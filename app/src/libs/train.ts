@@ -250,12 +250,15 @@ export const canTrainJutsu = (
   userdata: NonNullable<UserWithRelations>,
 ): boolean => {
   if (isJutsuEvolution(jutsu)) return false;
-  return canUseJutsu(jutsu, userdata);
+  // Learning a jutsu is intentionally allowed without the required bloodline item;
+  // the item only gates equipping and in-combat use, so skip that check here.
+  return canUseJutsu(jutsu, userdata, true);
 };
 
 export const canUseJutsu = (
   jutsu: Jutsu,
   userdata: NonNullable<UserWithRelations>,
+  ignoreBloodlineItem = false,
 ): boolean => {
   const userElements = new Set(getUserElements(userdata));
   if (userdata.isAi) return true;
@@ -265,7 +268,8 @@ export const canUseJutsu = (
     checkJutsuRank(jutsu.jutsuRank, userdata.rank) &&
     checkJutsuVillage(jutsu, userdata) &&
     checkJutsuBloodline(jutsu, userdata) &&
-    !!checkJutsuElements(jutsu, userElements)
+    !!checkJutsuElements(jutsu, userElements) &&
+    (ignoreBloodlineItem || checkJutsuBloodlineItem(jutsu, userdata.items))
   );
 };
 
