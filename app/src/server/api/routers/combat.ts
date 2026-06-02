@@ -2120,26 +2120,17 @@ export const initiateBattle = async (
         })
       : [];
 
-  // Identify COMBAT attackers engaging a same-or-higher bracket target — lift their own bracket
-  // immunity for the retaliation window. Stamped here at attack initiation (not battle end) so the
-  // window starts when the attack lands and abandoned/lost fights still expose the aggressor.
-  // targetIds holds only real DB users at this point (summons spawn mid-battle), so no isSummon filter.
-  const bracketImmunityAggressorIds =
-    battleType === "COMBAT"
-      ? userIds.filter((uid) => {
-          const attacker = users.find((u) => u.userId === uid);
-          if (!attacker) return false;
-          const attackerBracket = getExpBracket(attacker.experience);
-          return targetIds.some((tid) => {
-            const target = users.find((u) => u.userId === tid);
-            return (
-              !!target &&
-              !target.isAi &&
-              getExpBracket(target.experience) >= attackerBracket
-            );
-          });
-        })
-      : [];
+  // Initiating ANY attack on a real player lifts the attacker's own bracket immunity for the 5-minute
+  // retaliation window, so anyone from any bracket can hit them back. Stamped here at attack initiation
+  // (not battle end) so the window starts when the attack lands and abandoned/lost fights still expose
+  // the aggressor. AI-only targets don't count — bracket immunity is a PvP-only mechanic.
+  const combatTargetsRealPlayer =
+    battleType === "COMBAT" &&
+    targetIds.some((tid) => {
+      const target = users.find((u) => u.userId === tid);
+      return !!target && !target.isAi;
+    });
+  const bracketImmunityAggressorIds = combatTargetsRealPlayer ? userIds : [];
 
   // Run battle creation and user status updates in parallel for performance
   const [, , userResult] = await Promise.all([
