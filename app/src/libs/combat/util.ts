@@ -162,34 +162,6 @@ export const getItemDisplayDescription = (
   return source.description;
 };
 
-/**
- * Returns the battle description for a user item, preferring the active variant battleDescription if set.
- * Falls back to the base item battleDescription.
- */
-export const getItemDisplayBattleDescription = (
-  source:
-    | { variantBattleDescription: string | null | undefined }
-    | {
-        activeVariantId?: string | null;
-        item: {
-          battleDescription: string;
-          variants?: { id: string; battleDescription?: string | null }[];
-        };
-      }
-    | { battleDescription: string },
-): string => {
-  if ("variantBattleDescription" in source && source.variantBattleDescription != null) {
-    return source.variantBattleDescription;
-  }
-  if ("activeVariantId" in source && source.activeVariantId) {
-    const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
-    if (variant?.battleDescription != null) return variant.battleDescription;
-  }
-  if ("item" in source) return source.item.battleDescription;
-  if ("battleDescription" in source) return source.battleDescription;
-  return "";
-};
-
 // =============================================================================
 // STATIC DATA LOOKUP FUNCTIONS
 // These functions retrieve full data from extraState using IDs.

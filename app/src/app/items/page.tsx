@@ -290,6 +290,7 @@ export default function MyItems() {
                       ? eventItems?.filter((ui) => ui.equipped === "NONE")
                       : materialsItems?.filter((ui) => ui.equipped === "NONE")
                 }
+                allUserItems={userItems}
               />
             </div>
           </div>
@@ -562,12 +563,15 @@ function RepairModalWrapper({
  */
 interface BackpackProps {
   useritems: UserItemWithRelations[] | undefined;
+  // Full carried inventory (all tabs + equipped slots). Used for variant-token
+  // lookups so a token held in another tab or an equipped slot is still found.
+  allUserItems: UserItemWithRelations[] | undefined;
   userData: NonNullable<UserWithRelations>;
 }
 
 const Backpack: React.FC<BackpackProps> = (props) => {
   // Destructure
-  const { useritems, userData } = props;
+  const { useritems, allUserItems, userData } = props;
 
   // State
   const [useritem, setUserItem] = useState<UserItemWithRelations | undefined>(
@@ -911,7 +915,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       {variantItem && (
         <ItemVariantModal
           userItem={variantItem}
-          allUserItems={useritems}
+          allUserItems={allUserItems}
           onClose={() => setVariantItem(undefined)}
         />
       )}
