@@ -2230,6 +2230,25 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
     viewerWarParticipantUntil.getTime() > now &&
     targetWarParticipantUntil.getTime() > now;
 
+  // Re-render when the next time window (immunity lift or war participation) elapses, so the badge
+  // does not keep showing stale eligibility while the profile stays open past an expiry.
+  const [, forceBadgeRefresh] = useState(0);
+  const nextExpiry = Math.min(
+    ...[
+      targetBracketImmunityLiftedUntil.getTime(),
+      viewerWarParticipantUntil.getTime(),
+      targetWarParticipantUntil.getTime(),
+    ].filter((t) => t > now),
+  );
+  useEffect(() => {
+    if (!Number.isFinite(nextExpiry)) return;
+    const id = setTimeout(
+      () => forceBadgeRefresh((n) => n + 1),
+      Math.max(0, nextExpiry - Date.now()),
+    );
+    return () => clearTimeout(id);
+  }, [nextExpiry]);
+
   if (attackerBracket <= targetBracket) {
     return (
       <p className="font-medium text-green-600 text-sm">

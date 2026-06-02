@@ -46,7 +46,6 @@ import {
   getWarsArray,
   hydrateUserForQuests,
 } from "@/libs/combat/util";
-import { getExpBracket } from "@/libs/profile";
 import type { PusherClient } from "@/libs/pusher";
 import { broadcastRaidAvailability, updateUserOnMap } from "@/libs/pusher";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
@@ -55,11 +54,7 @@ import {
   prepareExclusiveRaidActivation,
 } from "@/libs/raids";
 import { battleJutsuExp } from "@/libs/train";
-import {
-  extendWarParticipantSql,
-  findWarsWithUser,
-  liftBracketImmunitySql,
-} from "@/libs/war";
+import { extendWarParticipantSql, findWarsWithUser } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
@@ -1371,21 +1366,6 @@ export const updateUser = async (
       }
     }
 
-    // Determine whether to stamp bracketImmunityLiftedUntil at battle end.
-    // Stamp only when this user was the aggressor attacking same or higher bracket.
-    // Defenders and downward attackers (higher bracket vs lower) do not reset the countdown.
-    const shouldStampBracketImmunity = (() => {
-      if (curBattle.battleType !== "COMBAT" || !user.isAggressor) return false;
-      const attackerBracket = getExpBracket(user.experience);
-      const opponents = curBattle.usersState.filter(
-        (u) => !u.isAggressor && !u.isSummon && !u.isAi,
-      );
-      return (
-        opponents.length > 0 &&
-        opponents.some((t) => getExpBracket(t.experience) >= attackerBracket)
-      );
-    })();
-
     // Update user & user items
     await Promise.all([
       // Update bounties
@@ -1524,11 +1504,6 @@ export const updateUser = async (
           stealthActive: false,
           stealthActivatedAt: null,
           stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
-          ...(shouldStampBracketImmunity
-            ? {
-                bracketImmunityLiftedUntil: liftBracketImmunitySql(),
-              }
-            : {}),
         })
         .where(eq(userData.userId, userId)),
       // Handle dropped items transfer if present on result. Currently only AI have droppable items, so no need to delete from loser

@@ -166,7 +166,11 @@ import { rollStealthKeep } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
 import { canUseJutsu, checkJutsuItems } from "@/libs/train";
 import { calcIsInVillage, getBiomeFromGlobalTile } from "@/libs/travel";
-import { extendWarParticipantSql, findWarsWithUser } from "@/libs/war";
+import {
+  extendWarParticipantSql,
+  findWarsWithUser,
+  liftBracketImmunitySql,
+} from "@/libs/war";
 import { fetchAiProfileById } from "@/routers/ai";
 import { fetchSectorVillage } from "@/routers/village";
 import { fetchActiveWars } from "@/routers/war";
@@ -2116,6 +2120,27 @@ export const initiateBattle = async (
         })
       : [];
 
+  // Identify COMBAT attackers engaging a same-or-higher bracket target — lift their own bracket
+  // immunity for the retaliation window. Stamped here at attack initiation (not battle end) so the
+  // window starts when the attack lands and abandoned/lost fights still expose the aggressor.
+  // targetIds holds only real DB users at this point (summons spawn mid-battle), so no isSummon filter.
+  const bracketImmunityAggressorIds =
+    battleType === "COMBAT"
+      ? userIds.filter((uid) => {
+          const attacker = users.find((u) => u.userId === uid);
+          if (!attacker) return false;
+          const attackerBracket = getExpBracket(attacker.experience);
+          return targetIds.some((tid) => {
+            const target = users.find((u) => u.userId === tid);
+            return (
+              !!target &&
+              !target.isAi &&
+              getExpBracket(target.experience) >= attackerBracket
+            );
+          });
+        })
+      : [];
+
   // Run battle creation and user status updates in parallel for performance
   const [, , userResult] = await Promise.all([
     client.insert(battle).values({
@@ -2191,12 +2216,18 @@ export const initiateBattle = async (
           stealthBreakUserIds.length > 0
             ? sql`CASE WHEN userId IN (${stealthBreakUserIds.map((id) => `"${id}"`).join(", ")}) THEN NULL ELSE stealthActivatedAt END`
             : sql`stealthActivatedAt`,
-        // Stamp war aggressors in the same update so the WHERE guard (status/sector match) gates
-        // both the battle entry and the participant timer atomically. GREATEST never shortens an
-        // existing longer stamp, and any leak on the rollback path is bounded to ~2h.
+        // Stamp war aggressors AND bracket-immunity aggressors in the same update so the WHERE guard
+        // (status/sector match) gates both the battle entry and these timers atomically. GREATEST never
+        // shortens an existing longer stamp; any leak on the rollback path is bounded (war ~2h, bracket
+        // immunity ~5m) and fail-safe — a lingering bracket lift only makes the aggressor more attackable.
         ...(warAggressorIds.length > 0
           ? {
               warParticipantUntil: sql`CASE WHEN ${inArray(userData.userId, warAggressorIds)} THEN ${extendWarParticipantSql()} ELSE ${userData.warParticipantUntil} END`,
+            }
+          : {}),
+        ...(bracketImmunityAggressorIds.length > 0
+          ? {
+              bracketImmunityLiftedUntil: sql`CASE WHEN ${inArray(userData.userId, bracketImmunityAggressorIds)} THEN ${liftBracketImmunitySql()} ELSE ${userData.bracketImmunityLiftedUntil} END`,
             }
           : {}),
       })
