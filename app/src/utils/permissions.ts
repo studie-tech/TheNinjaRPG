@@ -22,7 +22,9 @@ import type {
 export const canChangeContent = (role: UserRole) => {
   return [
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -34,10 +36,16 @@ export const canChangeContent = (role: UserRole) => {
   ].includes(role);
 };
 
+export const isStaffMember = (user: Pick<UserData, "staffAccount">) => {
+  return user.staffAccount;
+};
+
 export const canTakeKage = (role: UserRole) => {
   return [
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -72,7 +80,9 @@ export const canViewRevenueAnalytics = (role: UserRole) => {
 export const canPlayHiddenQuests = (role: UserRole) => {
   return [
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "CODER",
@@ -87,7 +97,9 @@ export const canSubmitNotification = (role: UserRole) => {
   return [
     "CODER",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "HEAD_MODERATOR",
@@ -127,7 +139,9 @@ export const canModifyEventGains = (role: UserRole) => {
     "CONTENT-ADMIN",
     "EVENT-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
   ].includes(role);
 };
 
@@ -151,7 +165,9 @@ export const canAdministrateWars = (role: UserRole) => {
     "CODING-ADMIN",
     "CONTENT-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -164,17 +180,26 @@ export const canChangeUserRolesTo = (role: UserRole): UserRole[] => {
   } else if (role === "CODING-ADMIN") {
     return ["USER", "CODER", "CODING-ADMIN"];
   } else if (role === "CONTENT-ADMIN") {
-    return ["USER", "CONTENT", "HEAD_CONTENT", "CONTENT-ADMIN"];
+    return [
+      "USER",
+      "CONTENT",
+      "BALANCE",
+      "HEAD_CONTENT",
+      "HEAD_BALANCE",
+      "CONTENT-ADMIN",
+    ];
   } else if (role === "EVENT-ADMIN") {
     return ["USER", "EVENT", "HEAD_EVENT", "EVENT-ADMIN"];
   } else if (role === "MODERATOR-ADMIN") {
     return ["USER", "HEAD_MODERATOR", "MODERATOR", "JR_MODERATOR"];
   } else if (role === "HEAD_MODERATOR") {
     return ["USER", "MODERATOR", "JR_MODERATOR"];
-  } else if (role === "HEAD_CONTENT") {
-    return ["USER", "CONTENT"];
+  } else if (role === "HEAD_CONTENT" || role === "HEAD_BALANCE") {
+    return ["USER", "CONTENT", "BALANCE"];
   } else if (role === "CONTENT") {
     return ["CONTENT"];
+  } else if (role === "BALANCE") {
+    return ["BALANCE"];
   } else if (role === "HEAD_EVENT") {
     return ["USER", "EVENT"];
   } else if (role === "EVENT") {
@@ -200,7 +225,9 @@ export const canSwapBloodline = (role: UserRole) => {
 export const canSeeSecretData = (role: UserRole) => {
   return [
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "JR_MODERATOR",
     "MODERATOR",
     "HEAD_MODERATOR",
@@ -229,7 +256,9 @@ export const canModifyUserBadges = (role: UserRole) => {
     "EVENT",
     "HEAD_EVENT",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "MODERATOR-ADMIN",
     "HEAD_MODERATOR",
     "MODERATOR",
@@ -429,7 +458,9 @@ export const canEditPublicUser = (user: UserData) => {
     "OWNER",
     "CODING-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "MODERATOR-ADMIN",
@@ -438,7 +469,7 @@ export const canEditPublicUser = (user: UserData) => {
 };
 
 export const canOnlyEditSelf = (userRole: UserRole) => {
-  return ["CONTENT", "EVENT", "CODER"].includes(userRole);
+  return ["CONTENT", "BALANCE", "EVENT", "CODER"].includes(userRole);
 };
 
 export const canAwardReputation = (role: UserRole) => {
@@ -462,7 +493,9 @@ export const canEditClans = (role: UserRole) => {
     "CODING-ADMIN",
     "MODERATOR-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT-ADMIN",
     "CODER",
   ].includes(role);
@@ -478,7 +511,9 @@ export const canAddNonCustomPollOptions = (role: UserRole) => {
     "EVENT",
     "HEAD_EVENT",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
   ].includes(role);
 };
 
@@ -492,7 +527,9 @@ export const canCreatePolls = (role: UserRole) => {
     "EVENT",
     "HEAD_EVENT",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
   ].includes(role);
 };
 
@@ -506,7 +543,9 @@ export const canEditPolls = (role: UserRole) => {
     "EVENT",
     "HEAD_EVENT",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
   ].includes(role);
 };
 
@@ -520,7 +559,9 @@ export const canClosePolls = (role: UserRole) => {
     "EVENT",
     "HEAD_EVENT",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
   ].includes(role);
 };
 
@@ -534,7 +575,9 @@ export const canDeletePollOptions = (role: UserRole) => {
     "EVENT",
     "HEAD_EVENT",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
   ].includes(role);
 };
 
@@ -542,13 +585,18 @@ export const canViewFullBattleLog = (role: UserRole) => {
   return [
     "CODER",
     "CONTENT",
+    "BALANCE",
+    "MODERATOR",
+    "HEAD_MODERATOR",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "OWNER",
     "CODING-ADMIN",
     "CONTENT-ADMIN",
     "EVENT-ADMIN",
+    "MODERATOR-ADMIN",
   ].includes(role);
 };
 
@@ -577,7 +625,9 @@ export const canClearSectors = (role: UserRole) => {
     "CODING-ADMIN",
     "CONTENT-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -594,7 +644,9 @@ export const canDeleteStaffApplication = (role: UserRole) => {
 
 export const canViewAllApplications = (role: UserRole) => {
   if (getApprovalGroup(role) !== null) return true;
-  return ["HEAD_CONTENT", "HEAD_EVENT", "HEAD_MODERATOR"].includes(role);
+  return ["HEAD_CONTENT", "HEAD_BALANCE", "HEAD_EVENT", "HEAD_MODERATOR"].includes(
+    role,
+  );
 };
 
 export const canApproveApplications = (role: UserRole) => {
@@ -620,7 +672,9 @@ export const canUnequipAllUsers = (user: UserData) => {
     "OWNER",
     "CODING-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -634,7 +688,9 @@ export const canEditUsername = (role: UserRole) => {
     "OWNER",
     "CODING-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -651,7 +707,9 @@ export const canEditCustomTitle = (role: UserRole) => {
     "OWNER",
     "CODING-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -666,7 +724,9 @@ export const canEditBloodline = (role: UserRole) => {
     "OWNER",
     "CODING-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -681,7 +741,9 @@ export const canEditVillage = (role: UserRole) => {
     "OWNER",
     "CODING-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -696,7 +758,9 @@ export const canEditRank = (role: UserRole) => {
     "OWNER",
     "CODING-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -711,7 +775,9 @@ export const canEditJutsus = (role: UserRole) => {
     "OWNER",
     "CODING-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -726,7 +792,9 @@ export const canEditItems = (role: UserRole) => {
     "OWNER",
     "CODING-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -741,7 +809,9 @@ export const canEditQuests = (role: UserRole) => {
     "OWNER",
     "CODING-ADMIN",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "EVENT-ADMIN",
@@ -782,7 +852,9 @@ export const canReskinFreely = (role: UserRole) => {
   return [
     "CODER",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "EVENT",
     "HEAD_EVENT",
     "HEAD_MODERATOR",
@@ -846,7 +918,9 @@ export function canEscalateToGithub(userRole: UserRole): boolean {
     "OWNER",
     "CODER",
     "CONTENT",
+    "BALANCE",
     "HEAD_CONTENT",
+    "HEAD_BALANCE",
     "CONTENT-ADMIN",
     "EVENT-ADMIN",
     "MODERATOR-ADMIN",

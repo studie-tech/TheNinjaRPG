@@ -245,14 +245,18 @@ export default function Staff() {
               <div className="rounded-lg bg-sky-600 p-1 font-bold">
                 Head Content
                 <UserList
-                  users={users.filter((user) => user.role === "HEAD_CONTENT")}
+                  users={users.filter((user) =>
+                    ["HEAD_CONTENT", "HEAD_BALANCE"].includes(user.role),
+                  )}
                   expectedLength={1}
                 />
               </div>
               <div className="rounded-lg bg-purple-400 p-1 font-bold">
                 Content
                 <UserList
-                  users={users.filter((user) => user.role === "CONTENT")}
+                  users={users.filter((user) =>
+                    ["CONTENT", "BALANCE"].includes(user.role),
+                  )}
                   expectedLength={6}
                 />
               </div>

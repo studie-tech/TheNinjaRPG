@@ -60,6 +60,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
 import {
+  BLOODLINE_SWAP_COOLDOWN_HOURS,
   BLOODLINE_SWAP_FREE_DAYS,
   COST_CHANGE_GENDER,
   COST_CHANGE_USERNAME,
@@ -112,6 +113,7 @@ import {
   canSwapBloodline,
   canSwapVillage,
   canUnequipAllUsers,
+  isStaffMember,
 } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useUserSearch } from "@/utils/search";
@@ -287,7 +289,7 @@ export default function EditProfile() {
           unselectedSubtitle="Reset all skill tree investments"
           icon={RotateCcw}
           selectedSubtitle={
-            canChangeContent(userData.role)
+            isStaffMember(userData)
               ? `You can reset your skill tree and get all spent skill points back for free as a staff member. You have ${userData.reputationPoints} reputation points.`
               : `You can reset your skill tree and get all spent skill points back for ${COST_SKILL_RESET} reputation points. You have ${userData.reputationPoints} reputation points.`
           }
@@ -375,7 +377,11 @@ export default function EditProfile() {
             title="Swap Bloodline"
             selectedTitle={activeElement}
             unselectedSubtitle="Change your bloodline of choice"
-            selectedSubtitle={`You can swap your bloodline to any bloodline your character has previously possessed for ${COST_SWAP_BLOODLINE} reputation points. Note: Bloodlines purchased directly before 14/06/2025 have not been recorded and can therefore not be swapped. You have ${userData.reputationPoints} reputation points.`}
+            selectedSubtitle={
+              isStaffMember(userData)
+                ? `You can swap your bloodline to any bloodline your character has previously possessed for free as a staff member. You must still wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps. Note: Bloodlines purchased directly before 14/06/2025 have not been recorded and can therefore not be swapped. You have ${userData.reputationPoints} reputation points.`
+                : `You can swap your bloodline to any bloodline your character has previously possessed for ${COST_SWAP_BLOODLINE} reputation points. You must wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps. Note: Bloodlines purchased directly before 14/06/2025 have not been recorded and can therefore not be swapped. You have ${userData.reputationPoints} reputation points.`
+            }
             icon={Droplets}
             onClick={setActiveElement}
           >
@@ -2293,7 +2299,7 @@ const ResetSkills: React.FC = () => {
             {isPending ? (
               <Loader size={5} />
             ) : isFree ? (
-              canChangeContent(userData.role) ? (
+              isStaffMember(userData) ? (
                 "Reset Skills (Free for staff)"
               ) : (
                 `Reset Skills (${resetInfo?.freeResetsRemaining} free GOLD resets remaining)`
@@ -2313,7 +2319,7 @@ const ResetSkills: React.FC = () => {
         This will reset all your skill tree investments and refund all spent skill
         points
         {isFree
-          ? canChangeContent(userData.role)
+          ? isStaffMember(userData)
             ? " (Free for staff member)"
             : " (Free GOLD monthly reset)"
           : ` for ${COST_SKILL_RESET} reputation points`}

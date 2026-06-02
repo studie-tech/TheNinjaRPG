@@ -279,7 +279,9 @@ export const UserRoles = [
   "MODERATOR",
   "JR_MODERATOR",
   "HEAD_CONTENT",
+  "HEAD_BALANCE",
   "CONTENT",
+  "BALANCE",
   "HEAD_EVENT",
   "EVENT",
   "CODER",
@@ -315,7 +317,9 @@ export type StaffApplicationApprovalState =
 // Roles users are allowed to apply for
 export const StaffApplicationTargetRoles = [
   "CONTENT",
+  "BALANCE",
   "HEAD_CONTENT",
+  "HEAD_BALANCE",
   "CODER",
   "EVENT",
   "HEAD_EVENT",

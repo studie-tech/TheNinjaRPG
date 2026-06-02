@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, like, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, like, lt, not, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -29,7 +29,11 @@ import { fetchUpdatedUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { canChangeContent, canUnequipAllUsers } from "@/utils/permissions";
+import {
+  canChangeContent,
+  canUnequipAllUsers,
+  isStaffMember,
+} from "@/utils/permissions";
 import { SkillTreeValidator } from "@/validators/combat";
 import {
   type SkillTreeFilteringSchema,
@@ -334,9 +338,12 @@ export const skillTreeRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
 
       // Determine if this reset should be free (GOLD supporters get first two per month free)
+      const federalStatus = getUserFederalStatus(user);
       const freeResets = getFreeResetAmount(user);
       const freeResetsUsed = monthlyResets.length;
-      const isFreeReset = freeResetsUsed < freeResets || canChangeContent(user.role);
+      const hasFreeResetAvailable = freeResetsUsed < freeResets;
+      const isStaffFreeReset = isStaffMember(user);
+      const isFreeReset = hasFreeResetAvailable || isStaffFreeReset;
 
       // Guard: if not free, ensure user can afford
       if (!isFreeReset && user.reputationPoints < COST_SKILL_RESET) {
@@ -366,36 +373,57 @@ export const skillTreeRouter = createTRPCRouter({
         }
       }
 
-      // Perform the reset (parallel operations)
-      await Promise.all([
-        // Delete all user skills (skill points remain, just reset used skills)
+      // Perform the reset
+      const writes: Promise<unknown>[] = [
         ctx.drizzle.delete(userSkill).where(eq(userSkill.userId, ctx.userId)),
-        // Log the reset for monthly tracking
-        ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "skillReset",
-          changes: [
-            isFreeReset
-              ? canChangeContent(user.role)
-                ? "Skill tree reset (free for staff)"
-                : "Skill tree reset (free GOLD monthly)"
-              : `Skill tree reset (-${COST_SKILL_RESET} reps)`,
-          ],
-          relatedId: null,
-          relatedMsg: isFreeReset
-            ? canChangeContent(user.role)
-              ? "Free reset for staff member"
-              : "Free monthly reset for GOLD supporter"
-            : `Charged ${COST_SKILL_RESET} reputation points`,
-          relatedImage: user.avatarLight,
-          relatedValue: isFreeReset ? 0 : COST_SKILL_RESET,
-        }),
-      ]);
+      ];
+
+      if (!isFreeReset) {
+        writes.push(
+          ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "skillReset",
+            changes: [`Skill tree reset (-${COST_SKILL_RESET} reps)`],
+            relatedId: null,
+            relatedMsg: `Charged ${COST_SKILL_RESET} reputation points`,
+            relatedImage: user.avatarLight,
+            relatedValue: COST_SKILL_RESET,
+          }),
+        );
+      } else if (isStaffFreeReset) {
+        writes.push(
+          ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "skillReset",
+            changes: ["Skill tree reset (free staff)"],
+            relatedId: null,
+            relatedMsg: SKILL_RESET_STAFF_RELATED_MSG,
+            relatedImage: user.avatarLight,
+            relatedValue: 0,
+          }),
+        );
+      } else if (hasFreeResetAvailable) {
+        writes.push(
+          ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "skillReset",
+            changes: [`Skill tree reset (free ${federalStatus} - monthly)`],
+            relatedId: null,
+            relatedMsg: `Free monthly reset for ${federalStatus} supporter`,
+            relatedImage: user.avatarLight,
+            relatedValue: 0,
+          }),
+        );
+      }
+
+      await Promise.all(writes);
 
       return {
         success: true,
-        message: `Skills points reset!${isFreeReset ? (canChangeContent(user.role) ? " (Free for staff member)" : " (Free for GOLD supporter)") : ""}`,
+        message: `Skills points reset!${isFreeReset ? (isStaffFreeReset ? " (Free for staff member)" : ` (Free for ${federalStatus} supporter)`) : ""}`,
       };
     }),
 
@@ -419,7 +447,7 @@ export const skillTreeRouter = createTRPCRouter({
       const freeResets = getFreeResetAmount(user);
       const freeResetsUsed = monthlyResets.length;
       const freeResetsRemaining = freeResets - freeResetsUsed;
-      const isFree = freeResetsRemaining > 0 || canChangeContent(user.role);
+      const isFree = freeResetsRemaining > 0 || isStaffMember(user);
       // Return
       return { isFree, freeResetsUsed, freeResetsRemaining };
     }),
@@ -763,6 +791,8 @@ export const skillTreeDatabaseFilter = (input: SkillTreeFilteringSchema) => {
   return filters;
 };
 
+const SKILL_RESET_STAFF_RELATED_MSG = "Free reset for staff member";
+
 /**
  * Fetch the number of monthly resets for a user
  * @param client - The database client
@@ -781,6 +811,7 @@ export const fetchMonthlyResets = async (client: DrizzleClient, userId: string) 
     where: and(
       eq(actionLog.userId, userId),
       eq(actionLog.tableName, "skillReset"),
+      not(eq(actionLog.relatedMsg, SKILL_RESET_STAFF_RELATED_MSG)),
       gte(actionLog.createdAt, startOfMonth),
       lt(actionLog.createdAt, startOfNextMonth),
     ),
