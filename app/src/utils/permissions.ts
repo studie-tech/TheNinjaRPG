@@ -373,6 +373,15 @@ export const canDeleteConceptArt = (role: UserRole) => {
   ].includes(role);
 };
 
+/** Returns a restriction message if the user cannot create concept art, otherwise null. */
+export const canCreateConceptArt = (
+  user: Pick<UserData, "isBanned" | "isSilenced">,
+): string | null => {
+  if (user.isBanned) return "You are banned";
+  if (user.isSilenced) return "You are silenced";
+  return null;
+};
+
 export const canEscalateBan = (user: UserData, report: UserReport) => {
   return (
     !report.adminResolved &&

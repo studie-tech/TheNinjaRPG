@@ -13,7 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Quote } from "@/components/ui/quote";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CONVERSATION_QUIET_MINS } from "@/drizzle/constants";
+import {
+  CONVERSATION_QUIET_MINS,
+  MESSAGING_MIN_LEVEL,
+  messagingLevelMessage,
+} from "@/drizzle/constants";
 import { CommentOnConversation } from "@/layout/Comment";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -83,6 +87,14 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     secondsFromNow(CONVERSATION_QUIET_MINS * 60),
   );
   const silence = new Date() > quietTime;
+  const belowMessagingMinLevel = (userData?.level ?? 0) < MESSAGING_MIN_LEVEL;
+  const composeRestriction = userData?.isBanned
+    ? "You are banned"
+    : userData?.isSilenced
+      ? "You are silenced"
+      : belowMessagingMinLevel
+        ? messagingLevelMessage
+        : null;
 
   // Typing indicator state
   type TypingUser = { username: string; timestamp: number };
@@ -113,6 +125,10 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   });
   const allComments = comments?.pages.flatMap((page) => page.data);
   const conversation = comments?.pages[0]?.convo;
+  const canComposeMessage =
+    !!userData &&
+    (conversation?.isStaffAvailable ||
+      (!userData.isBanned && !userData.isSilenced && !belowMessagingMinLevel));
   type ReturnedComment = ArrayElement<typeof allComments>;
 
   // Search functionality
@@ -585,13 +601,10 @@ const Conversation: React.FC<ConversationProps> = (props) => {
    * Submit comment
    */
   const handleSubmitComment = handleSubmit((data) => {
-    if (
-      (userData?.isSilenced || userData?.isBanned) &&
-      !conversation?.isStaffAvailable
-    ) {
+    if (composeRestriction && !conversation?.isStaffAvailable) {
       showMutationToast({
         success: false,
-        message: "You are silenced and cannot send a message.",
+        message: composeRestriction,
       });
       return;
     }
@@ -653,82 +666,87 @@ const Conversation: React.FC<ConversationProps> = (props) => {
           {conversation &&
             !conversation.isLocked &&
             userData &&
-            ((!userData.isBanned && !userData.isSilenced) ||
-              conversation.isStaffAvailable) && (
-              <div className="relative mb-2">
-                {canPostAsAI && (
-                  <div className="mb-3">
-                    <UserSearchSelect
-                      useFormMethods={userSearchMethods}
-                      label="Post as (leave empty to post as yourself)"
-                      selectedUsers={[]}
-                      showYourself={true}
-                      showAi={true}
-                      inline={true}
-                      maxUsers={maxUsers}
-                    />
-                  </div>
-                )}
-                {quoteIds &&
-                  quoteIds.length > 0 &&
-                  quoteIds.map((quoteId) => {
-                    const quote = allComments?.find((c) => c.id === quoteId);
-                    if (!quote) return null;
-                    return (
-                      <Quote
-                        key={quoteId}
-                        author={quote.username || "Unknown"}
-                        date={format(quote.createdAt, "MM/dd/yyyy")}
-                        onRemove={() => {
-                          setValue(
-                            "quoteIds",
-                            quoteIds.filter((id) => id !== quoteId),
-                          );
-                        }}
-                      >
-                        {stripBlockquotes(quote.content)}
-                      </Quote>
-                    );
-                  })}
-                <div className="relative">
-                  <RichInput
-                    id="comment"
-                    refreshKey={editorKey}
-                    height="120"
-                    disabled={isCommenting}
-                    placeholder="Write comment..."
-                    control={control}
-                    error={errors.comment?.message}
-                    onSubmit={handleSubmitComment}
-                    enableMentions={true}
-                    allowClipboardPaste={true}
-                  />
-                  <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 transform flex-row-reverse">
-                    {isCommenting && <Loader />}
-                  </div>
-                  <RefreshCw
-                    className="absolute top-[50%] right-24 z-20 h-8 w-8 translate-y-[-50%] text-gray-400 opacity-50 hover:cursor-pointer hover:text-gray-600"
-                    onClick={invalidateComments}
+            !canComposeMessage &&
+            composeRestriction && (
+              <p className="mb-2 text-center text-muted-foreground text-sm">
+                {composeRestriction}
+              </p>
+            )}
+          {conversation && !conversation.isLocked && canComposeMessage && (
+            <div className="relative mb-2">
+              {canPostAsAI && (
+                <div className="mb-3">
+                  <UserSearchSelect
+                    useFormMethods={userSearchMethods}
+                    label="Post as (leave empty to post as yourself)"
+                    selectedUsers={[]}
+                    showYourself={true}
+                    showAi={true}
+                    inline={true}
+                    maxUsers={maxUsers}
                   />
                 </div>
-                {conversation?.isPublic && typingUsers.size > 0 && (
-                  <div className="mt-1 text-muted-foreground text-xs italic">
-                    {(() => {
-                      const names = Array.from(typingUsers.values()).map(
-                        (u) => u.username,
-                      );
-                      if (names.length === 1) {
-                        return `${names[0]} is typing...`;
-                      } else if (names.length === 2) {
-                        return `${names[0]} and ${names[1]} are typing...`;
-                      } else {
-                        return `${names.slice(0, 2).join(", ")} and ${names.length - 2} more are typing...`;
-                      }
-                    })()}
-                  </div>
-                )}
+              )}
+              {quoteIds &&
+                quoteIds.length > 0 &&
+                quoteIds.map((quoteId) => {
+                  const quote = allComments?.find((c) => c.id === quoteId);
+                  if (!quote) return null;
+                  return (
+                    <Quote
+                      key={quoteId}
+                      author={quote.username || "Unknown"}
+                      date={format(quote.createdAt, "MM/dd/yyyy")}
+                      onRemove={() => {
+                        setValue(
+                          "quoteIds",
+                          quoteIds.filter((id) => id !== quoteId),
+                        );
+                      }}
+                    >
+                      {stripBlockquotes(quote.content)}
+                    </Quote>
+                  );
+                })}
+              <div className="relative">
+                <RichInput
+                  id="comment"
+                  refreshKey={editorKey}
+                  height="120"
+                  disabled={isCommenting}
+                  placeholder="Write comment..."
+                  control={control}
+                  error={errors.comment?.message}
+                  onSubmit={handleSubmitComment}
+                  enableMentions={true}
+                  allowClipboardPaste={true}
+                />
+                <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 transform flex-row-reverse">
+                  {isCommenting && <Loader />}
+                </div>
+                <RefreshCw
+                  className="absolute top-[50%] right-24 z-20 h-8 w-8 translate-y-[-50%] text-gray-400 opacity-50 hover:cursor-pointer hover:text-gray-600"
+                  onClick={invalidateComments}
+                />
               </div>
-            )}
+              {conversation?.isPublic && typingUsers.size > 0 && (
+                <div className="mt-1 text-muted-foreground text-xs italic">
+                  {(() => {
+                    const names = Array.from(typingUsers.values()).map(
+                      (u) => u.username,
+                    );
+                    if (names.length === 1) {
+                      return `${names[0]} is typing...`;
+                    } else if (names.length === 2) {
+                      return `${names[0]} and ${names[1]} are typing...`;
+                    } else {
+                      return `${names.slice(0, 2).join(", ")} and ${names.length - 2} more are typing...`;
+                    }
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
           {allComments
             ?.filter((c) => c.conversationId === conversation?.id)
             .filter((c) => {

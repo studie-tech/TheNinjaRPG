@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  BellOff,
   ImageIcon,
   ImagePlus,
   Loader2,
@@ -45,12 +46,19 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import ConceptImage from "@/layout/ConceptImage";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
+import { canCreateConceptArt } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import { UploadDropzone } from "@/utils/uploadthing";
 import {
@@ -156,6 +164,7 @@ export default function ConceptArt() {
     });
 
   const isPending = isImagePending || isVideoPending;
+  const conceptArtCreateRestriction = userData ? canCreateConceptArt(userData) : null;
 
   // Filters
   const only_own = useWatch({ control: filterForm.control, name: "only_own" });
@@ -273,7 +282,29 @@ export default function ConceptArt() {
               ))}
             </SelectContent>
           </Select>
-          {userData && (
+          {userData && conceptArtCreateRestriction && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button
+                      id="new-art"
+                      disabled
+                      variant="outline"
+                      aria-label={`${conceptArtCreateRestriction}. You cannot create concept art.`}
+                    >
+                      <BellOff className="mr-2 h-6 w-6 text-red-500" />
+                      {userData.isBanned ? "Banned" : "Silenced"}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {conceptArtCreateRestriction}. You cannot create concept art.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {userData && !conceptArtCreateRestriction && (
             <Confirm2
               title="Create New"
               button={

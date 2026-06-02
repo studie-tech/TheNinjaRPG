@@ -360,6 +360,9 @@ const RegisterForm: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex w-full flex-wrap items-center gap-4 px-10">
+                      <p className="w-full basis-full text-center font-bold">
+                        You can only have two accounts per person.
+                      </p>
                       <FormField
                         control={form.control}
                         name="username"
