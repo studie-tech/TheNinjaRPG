@@ -48,6 +48,7 @@ import {
   hasRequiredLevel,
   hasRequiredRank,
 } from "@/libs/train";
+import { fetchUserItems } from "@/routers/item";
 import { fetchStudents } from "@/routers/sensei";
 import {
   baseServerResponse,
@@ -327,14 +328,22 @@ export const jutsuRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [loadouts, user, userjutsus] = await Promise.all([
+      const [loadouts, user, userjutsus, userItems] = await Promise.all([
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
       // Mutate & return result
       const id = input.id;
-      return await selectJutsuLoadout(ctx.drizzle, id, loadouts, userjutsus, user);
+      return await selectJutsuLoadout(
+        ctx.drizzle,
+        id,
+        loadouts,
+        userjutsus,
+        user,
+        userItems,
+      );
     }),
 
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
@@ -511,7 +520,7 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("You don't meet the level requirement for this evolution");
       if (!canEvolveJutsu(evolutionJutsu, user))
         return errorResponse("You don't meet the stat requirements for this evolution");
-      if (!canUseJutsu(evolutionJutsu, user))
+      if (!canUseJutsu(evolutionJutsu, user, true))
         return errorResponse(
           "You don't meet all requirements for this evolution (village, bloodline, or element restrictions)",
         );
@@ -629,31 +638,45 @@ export const jutsuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query in parallel for performance
-      const [user, entry, relations, jutsuWithName, parent, siblings, evolutionGraph] =
-        await Promise.all([
-          fetchUser(ctx.drizzle, ctx.userId),
-          fetchJutsu(ctx.drizzle, input.id),
-          getJutsuRelations(ctx.drizzle, input.id),
-          ctx.drizzle.query.jutsu.findFirst({
-            columns: { name: true, id: true },
-            where: eq(jutsu.name, input.data.name),
-          }),
-          input.data.parentJutsuId
-            ? fetchJutsu(ctx.drizzle, input.data.parentJutsuId)
-            : Promise.resolve(null),
-          input.data.parentJutsuId
-            ? ctx.drizzle.query.jutsu.findMany({
-                columns: { id: true },
-                where: eq(jutsu.parentJutsuId, input.data.parentJutsuId),
-              })
-            : Promise.resolve([]),
-          input.data.parentJutsuId
-            ? ctx.drizzle.query.jutsu.findMany({
-                columns: { id: true, parentJutsuId: true },
-                where: isNotNull(jutsu.parentJutsuId),
-              })
-            : Promise.resolve([]),
-        ]);
+      const [
+        user,
+        entry,
+        relations,
+        jutsuWithName,
+        parent,
+        siblings,
+        evolutionGraph,
+        requiredItem,
+      ] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchJutsu(ctx.drizzle, input.id),
+        getJutsuRelations(ctx.drizzle, input.id),
+        ctx.drizzle.query.jutsu.findFirst({
+          columns: { name: true, id: true },
+          where: eq(jutsu.name, input.data.name),
+        }),
+        input.data.parentJutsuId
+          ? fetchJutsu(ctx.drizzle, input.data.parentJutsuId)
+          : Promise.resolve(null),
+        input.data.parentJutsuId
+          ? ctx.drizzle.query.jutsu.findMany({
+              columns: { id: true },
+              where: eq(jutsu.parentJutsuId, input.data.parentJutsuId),
+            })
+          : Promise.resolve([]),
+        input.data.parentJutsuId
+          ? ctx.drizzle.query.jutsu.findMany({
+              columns: { id: true, parentJutsuId: true },
+              where: isNotNull(jutsu.parentJutsuId),
+            })
+          : Promise.resolve([]),
+        input.data.requiredBloodlineItemId
+          ? ctx.drizzle.query.item.findFirst({
+              columns: { id: true, bloodlineId: true },
+              where: eq(item.id, input.data.requiredBloodlineItemId),
+            })
+          : Promise.resolve(null),
+      ]);
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
@@ -663,6 +686,17 @@ export const jutsuRouter = createTRPCRouter({
       if (entry.id === TUTORIAL_JUTSU_ID && input?.data?.hidden)
         return errorResponse("Cannot hide tutorial jutsu");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      // A required bloodline item must belong to the jutsu's own bloodline, otherwise the
+      // in-combat gate could never be satisfied (or would gate on an unrelated item).
+      if (input.data.requiredBloodlineItemId) {
+        if (!input.data.bloodlineId)
+          return errorResponse("Set a bloodline before requiring a bloodline item");
+        if (!requiredItem) return errorResponse("Required bloodline item not found");
+        if (requiredItem.bloodlineId !== input.data.bloodlineId)
+          return errorResponse(
+            "The required bloodline item must belong to the jutsu's bloodline",
+          );
+      }
       if (!input.data.injectableInBattle) {
         const totalRelations =
           relations.jutsuInjectors.length +
@@ -975,7 +1009,7 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse(
           "Evolution jutsus can only be obtained by evolving the parent jutsu",
         );
-      if (info.parentJutsuId && userjutsuObj && !canUseJutsu(info, user))
+      if (info.parentJutsuId && userjutsuObj && !canUseJutsu(info, user, true))
         return errorResponse("Jutsu not for you");
       if (
         userjutsus.some(
@@ -1048,6 +1082,7 @@ export const jutsuRouter = createTRPCRouter({
 
         const canAutoEquip =
           curEquip < maxEquip &&
+          checkJutsuBloodlineItem(info, user.items) &&
           (!jutsuHasResidual || residualJutsus.length < JUTSU_MAX_RESIDUAL_EQUIPPED) &&
           (!jutsuHasPierce || pierceJutsus.length < JUTSU_MAX_PIERCE_EQUIPPED) &&
           (!jutsuIsEvent || eventJutsus.length < JUTSU_MAX_EVENT_EQUIPPED) &&
@@ -1198,8 +1233,9 @@ export const jutsuRouter = createTRPCRouter({
       if (!isEquipped && userjutsuObj.jutsu.hidden && !canChangeContent(user.role))
         return errorResponse("Jutsu is hidden, cannot be equipped");
 
-      // Check if jutsu can be equipped
-      if (!isEquipped && !canUseJutsu(userjutsuObj.jutsu, user)) {
+      // Check if jutsu can be equipped (bloodline item handled separately below for a
+      // clearer error message, so skip it inside canUseJutsu here)
+      if (!isEquipped && !canUseJutsu(userjutsuObj.jutsu, user, true)) {
         return errorResponse("You cannot equip this jutsu due to missing requirements");
       }
       if (!isEquipped && !checkJutsuBloodlineItem(userjutsuObj.jutsu, user.items)) {
@@ -2098,12 +2134,20 @@ export const selectJutsuLoadout = async (
   loadouts: JutsuLoadout[],
   userjutsus: UserJutsuWithRelations[],
   user: Pick<UserData, "userId" | "federalStatus" | "staffAccount">,
+  userItems: Parameters<typeof checkJutsuBloodlineItem>[1],
 ) => {
   const loadout = loadouts.find((l) => l.id === loadoutId);
   const maxLoadouts = fedJutsuLoadouts(user);
 
   if (!loadout) return errorResponse("Loadout not found");
   if (maxLoadouts <= 0) return errorResponse("Loadouts not available");
+
+  // Only re-equip jutsus whose required bloodline item is still equipped/usable, so
+  // switching to a saved loadout can't re-equip a gated jutsu after its item is removed.
+  const equippableJutsuIds = loadout.jutsuIds.filter((jutsuId) => {
+    const owned = userjutsus.find((uj) => uj.jutsuId === jutsuId);
+    return owned ? checkJutsuBloodlineItem(owned.jutsu, userItems) : true;
+  });
 
   await Promise.all([
     client
@@ -2114,8 +2158,8 @@ export const selectJutsuLoadout = async (
       .update(userJutsu)
       .set({
         equipped:
-          loadout.jutsuIds.length > 0
-            ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, loadout.jutsuIds)} THEN 1 ELSE 0 END`
+          equippableJutsuIds.length > 0
+            ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equippableJutsuIds)} THEN 1 ELSE 0 END`
             : false,
       })
       .where(eq(userJutsu.userId, user.userId)),
@@ -2124,6 +2168,6 @@ export const selectJutsuLoadout = async (
   return {
     success: true,
     message: `Loadout selected`,
-    jutsus: userjutsus.filter((u) => loadout.jutsuIds.includes(u.jutsuId)),
+    jutsus: userjutsus.filter((u) => equippableJutsuIds.includes(u.jutsuId)),
   };
 };

@@ -947,7 +947,14 @@ export const combatRouter = createTRPCRouter({
       const [jutsuLoadoutResult, itemLoadoutResult] = await Promise.all([
         user.jutsuLoadout === jId || !jId
           ? { success: true, message: "Jutsu loadout already selected" }
-          : selectJutsuLoadout(ctx.drizzle, jId, jutsuLoadouts, userjutsus, user),
+          : selectJutsuLoadout(
+              ctx.drizzle,
+              jId,
+              jutsuLoadouts,
+              userjutsus,
+              user,
+              useritems,
+            ),
         user.itemLoadout === iId || !iId
           ? { success: true, message: "Item loadout already selected" }
           : selectItemLoadout(ctx.drizzle, iId, itemLoadouts, useritems, user),
@@ -2723,29 +2730,32 @@ export const processUsersForBattle = async (
             userQuests: user.userQuests ?? [],
             completedQuests: user.completedQuests ?? [],
           };
-          if (!canUseJutsu(userjutsu.jutsu, userForCheck) && !user.isAi) {
+          // Bloodline item is enforced separately below (all battle types), so skip it here
+          if (!canUseJutsu(userjutsu.jutsu, userForCheck, true) && !user.isAi) {
             return false;
           }
         }
-        // Add summons to list
+        // Bloodline item enforcement applies to all battle types including ranked,
+        // mirroring bloodline check behavior (unlike checkJutsuItems which is waived in ranked).
+        if (!checkJutsuBloodlineItem(userjutsu.jutsu, user.items) && !user.isAi) {
+          return false;
+        }
+        // Exclude jutsus that belong to a bloodline the user doesn't have
+        if (
+          userjutsu.jutsu.bloodlineId !== "" &&
+          !user.isAi &&
+          user.bloodlineId !== userjutsu.jutsu.bloodlineId
+        ) {
+          return false;
+        }
+        // Add summons to list only for jutsus that survived every gate above
         const effects = userjutsu.jutsu.effects as UserEffect[];
         effects
           .filter((e) => e.type === "summon")
           .forEach((e) => {
             if ("aiId" in e) allSummons.push(e.aiId);
           });
-        // Bloodline item enforcement applies to all battle types including ranked,
-        // mirroring bloodline check behavior (unlike checkJutsuItems which is waived in ranked).
-        // Not if required bloodline item is not equipped
-        if (!checkJutsuBloodlineItem(userjutsu.jutsu, user.items) && !user.isAi) {
-          return false;
-        }
-        // Not if not the right bloodline
-        return (
-          userjutsu.jutsu.bloodlineId === "" ||
-          user.isAi ||
-          user.bloodlineId === userjutsu.jutsu.bloodlineId
-        );
+        return true;
       });
     user.jutsus = processedJutsus;
 

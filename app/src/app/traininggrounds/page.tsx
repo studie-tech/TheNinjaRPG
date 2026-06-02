@@ -734,7 +734,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     .filter((j) => {
       if (j.parentJutsuId)
         return (
-          canUseJutsu(j, userData) &&
+          // Training/leveling is item-free, so ignore the bloodline item requirement here
+          canUseJutsu(j, userData, true) &&
           (userJutsuOwnership?.some((uj) => uj.jutsuId === j.id) ?? false)
         );
       return canTrainJutsu(j, userData);

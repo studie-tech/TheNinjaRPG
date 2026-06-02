@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import {
@@ -50,6 +51,18 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   });
   const { data: bloodlineItems, isPending: l5 } =
     api.item.getBloodlineItemNames.useQuery({ bloodlineId: selectedBloodlineId });
+
+  // Clear the required bloodline item whenever the admin changes the bloodline, so a
+  // jutsu can't be saved requiring an item from a different bloodline. Skip the initial
+  // mount so an existing jutsu's saved value isn't wiped on load.
+  const didInitBloodline = useRef(false);
+  useEffect(() => {
+    if (!didInitBloodline.current) {
+      didInitBloodline.current = true;
+      return;
+    }
+    form.setValue("requiredBloodlineItemId", null, { shouldDirty: true });
+  }, [selectedBloodlineId, form]);
 
   // Mutation for updating jutsu
   const { mutate: updateJutsu, isPending: l3 } = api.jutsu.update.useMutation({

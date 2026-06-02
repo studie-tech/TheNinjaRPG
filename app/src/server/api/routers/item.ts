@@ -1,16 +1,4 @@
-import {
-  and,
-  desc,
-  eq,
-  gte,
-  isNotNull,
-  isNull,
-  like,
-  lte,
-  ne,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, desc, eq, gte, isNull, like, lte, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -108,12 +96,14 @@ export const itemRouter = createTRPCRouter({
     })
     .input(z.object({ bloodlineId: z.string().nullish() }))
     .query(async ({ ctx, input }) => {
+      // No bloodline selected (the jutsu editor form sends "" when cleared) means there
+      // are no bloodline items to choose from — return an empty list rather than every
+      // bloodline item in the database.
+      const bloodlineId = input.bloodlineId;
+      if (!bloodlineId) return [];
       return await ctx.drizzle.query.item.findMany({
         columns: { id: true, name: true },
-        where: (table, { and, eq }) =>
-          input.bloodlineId
-            ? eq(table.bloodlineId, input.bloodlineId)
-            : isNotNull(table.bloodlineId),
+        where: (table, { eq }) => eq(table.bloodlineId, bloodlineId),
         orderBy: (table, { asc }) => [asc(table.name)],
       });
     }),
