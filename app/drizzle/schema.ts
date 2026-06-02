@@ -1928,6 +1928,43 @@ export const trainingLog = mysqlTable(
   },
 );
 
+export const actionQueue = mysqlTable(
+  "ActionQueue",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    queueType: mysqlEnum("queueType", consts.ActionQueueTypes).notNull(),
+    position: int("position").notNull(),
+    jutsuId: varchar("jutsuId", { length: 191 }),
+    stat: mysqlEnum("stat", consts.UserStatNames),
+    itemId: varchar("itemId", { length: 191 }),
+    quantity: int("quantity").default(1).notNull(),
+    targetLevel: int("targetLevel"),
+    moneyCost: int("moneyCost"),
+    queuedMaterialRefunds: json("queuedMaterialRefunds").$type<
+      {
+        userItemId: string;
+        itemId: string;
+        consumeQuantity: number;
+        quantityAfterPayment: number;
+      }[]
+    >(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("ActionQueue_userId_idx").on(table.userId),
+      userTypePositionIdx: index("ActionQueue_userId_queueType_position_idx").on(
+        table.userId,
+        table.queueType,
+        table.position,
+      ),
+    };
+  },
+);
+
 export const userAttribute = mysqlTable(
   "UserAttribute",
   {

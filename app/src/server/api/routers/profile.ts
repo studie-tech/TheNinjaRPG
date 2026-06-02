@@ -2607,6 +2607,12 @@ export const fetchUpdatedUser = async (props: {
     );
     toastMessages.push(...consequenceResult.notifications);
 
+    if (user.status === "AWAKE") {
+      const { processActionQueues } = await import("@/libs/actionQueue");
+      const queueMessages = await processActionQueues({ client, userId });
+      toastMessages.push(...queueMessages);
+    }
+
     user.questData = fullTrackers;
 
     // Hide information relating to quests

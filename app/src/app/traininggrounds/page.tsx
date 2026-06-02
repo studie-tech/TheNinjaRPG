@@ -57,6 +57,7 @@ import {
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { ActionQueuePanel } from "@/layout/ActionQueuePanel";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm2 from "@/layout/Confirm2";
@@ -414,6 +415,8 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               userData[result.data.currentlyTraining] + result.data.experience,
             questData: result.data.questData,
           });
+          await utils.actionQueue.get.invalidate();
+          await utils.profile.getUser.invalidate();
         }
       },
     });
@@ -424,6 +427,17 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
         showMutationToast(data);
         if (data.success) {
           await updateUser({ trainingSpeed: variables.speed });
+        }
+      },
+    });
+
+  const { mutate: queueStat, isPending: isQueueingStat } =
+    api.actionQueue.addStat.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.actionQueue.get.invalidate();
+          await utils.profile.getUser.invalidate();
         }
       },
     });
@@ -439,7 +453,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
     stopTraining({ ...data, villageId: userData.villageId });
   });
 
-  const isPending = isStarting || isStopping || isChaning;
+  const isPending = isStarting || isStopping || isChaning || isQueueingStat;
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (isPending) return <Loader explanation="Processing..." />;
@@ -605,6 +619,34 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           </div>
         </div>
       )}
+      <ActionQueuePanel queueTypes={["STAT"]} className="relative z-30" />
+      {userData.currentlyTraining && (
+        <div className="relative z-30 mt-2 rounded-md border p-3">
+          <p className="mb-2 font-medium text-sm">Queue next stat training</p>
+          <div className="grid grid-cols-4 gap-2 text-center text-xs">
+            {UserStatNames.map((stat) => {
+              const { stats_cap, gens_cap } = getUserCaps(userData.rank);
+              const cap =
+                stat.includes("Offence") || stat.includes("Defence")
+                  ? stats_cap
+                  : gens_cap;
+              const overCap = userData[stat] >= cap;
+              return (
+                <Button
+                  key={stat}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={overCap || isQueueingStat}
+                  onClick={() => queueStat({ stat })}
+                >
+                  {capitalizeFirstLetter(stat.match(/[a-z]+/g)?.[0] ?? stat)}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </ContentBox>
   );
 };
@@ -708,6 +750,32 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         await utils.jutsu.getUserJutsus.invalidate();
+        await utils.actionQueue.get.invalidate();
+      },
+      onSettled: () => {
+        document.body.style.cursor = "default";
+        setIsOpen(false);
+        setJutsu(undefined);
+      },
+    });
+
+  const { data: actionQueue } = api.actionQueue.get.useQuery(undefined, {
+    staleTime: 5000,
+    enabled: !!userData,
+  });
+
+  const { mutate: queueJutsu, isPending: isQueueingJutsu } =
+    api.actionQueue.addJutsu.useMutation({
+      onSuccess: async (result) => {
+        showMutationToast(result);
+        if (result.success) {
+          if (result.data?.money !== undefined) {
+            await updateUser({ money: result.data.money });
+          }
+          await utils.jutsu.getUserJutsus.invalidate();
+          await utils.actionQueue.get.invalidate();
+          await utils.profile.getUser.invalidate();
+        }
       },
       onSettled: () => {
         document.body.style.cursor = "default";
@@ -717,7 +785,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     });
 
   // Mutation loading
-  const isPending = isStartingTrain || isStoppingTrain;
+  const isPending = isStartingTrain || isStoppingTrain || isQueueingJutsu;
 
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -757,7 +825,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   );
 
   // Derived calculations
-  const level = userJutsuCounts?.find((entry) => entry.id === jutsu?.id)?.quantity || 0;
+  const userJutsuForSelected = userJutsus?.find((uj) => uj.jutsuId === jutsu?.id);
+  const queuedSameJutsu =
+    actionQueue?.entries.filter(
+      (entry) => entry.queueType === "JUTSU" && entry.jutsuId === jutsu?.id,
+    ).length ?? 0;
+  const level = (userJutsuForSelected?.level ?? 0) + queuedSameJutsu;
   const trainSeconds =
     jutsu &&
     getTimeLeftStr(
@@ -785,7 +858,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     } else if (!okBloodline) {
       proceed_label = `Wrong bloodline`;
     } else if (trainSeconds && cost) {
-      proceed_label = `Train [${trainSeconds}, ${cost} ryo]`;
+      proceed_label = finishTrainingAt
+        ? `Queue [${trainSeconds}, ${cost} ryo]`
+        : `Train [${trainSeconds}, ${cost} ryo]`;
     }
   }
 
@@ -800,7 +875,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       }
     >
       {userData && (
-        <div className="max-h-[320px] overflow-y-scroll">
+        <div
+          className={cn(
+            "max-h-[320px] overflow-y-scroll",
+            finishTrainingAt && "relative z-30",
+          )}
+        >
           <ActionSelector
             items={alljutsus}
             counts={userJutsuCounts}
@@ -830,8 +910,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
               setIsOpen={setIsOpen}
               isValid={false}
               onAccept={() => {
-                if (canTrain && !isPending) {
-                  train({ jutsuId: jutsu.id });
+                if (canTrain && !isPending && jutsu) {
+                  if (finishTrainingAt) {
+                    queueJutsu({ jutsuId: jutsu.id });
+                  } else {
+                    train({ jutsuId: jutsu.id });
+                  }
                 } else {
                   setIsOpen(false);
                 }
@@ -873,6 +957,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                   timeDiff={timeDiff}
                   onFinish={async () => {
                     await utils.jutsu.getUserJutsus.invalidate();
+                    await utils.profile.getUser.invalidate();
+                    await utils.actionQueue.get.invalidate();
                   }}
                 />
               </p>
@@ -888,6 +974,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           </div>
         </div>
       )}
+      <ActionQueuePanel queueTypes={["JUTSU"]} className="relative z-30" />
     </ContentBox>
   );
 };

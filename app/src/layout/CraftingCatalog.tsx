@@ -103,6 +103,18 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     },
   });
 
+  const queueCraftMutation = api.actionQueue.addCraft.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        setSelectedItem(null);
+        setCraftQuantity(1);
+        await utils.actionQueue.get.invalidate();
+        await utils.item.getUserItems.invalidate();
+      }
+    },
+  });
+
   // Filter items by category
   const categoryItems = useMemo(() => {
     if (!selectedCategory || !craftableItems) return [];
@@ -178,16 +190,19 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
 
   // Check if user can craft the selected item
   const canCraft = useMemo(() => {
-    if (!selectedItem || !userItems || isCurrentlyCrafting) return false;
+    if (!selectedItem || !userItems) return false;
     return selectedItem.craftingRequirements.every((req) => {
       const totalQuantity = getTotalItemQuantity(userItems, req.requirementItemId);
       return totalQuantity >= req.quantity * craftQuantity;
     });
-  }, [selectedItem, userItems, craftQuantity, isCurrentlyCrafting]);
+  }, [selectedItem, userItems, craftQuantity]);
 
   // Handle craft
   const handleCraft = () => {
-    if (selectedItem && canCraft) {
+    if (!selectedItem || !canCraft) return;
+    if (isCurrentlyCrafting) {
+      queueCraftMutation.mutate({ itemId: selectedItem.id, quantity: craftQuantity });
+    } else {
       craftItemMutation.mutate({ itemId: selectedItem.id, quantity: craftQuantity });
     }
   };
@@ -318,17 +333,19 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
           }
         }}
         proceed_label={
-          craftItemMutation.isPending
+          craftItemMutation.isPending || queueCraftMutation.isPending
             ? undefined
             : isCurrentlyCrafting
-              ? "Currently Crafting"
+              ? canCraft
+                ? "Add to Queue"
+                : "Missing Materials"
               : canCraft
                 ? "Start Crafting"
                 : "Missing Materials"
         }
         onAccept={handleCraft}
         confirmClassName={
-          canCraft && !isCurrentlyCrafting
+          canCraft
             ? "bg-blue-600 text-white hover:bg-blue-700"
             : "bg-red-600 text-white hover:bg-red-700"
         }

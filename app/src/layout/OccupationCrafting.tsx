@@ -13,6 +13,7 @@ import {
   CRAFTING_TIMES_MINS,
 } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import { ActionQueuePanel } from "@/layout/ActionQueuePanel";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
@@ -198,6 +199,7 @@ export default function OccupationCrafting() {
               userData={userData}
               isCurrentlyCrafting={craftingStatus?.isCurrentlyCrafting || false}
             />
+            <ActionQueuePanel queueTypes={["CRAFT"]} />
           </CardContent>
         </Card>
 
@@ -216,6 +218,8 @@ export default function OccupationCrafting() {
                       onEndShow="Ready!"
                       onFinish={() => {
                         void utils.item.getUserItems.invalidate();
+                        void utils.actionQueue.get.invalidate();
+                        void utils.profile.getUser.invalidate();
                       }}
                     />
                     )

@@ -928,6 +928,14 @@ export const JUTSU_TRANSFER_FREE_NORMAL = 3;
 export const JUTSU_TRANSFER_FREE_SILVER = 4;
 export const JUTSU_TRANSFER_FREE_GOLD = 5;
 
+// Training / crafting action queue
+export const ActionQueueTypes = ["JUTSU", "STAT", "CRAFT"] as const;
+export type ActionQueueType = (typeof ActionQueueTypes)[number];
+export const ACTION_QUEUE_BASE_SLOTS = 1;
+export const ACTION_QUEUE_FED_NORMAL_EXTRA = 1;
+export const ACTION_QUEUE_FED_SILVER_EXTRA = 2;
+export const ACTION_QUEUE_FED_GOLD_EXTRA = 3;
+
 // Jutsu reskin config
 export const RESKIN_LIMIT = 2;
 export const COST_RESKIN_JUTSU = 60;

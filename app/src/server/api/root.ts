@@ -1,3 +1,4 @@
+import { actionQueueRouter } from "./routers/actionQueue";
 import { activityStreakRouter } from "./routers/activityStreak";
 import { aiRouter } from "./routers/ai";
 import { anbuRouter } from "./routers/anbu";
@@ -58,6 +59,7 @@ import { createTRPCRouter } from "./trpc";
  * All routers added in /api/routers should be manually added here
  */
 export const appRouter = createTRPCRouter({
+  actionQueue: actionQueueRouter,
   activityStreak: activityStreakRouter,
   ai: aiRouter,
   anbu: anbuRouter,

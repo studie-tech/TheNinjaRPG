@@ -228,17 +228,26 @@ export const trainRouter = createTRPCRouter({
       ]);
       if (result.rowsAffected === 0) {
         return { success: false, message: "You are not training" };
-      } else {
-        return {
-          success: true,
-          message: `You gained ${trainingAmount.toFixed(2)} ${user.currentlyTraining}`,
-          data: {
-            experience: trainingAmount,
-            currentlyTraining: user.currentlyTraining,
-            questData: fullTrackers,
-          },
-        };
       }
+
+      const { processActionQueues } = await import("@/libs/actionQueue");
+      const queueMessages = await processActionQueues({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+
+      return {
+        success: true,
+        message:
+          queueMessages.length > 0
+            ? `You gained ${trainingAmount.toFixed(2)} ${user.currentlyTraining}. ${queueMessages.join(" ")}`
+            : `You gained ${trainingAmount.toFixed(2)} ${user.currentlyTraining}`,
+        data: {
+          experience: trainingAmount,
+          currentlyTraining: user.currentlyTraining,
+          questData: fullTrackers,
+        },
+      };
     }),
   // Update user training speed
   updateTrainingSpeed: protectedProcedure

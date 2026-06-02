@@ -25,6 +25,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
+  ACTION_QUEUE_FED_GOLD_EXTRA,
+  ACTION_QUEUE_FED_NORMAL_EXTRA,
+  ACTION_QUEUE_FED_SILVER_EXTRA,
   FED_EVENT_ITEMS_DEFAULT,
   FED_EVENT_ITEMS_GOLD,
   FED_EVENT_ITEMS_NORMAL,
@@ -486,6 +489,7 @@ const PayPalSubscriptionButton = (props: {
         <li>{FED_JUTSU_LOADOUTS_BASE + FED_NORMAL_JUTSU_LOADOUTS} jutsu loadouts</li>
         <li>{FED_ITEM_LOADOUTS_BASE + FED_NORMAL_ITEM_LOADOUTS} item loadouts</li>
         <li>+{SKILL_TREE_RESET_FREE_NORMAL} skill tree resets per month</li>
+        <li>+{ACTION_QUEUE_FED_NORMAL_EXTRA} action queue slot</li>
         <li>Custom avatar (512KB)</li>
       </ul>
     </>
@@ -505,6 +509,7 @@ const PayPalSubscriptionButton = (props: {
         <li>{FED_JUTSU_LOADOUTS_BASE + FED_SILVER_JUTSU_LOADOUTS} jutsu loadouts</li>
         <li>{FED_ITEM_LOADOUTS_BASE + FED_SILVER_ITEM_LOADOUTS} item loadouts</li>
         <li>+{SKILL_TREE_RESET_FREE_SILVER} skill tree resets per month</li>
+        <li>+{ACTION_QUEUE_FED_SILVER_EXTRA} action queue slots</li>
         <li>Custom avatar (1MB)</li>
       </ul>
     </>
@@ -522,6 +527,7 @@ const PayPalSubscriptionButton = (props: {
         <li>{FED_JUTSU_LOADOUTS_BASE + FED_GOLD_JUTSU_LOADOUTS} jutsu loadouts</li>
         <li>{FED_ITEM_LOADOUTS_BASE + FED_GOLD_ITEM_LOADOUTS} item loadouts</li>
         <li>+{SKILL_TREE_RESET_FREE_GOLD} skill tree resets per month</li>
+        <li>+{ACTION_QUEUE_FED_GOLD_EXTRA} action queue slots</li>
         <li>Custom avatar (2MB)</li>
       </ul>
     </>
