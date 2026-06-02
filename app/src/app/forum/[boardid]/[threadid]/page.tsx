@@ -5,6 +5,7 @@ import { use, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import NotFoundPage from "@/app/[...not-found]/page";
+import { FORUM_MIN_LEVEL, forumLevelMessage } from "@/drizzle/constants";
 import { CommentOnForum } from "@/layout/Comment";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -38,6 +39,7 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
   const allComments = comments?.data;
   const totalPages = comments?.totalPages ?? 0;
   const totalComments = comments?.totalComments ?? 0;
+  const belowForumMinLevel = (userData?.level ?? 0) < FORUM_MIN_LEVEL;
 
   const {
     handleSubmit,
@@ -70,7 +72,13 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
     });
 
   const handleSubmitComment = handleSubmit(
-    (data) => createComment(data),
+    (data) => {
+      if (belowForumMinLevel) {
+        showMutationToast({ success: false, message: forumLevelMessage });
+        return;
+      }
+      createComment(data);
+    },
     (errors) => console.error(errors),
   );
 
@@ -110,7 +118,18 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
             userData &&
             !thread.isLocked &&
             !userData.isBanned &&
-            !userData.isSilenced && (
+            !userData.isSilenced &&
+            belowForumMinLevel && (
+              <p className="mb-3 text-center text-muted-foreground text-sm">
+                {forumLevelMessage}
+              </p>
+            )}
+          {thread &&
+            userData &&
+            !thread.isLocked &&
+            !userData.isBanned &&
+            !userData.isSilenced &&
+            !belowForumMinLevel && (
               <div className="relative mb-3">
                 <RichInput
                   id="comment"

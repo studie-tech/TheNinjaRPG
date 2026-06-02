@@ -28,7 +28,9 @@ import { Label } from "@/components/ui/label";
 import {
   PITY_BLOODLINE_ROLLS,
   PITY_SYSTEM_ENABLED,
+  REP_TRADE_MIN_LEVEL,
   RYO_FOR_REP_DAYS_FROZEN,
+  repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import AvatarImage from "@/layout/Avatar";
@@ -320,6 +322,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
     });
 
   const isLoading = isCreating || isDelisting || isAccepting;
+  const belowRepTradeMinLevel = userData.level < REP_TRADE_MIN_LEVEL;
 
   // Creator search
   const maxUsers = 1;
@@ -423,7 +426,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
         ),
         actions: (
           <div className="flex flex-row gap-1">
-            {showActive && hasRyo && !owner && (
+            {showActive && hasRyo && !owner && !belowRepTradeMinLevel && (
               <Button onClick={() => accept({ offerId: offer.id })}>
                 <ShoppingCart className="mr-2 h-5 w-5" />
                 Buy
@@ -510,7 +513,12 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
       }
     >
       {/* CREATE OFFERS */}
-      {tradeableReps > 0 && (
+      {belowRepTradeMinLevel && (
+        <p className="border-b px-3 py-3 text-center text-muted-foreground text-sm">
+          {repTradeLevelMessage}
+        </p>
+      )}
+      {tradeableReps > 0 && !belowRepTradeMinLevel && (
         <div className="pb-5">
           <p className="p-3">
             You have <b>{tradeableReps.toLocaleString()} reputation points</b> and{" "}

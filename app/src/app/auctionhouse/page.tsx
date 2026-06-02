@@ -80,8 +80,10 @@ import { Separator } from "@/components/ui/separator";
 import {
   AUCTION_BIDDER_LEVEL_MAX,
   AUCTION_BIDDER_LEVEL_MIN,
+  AUCTION_HOUSE_MIN_LEVEL,
   AUCTION_LISTING_STATES,
   AUCTION_LISTING_TYPES,
+  auctionHouseLevelMessage,
   IMG_AVATAR_DEFAULT,
   ItemRarities,
   TRADEABLE_CURRENCY_TYPES,
@@ -158,6 +160,8 @@ export default function AuctionHousePage() {
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing Auction House" />;
 
+  const belowAuctionMinLevel = userData.level < AUCTION_HOUSE_MIN_LEVEL;
+
   return (
     <ContentBox
       title="Auction House"
@@ -178,10 +182,15 @@ export default function AuctionHousePage() {
               ))}
             </SelectContent>
           </Select>
-          <NewAuctionListingDialog />
+          {!belowAuctionMinLevel && <NewAuctionListingDialog />}
         </div>
       }
     >
+      {belowAuctionMinLevel && (
+        <p className="border-b px-4 py-3 text-center text-muted-foreground text-sm">
+          {auctionHouseLevelMessage}
+        </p>
+      )}
       <AuctionListing selectedStatus={selectedStatus} />
     </ContentBox>
   );
@@ -549,7 +558,7 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
               {bidStanding === "winning" && (
                 <Badge
                   variant="outline"
-                  className="gap-1 border-emerald-500/50 bg-emerald-500/10 font-medium text-emerald-900 text-[10px] dark:text-emerald-100"
+                  className="gap-1 border-emerald-500/50 bg-emerald-500/10 font-medium text-[10px] text-emerald-900 dark:text-emerald-100"
                 >
                   <TrendingUp className="h-3 w-3" />
                   Winning
@@ -558,7 +567,7 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
               {bidStanding === "outbid" && (
                 <Badge
                   variant="outline"
-                  className="gap-1 border-amber-500/50 bg-amber-500/10 font-medium text-amber-950 text-[10px] dark:text-amber-100"
+                  className="gap-1 border-amber-500/50 bg-amber-500/10 font-medium text-[10px] text-amber-950 dark:text-amber-100"
                 >
                   <TrendingDown className="h-3 w-3" />
                   Outbid
@@ -586,7 +595,7 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
           ) : null}
           <div className="mt-1.5 space-y-1.5 text-xs">
             <div>
-              <p className="mb-0.5 text-muted-foreground text-[10px] uppercase tracking-wide">
+              <p className="mb-0.5 text-[10px] text-muted-foreground uppercase tracking-wide">
                 Seller
               </p>
               <div className="flex min-w-0 items-center gap-2">
@@ -604,13 +613,13 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
               </div>
             </div>
             {showBidderLevelHint ? (
-              <p className="text-muted-foreground text-[10px] leading-snug">
+              <p className="text-[10px] text-muted-foreground leading-snug">
                 Bidders: levels {bidderMinLevel}–{bidderMaxLevel}
               </p>
             ) : null}
             {listing.listingType === "DIRECT" && (
               <div>
-                <p className="mb-0.5 text-muted-foreground text-[10px] uppercase tracking-wide">
+                <p className="mb-0.5 text-[10px] text-muted-foreground uppercase tracking-wide">
                   Offered to
                 </p>
                 <div className="flex min-w-0 items-center gap-2">
@@ -645,7 +654,7 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
       <Separator className="shrink-0 opacity-60" />
       <div className="flex shrink-0 items-end justify-between gap-2 p-3 pt-2">
         <div className="min-h-[4.25rem]">
-          <p className="text-muted-foreground text-[10px] uppercase tracking-wider">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Current
           </p>
           <p className="font-bold text-base text-emerald-700 tabular-nums dark:text-emerald-400">
@@ -655,7 +664,7 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
             </span>
           </p>
           {showPerUnitPricing ? (
-            <p className="mt-0.5 text-muted-foreground text-[10px] leading-tight tabular-nums">
+            <p className="mt-0.5 text-[10px] text-muted-foreground tabular-nums leading-tight">
               {formatAuctionPerUnitLine(
                 listing.currentPrice,
                 stackQuantity,
@@ -675,7 +684,7 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
               : "—"}
           </p>
           {listing.buyoutPrice != null && showPerUnitPricing ? (
-            <p className="mt-0.5 text-muted-foreground text-[10px] leading-tight tabular-nums">
+            <p className="mt-0.5 text-[10px] text-muted-foreground tabular-nums leading-tight">
               {formatAuctionPerUnitLine(
                 listing.buyoutPrice,
                 stackQuantity,
@@ -685,7 +694,7 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
           ) : null}
         </div>
         <div className="flex min-h-[4.25rem] flex-col items-end justify-end gap-0.5 text-right">
-          <div className="flex items-center gap-1 text-muted-foreground text-[10px] uppercase tracking-wide">
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide">
             <Timer className="h-3 w-3" />
             Ends
           </div>
@@ -787,7 +796,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
       </Modal2>
     );
   }
-  if (!listing.userItem || !listing.userItem.item) {
+  if (!listing.userItem?.item) {
     return (
       <Modal2 title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>
         <div className="p-4 text-center">
@@ -815,13 +824,15 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   const isActive = listing.status === "ACTIVE";
   const stackQuantity = listing.userItem.quantity;
   const showPerUnitPricing = listing.userItem.item.canStack && stackQuantity > 1;
-  const canSellerCancel = isOwner && isActive && listing.bids.length === 0;
 
   const bidderMinLevel = listing.bidderMinLevel ?? AUCTION_BIDDER_LEVEL_MIN;
   const bidderMaxLevel = listing.bidderMaxLevel ?? AUCTION_BIDDER_LEVEL_MAX;
+  const meetsAuctionHouseMinLevel = userData.level >= AUCTION_HOUSE_MIN_LEVEL;
   const canBidByLevel =
     listing.listingType !== "AUCTION" ||
     (userData.level >= bidderMinLevel && userData.level <= bidderMaxLevel);
+  const canBid = meetsAuctionHouseMinLevel && canBidByLevel;
+  const canSellerCancel = isOwner && isActive && listing.bids.length === 0;
 
   const minIntegerBid = Math.floor(listing.currentPrice) + 1;
   const parsedBidAmount = bidAmount.trim() === "" ? Number.NaN : Number(bidAmount);
@@ -903,7 +914,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
         <Card className="overflow-hidden border-amber-500/25 bg-linear-to-br from-amber-950/10 via-card to-card shadow-sm">
           <CardHeader className="space-y-0.5 p-3 pb-2">
             <div className="flex flex-wrap items-center justify-between gap-1.5">
-              <CardTitle className="flex items-center gap-1.5 text-xs font-semibold">
+              <CardTitle className="flex items-center gap-1.5 font-semibold text-xs">
                 <Gavel className="h-3 w-3 text-amber-600" />
                 Lot & pricing
               </CardTitle>
@@ -938,7 +949,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             <div className="flex flex-col gap-2 rounded-md border bg-background/60 p-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-0">
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <span className="shrink-0 text-muted-foreground text-[10px] uppercase tracking-wide">
+                  <span className="shrink-0 text-[10px] text-muted-foreground uppercase tracking-wide">
                     Seller
                   </span>
                   <Image
@@ -955,7 +966,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                 </div>
                 {listing.listingType === "DIRECT" && listing.targetUser ? (
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="shrink-0 text-muted-foreground text-[10px] uppercase tracking-wide">
+                    <span className="shrink-0 text-[10px] text-muted-foreground uppercase tracking-wide">
                       Buyer
                     </span>
                     <Image
@@ -972,15 +983,15 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                   </div>
                 ) : null}
               </div>
-              <div className="shrink-0 border-t border-emerald-500/20 pt-1.5 sm:border-t-0 sm:border-l sm:pl-3 sm:pt-0">
-                <p className="text-muted-foreground text-[10px] uppercase tracking-wide">
+              <div className="shrink-0 border-emerald-500/20 border-t pt-1.5 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-3">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
                   Current
                 </p>
-                <p className="font-bold text-base leading-tight text-emerald-800 tabular-nums sm:text-right dark:text-emerald-300">
+                <p className="font-bold text-base text-emerald-800 tabular-nums leading-tight sm:text-right dark:text-emerald-300">
                   {formatAuctionCurrency(listing.currentPrice, listing.currencyType)}
                 </p>
                 {showPerUnitPricing ? (
-                  <p className="mt-0.5 text-muted-foreground text-[10px] leading-tight sm:text-right">
+                  <p className="mt-0.5 text-[10px] text-muted-foreground leading-tight sm:text-right">
                     {formatAuctionPerUnitLine(
                       listing.currentPrice,
                       stackQuantity,
@@ -989,13 +1000,13 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                   </p>
                 ) : null}
                 {listing.buyoutPrice != null ? (
-                  <p className="mt-0.5 text-muted-foreground text-[11px] sm:text-right">
+                  <p className="mt-0.5 text-[11px] text-muted-foreground sm:text-right">
                     Buyout{" "}
                     {formatAuctionCurrency(listing.buyoutPrice, listing.currencyType)}
                   </p>
                 ) : null}
                 {listing.buyoutPrice != null && showPerUnitPricing ? (
-                  <p className="mt-0.5 text-muted-foreground text-[10px] leading-tight sm:text-right">
+                  <p className="mt-0.5 text-[10px] text-muted-foreground leading-tight sm:text-right">
                     {formatAuctionPerUnitLine(
                       listing.buyoutPrice,
                       stackQuantity,
@@ -1046,7 +1057,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
           !isExpired &&
           !isOwner &&
           (!listing.targetUserId || listing.targetUserId === userData.userId) &&
-          canBidByLevel && (
+          canBid && (
             <Card className="border-primary/20 bg-muted/20">
               <CardHeader className="space-y-0.5 p-3 pb-1.5">
                 <CardTitle className="text-sm">Raise your bid</CardTitle>
@@ -1121,7 +1132,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
               </p>
             </div>
             {!canSellerCancel && isActive ? (
-              <p className="text-center text-muted-foreground text-[10px]">
+              <p className="text-center text-[10px] text-muted-foreground">
                 Bids have been placed — this listing can no longer be cancelled.
               </p>
             ) : null}
@@ -1154,7 +1165,21 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
         {isActive &&
           !isExpired &&
           !isOwner &&
+          !meetsAuctionHouseMinLevel &&
+          (!listing.targetUserId || listing.targetUserId === userData.userId) && (
+            <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50/90 p-2.5 dark:border-amber-900 dark:bg-amber-950/40">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-800 dark:text-amber-200" />
+              <p className="text-amber-950 text-xs leading-snug dark:text-amber-100">
+                {auctionHouseLevelMessage}
+              </p>
+            </div>
+          )}
+
+        {isActive &&
+          !isExpired &&
+          !isOwner &&
           listing.listingType === "AUCTION" &&
+          meetsAuctionHouseMinLevel &&
           (!listing.targetUserId || listing.targetUserId === userData.userId) &&
           !canBidByLevel && (
             <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50/90 p-2.5 dark:border-amber-900 dark:bg-amber-950/40">
@@ -1488,7 +1513,7 @@ export const NewAuctionListingDialog: React.FC = () => {
                           className="h-9"
                         />
                         <CommandList
-                          className="w-full max-h-[300px] overflow-y-auto"
+                          className="max-h-[300px] w-full overflow-y-auto"
                           onWheel={(e) => {
                             const LINE_HEIGHT = 18;
                             const PAGE_HEIGHT = e.currentTarget.clientHeight;

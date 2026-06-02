@@ -19,6 +19,8 @@ import { z } from "zod";
 import {
   AUCTION_BIDDER_LEVEL_MAX,
   AUCTION_BIDDER_LEVEL_MIN,
+  AUCTION_HOUSE_MIN_LEVEL,
+  auctionHouseLevelMessage,
 } from "@/drizzle/constants";
 import {
   actionLog,
@@ -335,6 +337,9 @@ export const auctionRouter = createTRPCRouter({
       if (user.isTradeBanned) {
         return errorResponse("You are banned from trading");
       }
+      if (user.level < AUCTION_HOUSE_MIN_LEVEL) {
+        return errorResponse(auctionHouseLevelMessage);
+      }
       if (userItemData.equipped !== "NONE") {
         return errorResponse("Item is currently equipped");
       }
@@ -503,6 +508,9 @@ export const auctionRouter = createTRPCRouter({
       }
       if (user.isTradeBanned) {
         return errorResponse("You are banned from trading");
+      }
+      if (user.level < AUCTION_HOUSE_MIN_LEVEL) {
+        return errorResponse(auctionHouseLevelMessage);
       }
       if (auction.listingType === "AUCTION") {
         if (

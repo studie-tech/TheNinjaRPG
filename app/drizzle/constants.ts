@@ -889,7 +889,7 @@ export const COST_EXTRA_JUTSU_SLOT = 50;
 export const COST_REROLL_ELEMENT = 10;
 export const COST_SKILL_RESET = 30;
 export const COST_CONCEPT_IMAGE = 1;
-export const COST_CONCEPT_VIDEO = 10;
+export const COST_CONCEPT_VIDEO = 15;
 export const COST_STREAK_CATCHUP_DAY = 1;
 export const MAX_EXTRA_JUTSU_SLOTS = 2;
 export const BATTLE_LOG_FULL_LIMIT = 1000;
@@ -1571,6 +1571,14 @@ export const SECTOR_TYPES = [
 
 // Conversation config
 export const CONVERSATION_QUIET_MINS = 5;
+export const MESSAGING_MIN_LEVEL = 3;
+export const FORUM_MIN_LEVEL = 3;
+export const AUCTION_HOUSE_MIN_LEVEL = 15;
+export const REP_TRADE_MIN_LEVEL = 15;
+export const messagingLevelMessage = `You must reach level ${MESSAGING_MIN_LEVEL} to send messages`;
+export const forumLevelMessage = `You must reach level ${FORUM_MIN_LEVEL} to post in the forum`;
+export const auctionHouseLevelMessage = `You must reach level ${AUCTION_HOUSE_MIN_LEVEL} to use the auction house`;
+export const repTradeLevelMessage = `You must reach level ${REP_TRADE_MIN_LEVEL} to buy or sell reputation with other players`;
 export const REPORT_CONTEXT_WINDOW = 20;
 
 // Kage config

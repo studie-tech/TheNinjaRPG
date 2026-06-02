@@ -3,7 +3,13 @@ import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzl
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import {
+  FORUM_MIN_LEVEL,
+  forumLevelMessage,
+  IMG_AVATAR_DEFAULT,
+  MESSAGING_MIN_LEVEL,
+  messagingLevelMessage,
+} from "@/drizzle/constants";
 import {
   conversation,
   conversationComment,
@@ -207,8 +213,10 @@ export const commentsRouter = createTRPCRouter({
       // Resolve effective poster (allow staff to post as AI)
       const effectiveUserId = resolveSenderId(user, sender);
       // Guard
-      if (user.isBanned || user.isSilenced) {
-        return errorResponse("You are banned");
+      if (user.isBanned) return errorResponse("You are banned");
+      if (user.isSilenced) return errorResponse("You are silenced");
+      if (user.level < FORUM_MIN_LEVEL) {
+        return errorResponse(forumLevelMessage);
       }
       if (!thread) {
         return errorResponse("Thread not found");
@@ -370,6 +378,7 @@ export const commentsRouter = createTRPCRouter({
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
     .input(createConversationSchema)
+    .output(baseServerResponse.extend({ conversationId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, sender] = await Promise.all([
@@ -377,8 +386,10 @@ export const commentsRouter = createTRPCRouter({
         input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
       ]);
       // Guard
-      if (user.isBanned || user.isSilenced) {
-        throw serverError("UNAUTHORIZED", "You are banned");
+      if (user.isBanned) return errorResponse("You are banned");
+      if (user.isSilenced) return errorResponse("You are silenced");
+      if (user.level < MESSAGING_MIN_LEVEL) {
+        return errorResponse(messagingLevelMessage);
       }
       const effectiveUserId = resolveSenderId(user, sender);
       // Mutate
@@ -390,7 +401,7 @@ export const commentsRouter = createTRPCRouter({
         title: input.title,
         content: input.comment,
       });
-      return { conversationId: convoId };
+      return { success: true, message: "Message sent.", conversationId: convoId };
     }),
   exitConversation: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Leave a conversation" } })
@@ -676,6 +687,9 @@ export const commentsRouter = createTRPCRouter({
       if (!convo) return errorResponse("Conversation not found");
       if ((user.isBanned || user.isSilenced) && !convo.isStaffAvailable) {
         return errorResponse("You are banned");
+      }
+      if (user.level < MESSAGING_MIN_LEVEL && !convo.isStaffAvailable) {
+        return errorResponse(messagingLevelMessage);
       }
       if (!canViewConversation(convo, ctx.userId, user.role)) {
         return errorResponse("You are not allowed to view this conversation");

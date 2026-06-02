@@ -25,7 +25,14 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import type { FederalStatus, UserRank } from "@/drizzle/schema";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import type { FederalStatus, UserRank } from "@/drizzle/constants";
+import { MESSAGING_MIN_LEVEL, messagingLevelMessage } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
@@ -278,6 +285,14 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   });
   const senderUser = watchedSenderUsers?.[0];
   const canPostAsAI = userData && canPostAsAi(userData.role);
+  const belowMessagingMinLevel = (userData?.level ?? 0) < MESSAGING_MIN_LEVEL;
+  const composeRestriction = userData?.isBanned
+    ? "You are banned"
+    : userData?.isSilenced
+      ? "You are silenced"
+      : belowMessagingMinLevel
+        ? messagingLevelMessage
+        : null;
 
   const users = useWatch({
     control: userSearchMethods.control,
@@ -295,10 +310,10 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
 
   const createConversation = api.comments.createConversation.useMutation({
     onSuccess: (data) => {
-      showMutationToast({ success: true, message: "Message sent." });
-      create.reset();
-      if (data.conversationId) {
-        props.setSelectedConvo?.(data.conversationId);
+      showMutationToast(data);
+      if (data.success) {
+        create.reset();
+        if (data.conversationId) props.setSelectedConvo?.(data.conversationId);
       }
     },
   });
@@ -320,14 +335,33 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
 
   return (
     <div className="flex flex-row items-center">
-      {userData && (userData.isBanned || userData.isSilenced) && (
-        <Button id="conversation">
-          <BellOff className="mr-2 h-6 w-6 text-red-500" />
-          {userData.isBanned && "Banned"}
-          {userData.isSilenced && "Silenced"}
-        </Button>
+      {userData && composeRestriction && (
+        <TooltipProvider delayDuration={50}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  id="conversation"
+                  disabled
+                  variant="outline"
+                  aria-label={`${composeRestriction}. You cannot start a conversation.`}
+                >
+                  <BellOff className="mr-2 h-6 w-6 text-red-500" />
+                  {userData.isBanned
+                    ? "Banned"
+                    : userData.isSilenced
+                      ? "Silenced"
+                      : `Level ${MESSAGING_MIN_LEVEL} Required`}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {composeRestriction}. You cannot start a conversation.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
-      {userData && !userData.isBanned && !userData.isSilenced && (
+      {userData && !composeRestriction && (
         <Confirm2
           title="Create a new conversation"
           proceed_label="Submit"

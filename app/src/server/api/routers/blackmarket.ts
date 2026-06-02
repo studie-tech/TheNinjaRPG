@@ -13,10 +13,12 @@ import {
   COST_RESET_STATS,
   ElementNames,
   MAX_EXTRA_JUTSU_SLOTS,
+  REP_TRADE_MIN_LEVEL,
   RYO_CAP,
   RYO_FOR_REP_DAYS_FROZEN,
   RYO_FOR_REP_MAX_LISTINGS,
   RYO_FOR_REP_MIN_REPS,
+  repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { actionLog, ryoTrade, userData } from "@/drizzle/schema";
 import { filterValidElementsTypeguard } from "@/libs/train";
@@ -147,6 +149,9 @@ export const blackMarketRouter = createTRPCRouter({
       }
       if (user.isBanned) return errorResponse("You are banned");
       if (user.isTradeBanned) return errorResponse("You are banned from trading");
+      if (user.level < REP_TRADE_MIN_LEVEL) {
+        return errorResponse(repTradeLevelMessage);
+      }
       if (input.reps <= 0) return errorResponse("Reps must be greater than 0");
       if (input.ryo <= 0) return errorResponse("Ryo must be greater than 0");
       if (input.ryo < input.reps) return errorResponse("Ryo must be greater than reps");
@@ -227,6 +232,9 @@ export const blackMarketRouter = createTRPCRouter({
       }
       if (user.isBanned) return errorResponse("You are banned");
       if (user.isTradeBanned) return errorResponse("You are banned from trading");
+      if (user.level < REP_TRADE_MIN_LEVEL) {
+        return errorResponse(repTradeLevelMessage);
+      }
       if (user.money < offer.requestedRyo) {
         return errorResponse("Insufficient funds");
       }

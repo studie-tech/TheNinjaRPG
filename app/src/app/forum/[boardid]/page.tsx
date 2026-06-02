@@ -19,7 +19,12 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { FORUM_BOARD_THREADS_PER_PAGE, IMG_ICON_FORUM } from "@/drizzle/constants";
+import {
+  FORUM_BOARD_THREADS_PER_PAGE,
+  FORUM_MIN_LEVEL,
+  forumLevelMessage,
+  IMG_ICON_FORUM,
+} from "@/drizzle/constants";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
@@ -95,6 +100,7 @@ function Board(properties: { params: Promise<{ boardid: string }> }) {
   const canUserPostAsAi = userData && canPostAsAi(userData.role);
   const isNewsBoard = board?.name === "News";
   const canPostNews = userData && canCreateNews(userData.role);
+  const belowForumMinLevel = (userData?.level ?? 0) < FORUM_MIN_LEVEL;
 
   const { mutate: createThread, isPending: isCreatingThread } =
     api.forum.createThread.useMutation({
@@ -157,7 +163,8 @@ function Board(properties: { params: Promise<{ boardid: string }> }) {
         topRightContent={
           userData &&
           !userData.isBanned &&
-          !userData.isSilenced && (
+          !userData.isSilenced &&
+          !belowForumMinLevel && (
             <div className="flex flex-row items-center">
               <Confirm2
                 title="Create a new thread"
@@ -238,6 +245,14 @@ function Board(properties: { params: Promise<{ boardid: string }> }) {
           )
         }
       >
+        {userData &&
+          belowForumMinLevel &&
+          !userData.isBanned &&
+          !userData.isSilenced && (
+            <p className="mb-4 text-center text-muted-foreground text-sm">
+              {forumLevelMessage}
+            </p>
+          )}
         {allThreads?.length === 0 && <div>No threads found</div>}
         {allThreads?.map((thread, i) => {
           // Icons, which have to be clickable for moderators+, but just shown otherwise

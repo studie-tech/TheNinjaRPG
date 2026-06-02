@@ -1,6 +1,7 @@
 import { asc, eq, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { FORUM_MIN_LEVEL, forumLevelMessage } from "@/drizzle/constants";
 import { forumBoard, forumPost, forumThread, userData } from "@/drizzle/schema";
 import { resolveSenderId } from "@/libs/comments";
 import { fetchBoard, getInfiniteThreads, readNews } from "@/libs/forum";
@@ -85,8 +86,10 @@ export const forumRouter = createTRPCRouter({
       if (isNews && !canCreateNews(user.role)) {
         return errorResponse("You are not authorized to create news");
       }
-      if (user.isBanned || user.isSilenced) {
-        return errorResponse("You are banned");
+      if (user.isBanned) return errorResponse("You are banned");
+      if (user.isSilenced) return errorResponse("You are silenced");
+      if (user.level < FORUM_MIN_LEVEL) {
+        return errorResponse(forumLevelMessage);
       }
       // Mutate
       const sanitized = sanitize(input.content);
