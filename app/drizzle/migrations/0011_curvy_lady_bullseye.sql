@@ -1,0 +1,2 @@
+ALTER TABLE `UserData` ADD `bracketImmunityLiftedUntil` datetime(3) DEFAULT (CURRENT_TIMESTAMP(3)) NOT NULL;
+ALTER TABLE `UserData` ADD `warParticipantUntil` datetime(3) DEFAULT (CURRENT_TIMESTAMP(3)) NOT NULL;
