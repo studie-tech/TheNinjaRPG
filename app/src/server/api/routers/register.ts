@@ -185,6 +185,7 @@ export const registerRouter = createTRPCRouter({
           immunityUntil: secondsFromNow(24 * 3600),
           musicOn: input.musicOn ?? true,
           sfxOn: input.sfxOn ?? true,
+          buttonSfxOn: input.buttonSfxOn ?? true,
           ...(reminder ? { earnedExperience: 10000 } : {}),
         }),
         ctx.drizzle.insert(bloodlineRolls).values({

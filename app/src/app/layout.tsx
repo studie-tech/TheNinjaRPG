@@ -1,9 +1,11 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { MultisessionAppSupport } from "@clerk/nextjs/internal";
+import { auth } from "@clerk/nextjs/server";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { extractRouterConfig } from "uploadthing/server";
 import TrpcClientProvider from "@/app/_trpc/Provider";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
@@ -17,14 +19,31 @@ import { InstallPromptProvider } from "@/hooks/useInstallPrompt";
 import AcceptWarning from "@/layout/AcceptWarning";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
 import LayoutSwitcher from "@/layout/LayoutSwitcher";
+import {
+  AB_PIXEL_LAYOUT_COOKIE,
+  cookieValueToLayout,
+  LAYOUT_PREFERENCE_COOKIE,
+} from "@/libs/layoutPreference";
 import { UserContextProvider } from "@/utils/UserContext";
 
 import "../styles/globals.css";
 import "sonner/dist/styles.css";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const readCookies = await cookies();
+  const { userId } = await auth();
+  const initialIsSignedIn = !!userId;
+  const initialLayout =
+    cookieValueToLayout(readCookies.get(LAYOUT_PREFERENCE_COOKIE)?.value) ??
+    cookieValueToLayout(readCookies.get(AB_PIXEL_LAYOUT_COOKIE)?.value) ??
+    "default";
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={initialLayout === "pixel" ? "dark" : undefined}
+      suppressHydrationWarning
+    >
       <body className="h-full">
         <NextSSRPlugin
           /** https://docs.uploadthing.com/getting-started/appdir */
@@ -47,7 +66,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     process.env.NODE_ENV === "production" && (
                       <GoogleTagManager gtmId={env.NEXT_PUBLIC_MEASUREMENT_ID} />
                     )}
-                  <LayoutSwitcher>{children}</LayoutSwitcher>
+                  <LayoutSwitcher
+                    initialIsSignedIn={initialIsSignedIn}
+                    initialLayout={initialLayout}
+                  >
+                    {children}
+                  </LayoutSwitcher>
                   <Toaster />
                   <AcceptWarning />
                   <ActivityStreakPopup />
@@ -128,7 +152,7 @@ export const metadata: Metadata = {
     icon: "/favicon.ico",
     apple: "/icons/icon-192x192.png",
   },
-  manifest: "/manifest.json",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

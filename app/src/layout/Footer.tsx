@@ -1,52 +1,37 @@
 import Link from "next/link";
-import type React from "react";
+import React from "react";
+import { SITE_FOOTER_LINKS } from "@/libs/legalLinks";
 
 const Footer: React.FC = () => {
   return (
-    <div className="col-span-6 text-center text-white">
-      <p className="text-xs">
-        <Link
-          href="https://app.termly.io/document/terms-of-service/71d95c2f-d6eb-4e3c-b480-9f0b9bb87830"
-          target="_blank"
-          className="hover:text-gray-500"
-        >
-          ToS
-        </Link>{" "}
-        -{" "}
-        <Link
-          href="https://app.termly.io/document/privacy-policy/9fea0bba-1061-47c0-8f28-0f724f06cc0e"
-          target="_blank"
-          className="hover:text-gray-500"
-        >
-          Privacy
-        </Link>{" "}
-        - Cookie{" "}
-        <Link
-          href="https://app.termly.io/document/cookie-policy/971fe8a9-3613-41a0-86ad-8e08e7be93d7"
-          target="_blank"
-          className="hover:text-gray-500"
-        >
-          Policy
-        </Link>
-        {" / "}
-        <Link href="/consent" className="hover:text-gray-500">
-          Consent
-        </Link>{" "}
-        -{" "}
-        <Link href="/rules" className="hover:text-gray-500">
-          Rules
-        </Link>{" "}
-        -{" "}
-        <Link href="/manual/staff" className="hover:text-gray-500">
-          Staff
-        </Link>
+    <div className="col-span-6 text-center text-white" data-site-footer>
+      <p className="text-xs" data-footer-links>
+        {SITE_FOOTER_LINKS.map((link, index) => (
+          <React.Fragment key={link.href}>
+            {index > 0 && <span data-footer-separator> - </span>}
+            <Link
+              href={link.href}
+              target={link.target}
+              rel={link.target ? "noreferrer" : undefined}
+              className="hover:text-gray-500"
+              data-footer-link
+            >
+              {link.label}
+            </Link>
+          </React.Fragment>
+        ))}
       </p>
-      <p className="text-xs">
+      <p className="text-xs" data-footer-meta>
         TheNinja-RPG © by Studie-Tech ApS - 2005-{new Date().getFullYear()}
       </p>
-      <p className="mb-7 text-xs">
-        Rådhusstræde 15 - 1466 København K - Denmark -{" "}
-        <a href="mailto:contact@theninja-rpg.com">Contact</a>
+      <p className="mb-7 text-xs" data-footer-address>
+        Rådhusstræde 15 - 1466 København K - Denmark
+        <span data-footer-contact-wrapper>
+          {" - "}
+          <a href="mailto:contact@theninja-rpg.com" data-footer-contact>
+            Contact
+          </a>
+        </span>
       </p>
     </div>
   );

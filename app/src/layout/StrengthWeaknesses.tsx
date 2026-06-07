@@ -14,7 +14,6 @@ import {
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   UserRolesWithSkillTreeAccess,
 } from "@/drizzle/constants";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
 import ElementImage from "@/layout/ElementImage";
 import NavTabs from "@/layout/NavTabs";
@@ -22,8 +21,10 @@ import SkillTreeFolderGrid from "@/layout/SkillTreeFolderGrid";
 import SkillTreeFolderModal from "@/layout/SkillTreeFolderModal";
 import { capUserStats } from "@/libs/profile";
 import { getStealthStatus } from "@/libs/stealth";
+import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
+import { useActiveLayout } from "@/utils/LayoutContext";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { getUserElements } from "@/validators/user";
 
@@ -228,14 +229,15 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
   const statsChartRef = useRef<HTMLCanvasElement>(null);
   const generalsChartRef = useRef<HTMLCanvasElement>(null);
   const userElements = getUserElements(userData);
+  const activeLayout = useActiveLayout();
 
   useEffect(() => {
     const statsCtx = statsChartRef?.current?.getContext("2d");
     const generalsCtx = generalsChartRef?.current?.getContext("2d");
     if (statsCtx && generalsCtx && userData) {
       // Update stats chart
-      const localTheme = safeLocalStorageGetItem("theme");
-      ChartJS.defaults.color = localTheme === "dark" ? "#FFFFFF" : "#000000";
+      const chartTextColor = getEffectiveThemeTextColor(activeLayout);
+      ChartJS.defaults.color = chartTextColor;
       const myStatsChart = new ChartJS(statsCtx, {
         type: "radar",
         options: {
@@ -249,8 +251,13 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
           },
           scales: {
             r: {
-              angleLines: { display: true },
-              ticks: { backdropColor: "rgba(99, 255, 132, 0.0)" },
+              angleLines: { color: "rgba(148, 163, 184, 0.35)", display: true },
+              grid: { color: "rgba(148, 163, 184, 0.25)" },
+              pointLabels: { color: chartTextColor },
+              ticks: {
+                backdropColor: "rgba(99, 255, 132, 0.0)",
+                color: chartTextColor,
+              },
               suggestedMin: 0,
               backgroundColor: "rgba(99, 255, 132, 0.2)",
             },
@@ -304,8 +311,14 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
           responsive: true,
           aspectRatio: 1.1,
           scales: {
+            x: {
+              ticks: { color: chartTextColor },
+              grid: { color: "rgba(148, 163, 184, 0.16)" },
+            },
             y: {
               beginAtZero: true,
+              ticks: { color: chartTextColor },
+              grid: { color: "rgba(148, 163, 184, 0.16)" },
             },
           },
           plugins: {
@@ -347,7 +360,7 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
         myGeneralsChart.destroy();
       };
     }
-  }, [userData]);
+  }, [activeLayout, userData]);
 
   return (
     <div className="grid grid-cols-1 pt-3 sm:grid-cols-2">

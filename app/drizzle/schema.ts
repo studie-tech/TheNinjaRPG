@@ -2164,6 +2164,7 @@ export const userData = mysqlTable(
     tavernMessages: int("tavernMessages").default(0).notNull(),
     musicOn: boolean("musicOn").default(true).notNull(),
     sfxOn: boolean("sfxOn").default(true).notNull(),
+    buttonSfxOn: boolean("buttonSfxOn").default(true).notNull(),
     iframesMuted: boolean("iframesMuted").default(false).notNull(),
     tutorialStep: tinyint("tutorialStep", { unsigned: true }).default(0).notNull(),
     tutorialOn: boolean("tutorialOn").default(true).notNull(),
@@ -4555,7 +4556,11 @@ export const abEvent = mysqlTable(
       experimentIdx: index("AbEvent_experiment_idx").on(table.experiment),
       eventIdx: index("AbEvent_event_idx").on(table.event),
       sourceIdx: index("AbEvent_source_idx").on(table.source),
-      eventIpUnique: uniqueIndex("AbEvent_event_ip_key").on(table.event, table.ip),
+      experimentEventIpUnique: uniqueIndex("AbEvent_experiment_event_ip_key").on(
+        table.experiment,
+        table.event,
+        table.ip,
+      ),
       createdAtIdx: index("AbEvent_createdAt_idx").on(table.createdAt),
     };
   },

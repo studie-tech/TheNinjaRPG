@@ -1,39 +1,68 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import type React from "react";
-import LayoutCore4 from "@/components/layout/core4_default";
-
-// Used for landing page layout A/B test (disabled for now)
-// import { usePathname } from "next/navigation";
-// import { useUser } from "@clerk/nextjs";
-// import { useAbVariant } from "@/hooks/useAbVariant";
-// import LayoutCore4New from "@/components/layout/core4_new";
+import { useEffect, useState } from "react";
+import LayoutCore4Beta from "@/components/layout/core4_beta";
+import LayoutCore4Landing from "@/components/layout/core4_landing";
+import LayoutCore4Pixel from "@/components/layout/core4_pixel";
+import { safeLocalStorageGetItem } from "@/hooks/localstorage";
+import {
+  type EffectiveLayout,
+  LAYOUT_PREFERENCE_COOKIE,
+  persistLayoutPreferenceCookie,
+  storedValueToLayout,
+} from "@/libs/layoutPreference";
+import { LayoutContextProvider } from "@/utils/LayoutContext";
+import { useUserData } from "@/utils/UserContext";
 
 interface LayoutSwitcherProps {
   children: React.ReactNode;
+  initialIsSignedIn: boolean;
+  initialLayout: EffectiveLayout;
 }
 
 /**
  * LayoutSwitcher component for A/B testing different layouts
- * - Only applies to non-logged in users on the homepage
- * - Control group gets the default layout
- * - Treatment group gets the new layout
+ * - Anonymous users enter the A/B-tested layout from the middleware cookie
+ * - Users can override locally from the settings dialog
  */
-const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({ children }) => {
-  // Used for landing page layout A/B test (disabled for now)
-  // const pathname = usePathname();
-  // const { isSignedIn, isLoaded } = useUser();
-  // const { isTreatment } = useAbVariant("ab_layout_new_3");
-  // // Only apply A/B test on homepage for non-logged in users
-  // const shouldApplyAbTest = pathname === "/" && !isSignedIn;
-  // if (!isLoaded) return null;
-  // // Treatment group gets the new layout (only on homepage for non-logged in users)
-  // if (shouldApplyAbTest && isTreatment) {
-  //   return <LayoutCore4New>{children}</LayoutCore4New>;
-  // }
+const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
+  children,
+  initialIsSignedIn,
+  initialLayout,
+}) => {
+  const pathname = usePathname();
+  const { data: userData, isClerkLoaded, userId } = useUserData();
+  const [layout, setLayout] = useState<EffectiveLayout>(initialLayout);
 
-  // Default layout for everyone else
-  return <LayoutCore4>{children}</LayoutCore4>;
+  useEffect(() => {
+    const nextLayout =
+      storedValueToLayout(safeLocalStorageGetItem(LAYOUT_PREFERENCE_COOKIE)) ??
+      initialLayout;
+    setLayout(nextLayout);
+    persistLayoutPreferenceCookie(nextLayout);
+  }, [initialLayout]);
+
+  const displayedLayout = layout;
+  const isKnownAnonymous = isClerkLoaded ? !userId : !initialIsSignedIn;
+  const isPixelLanding =
+    displayedLayout === "pixel" && pathname === "/" && isKnownAnonymous && !userData;
+  const content = isPixelLanding ? (
+    <LayoutCore4Landing>{children}</LayoutCore4Landing>
+  ) : displayedLayout === "pixel" ? (
+    <LayoutCore4Pixel initialIsSignedIn={initialIsSignedIn}>
+      {children}
+    </LayoutCore4Pixel>
+  ) : (
+    <LayoutCore4Beta>{children}</LayoutCore4Beta>
+  );
+
+  return (
+    <LayoutContextProvider isPixelLanding={isPixelLanding} value={displayedLayout}>
+      {content}
+    </LayoutContextProvider>
+  );
 };
 
 export default LayoutSwitcher;

@@ -18,6 +18,7 @@ import { type TicketType, TicketTypes } from "@/validators/misc";
 interface LowerRightHelpProps {
   className?: string;
   children?: React.ReactNode;
+  ariaLabel?: string;
 }
 
 const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
@@ -117,7 +118,10 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger name="supportBtn" aria-label="supportBtn">
+      <PopoverTrigger
+        name="supportBtn"
+        aria-label={props.ariaLabel ?? (!userData ? "Audio settings" : "Support")}
+      >
         <div className={cn("relative", props.className)}>
           {props.children}
           {showTutorialNotification && (
@@ -127,7 +131,7 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
           )}
         </div>
       </PopoverTrigger>
-      <PopoverContent className="m-2 min-w-96 max-w-96">
+      <PopoverContent className="m-2 w-[calc(100vw-1rem)] min-w-0 max-w-96 sm:min-w-96">
         {!userData ? (
           <div>
             <p className="mb-2 font-bold text-lg">Audio Settings</p>

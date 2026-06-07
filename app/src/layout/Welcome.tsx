@@ -5,8 +5,9 @@ import { AlertTriangle, ChevronRight, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type React from "react";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import PixelPublicHeader from "@/components/layout/PixelPublicHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,16 +17,23 @@ import {
   IMG_FRONTPAGE_SCREENSHOT_SECTOR,
   IMG_FRONTPAGE_SCREENSHOT_VILLAGE,
   IMG_LAYOUT_WELCOME_IMG,
+  IMG_LOGO_FULL,
+  IMG_PIXEL_HERO_POSTER_OPTIMIZED,
   TOTAL_PLAYERS_MILESTONE,
 } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
+import { LEGAL_LINKS } from "@/libs/legalLinks";
 import { cn } from "@/libs/shadui";
+import { useActiveLayout, useIsPixelLanding } from "@/utils/LayoutContext";
 import { getFirstOfNextMonth } from "@/utils/time";
 
 const Welcome: React.FC = () => {
+  const activeLayout = useActiveLayout();
+  const isPixelLanding = useIsPixelLanding();
+
   // Snap container for full-height sections
   const backgroundClass = cn(
     "flex flex snap-start snap-always flex-col justify-center gap-4",
@@ -37,8 +45,19 @@ const Welcome: React.FC = () => {
   );
 
   // Check if game features should be shown (not in MCP mode)
-  const showGameFeatures =
-    !env.NEXT_PUBLIC_MCP_ENABLED || env.NEXT_PUBLIC_MCP_ENABLED === "false";
+  const isMcpEnabled = env.NEXT_PUBLIC_MCP_ENABLED === "true";
+  const showGameFeatures = !isMcpEnabled;
+
+  if (activeLayout === "pixel" && isPixelLanding) {
+    return (
+      <>
+        <PixelWelcome />
+        <Suspense>
+          <SetReferal />
+        </Suspense>
+      </>
+    );
+  }
 
   // Render
   return (
@@ -474,6 +493,446 @@ url = "${env.NEXT_PUBLIC_BASE_URL}/api/mcp"`}
 
 export default Welcome;
 
+const PixelWelcome: React.FC = () => {
+  const scrollContainerRef = useRef<HTMLElement>(null);
+  usePixelLandingParallax(scrollContainerRef);
+  const heroLogoRef = useRef<HTMLDivElement>(null);
+  const showHeaderLogo = usePixelHeaderLogoVisibility(heroLogoRef, scrollContainerRef);
+
+  const pixelClip = "tnr-pixel-clip";
+  const inkPrimaryButton = "tnr-ink-btn tnr-ink-btn-primary tnr-ink-register";
+  const inkSecondaryButton = "tnr-ink-btn tnr-ink-btn-secondary";
+  const panelClass = cn(
+    pixelClip,
+    "border border-sky-200/20 bg-slate-950/72 shadow-2xl shadow-black/30 backdrop-blur-md",
+  );
+  const eyebrowClass = "font-black text-amber-200 text-xs tracking-[0.2em]";
+  const sectionClass = "bg-[#09111d] py-16 sm:py-20";
+  const alternateSectionClass = "bg-[#0d1a2b] py-16 sm:py-20";
+  const containerClass = "mx-auto w-[min(100%_-_32px,1180px)]";
+  const screenshotClass = cn(
+    pixelClip,
+    "w-full border border-sky-200/20 object-cover shadow-2xl shadow-black/35",
+  );
+  const publicNavLinks = [
+    { href: "#world", name: "World" },
+    { href: "#features", name: "Features" },
+    { href: "#gameplay", name: "Gameplay" },
+    { href: "#community", name: "Community" },
+  ];
+
+  return (
+    <main
+      ref={scrollContainerRef}
+      className="tnr-pixel-scroll-container h-[100svh] overflow-y-auto overflow-x-hidden bg-[#09111d] text-slate-50"
+    >
+      <PixelPublicHeader showLogo={showHeaderLogo} navLinks={publicNavLinks} />
+
+      <section
+        className="relative grid min-h-[100svh] place-items-center overflow-hidden px-4 pt-28 pb-20"
+        data-pixel-snap="hero"
+      >
+        <video
+          className="absolute inset-0 h-full w-full object-cover"
+          muted
+          playsInline
+          autoPlay
+          loop
+          preload="metadata"
+          poster={IMG_PIXEL_HERO_POSTER_OPTIMIZED}
+          src="/layouts/pixel/tnr-hero.mp4"
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,14,.68),rgba(8,13,22,.35)_35%,rgba(7,10,18,.9)),radial-gradient(ellipse_at_center,transparent_0_35%,rgba(4,7,13,.72)_85%)]" />
+        <div className="relative z-10 flex w-[min(100%,820px)] flex-col items-center text-center">
+          <div ref={heroLogoRef}>
+            <Image
+              src={IMG_LOGO_FULL}
+              width={384}
+              height={138}
+              alt="The Ninja RPG"
+              priority
+              className="h-auto w-[min(72vw,360px)] drop-shadow-2xl"
+            />
+          </div>
+          <p className="mt-2 font-black text-amber-200 text-xs tracking-[0.2em]">
+            A Living Shinobi Realm
+          </p>
+          <h1 className="mt-4 max-w-[15ch] font-black font-serif text-4xl leading-[1.02] tracking-normal sm:text-5xl md:text-6xl">
+            Enter a world shaped by rivalry, growth, and legend
+          </h1>
+          <p className="mt-6 max-w-2xl text-lg text-slate-100 sm:text-xl">
+            In The Ninja RPG, every step draws you deeper into a living anime-inspired
+            world of villages, jutsus, conflict, progression, and discovery.
+          </p>
+          <div className="mt-6 grid w-full max-w-3xl gap-2 text-slate-100 text-sm sm:grid-cols-3">
+            {[
+              "Free anime ninja MMORPG",
+              "Train jutsu, stats, and bloodlines",
+              "PvP, villages, missions, and clans",
+            ].map((text) => (
+              <div
+                key={text}
+                className="whitespace-nowrap border border-sky-200/20 bg-slate-950/45 px-3 py-2 font-semibold"
+              >
+                {text}
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link href="/signup">
+              <Button size="lg" className={cn(inkPrimaryButton, "tnr-ink-cta")}>
+                <UserPlus className="mr-2 h-5 w-5" />
+                Register
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button
+                variant="outline"
+                size="lg"
+                className={cn(inkSecondaryButton, "tnr-ink-cta")}
+              >
+                Log In
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section id="world" className={alternateSectionClass} data-pixel-snap="section">
+        <div
+          className={cn(
+            containerClass,
+            "grid gap-8 md:grid-cols-[0.9fr_1.1fr] md:items-center",
+          )}
+        >
+          <div>
+            <p className={eyebrowClass}>Intro Artwork</p>
+            <h2 className="mt-3 font-black font-serif text-4xl md:text-6xl">
+              A Living Shinobi Realm
+            </h2>
+            <p className="mt-4 text-2xl text-slate-100">
+              Enter a world shaped by rivalry, growth, and legend
+            </p>
+            <p className="mt-5 max-w-xl text-slate-300">
+              In The Ninja RPG, every step draws you deeper into a living anime-inspired
+              world of villages, jutsus, conflict, progression, and discovery.
+            </p>
+          </div>
+          <div
+            className={cn(panelClass, "tnr-pixel-parallax p-3")}
+            data-pixel-parallax="0.08"
+          >
+            <Image
+              src="/screenshots/global.webp"
+              width={512}
+              height={372}
+              alt="Intro artwork"
+              className={screenshotClass}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="features"
+        className={alternateSectionClass}
+        data-pixel-snap="section"
+      >
+        <div
+          className={cn(
+            containerClass,
+            "grid gap-8 md:grid-cols-[1.05fr_0.95fr] md:items-center",
+          )}
+        >
+          <div
+            className={cn(
+              panelClass,
+              "tnr-pixel-parallax order-last p-3 md:order-none",
+            )}
+            data-pixel-parallax="0.06"
+          >
+            <Image
+              src="/screenshots/village.webp"
+              width={512}
+              height={340}
+              alt="Village Artwork"
+              className={screenshotClass}
+            />
+          </div>
+          <div>
+            <p className={eyebrowClass}>Village Artwork</p>
+            <p className="mt-3 font-black text-amber-100 text-sm tracking-[0.18em]">
+              Village Allegiance
+            </p>
+            <h2 className="mt-3 font-black font-serif text-4xl md:text-6xl">
+              Villages with identity and purpose
+            </h2>
+            <p className="mt-5 text-slate-300">
+              Align yourself with a village, build your reputation, and become part of a
+              larger story shaped by loyalty, conflict, and ambition.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className={sectionClass} data-pixel-snap="section">
+        <div
+          className={cn(
+            containerClass,
+            "grid gap-8 md:grid-cols-[0.9fr_1.1fr] md:items-center",
+          )}
+        >
+          <div>
+            <p className={eyebrowClass}>Combat Mastery</p>
+            <h2 className="mt-3 font-black font-serif text-4xl md:text-6xl">
+              Combat driven by growth and mastery
+            </h2>
+            <p className="mt-5 text-slate-300">
+              Progress through battles, sharpen your strengths, and develop a playstyle
+              that reflects your own path through the world.
+            </p>
+          </div>
+          <div
+            className={cn(panelClass, "tnr-pixel-parallax p-3")}
+            data-pixel-parallax="0.06"
+          >
+            <p className="mb-3 font-black text-amber-100 text-sm tracking-[0.18em]">
+              Combat Artwork
+            </p>
+            <Image
+              src="/screenshots/combat.webp"
+              width={512}
+              height={351}
+              alt="Combat Artwork"
+              className={screenshotClass}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className={alternateSectionClass} data-pixel-snap="section">
+        <div
+          className={cn(
+            containerClass,
+            "grid gap-8 md:grid-cols-[1.1fr_0.9fr] md:items-center",
+          )}
+        >
+          <div
+            className={cn(
+              panelClass,
+              "tnr-pixel-parallax order-last p-3 md:order-none",
+            )}
+            data-pixel-parallax="0.06"
+          >
+            <p className="mb-3 font-black text-amber-100 text-sm tracking-[0.18em]">
+              Exploration Artwork
+            </p>
+            <Image
+              src="/screenshots/sector.webp"
+              width={512}
+              height={366}
+              alt="Exploration Artwork"
+              className={screenshotClass}
+            />
+          </div>
+          <div>
+            <p className={eyebrowClass}>Open Journey</p>
+            <h2 className="mt-3 font-black font-serif text-4xl md:text-6xl">
+              A world built for exploration
+            </h2>
+            <p className="mt-5 text-slate-300">
+              Travel across locations, encounter new challenges, and experience a
+              browser RPG world that feels alive beyond a single screen.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="gameplay" className={sectionClass} data-pixel-snap="section">
+        <div
+          className={cn(
+            containerClass,
+            "grid gap-8 md:grid-cols-[0.9fr_1.1fr] md:items-center",
+          )}
+        >
+          <div>
+            <p className={eyebrowClass}>Gameplay Preview</p>
+            <h2 className="mt-3 font-black font-serif text-4xl md:text-6xl">
+              Track your path across the realm
+            </h2>
+            <p className="mt-5 text-slate-300">
+              Follow your journey across a connected shinobi world where villages,
+              routes, and rival territories give every decision a clear sense of place.
+            </p>
+          </div>
+          <div
+            className={cn(panelClass, "tnr-pixel-parallax p-3")}
+            data-pixel-parallax="0.04"
+          >
+            <p className="mb-3 font-black text-amber-100 text-sm tracking-[0.18em]">
+              Global Map
+            </p>
+            <Image
+              src="/screenshots/global.webp"
+              width={512}
+              height={372}
+              alt="Global map gameplay screenshot"
+              className={screenshotClass}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section id="legacy" className={alternateSectionClass} data-pixel-snap="section">
+        <div className={containerClass}>
+          <div className="mb-8 max-w-3xl">
+            <p className={eyebrowClass}>Browser RPG Legacy</p>
+            <h2 className="mt-3 font-black font-serif text-4xl md:text-6xl">
+              A long-running online ninja RPG
+            </h2>
+            <p className="mt-5 text-slate-300">
+              Join a free anime-inspired browser RPG built around villages, jutsus,
+              rivalries, exploration, and long-term character progression.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              [
+                "1,000,000+ Players",
+                "A large shinobi community has entered The Ninja RPG across years of village conflict, combat, and progression.",
+              ],
+              [
+                "Persistent RPG World",
+                "Train your character, travel between locations, join a village, and keep building your story over time.",
+              ],
+              [
+                "Online Since 2005",
+                "A long-running browser RPG with years of player history, rivalry, updates, and community-driven play.",
+              ],
+              [
+                "Playable in Browser",
+                "Start instantly from your browser with no download required, whether you are returning or beginning fresh.",
+              ],
+            ].map(([title, text]) => (
+              <div key={title} className={cn(panelClass, "p-5")}>
+                <h3 className="font-black font-serif text-2xl text-amber-100">
+                  {title}
+                </h3>
+                <p className="mt-3 text-slate-300 text-sm leading-6">{text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="community" className={sectionClass} data-pixel-snap="section">
+        <div className="mx-auto flex w-[min(100%_-_32px,900px)] flex-col items-center text-center">
+          <p className={eyebrowClass}>Begin the Legend</p>
+          <h2 className="mt-3 font-black font-serif text-4xl md:text-6xl">
+            Your Ninja Story Starts Now
+          </h2>
+          <p className="mt-4 max-w-2xl text-slate-300">
+            Step into the world, choose your path, and begin your journey today.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link href="/signup">
+              <Button size="lg" className={cn(inkPrimaryButton, "tnr-ink-cta")}>
+                <UserPlus className="mr-2 h-5 w-5" />
+                Register
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button
+                variant="outline"
+                size="lg"
+                className={cn(inkSecondaryButton, "tnr-ink-cta")}
+              >
+                Log In
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-sky-100/10 border-t bg-slate-950 py-12">
+        <div
+          className={cn(
+            containerClass,
+            "grid gap-8 md:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]",
+          )}
+        >
+          <div>
+            <Image
+              src={IMG_LOGO_FULL}
+              width={384}
+              height={138}
+              alt="The Ninja RPG"
+              className="h-auto w-44"
+            />
+            <p className="mt-4 max-w-sm text-slate-300">
+              Anime-inspired browser RPG adventure, built for rivalry, mastery, and
+              discovery.
+            </p>
+          </div>
+          <div>
+            <p className="font-black text-amber-100 tracking-[0.16em]">Explore</p>
+            <div className="mt-4 flex flex-col gap-2 text-slate-300">
+              <a href="#world" className="hover:text-amber-300">
+                World
+              </a>
+              <a href="#features" className="hover:text-amber-300">
+                Features
+              </a>
+              <a href="#gameplay" className="hover:text-amber-300">
+                Gameplay
+              </a>
+              <a href="#community" className="hover:text-amber-300">
+                Community
+              </a>
+            </div>
+          </div>
+          <div>
+            <p className="font-black text-amber-100 tracking-[0.16em]">Game</p>
+            <div className="mt-4 flex flex-col gap-2 text-slate-300">
+              <Link href="/login" className="hover:text-amber-300">
+                Log In
+              </Link>
+              <Link href="/signup" className="hover:text-amber-300">
+                Register
+              </Link>
+              <Link href="/login/forgot-password" className="hover:text-amber-300">
+                Recover Account
+              </Link>
+              <Link href="/rules" className="hover:text-amber-300">
+                Rules
+              </Link>
+              <Link href="/manual/staff" className="hover:text-amber-300">
+                Staff
+              </Link>
+            </div>
+          </div>
+          <div>
+            <p className="font-black text-amber-100 tracking-[0.16em]">Legal</p>
+            <div className="mt-4 flex flex-col gap-2 text-slate-300">
+              {LEGAL_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  target={link.target}
+                  rel={link.target ? "noreferrer" : undefined}
+                  className="hover:text-amber-300"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </footer>
+    </main>
+  );
+};
+
 const McpSetupDetails = ({
   title,
   children,
@@ -490,6 +949,112 @@ const McpSetupDetails = ({
       <div className="border-border border-t px-4 pt-3 pb-4">{children}</div>
     </details>
   );
+};
+
+const usePixelLandingParallax = (
+  scrollContainerRef: React.RefObject<HTMLElement | null>,
+) => {
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const parallaxEls = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-pixel-parallax]"),
+    );
+
+    if (parallaxEls.length === 0 || reducedMotion.matches) {
+      parallaxEls.forEach((el) => {
+        el.style.removeProperty("--pixel-parallax-y");
+      });
+      return;
+    }
+
+    let ticking = false;
+    const updateParallax = () => {
+      const viewportHeight = window.innerHeight || 1;
+
+      parallaxEls.forEach((el) => {
+        const speed = Number(el.dataset.pixelParallax || 0);
+        const rect = el.getBoundingClientRect();
+        const centerOffset = rect.top + rect.height / 2 - viewportHeight / 2;
+        const movement = Math.max(-42, Math.min(42, -centerOffset * speed));
+        el.style.setProperty("--pixel-parallax-y", `${movement.toFixed(2)}px`);
+      });
+
+      ticking = false;
+    };
+
+    const requestParallax = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(updateParallax);
+        ticking = true;
+      }
+    };
+
+    const handleMotionChange = (event: MediaQueryListEvent) => {
+      if (event.matches) {
+        parallaxEls.forEach((el) => {
+          el.style.removeProperty("--pixel-parallax-y");
+        });
+      } else {
+        requestParallax();
+      }
+    };
+
+    scrollContainer?.addEventListener("scroll", requestParallax, { passive: true });
+    window.addEventListener("resize", requestParallax);
+    reducedMotion.addEventListener("change", handleMotionChange);
+    requestParallax();
+
+    return () => {
+      scrollContainer?.removeEventListener("scroll", requestParallax);
+      window.removeEventListener("resize", requestParallax);
+      reducedMotion.removeEventListener("change", handleMotionChange);
+    };
+  }, [scrollContainerRef]);
+};
+
+const usePixelHeaderLogoVisibility = (
+  heroLogoRef: React.RefObject<HTMLElement | null>,
+  scrollContainerRef: React.RefObject<HTMLElement | null>,
+) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    let ticking = false;
+    const updateVisibility = () => {
+      const heroLogo = heroLogoRef.current;
+      if (!heroLogo) {
+        ticking = false;
+        return;
+      }
+
+      const headerHeight = 80;
+      const rect = heroLogo.getBoundingClientRect();
+      setIsVisible(rect.bottom <= headerHeight + 8);
+      ticking = false;
+    };
+
+    const requestVisibilityUpdate = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(updateVisibility);
+        ticking = true;
+      }
+    };
+
+    scrollContainer?.addEventListener("scroll", requestVisibilityUpdate, {
+      passive: true,
+    });
+    window.addEventListener("resize", requestVisibilityUpdate);
+    requestVisibilityUpdate();
+
+    return () => {
+      scrollContainer?.removeEventListener("scroll", requestVisibilityUpdate);
+      window.removeEventListener("resize", requestVisibilityUpdate);
+    };
+  }, [heroLogoRef, scrollContainerRef]);
+
+  return isVisible;
 };
 
 const SetReferal = () => {

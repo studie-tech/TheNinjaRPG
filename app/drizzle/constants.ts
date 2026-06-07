@@ -1964,6 +1964,10 @@ export const IMG_LAYOUT_HANDSIGN_HALLOWEEN =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcGYTUXSnxBpQqGNDcTHbLmYz8uXAl3oa54ti";
 export const IMG_LAYOUT_WELCOME_IMG =
   "https://tnr-storage-cdn.b-cdn.net/welcomeimage_compressed.webp";
+export const IMG_PIXEL_HERO_POSTER =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJW2NIKTvszvj71yaSYC0MDOmbko5q9JAGuLHf";
+export const IMG_PIXEL_HERO_POSTER_OPTIMIZED =
+  `${IMG_PIXEL_HERO_POSTER}?width=1280&height=720`;
 // "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqbkFzRdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn";
 // export const IMG_LOGO_FULL =
 //   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8b0eqBkkp45TvAnoIBa0rtCf1lbyXYjVKQ2q";
@@ -2180,6 +2184,12 @@ export const MUSIC_AKIKAZE_THEME =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJY9DJWIOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d";
 export const MUSIC_SYNDICATE_THEME =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxrcAPUWZsq9k0Von5rUfP6OgQ2TyptCKHS4u";
+export const BUTTON_CLICK_SFX_URLS = [
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSiIRUn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDaZRDSzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDTV5J0zEwoh0WXMnscL279N8ayVQUCbRzS3p",
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPB6OtxpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
+] as const;
 
 export const HomeTypes = [
   "NONE",

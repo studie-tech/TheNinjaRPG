@@ -54,6 +54,7 @@ const createMcpContext = async () => {
     userId: requestData?.userId ?? null,
     userAgent: requestData?.userAgent ?? "mcp-client",
     abLemuReplacementVariant: undefined,
+    abPixelLayoutVariant: undefined,
   };
 };
 

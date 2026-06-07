@@ -90,7 +90,7 @@ export const getMainNavbarLinks = (notifications?: NavBarDropdownLink[]) => {
   return links;
 };
 
-export const useGameMenu = (userData: UserWithRelations) => {
+export const useGameMenu = (userData?: UserWithRelations | null) => {
   const pathname = usePathname();
   const { notifications } = useUserData();
 
