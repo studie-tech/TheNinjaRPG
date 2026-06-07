@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { Toaster as SonnerToaster, type ToasterProps } from "sonner";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
+import { getEffectiveColorTheme } from "@/libs/themePreference";
 
 const Toaster = ({ ...props }: ToasterProps) => {
   // Get the current theme
   const [theme] = useState<"light" | "dark" | "system">(() => {
-    const savedTheme = safeLocalStorageGetItem("theme");
-    return savedTheme === "dark" || savedTheme === "light" ? savedTheme : "light";
+    return getEffectiveColorTheme();
   });
 
   // Feel free to tweak default props globally here.

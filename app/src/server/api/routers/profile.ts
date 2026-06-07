@@ -30,7 +30,6 @@ import {
   MAX_SKILL_POINTS,
   MAX_SKILL_POINTS_FROM_LEVELING,
   REGEN_SECONDS,
-  RYO_CAP,
   SENSEI_MAX_STUDENT_LEVEL,
   SHRINE_BOOST_TYPES,
   SKILL_POINT_MAX_LEVEL,
@@ -91,6 +90,7 @@ import {
   getGameSettingBoost,
   updateGameSetting,
 } from "@/libs/gamesettings";
+import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { moderateContent, validateUserUpdateReason } from "@/libs/moderator";
 import {
@@ -218,31 +218,38 @@ export const profileRouter = createTRPCRouter({
 
       // AB Test success
       if (input.step === TUTORIAL_STEPS_COUNT) {
-        const abLoadedEvent = await ctx.drizzle.query.abEvent.findFirst({
-          where: and(
-            eq(abEvent.ip, ctx.userIp ?? ""),
-            eq(abEvent.experiment, "ab_lemu_replacement_2"),
-            eq(abEvent.event, "loaded"),
-          ),
+        const experiments = getLayoutExperimentAssignments({
+          abPixelLayoutVariant: ctx.abPixelLayoutVariant,
+          abLemuReplacementVariant: ctx.abLemuReplacementVariant,
         });
-        if (ctx.abLemuReplacementVariant && abLoadedEvent) {
-          await ctx.drizzle
-            .insert(abEvent)
-            .values({
-              id: nanoid(),
-              userId: ctx.userId,
-              experiment: "ab_lemu_replacement_2",
-              variant: ctx.abLemuReplacementVariant,
-              event: "success",
-              source: abLoadedEvent.source,
-              ip: ctx.userIp && ctx.userIp !== "unknown" ? ctx.userIp : undefined,
-              userAgent:
-                typeof ctx.userAgent === "string"
-                  ? ctx.userAgent.slice(0, 180)
-                  : undefined,
-            })
-            .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-        }
+        await Promise.all(
+          experiments.map(async (experiment) => {
+            const abLoadedEvent = await ctx.drizzle.query.abEvent.findFirst({
+              where: and(
+                eq(abEvent.ip, ctx.userIp ?? ""),
+                eq(abEvent.experiment, experiment.experiment),
+                eq(abEvent.event, "loaded"),
+              ),
+            });
+            if (!abLoadedEvent) return;
+            await ctx.drizzle
+              .insert(abEvent)
+              .values({
+                id: nanoid(),
+                userId: ctx.userId,
+                experiment: experiment.experiment,
+                variant: experiment.variant,
+                event: "success",
+                source: abLoadedEvent.source,
+                ip: ctx.userIp && ctx.userIp !== "unknown" ? ctx.userIp : undefined,
+                userAgent:
+                  typeof ctx.userAgent === "string"
+                    ? ctx.userAgent.slice(0, 180)
+                    : undefined,
+              })
+              .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+          }),
+        );
       }
 
       // Return success response
@@ -264,6 +271,9 @@ export const profileRouter = createTRPCRouter({
           ...(input.tutorialOn !== undefined ? { tutorialOn: input.tutorialOn } : {}),
           ...(input.musicOn !== undefined ? { musicOn: input.musicOn } : {}),
           ...(input.sfxOn !== undefined ? { sfxOn: input.sfxOn } : {}),
+          ...(input.buttonSfxOn !== undefined
+            ? { buttonSfxOn: input.buttonSfxOn }
+            : {}),
           ...(input.iframesMuted !== undefined
             ? { iframesMuted: input.iframesMuted }
             : {}),

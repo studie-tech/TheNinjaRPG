@@ -2,7 +2,7 @@ import { useAtomValue } from "jotai";
 import { Dna, Gem, Link2 } from "lucide-react";
 import Link from "next/link";
 import type React from "react";
-import { SideBannerTitle } from "@/components/layout/core4_default";
+import { SideBannerTitle } from "@/components/layout/shared/LayoutSidebars";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
 import AvatarImage from "@/layout/Avatar";

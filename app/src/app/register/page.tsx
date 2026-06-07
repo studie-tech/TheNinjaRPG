@@ -176,6 +176,7 @@ const RegisterForm: React.FC = () => {
       bloodlineId: undefined,
       musicOn: true,
       sfxOn: true,
+      buttonSfxOn: true,
     },
   });
 
@@ -183,6 +184,7 @@ const RegisterForm: React.FC = () => {
   useEffect(() => {
     form.setValue("musicOn", getLocalStorageBoolean("musicOn", true));
     form.setValue("sfxOn", getLocalStorageBoolean("sfxOn", true));
+    form.setValue("buttonSfxOn", getLocalStorageBoolean("buttonSfxOn", true));
   }, [form]);
 
   // Carousel control

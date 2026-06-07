@@ -93,6 +93,7 @@ export const registrationSchema = z
     bloodlineId: z.string().min(1, "Bloodline selection is required"),
     musicOn: z.boolean().optional(),
     sfxOn: z.boolean().optional(),
+    buttonSfxOn: z.boolean().optional(),
   })
   .refine(
     (data) =>

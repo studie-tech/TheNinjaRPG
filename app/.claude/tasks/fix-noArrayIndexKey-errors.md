@@ -21,7 +21,7 @@ All errors have been fixed. The lint now reports 0 `noArrayIndexKey` errors.
 - To `Array.from({ length: expectedLength }, (_, idx) => `staff-skeleton-${idx}`).map((key) => ...)`
 - The key is now generated in `Array.from` and used directly
 
-### 3. `/app/src/components/layout/core4_default.tsx`
+### 3. `/app/src/components/layout/core4_beta.tsx`
 - Same pattern as above for skeleton loading indicators
 
 ### 4. `/app/src/layout/AiProfileEdit.tsx` (2 errors)

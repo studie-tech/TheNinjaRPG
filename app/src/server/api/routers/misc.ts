@@ -18,6 +18,7 @@ import {
   visitorLog,
 } from "@/drizzle/schema";
 import { fetchDmgConfig, getGameSetting, updateGameSetting } from "@/libs/gamesettings";
+import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import { randomString } from "@/libs/random";
 import { fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
@@ -57,16 +58,13 @@ export const miscRouter = createTRPCRouter({
       const ip = ctx.userIp ?? "unknown";
       if (ip === "unknown") return { success: false, message: "No IP detected" };
 
-      // Check if IP already recorded
-      const existing = await ctx.drizzle.query.visitorLog.findFirst({
-        where: eq(visitorLog.ip, ip),
+      const experiments = getLayoutExperimentAssignments({
+        abPixelLayoutVariant: ctx.abPixelLayoutVariant,
+        abLemuReplacementVariant: ctx.abLemuReplacementVariant,
       });
-      if (existing) {
-        return { success: true, message: "IP already tracked" };
-      }
 
-      // Insert new visitor and log AB test loaded event (if applicable) in parallel
-      const [visitorResult] = await Promise.all([
+      // Insert new visitor and log AB test loaded events (if applicable) in parallel
+      await Promise.all([
         ctx.drizzle
           .insert(visitorLog)
           .values({
@@ -77,28 +75,25 @@ export const miscRouter = createTRPCRouter({
             userAgent: String(ctx.userAgent).slice(0, 180),
           })
           .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
-        ctx.abLemuReplacementVariant
-          ? ctx.drizzle
-              .insert(abEvent)
-              .values({
-                id: nanoid(),
-                userId: null,
-                experiment: "ab_lemu_replacement_2",
-                variant: ctx.abLemuReplacementVariant,
-                event: "loaded",
-                source: input.utmSource,
-                ip: ctx.userIp && ctx.userIp !== "unknown" ? ctx.userIp : undefined,
-                userAgent:
-                  typeof ctx.userAgent === "string"
-                    ? ctx.userAgent.slice(0, 180)
-                    : undefined,
-              })
-              .onDuplicateKeyUpdate({ set: { id: sql`id` } })
-          : Promise.resolve(null),
+        ...experiments.map((experiment) =>
+          ctx.drizzle
+            .insert(abEvent)
+            .values({
+              id: nanoid(),
+              userId: null,
+              experiment: experiment.experiment,
+              variant: experiment.variant,
+              event: "loaded",
+              source: input.utmSource,
+              ip: ctx.userIp && ctx.userIp !== "unknown" ? ctx.userIp : undefined,
+              userAgent:
+                typeof ctx.userAgent === "string"
+                  ? ctx.userAgent.slice(0, 180)
+                  : undefined,
+            })
+            .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
+        ),
       ]);
-      if (visitorResult.rowsAffected === 0) {
-        return { success: false, message: "Failed to insert visitor" };
-      }
       return { success: true, message: "Visitor tracked" };
     }),
   getAllGameAssetNames: publicProcedure

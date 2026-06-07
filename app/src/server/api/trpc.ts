@@ -20,6 +20,10 @@ import type { NextRequest } from "next/server";
 import superjson from "superjson";
 import { ZodError, z } from "zod";
 import { userData } from "@/drizzle/schema";
+import {
+  AB_PIXEL_LAYOUT_COOKIE,
+  LEGACY_AB_LAYOUT_COOKIE,
+} from "@/libs/layoutPreference";
 import type { McpMeta } from "@/libs/mcp";
 /**
  * 1. CONTEXT
@@ -53,14 +57,16 @@ export const createAppTRPCContext = async (options: {
   const userAgent = readHeaders.get("user-agent") ?? undefined;
   // AB testing cookies
   const abLemuReplacementVariant = options.readCookies.get(
-    "ab_lemu_replacement_2",
+    LEGACY_AB_LAYOUT_COOKIE,
   )?.value;
+  const abPixelLayoutVariant = options.readCookies.get(AB_PIXEL_LAYOUT_COOKIE)?.value;
   return {
     drizzle: drizzleDB,
     userIp,
     userId,
     userAgent,
     abLemuReplacementVariant,
+    abPixelLayoutVariant,
   };
 };
 

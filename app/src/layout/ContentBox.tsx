@@ -64,7 +64,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
   return (
     <>
       {props.initialBreak && <div className="h-4"></div>}
-      <div className="sm:container" id={props.id}>
+      <div className="sm:container" data-content-box id={props.id}>
         <div
           className={`flex ${props.topRightCorntentBreakpoint ? `flex-col ${props.topRightCorntentBreakpoint}:flex-row ${props.topRightCorntentBreakpoint}:items-center` : "flex-row items-center"}`}
         >
@@ -100,6 +100,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
         </div>
 
         <div
+          data-content-box-inner
           className={`relative ${!props.noBorder ? "border-2 border-double" : ""} bg-card shadow-lg ${props.padding === undefined || props.padding ? "p-3" : ""} text-card-foreground`}
         >
           {props.children}

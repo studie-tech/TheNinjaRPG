@@ -1,12 +1,22 @@
 "use client";
 
-import { RefreshCw, Volume2, VolumeX } from "lucide-react";
-import { createContext, type ReactNode, use, useEffect, useState } from "react";
+import { LayoutTemplate, RefreshCw, Settings, Volume2, VolumeX } from "lucide-react";
+import {
+  createContext,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+  use,
+  useEffect,
+  useState,
+} from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import {
+  BUTTON_CLICK_SFX_URLS,
   MUSIC_AKIKAZE_THEME,
   MUSIC_SHIROHANA_THEME,
   MUSIC_SYNDICATE_THEME,
@@ -21,12 +31,21 @@ import {
 import { useAudio } from "@/hooks/useAudio";
 import { useIframeMute } from "@/hooks/useIframeMute";
 import { UncontrolledSliderField } from "@/layout/SliderField";
+import {
+  type EffectiveLayout,
+  LAYOUT_PREFERENCE_COOKIE,
+  persistLayoutPreferenceCookie,
+} from "@/libs/layoutPreference";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
+import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
+import { useActiveLayout } from "@/utils/LayoutContext";
 
 interface GameSettingsProps {
   userData?: UserWithRelations | null;
   updateUser?: (data: Partial<UserWithRelations>) => Promise<void>;
+  trigger?: "audio" | "settings";
+  triggerClassName?: string;
 }
 
 /**
@@ -35,8 +54,44 @@ interface GameSettingsProps {
 interface AudioContextValue {
   audioEnabled: boolean;
   setAudioEnabled: (enabled: boolean) => Promise<void>;
+  buttonSfxOn: boolean;
+  setButtonSfxOn: Dispatch<SetStateAction<boolean>>;
+  sfxVolume: number;
+  setSfxVolume: Dispatch<SetStateAction<number>>;
   requiresInteraction: boolean;
 }
+
+const BUTTON_SFX_VOLUME_MULTIPLIER = 0.45;
+const BUTTON_SFX_TARGET_SELECTOR = [
+  "button:not([disabled])",
+  "a[href]",
+  "label[for]",
+  '[role="button"]',
+  '[role="menuitem"]',
+  '[role="tab"]',
+  "[data-slot='menubar-item']",
+  "[data-slot='menubar-trigger']",
+  "[data-button-sfx]",
+].join(",");
+
+const shouldPlayButtonSfxForTarget = (target: EventTarget | null) => {
+  if (!(target instanceof Element)) return false;
+  const interactive = target.closest<HTMLElement>(BUTTON_SFX_TARGET_SELECTOR);
+  if (!interactive) return false;
+  if (interactive.closest("[data-button-sfx='off'], [data-disable-button-sfx]")) {
+    return false;
+  }
+  return (
+    interactive.getAttribute("aria-disabled") !== "true" &&
+    interactive.getAttribute("data-disabled") === null
+  );
+};
+
+const getRandomButtonSfxUrl = () => {
+  return BUTTON_CLICK_SFX_URLS[
+    Math.floor(Math.random() * BUTTON_CLICK_SFX_URLS.length)
+  ];
+};
 
 /**
  * Global context for sharing audio instance across all components
@@ -63,6 +118,28 @@ export const GlobalAudioProvider: React.FC<{
     if (saved !== null) return JSON.parse(saved) as boolean;
     return true;
   };
+
+  const getInitialButtonSfxState = (): boolean => {
+    if (userData && typeof userData.buttonSfxOn === "boolean") {
+      return userData.buttonSfxOn;
+    }
+    const saved = safeLocalStorageGetItem("buttonSfxOn");
+    if (saved !== null) return JSON.parse(saved) as boolean;
+    return true;
+  };
+
+  const getInitialSfxVolumeState = (): number => {
+    const saved = safeLocalStorageGetItem("sfxVolume");
+    if (saved !== null) return JSON.parse(saved) as number;
+    return 0.8;
+  };
+
+  const [buttonSfxOn, setButtonSfxOn] = useState<boolean>(() =>
+    isClient ? getInitialButtonSfxState() : true,
+  );
+  const [sfxVolume, setSfxVolume] = useState<number>(() =>
+    isClient ? getInitialSfxVolumeState() : 0.8,
+  );
 
   // Use village-specific music if user has a village, otherwise use default
   let musicSrc = MUSIC_WELCOME_TO_SEICHI;
@@ -95,14 +172,40 @@ export const GlobalAudioProvider: React.FC<{
     if (!isClient) return;
     if (userData) {
       void setAudioEnabled(!!userData.musicOn);
+      setButtonSfxOn(getInitialButtonSfxState());
     } else {
       void setAudioEnabled(getInitialMusicState());
+      setButtonSfxOn(getInitialButtonSfxState());
     }
   }, [isClient, userData]);
+
+  useEffect(() => {
+    if (!isClient) return;
+    setSfxVolume(getInitialSfxVolumeState());
+    void preloadAudioBuffers([...BUTTON_CLICK_SFX_URLS]);
+  }, [isClient]);
+
+  useEffect(() => {
+    if (!isClient || !buttonSfxOn) return;
+
+    const handleClick = (event: MouseEvent) => {
+      if (event.button !== 0 || !shouldPlayButtonSfxForTarget(event.target)) return;
+      const url = getRandomButtonSfxUrl();
+      if (!url) return;
+      void playPreloadedAudio(url, sfxVolume * BUTTON_SFX_VOLUME_MULTIPLIER);
+    };
+
+    document.addEventListener("click", handleClick, { capture: true });
+    return () => document.removeEventListener("click", handleClick, { capture: true });
+  }, [isClient, buttonSfxOn, sfxVolume]);
 
   const contextValue: AudioContextValue = {
     audioEnabled,
     setAudioEnabled,
+    buttonSfxOn,
+    setButtonSfxOn,
+    sfxVolume,
+    setSfxVolume,
     requiresInteraction,
   };
 
@@ -126,7 +229,15 @@ const useGlobalAudio = () => {
  */
 export const useGameSettings = (userData?: UserWithRelations | null) => {
   // Use the global audio instance
-  const { audioEnabled, setAudioEnabled, requiresInteraction } = useGlobalAudio();
+  const {
+    audioEnabled,
+    setAudioEnabled,
+    buttonSfxOn,
+    setButtonSfxOn,
+    sfxVolume,
+    setSfxVolume,
+    requiresInteraction,
+  } = useGlobalAudio();
 
   // Mount flag to keep SSR/CSR output in sync
   const [isClient, setIsClient] = useState(false);
@@ -145,18 +256,16 @@ export const useGameSettings = (userData?: UserWithRelations | null) => {
     isClient ? getInitialSfxState() : true,
   );
 
-  // SFX volume state
-  const getInitialSfxVolumeState = (): number => {
-    const saved = safeLocalStorageGetItem("sfxVolume");
-    if (saved !== null) return JSON.parse(saved) as number;
-    return 0.8;
-  };
-  const [sfxVolume, setSfxVolume] = useState<number>(() =>
-    isClient ? getInitialSfxVolumeState() : 0.8,
-  );
-
   // Light layout preference state
   const [lightLayout, setLightLayout] = useLocalStorage<boolean>("lightLayout", false);
+
+  // Full layout preference state
+  const activeLayout = useActiveLayout();
+  const [anonymousLayout, setAnonymousLayout] = useLocalStorage<EffectiveLayout>(
+    LAYOUT_PREFERENCE_COOKIE,
+    activeLayout,
+  );
+  const layoutPreference: EffectiveLayout = anonymousLayout || activeLayout;
 
   // Embedded iframe mute state
   const { isIframesMuted, setIframesMuted } = useIframeMute();
@@ -185,10 +294,14 @@ export const useGameSettings = (userData?: UserWithRelations | null) => {
     setAudioEnabled,
     sfxOn,
     setSfxOn,
+    buttonSfxOn,
+    setButtonSfxOn,
     sfxVolume,
     setSfxVolume,
     lightLayout,
     setLightLayout,
+    layoutPreference,
+    setAnonymousLayout,
     isIframesMuted,
     setIframesMuted,
     requiresInteraction,
@@ -213,10 +326,14 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
     setAudioEnabled,
     sfxOn,
     setSfxOn,
+    buttonSfxOn,
+    setButtonSfxOn,
     sfxVolume,
     setSfxVolume,
     lightLayout,
     setLightLayout,
+    layoutPreference,
+    setAnonymousLayout,
     isIframesMuted,
     setIframesMuted,
     requiresInteraction,
@@ -226,11 +343,12 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
   // Track initial lightLayout value to detect changes
   const [initialLightLayout] = useState<boolean>(lightLayout);
   const [lightLayoutChanged, setLightLayoutChanged] = useState(false);
+  const isPixelLayout = layoutPreference === "pixel";
 
   // Update tracking when lightLayout changes
   useEffect(() => {
-    setLightLayoutChanged(lightLayout !== initialLightLayout);
-  }, [lightLayout, initialLightLayout]);
+    setLightLayoutChanged(!isPixelLayout && lightLayout !== initialLightLayout);
+  }, [lightLayout, initialLightLayout, isPixelLayout]);
 
   const handleRefreshPage = () => {
     if (typeof window !== "undefined") {
@@ -272,6 +390,23 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
     }
   };
 
+  const handleButtonSfxToggle = (checked: boolean) => {
+    setButtonSfxOn(checked);
+    if (userData) {
+      updatePreferences({
+        preferredStat: userData.preferredStat ?? null,
+        preferredGeneral1: userData.preferredGeneral1 ?? null,
+        preferredGeneral2: userData.preferredGeneral2 ?? null,
+        buttonSfxOn: checked,
+      });
+      if (updateUser) {
+        void updateUser({ buttonSfxOn: checked });
+      }
+    } else {
+      safeLocalStorageSetItem("buttonSfxOn", JSON.stringify(checked));
+    }
+  };
+
   const handleSfxVolumeChange = (nextValue: React.SetStateAction<number>) => {
     let percent: number;
     if (typeof nextValue === "function") {
@@ -283,6 +418,16 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
     const newVolume = safePercent / 100;
     setSfxVolume(newVolume);
     safeLocalStorageSetItem("sfxVolume", JSON.stringify(newVolume));
+  };
+
+  const handleLayoutChange = (value: string) => {
+    const nextLayout = value === "pixel" ? "pixel" : "default";
+    safeLocalStorageSetItem(LAYOUT_PREFERENCE_COOKIE, JSON.stringify(nextLayout));
+    persistLayoutPreferenceCookie(nextLayout);
+    setAnonymousLayout(nextLayout);
+    if (typeof window !== "undefined") {
+      window.location.reload();
+    }
   };
 
   const isPanel = variant === "panel";
@@ -346,9 +491,24 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
             aria-label="Toggle sound effects"
           />
         </div>
+        <div className="mt-3 flex items-center justify-between">
+          <div>
+            <p className={textClass}>Button SFX</p>
+            {isPanel && (
+              <p className="text-muted-foreground text-xs">
+                {buttonSfxOn ? "Enabled" : "Disabled"}
+              </p>
+            )}
+          </div>
+          <Switch
+            checked={!!buttonSfxOn}
+            onCheckedChange={handleButtonSfxToggle}
+            aria-label="Toggle button sound effects"
+          />
+        </div>
       </div>
 
-      {sfxOn && (
+      {(sfxOn || buttonSfxOn) && (
         <div className="space-y-2">
           <div>
             <p className={textClass}>
@@ -373,21 +533,56 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
 
       <div>
         <p className={headerClass}>Display</p>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className={textClass}>Lighter Layout</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                {lightLayout ? "Enabled" : "Disabled"}
-              </p>
-            )}
+        <div className="mb-4 space-y-2">
+          <div className="flex items-start gap-2">
+            <LayoutTemplate className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div>
+              <p className={textClass}>Game Layout</p>
+              {isPanel && (
+                <p className="text-muted-foreground text-xs">
+                  Choose the chrome used across landing and in-game screens.
+                </p>
+              )}
+            </div>
           </div>
-          <Switch
-            checked={!!lightLayout}
-            onCheckedChange={setLightLayout}
-            aria-label="Toggle lighter layout"
-          />
+          <RadioGroup
+            value={layoutPreference}
+            onValueChange={handleLayoutChange}
+            className="grid grid-cols-2 gap-2"
+          >
+            <label
+              htmlFor="layout-default"
+              className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-2 text-sm hover:bg-accent"
+            >
+              <RadioGroupItem id="layout-default" value="default" />
+              Classic
+            </label>
+            <label
+              htmlFor="layout-pixel"
+              className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-2 text-sm hover:bg-accent"
+            >
+              <RadioGroupItem id="layout-pixel" value="pixel" />
+              Pixel
+            </label>
+          </RadioGroup>
         </div>
+        {!isPixelLayout && (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={textClass}>Lighter Layout</p>
+              {isPanel && (
+                <p className="text-muted-foreground text-xs">
+                  {lightLayout ? "Enabled" : "Disabled"}
+                </p>
+              )}
+            </div>
+            <Switch
+              checked={!!lightLayout}
+              onCheckedChange={setLightLayout}
+              aria-label="Toggle lighter layout"
+            />
+          </div>
+        )}
         {lightLayoutChanged && (
           <div className={isPanel ? "mt-3" : "mt-2"}>
             <Button
@@ -442,18 +637,26 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
 export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
   userData,
   updateUser,
+  trigger = "audio",
+  triggerClassName,
 }) => {
   const { audioEnabled } = useGameSettings(userData);
+  const isSettingsTrigger = trigger === "settings";
 
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Audio settings"
-          className="mx-1 rounded-full bg-blue-100 bg-opacity-80 text-slate-700 hover:bg-blue-300 hover:text-black"
+          aria-label={isSettingsTrigger ? "Game settings" : "Audio settings"}
+          className={
+            triggerClassName ??
+            "mx-1 rounded-full bg-blue-100 bg-opacity-80 text-slate-700 hover:bg-blue-300 hover:text-black"
+          }
         >
-          {audioEnabled ? (
+          {isSettingsTrigger ? (
+            <Settings className="h-4 w-4" suppressHydrationWarning />
+          ) : audioEnabled ? (
             <Volume2 className="h-6 w-6 p-1 xl:h-7 xl:w-7" suppressHydrationWarning />
           ) : (
             <VolumeX className="h-6 w-6 p-1 xl:h-7 xl:w-7" suppressHydrationWarning />

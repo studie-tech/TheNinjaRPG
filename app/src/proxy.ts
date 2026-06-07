@@ -1,5 +1,9 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import {
+  AB_PIXEL_LAYOUT_COOKIE,
+  LEGACY_AB_LAYOUT_COOKIE,
+} from "@/libs/layoutPreference";
 
 // import type { NextRequest } from "next/server";
 // import * as UAParser from "ua-parser-js";
@@ -44,6 +48,15 @@ const isMcpRoute = createRouteMatcher([
   "/.well-known/oauth-protected-resource(.*)",
 ]);
 
+const appendCookieHeader = (
+  existingCookieHeader: string | null,
+  name: string,
+  value: string,
+) => {
+  const cookie = `${name}=${value}`;
+  return existingCookieHeader ? `${existingCookieHeader}; ${cookie}` : cookie;
+};
+
 export default clerkMiddleware(
   async (auth, request) => {
     // Protect all routes except for the public ones
@@ -61,12 +74,38 @@ export default clerkMiddleware(
     const { pathname } = request.nextUrl;
     const { userId } = await auth();
     if (pathname === "/" && !userId) {
-      const cookie = request.cookies.get("ab_lemu_replacement_2");
+      const cookie = request.cookies.get(LEGACY_AB_LAYOUT_COOKIE);
       const variant = cookie?.value ?? (Math.random() < 0.5 ? "treatment" : "control");
+      const pixelCookie = request.cookies.get(AB_PIXEL_LAYOUT_COOKIE);
+      const pixelVariant =
+        pixelCookie?.value ?? (Math.random() < 0.5 ? "treatment" : "control");
       const url = request.nextUrl.clone();
-      console.log("variant", variant);
-      const res = NextResponse.rewrite(url);
-      if (!cookie) res.cookies.set("ab_lemu_replacement_2", variant, { path: "/" });
+      const requestHeaders = new Headers(request.headers);
+      let cookieHeader = requestHeaders.get("cookie");
+      if (!cookie) {
+        cookieHeader = appendCookieHeader(
+          cookieHeader,
+          LEGACY_AB_LAYOUT_COOKIE,
+          variant,
+        );
+      }
+      if (!pixelCookie) {
+        cookieHeader = appendCookieHeader(
+          cookieHeader,
+          AB_PIXEL_LAYOUT_COOKIE,
+          pixelVariant,
+        );
+      }
+      if (cookieHeader) requestHeaders.set("cookie", cookieHeader);
+      const res = NextResponse.rewrite(url, {
+        request: {
+          headers: requestHeaders,
+        },
+      });
+      if (!cookie) res.cookies.set(LEGACY_AB_LAYOUT_COOKIE, variant, { path: "/" });
+      if (!pixelCookie) {
+        res.cookies.set(AB_PIXEL_LAYOUT_COOKIE, pixelVariant, { path: "/" });
+      }
       return res;
     }
   },

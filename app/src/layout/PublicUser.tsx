@@ -73,7 +73,6 @@ import {
   XP_BRACKETS,
 } from "@/drizzle/constants";
 import type { Badge, Jutsu, UserBadge, UserRank } from "@/drizzle/schema";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { useUserEditForm } from "@/hooks/profile";
 import ActionLogs from "@/layout/ActionLog";
 import ActionLogFiltering, {
@@ -99,8 +98,10 @@ import { publicUserText } from "@/layout/seoTexts";
 import Table from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { getExpBracket, showUserRank } from "@/libs/profile";
+import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
 import { groupBy } from "@/utils/grouping";
+import { useActiveLayout } from "@/utils/LayoutContext";
 import { parseHtml } from "@/utils/parse";
 import {
   canAwardExperience,
@@ -1513,6 +1514,7 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
 }) => {
   // State
   const chartRef = useRef<HTMLCanvasElement>(null);
+  const activeLayout = useActiveLayout();
 
   // Query
   const { data: logEntries } = api.train.getTrainingLog.useQuery(
@@ -1552,8 +1554,8 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
     const ctx = chartRef?.current?.getContext("2d");
     if (ctx && datasets) {
       // Update stats chart
-      const localTheme = safeLocalStorageGetItem("theme");
-      ChartJS.defaults.color = localTheme === "dark" ? "#FFFFFF" : "#000000";
+      const chartTextColor = getEffectiveThemeTextColor(activeLayout);
+      ChartJS.defaults.color = chartTextColor;
       const myChart = new ChartJS(ctx, {
         type: "bar",
         options: {
@@ -1563,7 +1565,9 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
           scales: {
             y: {
               beginAtZero: true,
+              grid: { color: "rgba(148, 163, 184, 0.16)" },
               ticks: {
+                color: chartTextColor,
                 stepSize: 1,
               },
               title: {
@@ -1573,9 +1577,12 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
               stacked: true,
             },
             x: {
+              grid: { color: "rgba(148, 163, 184, 0.16)" },
               stacked: true,
+              ticks: { color: chartTextColor },
               title: {
                 display: true,
+                color: chartTextColor,
                 text: "Hour of Day",
               },
             },
@@ -1614,7 +1621,7 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
         myChart.destroy();
       };
     }
-  }, [datasets]);
+  }, [activeLayout, datasets]);
 
   return (
     <ContentBox

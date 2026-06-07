@@ -8,10 +8,11 @@ import CytoscapeComponent from "react-cytoscapejs";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { getEffectiveColorTheme } from "@/libs/themePreference";
 import { isMobile } from "@/utils/audio";
 import { isErrorFromSource } from "@/utils/error";
+import { useActiveLayout } from "@/utils/LayoutContext";
 import { getSearchValidator } from "@/validators/register";
 
 // Register edgehandles extension once globally
@@ -31,13 +32,13 @@ const GraphUsersGeneric = (
   props: GraphUsersGenericProps,
 ): React.ReactElement | null => {
   // State
-  const localTheme = safeLocalStorageGetItem("theme");
+  const activeLayout = useActiveLayout();
   const cyRef = useRef<Cytoscape.Core | null>(null);
   const isMountedRef = useRef(true);
   const layoutRunningRef = useRef(false);
   const layoutInstanceRef = useRef<Cytoscape.Layouts | null>(null);
   const isMobileDevice = isMobile();
-  const color = localTheme === "dark" ? "white" : "black";
+  const color = getEffectiveColorTheme(activeLayout) === "dark" ? "white" : "black";
 
   // Extract stop logic to useCallback to avoid side effects in render
   const stopLayout = useCallback(() => {
