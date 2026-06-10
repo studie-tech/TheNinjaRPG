@@ -36,7 +36,7 @@ import {
 } from "@/server/utils/shrine";
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
-import { secondsFromDate, secondsFromNow } from "@/utils/time";
+import { secondsFromDate } from "@/utils/time";
 import { getBoostTemplateSchema, setBoostTemplateSchema } from "@/validators/shrine";
 import {
   baseServerResponse,
@@ -208,15 +208,16 @@ export const shrineRouter = createTRPCRouter({
       }
 
       // Check if boost is already active
+      const now = new Date();
       const currentBoosts = user.village.shrineSettings.activeBoosts || {};
       const existingBoost = currentBoosts[input.boostType];
-      if (existingBoost && new Date(existingBoost) > new Date()) {
+      if (existingBoost && new Date(existingBoost) > now) {
         return errorResponse(`${input.boostType} boost is already active`);
       }
 
       // Update active boosts — JSON_SET targets only the specific boost key to avoid
       // race conditions with concurrent cron writes to other boost keys.
-      const boostExpiry = secondsFromNow(SHRINE_BOOST_DURATION_HOURS * 60 * 60);
+      const boostExpiry = secondsFromDate(SHRINE_BOOST_DURATION_HOURS * 60 * 60, now);
 
       const updateRes = await ctx.drizzle
         .update(village)
@@ -231,7 +232,7 @@ export const shrineRouter = createTRPCRouter({
           and(
             eq(village.id, user.villageId),
             gte(village.tokens, SHRINE_BOOST_COST),
-            boostInactivePredicate(input.boostType, new Date().toISOString()),
+            boostInactivePredicate(input.boostType, now.toISOString()),
           ),
         );
 
