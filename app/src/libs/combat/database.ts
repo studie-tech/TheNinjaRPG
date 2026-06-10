@@ -558,10 +558,6 @@ export const updateWars = async (
   const processedWarHealthIds = new Set<string>();
   // Track sectors where SECTOR_WAR shrine HP crossed to 0 (for exclusive raid activation)
   const sectorsWithDefeatedShrine = new Set<number>();
-  // Deduplicate warParticipantUntil stamp — one write per killer, regardless of kill count.
-  // This path also covers shrine AI kills: shrine AIs carry the defending village's villageId,
-  // so findWarsWithUser matches them and result.didWin triggers the stamp below.
-  const stampedWarParticipantIds = new Set<string>();
 
   warResults.forEach((warResult) => {
     warResult.wars.forEach((w) => {
@@ -605,19 +601,6 @@ export const updateWars = async (
             killedAt: new Date(),
           }),
         );
-        // Mark killer as war participant — allows cross-bracket targeting for 2 hours.
-        // Deduplicate: one DB write per killer per battle.
-        if (!stampedWarParticipantIds.has(user.userId)) {
-          stampedWarParticipantIds.add(user.userId);
-          otherPromises.push(
-            client
-              .update(userData)
-              .set({
-                warParticipantUntil: extendWarParticipantSql(),
-              })
-              .where(eq(userData.userId, user.userId)),
-          );
-        }
       }
 
       // Update shrine HP in war table for sector wars only (no townhall damage for sector wars)
@@ -1200,6 +1183,29 @@ export const updateUser = async (
       hasDefeatOpponentsInNonPvpQuest ||
       (hasDefeatOpponentsInPvpQuest && isInWarTornSector);
 
+    // War participant stamp: a winning killer who shares an active war with any non-summon
+    // opponent in this battle earns ~2h of cross-bracket targetability. Computed from the
+    // pre-loaded battle state (no DB fetch) and folded into the main userData update below so
+    // it costs no extra roundtrip. War-torn sector kills are excluded (war state is not tracked
+    // there). Shrine AI kills are covered too: shrine AIs carry the defending village's
+    // villageId, so findWarsWithUser matches them.
+    const userWars = getWarsArray(curBattle, user);
+    const isWinningWarParticipant =
+      result.didWin > 0 &&
+      !!user.villageId &&
+      !isInWarTornSector &&
+      curBattle.usersState.some(
+        (t) =>
+          t.userId !== userId &&
+          !t.isSummon &&
+          findWarsWithUser(
+            getWarsArray(curBattle, t),
+            userWars,
+            t.villageId,
+            user.villageId,
+          ).length > 0,
+      );
+
     // Accumulate all tracker tasks into a single array for one getNewTrackers call
     const trackerTasks: Parameters<typeof getNewTrackers>[1] = [];
 
@@ -1471,6 +1477,11 @@ export const updateUser = async (
           questData: updatedQuestData,
           battleId: null,
           regenAt: new Date(),
+          // Stamp the winning war participant in the same row update (no extra roundtrip).
+          // GREATEST() inside extendWarParticipantSql never shortens a longer existing stamp.
+          ...(isWinningWarParticipant
+            ? { warParticipantUntil: extendWarParticipantSql() }
+            : {}),
           ...(curBattle.battleType === "RANKED_PVP"
             ? {
                 rankedLp: sql`GREATEST(rankedLp + ${result.lpDiff}, 0)`,

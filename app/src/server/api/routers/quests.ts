@@ -760,13 +760,16 @@ export const questsRouter = createTRPCRouter({
       // the CAS success and the upsert burns one daily slot without delivering the quest
       // (acceptable), whereas the reverse order would deliver a quest when the limit is reached
       // (unacceptable — creates orphaned quest entries the user cannot access). The
-      // warParticipantUntil stamp is applied only after upsertQuestEntry succeeds so a failed
-      // quest creation cannot leak cross-bracket targetability without an active war quest.
+      // warParticipantUntil stamp rides on the same guarded CAS update so it costs no extra
+      // roundtrip; a crash before upsertQuestEntry then leaves a bounded (~2h) cross-bracket
+      // stamp without a quest — the same fail-safe leak the equivalent merge in initiateBattle
+      // accepts, and harmless since it only makes the user more attackable.
       if (questData.questType === "war") {
         const result = await ctx.drizzle
           .update(userData)
           .set({
             dailyWarMissions: sql`${userData.dailyWarMissions} + 1`,
+            warParticipantUntil: extendWarParticipantSql(),
           })
           .where(
             and(
@@ -780,10 +783,6 @@ export const questsRouter = createTRPCRouter({
           );
         }
         await upsertQuestEntry(ctx.drizzle, user, questData);
-        await ctx.drizzle
-          .update(userData)
-          .set({ warParticipantUntil: extendWarParticipantSql() })
-          .where(eq(userData.userId, user.userId));
       } else {
         await Promise.all([
           upsertQuestEntry(ctx.drizzle, user, questData),
