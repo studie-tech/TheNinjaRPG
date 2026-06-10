@@ -22,6 +22,7 @@ import {
 } from "@/drizzle/constants";
 import type {
   GameSetting,
+  Item,
   Jutsu,
   JutsuRank,
   UserData,
@@ -207,15 +208,29 @@ export const checkJutsuItems = (
 
 export const checkJutsuBloodlineItem = (
   jutsu: Jutsu,
-  userItems: Pick<UserItemWithItem, "itemId" | "equipped" | "durability">[] | undefined,
+  userItems:
+    | (Pick<UserItemWithItem, "itemId" | "equipped" | "durability"> & {
+        item: Pick<Item, "itemType" | "maxDurability">;
+      })[]
+    | undefined,
 ): boolean => {
   if (!jutsu.requiredBloodlineItemId) return true;
-  return !!userItems?.some(
-    (ui) =>
-      ui.itemId === jutsu.requiredBloodlineItemId &&
-      ui.equipped !== "NONE" &&
-      ui.durability > DURABILITY_USABILITY_THR,
-  );
+  return !!userItems?.some((ui) => {
+    if (ui.itemId !== jutsu.requiredBloodlineItemId || ui.equipped === "NONE") {
+      return false;
+    }
+    // Mirror combat's durability handling: ARMOR/ACCESSORY/KEYSTONE stop counting once
+    // they hit the usability floor (processUsersForBattle forces them to "NONE"), but
+    // weapons and other types stay equipped at low durability, so don't gate on it here.
+    if (
+      ui.item.itemType === "ARMOR" ||
+      ui.item.itemType === "ACCESSORY" ||
+      ui.item.itemType === "KEYSTONE"
+    ) {
+      return Math.min(ui.durability, ui.item.maxDurability) > DURABILITY_USABILITY_THR;
+    }
+    return true;
+  });
 };
 
 export const isJutsuEvolution = (jutsu: Jutsu): boolean => {

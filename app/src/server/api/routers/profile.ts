@@ -44,6 +44,7 @@ import type {
   Bloodline,
   BloodlineReskin,
   Clan,
+  Item,
   Quest,
   UserData,
   UserItem,
@@ -2289,7 +2290,12 @@ export const fetchUpdatedUser = async (props: {
         promotions: {
           limit: 1,
         },
-        items: { where: ne(userItem.equipped, "NONE") },
+        items: {
+          where: ne(userItem.equipped, "NONE"),
+          with: {
+            item: { columns: { id: true, itemType: true, maxDurability: true } },
+          },
+        },
         userQuests: {
           where: or(
             and(isNull(questHistory.endAt), eq(questHistory.completed, 0)),
@@ -2886,7 +2892,7 @@ export type UserWithRelations =
       activeReskin?: BloodlineReskin | null;
       anbuSquad?: { name: string } | null;
       clan?: Clan | null;
-      items: UserItem[];
+      items: (UserItem & { item: Pick<Item, "id" | "itemType" | "maxDurability"> })[];
       village?:
         | (Village & {
             structures?: VillageStructure[];

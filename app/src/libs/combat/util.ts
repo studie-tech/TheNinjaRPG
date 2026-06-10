@@ -46,7 +46,13 @@ import {
   WAR_SECTORWAR_PVP_SHRINE_REDUCE,
   WAR_TORN_SECTOR_BASE_MONEY,
 } from "@/drizzle/constants";
-import type { Battle, GameSetting, UserItem, VillageAlliance } from "@/drizzle/schema";
+import type {
+  Battle,
+  GameSetting,
+  Item,
+  UserItem,
+  VillageAlliance,
+} from "@/drizzle/schema";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
 import { calculateLpEloChange } from "@/libs/ranked_pvp";
@@ -286,20 +292,33 @@ export const hydrateUserForQuests = (battle: CompleteBattle, user: BattleUserSta
   const village = user.villageId ? getVillage(battle, user.villageId) : undefined;
   const bloodline = getBloodline(battle, user.bloodlineId);
 
-  // Omit BattleUserState.items (BattleUserItem[]) to replace with UserItem[] for type compatibility
+  // Omit BattleUserState.items (BattleUserItem[]) to rebuild as the UserItem shape
+  // (with the minimal item relation) that UserWithRelations carries.
   const { items: battleItems, ...userWithoutItems } = user;
 
-  // Convert BattleUserItem[] to UserItem[] by adding missing fields
+  // Convert BattleUserItem[] to UserItem[] by adding the fields not tracked on the
+  // battle reference type. The item relation is looked up from extraState so the
+  // result matches UserWithRelations.items.
   const now = new Date();
-  const items: UserItem[] = battleItems.map((bi) => ({
-    ...bi,
-    createdAt: now,
-    updatedAt: now,
-    userId: user.userId,
-    storedAtHome: false,
-    craftingFinishedAt: null,
-    isInAuction: false,
-  }));
+  const items: (UserItem & {
+    item: Pick<Item, "id" | "itemType" | "maxDurability">;
+  })[] = battleItems.map((bi) => {
+    const itemData = getItem(battle, bi.itemId);
+    return {
+      ...bi,
+      createdAt: now,
+      updatedAt: now,
+      userId: user.userId,
+      storedAtHome: false,
+      craftingFinishedAt: null,
+      isInAuction: false,
+      item: {
+        id: bi.itemId,
+        itemType: itemData?.itemType ?? "CONSUMABLE",
+        maxDurability: itemData?.maxDurability ?? 0,
+      },
+    };
+  });
 
   // Return hydrated user for quest processing
   return {
