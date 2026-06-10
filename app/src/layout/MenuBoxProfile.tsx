@@ -202,39 +202,13 @@ const MenuBoxProfile: React.FC = () => {
 
   const immunitySecsLeft = immunityData.secsLeft;
 
-  // Memoize the (createdAt, totalSeconds) pair together — Cooldown computes its deadline as
-  // createdAt + totalSeconds*1000, so the two must be sampled at the same instant. The fresh
-  // secsLeft below is used only for the > 0 JSX visibility guard, so the parent row collapses
-  // immediately when Cooldown's onTick setState fires (instead of waiting for fresh userData).
-  const bracketImmunityAnchor = useMemo(() => {
-    const now = Date.now();
-    return {
-      createdAt: now,
-      totalSeconds: Math.max(
-        0,
-        ((userData?.bracketImmunityLiftedUntil?.getTime() ?? 0) - now) / 1000,
-      ),
-    };
-  }, [userData?.bracketImmunityLiftedUntil]);
-  const bracketImmunitySecsLeft = Math.max(
-    0,
-    ((userData?.bracketImmunityLiftedUntil?.getTime() ?? 0) - Date.now()) / 1000,
-  );
+  // Bracket-immunity and war-participant countdown anchors (see useExpiryAnchor below): each gives a
+  // memoized (createdAt, totalSeconds) pair plus a fresh secsLeft for the > 0 visibility guard.
+  const bracketImmunityAnchor = useExpiryAnchor(userData?.bracketImmunityLiftedUntil);
+  const bracketImmunitySecsLeft = bracketImmunityAnchor.secsLeft;
 
-  const warParticipantAnchor = useMemo(() => {
-    const now = Date.now();
-    return {
-      createdAt: now,
-      totalSeconds: Math.max(
-        0,
-        ((userData?.warParticipantUntil?.getTime() ?? 0) - now) / 1000,
-      ),
-    };
-  }, [userData?.warParticipantUntil]);
-  const warParticipantSecsLeft = Math.max(
-    0,
-    ((userData?.warParticipantUntil?.getTime() ?? 0) - Date.now()) / 1000,
-  );
+  const warParticipantAnchor = useExpiryAnchor(userData?.warParticipantUntil);
+  const warParticipantSecsLeft = warParticipantAnchor.secsLeft;
 
   // Battle user state
   const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
@@ -702,6 +676,23 @@ const MenuBoxProfile: React.FC = () => {
 };
 
 export default MenuBoxProfile;
+
+/**
+ * Anchors an expiry countdown for a `Cooldown`. Returns a memoized (createdAt, totalSeconds) pair
+ * sampled from a single Date.now() reading — Cooldown derives its deadline as
+ * createdAt + totalSeconds*1000, so the two must come from the same instant — plus a fresh
+ * `secsLeft` recomputed every render for `> 0` visibility guards, so a row collapses the moment its
+ * timer hits zero instead of waiting for fresh userData.
+ */
+const useExpiryAnchor = (until: Date | null | undefined) => {
+  const untilMs = until?.getTime() ?? 0;
+  const anchor = useMemo(() => {
+    const now = Date.now();
+    return { createdAt: now, totalSeconds: Math.max(0, (untilMs - now) / 1000) };
+  }, [untilMs]);
+  const secsLeft = Math.max(0, (untilMs - Date.now()) / 1000);
+  return { ...anchor, secsLeft };
+};
 
 /**
  * Returns a formatted time string based on the number of seconds left.

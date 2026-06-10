@@ -1183,12 +1183,15 @@ export const updateUser = async (
       hasDefeatOpponentsInNonPvpQuest ||
       (hasDefeatOpponentsInPvpQuest && isInWarTornSector);
 
-    // War participant stamp: a winning killer who shares an active war with any non-summon
-    // opponent in this battle earns ~2h of cross-bracket targetability. Computed from the
-    // pre-loaded battle state (no DB fetch) and folded into the main userData update below so
-    // it costs no extra roundtrip. War-torn sector kills are excluded (war state is not tracked
-    // there). Shrine AI kills are covered too: shrine AIs carry the defending village's
-    // villageId, so findWarsWithUser matches them.
+    // War participant stamp: a winning killer who shares an active war with a non-summon foe on
+    // the opposing side of this battle earns ~2h of cross-bracket targetability. The
+    // `t.direction !== user.direction` guard restricts the match to actual opponents, so the rule
+    // is "won a fight that contained a war foe on the other side" rather than "...anywhere in the
+    // battle" — a war foe sitting on the killer's own side (e.g. a co-op raid) no longer counts.
+    // Computed from the pre-loaded battle state (no DB fetch) and folded into the main userData
+    // update below so it costs no extra roundtrip. War-torn sector kills are excluded (war state
+    // is not tracked there). Shrine AI kills are covered too: shrine AIs defend (right side) and
+    // carry the defending village's villageId, so findWarsWithUser matches them.
     const userWars = getWarsArray(curBattle, user);
     const isWinningWarParticipant =
       result.didWin > 0 &&
@@ -1198,6 +1201,7 @@ export const updateUser = async (
         (t) =>
           t.userId !== userId &&
           !t.isSummon &&
+          t.direction !== user.direction &&
           findWarsWithUser(
             getWarsArray(curBattle, t),
             userWars,
