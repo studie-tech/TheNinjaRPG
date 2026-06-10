@@ -957,10 +957,10 @@ const BoostTemplateGrid = ({
 
   const allDayFilledDays = useMemo(() => {
     const filled = new Set<number>();
-    for (let day = 0; day < 7; day++) {
+    for (let day = 0; day < DAY_LABELS.length; day++) {
       const dayEntries = localTemplate.filter((e) => e.dayOfWeek === day);
       const filledSlots = new Set(dayEntries.map((e) => e.slotIndex));
-      if (filledSlots.size === 12) {
+      if (filledSlots.size === SLOT_LABELS.length) {
         filled.add(day);
       }
     }
@@ -1019,7 +1019,7 @@ const BoostTemplateGrid = ({
     setLocalTemplate((prev) => {
       const filtered = prev.filter((e) => e.dayOfWeek !== day);
       const newEntries: BoostTemplateEntry[] = [];
-      for (let slot = 0; slot < 12; slot++) {
+      for (let slot = 0; slot < SLOT_LABELS.length; slot++) {
         for (const bt of boosts) {
           newEntries.push({
             boostType: bt as BoostTemplateEntry["boostType"],

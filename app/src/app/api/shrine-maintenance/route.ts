@@ -227,10 +227,7 @@ export function computeTemplateActivations(params: {
  * per-type keys are bounded and overwritten on re-activation, and
  * `boostInactivePredicate` lets a lapsed type re-activate on its next slot.
  */
-async function runShrineBoostTick(
-  now: Date = new Date(),
-  prevTime: Date = new Date(0),
-) {
+async function runShrineBoostTick(now: Date, prevTime: Date) {
   // Template boosts only fire on slot boundaries; nothing to process otherwise.
   if (!isNewSlotDue(now, prevTime)) return { activeUpdated: 0 };
 
