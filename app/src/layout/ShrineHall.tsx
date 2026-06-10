@@ -1183,8 +1183,7 @@ const BoostTemplateGrid = ({
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-sm font-semibold text-amber-400">
                     {DAY_LABELS[openCell.day]} · {SLOT_LABELS[openCell.slot]} –{" "}
-                    {`${String(((openCell.slot + 1) * 2) % 24).padStart(2, "0")}:00`}{" "}
-                    UTC
+                    {`${String((openCell.slot + 1) * 2).padStart(2, "0")}:00`} UTC
                   </span>
                   <span className="text-xs text-muted-foreground">
                     click away to close
