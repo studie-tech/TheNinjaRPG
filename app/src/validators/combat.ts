@@ -1110,6 +1110,12 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
     if (!data.destroyOnUse) {
       addIssue(ctx, "Items with unlockitemvariant must be destroyed on use");
     }
+    if (!data.preventBattleUsage) {
+      addIssue(
+        ctx,
+        "Items with unlockitemvariant must have preventBattleUsage enabled",
+      );
+    }
   }
 };
 
