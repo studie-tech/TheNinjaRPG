@@ -943,22 +943,27 @@ export const combatRouter = createTRPCRouter({
         return errorResponse("You already have this loadout selected");
       }
 
-      // Mutate to update loadouts
-      const [jutsuLoadoutResult, itemLoadoutResult] = await Promise.all([
+      // Apply the item loadout first, then the jutsu loadout. selectItemLoadout mutates
+      // `useritems` in place to the post-switch equipped state, and selectJutsuLoadout
+      // validates each gated jutsu's required bloodline item against that same array.
+      // Running them in parallel would validate jutsus against the pre-switch items,
+      // re-equipping a gated jutsu after its required item is dropped, or wrongly
+      // rejecting one the new item loadout has just equipped.
+      const itemLoadoutResult =
+        user.itemLoadout === iId || !iId
+          ? { success: true, message: "Item loadout already selected" }
+          : await selectItemLoadout(ctx.drizzle, iId, itemLoadouts, useritems, user);
+      const jutsuLoadoutResult =
         user.jutsuLoadout === jId || !jId
           ? { success: true, message: "Jutsu loadout already selected" }
-          : selectJutsuLoadout(
+          : await selectJutsuLoadout(
               ctx.drizzle,
               jId,
               jutsuLoadouts,
               userjutsus,
               user,
               useritems,
-            ),
-        user.itemLoadout === iId || !iId
-          ? { success: true, message: "Item loadout already selected" }
-          : selectItemLoadout(ctx.drizzle, iId, itemLoadouts, useritems, user),
-      ]);
+            );
 
       // Mutate
       userBattle.updatedAt = new Date();
