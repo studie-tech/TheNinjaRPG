@@ -2252,7 +2252,8 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
   if (attackerBracket <= targetBracket) {
     return (
       <p className="font-medium text-green-600 text-sm">
-        ✓ Bracket-eligible (same or higher bracket — server-side checks still apply)
+        ✓ Bracket-eligible (they are in your bracket or higher — server-side checks
+        still apply)
       </p>
     );
   }

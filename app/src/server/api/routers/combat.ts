@@ -1717,6 +1717,11 @@ export const initiateBattle = async (
   // Calculate battle width and height
   const gridSize = getDefaultBattleSizes(battleType, users[0]?.level ?? 0);
 
+  // Battle-global setup for the per-attacker XP bracket guard below. These do not depend on which
+  // attacker is being evaluated, so they are derived once instead of re-derived per loop iteration.
+  const now = new Date();
+  const nonAiTargets = users.filter((u) => targetIds.includes(u.userId) && !u.isAi);
+
   // Loop through each user
   for (const i of users.keys()) {
     // Get the user
@@ -1776,9 +1781,6 @@ export const initiateBattle = async (
 
     // XP Bracket restrictions — same-bracket-only PvP with immunity lift and war-participant exemptions
     if (battleType === "COMBAT" && userIds.includes(user.userId)) {
-      const now = new Date();
-      const nonAiTargets = users.filter((u) => targetIds.includes(u.userId) && !u.isAi);
-
       // War-Torn sector is a free-for-all — skip all village and bracket restrictions
       const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
       if (!isInWarTornSector) {
@@ -1794,13 +1796,9 @@ export const initiateBattle = async (
         }
 
         // Guard 2: Cannot attack members of allied villages
-        const alliedTarget = nonAiTargets.find((t) =>
-          relations.some(
-            (r) =>
-              r.status === "ALLY" &&
-              ((r.villageIdA === user.villageId && r.villageIdB === t.villageId) ||
-                (r.villageIdB === user.villageId && r.villageIdA === t.villageId)),
-          ),
+        const alliedTarget = nonAiTargets.find(
+          (t) =>
+            findRelationship(relations, user.villageId, t.villageId)?.status === "ALLY",
         );
         if (alliedTarget) {
           return {
