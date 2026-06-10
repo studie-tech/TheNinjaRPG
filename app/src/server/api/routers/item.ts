@@ -791,40 +791,26 @@ export const itemRouter = createTRPCRouter({
       }
       if (!ownershipRows.length) return errorResponse("You don't own this item");
       if (existingUnlock) return errorResponse("Variant already unlocked");
+      if (tokenItem.quantity <= 0) {
+        return errorResponse("Token item has no remaining uses");
+      }
 
-      // Mutate — consume token first so a crash after this leaves the user
-      // without the token but without the unlock (safe-failure direction: retryable).
-      const newQty = tokenItem.quantity - 1;
-      const consumeToken =
-        newQty <= 0
-          ? ctx.drizzle
-              .delete(userItem)
-              .where(
-                and(
-                  eq(userItem.id, input.tokenUserItemId),
-                  eq(userItem.quantity, tokenItem.quantity),
-                ),
-              )
-          : ctx.drizzle
-              .update(userItem)
-              .set({ quantity: newQty })
-              .where(
-                and(
-                  eq(userItem.id, input.tokenUserItemId),
-                  eq(userItem.quantity, tokenItem.quantity),
-                ),
-              );
-
-      // A thrown DB error here consumes nothing, so surface it gracefully and let
-      // the player retry rather than leaking an unhandled 500.
-      let tokenResult: Awaited<typeof consumeToken>;
+      // Mutate — consume token first so a crash after this leaves the user without
+      // the token but without the unlock (safe-failure direction: retryable). Uses
+      // the canonical atomic helper (CAS on quantity, deletes the stack at zero).
+      let consumed: boolean;
       try {
-        tokenResult = await consumeToken;
+        consumed = await consumeUserItemAtomically({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          userItemId: input.tokenUserItemId,
+          expectedQuantity: tokenItem.quantity,
+        });
       } catch {
         return errorResponse("Could not consume Variant Token — please try again");
       }
 
-      if (tokenResult.rowsAffected !== 1) {
+      if (!consumed) {
         return errorResponse("Token item was modified concurrently — please try again");
       }
 
