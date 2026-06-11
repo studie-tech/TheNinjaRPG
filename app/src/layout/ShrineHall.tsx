@@ -301,6 +301,8 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
   const now = useUtcNow(isActive, 60_000);
   const nowMs = now.getTime();
+  const currentDayOfWeek = now.getUTCDay();
+  const currentSlotIndex = getSlotIndex(now.getUTCHours());
 
   const { data: sectorData } = api.travel.getSectorData.useQuery(
     { sector: user.sector ?? 0 },
@@ -483,6 +485,8 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
           villageId={user.villageId}
           canEdit={isKage || isElder}
           isActive={isActive}
+          currentDayOfWeek={currentDayOfWeek}
+          currentSlotIndex={currentSlotIndex}
         />
       )}
     </div>
@@ -912,17 +916,18 @@ interface BoostTemplateGridProps {
   villageId: string;
   canEdit: boolean;
   isActive: boolean;
+  currentDayOfWeek: number;
+  currentSlotIndex: number;
 }
 
 const BoostTemplateGrid = ({
   villageId,
   canEdit,
   isActive,
+  currentDayOfWeek,
+  currentSlotIndex,
 }: BoostTemplateGridProps) => {
   const utils = api.useUtils();
-  const now = useUtcNow(isActive, 60_000);
-  const currentDayOfWeek = now.getUTCDay();
-  const currentSlotIndex = getSlotIndex(now.getUTCHours());
 
   const { data: templateData, isLoading } = api.shrine.getBoostTemplate.useQuery(
     { villageId },

@@ -28,6 +28,7 @@ import {
 import { getServerPusher } from "@/libs/pusher";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import {
   boostInactivePredicate,
@@ -179,14 +180,12 @@ export const shrineRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [{ user }, level3Shrines] = await Promise.all([
+      const [{ user }, hasShrine] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        ctx.drizzle.query.sector.findMany({
-          where: and(eq(sector.villageId, input.villageId), eq(sector.shrineLevel, 3)),
-        }),
+        hasLevel3Shrine(ctx.drizzle, input.villageId),
       ]);
 
       // Guards
@@ -198,7 +197,7 @@ export const shrineRouter = createTRPCRouter({
       if (user.village.kageId !== user.userId && user.rank !== "ELDER") {
         return errorResponse("Only the Kage or Elders can activate boosts");
       }
-      if (level3Shrines.length === 0) {
+      if (!hasShrine) {
         return errorResponse("Need at least one Level 3 shrine to activate boosts");
       }
       if (user.village.tokens < SHRINE_BOOST_COST) {
@@ -502,11 +501,9 @@ export const shrineRouter = createTRPCRouter({
     .input(setBoostTemplateSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, level3Shrines] = await Promise.all([
+      const [{ user }, hasShrine] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        ctx.drizzle.query.sector.findMany({
-          where: and(eq(sector.villageId, input.villageId), eq(sector.shrineLevel, 3)),
-        }),
+        hasLevel3Shrine(ctx.drizzle, input.villageId),
       ]);
 
       // Guards
@@ -518,7 +515,7 @@ export const shrineRouter = createTRPCRouter({
       if (user.village.kageId !== user.userId && user.rank !== "ELDER") {
         return errorResponse("Only the Kage or Elders can set boost templates");
       }
-      if (level3Shrines.length === 0) {
+      if (!hasShrine) {
         return errorResponse(
           "Need at least one Level 3 shrine to set a boost template",
         );
@@ -1236,3 +1233,19 @@ export const shrineRouter = createTRPCRouter({
       return errorResponse(`Failed to initiate shrine battle: ${result.message}`);
     }),
 });
+
+/**
+ * Returns whether the village controls at least one Level 3 shrine.
+ * Existence-only check — selects a single id rather than pulling full sector rows.
+ */
+const hasLevel3Shrine = async (
+  client: DrizzleClient,
+  villageId: string,
+): Promise<boolean> => {
+  const rows = await client
+    .select({ id: sector.id })
+    .from(sector)
+    .where(and(eq(sector.villageId, villageId), eq(sector.shrineLevel, 3)))
+    .limit(1);
+  return rows.length > 0;
+};

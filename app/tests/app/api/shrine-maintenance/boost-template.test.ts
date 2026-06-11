@@ -22,12 +22,9 @@ function prevBefore(now: Date): Date {
   return prev;
 }
 
-const VILLAGE_ID = "village_abc";
-
 const BASE_PARAMS = {
-  villageId: VILLAGE_ID,
   villageTokens: 100_000,
-  villagesWithLevel3Shrine: new Set([VILLAGE_ID]),
+  hasLevel3Shrine: true,
   boostCost: 15_000,
 };
 
@@ -98,7 +95,7 @@ describe("computeTemplateActivations", () => {
     const prevTime = utcDate(1, 3, 59);
     const result = computeTemplateActivations({
       ...BASE_PARAMS,
-      villagesWithLevel3Shrine: new Set(["other_village"]), // village not in set
+      hasLevel3Shrine: false, // village controls no Level 3 shrine
       now,
       prevTime,
       shrineSettings: {
