@@ -617,20 +617,13 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ variantId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query — ownership check joins userItem→itemVariant in parallel (variantId known upfront)
+      // Query — ownership check runs in parallel (variantId known upfront)
       const [user, variant, ownershipRows, existingUnlock] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.itemVariant.findFirst({
           where: eq(itemVariant.id, input.variantId),
         }),
-        ctx.drizzle
-          .select({ id: userItem.id })
-          .from(userItem)
-          .innerJoin(itemVariant, eq(userItem.itemId, itemVariant.itemId))
-          .where(
-            and(eq(userItem.userId, ctx.userId), eq(itemVariant.id, input.variantId)),
-          )
-          .limit(1),
+        fetchVariantOwnership(ctx.drizzle, ctx.userId, input.variantId),
         ctx.drizzle.query.userItemVariant.findFirst({
           where: and(
             eq(userItemVariant.userId, ctx.userId),
@@ -752,22 +745,17 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ tokenUserItemId: z.string(), variantId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query — ownership check joins userItem→itemVariant in parallel (variantId known upfront)
+      // Query — ownership check runs in parallel (variantId known upfront). The
+      // token only needs its base item (effects) and quantity, so fetchUserItem
+      // (no variant join) suffices here.
       const [user, tokenItem, variant, ownershipRows, existingUnlock] =
         await Promise.all([
           fetchUser(ctx.drizzle, ctx.userId),
-          fetchUserItemWithVariants(ctx.drizzle, ctx.userId, input.tokenUserItemId),
+          fetchUserItem(ctx.drizzle, ctx.userId, input.tokenUserItemId),
           ctx.drizzle.query.itemVariant.findFirst({
             where: eq(itemVariant.id, input.variantId),
           }),
-          ctx.drizzle
-            .select({ id: userItem.id })
-            .from(userItem)
-            .innerJoin(itemVariant, eq(userItem.itemId, itemVariant.itemId))
-            .where(
-              and(eq(userItem.userId, ctx.userId), eq(itemVariant.id, input.variantId)),
-            )
-            .limit(1),
+          fetchVariantOwnership(ctx.drizzle, ctx.userId, input.variantId),
           ctx.drizzle.query.userItemVariant.findFirst({
             where: and(
               eq(userItemVariant.userId, ctx.userId),
@@ -2341,6 +2329,22 @@ export const fetchUserItemWithVariants = async (
     where: and(eq(userItem.userId, userId), eq(userItem.id, userItemId)),
     with: { item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } } },
   });
+};
+
+// Does the caller own at least one userItem whose itemId matches the variant's
+// itemId? Shared by purchaseVariant and consumeVariantToken so both apply the
+// exact same ownership filter. Returns an array; callers check `.length`.
+export const fetchVariantOwnership = async (
+  client: DrizzleClient,
+  userId: string,
+  variantId: string,
+) => {
+  return await client
+    .select({ id: userItem.id })
+    .from(userItem)
+    .innerJoin(itemVariant, eq(userItem.itemId, itemVariant.itemId))
+    .where(and(eq(userItem.userId, userId), eq(itemVariant.id, variantId)))
+    .limit(1);
 };
 
 /**

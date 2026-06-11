@@ -684,6 +684,8 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     ...useritem.item,
     ...useritem,
     image: getItemDisplayImage(useritem as UserItemWithVariants),
+    name: getItemDisplayName(useritem as UserItemWithVariants),
+    description: getItemDisplayDescription(useritem as UserItemWithVariants),
   }));
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
   const repairItems = (useritems || []).filter(
@@ -951,6 +953,8 @@ const Character: React.FC<CharacterProps> = (props) => {
     ...useritem.item,
     ...useritem,
     image: getItemDisplayImage(useritem as UserItemWithVariants),
+    name: getItemDisplayName(useritem as UserItemWithVariants),
+    description: getItemDisplayDescription(useritem as UserItemWithVariants),
   }));
   const equipped = items?.find((item) => item.equipped === slot);
   const repairItems = (useritems || []).filter(
