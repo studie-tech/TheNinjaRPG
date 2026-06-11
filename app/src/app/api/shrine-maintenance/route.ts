@@ -142,28 +142,20 @@ type ShrineSettings = {
 export function computeTemplateActivations(params: {
   now: Date;
   prevTime: Date;
-  villageId: string;
   villageTokens: number;
   shrineSettings: ShrineSettings | null;
-  villagesWithLevel3Shrine: Set<string>;
+  hasLevel3Shrine: boolean;
   boostCost: number;
 }): { boostType: BoostTemplateEntry["boostType"]; newEndAt: string }[] {
-  const {
-    now,
-    prevTime,
-    villageId,
-    villageTokens,
-    shrineSettings,
-    villagesWithLevel3Shrine,
-    boostCost,
-  } = params;
+  const { now, prevTime, villageTokens, shrineSettings, hasLevel3Shrine, boostCost } =
+    params;
 
   // Defensive guard: callers already gate on slot boundaries, but keeping the
   // check here makes direct callers safe as well.
   if (!isNewSlotDue(now, prevTime)) return [];
 
   // Village must control at least one Level 3 shrine
-  if (!villagesWithLevel3Shrine.has(villageId)) return [];
+  if (!hasLevel3Shrine) return [];
 
   const template = shrineSettings?.boostTemplate ?? [];
   if (template.length === 0) return [];
@@ -262,10 +254,9 @@ async function runShrineBoostTick(now: Date, prevTime: Date) {
     const templateActivations = computeTemplateActivations({
       now,
       prevTime,
-      villageId: villageData.id,
       villageTokens: villageData.tokens ?? 0,
       shrineSettings: settings,
-      villagesWithLevel3Shrine,
+      hasLevel3Shrine: villagesWithLevel3Shrine.has(villageData.id),
       boostCost: SHRINE_BOOST_COST,
     });
     for (const activation of templateActivations) {
