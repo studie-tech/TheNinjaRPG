@@ -1243,6 +1243,7 @@ const BoostTemplateGrid = ({
                   <Button
                     size="sm"
                     variant="outline"
+                    disabled={isSaving}
                     onClick={() => {
                       if (clearConfirm) {
                         clearAll();
