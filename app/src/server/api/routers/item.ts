@@ -733,10 +733,19 @@ export const itemRouter = createTRPCRouter({
       }
 
       // Mutate
-      await ctx.drizzle
+      const updateResult = await ctx.drizzle
         .update(userItem)
         .set({ activeVariantId: input.variantId })
         .where(and(eq(userItem.id, input.userItemId), eq(userItem.userId, ctx.userId)));
+
+      // PlanetScale reports *changed* rows, so rowsAffected is 0 both when the
+      // row was deleted between the guard and this update AND when the variant
+      // was already active (a harmless re-select). Only the former is an error,
+      // and it is the only zero-row case where the fetched row still held a
+      // different active variant.
+      if (updateResult.rowsAffected === 0 && ui.activeVariantId !== input.variantId) {
+        return errorResponse("Item no longer available — please refresh and try again");
+      }
 
       return { success: true, message: "Active variant updated" };
     }),
