@@ -29,6 +29,7 @@ import {
   SHRINE_BOOST_DISPLAY,
   SHRINE_BOOST_DURATION_HOURS,
   SHRINE_BOOST_PER_SHRINE_PERC,
+  type SHRINE_BOOST_TYPE,
   SHRINE_BOOST_TYPES,
   SHRINE_MAX_AI_ASSIGNMENTS,
   SHRINE_MAX_LEVEL,
@@ -980,10 +981,10 @@ const BoostTemplateGrid = ({
 
   const { mutate: saveTemplate, isPending: isSaving } =
     api.shrine.setBoostTemplate.useMutation({
-      onSuccess: (res) => {
+      onSuccess: async (res) => {
         showMutationToast(res);
         if (res.success) {
-          void utils.shrine.getBoostTemplate.invalidate({ villageId });
+          await utils.shrine.getBoostTemplate.invalidate({ villageId });
           setIsDirty(false);
         }
       },
@@ -1183,37 +1184,21 @@ const BoostTemplateGrid = ({
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-sm font-semibold text-amber-400">
                     {DAY_LABELS[openCell.day]} · {SLOT_LABELS[openCell.slot]} –{" "}
-                    {`${String((openCell.slot + 1) * 2).padStart(2, "0")}:00`} UTC
+                    {SLOT_LABELS[(openCell.slot + 1) % SLOT_LABELS.length]} UTC
+                    {openCell.slot + 1 === SLOT_LABELS.length && " (next day)"}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     click away to close
                   </span>
                 </div>
-                <div className="grid grid-cols-5 gap-2">
-                  {SHRINE_BOOST_TYPES.map((bt) => {
-                    const checked = (
-                      templateBySlot.get(`${openCell.day}-${openCell.slot}`) ?? []
-                    ).some((e) => e.boostType === bt);
-                    return (
-                      <button
-                        key={bt}
-                        type="button"
-                        onClick={() =>
-                          toggleBoostInCell(openCell.day, openCell.slot, bt)
-                        }
-                        className={cn(
-                          "flex flex-col items-center gap-1 rounded-md px-2 py-3 text-center text-xs transition-colors",
-                          checked
-                            ? SHRINE_BOOST_DISPLAY[bt].color
-                            : "border border-border bg-background text-muted-foreground hover:border-muted-foreground",
-                        )}
-                      >
-                        {checked && <span>✓</span>}
-                        <span>{bt}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <BoostTypeChecklist
+                  checkedFor={(bt) =>
+                    (templateBySlot.get(`${openCell.day}-${openCell.slot}`) ?? []).some(
+                      (e) => e.boostType === bt,
+                    )
+                  }
+                  onToggle={(bt) => toggleBoostInCell(openCell.day, openCell.slot, bt)}
+                />
               </div>
             )}
 
@@ -1225,33 +1210,15 @@ const BoostTemplateGrid = ({
                     {DAY_LABELS[openAllDay]} · All Day (fills all 12 slots)
                   </span>
                 </div>
-                <div className="mb-3 grid grid-cols-5 gap-2">
-                  {SHRINE_BOOST_TYPES.map((bt) => {
-                    const checked = allDayBoosts.includes(bt);
-                    return (
-                      <button
-                        key={bt}
-                        type="button"
-                        onClick={() => {
-                          setAllDayBoosts((prev) =>
-                            prev.includes(bt)
-                              ? prev.filter((b) => b !== bt)
-                              : [...prev, bt],
-                          );
-                        }}
-                        className={cn(
-                          "flex flex-col items-center gap-1 rounded-md px-2 py-3 text-center text-xs transition-colors",
-                          checked
-                            ? SHRINE_BOOST_DISPLAY[bt].color
-                            : "border border-border bg-background text-muted-foreground hover:border-muted-foreground",
-                        )}
-                      >
-                        {checked && <span>✓</span>}
-                        <span>{bt}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <BoostTypeChecklist
+                  className="mb-3"
+                  checkedFor={(bt) => allDayBoosts.includes(bt)}
+                  onToggle={(bt) =>
+                    setAllDayBoosts((prev) =>
+                      prev.includes(bt) ? prev.filter((b) => b !== bt) : [...prev, bt],
+                    )
+                  }
+                />
                 <Button
                   size="sm"
                   disabled={allDayBoosts.length === 0}
@@ -1303,3 +1270,37 @@ const BoostTemplateGrid = ({
     </Card>
   );
 };
+
+interface BoostTypeChecklistProps {
+  checkedFor: (boostType: SHRINE_BOOST_TYPE) => boolean;
+  onToggle: (boostType: SHRINE_BOOST_TYPE) => void;
+  className?: string;
+}
+
+const BoostTypeChecklist = ({
+  checkedFor,
+  onToggle,
+  className,
+}: BoostTypeChecklistProps) => (
+  <div className={cn("grid grid-cols-5 gap-2", className)}>
+    {SHRINE_BOOST_TYPES.map((bt) => {
+      const checked = checkedFor(bt);
+      return (
+        <button
+          key={bt}
+          type="button"
+          onClick={() => onToggle(bt)}
+          className={cn(
+            "flex flex-col items-center gap-1 rounded-md px-2 py-3 text-center text-xs transition-colors",
+            checked
+              ? SHRINE_BOOST_DISPLAY[bt].color
+              : "border border-border bg-background text-muted-foreground hover:border-muted-foreground",
+          )}
+        >
+          {checked && <span>✓</span>}
+          <span>{bt}</span>
+        </button>
+      );
+    })}
+  </div>
+);
