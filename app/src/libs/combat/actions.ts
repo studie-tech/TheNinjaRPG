@@ -859,7 +859,8 @@ export const insertAction = (info: {
                     barrierEffect.targetId = barrierOnTile.id;
                     barrierEffect.id = nanoid();
                     if ("absorbPercentage" in barrierOnTile) {
-                      barrierEffect.barrierAbsorb = barrierOnTile.absorbPercentage;
+                      barrierEffect.barrierAbsorb =
+                        barrierOnTile.absorbPercentage / 100;
                     }
                     usersEffects.push(barrierEffect);
                   }
