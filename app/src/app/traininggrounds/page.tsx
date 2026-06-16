@@ -56,7 +56,9 @@ import {
   UserStatNames,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
-import { useTutorialStep } from "@/hooks/tutorial";
+import { useLocalStorage } from "@/hooks/localstorage";
+import { TUTORIAL_JUTSU_TRAIN_QUEUE_STEP_ID, useTutorialStep } from "@/hooks/tutorial";
+import ActivityQueuePanel from "@/layout/ActivityQueuePanel";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm2 from "@/layout/Confirm2";
@@ -72,6 +74,7 @@ import PublicUserComponent from "@/layout/PublicUser";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showTrainingCapcha } from "@/libs/captcha";
+import { getDisplayJutsuLevel, getJutsuQueueCostBasis } from "@/libs/jutsu";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import { getStealthStatus } from "@/libs/stealth";
@@ -103,24 +106,64 @@ import { getSearchValidator } from "@/validators/register";
 const getJutsuLevelCap = (_jutsu: { parentJutsuId?: string | null }) => JUTSU_LEVEL_CAP;
 
 export default function Training() {
-  // Ensure user is in village
   const { userData, timeDiff, access, updateUser } =
     useRequireInVillage("/traininggrounds");
+  const { currentStep } = useTutorialStep();
 
-  // While loading userdata
+  const [activeTab, setActiveTab] = useLocalStorage<string>(
+    "TrainingGroundsTab",
+    "Stats",
+  );
+
+  useEffect(() => {
+    if (currentStep?.title === "Training") {
+      setActiveTab("Stats");
+    }
+  }, [currentStep?.title, setActiveTab]);
+
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing Training Grounds" />;
 
-  // Show sensei component
   const showSenseiSystem = [...SENSEI_RANKS, "GENIN"].includes(userData.rank);
+  const tabs = ["Stats", "Jutsu", "Covert", ...(showSenseiSystem ? ["Sensei"] : [])];
 
-  // Show components if we have user
   return (
     <>
-      <StatsTraining userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
-      <JutsuTraining userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
-      <CovertTraining userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
-      {showSenseiSystem && (
+      <ContentBox
+        title="Training Grounds"
+        subtitle="Train stats, jutsu, and covert skills"
+        defaultBackHref="/village"
+        topRightContent={
+          <NavTabs current={activeTab} options={tabs} setValue={setActiveTab} />
+        }
+      >
+        <p className="text-muted-foreground text-sm">
+          Use the tabs above to switch between training types. Queue additional
+          trainings while one is in progress — Fed supporters get extra queue slots.
+        </p>
+      </ContentBox>
+      {activeTab === "Stats" && (
+        <StatsTraining
+          userData={userData}
+          timeDiff={timeDiff}
+          updateUser={updateUser}
+        />
+      )}
+      {activeTab === "Jutsu" && (
+        <JutsuTraining
+          userData={userData}
+          timeDiff={timeDiff}
+          updateUser={updateUser}
+        />
+      )}
+      {activeTab === "Covert" && (
+        <CovertTraining
+          userData={userData}
+          timeDiff={timeDiff}
+          updateUser={updateUser}
+        />
+      )}
+      {activeTab === "Sensei" && showSenseiSystem && (
         <SenseiSystem userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
       )}
     </>
@@ -368,22 +411,25 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
   const { userData, updateUser, timeDiff } = props;
   const efficiency = trainEfficiency(userData);
   const showCaptcha = userData && showTrainingCapcha(userData);
+  const [captchaStopOpen, setCaptchaStopOpen] = useState(false);
 
   // tRPC useUtils
   const utils = api.useUtils();
 
+  // Tutorial management hook
+  const { currentStep, handleNextStep } = useTutorialStep();
+
   // Query
+  const { data: statQueue, refetch: refetchStatQueue } =
+    api.train.getStatQueue.useQuery(undefined, { enabled: !!userData });
   const { data: captcha } = api.misc.getCaptcha.useQuery(undefined, {
     staleTime: 5000,
     enabled: showCaptcha,
   });
 
-  // Tutorial management hook
-  const { currentStep, handleNextStep } = useTutorialStep();
-
   // Mutations
   const { mutate: startTraining, isPending: isStarting } =
-    api.train.startTraining.useMutation({
+    api.train.enqueueStatTraining.useMutation({
       onSuccess: async (result) => {
         showMutationToast(result);
         if (result.success && result.data) {
@@ -393,6 +439,15 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
             handleNextStep();
           }
         }
+        await refetchStatQueue();
+      },
+    });
+
+  const { mutate: cancelStatQueue, isPending: isCancellingStatQueue } =
+    api.train.cancelStatQueueEntry.useMutation({
+      onSuccess: async (result) => {
+        showMutationToast(result);
+        await refetchStatQueue();
       },
     });
 
@@ -402,6 +457,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
         showMutationToast(result);
         await utils.misc.getCaptcha.invalidate();
         if (result.success && result.data) {
+          setCaptchaStopOpen(false);
           if (currentStep?.title === "Training") {
             handleNextStep();
           }
@@ -415,6 +471,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
             questData: result.data.questData,
           });
         }
+        await refetchStatQueue();
       },
     });
 
@@ -439,7 +496,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
     stopTraining({ ...data, villageId: userData.villageId });
   });
 
-  const isPending = isStarting || isStopping || isChaning;
+  const isPending = isStarting || isStopping || isChaning || isCancellingStatQueue;
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (isPending) return <Loader explanation="Processing..." />;
@@ -490,6 +547,59 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
         />
       }
     >
+      <ActivityQueuePanel
+        queue={statQueue}
+        timeDiff={timeDiff}
+        onCancel={(id) => cancelStatQueue({ queueId: id })}
+        isCancelling={isCancellingStatQueue}
+        onActiveFinish={() => void refetchStatQueue()}
+        onStopActive={() => {
+          if (showCaptcha) {
+            setCaptchaStopOpen(true);
+          } else {
+            stopTraining({ villageId: userData.villageId });
+          }
+        }}
+        isStoppingActive={isStopping}
+        stopButtonId="tutorial-traininggrounds-stopTraining"
+      />
+      {showCaptcha && captcha && captchaStopOpen && userData.currentlyTraining && (
+        <div className="mb-4 rounded-lg border p-4">
+          <p className="font-bold text-lg">Verify Humanity to stop training</p>
+          {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element for data URI */}
+          <img
+            alt="captcha"
+            className="mb-2"
+            src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
+          />
+          <Form {...captchaForm}>
+            <form onSubmit={onSubmit} className="space-y-2">
+              <FormField
+                control={captchaForm.control}
+                name="guess"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input placeholder="Enter captcha" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex gap-2">
+                <Button type="submit">Verify & Stop</Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setCaptchaStopOpen(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </div>
+      )}
       <div className="grid grid-cols-4 text-center font-bold">
         {UserStatNames.map((stat, i) => {
           const part = stat.match(/[a-z]+/g)?.[0] ?? "";
@@ -535,76 +645,6 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           );
         })}
       </div>
-      {userData.currentlyTraining && (
-        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-95">
-          <div className="m-auto flex flex-col items-center text-center text-white">
-            <p className="p-5 text-2xl">Training {userData.currentlyTraining}</p>
-            <Image
-              src={getImage(userData.currentlyTraining)}
-              alt={userData.currentlyTraining}
-              width={128}
-              height={128}
-            />
-            <div className="w-2/3">
-              {userData.trainingStartedAt && (
-                <p className="text-2xl">
-                  Time Left:{" "}
-                  <Countdown
-                    targetDate={secondsFromDate(
-                      trainingSpeedSeconds(userData.trainingSpeed),
-                      userData.trainingStartedAt,
-                    )}
-                    timeDiff={timeDiff}
-                  />
-                </p>
-              )}
-              {!showCaptcha && (
-                <XCircle
-                  id="tutorial-traininggrounds-stopTraining"
-                  className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
-                  onClick={() => stopTraining({ villageId: userData.villageId })}
-                />
-              )}
-              {showCaptcha && !captcha && <Loader explanation="Loading captcha" />}
-              {showCaptcha && captcha && (
-                <Popover>
-                  <PopoverTrigger>
-                    <XCircle className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500" />
-                  </PopoverTrigger>
-                  <PopoverContent>
-                    <p className="font-bold text-lg">Verify Humanity</p>
-                    {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element for data URI */}
-                    <img
-                      alt="captcha"
-                      className="mb-2"
-                      src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
-                    />
-                    <Form {...captchaForm}>
-                      <form className="relative" onSubmit={onSubmit}>
-                        <FormField
-                          control={captchaForm.control}
-                          name="guess"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input placeholder="Enter captcha" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <Button className="absolute top-0 right-0" type="submit">
-                          <CheckCheck className="h-5 w-5" />
-                        </Button>
-                      </form>
-                    </Form>
-                  </PopoverContent>
-                </Popover>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </ContentBox>
   );
 };
@@ -669,15 +709,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       enabled: !!userData,
     },
   );
-  const userJutsuCounts = userJutsus?.map((userJutsu) => {
-    return {
-      id: userJutsu.jutsuId,
-      quantity:
-        userJutsu.finishTraining && userJutsu.finishTraining > now
-          ? userJutsu.level - 1
-          : userJutsu.level,
-    };
-  });
+  const { data: jutsuQueue, refetch: refetchJutsuQueue } =
+    api.jutsu.getJutsuQueue.useQuery(undefined, { enabled: !!userData });
+  const userJutsuCounts = userJutsus?.map((userJutsu) => ({
+    id: userJutsu.jutsuId,
+    quantity: getDisplayJutsuLevel(userJutsu, now),
+  }));
 
   // Tutorial management hook
   const { currentStep, handleNextStep } = useTutorialStep();
@@ -690,11 +727,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
           await updateUser(result.data);
-          if (currentStep?.title === "Jutsu Training") {
+          if (currentStep?.id === TUTORIAL_JUTSU_TRAIN_QUEUE_STEP_ID) {
             handleNextStep();
           }
         }
         await utils.jutsu.getUserJutsus.invalidate();
+        await refetchJutsuQueue();
       },
       onSettled: () => {
         document.body.style.cursor = "default";
@@ -703,11 +741,19 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       },
     });
 
+  const { mutate: cancelJutsuQueue, isPending: isCancellingJutsuQueue } =
+    api.jutsu.cancelJutsuQueueEntry.useMutation({
+      onSuccess: async (result) => {
+        showMutationToast(result);
+        await Promise.all([refetchJutsuQueue(), utils.jutsu.getUserJutsus.refetch()]);
+      },
+    });
+
   const { mutate: cancel, isPending: isStoppingTrain } =
     api.jutsu.stopTraining.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        await utils.jutsu.getUserJutsus.invalidate();
+        await Promise.all([utils.jutsu.getUserJutsus.refetch(), refetchJutsuQueue()]);
       },
       onSettled: () => {
         document.body.style.cursor = "default";
@@ -747,7 +793,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     })
     .map((j) => {
       const uj = userJutsus?.find((uj) => uj.jutsuId === j.id);
-      return { ...j, level: uj?.level || 0 };
+      return { ...j, level: uj ? getDisplayJutsuLevel(uj, now) : 0 };
     })
     .filter((j) => j.level < getJutsuLevelCap(j))
     .sort((a, b) => b.level - a.level);
@@ -757,19 +803,28 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     (jutsu) => jutsu.finishTraining && jutsu.finishTraining > now,
   );
 
-  // Derived calculations
-  const level = userJutsuCounts?.find((entry) => entry.id === jutsu?.id)?.quantity || 0;
+  // Derived calculations — live from queue + DB level (matches enqueue logic)
+  const userJutsuObj = userJutsus?.find((uj) => uj.jutsuId === jutsu?.id);
+  const sameJutsuQueuedCount =
+    jutsuQueue?.queued.filter((e) => e.jutsuId === jutsu?.id).length ?? 0;
+  const costBasisLevel = getJutsuQueueCostBasis(
+    userJutsuObj?.level ?? 0,
+    sameJutsuQueuedCount,
+  );
+  const targetLevel = costBasisLevel + 1;
+  const trainTimeMs = jutsu ? calcJutsuTrainTime(jutsu, costBasisLevel, userData) : 0;
+  const cost =
+    (jutsu && calcJutsuTrainCost(jutsu, costBasisLevel, userData, students)) || 0;
   const trainSeconds =
-    jutsu &&
-    getTimeLeftStr(
-      ...getDaysHoursMinutesSeconds(calcJutsuTrainTime(jutsu, level, userData)),
-    );
-  const cost = (jutsu && calcJutsuTrainCost(jutsu, level, userData, students)) || 0;
+    jutsu && trainTimeMs
+      ? getTimeLeftStr(...getDaysHoursMinutesSeconds(trainTimeMs))
+      : "";
+  const level = userJutsuCounts?.find((entry) => entry.id === jutsu?.id)?.quantity || 0;
   const okRank = checkJutsuRank(jutsu?.jutsuRank, userData.rank);
   const okVillage = checkJutsuVillage(jutsu, userData);
   const okBloodline = checkJutsuBloodline(jutsu, userData);
   const canAfford = userData && cost && userData.money >= cost;
-  const isCapped = level >= (jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP);
+  const isCapped = targetLevel > (jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP);
   const canTrain = okRank && okVillage && okBloodline && !isCapped && canAfford;
 
   // Label for proceed button
@@ -786,7 +841,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     } else if (!okBloodline) {
       proceed_label = `Wrong bloodline`;
     } else if (trainSeconds && cost) {
-      proceed_label = `Train [${trainSeconds}, ${cost} ryo]`;
+      proceed_label = `Train → Lv.${targetLevel} [${trainSeconds}, ${cost.toLocaleString()} ryo]`;
     }
   }
 
@@ -800,6 +855,18 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         <JutsuFiltering state={state} fixedBloodline={userData.bloodlineId} />
       }
     >
+      <ActivityQueuePanel
+        queue={jutsuQueue}
+        timeDiff={timeDiff}
+        onCancel={(id) => cancelJutsuQueue({ queueId: id })}
+        isCancelling={isCancellingJutsuQueue}
+        onActiveFinish={async () => {
+          await utils.jutsu.getUserJutsus.invalidate();
+          await refetchJutsuQueue();
+        }}
+        onStopActive={() => cancel()}
+        isStoppingActive={isStoppingTrain}
+      />
       {userData && (
         <div className="max-h-[320px] overflow-y-scroll">
           <ActionSelector
@@ -862,33 +929,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         </div>
       )}
       {isFetching && <Loader explanation="Loading jutsu" />}
-      {finishTrainingAt?.finishTraining && (
-        <div className="min-h-36">
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
-            <div className="m-auto text-center text-white">
-              <p className="p-5 text-3xl">Training</p>
-              <p className="text-2xl">
-                Time Left:{" "}
-                <Countdown
-                  targetDate={finishTrainingAt.finishTraining}
-                  timeDiff={timeDiff}
-                  onFinish={async () => {
-                    await utils.jutsu.getUserJutsus.invalidate();
-                  }}
-                />
-              </p>
-              {!isRefetchingUserJutsu && (
-                <XCircle
-                  className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
-                  onClick={() => {
-                    cancel();
-                  }}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </ContentBox>
   );
 };

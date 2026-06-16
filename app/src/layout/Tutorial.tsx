@@ -153,7 +153,7 @@ const TUTORIAL_STEPS: TutorialStepConfig[] = [
   {
     title: "Training",
     description:
-      "Come here to begin training each of your offense that was covered under Strength and Weakness along with Training your jutsu. Use the filters to locate what you are looking for. Jutsu's are locked behind rank and elements. If you want a comprehensive guide of what Jutsu's are in the game please select Info and use the jutsu page there.",
+      "Train stats, jutsu, and covert skills from the tabs here. Each type uses a queue at the top — you can line up additional trainings while one is active. Use the filters to find jutsu; they're locked behind rank and elements. For a full jutsu list, open Info and use the jutsu page there.",
     elementId: "tutorial-traininggrounds",
     page: "/village",
   },

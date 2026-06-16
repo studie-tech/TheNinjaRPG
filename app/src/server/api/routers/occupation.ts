@@ -18,6 +18,7 @@ import {
   getTotalItemQuantity,
 } from "@/libs/crafting";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { cancelCraftQueueEntry, enqueueCraft, getCraftQueueStatus } from "@/libs/queue";
 import {
   fetchItemWithCraftingRequirements,
   fetchUserItems,
@@ -28,6 +29,7 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  serverError,
 } from "@/server/api/trpc";
 import {
   claimUserSnapshot,
@@ -36,8 +38,55 @@ import {
 import { canChangeContent } from "@/utils/permissions";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { getShrineBoost } from "@/utils/village";
+import { activityQueueStatusSchema } from "@/validators/queue";
 
 export const occupationRouter = createTRPCRouter({
+  getCraftQueue: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get crafting queue status" } })
+    .output(activityQueueStatusSchema)
+    .query(async ({ ctx }) => {
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      if (!user) throw serverError("NOT_FOUND", "User not found");
+      return getCraftQueueStatus(ctx.drizzle, user);
+    }),
+
+  enqueueCraft: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Start or queue crafting an item" } })
+    .input(
+      z.object({
+        itemId: z.string(),
+        quantity: z.int().min(1).max(10).prefault(1),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const result = await enqueueCraft(
+        ctx.drizzle,
+        ctx.userId,
+        input.itemId,
+        input.quantity,
+      );
+      if (!result.success) return errorResponse(result.message);
+      return { success: true, message: result.message };
+    }),
+
+  cancelCraftQueueEntry: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Cancel a queued craft entry" } })
+    .input(z.object({ queueId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const result = await cancelCraftQueueEntry(
+        ctx.drizzle,
+        ctx.userId,
+        input.queueId,
+      );
+      if (!result.success) return errorResponse(result.message);
+      return { success: true, message: result.message };
+    }),
+
   getCraftableItems: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get all craftable items" } })
     .query(async ({ ctx }) => {
@@ -96,235 +145,14 @@ export const occupationRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Run all initial queries in parallel
-      const [{ user }, itemWithRequirements, useritems] = await Promise.all([
-        // Get user data
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        // Get item to craft with its requirements
-        fetchItemWithCraftingRequirements(ctx.drizzle, input.itemId),
-        // Check if user is already crafting something
-        fetchUserItems(ctx.drizzle, ctx.userId),
-      ]);
-      // Derived
-      const currentlyCrafting = useritems.find(
-        (item) => item.craftingFinishedAt && item.craftingFinishedAt > new Date(),
+      const result = await enqueueCraft(
+        ctx.drizzle,
+        ctx.userId,
+        input.itemId,
+        input.quantity,
       );
-      // Guards
-      if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") {
-        return errorResponse("User is not awake");
-      }
-      if (user.sector === MAP_WAKE_ISLAND_SECTOR) {
-        return errorResponse("Cannot craft items on Wake Island");
-      }
-      if (user.occupation !== "CRAFTING") {
-        return errorResponse("You must have the Crafting occupation to craft items");
-      }
-      if (!itemWithRequirements) {
-        return errorResponse("Item not found");
-      }
-      if (currentlyCrafting) {
-        return errorResponse(
-          "You are already crafting an item. Please wait for it to finish.",
-        );
-      }
-      if (itemWithRequirements.hidden) {
-        return errorResponse("This item is hidden and cannot be crafted");
-      }
-      if (!itemWithRequirements.canBeCrafted) {
-        return errorResponse("This item is not craftable");
-      }
-      if (itemWithRequirements.craftingRequirements.length === 0) {
-        return errorResponse("This item cannot be crafted (no requirements defined)");
-      }
-      // Derived
-      const userCraftingRank = getCraftingRank(user.craftingExperience);
-      // Check rank eligibility using rank-based crafting times
-      const rankCraftingTime =
-        CRAFTING_TIMES_MINS[userCraftingRank][itemWithRequirements.rarity];
-      // Consumables have static crafting times that don't scale with rank
-      const craftingTime =
-        itemWithRequirements.itemType === "CONSUMABLE"
-          ? CONSUMABLE_CRAFTING_TIMES_MINS[itemWithRequirements.rarity]
-          : rankCraftingTime;
-      // Guards - check rank eligibility regardless of item type
-      if (rankCraftingTime === 0) {
-        const requiredRank =
-          itemWithRequirements.rarity === "RARE"
-            ? "Apprentice"
-            : itemWithRequirements.rarity === "EPIC"
-              ? "Master"
-              : itemWithRequirements.rarity === "LEGENDARY"
-                ? "Forgemaster"
-                : "Unknown";
-        return errorResponse(
-          `You need to be at least ${requiredRank} rank to craft ${itemWithRequirements.rarity} items`,
-        );
-      }
-      // Validate user has enough materials using collapsed quantities
-      for (const requirement of itemWithRequirements.craftingRequirements) {
-        const totalQuantity = getTotalItemQuantity(
-          useritems,
-          requirement.requirementItemId,
-        );
-        const requiredQuantity = requirement.quantity * input.quantity;
-        if (totalQuantity < requiredQuantity) {
-          const itemName = requirement.requirementItem?.name || "Unknown item";
-          return errorResponse(
-            `You need ${requiredQuantity} ${itemName} (you have ${totalQuantity})`,
-          );
-        }
-      }
-
-      // See if we have a shrine boost, add it to crafting time in case
-      const sectors = user.village?.sectors?.length || 0;
-      const shrineBoost = getShrineBoost(sectors, "Crafting", user.village);
-      const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
-      // Clan crafting time reduction (percentage stored in clan object)
-      // Max boost is 20% (10 levels × 2%), clamp as safety guard
-      // Only apply for real clans, not outlaw factions/towns
-      const clanCraftingTimeBoostCap =
-        (CLAN_BOOST_MAX_LEVEL * CLAN_BOOST_PERCENT_PER_LEVEL) / 100;
-      const clanCraftingTimeBoost = user.isOutlaw
-        ? 0
-        : Math.min((user.clan?.craftingTimeBoost ?? 0) / 100, clanCraftingTimeBoostCap);
-      const clanCraftingTimeFactor = 1 - clanCraftingTimeBoost;
-      const craftSeconds = Math.round(
-        craftingTime * 60 * shrineBoostFactor * clanCraftingTimeFactor * input.quantity,
-      );
-
-      // Calculate crafting finish time
-      const finishTime = new Date(Date.now() + craftSeconds * 1000);
-
-      // Execute crafting: consume materials and create crafting item
-      // Calculate consumption for each requirement
-      const allConsumptions = [];
-      for (const requirement of itemWithRequirements.craftingRequirements) {
-        const requiredQuantity = requirement.quantity * input.quantity;
-        const consumption = calculateItemConsumption(
-          useritems,
-          requirement.requirementItemId,
-          requiredQuantity,
-        );
-        if (!consumption.hasEnough) {
-          const itemName = requirement.requirementItem?.name || "Unknown item";
-          return errorResponse(`Insufficient ${itemName} for crafting`);
-        }
-        allConsumptions.push(...consumption.consumptions);
-      }
-
-      // CAS + atomic material rows prevent duplicate crafts under concurrent requests.
-      const craftClaimResult = await claimUserSnapshot({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        updatedAt: user.updatedAt,
-        where: [
-          eq(userData.status, "AWAKE"),
-          or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
-        ],
-      });
-      if (!craftClaimResult.success) {
-        return errorResponse(
-          "Could not start crafting — state changed, please try again",
-        );
-      }
-
-      const materialUpdates = await Promise.all(
-        allConsumptions.map((consumption) =>
-          updateUserItemQuantityAtomically({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            userItemId: consumption.userItemId,
-            expectedQuantity: consumption.consumeQuantity + consumption.newQuantity,
-            nextQuantity: consumption.newQuantity,
-          }),
-        ),
-      );
-      if (!materialUpdates.every(Boolean)) {
-        return errorResponse(
-          "Could not start crafting — materials changed, please try again",
-        );
-      }
-
-      // Create crafting item entry/entries
-      // Respect stackSize limit when creating items
-      const craftingItemInserts = [];
-      if (itemWithRequirements.stackSize === 1) {
-        // Create separate items for non-stackable items
-        for (let i = 0; i < input.quantity; i++) {
-          craftingItemInserts.push(
-            ctx.drizzle.insert(userItem).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              itemId: input.itemId,
-              quantity: 1,
-              craftingFinishedAt: finishTime,
-            }),
-          );
-        }
-      } else {
-        // Create stacked items respecting stackSize limit
-        let remainingQuantity = input.quantity;
-        while (remainingQuantity > 0) {
-          const stackQuantity = Math.min(
-            remainingQuantity,
-            itemWithRequirements.stackSize,
-          );
-          craftingItemInserts.push(
-            ctx.drizzle.insert(userItem).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              itemId: input.itemId,
-              quantity: stackQuantity,
-              craftingFinishedAt: finishTime,
-            }),
-          );
-          remainingQuantity -= stackQuantity;
-        }
-      }
-
-      // Award crafting experience (from item config, or 0 if not set)
-      // Apply clan crafting experience boost (only for real clans, not outlaw factions/towns)
-      const clanCraftingExpBoost = user.isOutlaw
-        ? 0
-        : (user.clan?.craftingExpBoost ?? 0) / 100;
-      const baseExpGain =
-        (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
-      const expGain = Math.floor(baseExpGain * (1 + clanCraftingExpBoost));
-      // Update trackers with crafting experience gained
-      const { trackers } = getNewTrackers(user, [
-        { task: "crafting_experience_gained", increment: expGain },
-      ]);
-      const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
-      const expUpdate = ctx.drizzle
-        .update(userData)
-        .set({
-          craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
-          questData: questDataForDb,
-        })
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            eq(userData.status, "AWAKE"),
-            or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
-          ),
-        );
-
-      const [, expResult] = await Promise.all([
-        Promise.all(craftingItemInserts),
-        expUpdate,
-      ]);
-      if (!expResult || expResult.rowsAffected !== 1) {
-        return errorResponse(
-          "Could not start crafting — you must be awake and not on Wake Island",
-        );
-      }
-
-      return {
-        success: true,
-        message: `Started crafting ${input.quantity}x ${itemWithRequirements.name}. ${expGain > 0 ? `+${expGain} EXP.` : ""} Ready in ${formatSecondsToTimeDisplay(craftSeconds)}.`,
-        finishTime: finishTime.toISOString(),
-      };
+      if (!result.success) return errorResponse(result.message);
+      return { success: true, message: result.message };
     }),
 
   imbueItem: protectedProcedure

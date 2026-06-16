@@ -73,6 +73,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/queue-tick",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/hourly-maintainance",
       "schedule": "0 * * * *"
     },

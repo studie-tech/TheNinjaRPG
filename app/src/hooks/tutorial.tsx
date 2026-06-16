@@ -36,6 +36,9 @@ export interface TutorialStepConfig {
 // Dynamic combat tutorial step IDs that should show contextual guidance
 const DYNAMIC_COMBAT_STEP_ID = "bRelJfsU9wuHNmhUSg0db";
 
+/** Pick jutsu + queue training on Training Grounds (before village gear step). */
+export const TUTORIAL_JUTSU_TRAIN_QUEUE_STEP_ID = "eSBZJXRN_MCSYM90z3d5f";
+
 // Hospitalized tutorial step
 export const TUTORIAL_HOSPITALIZED_STEP: TutorialStepConfig = {
   id: "5uhDcTB1sMeGO_",
@@ -183,7 +186,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Training",
     elementIds: ["tutorial-traininggrounds-taijutsuoffence"],
     description:
-      "Welcome to the training grounds. Here you can either train some of your basic stats, or train a new jutsu to use in battle. Let's start out by doing a bit of offensive taijutsu training, making your attacks more powerful.",
+      "Welcome to the training grounds. Use the Stats tab to train your basic stats — pick offensive taijutsu to make your attacks more powerful. Your training starts in the queue at the top once you select a stat.",
     page: "/traininggrounds",
   },
   {
@@ -191,18 +194,19 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Training",
     elementIds: ["tutorial-traininggrounds-stopTraining"],
     description:
-      "Training takes a bit of time, but you can stop any time you want. The most efficent way to train is bouts out 15min at a time - if you're squeezed on time, however, there are also options to train your character for 24 hours at a time. End your training when you're ready, then we'll go train a jutsu!",
+      "Training takes a bit of time, but you can stop any time. The queue at the top shows what's active — use Stop & claim when you're ready. The most efficient approach is 15-minute bouts; you can also train for up to 24 hours at a time. End this session when you're ready, then we'll train a jutsu!",
     page: "/traininggrounds",
   },
   {
-    id: "eSBZJXRN_MCSYM90z3d5f",
+    id: TUTORIAL_JUTSU_TRAIN_QUEUE_STEP_ID,
     title: "Jutsu Training",
     elementIds: [
       "tutorial-traininggrounds-trainJutsu-proceed",
       `tutorial-combat-action-${TUTORIAL_JUTSU_ID}`,
+      "tutorial-Jutsu",
     ],
     description:
-      "Now that your character is a bit stronger, pick a jutsu from the list to train. The more you train and progress the more powerful jutsu will be available for you to train.",
+      "Switch to the Jutsu tab, then pick a jutsu from the list to queue training. The more you train and progress, the more powerful jutsu become available.",
     page: "/traininggrounds",
   },
   {

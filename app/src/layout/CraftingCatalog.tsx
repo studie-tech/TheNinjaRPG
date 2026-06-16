@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  ACTIVITY_QUEUE_TICK_INTERVAL_MINUTES,
   CONSUMABLE_CRAFTING_TIMES_MINS,
   CRAFTING_TIMES_MINS,
   ItemRarities,
@@ -71,6 +72,7 @@ interface CraftingCatalogProps {
   userItems: UserItemWithRelations[] | undefined;
   userData: UserWithRelations | undefined;
   isCurrentlyCrafting: boolean;
+  hasOpenQueueSlots: boolean;
 }
 
 export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
@@ -78,6 +80,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   userItems,
   userData,
   isCurrentlyCrafting,
+  hasOpenQueueSlots,
 }) => {
   // Utils
   const utils = api.useUtils();
@@ -99,6 +102,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
         setSelectedItem(null);
         setCraftQuantity(1);
         await utils.item.getUserItems.invalidate();
+        await utils.occupation.getCraftQueue.invalidate();
       }
     },
   });
@@ -178,19 +182,30 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
 
   // Check if user can craft the selected item
   const canCraft = useMemo(() => {
-    if (!selectedItem || !userItems || isCurrentlyCrafting) return false;
+    if (!selectedItem || !userItems) return false;
     return selectedItem.craftingRequirements.every((req) => {
       const totalQuantity = getTotalItemQuantity(userItems, req.requirementItemId);
       return totalQuantity >= req.quantity * craftQuantity;
     });
-  }, [selectedItem, userItems, craftQuantity, isCurrentlyCrafting]);
+  }, [selectedItem, userItems, craftQuantity]);
 
   // Handle craft
+  const canProceed = canCraft && (!isCurrentlyCrafting || hasOpenQueueSlots);
+
   const handleCraft = () => {
-    if (selectedItem && canCraft) {
+    if (selectedItem && canProceed) {
       craftItemMutation.mutate({ itemId: selectedItem.id, quantity: craftQuantity });
     }
   };
+
+  const proceedLabel = (() => {
+    if (craftItemMutation.isPending) return undefined;
+    if (isCurrentlyCrafting && hasOpenQueueSlots && canCraft) return "Add to queue";
+    if (isCurrentlyCrafting && hasOpenQueueSlots) return "Missing Materials";
+    if (isCurrentlyCrafting) return "Currently Crafting";
+    if (canCraft) return "Start Crafting";
+    return "Missing Materials";
+  })();
 
   // Category counts
   const categoryCounts = useMemo<Record<CatalogCategory, number>>(() => {
@@ -317,18 +332,11 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
             setCraftQuantity(1);
           }
         }}
-        proceed_label={
-          craftItemMutation.isPending
-            ? undefined
-            : isCurrentlyCrafting
-              ? "Currently Crafting"
-              : canCraft
-                ? "Start Crafting"
-                : "Missing Materials"
-        }
+        proceed_label={proceedLabel}
         onAccept={handleCraft}
+        proceedDisabled={!canProceed}
         confirmClassName={
-          canCraft && !isCurrentlyCrafting
+          canProceed
             ? "bg-blue-600 text-white hover:bg-blue-700"
             : "bg-red-600 text-white hover:bg-red-700"
         }
@@ -439,12 +447,23 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
               </div>
             )}
 
-            {/* Currently crafting warning */}
-            {isCurrentlyCrafting && (
+            {/* Crafting queue info */}
+            {isCurrentlyCrafting && hasOpenQueueSlots && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
+                <p className="text-blue-800 text-sm dark:text-blue-200">
+                  You are currently crafting another item. You can add this recipe to
+                  your queue — materials are consumed now and crafting starts when your
+                  active slot opens (may take up to{" "}
+                  {ACTIVITY_QUEUE_TICK_INTERVAL_MINUTES} minute
+                  {ACTIVITY_QUEUE_TICK_INTERVAL_MINUTES === 1 ? "" : "s"}).
+                </p>
+              </div>
+            )}
+            {isCurrentlyCrafting && !hasOpenQueueSlots && (
               <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  You are currently crafting another item. Please wait for it to finish
-                  before starting a new craft.
+                  You are currently crafting and your queue is full. Wait for a slot to
+                  open before starting another craft.
                 </p>
               </div>
             )}

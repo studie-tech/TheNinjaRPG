@@ -13,6 +13,7 @@ import {
   CRAFTING_TIMES_MINS,
 } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import ActivityQueuePanel from "@/layout/ActivityQueuePanel";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
@@ -42,6 +43,16 @@ export default function OccupationCrafting() {
   // API calls
   const { data: userItems } = api.item.getUserItems.useQuery();
   const { data: craftableItems } = api.occupation.getCraftableItems.useQuery();
+  const { data: craftQueue, refetch: refetchCraftQueue } =
+    api.occupation.getCraftQueue.useQuery(undefined, { enabled: !!userData });
+
+  const cancelCraftQueueMutation = api.occupation.cancelCraftQueueEntry.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      await refetchCraftQueue();
+      await utils.item.getUserItems.invalidate();
+    },
+  });
 
   // Get currently imbuing items
   const activeImbuingItem = (userItems || []).find(
@@ -179,6 +190,16 @@ export default function OccupationCrafting() {
           </CardContent>
         </Card>
 
+        {craftQueue && (
+          <ActivityQueuePanel
+            queue={craftQueue}
+            timeDiff={0}
+            onCancel={(id) => cancelCraftQueueMutation.mutate({ queueId: id })}
+            isCancelling={cancelCraftQueueMutation.isPending}
+            onActiveFinish={() => void refetchCraftQueue()}
+          />
+        )}
+
         {/* Crafting Catalog */}
         <Card>
           <CardHeader>
@@ -197,6 +218,9 @@ export default function OccupationCrafting() {
               userItems={userItems}
               userData={userData}
               isCurrentlyCrafting={craftingStatus?.isCurrentlyCrafting || false}
+              hasOpenQueueSlots={
+                craftQueue !== undefined && craftQueue.usedQueued < craftQueue.maxQueued
+              }
             />
           </CardContent>
         </Card>

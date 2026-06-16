@@ -1269,6 +1269,20 @@ export const FED_EVENT_ITEMS_SILVER = 20;
 export const FED_EVENT_ITEMS_GOLD = 25;
 export const FED_EVENT_ITEMS_DEFAULT = 10;
 
+// Activity queue config (stat / jutsu / craft training queues)
+export const ActivityQueueTypes = ["STAT", "JUTSU", "CRAFT"] as const;
+export type ActivityQueueType = (typeof ActivityQueueTypes)[number];
+
+export const ActivityQueueStatuses = ["QUEUED", "CANCELLED", "COMPLETED"] as const;
+export type ActivityQueueStatus = (typeof ActivityQueueStatuses)[number];
+
+export const QUEUE_BASE_SLOTS = 1;
+export const FED_NORMAL_QUEUE_SLOTS = 1;
+export const FED_SILVER_QUEUE_SLOTS = 2;
+export const FED_GOLD_QUEUE_SLOTS = 3;
+/** Queue cron runs at most once per UTC minute. */
+export const ACTIVITY_QUEUE_TICK_INTERVAL_MINUTES = 1;
+
 // Missions config
 export const ERRANDS_PER_DAY = 50;
 export const MISSIONS_PER_DAY = 20;

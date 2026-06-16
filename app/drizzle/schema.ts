@@ -1677,6 +1677,73 @@ export const rankedPvpQueueRelations = relations(rankedPvpQueue, ({ one }) => ({
   }),
 }));
 
+export const userActivityQueue = mysqlTable(
+  "UserActivityQueue",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    type: mysqlEnum("type", consts.ActivityQueueTypes).notNull(),
+    status: mysqlEnum("status", consts.ActivityQueueStatuses)
+      .default("QUEUED")
+      .notNull(),
+    position: int("position").notNull(),
+    stat: mysqlEnum("stat", consts.UserStatNames),
+    jutsuId: varchar("jutsuId", { length: 191 }),
+    itemId: varchar("itemId", { length: 191 }),
+    quantity: int("quantity").default(1).notNull(),
+    moneyPaid: int("moneyPaid").default(0).notNull(),
+    materialsPaid: json("materialsPaid").$type<QueueMaterialRefund[]>(),
+    costBasisLevel: int("costBasisLevel"),
+    targetLevel: int("targetLevel"),
+    trainTimeMs: int("trainTimeMs"),
+    trainingSpeed: mysqlEnum("trainingSpeed", consts.TrainingSpeeds),
+    craftSeconds: int("craftSeconds"),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userIdTypePositionKey: uniqueIndex("UserActivityQueue_userId_type_position_key").on(
+        table.userId,
+        table.type,
+        table.position,
+      ),
+      userIdTypeStatusIdx: index("UserActivityQueue_userId_type_status_idx").on(
+        table.userId,
+        table.type,
+        table.status,
+      ),
+      userIdIdx: index("UserActivityQueue_userId_idx").on(table.userId),
+    };
+  },
+);
+export type UserActivityQueue = InferSelectModel<typeof userActivityQueue>;
+export type QueueMaterialRefund = {
+  itemId: string;
+  quantity: number;
+  userItemId: string;
+};
+
+export const userActivityQueueRelations = relations(userActivityQueue, ({ one }) => ({
+  user: one(userData, {
+    fields: [userActivityQueue.userId],
+    references: [userData.userId],
+  }),
+  jutsu: one(jutsu, {
+    fields: [userActivityQueue.jutsuId],
+    references: [jutsu.id],
+  }),
+  item: one(item, {
+    fields: [userActivityQueue.itemId],
+    references: [item.id],
+  }),
+}));
+
 export const recruitmentRewards = mysqlTable(
   "RecruitmentRewards",
   {
