@@ -122,12 +122,17 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                       }}
                       prefetch={false}
                     >
-                      {link.icon}
-                      <span className="truncate">{link.name}</span>
+                      <span className="relative flex min-w-0 items-center gap-1">
+                        {link.icon}
+                        <span className="truncate">{link.name}</span>
+                        {count > 0 && (
+                          <span className="absolute -top-2 -right-3 z-50 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-orange-100 text-xs">
+                            {count}
+                          </span>
+                        )}
+                      </span>
                       {count > 0 && (
-                        <div className="absolute top-0 right-0 z-50 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-orange-100 text-xs">
-                          {count}
-                        </div>
+                        <span className="sr-only">{count} unread notifications</span>
                       )}
                     </Link>
                   );
