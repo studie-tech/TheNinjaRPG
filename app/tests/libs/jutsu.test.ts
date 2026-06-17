@@ -145,6 +145,20 @@ describe("computeJutsuLoadoutAssignments", () => {
     expect(out.invalidJutsus[0]).toMatch(/event/);
   });
 
+  it("deduplicates repeated jutsuIds so they do not double-count toward caps", () => {
+    vi.mocked(calcJutsuEquipLimit).mockReturnValueOnce(2);
+    const userjutsus = [uj({ jutsuId: "a" }), uj({ jutsuId: "b" })];
+    const out = computeJutsuLoadoutAssignments({
+      jutsuIds: ["a", "a", "b"],
+      userjutsus,
+      user: USER,
+    });
+    // Without dedup the second "a" would consume the second slot and falsely
+    // reject "b" with an equip-limit warning.
+    expect(out.equipIds).toEqual(["a", "b"]);
+    expect(out.invalidJutsus).toEqual([]);
+  });
+
   it("enforces the barrier-jutsu cap", () => {
     const count = JUTSU_MAX_BARRIER_EQUIPPED + 1;
     const userjutsus = Array.from({ length: count }, (_, i) =>
