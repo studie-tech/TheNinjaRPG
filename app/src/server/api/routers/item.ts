@@ -66,6 +66,7 @@ import {
   computeLoadoutAssignments,
   nonCombatConsume,
 } from "@/libs/item";
+import { buildMissingLoadouts, decideRename, findAllowedLoadout } from "@/libs/loadout";
 import { collapseRewards, postProcessRewards } from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
@@ -2089,23 +2090,31 @@ export const itemRouter = createTRPCRouter({
       ]);
       // Derived
       const maxLoadouts = fedItemLoadouts(user);
-      // Create missing loadouts if needed (deterministic id + no-op on
-      // conflict so concurrent reads can't insert duplicate rows).
-      if (loadouts.length < maxLoadouts) {
-        for (let i = loadouts.length; i < maxLoadouts; i++) {
-          const loadout = {
-            id: `${ctx.userId}-item-${i}`,
-            userId: ctx.userId,
-            itemData: [],
-            name: "",
-            createdAt: new Date(),
-          };
-          await ctx.drizzle
-            .insert(itemLoadout)
-            .values(loadout)
-            .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-          loadouts.push(loadout);
-        }
+      // Backfill any loadouts the user is entitled to but does not yet own. A
+      // deterministic id + no-op upsert keeps concurrent reads from inserting
+      // duplicates, and one batched insert avoids a round-trip per slot.
+      const missing = buildMissingLoadouts(
+        ctx.userId,
+        "item",
+        loadouts.length,
+        maxLoadouts,
+        { itemData: [] as ItemLoadout["itemData"] },
+        new Date(),
+      );
+      if (missing.length > 0) {
+        await ctx.drizzle
+          .insert(itemLoadout)
+          .values(missing)
+          .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+        loadouts.push(...missing);
+      }
+      // Default the active pointer to the first loadout when unset (mirrors the
+      // jutsu loadout endpoint).
+      if (loadouts[0] && !user.itemLoadout) {
+        await ctx.drizzle
+          .update(userData)
+          .set({ itemLoadout: loadouts[0].id })
+          .where(eq(userData.userId, ctx.userId));
       }
       return maxLoadouts < loadouts.length ? loadouts.slice(0, maxLoadouts) : loadouts;
     }),
@@ -2130,17 +2139,18 @@ export const itemRouter = createTRPCRouter({
     .input(renameLoadoutSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const loadouts = await fetchItemLoadouts(ctx.drizzle, ctx.userId);
-      const loadout = loadouts.find((l) => l.id === input.id);
-      if (!loadout) return errorResponse("Loadout not found");
-      // Short-circuit no-op so PlanetScale rowsAffected=0 isn't misread.
-      if (loadout.name === input.name) {
-        return { success: true, message: "Loadout name unchanged" };
-      }
-      await ctx.drizzle
+      const [loadouts, user] = await Promise.all([
+        fetchItemLoadouts(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, ctx.userId),
+      ]);
+      const decision = decideRename(loadouts, fedItemLoadouts(user), input);
+      if (!decision.ok) return errorResponse(decision.message);
+      if (!decision.changed) return { success: true, message: decision.message };
+      const result = await ctx.drizzle
         .update(itemLoadout)
-        .set({ name: input.name })
-        .where(and(eq(itemLoadout.id, loadout.id), eq(itemLoadout.userId, ctx.userId)));
+        .set({ name: decision.name })
+        .where(and(eq(itemLoadout.id, input.id), eq(itemLoadout.userId, ctx.userId)));
+      if (result.rowsAffected === 0) return errorResponse("Loadout not found");
       return { success: true, message: "Loadout renamed" };
     }),
 });
@@ -2167,11 +2177,13 @@ export const selectItemLoadout = async (
     "userId" | "federalStatus" | "staffAccount" | "level" | "bloodlineId"
   >,
 ) => {
-  const loadout = loadouts.find((l) => l.id === loadoutId);
   const maxLoadouts = fedItemLoadouts(user);
-  // Guard
-  if (!loadout) return errorResponse("Loadout not found");
+  // Guard: only loadouts within the user's current allowance are selectable, so
+  // a downgraded user can't reach an out-of-range loadout by guessing its
+  // deterministic id (loadouts are ordered the same way getItemLoadouts slices).
   if (maxLoadouts <= 0) return errorResponse("Loadouts not available");
+  const loadout = findAllowedLoadout(loadouts, loadoutId, maxLoadouts);
+  if (!loadout) return errorResponse("Loadout not found");
 
   // Decide which rows get which slots (pure, fully validated).
   const { assignments, invalidItems } = computeLoadoutAssignments(
@@ -2203,8 +2215,10 @@ export const selectItemLoadout = async (
       .where(eq(userItem.userId, user.userId));
   }
 
-  // Advance the active-loadout pointer only AFTER the equip succeeds, so it can
-  // never point at a loadout that was not actually applied.
+  // The equip above is one atomic statement, so it never half-applies. Advance
+  // the active-loadout pointer only AFTER it succeeds (one extra round-trip, not
+  // a parallel Promise.all) so the pointer can never race ahead of the equip and
+  // point at a loadout that was not actually applied.
   await client
     .update(userData)
     .set({ itemLoadout: loadout.id })

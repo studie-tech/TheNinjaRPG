@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
-  isEquippableUserItem,
   checkEquipConstraints,
+  computeLoadoutAssignments,
   type EquipConstraintInfo,
   type EquippedAssignment,
+  isEquippableUserItem,
 } from "@/libs/item";
+import type { ItemSlot } from "@/drizzle/constants";
+import type { UserItemWithRelations } from "@/drizzle/schema";
 
 const NOW = new Date("2026-06-17T00:00:00Z");
 const PAST = new Date("2026-06-16T00:00:00Z");
@@ -45,6 +48,15 @@ describe("isEquippableUserItem", () => {
     expect(
       isEquippableUserItem(
         { storedAtHome: false, isInAuction: false, craftingFinishedAt: PAST },
+        NOW,
+      ),
+    ).toBe(true);
+  });
+  it("treats an item whose crafting finishes exactly now as equippable", () => {
+    // Matches toggleEquipItem and the imbuement check, which both use `> now`.
+    expect(
+      isEquippableUserItem(
+        { storedAtHome: false, isInAuction: false, craftingFinishedAt: NOW },
         NOW,
       ),
     ).toBe(true);
@@ -104,9 +116,6 @@ describe("checkEquipConstraints", () => {
   });
 });
 
-import { computeLoadoutAssignments } from "@/libs/item";
-import type { UserItemWithRelations } from "@/drizzle/schema";
-
 // Minimal user-item factory; only the fields the function reads are set.
 const ui = (over: {
   id: string;
@@ -156,7 +165,7 @@ describe("computeLoadoutAssignments", () => {
     expect(out.invalidItems).toEqual([]);
   });
 
-  it("does not pick the same row twice for a duplicated itemId (defect #3)", () => {
+  it("does not pick the same row twice for a duplicated itemId", () => {
     // Loadout references i1 twice but the user owns only one unit.
     const items = [ui({ id: "r1", itemId: "i1", slotType: "ITEM", maxEquips: 2 })];
     const out = computeLoadoutAssignments(
@@ -171,7 +180,7 @@ describe("computeLoadoutAssignments", () => {
     expect(out.invalidItems.length).toBe(1);
   });
 
-  it("never assigns two items to the same slot (defect #2)", () => {
+  it("never assigns two items to the same slot", () => {
     const items = [
       ui({ id: "r1", itemId: "i1", slotType: "HEAD" }),
       ui({ id: "r2", itemId: "i2", slotType: "HEAD" }),
@@ -189,7 +198,7 @@ describe("computeLoadoutAssignments", () => {
     expect(out.assignments.length).toBe(1);
   });
 
-  it("skips a hidden item with a clear warning (defect #1, hidden policy)", () => {
+  it("skips a hidden item with a clear warning", () => {
     const items = [ui({ id: "r1", itemId: "i1", name: "Ghost Blade", hidden: true })];
     const out = computeLoadoutAssignments(
       [{ itemId: "i1", slot: "HEAD" }],
@@ -283,5 +292,42 @@ describe("computeLoadoutAssignments", () => {
     );
     expect(out.assignments).toEqual([{ userItemId: "r1", slot: "HEAD" }]);
     expect(out.invalidItems).toEqual([]);
+  });
+
+  it("prefers a clean duplicate row over a sibling that is being imbued", () => {
+    // Two owned units of i1: r1 is mid-imbue, r2 is clean. The clean unit must
+    // be chosen rather than skipping the entry as invalid.
+    const items = [
+      ui({
+        id: "r1",
+        itemId: "i1",
+        slotType: "HEAD",
+        imbuements: [{ craftingFinishedAt: FUTURE }],
+      }),
+      ui({ id: "r2", itemId: "i1", slotType: "HEAD" }),
+    ];
+    const out = computeLoadoutAssignments(
+      [{ itemId: "i1", slot: "HEAD" }],
+      items,
+      USER,
+      NOW,
+    );
+    expect(out.assignments).toEqual([{ userItemId: "r2", slot: "HEAD" }]);
+    expect(out.invalidItems).toEqual([]);
+  });
+
+  it("does not resolve a NONE slot type to the NONE sentinel slot", () => {
+    // Legacy/invalid saved slot forces the fallback resolver; an item whose
+    // slot type is NONE must be rejected, never assigned the NONE sentinel.
+    const items = [ui({ id: "r1", itemId: "i1", name: "Junk", slotType: "NONE" })];
+    const out = computeLoadoutAssignments(
+      // Legacy/removed saved slot value forces the fallback resolver.
+      [{ itemId: "i1", slot: "ITEM_99" as unknown as ItemSlot }],
+      items,
+      USER,
+      NOW,
+    );
+    expect(out.assignments).toEqual([]);
+    expect(out.invalidItems[0]).toMatch(/invalid slot/);
   });
 });

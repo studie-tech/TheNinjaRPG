@@ -46,6 +46,7 @@ import {
   userJutsu,
 } from "@/drizzle/schema";
 import { getFreeTransfers, getReskinnedUserJutsu } from "@/libs/jutsu";
+import { buildMissingLoadouts, decideRename, findAllowedLoadout } from "@/libs/loadout";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
@@ -312,23 +313,23 @@ export const jutsuRouter = createTRPCRouter({
       ]);
       const maxLoadouts = fedJutsuLoadouts(user);
 
-      // Create missing loadouts if needed (deterministic id + no-op on
-      // conflict so concurrent reads can't insert duplicate rows).
-      if (loadouts.length < maxLoadouts) {
-        for (let i = loadouts.length; i < maxLoadouts; i++) {
-          const loadout = {
-            id: `${ctx.userId}-jutsu-${i}`,
-            userId: ctx.userId,
-            jutsuIds: [],
-            name: "",
-            createdAt: new Date(),
-          };
-          await ctx.drizzle
-            .insert(jutsuLoadout)
-            .values(loadout)
-            .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-          loadouts.push(loadout);
-        }
+      // Backfill any loadouts the user is entitled to but does not yet own. A
+      // deterministic id + no-op upsert keeps concurrent reads from inserting
+      // duplicates, and one batched insert avoids a round-trip per slot.
+      const missing = buildMissingLoadouts(
+        ctx.userId,
+        "jutsu",
+        loadouts.length,
+        maxLoadouts,
+        { jutsuIds: [] as JutsuLoadout["jutsuIds"] },
+        new Date(),
+      );
+      if (missing.length > 0) {
+        await ctx.drizzle
+          .insert(jutsuLoadout)
+          .values(missing)
+          .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+        loadouts.push(...missing);
       }
 
       // If more than one loadout, and no user loadout, set it to the first
@@ -1365,19 +1366,18 @@ export const jutsuRouter = createTRPCRouter({
     .input(renameLoadoutSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const loadouts = await fetchJutsuLoadouts(ctx.drizzle, ctx.userId);
-      const loadout = loadouts.find((l) => l.id === input.id);
-      if (!loadout) return errorResponse("Loadout not found");
-      // Short-circuit no-op so PlanetScale rowsAffected=0 isn't misread.
-      if (loadout.name === input.name) {
-        return { success: true, message: "Loadout name unchanged" };
-      }
-      await ctx.drizzle
+      const [loadouts, user] = await Promise.all([
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, ctx.userId),
+      ]);
+      const decision = decideRename(loadouts, fedJutsuLoadouts(user), input);
+      if (!decision.ok) return errorResponse(decision.message);
+      if (!decision.changed) return { success: true, message: decision.message };
+      const result = await ctx.drizzle
         .update(jutsuLoadout)
-        .set({ name: input.name })
-        .where(
-          and(eq(jutsuLoadout.id, loadout.id), eq(jutsuLoadout.userId, ctx.userId)),
-        );
+        .set({ name: decision.name })
+        .where(and(eq(jutsuLoadout.id, input.id), eq(jutsuLoadout.userId, ctx.userId)));
+      if (result.rowsAffected === 0) return errorResponse("Loadout not found");
       return { success: true, message: "Loadout renamed" };
     }),
 
@@ -2176,11 +2176,13 @@ export const selectJutsuLoadout = async (
   user: Pick<UserData, "userId" | "federalStatus" | "staffAccount">,
   userItems: JutsuBloodlineItemUserItems | undefined,
 ) => {
-  const loadout = loadouts.find((l) => l.id === loadoutId);
   const maxLoadouts = fedJutsuLoadouts(user);
-
-  if (!loadout) return errorResponse("Loadout not found");
+  // Guard: only loadouts within the user's current allowance are selectable, so
+  // a downgraded user can't reach an out-of-range loadout by guessing its
+  // deterministic id (loadouts are ordered the same way getLoadouts slices).
   if (maxLoadouts <= 0) return errorResponse("Loadouts not available");
+  const loadout = findAllowedLoadout(loadouts, loadoutId, maxLoadouts);
+  if (!loadout) return errorResponse("Loadout not found");
 
   // Only re-equip jutsus whose required bloodline item is still equipped/usable, so
   // switching to a saved loadout can't re-equip a gated jutsu after its item is removed.
@@ -2189,21 +2191,22 @@ export const selectJutsuLoadout = async (
     return owned ? checkJutsuBloodlineItem(owned.jutsu, userItems) : true;
   });
 
-  await Promise.all([
-    client
-      .update(userData)
-      .set({ jutsuLoadout: loadout.id })
-      .where(eq(userData.userId, user.userId)),
-    client
-      .update(userJutsu)
-      .set({
-        equipped:
-          equippableJutsuIds.length > 0
-            ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equippableJutsuIds)} THEN 1 ELSE 0 END`
-            : false,
-      })
-      .where(eq(userJutsu.userId, user.userId)),
-  ]);
+  // Equip first, then advance the pointer (mirrors selectItemLoadout). The equip
+  // is one atomic statement, so serializing keeps the jutsuLoadout pointer from
+  // racing ahead and pointing at a loadout whose jutsus were not equipped.
+  await client
+    .update(userJutsu)
+    .set({
+      equipped:
+        equippableJutsuIds.length > 0
+          ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equippableJutsuIds)} THEN 1 ELSE 0 END`
+          : false,
+    })
+    .where(eq(userJutsu.userId, user.userId));
+  await client
+    .update(userData)
+    .set({ jutsuLoadout: loadout.id })
+    .where(eq(userData.userId, user.userId));
 
   return {
     success: true,

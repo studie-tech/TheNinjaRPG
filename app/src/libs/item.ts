@@ -187,10 +187,12 @@ export const calcItemRepairCost = (useritem: UserItemWithItem) => {
 };
 
 /**
- * Single source of truth for inventory equip-availability. Returns a reason
- * string when a user item cannot be equipped from the normal inventory (stored
- * at home, in an auction, or mid-crafting), otherwise null. Reused by the equip
- * picker filter and loadout application so the two never diverge.
+ * Inventory equip-availability for the inventory picker filter and the loadout
+ * application path. Returns a reason string when a user item cannot be equipped
+ * from the normal inventory (stored at home, in an auction, or mid-crafting),
+ * otherwise null. The crafting boundary is strict (`> now`) so an item that
+ * finishes crafting exactly now is available, matching toggleEquipItem and the
+ * imbuement check.
  */
 export const getEquipBlockReason = (
   ui: { storedAtHome: boolean; isInAuction: boolean; craftingFinishedAt: Date | null },
@@ -198,18 +200,29 @@ export const getEquipBlockReason = (
 ): string | null => {
   if (ui.storedAtHome) return "is stored at home";
   if (ui.isInAuction) return "is in auction";
-  if (ui.craftingFinishedAt && ui.craftingFinishedAt >= now) return "is being crafted";
+  if (ui.craftingFinishedAt && ui.craftingFinishedAt > now) return "is being crafted";
   return null;
 };
 
 /**
  * Whether a user item can be equipped from the normal inventory. Derived from
- * getEquipBlockReason — do not re-implement the underlying checks elsewhere.
+ * getEquipBlockReason so the inventory picker and loadout paths stay in sync.
  */
 export const isEquippableUserItem = (
   ui: { storedAtHome: boolean; isInAuction: boolean; craftingFinishedAt: Date | null },
   now: Date = new Date(),
 ): boolean => getEquipBlockReason(ui, now) === null;
+
+/**
+ * Whether any of a user item's imbuements is still in progress at `now`.
+ * Separate from getEquipBlockReason because the inventory picker reasons about
+ * imbuements independently of home/auction/crafting availability.
+ */
+export const isImbuing = (
+  ui: { imbuements: { craftingFinishedAt: Date | null }[] },
+  now: Date = new Date(),
+): boolean =>
+  ui.imbuements.some((im) => im.craftingFinishedAt && im.craftingFinishedAt > now);
 
 export interface EquipConstraintInfo {
   itemId: string;
@@ -225,9 +238,12 @@ export interface EquippedAssignment {
 }
 
 /**
- * Canonical equip limits shared by single-item equipping and loadout
- * application. Returns an error message if `candidate` cannot be equipped
- * given the items already assigned (`current`), otherwise null.
+ * Equip-limit rules (per-item max, one-bloodline-item, one-hand-armor) for the
+ * loadout application path. toggleEquipItem applies the equivalent rules inline
+ * rather than calling this, because it counts maxEquips against the live
+ * `equipped` state (which can include the candidate row when re-slotting),
+ * whereas this counts only the assignments built so far. Returns an error
+ * message if `candidate` cannot be equipped given `current`, otherwise null.
  */
 export const checkEquipConstraints = (
   candidate: EquipConstraintInfo,
@@ -283,14 +299,17 @@ export const computeLoadoutAssignments = (
   const current: EquippedAssignment[] = [];
 
   for (const entry of itemData) {
-    // Defect #3 + reliability: prefer an available (carried, not auction/crafting)
-    // unconsumed unit; fall back to any unconsumed unit so we can still report a
-    // precise reason rather than dropping a duplicated itemId silently.
+    // Prefer an unconsumed unit that is actually equippable (carried, not
+    // auction/crafting/imbuing); fall back to any unconsumed unit so a
+    // duplicated itemId still reports a precise reason instead of being
+    // dropped silently.
     const owned = useritems.filter(
       (it) => it.itemId === entry.itemId && !consumedRowIds.has(it.id),
     );
     const useritem =
-      owned.find((it) => getEquipBlockReason(it, now) === null) ?? owned[0];
+      owned.find(
+        (it) => getEquipBlockReason(it, now) === null && !isImbuing(it, now),
+      ) ?? owned[0];
     if (!useritem) {
       invalidItems.push(`Item not found`);
       continue;
@@ -314,26 +333,31 @@ export const computeLoadoutAssignments = (
       invalidItems.push(`${item.name} requires a specific bloodline to equip`);
       continue;
     }
-    const imbuing = useritem.imbuements.filter(
-      (im) => im.craftingFinishedAt && im.craftingFinishedAt > now,
-    );
-    if (imbuing.length > 0) {
+    if (isImbuing(useritem, now)) {
       invalidItems.push(`${item.name} is being imbued`);
       continue;
     }
-    // Resolve the slot (handles legacy values like ITEM_7).
+    // Resolve the slot (handles legacy values like ITEM_7). When the saved slot
+    // is no longer valid, fall back to a real equip slot for the item's type —
+    // never the NONE sentinel and never for an item with no real slot type.
     const validSlots = ItemSlots as readonly string[];
     let resolvedSlot: ItemSlot | undefined;
     if (validSlots.includes(entry.slot)) {
       resolvedSlot = entry.slot;
     } else {
-      resolvedSlot = ItemSlots.find((s) => s.includes(item.slot) && !usedSlots.has(s));
+      const slotType = item.slot;
+      resolvedSlot =
+        slotType && slotType !== "NONE"
+          ? ItemSlots.find(
+              (s) => s !== "NONE" && s.includes(slotType) && !usedSlots.has(s),
+            )
+          : undefined;
       if (!resolvedSlot) {
         invalidItems.push(`${item.name} has invalid slot`);
         continue;
       }
     }
-    // Defect #2: never reuse a slot.
+    // Never reuse a slot already taken by an earlier assignment.
     if (usedSlots.has(resolvedSlot)) {
       invalidItems.push(`${item.name} slot already in use`);
       continue;
