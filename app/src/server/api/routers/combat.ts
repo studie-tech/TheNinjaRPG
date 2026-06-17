@@ -958,7 +958,15 @@ export const combatRouter = createTRPCRouter({
               jutsuLoadouts,
               userjutsus,
               user,
-              useritems,
+              (jutsuIds) => {
+                const equipIds = jutsuIds.filter((jutsuId) => {
+                  const owned = userjutsus.find((uj) => uj.jutsuId === jutsuId);
+                  return owned
+                    ? checkJutsuBloodlineItem(owned.jutsu, useritems)
+                    : true;
+                });
+                return { equipIds, invalidJutsus: [] };
+              },
             );
 
       // Mutate

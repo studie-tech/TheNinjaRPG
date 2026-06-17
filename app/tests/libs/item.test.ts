@@ -344,4 +344,19 @@ describe("computeLoadoutAssignments", () => {
     expect(out.assignments).toEqual([]);
     expect(out.invalidItems[0]).toMatch(/invalid slot/);
   });
+
+  it("re-resolves a saved slot incompatible with the item's slot type", () => {
+    // A stale/corrupt loadout can carry a valid-enum slot ("CHEST") that does
+    // not match the item's slot type ("HEAD"). It must not be equipped into
+    // CHEST; the fallback resolver recovers a compatible HEAD slot instead.
+    const items = [ui({ id: "r1", itemId: "i1", slotType: "HEAD" })];
+    const out = computeLoadoutAssignments(
+      [{ itemId: "i1", slot: "CHEST" }],
+      items,
+      USER,
+      NOW,
+    );
+    expect(out.assignments).toEqual([{ userItemId: "r1", slot: "HEAD" }]);
+    expect(out.invalidItems).toEqual([]);
+  });
 });

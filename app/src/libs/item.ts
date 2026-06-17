@@ -270,6 +270,23 @@ export const checkEquipConstraints = (
   return null;
 };
 
+/**
+ * Whether an equip slot is compatible with an item's slot type. An item's slot
+ * type (e.g. "ITEM", "HAND", "HEAD") is a substring of every concrete slot it
+ * fits ("ITEM_1".."ITEM_7", "HAND_1"/"HAND_2", "HEAD"). Excludes the NONE
+ * sentinel on both sides so neither a saved NONE entry nor a slot-less item
+ * resolves to a real slot. Shared by the saved-slot and fallback resolver paths
+ * so a stale/corrupt loadout cannot equip an item into an incompatible slot.
+ */
+export const isCompatibleEquipSlot = (
+  candidate: ItemSlot,
+  slotType: string | null | undefined,
+): boolean =>
+  candidate !== "NONE" &&
+  !!slotType &&
+  slotType !== "NONE" &&
+  candidate.includes(slotType);
+
 export interface LoadoutAssignment {
   userItemId: string;
   slot: ItemSlot;
@@ -342,18 +359,24 @@ export const computeLoadoutAssignments = (
     // never the NONE sentinel and never for an item with no real slot type.
     const validSlots = ItemSlots as readonly string[];
     let resolvedSlot: ItemSlot | undefined;
-    // "NONE" is a valid ItemSlots member (the unequipped sentinel), so exclude
-    // it here too — otherwise a saved NONE entry would be taken at face value
-    // and consume a row/slot while equipping nothing. Fall through to the
-    // fallback resolver, which recovers a real slot or reports it invalid.
-    if (entry.slot !== "NONE" && validSlots.includes(entry.slot)) {
+    // Accept the saved slot only when it is a real ItemSlots member AND actually
+    // compatible with this item's slot type. isCompatibleEquipSlot excludes the
+    // NONE sentinel (a saved NONE would otherwise consume a row/slot while
+    // equipping nothing) and rejects a stale/corrupt entry that points at an
+    // incompatible slot (e.g. a HEAD item saved into CHEST). Anything that fails
+    // falls through to the fallback resolver, which recovers a real slot for the
+    // item's type or reports it invalid.
+    if (
+      validSlots.includes(entry.slot) &&
+      isCompatibleEquipSlot(entry.slot, item.slot)
+    ) {
       resolvedSlot = entry.slot;
     } else {
       const slotType = item.slot;
       resolvedSlot =
         slotType && slotType !== "NONE"
           ? ItemSlots.find(
-              (s) => s !== "NONE" && s.includes(slotType) && !usedSlots.has(s),
+              (s) => isCompatibleEquipSlot(s, slotType) && !usedSlots.has(s),
             )
           : undefined;
       if (!resolvedSlot) {
