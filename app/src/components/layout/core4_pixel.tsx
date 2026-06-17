@@ -90,7 +90,7 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
           {isSignedInLayout && (
             <div
               className={cn(
-                "relative top-2 left-[50%] z-40 hidden w-[calc(100%-32px)] translate-x-[-50%] items-center justify-between px-4 py-2 font-bold text-slate-100 text-sm md:flex",
+                "relative top-2 left-[50%] z-40 hidden w-[calc(100%-16px)] translate-x-[-50%] items-center justify-between px-4 py-2 font-bold text-slate-100 text-sm md:flex",
                 "max-w-[1440px]",
                 PIXEL_SIGNED_IN_SHELL_SURFACE,
               )}
@@ -244,7 +244,7 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
             isAnonymousLayout
               ? "top-24"
               : isSignedInLayout
-                ? "tnr-pixel-mobile-signed-content-row top-[70px] mx-auto mt-6 w-[calc(100%-32px)] max-w-[1440px] items-start gap-4 md:top-0"
+                ? "tnr-pixel-mobile-signed-content-row top-[70px] mx-auto mt-6 w-[calc(100%-16px)] max-w-[1440px] items-start gap-0 md:top-0 md:gap-2"
                 : "md:top-6",
             !isSignedInLayout &&
               (shownNotifications &&
@@ -257,7 +257,7 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
           <div
             className={cn(
               "relative hidden shrink-0 md:block",
-              isSignedInLayout ? "w-[220px] xl:w-[250px]" : "px-2",
+              isSignedInLayout ? "w-[200px] lg:w-[250px]" : "px-2",
               isAnonymousLayout && "hidden md:hidden",
             )}
           >
@@ -330,7 +330,7 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
             </div>
           </div>
           {isSignedInLayout && (
-            <div className="relative hidden w-[220px] shrink-0 md:block xl:w-[250px]">
+            <div className="relative hidden w-[200px] shrink-0 md:block lg:w-[250px]">
               <div className="relative">
                 <div
                   className={cn(
