@@ -117,6 +117,7 @@ const LoadoutSelector = <T extends LoadoutData>(
                   <input
                     // biome-ignore lint/a11y/noAutofocus: Inline rename input must focus immediately on edit activation for usability
                     autoFocus
+                    aria-label={`Rename ${displayName}`}
                     defaultValue={loadout.name ?? ""}
                     maxLength={LOADOUT_NAME_MAX_LENGTH}
                     className="mt-1 w-16 rounded border bg-background px-1 text-center text-xs"
@@ -134,8 +135,9 @@ const LoadoutSelector = <T extends LoadoutData>(
                 ) : (
                   <button
                     type="button"
-                    className="mt-1 flex items-center gap-0.5 text-xs hover:text-primary"
+                    className="mt-1 flex items-center gap-0.5 text-xs hover:text-primary disabled:opacity-50"
                     aria-label={`Rename ${displayName}`}
+                    disabled={renameMutation?.isPending}
                     onClick={() => setEditingId(loadout.id)}
                   >
                     <span className="max-w-16 truncate">{displayName}</span>
