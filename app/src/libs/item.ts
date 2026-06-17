@@ -342,7 +342,11 @@ export const computeLoadoutAssignments = (
     // never the NONE sentinel and never for an item with no real slot type.
     const validSlots = ItemSlots as readonly string[];
     let resolvedSlot: ItemSlot | undefined;
-    if (validSlots.includes(entry.slot)) {
+    // "NONE" is a valid ItemSlots member (the unequipped sentinel), so exclude
+    // it here too — otherwise a saved NONE entry would be taken at face value
+    // and consume a row/slot while equipping nothing. Fall through to the
+    // fallback resolver, which recovers a real slot or reports it invalid.
+    if (entry.slot !== "NONE" && validSlots.includes(entry.slot)) {
       resolvedSlot = entry.slot;
     } else {
       const slotType = item.slot;

@@ -3,7 +3,31 @@ import {
   buildMissingLoadouts,
   decideRename,
   findAllowedLoadout,
+  resolveSelectableLoadout,
 } from "@/libs/loadout";
+
+describe("resolveSelectableLoadout", () => {
+  const loadouts = [{ id: "a" }, { id: "b" }, { id: "c" }];
+
+  it("resolves a loadout within the allowance", () => {
+    expect(resolveSelectableLoadout(loadouts, "b", 3)).toEqual({
+      ok: true,
+      loadout: { id: "b" },
+    });
+  });
+  it("rejects when loadouts are unavailable", () => {
+    expect(resolveSelectableLoadout(loadouts, "a", 0)).toEqual({
+      ok: false,
+      message: "Loadouts not available",
+    });
+  });
+  it("rejects an out-of-range loadout", () => {
+    expect(resolveSelectableLoadout(loadouts, "c", 2)).toEqual({
+      ok: false,
+      message: "Loadout not found",
+    });
+  });
+});
 
 describe("findAllowedLoadout", () => {
   const loadouts = [{ id: "a" }, { id: "b" }, { id: "c" }];
