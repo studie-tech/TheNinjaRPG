@@ -45,6 +45,10 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   }, [initialLayout]);
 
   const displayedLayout = layout;
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", displayedLayout === "pixel");
+  }, [displayedLayout]);
+
   const isKnownAnonymous = isClerkLoaded ? !userId : !initialIsSignedIn;
   const isPixelLanding =
     displayedLayout === "pixel" && pathname === "/" && isKnownAnonymous && !userData;

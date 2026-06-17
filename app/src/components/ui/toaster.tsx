@@ -1,14 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Toaster as SonnerToaster, type ToasterProps } from "sonner";
 import { getEffectiveColorTheme } from "@/libs/themePreference";
 
 const Toaster = ({ ...props }: ToasterProps) => {
   // Get the current theme
-  const [theme] = useState<"light" | "dark" | "system">(() => {
+  const [theme, setTheme] = useState<"light" | "dark" | "system">(() => {
     return getEffectiveColorTheme();
   });
+
+  useEffect(() => {
+    const syncTheme = () => setTheme(getEffectiveColorTheme());
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    window.addEventListener("storage", syncTheme);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("storage", syncTheme);
+    };
+  }, []);
 
   // Feel free to tweak default props globally here.
   return (

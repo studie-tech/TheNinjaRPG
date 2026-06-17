@@ -57,6 +57,7 @@ type BrowserCookieStore = {
     path?: string;
     expires?: number;
     sameSite?: "lax" | "strict" | "none";
+    secure?: boolean;
   }) => Promise<void>;
 };
 
@@ -64,10 +65,12 @@ export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
   if (typeof window === "undefined") return;
 
   const expires = Date.now() + 365 * 24 * 60 * 60 * 1000;
+  const secure = window.location.protocol === "https:";
+  const secureAttribute = secure ? "; secure" : "";
   // Write document.cookie synchronously so a following reload sees the preference.
   // Chrome's Cookie Store API is asynchronous and can lose the race with reload().
   // biome-ignore lint/suspicious/noDocumentCookie: synchronous persistence is needed before layout reload.
-  document.cookie = `${LAYOUT_PREFERENCE_COOKIE}=${layout}; path=/; max-age=31536000; samesite=lax`;
+  document.cookie = `${LAYOUT_PREFERENCE_COOKIE}=${layout}; path=/; max-age=31536000; samesite=lax${secureAttribute}`;
 
   const cookieStore = (window as Window & { cookieStore?: BrowserCookieStore })
     .cookieStore;
@@ -78,6 +81,7 @@ export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
       path: "/",
       expires,
       sameSite: "lax",
+      secure,
     });
   }
 };

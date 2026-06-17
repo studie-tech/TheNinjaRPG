@@ -41,7 +41,10 @@ import { LayoutBackground } from "./shared/LayoutBackground";
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import { StrongestUsersBanner } from "./shared/LayoutSidebars";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
-import { forwardVerticalWheelToDocumentScroll } from "./shared/layoutUtils";
+import {
+  forwardVerticalWheelToDocumentScroll,
+  isClerkElement,
+} from "./shared/layoutUtils";
 import { MobileGameNav } from "./shared/MobileGameNav";
 
 export { SideBannerTitle } from "./shared/LayoutSidebars";
@@ -309,10 +312,15 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
                 <Menu className={cn(variantClasses.yellowButton)} />
               )}
             </SheetTrigger>
-            <SheetContent side="left">
+            <SheetContent
+              side="left"
+              onInteractOutside={(event) => {
+                if (isClerkElement(event.target)) event.preventDefault();
+              }}
+            >
               <SheetHeader className="text-left">
                 <VisuallyHidden.Root>
-                  <SheetTitle>Test</SheetTitle>
+                  <SheetTitle>Main Menu</SheetTitle>
                 </VisuallyHidden.Root>
                 <Suspense fallback={<Loader explanation="Loading..." />}>
                   {pathname === "/combat" ? (
@@ -357,9 +365,13 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
                 <LogIn className={cn(variantClasses.yellowButton)} />
               )}
             </SheetTrigger>
-            <SheetContent>
+            <SheetContent
+              onInteractOutside={(event) => {
+                if (isClerkElement(event.target)) event.preventDefault();
+              }}
+            >
               <VisuallyHidden.Root>
-                <SheetTitle>Test</SheetTitle>
+                <SheetTitle>Game Menu</SheetTitle>
               </VisuallyHidden.Root>
               <Suspense fallback={<Loader explanation="Loading..." />}>
                 <SheetHeader>
