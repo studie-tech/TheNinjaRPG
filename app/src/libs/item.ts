@@ -11,6 +11,8 @@ import {
   FED_MATERIALS_SILVER_SLOTS,
   FED_NORMAL_INVENTORY_SLOTS,
   FED_SILVER_INVENTORY_SLOTS,
+  type ItemSlot,
+  ItemSlots,
   MATERIALS_BASE_SLOTS,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
 } from "@/drizzle/constants";
@@ -18,6 +20,7 @@ import type {
   Item,
   UserData,
   UserItemWithItem,
+  UserItemWithRelations,
   VillageStructure,
 } from "@/drizzle/schema";
 import { getUserFederalStatus } from "@/utils/paypal";
@@ -181,4 +184,178 @@ export const calcItemRepairCost = (useritem: UserItemWithItem) => {
     default:
       return 0;
   }
+};
+
+/**
+ * Single source of truth for inventory equip-availability. Returns a reason
+ * string when a user item cannot be equipped from the normal inventory (stored
+ * at home, in an auction, or mid-crafting), otherwise null. Reused by the equip
+ * picker filter and loadout application so the two never diverge.
+ */
+export const getEquipBlockReason = (
+  ui: { storedAtHome: boolean; isInAuction: boolean; craftingFinishedAt: Date | null },
+  now: Date = new Date(),
+): string | null => {
+  if (ui.storedAtHome) return "is stored at home";
+  if (ui.isInAuction) return "is in auction";
+  if (ui.craftingFinishedAt && ui.craftingFinishedAt >= now) return "is being crafted";
+  return null;
+};
+
+/**
+ * Whether a user item can be equipped from the normal inventory. Derived from
+ * getEquipBlockReason — do not re-implement the underlying checks elsewhere.
+ */
+export const isEquippableUserItem = (
+  ui: { storedAtHome: boolean; isInAuction: boolean; craftingFinishedAt: Date | null },
+  now: Date = new Date(),
+): boolean => getEquipBlockReason(ui, now) === null;
+
+export interface EquipConstraintInfo {
+  itemId: string;
+  bloodlineId: string | null;
+  itemType: string;
+  slot: string;
+  maxEquips: number;
+}
+
+export interface EquippedAssignment {
+  slot: ItemSlot;
+  info: EquipConstraintInfo;
+}
+
+/**
+ * Canonical equip limits shared by single-item equipping and loadout
+ * application. Returns an error message if `candidate` cannot be equipped
+ * given the items already assigned (`current`), otherwise null.
+ */
+export const checkEquipConstraints = (
+  candidate: EquipConstraintInfo,
+  current: EquippedAssignment[],
+): string | null => {
+  const sameItem = current.filter((a) => a.info.itemId === candidate.itemId).length;
+  if (sameItem >= candidate.maxEquips) {
+    return `No more than ${candidate.maxEquips} instances. Already have ${sameItem} equipped.`;
+  }
+  if (candidate.bloodlineId) {
+    if (current.some((a) => a.info.bloodlineId)) {
+      return "You can only equip one item with a bloodline requirement";
+    }
+  }
+  if (candidate.itemType === "ARMOR" && candidate.slot === "HAND") {
+    const handArmor = current.some(
+      (a) =>
+        (a.slot === "HAND_1" || a.slot === "HAND_2") && a.info.itemType === "ARMOR",
+    );
+    if (handArmor) {
+      return "You can only equip one armor item in your hand slots";
+    }
+  }
+  return null;
+};
+
+export interface LoadoutAssignment {
+  userItemId: string;
+  slot: ItemSlot;
+}
+
+export interface ComputedLoadout {
+  assignments: LoadoutAssignment[];
+  invalidItems: string[];
+}
+
+/**
+ * Pure decision logic for applying an item loadout. Validates every saved
+ * entry against the user's current inventory and equip limits, assigning each
+ * to a unique slot and a unique owned row. Skipped entries are reported in
+ * `invalidItems`. No database access — fully unit-testable.
+ */
+export const computeLoadoutAssignments = (
+  itemData: Array<{ itemId: string; slot: ItemSlot }>,
+  useritems: UserItemWithRelations[],
+  user: { level: number; bloodlineId: string | null },
+  now: Date = new Date(),
+): ComputedLoadout => {
+  const assignments: LoadoutAssignment[] = [];
+  const invalidItems: string[] = [];
+  const usedSlots = new Set<ItemSlot>();
+  const consumedRowIds = new Set<string>();
+  const current: EquippedAssignment[] = [];
+
+  for (const entry of itemData) {
+    // Defect #3 + reliability: prefer an available (carried, not auction/crafting)
+    // unconsumed unit; fall back to any unconsumed unit so we can still report a
+    // precise reason rather than dropping a duplicated itemId silently.
+    const owned = useritems.filter(
+      (it) => it.itemId === entry.itemId && !consumedRowIds.has(it.id),
+    );
+    const useritem =
+      owned.find((it) => getEquipBlockReason(it, now) === null) ?? owned[0];
+    if (!useritem) {
+      invalidItems.push(`Item not found`);
+      continue;
+    }
+    const item = useritem.item;
+    // Inventory availability (home / auction / crafting) via the shared rule.
+    const blockReason = getEquipBlockReason(useritem, now);
+    if (blockReason) {
+      invalidItems.push(`${item.name} ${blockReason}`);
+      continue;
+    }
+    if (item.hidden) {
+      invalidItems.push(`${item.name} is hidden`);
+      continue;
+    }
+    if (item.requiredLevel > user.level) {
+      invalidItems.push(`${item.name} requires level ${item.requiredLevel}`);
+      continue;
+    }
+    if (item.bloodlineId && item.bloodlineId !== user.bloodlineId) {
+      invalidItems.push(`${item.name} requires a specific bloodline to equip`);
+      continue;
+    }
+    const imbuing = useritem.imbuements.filter(
+      (im) => im.craftingFinishedAt && im.craftingFinishedAt > now,
+    );
+    if (imbuing.length > 0) {
+      invalidItems.push(`${item.name} is being imbued`);
+      continue;
+    }
+    // Resolve the slot (handles legacy values like ITEM_7).
+    const validSlots = ItemSlots as readonly string[];
+    let resolvedSlot: ItemSlot | undefined;
+    if (validSlots.includes(entry.slot)) {
+      resolvedSlot = entry.slot;
+    } else {
+      resolvedSlot = ItemSlots.find((s) => s.includes(item.slot) && !usedSlots.has(s));
+      if (!resolvedSlot) {
+        invalidItems.push(`${item.name} has invalid slot`);
+        continue;
+      }
+    }
+    // Defect #2: never reuse a slot.
+    if (usedSlots.has(resolvedSlot)) {
+      invalidItems.push(`${item.name} slot already in use`);
+      continue;
+    }
+    // Equip limits shared with toggleEquipItem.
+    const info: EquipConstraintInfo = {
+      itemId: useritem.itemId,
+      bloodlineId: item.bloodlineId,
+      itemType: item.itemType,
+      slot: item.slot,
+      maxEquips: item.maxEquips,
+    };
+    const constraintError = checkEquipConstraints(info, current);
+    if (constraintError) {
+      invalidItems.push(`${item.name}: ${constraintError}`);
+      continue;
+    }
+    assignments.push({ userItemId: useritem.id, slot: resolvedSlot });
+    usedSlots.add(resolvedSlot);
+    consumedRowIds.add(useritem.id);
+    current.push({ slot: resolvedSlot, info });
+  }
+
+  return { assignments, invalidItems };
 };

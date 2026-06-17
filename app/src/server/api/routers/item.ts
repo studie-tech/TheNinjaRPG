@@ -11,6 +11,7 @@ import {
   lte,
   ne,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -62,6 +63,7 @@ import {
   calcMaxEventItems,
   calcMaxItems,
   calcMaxMaterials,
+  computeLoadoutAssignments,
   nonCombatConsume,
 } from "@/libs/item";
 import { collapseRewards, postProcessRewards } from "@/libs/quest";
@@ -89,6 +91,7 @@ import {
   itemFilteringSchema,
   UserUnlockedVariantResponseSchema,
 } from "@/validators/item";
+import { renameLoadoutSchema } from "@/validators/loadout";
 import type { PostProcessedRewards } from "@/validators/rewards";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 import { updateRewards } from "./quests";
@@ -2086,16 +2089,21 @@ export const itemRouter = createTRPCRouter({
       ]);
       // Derived
       const maxLoadouts = fedItemLoadouts(user);
-      // Create missing loadouts if needed
+      // Create missing loadouts if needed (deterministic id + no-op on
+      // conflict so concurrent reads can't insert duplicate rows).
       if (loadouts.length < maxLoadouts) {
         for (let i = loadouts.length; i < maxLoadouts; i++) {
           const loadout = {
-            id: nanoid(),
+            id: `${ctx.userId}-item-${i}`,
             userId: ctx.userId,
             itemData: [],
+            name: "",
             createdAt: new Date(),
           };
-          await ctx.drizzle.insert(itemLoadout).values(loadout);
+          await ctx.drizzle
+            .insert(itemLoadout)
+            .values(loadout)
+            .onDuplicateKeyUpdate({ set: { id: sql`id` } });
           loadouts.push(loadout);
         }
       }
@@ -2110,11 +2118,30 @@ export const itemRouter = createTRPCRouter({
       const [loadouts, user, useritems] = await Promise.all([
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
       ]);
       // Mutate & return result
       const id = input.id;
       return await selectItemLoadout(ctx.drizzle, id, loadouts, useritems, user);
+    }),
+
+  renameLoadout: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Rename an item loadout" } })
+    .input(renameLoadoutSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const loadouts = await fetchItemLoadouts(ctx.drizzle, ctx.userId);
+      const loadout = loadouts.find((l) => l.id === input.id);
+      if (!loadout) return errorResponse("Loadout not found");
+      // Short-circuit no-op so PlanetScale rowsAffected=0 isn't misread.
+      if (loadout.name === input.name) {
+        return { success: true, message: "Loadout name unchanged" };
+      }
+      await ctx.drizzle
+        .update(itemLoadout)
+        .set({ name: input.name })
+        .where(and(eq(itemLoadout.id, loadout.id), eq(itemLoadout.userId, ctx.userId)));
+      return { success: true, message: "Loadout renamed" };
     }),
 });
 
@@ -2140,112 +2167,55 @@ export const selectItemLoadout = async (
     "userId" | "federalStatus" | "staffAccount" | "level" | "bloodlineId"
   >,
 ) => {
-  // First unequip all items
-  // Derived
   const loadout = loadouts.find((l) => l.id === loadoutId);
   const maxLoadouts = fedItemLoadouts(user);
   // Guard
   if (!loadout) return errorResponse("Loadout not found");
   if (maxLoadouts <= 0) return errorResponse("Loadouts not available");
 
-  // Validate items in loadout
-  const validItemData: Array<{ itemId: string; slot: ItemSlot }> = [];
-  const invalidItems = [];
-  for (const itemEntry of loadout.itemData) {
-    const useritem = useritems.find((ui) => ui.itemId === itemEntry.itemId);
-    if (!useritem) {
-      invalidItems.push(`Item not found`);
-      continue;
+  // Decide which rows get which slots (pure, fully validated).
+  const { assignments, invalidItems } = computeLoadoutAssignments(
+    loadout.itemData,
+    useritems,
+    user,
+    new Date(),
+  );
+
+  // Apply atomically: a single statement equips the loadout and unequips
+  // everything else, so there is no wipe-then-partial-fail window.
+  if (assignments.length === 0) {
+    await client
+      .update(userItem)
+      .set({ equipped: "NONE" })
+      .where(eq(userItem.userId, user.userId));
+  } else {
+    const sqlChunks: SQL[] = [sql`(case`];
+    for (const a of assignments) {
+      sqlChunks.push(sql`when ${userItem.id} = ${a.userItemId} then ${a.slot}`);
     }
-    if (useritem.storedAtHome) {
-      invalidItems.push(`${useritem.item.name} is stored at home`);
-      continue;
-    }
-    if (useritem.item.requiredLevel > user.level) {
-      invalidItems.push(
-        `${useritem.item.name} requires level ${useritem.item.requiredLevel}`,
-      );
-      continue;
-    }
-    if (useritem.item.bloodlineId && useritem.item.bloodlineId !== user.bloodlineId) {
-      invalidItems.push(`${useritem.item.name} requires a specific bloodline to equip`);
-      continue;
-    }
-    if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
-      invalidItems.push(`${useritem.item.name} is being crafted`);
-      continue;
-    }
-    if (useritem.isInAuction) {
-      invalidItems.push(`${useritem.item.name} is in auction`);
-      continue;
-    }
-    const currentlyImbuing = useritem.imbuements.filter(
-      (imbuement) =>
-        imbuement.craftingFinishedAt && imbuement.craftingFinishedAt > new Date(),
-    );
-    if (currentlyImbuing.length > 0) {
-      invalidItems.push(`${useritem.item.name} is being imbued`);
-      continue;
-    }
-    // Validate slot is still valid (handles legacy data like ITEM_7)
-    const validSlots = ItemSlots as readonly string[];
-    if (!validSlots.includes(itemEntry.slot)) {
-      // Try to find a valid slot for this item type
-      const itemSlotType = useritem.item.slot;
-      const matchingSlot = ItemSlots.find(
-        (slot) =>
-          slot.includes(itemSlotType) && !validItemData.find((v) => v.slot === slot),
-      );
-      if (matchingSlot) {
-        validItemData.push({ itemId: itemEntry.itemId, slot: matchingSlot });
-      } else {
-        invalidItems.push(`${useritem.item.name} has invalid slot`);
-      }
-      continue;
-    }
-    validItemData.push(itemEntry);
+    sqlChunks.push(sql`else 'NONE' end)`);
+    // Drizzle narrows `equipped` to the enum union in set(); cast the raw CASE
+    // expression to that type so it is accepted as the column value.
+    const equippedCase = sql.join(sqlChunks, sql.raw(" ")) as unknown as ItemSlot;
+    await client
+      .update(userItem)
+      .set({ equipped: equippedCase })
+      .where(eq(userItem.userId, user.userId));
   }
 
-  // Get valid item ids
-  const validItemIds = validItemData.map((i) => i.itemId);
-
-  // First unequip all items
+  // Advance the active-loadout pointer only AFTER the equip succeeds, so it can
+  // never point at a loadout that was not actually applied.
   await client
-    .update(userItem)
-    .set({ equipped: "NONE" })
-    .where(eq(userItem.userId, user.userId));
+    .update(userData)
+    .set({ itemLoadout: loadout.id })
+    .where(eq(userData.userId, user.userId));
+
+  // Reflect the new equipped state on the in-memory list for the response.
+  const bySlot = new Map(assignments.map((a) => [a.userItemId, a.slot]));
   useritems.forEach((ui) => {
-    ui.equipped = "NONE";
+    ui.equipped = bySlot.get(ui.id) ?? "NONE";
   });
 
-  // Then equip valid items from loadout
-  const equipPromises = [];
-  for (const itemEntry of validItemData) {
-    // Find the first available item with this itemId
-    const userItemToEquip =
-      useritems.find(
-        (ui) => ui.itemId === itemEntry.itemId && ui.equipped === "NONE",
-      ) || useritems.find((ui) => ui.itemId === itemEntry.itemId);
-
-    if (userItemToEquip) {
-      equipPromises.push(
-        client
-          .update(userItem)
-          .set({ equipped: itemEntry.slot })
-          .where(eq(userItem.id, userItemToEquip.id)),
-      );
-      userItemToEquip.equipped = itemEntry.slot;
-    }
-  }
-  // Execute all updates
-  await Promise.all([
-    client
-      .update(userData)
-      .set({ itemLoadout: loadout.id })
-      .where(eq(userData.userId, user.userId)),
-    ...equipPromises,
-  ]);
-  // Return
   const message =
     invalidItems.length > 0
       ? `Loadout selected. Warnings: ${invalidItems.join(", ")}`
@@ -2254,7 +2224,7 @@ export const selectItemLoadout = async (
   return {
     success: true,
     message,
-    items: useritems.filter((ui) => validItemIds.includes(ui.itemId)),
+    items: useritems.filter((ui) => bySlot.has(ui.id)),
   };
 };
 
@@ -2370,7 +2340,11 @@ export const fetchItemWithCraftingRequirements = async (
   });
 };
 
-export const fetchUserItems = async (client: DrizzleClient, userId: string) => {
+export const fetchUserItems = async (
+  client: DrizzleClient,
+  userId: string,
+  options?: { includeHidden?: boolean },
+) => {
   const useritems = await client.query.userItem.findMany({
     where: and(eq(userItem.userId, userId)),
     with: {
@@ -2392,7 +2366,9 @@ export const fetchUserItemsWithVariants = async (
       imbuements: { with: { item: true } },
     },
   });
-  return useritems.filter((ui) => ui.item && !ui.item.hidden);
+  return useritems.filter(
+    (ui) => ui.item && (options?.includeHidden || !ui.item.hidden),
+  );
 };
 
 export const fetchUserItem = async (
@@ -2588,7 +2564,7 @@ export const toggleEquipItem = async (
 export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) => {
   return await client.query.itemLoadout.findMany({
     where: eq(itemLoadout.userId, userId),
-    orderBy: (table) => desc(table.createdAt),
+    orderBy: (table) => asc(table.createdAt),
   });
 };
 

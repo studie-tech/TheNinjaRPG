@@ -40,12 +40,22 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
     },
   });
 
+  const renameResult = api.item.renameLoadout.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.item.getItemLoadouts.invalidate();
+      }
+    },
+  });
+
   return (
     <LoadoutSelector
       {...props}
       config={{
         getQuery: () => queryResult,
         selectMutation: () => mutationResult,
+        renameMutation: () => renameResult,
         maxLoadoutsFn: fedItemLoadouts,
         getSelectedId: (userData) => userData.itemLoadout,
       }}

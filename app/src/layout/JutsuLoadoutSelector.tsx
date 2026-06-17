@@ -41,12 +41,22 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
     },
   });
 
+  const renameResult = api.jutsu.renameLoadout.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.jutsu.getLoadouts.invalidate();
+      }
+    },
+  });
+
   return (
     <LoadoutSelector
       {...props}
       config={{
         getQuery: () => queryResult,
         selectMutation: () => mutationResult,
+        renameMutation: () => renameResult,
         maxLoadoutsFn: fedJutsuLoadouts,
         getSelectedId: (userData) => userData.jutsuLoadout,
       }}

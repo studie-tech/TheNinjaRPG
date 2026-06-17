@@ -50,6 +50,7 @@ import {
   calcMaxEventItems,
   calcMaxItems,
   calcMaxMaterials,
+  isEquippableUserItem,
   nonCombatConsume,
 } from "@/libs/item";
 import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
@@ -142,9 +143,7 @@ export default function MyItems() {
 
   // Subtitle
   const availableItems = userItems
-    ?.filter((ui) => !ui.storedAtHome)
-    .filter((ui) => !ui.craftingFinishedAt || ui.craftingFinishedAt < new Date())
-    .filter((ui) => !ui.isInAuction)
+    ?.filter((ui) => isEquippableUserItem(ui))
     .map((ui) => ({
       ...ui,
       imbuements: ui.imbuements.filter(
@@ -1043,8 +1042,10 @@ const Character: React.FC<CharacterProps> = (props) => {
           >
             {!isEquipping ? (
               <ActionSelector
-                items={items?.filter((item) => slot?.includes(item.slot))}
-                counts={items}
+                items={items?.filter(
+                  (item) => slot?.includes(item.slot) && isEquippableUserItem(item),
+                )}
+                counts={items?.filter((item) => isEquippableUserItem(item))}
                 showBgColor={false}
                 showLabels={false}
                 greyedIds={items
