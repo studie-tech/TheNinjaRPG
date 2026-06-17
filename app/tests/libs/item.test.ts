@@ -316,6 +316,20 @@ describe("computeLoadoutAssignments", () => {
     expect(out.invalidItems).toEqual([]);
   });
 
+  it("recovers a saved NONE-sentinel slot to a real slot instead of assigning NONE", () => {
+    // "NONE" is a valid ItemSlots member (the unequipped sentinel), so a saved
+    // entry carrying it must not be taken at face value via the primary branch.
+    const items = [ui({ id: "r1", itemId: "i1", slotType: "HEAD" })];
+    const out = computeLoadoutAssignments(
+      [{ itemId: "i1", slot: "NONE" }],
+      items,
+      USER,
+      NOW,
+    );
+    expect(out.assignments).toEqual([{ userItemId: "r1", slot: "HEAD" }]);
+    expect(out.invalidItems).toEqual([]);
+  });
+
   it("does not resolve a NONE slot type to the NONE sentinel slot", () => {
     // Legacy/invalid saved slot forces the fallback resolver; an item whose
     // slot type is NONE must be rejected, never assigned the NONE sentinel.

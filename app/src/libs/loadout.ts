@@ -17,6 +17,23 @@ export const findAllowedLoadout = <T extends { id: string }>(
 };
 
 /**
+ * Resolves the loadout a select request may apply, encoding both guards the
+ * item and jutsu select paths share: loadouts must be available at all, and the
+ * requested id must be within the user's current allowance. Returns a
+ * discriminated result so the caller maps the message to its error response.
+ */
+export const resolveSelectableLoadout = <T extends { id: string }>(
+  loadouts: T[],
+  loadoutId: string,
+  maxLoadouts: number,
+): { ok: true; loadout: T } | { ok: false; message: string } => {
+  if (maxLoadouts <= 0) return { ok: false, message: "Loadouts not available" };
+  const loadout = findAllowedLoadout(loadouts, loadoutId, maxLoadouts);
+  if (!loadout) return { ok: false, message: "Loadout not found" };
+  return { ok: true, loadout };
+};
+
+/**
  * Pure decision for renaming a loadout, shared by the item and jutsu routers.
  * Reports a no-op when the name is unchanged so the caller can skip a redundant
  * write. No database access — fully unit-testable.
