@@ -32,7 +32,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { FederalStatus, UserRank } from "@/drizzle/constants";
-import { MESSAGING_MIN_LEVEL, messagingLevelMessage } from "@/drizzle/constants";
+import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
@@ -42,7 +42,7 @@ import RichInput from "@/layout/RichInput";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
-import { canPostAsAi } from "@/utils/permissions";
+import { canPostAsAi, getMessagingRestriction } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
   type CreateConversationSchema,
@@ -285,14 +285,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   });
   const senderUser = watchedSenderUsers?.[0];
   const canPostAsAI = userData && canPostAsAi(userData.role);
-  const belowMessagingMinLevel = (userData?.level ?? 0) < MESSAGING_MIN_LEVEL;
-  const composeRestriction = userData?.isBanned
-    ? "You are banned"
-    : userData?.isSilenced
-      ? "You are silenced"
-      : belowMessagingMinLevel
-        ? messagingLevelMessage
-        : null;
+  const composeRestriction = userData ? getMessagingRestriction(userData) : null;
 
   const users = useWatch({
     control: userSearchMethods.control,

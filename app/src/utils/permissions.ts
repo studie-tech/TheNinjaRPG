@@ -4,6 +4,8 @@ import type {
   UserRole,
 } from "@/drizzle/constants";
 import {
+  MESSAGING_MIN_LEVEL,
+  messagingLevelMessage,
   StaffApprovalGroups,
   SUPPORT_TICKET_STATUS_TRANSITIONS,
   UserRoles,
@@ -374,11 +376,21 @@ export const canDeleteConceptArt = (role: UserRole) => {
 };
 
 /** Returns a restriction message if the user cannot create concept art, otherwise null. */
-export const canCreateConceptArt = (
+export const getConceptArtCreateRestriction = (
   user: Pick<UserData, "isBanned" | "isSilenced">,
 ): string | null => {
   if (user.isBanned) return "You are banned";
   if (user.isSilenced) return "You are silenced";
+  return null;
+};
+
+/** Returns a restriction message if the user cannot use messaging, otherwise null. */
+export const getMessagingRestriction = (
+  user: Pick<UserData, "isBanned" | "isSilenced" | "level">,
+): string | null => {
+  if (user.isBanned) return "You are banned";
+  if (user.isSilenced) return "You are silenced";
+  if ((user.level ?? 0) < MESSAGING_MIN_LEVEL) return messagingLevelMessage;
   return null;
 };
 

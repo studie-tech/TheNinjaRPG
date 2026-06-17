@@ -13,11 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Quote } from "@/components/ui/quote";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  CONVERSATION_QUIET_MINS,
-  MESSAGING_MIN_LEVEL,
-  messagingLevelMessage,
-} from "@/drizzle/constants";
+import { CONVERSATION_QUIET_MINS } from "@/drizzle/constants";
 import { CommentOnConversation } from "@/layout/Comment";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -27,7 +23,7 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { getNewReactions, processMentions } from "@/utils/chat";
 import { parseHtml } from "@/utils/parse";
-import { canPostAsAi } from "@/utils/permissions";
+import { canPostAsAi, getMessagingRestriction } from "@/utils/permissions";
 import { stripBlockquotes } from "@/utils/sanitize";
 import { secondsFromNow } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -87,14 +83,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     secondsFromNow(CONVERSATION_QUIET_MINS * 60),
   );
   const silence = new Date() > quietTime;
-  const belowMessagingMinLevel = (userData?.level ?? 0) < MESSAGING_MIN_LEVEL;
-  const composeRestriction = userData?.isBanned
-    ? "You are banned"
-    : userData?.isSilenced
-      ? "You are silenced"
-      : belowMessagingMinLevel
-        ? messagingLevelMessage
-        : null;
+  const composeRestriction = userData ? getMessagingRestriction(userData) : null;
 
   // Typing indicator state
   type TypingUser = { username: string; timestamp: number };
@@ -126,9 +115,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   const allComments = comments?.pages.flatMap((page) => page.data);
   const conversation = comments?.pages[0]?.convo;
   const canComposeMessage =
-    !!userData &&
-    (conversation?.isStaffAvailable ||
-      (!userData.isBanned && !userData.isSilenced && !belowMessagingMinLevel));
+    !!userData && (conversation?.isStaffAvailable || !composeRestriction);
   type ReturnedComment = ArrayElement<typeof allComments>;
 
   // Search functionality
