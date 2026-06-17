@@ -99,6 +99,13 @@
       "when": 1781773804100,
       "tag": "0013_military_klaw",
       "breakpoints": false
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1781783013977,
+      "tag": "0014_workable_darkhawk",
+      "breakpoints": false
     }
   ]
 }
