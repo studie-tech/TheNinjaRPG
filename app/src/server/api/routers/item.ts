@@ -1,4 +1,17 @@
-import { and, asc, desc, eq, gte, isNull, like, lte, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  like,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -249,6 +262,23 @@ export const itemRouter = createTRPCRouter({
       if (entry.id === TUTORIAL_ITEM_ID)
         return errorResponse("Cannot delete tutorial item");
       if (entry && canChangeContent(user.role)) {
+        // No FK cascades on PlanetScale, so clean variant rows leaf-first (user
+        // unlocks -> variant definitions) before deleting the parent item, mirroring
+        // deleteItemVariant. A partial failure then leaves orphaned children pointing
+        // at a still-present parent rather than dangling references to a missing one.
+        const variants = await ctx.drizzle.query.itemVariant.findMany({
+          where: eq(itemVariant.itemId, input.id),
+          columns: { id: true },
+        });
+        if (variants.length > 0) {
+          await ctx.drizzle.delete(userItemVariant).where(
+            inArray(
+              userItemVariant.variantId,
+              variants.map((v) => v.id),
+            ),
+          );
+          await ctx.drizzle.delete(itemVariant).where(eq(itemVariant.itemId, input.id));
+        }
         await Promise.all([
           ctx.drizzle.delete(item).where(eq(item.id, input.id)),
           ctx.drizzle.delete(userItem).where(eq(userItem.itemId, input.id)),
@@ -776,6 +806,9 @@ export const itemRouter = createTRPCRouter({
       // Guards
       if (user.isBanned) return errorResponse("You are banned");
       if (!tokenItem) return errorResponse("Token item not found");
+      if (tokenItem.storedAtHome) {
+        return errorResponse("Fetch the Variant Token from home storage first");
+      }
       if (!variant) return errorResponse("Variant not found");
       if (variant.costType !== "VARIANT_TOKEN") {
         return errorResponse("This variant does not require a Variant Token");
