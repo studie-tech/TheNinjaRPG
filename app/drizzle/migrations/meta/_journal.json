@@ -85,6 +85,13 @@
       "when": 1780747176870,
       "tag": "0011_curvy_lady_bullseye",
       "breakpoints": false
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1781707589859,
+      "tag": "0012_little_master_chief",
+      "breakpoints": false
     }
   ]
 }
