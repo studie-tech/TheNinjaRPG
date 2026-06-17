@@ -226,7 +226,9 @@ export const profileRouter = createTRPCRouter({
           experiments.map(async (experiment) => {
             const abLoadedEvent = await ctx.drizzle.query.abEvent.findFirst({
               where: and(
-                eq(abEvent.ip, ctx.userIp ?? ""),
+                ctx.userIp && ctx.userIp !== "unknown"
+                  ? eq(abEvent.ip, ctx.userIp)
+                  : isNull(abEvent.ip),
                 eq(abEvent.experiment, experiment.experiment),
                 eq(abEvent.event, "loaded"),
               ),

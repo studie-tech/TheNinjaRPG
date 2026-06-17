@@ -70,7 +70,7 @@ export const createPwaManifest = (): MetadataRoute.Manifest => ({
       sizes: "512x351",
       type: "image/webp",
       form_factor: "wide",
-      label: "Stratgic 2d combat system",
+      label: "Strategic 2d combat system",
     },
     {
       src: "/screenshots/sector.webp",

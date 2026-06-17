@@ -167,6 +167,7 @@ export const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> =
     <div>
       <button
         type="button"
+        data-sidebar-keep-open="true"
         onClick={() => setIsCollapsed(!isCollapsed)}
         className="flex w-full cursor-pointer items-center justify-between px-1 pt-2 font-bold text-orange-100 text-xl transition-colors duration-200 hover:text-orange-300"
         aria-label={isCollapsed ? `Show ${count} notifications` : "Hide notifications"}
@@ -229,6 +230,7 @@ export const MobileNotificationsPopover: React.FC<MobileNotificationsPopoverProp
       <PopoverTrigger asChild>
         <button
           type="button"
+          data-sidebar-keep-open="true"
           className={cn("relative", isPixel && PIXEL_MOBILE_HEADER_BUTTON_STYLE)}
           aria-label={`Open notifications (${count})`}
         >

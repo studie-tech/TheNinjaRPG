@@ -23,7 +23,10 @@ import GameLayoutController from "./shared/GameLayoutController";
 import { LayoutBackground } from "./shared/LayoutBackground";
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
-import { forwardVerticalWheelToDocumentScroll } from "./shared/layoutUtils";
+import {
+  forwardVerticalWheelToDocumentScroll,
+  isClerkElement,
+} from "./shared/layoutUtils";
 import {
   ANONYMOUS_PIXEL_NAV_LINKS,
   PIXEL_MOBILE_HEADER_BUTTON_STYLE,
@@ -147,6 +150,9 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     <SheetContent
                       side="left"
                       className="w-[min(88vw,360px)] border-sky-200/20 bg-slate-950/95 p-4 text-slate-50 backdrop-blur-md"
+                      onInteractOutside={(event) => {
+                        if (isClerkElement(event.target)) event.preventDefault();
+                      }}
                     >
                       <SheetHeader className="space-y-0 text-left">
                         <VisuallyHidden.Root>
@@ -205,7 +211,12 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     >
                       <Earth className={PIXEL_MOBILE_HEADER_ICON_STYLE} />
                     </SheetTrigger>
-                    <SheetContent className="w-[min(88vw,360px)] border-sky-200/20 bg-slate-950/95 p-4 text-slate-50 backdrop-blur-md">
+                    <SheetContent
+                      className="w-[min(88vw,360px)] border-sky-200/20 bg-slate-950/95 p-4 text-slate-50 backdrop-blur-md"
+                      onInteractOutside={(event) => {
+                        if (isClerkElement(event.target)) event.preventDefault();
+                      }}
+                    >
                       <VisuallyHidden.Root>
                         <SheetTitle>Game menu</SheetTitle>
                       </VisuallyHidden.Root>

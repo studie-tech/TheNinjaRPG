@@ -422,6 +422,7 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
 
   const handleLayoutChange = (value: string) => {
     const nextLayout = value === "pixel" ? "pixel" : "default";
+    if (nextLayout === layoutPreference) return;
     safeLocalStorageSetItem(LAYOUT_PREFERENCE_COOKIE, JSON.stringify(nextLayout));
     persistLayoutPreferenceCookie(nextLayout);
     setAnonymousLayout(nextLayout);

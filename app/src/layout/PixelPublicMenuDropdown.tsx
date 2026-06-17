@@ -33,13 +33,15 @@ const PixelPublicMenuDropdown: React.FC<{ className?: string }> = ({ className }
           {menuItems.map((item) => {
             const count = item.notificationCount ?? 0;
             return (
-              <Link key={item.href} href={item.href} prefetch={false} tabIndex={-1}>
-                <MenubarItem
-                  onClick={async () => {
-                    if (item.onClick) await item.onClick();
-                  }}
-                  className="tnr-ink-menu-item"
-                >
+              <MenubarItem
+                key={item.href}
+                asChild
+                onSelect={async () => {
+                  if (item.onClick) await item.onClick();
+                }}
+                className="tnr-ink-menu-item"
+              >
+                <Link href={item.href} prefetch={false}>
                   {item.icon}
                   <span>{item.name}</span>
                   {count > 0 && (
@@ -47,8 +49,8 @@ const PixelPublicMenuDropdown: React.FC<{ className?: string }> = ({ className }
                       {count}
                     </span>
                   )}
-                </MenubarItem>
-              </Link>
+                </Link>
+              </MenubarItem>
             );
           })}
         </MenubarContent>

@@ -247,11 +247,13 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
   return (
     <div className="flex flex-row items-center">
       {userData && (
-        <UserButton
-          appearance={{
-            elements: { userButtonPopoverCard: { pointerEvents: "initial" } },
-          }}
-        />
+        <span data-sidebar-keep-open="true" data-clerk-element="true">
+          <UserButton
+            appearance={{
+              elements: { userButtonPopoverCard: { pointerEvents: "initial" } },
+            }}
+          />
+        </span>
       )}
       <Link href="/event" onClick={onEventClick} aria-label="Event Notifications">
         <Bell className="mx-1 ml-2 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
