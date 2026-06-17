@@ -7,8 +7,6 @@ import {
   FORUM_MIN_LEVEL,
   forumLevelMessage,
   IMG_AVATAR_DEFAULT,
-  MESSAGING_MIN_LEVEL,
-  messagingLevelMessage,
 } from "@/drizzle/constants";
 import {
   conversation,
@@ -47,6 +45,7 @@ import {
   canSeeReport,
   canSeeSecretData,
   canViewConversation,
+  getMessagingRestriction,
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import sanitize, { stripBlockquotes } from "@/utils/sanitize";
@@ -386,11 +385,8 @@ export const commentsRouter = createTRPCRouter({
         input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
       ]);
       // Guard
-      if (user.isBanned) return errorResponse("You are banned");
-      if (user.isSilenced) return errorResponse("You are silenced");
-      if (user.level < MESSAGING_MIN_LEVEL) {
-        return errorResponse(messagingLevelMessage);
-      }
+      const messagingRestriction = getMessagingRestriction(user);
+      if (messagingRestriction) return errorResponse(messagingRestriction);
       const effectiveUserId = resolveSenderId(user, sender);
       // Mutate
       const convoId = await createConvo({
@@ -685,11 +681,9 @@ export const commentsRouter = createTRPCRouter({
         sender && effectiveUserId === sender.userId ? sender.username : user.username;
       // Guard
       if (!convo) return errorResponse("Conversation not found");
-      if ((user.isBanned || user.isSilenced) && !convo.isStaffAvailable) {
-        return errorResponse("You are banned");
-      }
-      if (user.level < MESSAGING_MIN_LEVEL && !convo.isStaffAvailable) {
-        return errorResponse(messagingLevelMessage);
+      const messagingRestriction = getMessagingRestriction(user);
+      if (messagingRestriction && !convo.isStaffAvailable) {
+        return errorResponse(messagingRestriction);
       }
       if (!canViewConversation(convo, ctx.userId, user.role)) {
         return errorResponse("You are not allowed to view this conversation");
