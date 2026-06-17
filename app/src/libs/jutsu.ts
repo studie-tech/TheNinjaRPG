@@ -65,7 +65,13 @@ export const computeJutsuLoadoutAssignments = (args: {
   let stun = 0;
   let residual = 0;
 
-  for (const jutsuId of jutsuIds) {
+  // A jutsu is equipped or not (no quantity), and the equip CASE matches by
+  // jutsuId, so a duplicate id in a stale loadout equips the same row once.
+  // Dedupe up front so duplicates cannot double-count toward the caps and
+  // falsely reject a later jutsu.
+  const uniqueJutsuIds = [...new Set(jutsuIds)];
+
+  for (const jutsuId of uniqueJutsuIds) {
     const uj = userjutsus.find((j) => j.jutsuId === jutsuId);
     if (!uj) {
       invalidJutsus.push("Jutsu not found");
