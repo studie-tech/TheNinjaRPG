@@ -1,5 +1,17 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, gte, inArray, isNotNull, like, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  like,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -81,6 +93,7 @@ import {
   jutsuReskinCreateSchema,
   jutsuReskinUpdateSchema,
 } from "@/validators/jutsu";
+import { renameLoadoutSchema } from "@/validators/loadout";
 import { QuestTracker } from "@/validators/objectives";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 
@@ -299,16 +312,21 @@ export const jutsuRouter = createTRPCRouter({
       ]);
       const maxLoadouts = fedJutsuLoadouts(user);
 
-      // Create missing loadouts if needed
+      // Create missing loadouts if needed (deterministic id + no-op on
+      // conflict so concurrent reads can't insert duplicate rows).
       if (loadouts.length < maxLoadouts) {
         for (let i = loadouts.length; i < maxLoadouts; i++) {
           const loadout = {
-            id: nanoid(),
+            id: `${ctx.userId}-jutsu-${i}`,
             userId: ctx.userId,
             jutsuIds: [],
+            name: "",
             createdAt: new Date(),
           };
-          await ctx.drizzle.insert(jutsuLoadout).values(loadout);
+          await ctx.drizzle
+            .insert(jutsuLoadout)
+            .values(loadout)
+            .onDuplicateKeyUpdate({ set: { id: sql`id` } });
           loadouts.push(loadout);
         }
       }
@@ -1342,6 +1360,27 @@ export const jutsuRouter = createTRPCRouter({
       return { success: true, message: `Order updated` };
     }),
 
+  renameLoadout: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Rename a jutsu loadout" } })
+    .input(renameLoadoutSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const loadouts = await fetchJutsuLoadouts(ctx.drizzle, ctx.userId);
+      const loadout = loadouts.find((l) => l.id === input.id);
+      if (!loadout) return errorResponse("Loadout not found");
+      // Short-circuit no-op so PlanetScale rowsAffected=0 isn't misread.
+      if (loadout.name === input.name) {
+        return { success: true, message: "Loadout name unchanged" };
+      }
+      await ctx.drizzle
+        .update(jutsuLoadout)
+        .set({ name: input.name })
+        .where(
+          and(eq(jutsuLoadout.id, loadout.id), eq(jutsuLoadout.userId, ctx.userId)),
+        );
+      return { success: true, message: "Loadout renamed" };
+    }),
+
   createReskin: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Create a jutsu reskin" } })
     .input(jutsuReskinCreateSchema)
@@ -1734,7 +1773,7 @@ export type JutsuRelations = Awaited<ReturnType<typeof getJutsuRelations>>;
 export const fetchJutsuLoadouts = async (client: DrizzleClient, userId: string) => {
   return await client.query.jutsuLoadout.findMany({
     where: eq(jutsuLoadout.userId, userId),
-    orderBy: (table) => desc(table.createdAt),
+    orderBy: (table) => asc(table.createdAt),
   });
 };
 
