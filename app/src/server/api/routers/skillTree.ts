@@ -373,51 +373,36 @@ export const skillTreeRouter = createTRPCRouter({
         }
       }
 
+      const resetActionLogDetails = !isFreeReset
+        ? {
+            changes: [`Skill tree reset (-${COST_SKILL_RESET} reps)`],
+            relatedMsg: `Charged ${COST_SKILL_RESET} reputation points`,
+            relatedValue: COST_SKILL_RESET,
+          }
+        : isStaffFreeReset
+          ? {
+              changes: ["Skill tree reset (free staff)"],
+              relatedMsg: SKILL_RESET_STAFF_RELATED_MSG,
+              relatedValue: 0,
+            }
+          : {
+              changes: [`Skill tree reset (free ${federalStatus} - monthly)`],
+              relatedMsg: `Free monthly reset for ${federalStatus} supporter`,
+              relatedValue: 0,
+            };
+
       // Perform the reset
       const writes: Promise<unknown>[] = [
         ctx.drizzle.delete(userSkill).where(eq(userSkill.userId, ctx.userId)),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "skillReset",
+          relatedId: null,
+          relatedImage: user.avatarLight,
+          ...resetActionLogDetails,
+        }),
       ];
-
-      if (!isFreeReset) {
-        writes.push(
-          ctx.drizzle.insert(actionLog).values({
-            id: nanoid(),
-            userId: ctx.userId,
-            tableName: "skillReset",
-            changes: [`Skill tree reset (-${COST_SKILL_RESET} reps)`],
-            relatedId: null,
-            relatedMsg: `Charged ${COST_SKILL_RESET} reputation points`,
-            relatedImage: user.avatarLight,
-            relatedValue: COST_SKILL_RESET,
-          }),
-        );
-      } else if (isStaffFreeReset) {
-        writes.push(
-          ctx.drizzle.insert(actionLog).values({
-            id: nanoid(),
-            userId: ctx.userId,
-            tableName: "skillReset",
-            changes: ["Skill tree reset (free staff)"],
-            relatedId: null,
-            relatedMsg: SKILL_RESET_STAFF_RELATED_MSG,
-            relatedImage: user.avatarLight,
-            relatedValue: 0,
-          }),
-        );
-      } else if (hasFreeResetAvailable) {
-        writes.push(
-          ctx.drizzle.insert(actionLog).values({
-            id: nanoid(),
-            userId: ctx.userId,
-            tableName: "skillReset",
-            changes: [`Skill tree reset (free ${federalStatus} - monthly)`],
-            relatedId: null,
-            relatedMsg: `Free monthly reset for ${federalStatus} supporter`,
-            relatedImage: user.avatarLight,
-            relatedValue: 0,
-          }),
-        );
-      }
 
       await Promise.all(writes);
 
