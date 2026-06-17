@@ -15,13 +15,6 @@ function utcDate(dayOfWeek: number, hour: number, minute = 0): Date {
   return d;
 }
 
-// A prevTime that is before the slot boundary for the given now
-function prevBefore(now: Date): Date {
-  const prev = new Date(now);
-  prev.setUTCMinutes(prev.getUTCMinutes() - 1);
-  return prev;
-}
-
 const BASE_PARAMS = {
   villageTokens: 100_000,
   hasLevel3Shrine: true,
