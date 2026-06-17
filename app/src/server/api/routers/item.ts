@@ -2120,10 +2120,12 @@ export const itemRouter = createTRPCRouter({
             .values(rows)
             .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
         writeDefaultPointer: (id) =>
+          // Compare-and-swap: only set the default when no pointer exists yet, so
+          // a concurrent select that set it first is not overwritten.
           ctx.drizzle
             .update(userData)
             .set({ itemLoadout: id })
-            .where(eq(userData.userId, ctx.userId)),
+            .where(and(eq(userData.userId, ctx.userId), isNull(userData.itemLoadout))),
       });
     }),
   selectItemLoadout: protectedProcedure
@@ -2197,12 +2199,15 @@ export const selectItemLoadout = async (
   if (!selectable.ok) return errorResponse(selectable.message);
   const loadout = selectable.loadout;
 
-  // Decide which rows get which slots (pure, fully validated).
+  // Decide which rows get which slots (pure, fully validated). Reuse this `now`
+  // for the SQL availability guards below so the snapshot validation and the
+  // atomic update reason about the same instant.
+  const now = new Date();
   const { assignments, invalidItems } = computeLoadoutAssignments(
     loadout.itemData,
     useritems,
     user,
-    new Date(),
+    now,
   );
 
   // Apply atomically: a single statement equips the loadout and unequips
@@ -2215,7 +2220,13 @@ export const selectItemLoadout = async (
   } else {
     const sqlChunks: SQL[] = [sql`(case`];
     for (const a of assignments) {
-      sqlChunks.push(sql`when ${userItem.id} = ${a.userItemId} then ${a.slot}`);
+      // Re-check availability inside the atomic update (mirrors
+      // getEquipBlockReason): if a row was moved home/auction/crafting between
+      // the snapshot and now, its arm no longer matches and it falls to 'NONE'
+      // instead of being equipped while ineligible.
+      sqlChunks.push(
+        sql`when ${userItem.id} = ${a.userItemId} and ${userItem.storedAtHome} = false and ${userItem.isInAuction} = false and (${userItem.craftingFinishedAt} is null or ${userItem.craftingFinishedAt} <= ${now}) then ${a.slot}`,
+      );
     }
     sqlChunks.push(sql`else 'NONE' end)`);
     // Drizzle narrows `equipped` to the enum union in set(); cast the raw CASE
@@ -2590,7 +2601,9 @@ export const toggleEquipItem = async (
 export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) => {
   return await client.query.itemLoadout.findMany({
     where: eq(itemLoadout.userId, userId),
-    orderBy: (table) => asc(table.createdAt),
+    // id is the deterministic tie-breaker so ties on createdAt (possible after a
+    // batched backfill) keep a stable order across reads.
+    orderBy: (table) => [asc(table.createdAt), asc(table.id)],
   });
 };
 

@@ -44,15 +44,15 @@ export const backfillLoadouts = async <T extends { id: string }>(args: {
 }): Promise<T[]> => {
   if (args.missing.length > 0) {
     await args.insertMissing(args.missing);
-    args.loadouts.push(...args.missing);
   }
-  const first = args.loadouts[0];
+  // Build a local merged list rather than mutating the caller-owned array.
+  const merged =
+    args.missing.length > 0 ? [...args.loadouts, ...args.missing] : args.loadouts;
+  const first = merged[0];
   if (first && !args.currentPointer) {
     await args.writeDefaultPointer(first.id);
   }
-  return args.maxLoadouts < args.loadouts.length
-    ? args.loadouts.slice(0, args.maxLoadouts)
-    : args.loadouts;
+  return args.maxLoadouts < merged.length ? merged.slice(0, args.maxLoadouts) : merged;
 };
 
 /**

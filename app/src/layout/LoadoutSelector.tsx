@@ -74,10 +74,11 @@ const LoadoutSelector = <T extends LoadoutData>(
     }
   };
 
-  const submitRename = (id: string, value: string) => {
+  const submitRename = (id: string, value: string, currentName?: string) => {
     const trimmed = value.trim();
     setEditingId(null);
-    if (trimmed.length > 0) {
+    // Skip the mutation on a no-op rename so it does not round-trip or toast.
+    if (trimmed.length > 0 && trimmed !== (currentName ?? "").trim()) {
       renameMutation?.mutate({ id, name: trimmed });
     }
   };
@@ -121,7 +122,9 @@ const LoadoutSelector = <T extends LoadoutData>(
                     defaultValue={loadout.name ?? ""}
                     maxLength={LOADOUT_NAME_MAX_LENGTH}
                     className="mt-1 w-16 rounded border bg-background px-1 text-center text-xs"
-                    onBlur={(e) => submitRename(loadout.id, e.target.value)}
+                    onBlur={(e) =>
+                      submitRename(loadout.id, e.target.value, loadout.name)
+                    }
                     onKeyDown={(e) => {
                       // Commit on Enter via the single onBlur path (no double
                       // submit); Escape clears first so the blur-commit no-ops.

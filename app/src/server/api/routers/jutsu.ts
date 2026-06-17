@@ -7,6 +7,7 @@ import {
   gte,
   inArray,
   isNotNull,
+  isNull,
   like,
   ne,
   or,
@@ -45,7 +46,12 @@ import {
   userData,
   userJutsu,
 } from "@/drizzle/schema";
-import { getFreeTransfers, getReskinnedUserJutsu } from "@/libs/jutsu";
+import type { ComputedJutsuLoadout } from "@/libs/jutsu";
+import {
+  computeJutsuLoadoutAssignments,
+  getFreeTransfers,
+  getReskinnedUserJutsu,
+} from "@/libs/jutsu";
 import {
   buildMissingLoadouts,
   decideRename,
@@ -64,9 +70,7 @@ import {
   checkJutsuBloodlineItem,
   hasRequiredLevel,
   hasRequiredRank,
-  type JutsuBloodlineItemUserItems,
 } from "@/libs/train";
-import { fetchUserItems } from "@/routers/item";
 import { fetchStudents } from "@/routers/sensei";
 import {
   baseServerResponse,
@@ -343,10 +347,12 @@ export const jutsuRouter = createTRPCRouter({
             .values(rows)
             .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
         writeDefaultPointer: (id) =>
+          // Compare-and-swap: only set the default when no pointer exists yet, so
+          // a concurrent select that set it first is not overwritten.
           ctx.drizzle
             .update(userData)
             .set({ jutsuLoadout: id })
-            .where(eq(userData.userId, ctx.userId)),
+            .where(and(eq(userData.userId, ctx.userId), isNull(userData.jutsuLoadout))),
       });
     }),
 
@@ -355,13 +361,20 @@ export const jutsuRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [loadouts, user, userjutsus, userItems] = await Promise.all([
+      // fetchUpdatedUser (not fetchUser) so the full relations canUseJutsu reads
+      // (bloodline/village/elements) are present for validation, mirroring
+      // toggleEquip. Note this makes the mutation no longer read-only on the user
+      // row: fetchUpdatedUser may persist the usual throttled regen/quest
+      // maintenance (never money/XP/loadout state).
+      const [loadouts, data, userjutsus] = await Promise.all([
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
-      // Mutate & return result
+      const { user } = data;
+      if (!user) return errorResponse("User not found");
+      // Pass the validator here (full user relations are loaded) so a stale
+      // loadout cannot re-equip hidden/ineligible jutsu or exceed equip caps.
       const id = input.id;
       return await selectJutsuLoadout(
         ctx.drizzle,
@@ -369,7 +382,7 @@ export const jutsuRouter = createTRPCRouter({
         loadouts,
         userjutsus,
         user,
-        userItems,
+        (jutsuIds) => computeJutsuLoadoutAssignments({ jutsuIds, userjutsus, user }),
       );
     }),
 
@@ -1781,7 +1794,9 @@ export type JutsuRelations = Awaited<ReturnType<typeof getJutsuRelations>>;
 export const fetchJutsuLoadouts = async (client: DrizzleClient, userId: string) => {
   return await client.query.jutsuLoadout.findMany({
     where: eq(jutsuLoadout.userId, userId),
-    orderBy: (table) => asc(table.createdAt),
+    // id is the deterministic tie-breaker so ties on createdAt (possible after a
+    // batched backfill) keep a stable order across reads.
+    orderBy: (table) => [asc(table.createdAt), asc(table.id)],
   });
 };
 
@@ -2182,7 +2197,10 @@ export const selectJutsuLoadout = async (
   loadouts: JutsuLoadout[],
   userjutsus: UserJutsuWithRelations[],
   user: Pick<UserData, "userId" | "federalStatus" | "staffAccount">,
-  userItems: JutsuBloodlineItemUserItems | undefined,
+  // Optional validator: when supplied, saved jutsuIds are filtered to those still
+  // equippable. The jutsu-management path passes full canUseJutsu validation;
+  // combat passes a slimmer required-item validator against its battle state.
+  validateLoadout?: (jutsuIds: string[]) => ComputedJutsuLoadout,
 ) => {
   // Guard: only loadouts within the user's current allowance are selectable, so
   // a downgraded user can't reach an out-of-range loadout by guessing its
@@ -2195,12 +2213,13 @@ export const selectJutsuLoadout = async (
   if (!selectable.ok) return errorResponse(selectable.message);
   const loadout = selectable.loadout;
 
-  // Only re-equip jutsus whose required bloodline item is still equipped/usable, so
-  // switching to a saved loadout can't re-equip a gated jutsu after its item is removed.
-  const equippableJutsuIds = loadout.jutsuIds.filter((jutsuId) => {
-    const owned = userjutsus.find((uj) => uj.jutsuId === jutsuId);
-    return owned ? checkJutsuBloodlineItem(owned.jutsu, userItems) : true;
-  });
+  // Unlike selectItemLoadout (which re-checks availability inside the atomic SQL
+  // CASE), jutsu eligibility derives entirely from the just-fetched snapshot
+  // (ownership + canUseJutsu + caps), and no external subsystem mutates it
+  // mid-request, so JS-side validation here needs no write-time re-check.
+  const { equipIds, invalidJutsus } = validateLoadout
+    ? validateLoadout(loadout.jutsuIds)
+    : { equipIds: loadout.jutsuIds, invalidJutsus: [] as string[] };
 
   // Equip first, then advance the pointer (mirrors selectItemLoadout). The equip
   // is one atomic statement, so serializing keeps the jutsuLoadout pointer from
@@ -2209,8 +2228,8 @@ export const selectJutsuLoadout = async (
     .update(userJutsu)
     .set({
       equipped:
-        equippableJutsuIds.length > 0
-          ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equippableJutsuIds)} THEN 1 ELSE 0 END`
+        equipIds.length > 0
+          ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equipIds)} THEN 1 ELSE 0 END`
           : false,
     })
     .where(eq(userJutsu.userId, user.userId));
@@ -2219,9 +2238,14 @@ export const selectJutsuLoadout = async (
     .set({ jutsuLoadout: loadout.id })
     .where(eq(userData.userId, user.userId));
 
+  const message =
+    invalidJutsus.length > 0
+      ? `Loadout selected. Warnings: ${invalidJutsus.join(", ")}`
+      : `Loadout selected`;
+
   return {
     success: true,
-    message: `Loadout selected`,
-    jutsus: userjutsus.filter((u) => equippableJutsuIds.includes(u.jutsuId)),
+    message,
+    jutsus: userjutsus.filter((u) => equipIds.includes(u.jutsuId)),
   };
 };

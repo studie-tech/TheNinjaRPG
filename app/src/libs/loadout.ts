@@ -78,11 +78,11 @@ export const buildMissingLoadouts = <C extends Record<string, unknown>>(
     [];
   for (let i = existingCount; i < maxLoadouts; i++) {
     rows.push({
+      ...emptyContent,
       id: `${userId}-${kind}-${i}`,
       userId,
       name: "",
       createdAt: new Date(baseTime.getTime() + i),
-      ...emptyContent,
     });
   }
   return rows;
