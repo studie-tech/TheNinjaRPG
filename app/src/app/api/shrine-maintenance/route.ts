@@ -23,7 +23,7 @@ import { fetchVillages } from "@/server/api/routers/village";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
 import {
   boostInactivePredicate,
-  setActiveBoostExpression,
+  mergeActiveBoostsExpression,
 } from "@/server/utils/shrine";
 import {
   getCurrentSlotBoundary,
@@ -264,31 +264,54 @@ async function runShrineBoostTick(now: Date, prevTime: Date) {
     }
   }
 
-  // Each activation is an independent CAS update on its village row, run in
-  // parallel: MySQL serializes same-row writes for correctness while the
-  // boostInactivePredicate + token guards keep them idempotent, so a retried
-  // tick can never double-deduct tokens or overwrite a still-live boost.
+  // Group activations by village so each row takes a single UPDATE instead of
+  // one round-trip per boost type. MySQL serializes writes to the same row, so a
+  // village whose template activates several types in one slot would otherwise
+  // pay N sequential round-trips. mergeActiveBoostsExpression upserts all of a
+  // village's keys in one JSON_SET, and the token + per-type
+  // boostInactivePredicate guards keep the write idempotent: a retried tick can
+  // never double-deduct tokens or overwrite a still-live boost.
+  //
+  // Trade-off: the all-CAS WHERE makes the whole batched update no-op if ANY one
+  // of the village's types was concurrently activated (e.g. by Kage activateBoost
+  // between this tick's read and write), rather than the unaffected types
+  // succeeding independently. That race on the exact slot boundary is rare and
+  // only costs a one-slot activation delay — never tokens or a clobbered boost.
   const nowIso = now.toISOString();
+  const activationsByVillage = new Map<
+    string,
+    { boostType: BoostTemplateEntry["boostType"]; endAt: string }[]
+  >();
+  for (const { villageId, boostType, newEndAt } of pendingTemplateActivations) {
+    const upserts = activationsByVillage.get(villageId) ?? [];
+    upserts.push({ boostType, endAt: newEndAt });
+    activationsByVillage.set(villageId, upserts);
+  }
+
   const templateUpdateResults = await Promise.all(
-    pendingTemplateActivations.map(({ villageId, boostType, newEndAt }) =>
-      drizzleDB
+    [...activationsByVillage.entries()].map(async ([villageId, upserts]) => {
+      const totalCost = SHRINE_BOOST_COST * upserts.length;
+      const res = await drizzleDB
         .update(village)
         .set({
-          shrineSettings: setActiveBoostExpression(boostType, newEndAt),
-          tokens: sql`${village.tokens} - ${SHRINE_BOOST_COST}`,
+          shrineSettings: mergeActiveBoostsExpression({ removeKeys: [], upserts }),
+          tokens: sql`${village.tokens} - ${totalCost}`,
         })
         .where(
           and(
             eq(village.id, villageId),
-            gte(village.tokens, SHRINE_BOOST_COST),
-            boostInactivePredicate(boostType, nowIso),
+            gte(village.tokens, totalCost),
+            ...upserts.map((u) => boostInactivePredicate(u.boostType, nowIso)),
           ),
-        ),
-    ),
+        );
+      return { res, count: upserts.length };
+    }),
   );
 
+  // One affected row applied all of that village's upserts, so count activated
+  // boosts (rowsAffected * upserts) rather than rows for an accurate log total.
   const activeUpdated = templateUpdateResults.reduce(
-    (total, res) => total + (res.rowsAffected ?? 0),
+    (total, { res, count }) => total + (res.rowsAffected ?? 0) * count,
     0,
   );
 
