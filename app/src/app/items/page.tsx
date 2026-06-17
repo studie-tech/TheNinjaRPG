@@ -1240,11 +1240,17 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   const { data: unlockedVariants } = api.item.getUserUnlockedVariants.useQuery({
     itemId: userItem.item.id,
   });
+  // Until the unlock list resolves, unlockedIds is empty — gate locked actions on
+  // this so an already-owned variant never briefly renders a Buy / Use Token button.
+  const unlockStatusLoaded = unlockedVariants !== undefined;
   const unlockedIds = new Set(unlockedVariants?.map((u) => u.variantId) ?? []);
 
+  // Only carried tokens count — home storage is not carried inventory, matching
+  // how regular consumables require the item to be in the backpack to be used.
   const variantTokens =
-    allUserItems?.filter((ui) =>
-      ui.item.effects.some((e) => e.type === "unlockitemvariant"),
+    allUserItems?.filter(
+      (ui) =>
+        !ui.storedAtHome && ui.item.effects.some((e) => e.type === "unlockitemvariant"),
     ) ?? [];
 
   const purchase = api.item.purchaseVariant.useMutation({
@@ -1362,6 +1368,10 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
                     Select
                   </Button>
                 )
+              ) : !unlockStatusLoaded ? (
+                <Button size="sm" variant="outline" className="mt-1 w-full" disabled>
+                  …
+                </Button>
               ) : needsToken ? (
                 <Button
                   size="sm"
