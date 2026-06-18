@@ -481,12 +481,13 @@ export const shrineRouter = createTRPCRouter({
         );
       }
 
+      // shrineSettings is notNull with a default, but guard against legacy/null rows
+      // the same way the cron tick does rather than dereferencing blindly.
+      const shrineSettings = targetVillage.shrineSettings ?? null;
       return {
-        boostTemplate: targetVillage.shrineSettings.boostTemplate ?? [],
-        boostTemplateUpdatedBy:
-          targetVillage.shrineSettings.boostTemplateUpdatedBy ?? null,
-        boostTemplateUpdatedAt:
-          targetVillage.shrineSettings.boostTemplateUpdatedAt ?? null,
+        boostTemplate: shrineSettings?.boostTemplate ?? [],
+        boostTemplateUpdatedBy: shrineSettings?.boostTemplateUpdatedBy ?? null,
+        boostTemplateUpdatedAt: shrineSettings?.boostTemplateUpdatedAt ?? null,
       };
     }),
 

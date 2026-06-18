@@ -172,11 +172,19 @@ export function computeTemplateActivations(params: {
   // walk every boundary in (prevTime, now] and emit per-slot, slot-anchored expiries.
   const currentSlotIndex = getSlotIndex(now.getUTCHours());
 
-  // Find matching template entries for current slot
-  const matchingEntries = template
-    .filter((e) => e.dayOfWeek === currentDayOfWeek && e.slotIndex === currentSlotIndex)
-    .map((e) => e.boostType as BoostTemplateEntry["boostType"])
-    .sort(); // alphabetical for deterministic partial activation
+  // Find matching template entries for current slot. Dedupe by boost type: the
+  // setBoostTemplate validator rejects duplicate (boostType, day, slot) rows, but a
+  // direct/legacy DB write could still contain them — without this a repeated type
+  // would be charged once per occurrence while JSON_SET writes the key only once.
+  const matchingEntries = [
+    ...new Set(
+      template
+        .filter(
+          (e) => e.dayOfWeek === currentDayOfWeek && e.slotIndex === currentSlotIndex,
+        )
+        .map((e) => e.boostType as BoostTemplateEntry["boostType"]),
+    ),
+  ].sort(); // alphabetical for deterministic partial activation
 
   const activeBoosts = shrineSettings?.activeBoosts ?? {};
   const boostDurationMs = SHRINE_BOOST_DURATION_HOURS * 60 * 60 * 1000;

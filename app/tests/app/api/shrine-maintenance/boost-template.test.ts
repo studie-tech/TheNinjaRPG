@@ -133,6 +133,26 @@ describe("computeTemplateActivations", () => {
     expect(result[0]?.boostType).toBe("Crafting");
   });
 
+  it("dedupes duplicate (boostType, day, slot) rows so a type activates at most once", () => {
+    const now = utcDate(1, 4, 0);
+    const prevTime = utcDate(1, 3, 59);
+    const result = computeTemplateActivations({
+      ...BASE_PARAMS,
+      now,
+      prevTime,
+      shrineSettings: {
+        // Malformed/legacy data: the same type repeated for one slot. The cron must
+        // not charge tokens per occurrence (JSON_SET writes the key only once).
+        boostTemplate: [
+          { boostType: "Training", dayOfWeek: 1, slotIndex: 2 },
+          { boostType: "Training", dayOfWeek: 1, slotIndex: 2 },
+        ],
+      },
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]?.boostType).toBe("Training");
+  });
+
   it("returns empty array when template is empty", () => {
     const now = utcDate(1, 4, 0);
     const prevTime = utcDate(1, 3, 59);
