@@ -47,6 +47,7 @@ import {
   checkJutsuBloodlineItem,
   hasRequiredLevel,
   hasRequiredRank,
+  type JutsuBloodlineItemUserItems,
 } from "@/libs/train";
 import { fetchUserItems } from "@/routers/item";
 import { fetchStudents } from "@/routers/sensei";
@@ -2134,7 +2135,7 @@ export const selectJutsuLoadout = async (
   loadouts: JutsuLoadout[],
   userjutsus: UserJutsuWithRelations[],
   user: Pick<UserData, "userId" | "federalStatus" | "staffAccount">,
-  userItems: Parameters<typeof checkJutsuBloodlineItem>[1],
+  userItems: JutsuBloodlineItemUserItems | undefined,
 ) => {
   const loadout = loadouts.find((l) => l.id === loadoutId);
   const maxLoadouts = fedJutsuLoadouts(user);

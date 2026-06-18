@@ -50,7 +50,7 @@ import { getUserFederalStatus } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
 import { getUserElements } from "@/validators/user";
 
-type EquippedUserItems = NonNullable<UserWithRelations>["items"];
+export type JutsuBloodlineItemUserItems = NonNullable<UserWithRelations>["items"];
 
 export const availableJutsuLetterRanks = (userrank: UserRank): LetterRank[] => {
   switch (userrank) {
@@ -209,7 +209,7 @@ export const checkJutsuItems = (
 
 export const checkJutsuBloodlineItem = (
   jutsu: Jutsu,
-  userItems: EquippedUserItems | undefined,
+  userItems: JutsuBloodlineItemUserItems | undefined,
 ): boolean => {
   if (!jutsu.requiredBloodlineItemId) return true;
   return !!userItems?.some((ui) => {
