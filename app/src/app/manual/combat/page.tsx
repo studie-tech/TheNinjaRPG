@@ -4,12 +4,12 @@ import { BattleLengthHistogram } from "@/layout/BattleLengthHistogram";
 import ContentBox from "@/layout/ContentBox";
 import { DmgConfigDialog } from "@/layout/DmgConfigDialog";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
-import { canModifyEventGains } from "@/utils/permissions";
+import { canModifyCombatSettings } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
 export default function ManualCombat() {
   const { data: userData } = useUserData();
-  const isAdmin = userData?.role ? canModifyEventGains(userData.role) : false;
+  const isAdmin = userData?.role ? canModifyCombatSettings(userData.role) : false;
 
   return (
     <>

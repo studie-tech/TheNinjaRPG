@@ -1,10 +1,27 @@
 import { expect, test } from "vitest";
+import type { UserRole } from "@/drizzle/constants";
+import { UserRoles } from "@/drizzle/constants";
 import {
   canApproveApplications,
   canDeleteConceptArt,
+  canModifyCombatSettings,
+  canModifyEventGains,
   canViewAllApplications,
   getApprovalGroup,
 } from "@/utils/permissions";
+
+const combatSettingsRoles = [
+  "OWNER",
+  "CODING-ADMIN",
+  "CONTENT-ADMIN",
+  "EVENT-ADMIN",
+  "MODERATOR-ADMIN",
+  "HEAD_CONTENT",
+  "CONTENT",
+  "HEAD_EVENT",
+  "EVENT",
+  "CODER",
+] as const satisfies readonly UserRole[];
 
 test("approval groups are assigned to the correct admin roles", () => {
   expect(getApprovalGroup("CODER")).toBeNull();
@@ -76,4 +93,18 @@ test("non-approval staff do not get application approval access", () => {
   expect(canViewAllApplications("EVENT")).toBe(false);
   expect(canViewAllApplications("MODERATOR")).toBe(false);
   expect(canViewAllApplications("JR_MODERATOR")).toBe(false);
+});
+
+test("combat settings use balance/content permissions instead of event gain permissions", () => {
+  const expectedRoles = new Set<UserRole>(combatSettingsRoles);
+  for (const role of UserRoles) {
+    expect(canModifyCombatSettings(role)).toBe(expectedRoles.has(role));
+  }
+
+  expect(canModifyEventGains("CODER")).toBe(false);
+  expect(canModifyEventGains("EVENT")).toBe(false);
+  expect(canModifyEventGains("HEAD_EVENT")).toBe(false);
+  expect(canModifyCombatSettings("CODER")).toBe(true);
+  expect(canModifyCombatSettings("EVENT")).toBe(true);
+  expect(canModifyCombatSettings("HEAD_EVENT")).toBe(true);
 });

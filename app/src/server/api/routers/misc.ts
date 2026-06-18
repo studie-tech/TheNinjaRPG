@@ -25,6 +25,7 @@ import type { DrizzleClient } from "@/server/db";
 import {
   canAwardReputation,
   canEnableGlobalTavern,
+  canModifyCombatSettings,
   canModifyEventGains,
   canSubmitNotification,
 } from "@/utils/permissions";
@@ -249,7 +250,7 @@ export const miscRouter = createTRPCRouter({
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guards
-      if (!canModifyEventGains(user.role)) return errorResponse("Not allowed");
+      if (!canModifyCombatSettings(user.role)) return errorResponse("Not allowed");
       // Update all DMG settings in parallel
       const nameToValue: Record<string, number> = {
         DMG_STATS_SCALING: input.stats_scaling,
