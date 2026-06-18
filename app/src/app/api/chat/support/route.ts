@@ -217,11 +217,19 @@ This document outlines various screens, menus, and gameplay systems available in
     - The turn automatically ends if AP drops below 20%.
 - **Basic Actions:**  
   - **Basic Attack:**  
-    - Costs 40 AP and 10 SP; scales with Taijutsu.
+    - Costs 20 AP and 10 SP; has a 1-round cooldown; scales with Highest offense.
+  - **Offensive Stance:**  
+    - Costs 20 AP; has a 1-round cooldown; increases all offence damage by 5% for 1 round.
+  - **Defensive Stance:**  
+    - Costs 20 AP; has a 1-round cooldown; reduces damage taken by 5% for 1 round.
   - **Basic Heal:**  
     - Costs 60 AP and 10 CP; has a 5-round cooldown and scales with Medical Ninja Rank.
+  - **Meditate:**  
+    - Costs 20 AP and 10 CP; has a 4-round cooldown; restores chakra and Stamina and scales with Medical Ninja Rank.
   - **Move:**  
-    - Costs 30 AP per hexagon of movement.
+    - Costs 10 AP per hexagon of movement.
+  - **Replacement Technique:**  
+    - Costs 20 AP; has a 2-round cooldown; reposition up to 5 hexes away.
   - **Clear:**  
     - Costs 60 AP, affects a 4-hex range, with a 9-turn cooldown; removes opponent’s positive effects.
   - **Cleanse:**  

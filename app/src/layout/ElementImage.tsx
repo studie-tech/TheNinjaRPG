@@ -154,11 +154,35 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
           />
         );
         break;
+      case "offensiveStance":
+        image = (
+          <BicepsFlexed
+            strokeWidth={3}
+            className={cn(base, props.className, "bg-red-600")}
+          />
+        );
+        break;
+      case "defensiveStance":
+        image = (
+          <BrainCog
+            strokeWidth={3}
+            className={cn(base, props.className, "bg-blue-600")}
+          />
+        );
+        break;
       case "basicHeal":
         image = (
           <HeartPulse
             strokeWidth={3}
             className={cn(base, props.className, "bg-green-600")}
+          />
+        );
+        break;
+      case "meditate":
+        image = (
+          <Brain
+            strokeWidth={3}
+            className={cn(base, props.className, "bg-purple-600")}
           />
         );
         break;
@@ -191,6 +215,14 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
           <Footprints
             strokeWidth={3}
             className={cn(base, props.className, "bg-cyan-600")}
+          />
+        );
+        break;
+      case "replacementTechnique":
+        image = (
+          <LoaderPinwheel
+            strokeWidth={3}
+            className={cn(base, props.className, "bg-orange-500")}
           />
         );
         break;

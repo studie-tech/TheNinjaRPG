@@ -13,9 +13,13 @@ import {
   IMG_BASIC_ATTACK,
   IMG_BASIC_CLEANSE,
   IMG_BASIC_CLEAR,
+  IMG_BASIC_DEFENSIVE_STANCE,
   IMG_BASIC_FLEE,
   IMG_BASIC_HEAL,
+  IMG_BASIC_MEDITATE,
   IMG_BASIC_MOVE,
+  IMG_BASIC_OFFENSIVE_STANCE,
+  IMG_BASIC_REPLACEMENT_TECHNIQUE,
   IMG_BASIC_WAIT,
   NO_DURABILITY_LOSS_COMBATS,
   NonActionItemTypes,
@@ -65,9 +69,11 @@ import {
   ClearTag,
   DamageTag,
   DecreaseCooldownTag,
+  DecreaseDamageTakenTag,
   FleeTag,
   HealTag,
   IncreaseCooldownTag,
+  IncreaseDamageGivenTag,
   IncreaseRangeTag,
   InjectJutsusTag,
   MoveTag,
@@ -100,11 +106,20 @@ export const availableUserActions = (
 
   // Concatenate all actions
   let availableActions = [
-    ...(basicMoves && !isStealth ? [basicActions.basicAttack] : []),
-    ...(!isImmobilized ? [basicActions.basicMove] : []),
+    ...(basicMoves && !isStealth
+      ? [
+          basicActions.basicAttack,
+          basicActions.basicOffensiveStance,
+          basicActions.basicDefensiveStance,
+        ]
+      : []),
+    ...(!isImmobilized
+      ? [basicActions.basicMove, basicActions.basicReplacementTechnique]
+      : []),
     ...(basicMoves && !isStealth && !isStudent
       ? [
           basicActions.basicHeal,
+          basicActions.basicMeditate,
           basicActions.basicClear,
           basicActions.basicCleanse,
           basicActions.basicFlee,
@@ -282,8 +297,15 @@ export const getActiveBasicActions = (
   // Build active actions using base (full CombatAction) merged with tracking data
   const active: BasicActions = {
     basicAttack: mergeTracking(base.basicAttack, "basicAttack"),
+    basicOffensiveStance: mergeTracking(base.basicOffensiveStance, "offensiveStance"),
+    basicDefensiveStance: mergeTracking(base.basicDefensiveStance, "defensiveStance"),
     basicHeal: mergeTracking(base.basicHeal, "basicHeal"),
+    basicMeditate: mergeTracking(base.basicMeditate, "meditate"),
     basicMove: mergeTracking(base.basicMove, "move"),
+    basicReplacementTechnique: mergeTracking(
+      base.basicReplacementTechnique,
+      "replacementTechnique",
+    ),
     basicClear: mergeTracking(base.basicClear, "clear"),
     basicCleanse: mergeTracking(base.basicCleanse, "cleanse"),
     basicFlee: mergeTracking(base.basicFlee, "flee"),
@@ -365,6 +387,9 @@ export const getDefaultBasicActions = (
       }
     | undefined,
 ): BasicActions => {
+  const healPower = calcCombatHealPercentage(user);
+  const jutsuStatTypes = ["Ninjutsu", "Genjutsu", "Taijutsu", "Bukijutsu"] as const;
+
   return {
     basicAttack: {
       id: "basicAttack",
@@ -377,11 +402,11 @@ export const getDefaultBasicActions = (
       healthCost: 0,
       chakraCost: 0,
       staminaCost: 10,
-      actionCostPerc: 40,
+      actionCostPerc: 20,
       range: 1,
       updatedAt: Date.now(),
-      cooldown: 0,
-      originalCooldown: 0,
+      cooldown: 1,
+      originalCooldown: 1,
       lastUsedRound:
         user?.basicActions?.find((ba) => ba.id === "basicAttack")?.lastUsedRound ?? 0,
       level: user?.level,
@@ -394,6 +419,67 @@ export const getDefaultBasicActions = (
           rounds: 0,
           appearAnimation: ID_ANIMATION_HIT,
           appearSfx: ID_SFX_HIT,
+        }),
+      ],
+    },
+    basicOffensiveStance: {
+      id: "offensiveStance",
+      name: "Offensive Stance",
+      image: IMG_BASIC_OFFENSIVE_STANCE,
+      battleDescription:
+        "%user takes an offensive stance, increasing their offence damage",
+      type: "basic" as const,
+      target: "SELF" as const,
+      method: "SINGLE" as const,
+      healthCost: 0,
+      chakraCost: 0,
+      staminaCost: 0,
+      actionCostPerc: 20,
+      range: 0,
+      updatedAt: Date.now(),
+      cooldown: 1,
+      originalCooldown: 1,
+      lastUsedRound:
+        user?.basicActions?.find((ba) => ba.id === "offensiveStance")?.lastUsedRound ??
+        -10,
+      level: user?.level,
+      effects: [
+        IncreaseDamageGivenTag.parse({
+          power: 5,
+          powerPerLevel: 0,
+          calculation: "percentage",
+          statTypes: [...jutsuStatTypes],
+          rounds: 1,
+        }),
+      ],
+    },
+    basicDefensiveStance: {
+      id: "defensiveStance",
+      name: "Defensive Stance",
+      image: IMG_BASIC_DEFENSIVE_STANCE,
+      battleDescription: "%user takes a defensive stance, reducing damage taken",
+      type: "basic" as const,
+      target: "SELF" as const,
+      method: "SINGLE" as const,
+      healthCost: 0,
+      chakraCost: 0,
+      staminaCost: 0,
+      actionCostPerc: 20,
+      range: 0,
+      updatedAt: Date.now(),
+      cooldown: 1,
+      originalCooldown: 1,
+      lastUsedRound:
+        user?.basicActions?.find((ba) => ba.id === "defensiveStance")?.lastUsedRound ??
+        -10,
+      level: user?.level,
+      effects: [
+        DecreaseDamageTakenTag.parse({
+          power: 5,
+          powerPerLevel: 0,
+          calculation: "percentage",
+          statTypes: [...jutsuStatTypes],
+          rounds: 1,
         }),
       ],
     },
@@ -418,10 +504,42 @@ export const getDefaultBasicActions = (
       level: user?.level,
       effects: [
         HealTag.parse({
-          power: calcCombatHealPercentage(user),
+          power: healPower,
           powerPerLevel: 0.0,
           calculation: "static",
           rounds: 0,
+          poolsAffected: ["Health"],
+          appearAnimation: ID_ANIMATION_HEAL,
+          appearSfx: ID_SFX_HEAL,
+        }),
+      ],
+    },
+    basicMeditate: {
+      id: "meditate",
+      name: "Meditate",
+      image: IMG_BASIC_MEDITATE,
+      battleDescription: "%user meditates to restore their chakra and stamina",
+      type: "basic" as const,
+      target: "SELF" as const,
+      method: "SINGLE" as const,
+      healthCost: 0,
+      chakraCost: 10,
+      staminaCost: 0,
+      actionCostPerc: 20,
+      range: 0,
+      updatedAt: Date.now(),
+      cooldown: 4,
+      originalCooldown: 4,
+      lastUsedRound:
+        user?.basicActions?.find((ba) => ba.id === "meditate")?.lastUsedRound ?? -10,
+      level: user?.level,
+      effects: [
+        HealTag.parse({
+          power: healPower,
+          powerPerLevel: 0.0,
+          calculation: "static",
+          rounds: 0,
+          poolsAffected: ["Chakra", "Stamina"],
           appearAnimation: ID_ANIMATION_HEAL,
           appearSfx: ID_SFX_HEAL,
         }),
@@ -444,7 +562,29 @@ export const getDefaultBasicActions = (
       healthCost: 0,
       chakraCost: 0,
       staminaCost: 0,
-      actionCostPerc: 30,
+      actionCostPerc: 10,
+      effects: [MoveTag.parse({ power: 100, appearSfx: ID_SFX_MOVE })],
+    },
+    basicReplacementTechnique: {
+      id: "replacementTechnique",
+      name: "Replacement Technique",
+      image: IMG_BASIC_REPLACEMENT_TECHNIQUE,
+      battleDescription:
+        "%user uses the replacement technique to reposition on the battlefield",
+      type: "basic" as const,
+      target: "EMPTY_GROUND" as const,
+      method: "SINGLE" as const,
+      range: 5,
+      updatedAt: Date.now(),
+      cooldown: 2,
+      originalCooldown: 2,
+      lastUsedRound:
+        user?.basicActions?.find((ba) => ba.id === "replacementTechnique")
+          ?.lastUsedRound ?? -10,
+      healthCost: 0,
+      chakraCost: 0,
+      staminaCost: 0,
+      actionCostPerc: 20,
       effects: [MoveTag.parse({ power: 100, appearSfx: ID_SFX_MOVE })],
     },
     basicCleanse: {

@@ -366,7 +366,11 @@ export const combatRouter = createTRPCRouter({
       const basicActionIds = [
         "basicAttack",
         "basicHeal",
+        "meditate",
+        "offensiveStance",
+        "defensiveStance",
         "move",
+        "replacementTechnique",
         "cleanse",
         "clear",
         "flee",

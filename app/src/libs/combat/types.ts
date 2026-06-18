@@ -262,7 +262,7 @@ export type BattleUserItem = {
  * Only stores per-user dynamic state.
  */
 export type BattleBasicAction = {
-  id: string; // basicAttack, basicHeal, move, cleanse, clear, flee
+  id: string; // basicAttack, offensiveStance, defensiveStance, basicHeal, meditate, move, replacementTechnique, cleanse, clear, flee
   lastUsedRound: number;
   cooldown?: number; // Optional GCD override (only set when GCD is applied)
 };
@@ -291,8 +291,12 @@ export type BattleUserState = Omit<UserData, "questData"> &
  */
 export type BasicActions = {
   basicAttack: CombatAction;
+  basicOffensiveStance: CombatAction;
+  basicDefensiveStance: CombatAction;
   basicHeal: CombatAction;
+  basicMeditate: CombatAction;
   basicMove: CombatAction;
+  basicReplacementTechnique: CombatAction;
   basicClear: CombatAction;
   basicCleanse: CombatAction;
   basicFlee: CombatAction;
