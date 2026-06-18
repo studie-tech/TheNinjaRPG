@@ -92,6 +92,13 @@
       "when": 1781707589859,
       "tag": "0012_little_master_chief",
       "breakpoints": false
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1781773804100,
+      "tag": "0013_military_klaw",
+      "breakpoints": false
     }
   ]
 }
