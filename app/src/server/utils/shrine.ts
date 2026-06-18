@@ -9,7 +9,8 @@ import { village } from "@/drizzle/schema";
  * are preserved because we never write the full $.activeBoosts blob.
  *
  * Removes are applied before upserts so a same-tick upsert wins over a same-tick expiry.
- * If both arrays are empty the input shrineSettings is returned unchanged.
+ * If both arrays are empty the expression only normalizes a missing $.activeBoosts to
+ * an empty object, leaving all existing keys intact.
  */
 export function mergeActiveBoostsExpression(params: {
   removeKeys: SHRINE_BOOST_TYPE[];

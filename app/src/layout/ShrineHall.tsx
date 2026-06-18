@@ -873,10 +873,19 @@ const useUtcNow = (enabled: boolean, intervalMs: number) => {
   return now;
 };
 
+// After a 2-hour slot boundary is crossed, keep refreshing for this long. The
+// maintenance cron that activates template boosts only runs once per minute and its
+// write can land after the client's boundary tick fires (client ticks aren't aligned
+// to the cron), so a single invalidation can miss it. Re-invalidating across this
+// window — a handful of fetches per 2h boundary — reliably picks the new boost up.
+const SLOT_BOUNDARY_REVALIDATE_MS = 3 * 60_000;
+
 /**
- * Calls `invalidate` once each time a 2-hour UTC slot boundary is crossed while
- * `nowMs` ticks forward. Used to refresh server state (e.g. cron-activated boosts)
- * that won't otherwise update with the global `staleTime: Infinity` cache.
+ * Refreshes server state (e.g. cron-activated boosts) that the global
+ * `staleTime: Infinity` cache won't otherwise update. Each time a 2-hour UTC slot
+ * boundary is crossed while `nowMs` ticks forward, it invalidates for a short grace
+ * window afterwards so the once-per-minute cron's write is picked up even when it
+ * lands slightly after the boundary tick.
  */
 const useInvalidateOnSlotBoundary = (
   nowMs: number,
@@ -884,11 +893,15 @@ const useInvalidateOnSlotBoundary = (
   invalidate: () => unknown,
 ) => {
   const prevTickMsRef = useRef<number>(nowMs);
+  const revalidateUntilMsRef = useRef<number>(0);
   useEffect(() => {
     if (enabled && isNewSlotDue(new Date(nowMs), new Date(prevTickMsRef.current))) {
-      void invalidate();
+      revalidateUntilMsRef.current = nowMs + SLOT_BOUNDARY_REVALIDATE_MS;
     }
     prevTickMsRef.current = nowMs;
+    if (enabled && nowMs <= revalidateUntilMsRef.current) {
+      void invalidate();
+    }
   }, [nowMs, enabled, invalidate]);
 };
 
@@ -989,7 +1002,10 @@ const BoostTemplateGrid = ({
       onSuccess: async (res) => {
         showMutationToast(res);
         if (res.success) {
-          await utils.shrine.getBoostTemplate.invalidate({ villageId });
+          await Promise.all([
+            utils.shrine.getBoostTemplate.invalidate({ villageId }),
+            utils.profile.getUser.invalidate(),
+          ]);
           setIsDirty(false);
         }
       },
@@ -1092,6 +1108,7 @@ const BoostTemplateGrid = ({
                         {canEdit && (
                           <button
                             type="button"
+                            disabled={isSaving}
                             onClick={() => {
                               setOpenAllDay(openAllDay === dayIdx ? null : dayIdx);
                               setAllDayBoosts([]);
@@ -1139,7 +1156,7 @@ const BoostTemplateGrid = ({
                           >
                             <button
                               type="button"
-                              disabled={!canEdit}
+                              disabled={!canEdit || isSaving}
                               onClick={() => {
                                 setOpenCell(
                                   isCellOpen ? null : { day: dayIdx, slot: slotIdx },
@@ -1197,6 +1214,7 @@ const BoostTemplateGrid = ({
                   </span>
                 </div>
                 <BoostTypeChecklist
+                  disabled={isSaving}
                   checkedFor={(bt) =>
                     (templateBySlot.get(`${openCell.day}-${openCell.slot}`) ?? []).some(
                       (e) => e.boostType === bt,
@@ -1217,6 +1235,7 @@ const BoostTemplateGrid = ({
                 </div>
                 <BoostTypeChecklist
                   className="mb-3"
+                  disabled={isSaving}
                   checkedFor={(bt) => allDayBoosts.includes(bt)}
                   onToggle={(bt) =>
                     setAllDayBoosts((prev) =>
@@ -1226,7 +1245,7 @@ const BoostTemplateGrid = ({
                 />
                 <Button
                   size="sm"
-                  disabled={allDayBoosts.length === 0}
+                  disabled={allDayBoosts.length === 0 || isSaving}
                   onClick={() => fillAllDay(openAllDay, allDayBoosts)}
                 >
                   Fill Day
@@ -1281,12 +1300,14 @@ interface BoostTypeChecklistProps {
   checkedFor: (boostType: SHRINE_BOOST_TYPE) => boolean;
   onToggle: (boostType: SHRINE_BOOST_TYPE) => void;
   className?: string;
+  disabled?: boolean;
 }
 
 const BoostTypeChecklist = ({
   checkedFor,
   onToggle,
   className,
+  disabled,
 }: BoostTypeChecklistProps) => (
   <div className={cn("grid grid-cols-5 gap-2", className)}>
     {SHRINE_BOOST_TYPES.map((bt) => {
@@ -1295,9 +1316,10 @@ const BoostTypeChecklist = ({
         <button
           key={bt}
           type="button"
+          disabled={disabled}
           onClick={() => onToggle(bt)}
           className={cn(
-            "flex flex-col items-center gap-1 rounded-md px-2 py-3 text-center text-xs transition-colors",
+            "flex flex-col items-center gap-1 rounded-md px-2 py-3 text-center text-xs transition-colors disabled:opacity-50",
             checked
               ? SHRINE_BOOST_DISPLAY[bt].color
               : "border border-border bg-background text-muted-foreground hover:border-muted-foreground",
