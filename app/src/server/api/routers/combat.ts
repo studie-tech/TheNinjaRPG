@@ -2240,11 +2240,17 @@ export const initiateBattle = async (
               ? [inArray(userData.userId, targetIds)]
               : []),
           ),
-          or(
-            eq(userData.status, "AWAKE"),
-            eq(userData.status, "QUEUED"),
-            eq(userData.status, "KAGE_QUEUED"),
-          ),
+          // Ranked participants are claimed straight from the queue, so require
+          // QUEUED specifically: a player who just left the queue (now AWAKE)
+          // must not be pulled into a ranked battle by a poll whose snapshot
+          // predated their leave.
+          battleType === "RANKED_PVP"
+            ? eq(userData.status, "QUEUED")
+            : or(
+                eq(userData.status, "AWAKE"),
+                eq(userData.status, "QUEUED"),
+                eq(userData.status, "KAGE_QUEUED"),
+              ),
           ...(battleType === "COMBAT"
             ? [
                 and(

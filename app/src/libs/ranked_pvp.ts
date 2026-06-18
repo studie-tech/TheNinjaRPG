@@ -14,6 +14,8 @@ import {
   RANKED_LOADOUT_MAX_STUN_JUTSUS,
   RANKED_LOADOUT_MAX_SUMMON_JUTSUS,
   RANKED_LOADOUT_MAX_WEAPONS,
+  RANKED_MIN_LP_GAIN,
+  RANKED_QUEUE_MAX_WAIT_SECS,
   RANKED_RANKS,
   RANKED_SANNIN_TOP_PLAYERS,
   RANKED_STREAK_BONUS,
@@ -108,8 +110,34 @@ export function calculateLpEloChange(
     lpChange += RANKED_STREAK_BONUS * player.rankedStreak;
   }
 
-  return Math.round(lpChange);
+  const rounded = Math.round(lpChange);
+  // A win always grants at least RANKED_MIN_LP_GAIN, even against a much
+  // lower-rated opponent where the raw Elo delta rounds near zero.
+  return playerWon ? Math.max(rounded, RANKED_MIN_LP_GAIN) : rounded;
 }
+
+/**
+ * LP radius for ranked matchmaking, widening with time in queue. Once the
+ * player has waited RANKED_QUEUE_MAX_WAIT_SECS, rank is ignored entirely
+ * (Infinity) so they match any queued opponent.
+ * @param secondsInQueue - Seconds the player has been in the queue
+ * @returns The LP radius within which an opponent may be matched
+ */
+export const getRankedRadius = (secondsInQueue: number): number => {
+  if (secondsInQueue >= RANKED_QUEUE_MAX_WAIT_SECS) {
+    return Infinity;
+  }
+  if (secondsInQueue < 60) {
+    return 50;
+  } else if (secondsInQueue < 120) {
+    return 100;
+  } else if (secondsInQueue < 180) {
+    return 150;
+  } else if (secondsInQueue < 240) {
+    return 200;
+  }
+  return 250;
+};
 
 /**
  * Validate the jutsu loadout for ranked PvP
