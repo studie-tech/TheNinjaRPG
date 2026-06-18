@@ -344,9 +344,7 @@ export const pvpRankRouter = createTRPCRouter({
       ]);
       // Cleanups ub case of bad queuing state
       if (user.status !== "QUEUED" && queueEntry) {
-        await ctx.drizzle
-          .delete(rankedPvpQueue)
-          .where(eq(rankedPvpQueue.userId, ctx.userId));
+        await deleteUserRankedQueueRow(ctx.drizzle, ctx.userId);
       } else if (user.status === "QUEUED" && !queueEntry) {
         await ctx.drizzle
           .update(userData)
@@ -550,7 +548,7 @@ export const pvpRankRouter = createTRPCRouter({
       }
       // Mutation
       await Promise.all([
-        ctx.drizzle.delete(rankedPvpQueue).where(eq(rankedPvpQueue.userId, ctx.userId)),
+        deleteUserRankedQueueRow(ctx.drizzle, ctx.userId),
         // Guard on QUEUED so a concurrent match that already claimed us into a
         // battle (status BATTLE) is not clobbered back to AWAKE.
         ctx.drizzle
@@ -588,9 +586,7 @@ export const pvpRankRouter = createTRPCRouter({
       // inQueue stays true (the client keeps polling) and the lost-claim restore
       // below would re-QUEUE us into unwanted matches.
       if (userEntry.user?.status !== "QUEUED") {
-        await ctx.drizzle
-          .delete(rankedPvpQueue)
-          .where(eq(rankedPvpQueue.userId, ctx.userId));
+        await deleteUserRankedQueueRow(ctx.drizzle, ctx.userId);
         return { success: false, message: "", battleId: undefined };
       }
       // Derived
@@ -741,6 +737,15 @@ export const fetchUserRankedQueue = async (client: DrizzleClient, userId: string
     },
   });
 };
+
+/**
+ * Delete a user's ranked PvP queue row. Reconciles a stale/orphaned row (one
+ * that outlived its owner's QUEUED status) and backs leaving the queue.
+ * @param client - The Drizzle client
+ * @param userId - The user's ID
+ */
+export const deleteUserRankedQueueRow = (client: DrizzleClient, userId: string) =>
+  client.delete(rankedPvpQueue).where(eq(rankedPvpQueue.userId, userId));
 
 /**
  * Fetch all ranked seasons
