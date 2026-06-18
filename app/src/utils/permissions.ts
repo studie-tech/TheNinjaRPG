@@ -145,6 +145,13 @@ export const canModifyEventGains = (role: UserRole) => {
   ].includes(role);
 };
 
+/**
+ * Combat formula settings are balance/content controls, not event gain controls.
+ */
+export const canModifyCombatSettings = (role: UserRole) => {
+  return canChangeContent(role);
+};
+
 export const canEnableGlobalTavern = (role: UserRole) => {
   return [
     "OWNER",

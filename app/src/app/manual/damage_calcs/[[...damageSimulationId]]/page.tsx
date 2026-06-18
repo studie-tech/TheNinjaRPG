@@ -32,7 +32,7 @@ import { damageUser } from "@/libs/combat/tags";
 import type { BattleUserState, Consequence, UserEffect } from "@/libs/combat/types";
 import { calcHP, calcLevel } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
-import { canModifyEventGains } from "@/utils/permissions";
+import { canModifyCombatSettings } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import { actSchema, confSchema, statSchema } from "@/validators/combat";
 
@@ -52,7 +52,7 @@ export default function Simulator(props: {
   const params = use(props.params);
   // Fetch user data
   const { data: userData } = useUserData();
-  const isAdmin = userData?.role ? canModifyEventGains(userData.role) : false;
+  const isAdmin = userData?.role ? canModifyCombatSettings(userData.role) : false;
 
   // Colors for chart
   const colors = [
