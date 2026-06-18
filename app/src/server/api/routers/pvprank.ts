@@ -558,10 +558,19 @@ export const pvpRankRouter = createTRPCRouter({
           .set({ status: "AWAKE" })
           .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "QUEUED"))),
       ]);
-      // No row matched -> we were matched into a battle; don't report a
-      // misleading success. The battle Pusher event redirects us into the match.
+      // No row matched: status changed between the guard read and this update.
+      // That can mean a concurrent match claimed us into a battle, OR a failed
+      // match rolled us back to AWAKE. The queue row is already deleted, so we are
+      // out of the queue either way; re-read battleId (cold path) to report
+      // accurately rather than assume a battle.
       if (leaveResult.rowsAffected === 0) {
-        return errorResponse("You've been matched into a ranked battle");
+        const current = await ctx.drizzle.query.userData.findFirst({
+          columns: { battleId: true },
+          where: eq(userData.userId, ctx.userId),
+        });
+        if (current?.battleId) {
+          return errorResponse("You've been matched into a ranked battle");
+        }
       }
       return { success: true, message: "Left ranked PvP queue" };
     }),
