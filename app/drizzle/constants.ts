@@ -194,7 +194,11 @@ export type GeneralType = (typeof GeneralTypes)[number];
 export const AdjustableBasicActions = [
   "basicAttack",
   "basicHeal",
+  "meditate",
+  "offensiveStance",
+  "defensiveStance",
   "move",
+  "replacementTechnique",
   "clear",
   "cleanse",
 ] as const;
@@ -921,7 +925,7 @@ export const BLOODLINE_ROLL_TYPES = [
 ] as const;
 
 // Bloodline swap config
-export const BLOODLINE_SWAP_COOLDOWN_HOURS = 48;
+export const BLOODLINE_SWAP_COOLDOWN_HOURS = 120;
 export const BLOODLINE_SWAP_FREE_DAYS = 30;
 export const BLOODLINE_SWAP_FREE_AMOUNT = 0;
 export const BLOODLINE_SWAP_FREE_NORMAL = 0;
@@ -2112,8 +2116,14 @@ export const IMG_ELEMENT_METAL =
 
 export const IMG_BASIC_HEAL =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnlXNSKmojJ0EqeDCvBrNmZaXVdY97gSpOWiA";
+export const IMG_BASIC_MEDITATE =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgt4hLTcU9cpECTimBdjaqbNn7vQsxGR1wLk4";
 export const IMG_BASIC_ATTACK =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdMXlCrP62PI3ciLaYzgVX8FopBADxSrGmvQl";
+export const IMG_BASIC_OFFENSIVE_STANCE =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnBZu0YmojJ0EqeDCvBrNmZaXVdY97gSpOWiA";
+export const IMG_BASIC_DEFENSIVE_STANCE =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFr82ddG2iOewJtjGzvNcmEX3TBnoSfMDZPH4";
 export const IMG_BASIC_FLEE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRohRDR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl";
 export const IMG_BASIC_STEALTH =
@@ -2122,6 +2132,8 @@ export const IMG_BASIC_WAIT =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8ByNJwOkkp45TvAnoIBa0rtCf1lbyXYjVKQ2";
 export const IMG_BASIC_MOVE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQxuGeXmojJ0EqeDCvBrNmZaXVdY97gSpOWi";
+export const IMG_BASIC_REPLACEMENT_TECHNIQUE =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZtjLXMaYQrBIUTu69nkMxWmS4ah0O7LVCp8b";
 export const IMG_BASIC_CLEANSE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5oYOji797jl4ubX8xrRqTZasyMp2WA5eLGUP";
 export const IMG_BASIC_CLEAR =
