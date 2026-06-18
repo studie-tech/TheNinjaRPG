@@ -2,60 +2,14 @@ import { describe, it, expect } from "vitest";
 import { damageCalc } from "@/libs/combat/tags";
 import { dmgConfig } from "@/libs/combat/constants";
 import { DMG_REDUCTION_CAP } from "@/drizzle/constants";
-import type { UserEffect } from "@/libs/combat/types";
 import type { BattleUserState, Consequence } from "@/libs/combat/types";
-
-/** Helper to create a minimal damage UserEffect for testing */
-const makeDamageEffect = (
-  overrides: Partial<UserEffect> = {},
-): UserEffect =>
-  ({
-    id: "test-effect",
-    creatorId: "attacker",
-    targetId: "defender",
-    level: 1,
-    isNew: true,
-    castThisRound: true,
-    createdRound: 1,
-    power: 40,
-    powerPerLevel: 0,
-    type: "damage",
-    calculation: "formula",
-    direction: "offence",
-    longitude: 0,
-    latitude: 0,
-    barrierAbsorb: 0,
-    actionId: "test-action",
-    statTypes: ["Ninjutsu"],
-    generalTypes: [],
-    ...overrides,
-  }) as unknown as UserEffect;
+import { makeBattleUser, makeDamageEffect } from "./helpers/battleScenario";
 
 /** Helper to create a minimal BattleUserState for testing */
 const makeUser = (
-  overrides: Record<string, unknown> = {},
+  overrides: Partial<BattleUserState> = {},
 ): BattleUserState =>
-  ({
-    userId: "user",
-    level: 100,
-    experience: 0,
-    ninjutsuOffence: 450000,
-    ninjutsuDefence: 450000,
-    taijutsuOffence: 450000,
-    taijutsuDefence: 450000,
-    bukijutsuOffence: 450000,
-    bukijutsuDefence: 450000,
-    genjutsuOffence: 450000,
-    genjutsuDefence: 450000,
-    strength: 100000,
-    intelligence: 100000,
-    willpower: 100000,
-    speed: 100000,
-    highestOffence: "ninjutsuOffence",
-    highestDefence: "ninjutsuDefence",
-    highestGenerals: ["strength", "intelligence"],
-    ...overrides,
-  }) as unknown as BattleUserState;
+  makeBattleUser(overrides.userId ?? "user", overrides);
 
 describe("damageCalc - new HP-based formula", () => {
   it("returns effect power for non-formula calculations", () => {
