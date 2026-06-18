@@ -3,6 +3,7 @@ import {
   asc,
   desc,
   eq,
+  exists,
   gte,
   inArray,
   isNull,
@@ -75,7 +76,7 @@ import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedItemLoadouts } from "@/utils/paypal";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
-import sanitize, { sanitizeVariantText } from "@/utils/sanitize";
+import { sanitizeVariantText } from "@/utils/sanitize";
 import type { QueryCondition } from "@/utils/typeutils";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { getStrucBoost } from "@/utils/village";
@@ -762,17 +763,44 @@ export const itemRouter = createTRPCRouter({
         }
       }
 
-      // Mutate
+      // Mutate — when setting a variant, gate the write on the unlock still
+      // existing at write time via an EXISTS subquery. deleteItemVariant nulls
+      // activeVariantId on all rows when a variant is removed, but that cascade
+      // cannot stop a selectVariant write that lands *after* it; the EXISTS guard
+      // is evaluated atomically inside this UPDATE, so a concurrently-deleted
+      // unlock makes the row no longer match and we refuse to persist a dangling
+      // variant. Clearing (variantId === null) needs no such guard.
       const updateResult = await ctx.drizzle
         .update(userItem)
         .set({ activeVariantId: input.variantId })
-        .where(and(eq(userItem.id, input.userItemId), eq(userItem.userId, ctx.userId)));
+        .where(
+          and(
+            eq(userItem.id, input.userItemId),
+            eq(userItem.userId, ctx.userId),
+            ...(input.variantId
+              ? [
+                  exists(
+                    ctx.drizzle
+                      .select({ id: userItemVariant.id })
+                      .from(userItemVariant)
+                      .where(
+                        and(
+                          eq(userItemVariant.userId, ctx.userId),
+                          eq(userItemVariant.variantId, input.variantId),
+                        ),
+                      ),
+                  ),
+                ]
+              : []),
+          ),
+        );
 
-      // PlanetScale reports *changed* rows, so rowsAffected is 0 both when the
-      // row was deleted between the guard and this update AND when the variant
-      // was already active (a harmless re-select). Only the former is an error,
-      // and it is the only zero-row case where the fetched row still held a
-      // different active variant.
+      // PlanetScale reports *changed* rows, so rowsAffected is 0 in three cases:
+      // the row was deleted between the guard and this update, the unlock was
+      // concurrently deleted (EXISTS guard above fails), or the variant was
+      // already active (a harmless re-select). The first two are errors; the
+      // re-select is not. All zero-row error cases coincide with the fetched row
+      // still holding a different active variant than the one requested.
       if (updateResult.rowsAffected === 0 && ui.activeVariantId !== input.variantId) {
         return errorResponse("Item no longer available — please refresh and try again");
       }
@@ -803,16 +831,32 @@ export const itemRouter = createTRPCRouter({
           }),
         ]);
 
-      // Guards
+      // Guards — mirror the consume mutation's state checks so a token cannot be
+      // spent while the user is not AWAKE (covers TRAVEL/BATTLE/ASLEEP/etc.), while
+      // the token stack is still crafting, or while it is tied to an active auction
+      // (consumeUserItemAtomically only guards id/userId/quantity).
       if (user.isBanned) return errorResponse("You are banned");
+      if (user.status !== "AWAKE") {
+        return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
+      }
       if (!tokenItem) return errorResponse("Token item not found");
       if (tokenItem.storedAtHome) {
         return errorResponse("Fetch the Variant Token from home storage first");
+      }
+      if (tokenItem.craftingFinishedAt && tokenItem.craftingFinishedAt > new Date()) {
+        return errorResponse("Cannot consume a Variant Token that is still crafting");
+      }
+      if (tokenItem.isInAuction) {
+        return errorResponse("Cannot consume a Variant Token listed in an auction");
       }
       if (!variant) return errorResponse("Variant not found");
       if (variant.costType !== "VARIANT_TOKEN") {
         return errorResponse("This variant does not require a Variant Token");
       }
+      // Variant Tokens are intentionally generic: any item carrying the
+      // `unlockitemvariant` effect can unlock any token-gated variant on any item
+      // the user owns. This mirrors the jutsu Reskin Token model — there is
+      // deliberately no per-item or per-variant binding stored on the token.
       const hasVariantTokenEffect = tokenItem.item.effects.some(
         (e) => e.type === "unlockitemvariant",
       );
@@ -2376,6 +2420,12 @@ export const fetchUserItemWithVariants = async (
 // Does the caller own at least one userItem whose itemId matches the variant's
 // itemId? Shared by purchaseVariant and consumeVariantToken so both apply the
 // exact same ownership filter. Returns an array; callers check `.length`.
+//
+// Ownership is only required at purchase/consume time. The unlock itself lives on
+// userItemVariant keyed by (userId, variantId) and intentionally persists per-user
+// even after every copy of the item is sold or consumed — "you keep what you paid
+// for". This mirrors the jutsu Reskin model; re-acquiring the item later restores
+// access to the already-unlocked variant without paying again.
 export const fetchVariantOwnership = async (
   client: DrizzleClient,
   userId: string,
@@ -2722,6 +2772,9 @@ export const splitItemStack = async (
       equipped: "NONE",
       storedAtHome: currentUserItem.storedAtHome,
       isInAuction: false,
+      // Carry the selected cosmetic onto the split-off stack so splitting does
+      // not silently drop the active variant.
+      activeVariantId: currentUserItem.activeVariantId,
       craftingFinishedAt: currentUserItem.craftingFinishedAt,
       dropChancePerc: currentUserItem.dropChancePerc,
       createdAt: new Date(),
@@ -2749,6 +2802,7 @@ type MergeEligibleUserItemForStackMerge = Pick<
   | "quantity"
   | "equipped"
   | "storedAtHome"
+  | "activeVariantId"
   | "craftingFinishedAt"
   | "isInAuction"
 > & { imbuements: readonly unknown[] };
@@ -2764,11 +2818,20 @@ type MergeStacksExecutionResult =
 
 type UserItemMergeBucketRow = Pick<
   UserItem,
-  "id" | "quantity" | "equipped" | "storedAtHome"
+  "id" | "quantity" | "equipped" | "storedAtHome" | "activeVariantId"
 >;
 
-const mergeStacksBucketKey = (row: Pick<UserItem, "storedAtHome" | "equipped">) =>
-  `${row.storedAtHome ? "home" : "carry"}:${row.equipped}`;
+// activeVariantId is part of the bucket key so two stacks of the same item with
+// different selected cosmetics never merge into one (which would silently drop
+// one variant). Same-variant stacks share a bucket, so the merged row keeps the
+// correct variant and the per-bucket UPDATE/DELETE need not guard on it.
+// Note: a selectVariant call racing between bucket construction and the writes
+// could move a row to a different variant after bucketing — an accepted,
+// pre-existing PlanetScale limitation (no transactions), not a regression here.
+const mergeStacksBucketKey = (
+  row: Pick<UserItem, "storedAtHome" | "equipped" | "activeVariantId">,
+) =>
+  `${row.storedAtHome ? "home" : "carry"}:${row.equipped}:${row.activeVariantId ?? "none"}`;
 
 /**
  * Merges stacks only within the same inventory bucket (`storedAtHome` + `equipped`) so

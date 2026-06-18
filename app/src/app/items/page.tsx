@@ -29,7 +29,6 @@ import { COST_EXTRA_ITEM_SLOT, IMG_EQUIP_SILHOUETTE } from "@/drizzle/constants"
 import type {
   Item,
   ItemSlot,
-  ItemVariant,
   UserItem,
   UserItemWithRelations,
   UserItemWithVariants,
@@ -45,11 +44,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
 import NavTabs from "@/layout/NavTabs";
-import {
-  getItemDisplayDescription,
-  getItemDisplayImage,
-  getItemDisplayName,
-} from "@/libs/combat/util";
+import { applyActiveVariant } from "@/libs/combat/util";
 import {
   calcItemSellingPrice,
   calcMaxEventItems,
@@ -681,11 +676,8 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     isSplitting ||
     isUsingRepairItem;
   const items = useritems?.map((useritem) => ({
-    ...useritem.item,
+    ...applyActiveVariant(useritem as UserItemWithVariants),
     ...useritem,
-    image: getItemDisplayImage(useritem as UserItemWithVariants),
-    name: getItemDisplayName(useritem as UserItemWithVariants),
-    description: getItemDisplayDescription(useritem as UserItemWithVariants),
   }));
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
   const repairItems = (useritems || []).filter(
@@ -738,10 +730,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         >
           <ItemWithEffects
             item={{
-              ...useritem.item,
-              image: getItemDisplayImage(useritem as UserItemWithVariants),
-              name: getItemDisplayName(useritem as UserItemWithVariants),
-              description: getItemDisplayDescription(useritem as UserItemWithVariants),
+              ...applyActiveVariant(useritem as UserItemWithVariants),
               imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
               curDurability: useritem.durability,
             }}
@@ -950,11 +939,8 @@ const Character: React.FC<CharacterProps> = (props) => {
 
   // Collapse UserItem and Item
   const items = useritems?.map((useritem) => ({
-    ...useritem.item,
+    ...applyActiveVariant(useritem as UserItemWithVariants),
     ...useritem,
-    image: getItemDisplayImage(useritem as UserItemWithVariants),
-    name: getItemDisplayName(useritem as UserItemWithVariants),
-    description: getItemDisplayDescription(useritem as UserItemWithVariants),
   }));
   const equipped = items?.find((item) => item.equipped === slot);
   const repairItems = (useritems || []).filter(
@@ -1083,12 +1069,7 @@ const Character: React.FC<CharacterProps> = (props) => {
           >
             <ItemWithEffects
               item={{
-                ...useritem.item,
-                image: getItemDisplayImage(useritem as UserItemWithVariants),
-                name: getItemDisplayName(useritem as UserItemWithVariants),
-                description: getItemDisplayDescription(
-                  useritem as UserItemWithVariants,
-                ),
+                ...applyActiveVariant(useritem as UserItemWithVariants),
                 imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
                 curDurability: useritem.durability,
               }}
