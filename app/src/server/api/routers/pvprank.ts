@@ -1,5 +1,17 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -28,6 +40,7 @@ import {
 } from "@/drizzle/schema";
 import { collapseRewards, postProcessRewards } from "@/libs/quest";
 import {
+  getRankedRadius,
   getRankedRank,
   validateItemLoadout,
   validateJutsuLoadout,
@@ -538,10 +551,12 @@ export const pvpRankRouter = createTRPCRouter({
       // Mutation
       await Promise.all([
         ctx.drizzle.delete(rankedPvpQueue).where(eq(rankedPvpQueue.userId, ctx.userId)),
+        // Guard on QUEUED so a concurrent match that already claimed us into a
+        // battle (status BATTLE) is not clobbered back to AWAKE.
         ctx.drizzle
           .update(userData)
           .set({ status: "AWAKE" })
-          .where(eq(userData.userId, ctx.userId)),
+          .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "QUEUED"))),
       ]);
       return { success: true, message: "Left ranked PvP queue" };
     }),
@@ -573,6 +588,10 @@ export const pvpRankRouter = createTRPCRouter({
       const lpRadius = getRankedRadius(secondsInQueue);
       const opponentEntry = queuedPlayers.find((opponent) => {
         if (opponent.userId === ctx.userId) return false;
+        // Also the crash-recovery reconciler: PlanetScale has no transactions,
+        // so a crash between a successful match and the queue-row delete can
+        // leave a BATTLE player with a lingering queue row. Skipping non-QUEUED
+        // rows here (and the QUEUED-only claim in initiateBattle) excludes them.
         if (opponent.user?.status !== "QUEUED") return false;
         return Math.abs(opponent.rankedLp - userEntry.rankedLp) <= lpRadius;
       });
@@ -583,85 +602,116 @@ export const pvpRankRouter = createTRPCRouter({
       if (!userEntry.user.rankedLoadout || !opponentEntry.user.rankedLoadout) {
         return { success: false, message: "No loadout found", battleId: undefined };
       }
-      // Start battle
-      const [result] = await Promise.all([
-        initiateBattle(
-          {
-            userIds: [userEntry.userId],
-            targetIds: [opponentEntry.userId],
-            client: ctx.drizzle,
-            biome: "arena",
-            targetStatDistribution: RANKED_PVP_STATS,
-            userStatDistribution: RANKED_PVP_STATS,
-            forceLoadouts: [
-              userEntry.user.rankedLoadout,
-              opponentEntry.user.rankedLoadout,
-            ],
-          },
-          "RANKED_PVP",
-        ),
-        ctx.drizzle
-          .delete(rankedPvpQueue)
-          .where(inArray(rankedPvpQueue.userId, [ctx.userId, opponentEntry.userId])),
-        ctx.drizzle
-          .insert(logQueueLengths)
-          .values({
-            rankedRank: rankedRank,
-            ceiledMinutes: Math.ceil(secondsInQueue / 60),
-            count: 1,
-          })
-          .onDuplicateKeyUpdate({ set: { count: sql`${logQueueLengths.count} + 1` } }),
-        ctx.drizzle
-          .insert(logRankedPicks)
-          .values([
-            ...userEntry.user.rankedLoadout.loadout.jutsuIds.map((jutsuId) => ({
-              type: "jutsu" as const,
-              contentId: jutsuId,
-              battleType: "RANKED_PVP" as const,
-              count: 1,
-            })),
-            ...userEntry.user.rankedLoadout.loadout.weaponIds.map((weaponId) => ({
-              type: "item" as const,
-              contentId: weaponId,
-              battleType: "RANKED_PVP" as const,
-              count: 1,
-            })),
-            ...userEntry.user.rankedLoadout.loadout.consumableIds.map(
-              (consumableId) => ({
-                type: "consumable" as const,
-                contentId: consumableId,
-                battleType: "RANKED_PVP" as const,
-                count: 1,
-              }),
-            ),
-            ...opponentEntry.user.rankedLoadout.loadout.jutsuIds.map((jutsuId) => ({
-              type: "jutsu" as const,
-              contentId: jutsuId,
-              battleType: "RANKED_PVP" as const,
-              count: 1,
-            })),
-            ...opponentEntry.user.rankedLoadout.loadout.weaponIds.map((weaponId) => ({
-              type: "item" as const,
-              contentId: weaponId,
-              battleType: "RANKED_PVP" as const,
-              count: 1,
-            })),
-            ...opponentEntry.user.rankedLoadout.loadout.consumableIds.map(
-              (consumableId) => ({
-                type: "consumable" as const,
-                contentId: consumableId,
-                battleType: "RANKED_PVP" as const,
-                count: 1,
-              }),
-            ),
-          ])
-          .onDuplicateKeyUpdate({ set: { count: sql`${logRankedPicks.count} + 1` } }),
-      ]);
+      // The atomic claim is inside initiateBattle: it transitions both
+      // participants QUEUED -> BATTLE in one guarded UPDATE and rolls back
+      // (resetting only the rows it touched to AWAKE) if it cannot claim both.
+      // That userData status-CAS — not the queue table — is the single-winner
+      // mutex, so we call it first and gate all cleanup on its success.
+      const result = await initiateBattle(
+        {
+          userIds: [userEntry.userId],
+          targetIds: [opponentEntry.userId],
+          client: ctx.drizzle,
+          biome: "arena",
+          targetStatDistribution: RANKED_PVP_STATS,
+          userStatDistribution: RANKED_PVP_STATS,
+          forceLoadouts: [
+            userEntry.user.rankedLoadout,
+            opponentEntry.user.rankedLoadout,
+          ],
+        },
+        "RANKED_PVP",
+      );
+
       if (result.success && result.battleId) {
+        // Winner path only: remove both players from the queue and write match
+        // logs. Gating these on success stops a losing poll from deleting queue
+        // rows it never matched.
+        await Promise.all([
+          ctx.drizzle
+            .delete(rankedPvpQueue)
+            .where(inArray(rankedPvpQueue.userId, [ctx.userId, opponentEntry.userId])),
+          ctx.drizzle
+            .insert(logQueueLengths)
+            .values({
+              rankedRank: rankedRank,
+              ceiledMinutes: Math.ceil(secondsInQueue / 60),
+              count: 1,
+            })
+            .onDuplicateKeyUpdate({
+              set: { count: sql`${logQueueLengths.count} + 1` },
+            }),
+          ctx.drizzle
+            .insert(logRankedPicks)
+            .values([
+              ...userEntry.user.rankedLoadout.loadout.jutsuIds.map((jutsuId) => ({
+                type: "jutsu" as const,
+                contentId: jutsuId,
+                battleType: "RANKED_PVP" as const,
+                count: 1,
+              })),
+              ...userEntry.user.rankedLoadout.loadout.weaponIds.map((weaponId) => ({
+                type: "item" as const,
+                contentId: weaponId,
+                battleType: "RANKED_PVP" as const,
+                count: 1,
+              })),
+              ...userEntry.user.rankedLoadout.loadout.consumableIds.map(
+                (consumableId) => ({
+                  type: "consumable" as const,
+                  contentId: consumableId,
+                  battleType: "RANKED_PVP" as const,
+                  count: 1,
+                }),
+              ),
+              ...opponentEntry.user.rankedLoadout.loadout.jutsuIds.map((jutsuId) => ({
+                type: "jutsu" as const,
+                contentId: jutsuId,
+                battleType: "RANKED_PVP" as const,
+                count: 1,
+              })),
+              ...opponentEntry.user.rankedLoadout.loadout.weaponIds.map((weaponId) => ({
+                type: "item" as const,
+                contentId: weaponId,
+                battleType: "RANKED_PVP" as const,
+                count: 1,
+              })),
+              ...opponentEntry.user.rankedLoadout.loadout.consumableIds.map(
+                (consumableId) => ({
+                  type: "consumable" as const,
+                  contentId: consumableId,
+                  battleType: "RANKED_PVP" as const,
+                  count: 1,
+                }),
+              ),
+            ])
+            .onDuplicateKeyUpdate({ set: { count: sql`${logRankedPicks.count} + 1` } }),
+        ]);
         return { success: true, message: "Match found!", battleId: result.battleId };
-      } else {
-        return result;
       }
+
+      // Lost the claim (opponent taken first, or both already gone). Our queue
+      // row was left intact above, so the next 5s poll rematches us. Restore us
+      // to QUEUED only if we are exactly initiateBattle's rollback AWAKE (no real
+      // battle) and our queue row still exists, so this can never clobber a
+      // legitimate BATTLE/other state or a row a concurrent winner cleaned up.
+      await ctx.drizzle
+        .update(userData)
+        .set({ status: "QUEUED" })
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.status, "AWAKE"),
+            isNull(userData.battleId),
+            exists(
+              ctx.drizzle
+                .select({ one: sql`1` })
+                .from(rankedPvpQueue)
+                .where(eq(rankedPvpQueue.userId, ctx.userId)),
+            ),
+          ),
+        );
+      return { success: false, message: "", battleId: undefined };
     }),
 });
 
@@ -706,35 +756,6 @@ export const fetchCurrentSeason = async (client: DrizzleClient) => {
     ),
   });
   return season || null;
-};
-
-/**
- * Get the radius for a ranked PvP match
- * @param secondsInQueue - The number of seconds the player has been in the queue
- * @returns The radius for the match
- */
-export const getRankedRadius = (secondsInQueue: number) => {
-  if (secondsInQueue < 60) {
-    return 50;
-  } else if (secondsInQueue < 120) {
-    return 100;
-  } else if (secondsInQueue < 180) {
-    return 150;
-  } else if (secondsInQueue < 240) {
-    return 200;
-  } else if (secondsInQueue < 300) {
-    return 250;
-  } else if (secondsInQueue < 600) {
-    return 300;
-  } else if (secondsInQueue < 900) {
-    return 350;
-  } else if (secondsInQueue < 1200) {
-    return 400;
-  } else if (secondsInQueue < 1500) {
-    return 450;
-  } else {
-    return 500;
-  }
 };
 
 /**

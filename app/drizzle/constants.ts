@@ -1641,6 +1641,11 @@ export const WAR_FUNDS_COST = 10000; // Prestige cost of declaring war
 export const RANKED_REQUIRED_RANK: UserRank = "CHUNIN";
 export const RANKED_ENTRY_COST = 40000;
 export const RANKED_STREAK_BONUS = 2;
+// Max seconds a player waits in the ranked queue before rank is ignored and
+// they are matched with any other queued player.
+export const RANKED_QUEUE_MAX_WAIT_SECS = 300;
+// Minimum LP a player gains from a ranked win, regardless of the Elo delta.
+export const RANKED_MIN_LP_GAIN = 18;
 export const RANKED_SANNIN_TOP_PLAYERS = 10;
 export const RANKED_RANKS = [
   "Unranked",
