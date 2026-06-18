@@ -149,6 +149,54 @@ describe("buildDamagePacketModifierLists", () => {
 });
 
 describe("buildDamageModifierEligibilityById", () => {
+  it("excludes expired damage modifiers before packet lists can apply them", () => {
+    const expiredDr = makeModifierEffect({
+      id: "expired-dr",
+      type: "decreasedamagetaken",
+      targetId: "defender",
+      fromType: "jutsu",
+      power: 80,
+      rounds: 0,
+    });
+    expiredDr.createdRound = 1;
+
+    const usersStateById = new Map([["defender", makeBattleUser("defender")]]);
+    const eligibility = buildDamageModifierEligibilityById(
+      [expiredDr],
+      3,
+      usersStateById,
+    );
+    const emptyGear = { attacker: gearMods(), defender: gearMods() };
+
+    const baseline = computeDamagePacket({
+      rawDamage: 100,
+      damageEffect: makeDamageEffect(),
+      usersEffects: [],
+      attackerId: "attacker",
+      defenderId: "defender",
+      battleRound: 3,
+      preBattleGearModifiers: emptyGear,
+    }).damage;
+    const withExpired = computeDamagePacket({
+      rawDamage: 100,
+      damageEffect: makeDamageEffect(),
+      usersEffects: [expiredDr],
+      attackerId: "attacker",
+      defenderId: "defender",
+      battleRound: 3,
+      preBattleGearModifiers: emptyGear,
+      modifierLists: buildDamagePacketModifierLists(
+        [expiredDr],
+        "attacker",
+        "defender",
+        eligibility,
+      ),
+    }).damage;
+
+    expect(eligibility.has("expired-dr")).toBe(false);
+    expect(withExpired).toBeCloseTo(baseline, 2);
+  });
+
   it("excludes modifiers when buffprevent RNG blocks", () => {
     vi.spyOn(Math, "random").mockReturnValue(0);
 
