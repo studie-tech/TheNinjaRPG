@@ -582,16 +582,28 @@ export const pvpRankRouter = createTRPCRouter({
       if (!userEntry) {
         return { success: false, message: "", battleId: undefined };
       }
+      // If we hold a queue row but are no longer QUEUED, the row is stale — e.g.
+      // a crash between a successful match start and the queue cleanup left it
+      // behind and our battle has since ended. Remove it and stop: otherwise
+      // inQueue stays true (the client keeps polling) and the lost-claim restore
+      // below would re-QUEUE us into unwanted matches.
+      if (userEntry.user?.status !== "QUEUED") {
+        await ctx.drizzle
+          .delete(rankedPvpQueue)
+          .where(eq(rankedPvpQueue.userId, ctx.userId));
+        return { success: false, message: "", battleId: undefined };
+      }
       // Derived
       const secondsInQueue = secondsPassed(userEntry.queueStartTime);
       const rankedRank = getRankedRank(userEntry.rankedLp, topPlayersLP);
       const lpRadius = getRankedRadius(secondsInQueue);
       const opponentEntry = queuedPlayers.find((opponent) => {
         if (opponent.userId === ctx.userId) return false;
-        // Also the crash-recovery reconciler: PlanetScale has no transactions,
-        // so a crash between a successful match and the queue-row delete can
-        // leave a BATTLE player with a lingering queue row. Skipping non-QUEUED
-        // rows here (and the QUEUED-only claim in initiateBattle) excludes them.
+        // Skip opponents that are no longer QUEUED: a crash between a successful
+        // match and the queue-row delete can leave a BATTLE player with a
+        // lingering queue row. This filter, with the QUEUED-only claim in
+        // initiateBattle, keeps such a stale row from being matched (our own
+        // stale row is removed by the caller-status guard above).
         if (opponent.user?.status !== "QUEUED") return false;
         return Math.abs(opponent.rankedLp - userEntry.rankedLp) <= lpRadius;
       });
