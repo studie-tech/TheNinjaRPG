@@ -1,163 +1,141 @@
 import { describe, it, expect } from "vitest";
-import {
-  getItemDisplayDescription,
-  getItemDisplayImage,
-  getItemDisplayName,
-} from "@/libs/combat/util";
+import { applyActiveVariant } from "@/libs/combat/util";
 
-describe("getItemDisplayImage", () => {
-  // ── flat { image } shape ──────────────────────────────────────────────────
+const baseItem = {
+  id: "item-1",
+  image: "/items/base.png",
+  name: "Base Sword",
+  description: "A sharp blade.",
+};
 
-  it("returns image directly from a flat source object", () => {
-    const result = getItemDisplayImage({ image: "/items/sword.png" });
-    expect(result).toBe("/items/sword.png");
-  });
+describe("applyActiveVariant", () => {
+  // ── no active variant ──────────────────────────────────────────────────────
 
-  // ── userItem shape, no active variant ─────────────────────────────────────
-
-  it("returns item.image when activeVariantId is null", () => {
-    const source = {
+  it("returns base item fields when activeVariantId is null", () => {
+    const result = applyActiveVariant({
       activeVariantId: null,
-      item: { image: "/items/base.png", variants: [{ id: "v1", image: "/items/red.png" }] },
-    };
-    expect(getItemDisplayImage(source)).toBe("/items/base.png");
-  });
-
-  it("returns item.image when activeVariantId is undefined", () => {
-    const source = {
-      activeVariantId: undefined,
-      item: { image: "/items/base.png", variants: [{ id: "v1", image: "/items/red.png" }] },
-    };
-    expect(getItemDisplayImage(source)).toBe("/items/base.png");
-  });
-
-  it("returns item.image when activeVariantId is an empty string", () => {
-    const source = {
-      activeVariantId: "",
-      item: { image: "/items/base.png", variants: [{ id: "v1", image: "/items/red.png" }] },
-    };
-    expect(getItemDisplayImage(source)).toBe("/items/base.png");
-  });
-
-  // ── userItem shape, active variant resolves ───────────────────────────────
-
-  it("returns variant image when activeVariantId matches a variant", () => {
-    const source = {
-      activeVariantId: "v2",
       item: {
-        image: "/items/base.png",
+        ...baseItem,
         variants: [
-          { id: "v1", image: "/items/red.png" },
-          { id: "v2", image: "/items/blue.png" },
+          {
+            id: "v1",
+            image: "/items/red.png",
+            name: "Red Sword",
+            description: "A scarlet blade.",
+          },
         ],
       },
-    };
-    expect(getItemDisplayImage(source)).toBe("/items/blue.png");
+    });
+    expect(result.image).toBe("/items/base.png");
+    expect(result.name).toBe("Base Sword");
+    expect(result.description).toBe("A sharp blade.");
   });
 
-  it("returns item.image when activeVariantId does not match any variant", () => {
-    const source = {
+  it("returns base item fields when activeVariantId is undefined", () => {
+    const result = applyActiveVariant({
+      activeVariantId: undefined,
+      item: { ...baseItem, variants: [{ id: "v1", image: "/items/red.png" }] },
+    });
+    expect(result.image).toBe("/items/base.png");
+    expect(result.name).toBe("Base Sword");
+    expect(result.description).toBe("A sharp blade.");
+  });
+
+  it("returns base item fields when activeVariantId is an empty string", () => {
+    const result = applyActiveVariant({
+      activeVariantId: "",
+      item: { ...baseItem, variants: [{ id: "v1", image: "/items/red.png" }] },
+    });
+    expect(result.image).toBe("/items/base.png");
+  });
+
+  // ── active variant resolves ────────────────────────────────────────────────
+
+  it("overrides image/name/description when the active variant matches", () => {
+    const result = applyActiveVariant({
+      activeVariantId: "v2",
+      item: {
+        ...baseItem,
+        variants: [
+          {
+            id: "v1",
+            image: "/items/red.png",
+            name: "Red Sword",
+            description: "A scarlet blade.",
+          },
+          {
+            id: "v2",
+            image: "/items/blue.png",
+            name: "Blue Sword",
+            description: "An azure blade.",
+          },
+        ],
+      },
+    });
+    expect(result.image).toBe("/items/blue.png");
+    expect(result.name).toBe("Blue Sword");
+    expect(result.description).toBe("An azure blade.");
+  });
+
+  it("falls back per-field when the variant leaves name/description null", () => {
+    const result = applyActiveVariant({
+      activeVariantId: "v1",
+      item: {
+        ...baseItem,
+        variants: [
+          { id: "v1", image: "/items/red.png", name: null, description: null },
+        ],
+      },
+    });
+    // image is always defined on a variant, so it overrides...
+    expect(result.image).toBe("/items/red.png");
+    // ...but null name/description fall back to the base item.
+    expect(result.name).toBe("Base Sword");
+    expect(result.description).toBe("A sharp blade.");
+  });
+
+  it("returns base item fields when activeVariantId matches no variant", () => {
+    const result = applyActiveVariant({
       activeVariantId: "v-missing",
       item: {
-        image: "/items/base.png",
-        variants: [{ id: "v1", image: "/items/red.png" }],
+        ...baseItem,
+        variants: [{ id: "v1", image: "/items/red.png", name: "Red Sword" }],
       },
-    };
-    expect(getItemDisplayImage(source)).toBe("/items/base.png");
+    });
+    expect(result.image).toBe("/items/base.png");
+    expect(result.name).toBe("Base Sword");
   });
 
-  // ── variants array absent ─────────────────────────────────────────────────
+  // ── variants array absent / empty ──────────────────────────────────────────
 
-  it("returns item.image when variants array is absent and activeVariantId is set", () => {
-    const source = {
+  it("returns base item fields when variants is absent and activeVariantId is set", () => {
+    const result = applyActiveVariant({
       activeVariantId: "v1",
-      item: { image: "/items/base.png" },
-    };
-    expect(getItemDisplayImage(source)).toBe("/items/base.png");
+      item: { ...baseItem },
+    });
+    expect(result.image).toBe("/items/base.png");
+    expect(result.name).toBe("Base Sword");
   });
 
-  it("returns item.image when variants array is empty and activeVariantId is set", () => {
-    const source = {
+  it("returns base item fields when variants is empty and activeVariantId is set", () => {
+    const result = applyActiveVariant({
       activeVariantId: "v1",
-      item: { image: "/items/base.png", variants: [] },
-    };
-    expect(getItemDisplayImage(source)).toBe("/items/base.png");
-  });
-});
-
-describe("getItemDisplayName", () => {
-  it("returns name from flat source", () => {
-    expect(getItemDisplayName({ name: "Crimson Blade" })).toBe("Crimson Blade");
+      item: { ...baseItem, variants: [] },
+    });
+    expect(result.image).toBe("/items/base.png");
   });
 
-  it("returns item.name when activeVariantId is null", () => {
-    const source = {
-      activeVariantId: null,
-      item: { name: "Base Sword", variants: [{ id: "v1", name: "Red Sword" }] },
-    };
-    expect(getItemDisplayName(source)).toBe("Base Sword");
-  });
+  // ── merged object preserves the rest of the item ───────────────────────────
 
-  it("returns variant name when activeVariantId matches", () => {
-    const source = {
-      activeVariantId: "v1",
-      item: { name: "Base Sword", variants: [{ id: "v1", name: "Red Sword" }] },
-    };
-    expect(getItemDisplayName(source)).toBe("Red Sword");
-  });
-
-  it("falls back to item.name when variant name is null", () => {
-    const source = {
-      activeVariantId: "v1",
-      item: { name: "Base Sword", variants: [{ id: "v1", name: null }] },
-    };
-    expect(getItemDisplayName(source)).toBe("Base Sword");
-  });
-
-  it("falls back to item.name when activeVariantId does not match", () => {
-    const source = {
-      activeVariantId: "v-missing",
-      item: { name: "Base Sword", variants: [{ id: "v1", name: "Red Sword" }] },
-    };
-    expect(getItemDisplayName(source)).toBe("Base Sword");
-  });
-});
-
-describe("getItemDisplayDescription", () => {
-  it("returns description from flat source", () => {
-    expect(getItemDisplayDescription({ description: "A sharp blade." })).toBe("A sharp blade.");
-  });
-
-  it("returns item.description when no active variant", () => {
-    const source = {
-      activeVariantId: null,
-      item: {
-        description: "A sharp blade.",
-        variants: [{ id: "v1", description: "A scarlet blade." }],
-      },
-    };
-    expect(getItemDisplayDescription(source)).toBe("A sharp blade.");
-  });
-
-  it("returns variant description when activeVariantId matches and variant has description", () => {
-    const source = {
+  it("preserves non-cosmetic item fields in the returned object", () => {
+    const result = applyActiveVariant({
       activeVariantId: "v1",
       item: {
-        description: "A sharp blade.",
-        variants: [{ id: "v1", description: "A scarlet blade." }],
+        ...baseItem,
+        variants: [{ id: "v1", image: "/items/red.png", name: "Red Sword" }],
       },
-    };
-    expect(getItemDisplayDescription(source)).toBe("A scarlet blade.");
-  });
-
-  it("falls back to item.description when variant description is null", () => {
-    const source = {
-      activeVariantId: "v1",
-      item: {
-        description: "A sharp blade.",
-        variants: [{ id: "v1", description: null }],
-      },
-    };
-    expect(getItemDisplayDescription(source)).toBe("A sharp blade.");
+    });
+    expect(result.id).toBe("item-1");
+    expect(result.name).toBe("Red Sword");
   });
 });

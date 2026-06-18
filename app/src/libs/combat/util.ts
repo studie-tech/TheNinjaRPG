@@ -93,73 +93,41 @@ import type {
 // =============================================================================
 
 /**
- * Returns the display image for a user item, preferring the active variant image if set.
- * Falls back to the base item image.
- */
-export const getItemDisplayImage = (
-  source:
-    | {
-        activeVariantId?: string | null;
-        item: { image: string; variants?: { id: string; image: string }[] };
-      }
-    | { image: string },
-): string => {
-  if ("activeVariantId" in source && source.activeVariantId) {
-    const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
-    if (variant) return variant.image;
-  }
-  if ("item" in source) return source.item.image;
-  return source.image;
-};
-
-/**
- * Returns the display name for a user item, preferring the active variant name if set.
- * Falls back to the base item name.
+ * Resolve a user item's active variant into a display-ready item: returns the base
+ * item with image/name/description overridden by the active variant when one is
+ * selected (and the variant defines that field), falling back to the base item.
+ * Mirrors getReskinnedUserJutsu for the jutsu cosmetic system — one helper does the
+ * variant lookup once instead of three parallel getters each re-running `.find()`.
  *
- * Intended for inventory and shop UI where the full item+variants object is available.
- * In combat, battle descriptions are pre-resolved into BattleUserItem.variantBattleDescription
- * at initiateBattle time — do not call this during action processing.
+ * Inventory and shop UI only. In combat, battle descriptions are pre-resolved into
+ * BattleUserItem.variantBattleDescription at initiateBattle time — do not call this
+ * during action processing.
  */
-export const getItemDisplayName = (
-  source:
-    | {
-        activeVariantId?: string | null;
-        item: { name: string; variants?: { id: string; name?: string | null }[] };
-      }
-    | { name: string },
-): string => {
-  if ("activeVariantId" in source && source.activeVariantId) {
-    const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
-    if (variant?.name != null) return variant.name;
-  }
-  if ("item" in source) return source.item.name;
-  return source.name;
-};
-
-/**
- * Returns the display description for a user item, preferring the active variant description if set.
- * Falls back to the base item description.
- *
- * Intended for inventory and shop UI where the full item+variants object is available.
- * In combat, use the pre-resolved BattleUserItem fields instead.
- */
-export const getItemDisplayDescription = (
-  source:
-    | {
-        activeVariantId?: string | null;
-        item: {
-          description: string;
-          variants?: { id: string; description?: string | null }[];
-        };
-      }
-    | { description: string },
-): string => {
-  if ("activeVariantId" in source && source.activeVariantId) {
-    const variant = source.item.variants?.find((v) => v.id === source.activeVariantId);
-    if (variant?.description != null) return variant.description;
-  }
-  if ("item" in source) return source.item.description;
-  return source.description;
+export const applyActiveVariant = <
+  TItem extends {
+    image: string;
+    name: string;
+    description: string;
+    variants?: {
+      id: string;
+      image: string;
+      name?: string | null;
+      description?: string | null;
+    }[];
+  },
+>(userItem: {
+  activeVariantId?: string | null;
+  item: TItem;
+}): TItem & { image: string; name: string; description: string } => {
+  const variant = userItem.activeVariantId
+    ? userItem.item.variants?.find((v) => v.id === userItem.activeVariantId)
+    : undefined;
+  return {
+    ...userItem.item,
+    image: variant?.image ?? userItem.item.image,
+    name: variant?.name ?? userItem.item.name,
+    description: variant?.description ?? userItem.item.description,
+  };
 };
 
 // =============================================================================

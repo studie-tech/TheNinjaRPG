@@ -869,6 +869,10 @@ export const completeAuctionInternal = async (
         .set({
           userId: winningBid.bidderId,
           isInAuction: false,
+          // Clear the seller's selected cosmetic on ownership transfer — the buyer
+          // has not necessarily unlocked this variant, and display/combat paths
+          // trust activeVariantId. The buyer can re-select it if they own the unlock.
+          activeVariantId: null,
           updatedAt: new Date(),
         })
         .where(eq(userItem.id, auction.userItemId)),
