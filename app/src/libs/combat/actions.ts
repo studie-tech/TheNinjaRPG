@@ -662,7 +662,8 @@ export const userItemToAction = (
     cooldown: useritem.originalCooldown,
     originalCooldown: useritem.originalCooldown,
     lastUsedRound: useritem.lastUsedRound,
-    level: user.level,
+    // Items are not trained actions; character level should not scale item effect power.
+    level: 0,
     healthCost: Math.max(0, item.healthCost - item.healthCostReducePerLvl * user.level),
     chakraCost: Math.max(0, item.chakraCost - item.chakraCostReducePerLvl * user.level),
     staminaCost: Math.max(

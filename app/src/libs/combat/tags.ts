@@ -1106,12 +1106,7 @@ const removeEffects = (
     // Remove user effects
     usersEffects
       .filter((e) => e.targetId === effect.targetId)
-      .filter((e) => e.fromType !== "bloodline")
-      .filter((e) => e.fromType !== "armor")
-      .filter((e) => e.fromType !== "accessory")
-      .filter((e) => e.fromType !== "keystone")
-      .filter((e) => e.fromType !== "skill")
-      .filter((e) => e.fromType !== "ranked")
+      .filter((e) => !persistentEffectSourceTypes.has(e.fromType))
       .filter(type === "positive" ? isPositiveUserEffect : isNegativeUserEffect)
       .forEach((e) => {
         e.rounds = 0;
@@ -1135,6 +1130,16 @@ const removeEffects = (
   }
   return { txt: text, color: "blue" } as ActionEffect;
 };
+
+const persistentEffectSourceTypes = new Set<UserEffect["fromType"]>([
+  "bloodline",
+  "armor",
+  "accessory",
+  "keystone",
+  "skill",
+  "ranked",
+  "village",
+]);
 
 export const clear = (
   effect: UserEffect,

@@ -292,19 +292,28 @@ describe("buildDamageModifierEligibilityById", () => {
     expect(lists.inBattleIncreases).toHaveLength(0);
 
     const emptyGear = { attacker: gearMods(), defender: gearMods() };
+    const activeInc = makeModifierEffect({
+      id: "active-inc",
+      type: "increasedamagegiven",
+      targetId: "attacker",
+      power: 20,
+      fromType: "jutsu",
+    });
+    activeInc.createdRound = 5;
+
     const withInc = computeDamagePacket({
       rawDamage: 100,
       damageEffect: makeDamageEffect(),
-      usersEffects: [inc],
+      usersEffects: [activeInc],
       attackerId: "attacker",
       defenderId: "defender",
       battleRound: 1,
       preBattleGearModifiers: emptyGear,
       modifierLists: buildDamagePacketModifierLists(
-        [inc],
+        [activeInc],
         "attacker",
         "defender",
-        buildDamageModifierEligibilityById([inc], 1, usersStateById),
+        buildDamageModifierEligibilityById([activeInc], 1, usersStateById),
       ),
     }).damage;
 

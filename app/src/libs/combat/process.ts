@@ -1334,6 +1334,7 @@ export const buildDamageModifierEligibilityById = (
     const isBoost = damageBoostTypes.includes(effect.type);
     const isDr = damageReductionTypes.includes(effect.type);
     if (!isBoost && !isDr) continue;
+    if (!isEffectActive(effect)) continue;
 
     // Same condition as adjustDamageGiven / adjustDamageTaken after applySingleEffect
     // assigns `effect.castThisRound = (startRound === curRound)`.
