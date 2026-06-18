@@ -2,14 +2,8 @@ import { describe, it, expect } from "vitest";
 import { damageCalc } from "@/libs/combat/tags";
 import { dmgConfig } from "@/libs/combat/constants";
 import { DMG_REDUCTION_CAP } from "@/drizzle/constants";
-import type { BattleUserState, Consequence } from "@/libs/combat/types";
-import { makeBattleUser, makeDamageEffect } from "./helpers/battleScenario";
-
-/** Helper to create a minimal BattleUserState for testing */
-const makeUser = (
-  overrides: Partial<BattleUserState> = {},
-): BattleUserState =>
-  makeBattleUser(overrides.userId ?? "user", overrides);
+import type { Consequence } from "@/libs/combat/types";
+import { makeDamageEffect, makeUser } from "./helpers/battleScenario";
 
 describe("damageCalc - new HP-based formula", () => {
   it("returns effect power for non-formula calculations", () => {

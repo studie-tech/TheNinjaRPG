@@ -13,17 +13,13 @@ import {
   isConsolidatedStage1PercentageModifier,
 } from "@/libs/combat/process";
 import {
+  defaultTestGearModifiers,
   gearMods,
   makeBattleUser,
   makeDamageEffect,
   makeDamageModifierEffect as makeModifierEffect,
   makeEffect,
 } from "./helpers/battleScenario";
-
-const defaultTestGearModifiers = () => ({
-  attacker: gearMods({ incDamageGivenFromGear: 18.9 }),
-  defender: gearMods({ drTakenFromGear: 5 }),
-});
 
 describe("isConsolidatedStage1PercentageModifier", () => {
   it("consolidates equipped gear percentage damage mods only", () => {
