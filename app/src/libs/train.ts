@@ -22,7 +22,6 @@ import {
 } from "@/drizzle/constants";
 import type {
   GameSetting,
-  Item,
   Jutsu,
   JutsuRank,
   UserData,
@@ -50,6 +49,8 @@ import type { UserWithRelations } from "@/routers/profile";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
 import { getUserElements } from "@/validators/user";
+
+type EquippedUserItems = NonNullable<UserWithRelations>["items"];
 
 export const availableJutsuLetterRanks = (userrank: UserRank): LetterRank[] => {
   switch (userrank) {
@@ -208,11 +209,7 @@ export const checkJutsuItems = (
 
 export const checkJutsuBloodlineItem = (
   jutsu: Jutsu,
-  userItems:
-    | (Pick<UserItemWithItem, "itemId" | "equipped" | "durability"> & {
-        item: Pick<Item, "itemType" | "maxDurability">;
-      })[]
-    | undefined,
+  userItems: EquippedUserItems | undefined,
 ): boolean => {
   if (!jutsu.requiredBloodlineItemId) return true;
   return !!userItems?.some((ui) => {
@@ -454,7 +451,7 @@ export const trainingMultiplier = (user: UserData) => {
  * Extra multiplier based on rank perks
  */
 const getRankTrainingMultiplierBoost = (user: UserData) => {
-  if (user.rank === "GENIN" && !!user.senseiId) {
+  if (user.rank === "GENIN" && user.senseiId) {
     return 1 + SENSEI_GENIN_TRAIN_EXP_BOOST_PERC / 100;
   }
   return 1;
