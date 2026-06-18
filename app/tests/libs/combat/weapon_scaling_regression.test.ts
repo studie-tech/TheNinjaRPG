@@ -25,7 +25,7 @@ import type {
   ReturnedUserState,
   UserEffect,
 } from "@/libs/combat/types";
-import { DamageTag } from "@/validators/combat";
+import { makeTag } from "./helpers/battleScenario";
 
 const makeBattleWithWeapon = (): ReturnedBattle => {
   const weapon = {
@@ -47,7 +47,7 @@ const makeBattleWithWeapon = (): ReturnedBattle => {
     cooldown: 0,
     maxDurability: 100,
     effects: [
-      DamageTag.parse({
+      makeTag("damage", {
         power: 22,
         powerPerLevel: 1,
         calculation: "formula",

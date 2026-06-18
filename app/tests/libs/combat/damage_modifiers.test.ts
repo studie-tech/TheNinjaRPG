@@ -10,105 +10,15 @@ import {
   computeDamagePacket,
   type DamageModifierEligibility,
   consolidatePreBattleDamageModifiers,
-  emptyPreBattleGearModifiers,
   isConsolidatedStage1PercentageModifier,
 } from "@/libs/combat/process";
-import type {
-  BattleUserState,
-  PreBattleGearModifiers,
-  UserEffect,
-} from "@/libs/combat/types";
 import {
-  BuffPreventTag,
-  DamageTag,
-  DecreaseDamageTakenTag,
-  IncreaseDamageGivenTag,
-  SealTag,
-  type ZodAllTags,
-} from "@/validators/combat";
-
-type UserEffectRuntime = Pick<
-  UserEffect,
-  | "id"
-  | "creatorId"
-  | "targetId"
-  | "level"
-  | "isNew"
-  | "castThisRound"
-  | "createdRound"
-  | "longitude"
-  | "latitude"
-  | "barrierAbsorb"
-  | "actionId"
-> & {
-  fromType?: UserEffect["fromType"];
-};
-
-const toUserEffect = (tag: ZodAllTags, runtime: UserEffectRuntime): UserEffect => ({
-  ...tag,
-  ...runtime,
-});
-
-const makeDamageEffect = (): UserEffect =>
-  toUserEffect(
-    DamageTag.parse({
-      statTypes: ["Ninjutsu"],
-      calculation: "formula",
-    }),
-    {
-      id: "dmg-1",
-      creatorId: "attacker",
-      targetId: "defender",
-      level: 1,
-      isNew: true,
-      castThisRound: true,
-      createdRound: 1,
-      longitude: 0,
-      latitude: 0,
-      barrierAbsorb: 0,
-      actionId: "test-action",
-    },
-  );
-
-const makeModifierEffect = (params: {
-  id?: string;
-  type: "increasedamagegiven" | "decreasedamagetaken";
-  targetId: string;
-  power: number;
-  fromType?: UserEffect["fromType"];
-  calculation?: "static" | "percentage";
-}): UserEffect => {
-  const tagInput = {
-    power: params.power,
-    calculation: params.calculation ?? "percentage",
-    statTypes: ["Ninjutsu"] as const,
-  };
-
-  const tag =
-    params.type === "increasedamagegiven"
-      ? IncreaseDamageGivenTag.parse(tagInput)
-      : DecreaseDamageTakenTag.parse(tagInput);
-
-  return toUserEffect(tag, {
-    id: params.id ?? "mod-1",
-    creatorId: "attacker",
-    targetId: params.targetId,
-    level: 0,
-    isNew: false,
-    castThisRound: false,
-    createdRound: 0,
-    longitude: 0,
-    latitude: 0,
-    barrierAbsorb: 0,
-    actionId: "test-action",
-    fromType: params.fromType,
-  });
-};
-
-const gearMods = (overrides: Partial<PreBattleGearModifiers> = {}): PreBattleGearModifiers => ({
-  ...emptyPreBattleGearModifiers(),
-  ...overrides,
-});
+  gearMods,
+  makeBattleUser,
+  makeDamageEffect,
+  makeDamageModifierEffect as makeModifierEffect,
+  makeEffect,
+} from "./helpers/battleScenario";
 
 const defaultTestGearModifiers = () => ({
   attacker: gearMods({ incDamageGivenFromGear: 18.9 }),
@@ -255,8 +165,9 @@ describe("buildDamageModifierEligibilityById", () => {
     });
     inc.createdRound = 5;
 
-    const prevent = toUserEffect(
-      BuffPreventTag.parse({ power: 100, calculation: "static" }),
+    const prevent = makeEffect(
+      "buffprevent",
+      { power: 100, calculation: "static" },
       {
         id: "buff-prevent",
         creatorId: "defender",
@@ -272,7 +183,7 @@ describe("buildDamageModifierEligibilityById", () => {
       },
     );
 
-    const attacker = { userId: "attacker", username: "Attacker" } as BattleUserState;
+    const attacker = makeBattleUser("attacker", { username: "Attacker" });
     const usersStateById = new Map([["attacker", attacker]]);
     const eligibility = buildDamageModifierEligibilityById(
       [inc, prevent],
@@ -605,19 +516,23 @@ describe("computeDamagePacket", () => {
       fromType: "bloodline",
       power: 40,
     });
-    const seal = toUserEffect(SealTag.parse({ power: 100, calculation: "static" }), {
-      id: "seal-1",
-      creatorId: "defender",
-      targetId: "attacker",
-      level: 0,
-      isNew: false,
-      castThisRound: false,
-      createdRound: 0,
-      longitude: 0,
-      latitude: 0,
-      barrierAbsorb: 0,
-      actionId: "seal-action",
-    });
+    const seal = makeEffect(
+      "seal",
+      { power: 100, calculation: "static" },
+      {
+        id: "seal-1",
+        creatorId: "defender",
+        targetId: "attacker",
+        level: 0,
+        isNew: false,
+        castThisRound: false,
+        createdRound: 0,
+        longitude: 0,
+        latitude: 0,
+        barrierAbsorb: 0,
+        actionId: "seal-action",
+      },
+    );
 
     const baseline = computeDamagePacket({
       rawDamage: 505,

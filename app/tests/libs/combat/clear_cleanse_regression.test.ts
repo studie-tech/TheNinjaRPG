@@ -4,31 +4,28 @@ vi.mock("@/server/db", () => ({
   drizzleDB: {},
 }));
 
-import {
-  battleScenario,
-  makeDamageTakenEffect,
-} from "./helpers/battleScenario";
+import { battleScenario } from "./helpers/battleScenario";
 
 describe("Clear/Cleanse damage modifier regressions", () => {
   it("clear removes temporary DR but preserves village DR and base DR", () => {
     const scenario = battleScenario()
       .addEffect(
-        makeDamageTakenEffect({
+        "decreasedamagetaken",
+        { power: 15, rounds: 10, calculation: "percentage" },
+        {
           id: "village-dr",
           targetId: "defender",
-          type: "decreasedamagetaken",
           fromType: "village",
-          power: 15,
-        }),
+        },
       )
       .addEffect(
-        makeDamageTakenEffect({
+        "decreasedamagetaken",
+        { power: 25, rounds: 10, calculation: "percentage" },
+        {
           id: "jutsu-dr",
           targetId: "defender",
-          type: "decreasedamagetaken",
           fromType: "jutsu",
-          power: 25,
-        }),
+        },
       );
 
     scenario.clearPositive("defender");
@@ -39,13 +36,13 @@ describe("Clear/Cleanse damage modifier regressions", () => {
     const noStatusDamage = battleScenario().computeDamage();
     const villageOnlyDamage = battleScenario()
       .addEffect(
-        makeDamageTakenEffect({
+        "decreasedamagetaken",
+        { power: 15, rounds: 10, calculation: "percentage" },
+        {
           id: "village-dr",
           targetId: "defender",
-          type: "decreasedamagetaken",
           fromType: "village",
-          power: 15,
-        }),
+        },
       )
       .computeDamage();
 
@@ -56,22 +53,22 @@ describe("Clear/Cleanse damage modifier regressions", () => {
   it("cleanse removes temporary damage-taken debuffs but preserves village debuffs", () => {
     const scenario = battleScenario()
       .addEffect(
-        makeDamageTakenEffect({
+        "increasedamagetaken",
+        { power: 15, rounds: 10, calculation: "percentage" },
+        {
           id: "village-inc-taken",
           targetId: "defender",
-          type: "increasedamagetaken",
           fromType: "village",
-          power: 15,
-        }),
+        },
       )
       .addEffect(
-        makeDamageTakenEffect({
+        "increasedamagetaken",
+        { power: 25, rounds: 10, calculation: "percentage" },
+        {
           id: "jutsu-inc-taken",
           targetId: "defender",
-          type: "increasedamagetaken",
           fromType: "jutsu",
-          power: 25,
-        }),
+        },
       );
 
     scenario.cleanseNegative("defender");
@@ -82,13 +79,13 @@ describe("Clear/Cleanse damage modifier regressions", () => {
     const noStatusDamage = battleScenario().computeDamage();
     const villageOnlyDamage = battleScenario()
       .addEffect(
-        makeDamageTakenEffect({
+        "increasedamagetaken",
+        { power: 15, rounds: 10, calculation: "percentage" },
+        {
           id: "village-inc-taken",
           targetId: "defender",
-          type: "increasedamagetaken",
           fromType: "village",
-          power: 15,
-        }),
+        },
       )
       .computeDamage();
 
