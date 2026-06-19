@@ -898,6 +898,19 @@ export const enqueueJutsuTraining = async (
       return { success: false, message: "You don't have enough money" };
     }
 
+    const claimResult = await claimUserSnapshot({
+      client,
+      userId,
+      updatedAt: user.updatedAt,
+      where: [eq(userData.status, "AWAKE")],
+    });
+    if (!claimResult.success) {
+      return {
+        success: false,
+        message: "Could not start jutsu training — please try again",
+      };
+    }
+
     let questDataFull = user.questData ?? [];
     if (!userjutsuObj) {
       const { trackers } = getNewTrackers(user, [
