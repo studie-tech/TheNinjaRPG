@@ -1,17 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  exists,
-  gt,
-  gte,
-  inArray,
-  isNull,
-  lte,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -648,10 +636,47 @@ export const pvpRankRouter = createTRPCRouter({
       );
 
       if (result.success && result.battleId) {
-        // Winner path only: remove both players from the queue and write match
-        // logs. Gating these on success stops a losing poll from deleting queue
-        // rows it never matched.
-        await Promise.all([
+        const rankedPickRows = [
+          ...userEntry.user.rankedLoadout.loadout.jutsuIds.map((jutsuId) => ({
+            type: "jutsu" as const,
+            contentId: jutsuId,
+            battleType: "RANKED_PVP" as const,
+            count: 1,
+          })),
+          ...userEntry.user.rankedLoadout.loadout.weaponIds.map((weaponId) => ({
+            type: "item" as const,
+            contentId: weaponId,
+            battleType: "RANKED_PVP" as const,
+            count: 1,
+          })),
+          ...userEntry.user.rankedLoadout.loadout.consumableIds.map((consumableId) => ({
+            type: "consumable" as const,
+            contentId: consumableId,
+            battleType: "RANKED_PVP" as const,
+            count: 1,
+          })),
+          ...opponentEntry.user.rankedLoadout.loadout.jutsuIds.map((jutsuId) => ({
+            type: "jutsu" as const,
+            contentId: jutsuId,
+            battleType: "RANKED_PVP" as const,
+            count: 1,
+          })),
+          ...opponentEntry.user.rankedLoadout.loadout.weaponIds.map((weaponId) => ({
+            type: "item" as const,
+            contentId: weaponId,
+            battleType: "RANKED_PVP" as const,
+            count: 1,
+          })),
+          ...opponentEntry.user.rankedLoadout.loadout.consumableIds.map(
+            (consumableId) => ({
+              type: "consumable" as const,
+              contentId: consumableId,
+              battleType: "RANKED_PVP" as const,
+              count: 1,
+            }),
+          ),
+        ];
+        const postMatchTasks: PromiseLike<unknown>[] = [
           ctx.drizzle
             .delete(rankedPvpQueue)
             .where(inArray(rankedPvpQueue.userId, [ctx.userId, opponentEntry.userId])),
@@ -665,76 +690,27 @@ export const pvpRankRouter = createTRPCRouter({
             .onDuplicateKeyUpdate({
               set: { count: sql`${logQueueLengths.count} + 1` },
             }),
-          ctx.drizzle
-            .insert(logRankedPicks)
-            .values([
-              ...userEntry.user.rankedLoadout.loadout.jutsuIds.map((jutsuId) => ({
-                type: "jutsu" as const,
-                contentId: jutsuId,
-                battleType: "RANKED_PVP" as const,
-                count: 1,
-              })),
-              ...userEntry.user.rankedLoadout.loadout.weaponIds.map((weaponId) => ({
-                type: "item" as const,
-                contentId: weaponId,
-                battleType: "RANKED_PVP" as const,
-                count: 1,
-              })),
-              ...userEntry.user.rankedLoadout.loadout.consumableIds.map(
-                (consumableId) => ({
-                  type: "consumable" as const,
-                  contentId: consumableId,
-                  battleType: "RANKED_PVP" as const,
-                  count: 1,
-                }),
-              ),
-              ...opponentEntry.user.rankedLoadout.loadout.jutsuIds.map((jutsuId) => ({
-                type: "jutsu" as const,
-                contentId: jutsuId,
-                battleType: "RANKED_PVP" as const,
-                count: 1,
-              })),
-              ...opponentEntry.user.rankedLoadout.loadout.weaponIds.map((weaponId) => ({
-                type: "item" as const,
-                contentId: weaponId,
-                battleType: "RANKED_PVP" as const,
-                count: 1,
-              })),
-              ...opponentEntry.user.rankedLoadout.loadout.consumableIds.map(
-                (consumableId) => ({
-                  type: "consumable" as const,
-                  contentId: consumableId,
-                  battleType: "RANKED_PVP" as const,
-                  count: 1,
-                }),
-              ),
-            ])
-            .onDuplicateKeyUpdate({ set: { count: sql`${logRankedPicks.count} + 1` } }),
-        ]);
+        ];
+        if (rankedPickRows.length > 0) {
+          postMatchTasks.push(
+            ctx.drizzle
+              .insert(logRankedPicks)
+              .values(rankedPickRows)
+              .onDuplicateKeyUpdate({
+                set: { count: sql`${logRankedPicks.count} + 1` },
+              }),
+          );
+        }
+        // Winner path only: remove both players from the queue and write match
+        // logs. Gating these on success stops a losing poll from deleting queue
+        // rows it never matched.
+        await Promise.all(postMatchTasks);
         return { success: true, message: "Match found!", battleId: result.battleId };
       }
 
-      // Lost the claim (opponent taken first, or both already gone). Our queue
-      // row was left intact above, so the next 5s poll rematches us. Restore us
-      // to QUEUED only if we are exactly initiateBattle's rollback AWAKE (no real
-      // battle) and our queue row still exists, so this can never clobber a
-      // legitimate BATTLE/other state or a row a concurrent winner cleaned up.
-      await ctx.drizzle
-        .update(userData)
-        .set({ status: "QUEUED" })
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            eq(userData.status, "AWAKE"),
-            isNull(userData.battleId),
-            exists(
-              ctx.drizzle
-                .select({ one: sql`1` })
-                .from(rankedPvpQueue)
-                .where(eq(rankedPvpQueue.userId, ctx.userId)),
-            ),
-          ),
-        );
+      // Lost the claim (opponent taken first, the caller already left, or both
+      // already gone). Ranked rollback in initiateBattle restores any
+      // temporarily claimed queue rows, so the next 5s poll can rematch.
       return { success: false, message: "", battleId: undefined };
     }),
 });
