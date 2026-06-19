@@ -24,7 +24,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { OverworldInteractionTypes } from "@/drizzle/constants";
 import type { OverworldAiPlacement, OverworldAiPlacementQuest } from "@/drizzle/schema";
+import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
@@ -73,7 +75,7 @@ interface PlacementsManagerProps {
 
 const defaultFormValues = (aiId: string): OverworldPlacementInput => ({
   aiTemplateUserId: aiId,
-  interactionType: "HOSTILE",
+  interactionType: OverworldInteractionTypes[1],
   sectorType: "specific",
   locationType: "specific",
   sector: 0,
@@ -106,7 +108,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
   const interactionType = useWatch({
     control: form.control,
     name: "interactionType",
-    defaultValue: "HOSTILE",
+    defaultValue: OverworldInteractionTypes[1],
   });
   const sectorType = useWatch({
     control: form.control,
@@ -251,8 +253,11 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="HOSTILE">HOSTILE</SelectItem>
-                      <SelectItem value="FRIENDLY">FRIENDLY</SelectItem>
+                      {OverworldInteractionTypes.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -584,14 +589,19 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => remove({ id: p.id })}
-                    disabled={isLoading}
+                  <Confirm2
+                    title="Delete Placement"
+                    button={
+                      <Button variant="ghost" size="icon" disabled={isLoading}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    }
+                    onAccept={() => remove({ id: p.id })}
                   >
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
+                    Deleting this placement will permanently remove it and fail any
+                    player quest objectives that are bound to this placement. Are you
+                    sure?
+                  </Confirm2>
                 </div>
               </div>
             ))}

@@ -1,4 +1,4 @@
-import { eq, ne } from "drizzle-orm";
+import { eq, ne, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { overworldAiPlacement } from "@/drizzle/schema";
 import {
@@ -12,7 +12,7 @@ import { drizzleDB } from "@/server/db";
 const ENDPOINT_NAME = "daily-overworld-ai";
 
 export async function GET() {
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
+  // Touch a dynamic API so Next.js does not statically cache this GET handler
   await cookies();
 
   // Check timer
@@ -37,7 +37,7 @@ export async function GET() {
               sector: pos.sector,
               longitude: pos.longitude,
               latitude: pos.latitude,
-              positionVersion: p.positionVersion + 1,
+              positionVersion: sql`${overworldAiPlacement.positionVersion} + 1`,
             })
             .where(eq(overworldAiPlacement.id, p.id));
         }),

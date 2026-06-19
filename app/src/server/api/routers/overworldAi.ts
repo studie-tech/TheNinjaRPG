@@ -132,9 +132,14 @@ export const overworldAiRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Fetch placement and actor in parallel — both are needed regardless of interaction type.
+      const [placement, actor] = await Promise.all([
+        fetchPlacement(ctx.drizzle, input.placementId),
+        fetchUser(ctx.drizzle, ctx.userId),
+      ]);
+
       // Validate placement: must exist, be active, bind a still-AI template, and the
       // client's position version must match the authoritative server placement.
-      const placement = await fetchPlacement(ctx.drizzle, input.placementId);
       if (!placement || !placement.isActive || !placement.aiTemplate?.isAi) {
         return errorResponse("This NPC is no longer here");
       }
@@ -145,7 +150,6 @@ export const overworldAiRouter = createTRPCRouter({
       // Validate actor state. Server placement coordinates are authoritative; the
       // client-supplied position is only a hint, so we compare the actor against the
       // placement's stored tile rather than trusting any client coordinates.
-      const actor = await fetchUser(ctx.drizzle, ctx.userId);
       if (actor.isBanned) return errorResponse("You are banned");
       if (actor.status !== "AWAKE") return errorResponse("You must be awake");
       if (actor.travelFinishAt && actor.travelFinishAt > new Date()) {
@@ -254,6 +258,8 @@ export const overworldAiRouter = createTRPCRouter({
           resolved,
           notifications,
           consequences,
+          existingHistory:
+            activeUser.userQuests?.find((q) => q.questId === bound.questId) ?? null,
         });
 
         if (claim.outcome !== "claimed") {
