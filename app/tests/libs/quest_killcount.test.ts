@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { QuestType } from "@/drizzle/constants";
+import { QuestTypes, type QuestType } from "@/drizzle/constants";
 import { getNewTrackers, killObjectiveCountsForQuest } from "@/libs/quest";
 
 // ---------------------------------------------------------------------------
@@ -167,7 +167,8 @@ describe("killObjectiveCountsForQuest", () => {
   });
 
   it("non-pvp/war quest types count anywhere", () => {
-    for (const questType of ["daily", "mission", "achievement", "errand"] as const) {
+    // Derived from the canonical enum so new quest types are covered automatically.
+    for (const questType of QuestTypes.filter((t) => t !== "pvp" && t !== "war")) {
       expect(killObjectiveCountsForQuest(questType, undefined, undefined)).toBe(true);
     }
   });
@@ -239,6 +240,20 @@ describe("getNewTrackers defeat_opponents gating", () => {
       { inWarTornSector: false, isWarParticipant: true },
     );
     expect(goalDone(notCounted, "war-1", "w-obj")).toBe(false);
+  });
+
+  it("a war quest does not complete defeat_opponents from a missing warFoe in a mixed war battle", () => {
+    const war = makeQuest("war-1", "war", [defeatOpponentsObjective("w-obj", "ai-1")]);
+
+    // warFoe is omitted but the battle is a war battle (isWarParticipant: true). A per-opponent
+    // objective must deny rather than fall back to the battle-global flag.
+    const result = getNewTrackers(
+      makeUser([war]),
+      [{ task: "defeat_opponents", contentId: "ai-1", text: "Won" }],
+      { inWarTornSector: false, isWarParticipant: true },
+    );
+
+    expect(goalDone(result, "war-1", "w-obj")).toBe(false);
   });
 
   it("a daily quest does not leak defeat_opponents into a pvp quest outside the war-torn sector", () => {
