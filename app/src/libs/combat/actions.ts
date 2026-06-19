@@ -171,6 +171,13 @@ export const availableUserActions = (
               );
               if (hasSummonTag) return false;
             }
+            // Filter out movement jutsu when immobilized
+            if (isImmobilized) {
+              const hasMoveTag = jutsu.effects.some(
+                (e: { type: string }) => e.type === "move",
+              );
+              if (hasMoveTag) return false;
+            }
             // Filter out jutsus removed by elemental seal
             if (!elementalSeal?.elements?.length) return true;
             const jutsuElements = new Set<string>();
