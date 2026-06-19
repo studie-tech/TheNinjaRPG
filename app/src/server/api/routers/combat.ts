@@ -3,6 +3,7 @@ import {
   and,
   desc,
   eq,
+  exists,
   gt,
   gte,
   inArray,
@@ -77,6 +78,7 @@ import {
   quest,
   questHistory,
   raidParticipation,
+  rankedPvpQueue,
   sector,
   tournamentMatch,
   userData,
@@ -2263,7 +2265,15 @@ export const initiateBattle = async (
           // must not be pulled into a ranked battle by a poll whose snapshot
           // predated their leave.
           battleType === "RANKED_PVP"
-            ? eq(userData.status, "QUEUED")
+            ? and(
+                eq(userData.status, "QUEUED"),
+                exists(
+                  client
+                    .select({ one: sql`1` })
+                    .from(rankedPvpQueue)
+                    .where(eq(rankedPvpQueue.userId, userData.userId)),
+                ),
+              )
             : or(
                 eq(userData.status, "AWAKE"),
                 eq(userData.status, "QUEUED"),
@@ -2308,7 +2318,18 @@ export const initiateBattle = async (
     await Promise.all([
       client
         .update(userData)
-        .set({ status: "AWAKE", battleId: null })
+        .set({
+          status:
+            battleType === "RANKED_PVP"
+              ? sql`CASE WHEN ${exists(
+                  client
+                    .select({ one: sql`1` })
+                    .from(rankedPvpQueue)
+                    .where(eq(rankedPvpQueue.userId, userData.userId)),
+                )} THEN "QUEUED" ELSE "AWAKE" END`
+              : "AWAKE",
+          battleId: null,
+        })
         .where(eq(userData.battleId, battleId)),
       client.delete(battle).where(eq(battle.id, battleId)),
       client.delete(battleHistory).where(eq(battleHistory.battleId, battleId)),
