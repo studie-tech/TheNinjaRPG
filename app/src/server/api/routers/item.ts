@@ -2161,6 +2161,16 @@ export const itemRouter = createTRPCRouter({
             .where(
               and(eq(itemLoadout.id, input.id), eq(itemLoadout.userId, ctx.userId)),
             ),
+        () =>
+          ctx.drizzle.query.itemLoadout
+            .findFirst({
+              columns: { id: true },
+              where: and(
+                eq(itemLoadout.id, input.id),
+                eq(itemLoadout.userId, ctx.userId),
+              ),
+            })
+            .then((row) => !!row),
       );
     }),
 });
@@ -2220,11 +2230,12 @@ export const selectItemLoadout = async (
     const sqlChunks: SQL[] = [sql`(case`];
     for (const a of assignments) {
       // Re-check availability inside the atomic update (mirrors
-      // getEquipBlockReason): if a row was moved home/auction/crafting between
-      // the snapshot and now, its arm no longer matches and it falls to 'NONE'
-      // instead of being equipped while ineligible.
+      // getEquipBlockReason + isImbuing): if a row was moved home/auction/crafting
+      // or began imbuing between the snapshot and now, its arm no longer matches
+      // and it falls to 'NONE' instead of being equipped while ineligible.
+      // Imbuement lives on a separate table, so it needs a correlated NOT EXISTS.
       sqlChunks.push(
-        sql`when ${userItem.id} = ${a.userItemId} and ${userItem.storedAtHome} = false and ${userItem.isInAuction} = false and (${userItem.craftingFinishedAt} is null or ${userItem.craftingFinishedAt} <= ${now}) then ${a.slot}`,
+        sql`when ${userItem.id} = ${a.userItemId} and ${userItem.storedAtHome} = false and ${userItem.isInAuction} = false and (${userItem.craftingFinishedAt} is null or ${userItem.craftingFinishedAt} <= ${now}) and not exists (select 1 from ${userItemImbuement} where ${userItemImbuement.userItemId} = ${a.userItemId} and ${userItemImbuement.craftingFinishedAt} > ${now}) then ${a.slot}`,
       );
     }
     sqlChunks.push(sql`else 'NONE' end)`);
@@ -2246,11 +2257,35 @@ export const selectItemLoadout = async (
     .set({ itemLoadout: loadout.id })
     .where(eq(userData.userId, user.userId));
 
-  // Reflect the new equipped state on the in-memory list for the response.
-  const bySlot = new Map(assignments.map((a) => [a.userItemId, a.slot]));
+  // The CASE can legitimately drop an assignment to 'NONE' when the row became
+  // unavailable (home/auction/crafting/imbue) between the snapshot and the
+  // UPDATE. Re-read the committed equipped state for the assigned rows so the
+  // in-memory list, the returned items and the warnings reflect what was
+  // actually equipped — not merely what we intended to equip.
+  const assignmentIds = assignments.map((a) => a.userItemId);
+  const committedRows =
+    assignmentIds.length > 0
+      ? await client
+          .select({ id: userItem.id, equipped: userItem.equipped })
+          .from(userItem)
+          .where(
+            and(eq(userItem.userId, user.userId), inArray(userItem.id, assignmentIds)),
+          )
+      : [];
+  const committedSlot = new Map(
+    committedRows.filter((r) => r.equipped !== "NONE").map((r) => [r.id, r.equipped]),
+  );
   useritems.forEach((ui) => {
-    ui.equipped = bySlot.get(ui.id) ?? "NONE";
+    ui.equipped = committedSlot.get(ui.id) ?? "NONE";
   });
+  // Surface any intended assignment the guard dropped to 'NONE' so the caller
+  // (and combat battle state) does not treat a raced-out row as equipped.
+  assignments
+    .filter((a) => !committedSlot.has(a.userItemId))
+    .forEach((a) => {
+      const name = useritems.find((u) => u.id === a.userItemId)?.item.name ?? "Item";
+      invalidItems.push(`${name} became unavailable`);
+    });
 
   const message =
     invalidItems.length > 0
@@ -2260,7 +2295,7 @@ export const selectItemLoadout = async (
   return {
     success: true,
     message,
-    items: useritems.filter((ui) => bySlot.has(ui.id)),
+    items: useritems.filter((ui) => committedSlot.has(ui.id)),
   };
 };
 

@@ -354,39 +354,35 @@ export const computeLoadoutAssignments = (
       invalidItems.push(`${item.name} is being imbued`);
       continue;
     }
-    // Resolve the slot (handles legacy values like ITEM_7). When the saved slot
-    // is no longer valid, fall back to a real equip slot for the item's type —
-    // never the NONE sentinel and never for an item with no real slot type.
+    // Resolve the slot (handles legacy values like ITEM_7). Prefer the saved
+    // slot when it is a real, compatible ItemSlots member and still free;
+    // otherwise — or when an earlier same-type assignment already took it — fall
+    // back to any free compatible slot for the item's type. Never the NONE
+    // sentinel and never for an item with no real slot type.
     const validSlots = ItemSlots as readonly string[];
-    let resolvedSlot: ItemSlot | undefined;
-    // Accept the saved slot only when it is a real ItemSlots member AND actually
-    // compatible with this item's slot type. isCompatibleEquipSlot excludes the
-    // NONE sentinel (a saved NONE would otherwise consume a row/slot while
-    // equipping nothing) and rejects a stale/corrupt entry that points at an
-    // incompatible slot (e.g. a HEAD item saved into CHEST). Anything that fails
-    // falls through to the fallback resolver, which recovers a real slot for the
-    // item's type or reports it invalid.
-    if (
-      validSlots.includes(entry.slot) &&
-      isCompatibleEquipSlot(entry.slot, item.slot)
-    ) {
-      resolvedSlot = entry.slot;
-    } else {
-      const slotType = item.slot;
-      resolvedSlot =
+    const slotType = item.slot;
+    const findFreeSlot = (): ItemSlot | undefined =>
+      slotType && slotType !== "NONE"
+        ? ItemSlots.find((s) => isCompatibleEquipSlot(s, slotType) && !usedSlots.has(s))
+        : undefined;
+    // isCompatibleEquipSlot excludes the NONE sentinel (a saved NONE would
+    // otherwise consume a row/slot while equipping nothing) and rejects a
+    // stale/corrupt entry that points at an incompatible slot (e.g. a HEAD item
+    // saved into CHEST). When the saved slot is usable but already taken (two
+    // same-type items carrying the same stale slot), fall back rather than drop
+    // the second item while another compatible slot is still free.
+    const savedSlotUsable =
+      validSlots.includes(entry.slot) && isCompatibleEquipSlot(entry.slot, item.slot);
+    const resolvedSlot =
+      savedSlotUsable && !usedSlots.has(entry.slot) ? entry.slot : findFreeSlot();
+    if (!resolvedSlot) {
+      // A real slot type with every compatible slot already taken is an
+      // exhausted-slot case; no real slot type at all is a corrupt/invalid entry.
+      invalidItems.push(
         slotType && slotType !== "NONE"
-          ? ItemSlots.find(
-              (s) => isCompatibleEquipSlot(s, slotType) && !usedSlots.has(s),
-            )
-          : undefined;
-      if (!resolvedSlot) {
-        invalidItems.push(`${item.name} has invalid slot`);
-        continue;
-      }
-    }
-    // Never reuse a slot already taken by an earlier assignment.
-    if (usedSlots.has(resolvedSlot)) {
-      invalidItems.push(`${item.name} slot already in use`);
+          ? `${item.name} slot already in use`
+          : `${item.name} has invalid slot`,
+      );
       continue;
     }
     // Equip limits shared with toggleEquipItem.

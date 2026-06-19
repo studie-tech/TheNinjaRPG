@@ -81,6 +81,7 @@ import {
   sector,
   tournamentMatch,
   userData,
+  userJutsu,
   village,
   villageAlliance,
   war,
@@ -959,6 +960,35 @@ export const combatRouter = createTRPCRouter({
               },
             );
 
+      // When only the item loadout changed, selectJutsuLoadout (and its
+      // bloodline-item revalidation) never runs, so a jutsu gated on a bloodline
+      // item that the item switch just unequipped would otherwise stay equipped.
+      // Re-validate the currently-equipped jutsus against the post-switch items
+      // and unequip any that lost their required item — surgically, without
+      // touching the jutsu loadout pointer or the player's other equipped jutsus.
+      const itemChanged = !!iId && user.itemLoadout !== iId;
+      const jutsuChanged = !!jId && user.jutsuLoadout !== jId;
+      let invalidatedJutsuIds: string[] = [];
+      if (itemChanged && !jutsuChanged && "items" in itemLoadoutResult) {
+        invalidatedJutsuIds = user.jutsus
+          .filter((ref) => {
+            const owned = userjutsus.find((uj) => uj.jutsuId === ref.jutsuId);
+            return owned ? !checkJutsuBloodlineItem(owned.jutsu, useritems) : false;
+          })
+          .map((ref) => ref.jutsuId);
+        if (invalidatedJutsuIds.length > 0) {
+          await ctx.drizzle
+            .update(userJutsu)
+            .set({ equipped: false })
+            .where(
+              and(
+                eq(userJutsu.userId, ctx.userId),
+                inArray(userJutsu.jutsuId, invalidatedJutsuIds),
+              ),
+            );
+        }
+      }
+
       // Mutate
       userBattle.updatedAt = new Date();
       userBattle.version = userBattle.version + 1;
@@ -1005,6 +1035,7 @@ export const combatRouter = createTRPCRouter({
       const hydratedJutsus =
         newJutsus ??
         user.jutsus
+          .filter((ref) => !invalidatedJutsuIds.includes(ref.jutsuId))
           .map((ref) => {
             const jutsu = userBattle.extraState.jutsus?.[ref.jutsuId];
             if (!jutsu) return null;

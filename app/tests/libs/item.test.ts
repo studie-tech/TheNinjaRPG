@@ -198,6 +198,28 @@ describe("computeLoadoutAssignments", () => {
     expect(out.assignments.length).toBe(1);
   });
 
+  it("falls back to a free slot when two same-type items share a stale slot", () => {
+    // Two different ITEM-slot items both saved at a stale ITEM_1. The first
+    // takes ITEM_1; the second must fall back to a free compatible slot rather
+    // than be dropped as "slot already in use" while ITEM_2 is still open.
+    const items = [
+      ui({ id: "r1", itemId: "i1", slotType: "ITEM" }),
+      ui({ id: "r2", itemId: "i2", slotType: "ITEM" }),
+    ];
+    const out = computeLoadoutAssignments(
+      [
+        { itemId: "i1", slot: "ITEM_1" },
+        { itemId: "i2", slot: "ITEM_1" },
+      ],
+      items,
+      USER,
+    );
+    expect(out.invalidItems).toEqual([]);
+    expect(out.assignments.length).toBe(2);
+    expect(new Set(out.assignments.map((a) => a.slot)).size).toBe(2);
+    expect(out.assignments).toContainEqual({ userItemId: "r1", slot: "ITEM_1" });
+  });
+
   it("skips a hidden item with a clear warning", () => {
     const items = [ui({ id: "r1", itemId: "i1", name: "Ghost Blade", hidden: true })];
     const out = computeLoadoutAssignments(
