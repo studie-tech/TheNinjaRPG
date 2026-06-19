@@ -226,6 +226,11 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     { id: "huntingRank", type: "str_array", values: HUNTING_RANKS },
     { id: "gatheringRank", type: "str_array", values: GATHERING_RANKS },
     { id: "requiredLevel", type: "number" },
+    {
+      id: "requiredFarmingLevel",
+      type: "number",
+      label: "Required Farming Level",
+    },
     { id: "maxLevel", type: "number", label: "Max Level" },
     {
       id: "sceneBackground",

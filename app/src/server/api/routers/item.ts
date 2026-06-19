@@ -2517,6 +2517,9 @@ export const itemRouter = createTRPCRouter({
       if (!info.inShop) return errorResponse("Item is not for sale");
       if (isEvolution(info.parentItemId))
         return errorResponse("Evolution items cannot be bought; they must be evolved");
+      if (info.isFarmSeed) {
+        return errorResponse("Farm seeds are purchased from the farm shop");
+      }
       if (user.isBanned) return errorResponse("You are banned");
       if (info.hidden && !canChangeContent(user.role)) {
         return errorResponse("Item is hidden, cannot be bought");

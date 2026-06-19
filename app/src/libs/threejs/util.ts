@@ -691,7 +691,7 @@ export const setupScene = (info: {
 export const setRaycasterFromMouse = (
   raycaster: Raycaster,
   sceneRef: HTMLElement,
-  event: MouseEvent,
+  event: MouseEvent | PointerEvent,
   camera: OrthographicCamera | PerspectiveCamera,
 ) => {
   const pointer = new Vector2();

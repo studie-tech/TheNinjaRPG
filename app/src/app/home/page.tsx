@@ -22,6 +22,7 @@ import {
   IMG_HOME_EAT,
   IMG_HOME_SLEEP,
   IMG_HOME_TRAIN,
+  IMG_OCCUPATION_FARMING,
   ITEM_LEVEL_CAP,
 } from "@/drizzle/constants";
 import type { UserItemWithItem } from "@/drizzle/schema";
@@ -164,7 +165,7 @@ export default function HomePage() {
         subtitle={`Train, eat, sleep. +${boost}% regen sleeping.`}
         defaultBackHref="/village"
       >
-        <div className="grid grid-cols-3 items-center justify-center text-center font-bold italic">
+        <div className="grid grid-cols-2 items-center justify-center text-center font-bold italic sm:grid-cols-4">
           <Link href="/traininggrounds">
             <Image
               className="hover:opacity-30"
@@ -217,6 +218,16 @@ export default function HomePage() {
               )}
             </button>
           )}
+          <Link href="/farm">
+            <Image
+              className="h-64 w-64 object-contain hover:opacity-30"
+              alt="farm"
+              src={IMG_OCCUPATION_FARMING}
+              width={256}
+              height={256}
+            />
+            Farm
+          </Link>
         </div>
       </ContentBox>
       {ownVillage && (

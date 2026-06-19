@@ -50,6 +50,7 @@ import {
   getWarsArray,
   hydrateUserForQuests,
 } from "@/libs/combat/util";
+import { getPvpFarmActivityReductionSeconds } from "@/libs/farming";
 import type { PusherClient } from "@/libs/pusher";
 import { broadcastRaidAvailability, updateUserOnMap } from "@/libs/pusher";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
@@ -61,6 +62,7 @@ import { battleItemExp, battleJutsuExp } from "@/libs/train";
 import { extendWarParticipantSql, findWarsWithUser } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { reduceActiveFarmPlotTimers } from "@/server/utils/farming";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
 
 type DataBattleAction = {
@@ -1203,6 +1205,19 @@ export const updateUser = async (
   const user = curBattle.usersState.find((u) => u.userId === userId);
   if (result && user) {
     const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
+    const hasHumanOpponent = curBattle.usersState.some(
+      (candidate) =>
+        candidate.userId !== userId &&
+        candidate.direction !== user.direction &&
+        !candidate.isAi &&
+        !candidate.isSummon,
+    );
+    const farmActivityReductionSeconds = getPvpFarmActivityReductionSeconds(
+      curBattle.battleType,
+      result.outcome,
+      hasHumanOpponent,
+    );
+    const farmActivityAt = new Date();
 
     // War-kill detection: an opposing-side, non-summon foe who shares an active war with the
     // user. The `t.direction !== user.direction` guard restricts the match to actual opponents,
@@ -1429,6 +1444,25 @@ export const updateUser = async (
 
     // Update user & user items
     await Promise.all([
+      ...(farmActivityReductionSeconds > 0
+        ? [
+            reduceActiveFarmPlotTimers(
+              client,
+              userId,
+              farmActivityReductionSeconds,
+              farmActivityAt,
+            ).then((farmResult) => {
+              if (farmResult.rowsAffected > 0) {
+                const reductionLabel = result.didWin
+                  ? "1 minute 30 seconds"
+                  : "1 minute";
+                result.notifications.push(
+                  `PvP activity reduced active crop growth times by ${reductionLabel}.`,
+                );
+              }
+            }),
+          ]
+        : []),
       // Update bounties
       ...(result.bountiesClaimed.length > 0
         ? [

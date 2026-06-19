@@ -33,6 +33,7 @@ export default function Users() {
     "Outlaws",
     "Community",
     "Crafting",
+    "Farming",
     "Medical",
     "Staff",
     "Recruiters",
@@ -47,6 +48,7 @@ export default function Users() {
     | "Outlaws"
     | "Community"
     | "Crafting"
+    | "Farming"
     | "Medical"
     | "Staff"
     | "Recruiters"
@@ -112,6 +114,8 @@ export default function Users() {
     columns.push({ key: "updatedAt", header: "Last Active", type: "time_passed" });
   } else if (activeTab === "Crafting") {
     columns.push({ key: "craftingExperience", header: "Crafting", type: "string" });
+  } else if (activeTab === "Farming") {
+    columns.push({ key: "farmingExperience", header: "Farming", type: "string" });
   } else if (activeTab === "Medical") {
     columns.push({ key: "medicalExperience", header: "Medical", type: "string" });
   } else if (activeTab === "PvP") {

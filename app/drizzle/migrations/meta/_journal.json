@@ -281,6 +281,13 @@
       "when": 1788079296452,
       "tag": "0039_quest_history_unique_user_quest",
       "breakpoints": false
+    },
+    {
+      "idx": 40,
+      "version": "5",
+      "when": 1788084331531,
+      "tag": "0040_wooden_stellaris",
+      "breakpoints": false
     }
   ]
 }

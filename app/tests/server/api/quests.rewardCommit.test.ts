@@ -167,6 +167,13 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       questData: [],
       activeNpcQuestId: expect.anything(),
     });
+    expect(sets[3]).toMatchObject({
+      finishAt: expect.anything(),
+      updatedAt: expect.any(Date),
+    });
+    expect(result).toMatchObject({
+      postNotifications: ["Active crop growth times reduced by 1 minute."],
+    });
   });
 
   it("does not pay twice when the completion compare-and-swap loses to a prior claim", async () => {
@@ -231,7 +238,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       ...user,
       items: [{ id: "user-item-1", itemId: "item-1" }],
     };
-    const { client, deleteFrom, deleteWhere } = makeClient([
+    const { client, sets, deleteFrom, deleteWhere } = makeClient([
       { rowsAffected: 1 },
       { rowsAffected: 1 },
     ]);
@@ -252,6 +259,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
     expect(result.outcome).toBe("claimed");
     expect(deleteFrom).toHaveBeenCalledOnce();
     expect(deleteWhere).toHaveBeenCalledOnce();
+    expect(sets).toHaveLength(2);
   });
 
   it("drops the resolved quest tracker so replayed assignments start with fresh objectives", async () => {
