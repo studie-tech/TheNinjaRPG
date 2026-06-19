@@ -873,13 +873,16 @@ export const getNewTrackers = (
             .forEach((taskUpdate) => {
               // War-context kill objectives only advance in their required context (pvp →
               // war-torn sector; war → active-war kill). All other tasks always count.
+              // `defeat_opponents` is per-opponent, so a missing `warFoe` must deny rather than
+              // fall back to the battle-global flag (which would credit a non-war target in a
+              // mixed war battle); `pvp_kills` keeps the battle-global fallback by design.
+              const taskWarFoe =
+                task === "defeat_opponents"
+                  ? (taskUpdate.warFoe ?? false)
+                  : taskUpdate.warFoe;
               const killCounts =
                 !isWarContextKillTask ||
-                killObjectiveCountsForQuest(
-                  quest.questType,
-                  combatContext,
-                  taskUpdate.warFoe,
-                );
+                killObjectiveCountsForQuest(quest.questType, combatContext, taskWarFoe);
               // If objective has a value, increment it
               if (status && "value" in objective) {
                 if (taskUpdate.increment && killCounts) {
