@@ -213,7 +213,7 @@ This document outlines various screens, menus, and gameplay systems available in
     - Provides a zoomed-out view of the combat area.
   - **Time Remaining and Action Gauge:**  
     - 60-second turn timer.  
-    - The action gauge (AP) determines available actions; actions drain AP by varying amounts (typically 60%, 40%, 30%, or 20%).  
+    - The action gauge (AP) determines available actions; actions drain AP by varying amounts (typically 60%, 40%, 20%, or 10%).  
     - The turn automatically ends if AP drops below 20%.
 - **Basic Actions:**  
   - **Basic Attack:**  

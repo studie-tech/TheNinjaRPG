@@ -389,6 +389,8 @@ export const getDefaultBasicActions = (
 ): BasicActions => {
   const healPower = calcCombatHealPercentage(user);
   const jutsuStatTypes = ["Ninjutsu", "Genjutsu", "Taijutsu", "Bukijutsu"] as const;
+  const lastUsed = (id: string, def = -10) =>
+    user?.basicActions?.find((ba) => ba.id === id)?.lastUsedRound ?? def;
 
   return {
     basicAttack: {
@@ -407,8 +409,7 @@ export const getDefaultBasicActions = (
       updatedAt: Date.now(),
       cooldown: 1,
       originalCooldown: 1,
-      lastUsedRound:
-        user?.basicActions?.find((ba) => ba.id === "basicAttack")?.lastUsedRound ?? 0,
+      lastUsedRound: lastUsed("basicAttack"),
       level: user?.level,
       effects: [
         DamageTag.parse({
@@ -439,9 +440,7 @@ export const getDefaultBasicActions = (
       updatedAt: Date.now(),
       cooldown: 1,
       originalCooldown: 1,
-      lastUsedRound:
-        user?.basicActions?.find((ba) => ba.id === "offensiveStance")?.lastUsedRound ??
-        -10,
+      lastUsedRound: lastUsed("offensiveStance"),
       level: user?.level,
       effects: [
         IncreaseDamageGivenTag.parse({
@@ -469,9 +468,7 @@ export const getDefaultBasicActions = (
       updatedAt: Date.now(),
       cooldown: 1,
       originalCooldown: 1,
-      lastUsedRound:
-        user?.basicActions?.find((ba) => ba.id === "defensiveStance")?.lastUsedRound ??
-        -10,
+      lastUsedRound: lastUsed("defensiveStance"),
       level: user?.level,
       effects: [
         DecreaseDamageTakenTag.parse({
@@ -499,8 +496,7 @@ export const getDefaultBasicActions = (
       updatedAt: Date.now(),
       cooldown: 5,
       originalCooldown: 5,
-      lastUsedRound:
-        user?.basicActions?.find((ba) => ba.id === "basicHeal")?.lastUsedRound ?? -10,
+      lastUsedRound: lastUsed("basicHeal"),
       level: user?.level,
       effects: [
         HealTag.parse({
@@ -530,8 +526,7 @@ export const getDefaultBasicActions = (
       updatedAt: Date.now(),
       cooldown: 4,
       originalCooldown: 4,
-      lastUsedRound:
-        user?.basicActions?.find((ba) => ba.id === "meditate")?.lastUsedRound ?? -10,
+      lastUsedRound: lastUsed("meditate"),
       level: user?.level,
       effects: [
         HealTag.parse({
@@ -557,8 +552,7 @@ export const getDefaultBasicActions = (
       updatedAt: Date.now(),
       cooldown: 0,
       originalCooldown: 0,
-      lastUsedRound:
-        user?.basicActions?.find((ba) => ba.id === "move")?.lastUsedRound ?? 0,
+      lastUsedRound: lastUsed("move", 0),
       healthCost: 0,
       chakraCost: 0,
       staminaCost: 0,
@@ -578,9 +572,7 @@ export const getDefaultBasicActions = (
       updatedAt: Date.now(),
       cooldown: 2,
       originalCooldown: 2,
-      lastUsedRound:
-        user?.basicActions?.find((ba) => ba.id === "replacementTechnique")
-          ?.lastUsedRound ?? -10,
+      lastUsedRound: lastUsed("replacementTechnique"),
       healthCost: 0,
       chakraCost: 0,
       staminaCost: 0,
@@ -599,8 +591,7 @@ export const getDefaultBasicActions = (
       updatedAt: Date.now(),
       cooldown: 10,
       originalCooldown: 10,
-      lastUsedRound:
-        user?.basicActions?.find((ba) => ba.id === "cleanse")?.lastUsedRound ?? -10,
+      lastUsedRound: lastUsed("cleanse"),
       healthCost: 0,
       chakraCost: 0,
       staminaCost: 0,
@@ -619,8 +610,7 @@ export const getDefaultBasicActions = (
       updatedAt: Date.now(),
       cooldown: 10,
       originalCooldown: 10,
-      lastUsedRound:
-        user?.basicActions?.find((ba) => ba.id === "clear")?.lastUsedRound ?? -10,
+      lastUsedRound: lastUsed("clear"),
       healthCost: 0,
       chakraCost: 0,
       staminaCost: 0,
@@ -639,8 +629,7 @@ export const getDefaultBasicActions = (
       updatedAt: Date.now(),
       cooldown: 0,
       originalCooldown: 0,
-      lastUsedRound:
-        user?.basicActions?.find((ba) => ba.id === "flee")?.lastUsedRound ?? 0,
+      lastUsedRound: lastUsed("flee", 0),
       healthCost: 0.1,
       chakraCost: 0,
       staminaCost: 0,

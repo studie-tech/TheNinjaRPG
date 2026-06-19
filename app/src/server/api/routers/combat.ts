@@ -30,6 +30,7 @@ import {
 import * as mapData from "@/data/hexasphere.json";
 import type { BattleType } from "@/drizzle/constants";
 import {
+  AdjustableBasicActions,
   AutoBattleTypes,
   BATTLE_ARENA_DAILY_LIMIT,
   BattleTypes,
@@ -363,19 +364,7 @@ export const combatRouter = createTRPCRouter({
       const showBasicActions = input.showBasicActions ?? true;
 
       // Basic action IDs to filter out when showBasicActions is false
-      const basicActionIds = [
-        "basicAttack",
-        "basicHeal",
-        "meditate",
-        "offensiveStance",
-        "defensiveStance",
-        "move",
-        "replacementTechnique",
-        "cleanse",
-        "clear",
-        "flee",
-        "wait",
-      ];
+      const basicActionIds = [...AdjustableBasicActions, "flee", "wait"];
 
       // Build where conditions
       const conditions = [eq(battleAction.battleId, input.battleId)];
