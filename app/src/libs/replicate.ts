@@ -309,23 +309,62 @@ export const txt2imgGPT = async (config: Txt2ImgConfig) => {
 export const txt2imgNanoBanana = async (config: Txt2ImgConfig) => {
   const replicate = getReplicateInstance();
 
-  const composedPrompt = `
-      <system prompt>
-        ${config.preprompt}
-      </system prompt>
-      <user prompt>
-        ${config.prompt} ${config.removeBg ? "remove background" : "include appropriate background. Full image."}
-      </user prompt>
-    `;
+  // nano-banana (Gemini Flash Image) is an image model with no system-prompt
+  // concept. Feeding it the long, role-style preprompt ("You are an assistant…")
+  // makes Gemini answer in text and emit no image, which Replicate surfaces as
+  // "Failed to generate image". For text-to-image, build a single description-led
+  // prompt — subject first, style guidance as trailing context — with no
+  // <system>/<user> scaffolding. The edit path (previousImg) already works with
+  // the bare user prompt plus an input image, so leave it untouched.
+  const backgroundInstruction = config.removeBg
+    ? "Isolate the subject on a plain, solid background with no scenery."
+    : "Include an appropriate full background.";
+  const styleGuidance = config.preprompt.trim();
+  const composedPrompt = [
+    `Generate a single image. ${config.prompt}.`,
+    backgroundInstruction,
+    styleGuidance ? `Art style guidance:\n${styleGuidance}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  // nano-banana defaults aspect_ratio to "match_input_image"; with no input image
+  // it warns and falls back to 1:1. Set it explicitly from the requested
+  // orientation for text-to-image, and let the edit path keep the default so the
+  // result matches the source image.
+  const aspectRatio =
+    config.size === "square" ? "1:1" : config.size === "portrait" ? "2:3" : "3:2";
 
   const promptToSend = config.previousImg ? config.prompt : composedPrompt;
   const inputs: Record<string, unknown> = { prompt: promptToSend };
-  if (config.previousImg) inputs.image_input = [config.previousImg];
+  if (config.previousImg) {
+    inputs.image_input = [config.previousImg];
+  } else {
+    inputs.aspect_ratio = aspectRatio;
+  }
 
-  // Get the file from the replicate run
-  let file = (await replicate.run("google/nano-banana", {
-    input: inputs,
-  })) as FileOutput;
+  // Get the file from the replicate run. nano-banana's wrapper collapses every
+  // Gemini failure to the opaque "Failed to generate image" prediction error, so
+  // log the full context (exact prompt, aspect ratio, error message + stack)
+  // server-side before re-throwing — otherwise it surfaces only as "[object Error]"
+  // in the client tRPC logger and is impossible to diagnose.
+  let file: FileOutput;
+  try {
+    file = (await replicate.run("google/nano-banana", {
+      input: inputs,
+    })) as FileOutput;
+  } catch (cause) {
+    console.error("[txt2imgNanoBanana] Replicate generation failed", {
+      model: "google/nano-banana",
+      hasImageInput: Boolean(config.previousImg),
+      aspectRatio: inputs.aspect_ratio ?? null,
+      promptLength: promptToSend.length,
+      prompt: promptToSend,
+      error:
+        cause instanceof Error ? { message: cause.message, stack: cause.stack } : cause,
+    });
+    throw cause;
+  }
   if (!file) throw new Error("No output from AI model");
 
   // If transparent background requested, post-process with remove-bg
