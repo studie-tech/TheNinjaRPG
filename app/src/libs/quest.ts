@@ -566,6 +566,37 @@ export type QuestConsequence = {
 };
 
 /**
+ * Battle context for gating "war-context" kill objectives. Supplied only from the combat path.
+ */
+export type CombatQuestContext = {
+  inWarTornSector: boolean;
+  isWarParticipant: boolean;
+};
+
+/**
+ * Decide whether a war-context kill objective (`pvp_kills` / `defeat_opponents`) should advance
+ * for a given quest type and battle context:
+ * - `pvp` quests count only inside the war-torn sector.
+ * - `war` quests count only active-war kills: a per-opponent `warFoe` flag when available (e.g.
+ *   `defeat_opponents`), otherwise the battle-global war-participant flag (e.g. the `pvp_kills`
+ *   counter, which is only emitted on a win).
+ * - every other quest type counts anywhere.
+ * Context is only passed from combat, so an absent context conservatively denies pvp/war
+ * counting; non-combat callers never emit kill progress for these tasks.
+ */
+export const killObjectiveCountsForQuest = (
+  questType: QuestType | undefined,
+  context: CombatQuestContext | undefined,
+  warFoe: boolean | undefined,
+): boolean => {
+  if (questType === "pvp") return context?.inWarTornSector === true;
+  if (questType === "war") {
+    return warFoe !== undefined ? warFoe : context?.isWarParticipant === true;
+  }
+  return true;
+};
+
+/**
  * Used to update the quest tracking data for a user. Takes in the user with his questData
  * information, as well as a task to update. The value is the value to update the task with,
  * e.g. if task is 'pvp_kills' and value is 1, then the user has killed 1 player. This function
@@ -585,7 +616,9 @@ export const getNewTrackers = (
     value?: number;
     text?: string;
     contentId?: string;
+    warFoe?: boolean;
   }[],
+  combatContext?: CombatQuestContext,
 ) => {
   const questData = user.questData ?? [];
   const activeQuests = getUserQuests(user);
@@ -738,6 +771,9 @@ export const getNewTrackers = (
 
           // Convenience
           const task = objective.task;
+          // Kill objectives whose counting is gated by battle context per quest type
+          const isWarContextKillTask =
+            task === "pvp_kills" || task === "defeat_opponents";
           const isKage = user.village?.kageId === user.userId;
 
           // General updates we want to apply every time
@@ -835,12 +871,21 @@ export const getNewTrackers = (
               (taskUpdate) => taskUpdate.task === task || taskUpdate.task === "any",
             )
             .forEach((taskUpdate) => {
+              // War-context kill objectives only advance in their required context (pvp →
+              // war-torn sector; war → active-war kill). All other tasks always count.
+              const killCounts =
+                !isWarContextKillTask ||
+                killObjectiveCountsForQuest(
+                  quest.questType,
+                  combatContext,
+                  taskUpdate.warFoe,
+                );
               // If objective has a value, increment it
               if (status && "value" in objective) {
-                if (taskUpdate.increment) {
+                if (taskUpdate.increment && killCounts) {
                   status.value += taskUpdate.increment;
                 }
-                if (taskUpdate.value) {
+                if (taskUpdate.value && killCounts) {
                   status.value = taskUpdate.value;
                 }
               }
@@ -962,6 +1007,7 @@ export const getNewTrackers = (
                 opponentIds.length > 0
               ) {
                 if (
+                  killCounts &&
                   taskUpdate.text &&
                   opponentIds.includes(taskUpdate.contentId || "1337")
                 ) {

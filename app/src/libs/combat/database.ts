@@ -41,7 +41,6 @@ import { stillInBattle } from "@/libs/combat/actions";
 import type { ActionEffect, CombatResult, CompleteBattle } from "@/libs/combat/types";
 import {
   getItem,
-  getUserQuestsFromBattle,
   getVillage,
   getWarsArray,
   hydrateUserForQuests,
@@ -1147,75 +1146,43 @@ export const updateUser = async (
   const updatedQuestIds: string[] = [];
   const user = curBattle.usersState.find((u) => u.userId === userId);
   if (result && user) {
-    // Check if user has active PvP quests with pvp_kills or defeat_opponents objectives
-    // Get user quests from extraState (static data that doesn't change during battle)
-    const activeQuests = getUserQuestsFromBattle(curBattle, user.controllerId).filter(
-      (q) => Array.isArray(q.quest?.content?.objectives),
-    );
-    const questHasObjective = (
-      uq: (typeof activeQuests)[number],
-      task: "pvp_kills" | "defeat_opponents",
-    ) => uq.quest?.content?.objectives.some((obj) => obj.task === task) ?? false;
-    const activePvpQuests = activeQuests.filter((q) => q.questType === "pvp");
-    const hasPvpKillsInPvpQuest = activePvpQuests.some((uq) =>
-      questHasObjective(uq, "pvp_kills"),
-    );
-    const hasDefeatOpponentsInPvpQuest = activePvpQuests.some((uq) =>
-      questHasObjective(uq, "defeat_opponents"),
-    );
-    // Check if user has non-PvP quests with these objectives (should increment normally)
-    const hasPvpKillsInNonPvpQuest = activeQuests
-      .filter((q) => q.questType !== "pvp")
-      .some((uq) => questHasObjective(uq, "pvp_kills"));
-    const hasDefeatOpponentsInNonPvpQuest = activeQuests
-      .filter((q) => q.questType !== "pvp")
-      .some((uq) => questHasObjective(uq, "defeat_opponents"));
     const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
-    // Only increment pvp_kills if:
-    // - User has non-PvP quest with that objective (increment normally), OR
-    // - User has PvP quest with that objective AND is in war-torn sector
-    const shouldIncrementPvpKills =
-      hasPvpKillsInNonPvpQuest || (hasPvpKillsInPvpQuest && isInWarTornSector);
-    // Only increment defeat_opponents if:
-    // - User has non-PvP quest with that objective (increment normally), OR
-    // - User has PvP quest with that objective AND is in war-torn sector
-    const shouldIncrementDefeatOpponents =
-      hasDefeatOpponentsInNonPvpQuest ||
-      (hasDefeatOpponentsInPvpQuest && isInWarTornSector);
 
-    // War participant stamp: a winning killer who shares an active war with a non-summon foe on
-    // the opposing side of this battle earns ~2h of cross-bracket targetability. The
-    // `t.direction !== user.direction` guard restricts the match to actual opponents, so the rule
-    // is "won a fight that contained a war foe on the other side" rather than "...anywhere in the
-    // battle" — a war foe sitting on the killer's own side (e.g. a co-op raid) no longer counts.
-    // Computed from the pre-loaded battle state (no DB fetch) and folded into the main userData
-    // update below so it costs no extra roundtrip. War-torn sector kills are excluded (war state
-    // is not tracked there). Shrine AI kills are covered too: shrine AIs defend (right side) and
-    // carry the defending village's villageId, so findWarsWithUser matches them.
+    // War-kill detection: an opposing-side, non-summon foe who shares an active war with the
+    // user. The `t.direction !== user.direction` guard restricts the match to actual opponents,
+    // so it means "a fight that contained a war foe on the other side" rather than a war foe on
+    // the killer's own side (e.g. a co-op raid). War-torn sector kills are excluded (war state is
+    // not tracked there). Shrine AI kills are covered too: shrine AIs defend (right side) and
+    // carry the defending village's villageId, so findWarsWithUser matches them. Computed from
+    // pre-loaded battle state (no DB fetch).
     const userWars = getWarsArray(curBattle, user);
-    const isWinningWarParticipant =
-      result.didWin > 0 &&
-      !!user.villageId &&
+    const isOpposingWarFoe = (t: (typeof curBattle.usersState)[number]) =>
       !isInWarTornSector &&
-      curBattle.usersState.some(
-        (t) =>
-          t.userId !== userId &&
-          !t.isSummon &&
-          t.direction !== user.direction &&
-          findWarsWithUser(
-            getWarsArray(curBattle, t),
-            userWars,
-            t.villageId,
-            user.villageId,
-          ).length > 0,
-      );
+      !!user.villageId &&
+      t.userId !== userId &&
+      !t.isSummon &&
+      t.direction !== user.direction &&
+      findWarsWithUser(
+        getWarsArray(curBattle, t),
+        userWars,
+        t.villageId,
+        user.villageId,
+      ).length > 0;
+    // Battle-global war participation (outcome-independent): gates the per-battle pvp_kills
+    // counter for war quests. Per-opponent `warFoe` (below) gates defeat_opponents so a non-war
+    // target isn't credited just because a war foe shared the battle.
+    const isWarBattleParticipant = curBattle.usersState.some(isOpposingWarFoe);
+    // A winning war participant earns ~2h of cross-bracket targetability; folded into the main
+    // userData update below so it costs no extra roundtrip.
+    const isWinningWarParticipant = result.didWin > 0 && isWarBattleParticipant;
 
     // Accumulate all tracker tasks into a single array for one getNewTrackers call
     const trackerTasks: Parameters<typeof getNewTrackers>[1] = [];
 
-    // Update quest tracker with battle result
+    // Update quest tracker with battle result. pvp_kills is emitted on every COMBAT win; the
+    // war-torn (pvp quests) / active-war (war quests) gating is applied per quest in getNewTrackers.
     if (result.didWin > 0) {
-      if (curBattle.battleType === "COMBAT" && shouldIncrementPvpKills) {
+      if (curBattle.battleType === "COMBAT") {
         trackerTasks.push({ task: "pvp_kills", increment: 1 });
       }
       if (curBattle.battleType === "ARENA") {
@@ -1234,16 +1201,14 @@ export const updateUser = async (
       ...curBattle.usersState
         .filter((u) => u.userId !== userId)
         .flatMap((u) => [
-          // Defeat opponent with outcome - only if conditions are met
-          ...(shouldIncrementDefeatOpponents
-            ? [
-                {
-                  task: "defeat_opponents" as const,
-                  contentId: u.controllerId,
-                  text: result.outcome,
-                },
-              ]
-            : []),
+          // Defeat opponent with outcome; gated per quest type in getNewTrackers (pvp → war-torn
+          // sector, war → this opponent being an active-war foe).
+          {
+            task: "defeat_opponents" as const,
+            contentId: u.controllerId,
+            text: result.outcome,
+            warFoe: isOpposingWarFoe(u),
+          },
           // Start battle with outcome
           {
             task: "start_battle" as const,
@@ -1269,6 +1234,10 @@ export const updateUser = async (
     const { trackers, notifications, questIdsUpdated } = getNewTrackers(
       hydratedUser,
       trackerTasks,
+      {
+        inWarTornSector: isInWarTornSector,
+        isWarParticipant: isWarBattleParticipant,
+      },
     );
     updatedQuestIds.push(...questIdsUpdated);
     const updatedQuestData = filterQuestTrackersForDbPersist(
