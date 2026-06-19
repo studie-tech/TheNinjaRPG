@@ -8,8 +8,11 @@ import {
   gt,
   gte,
   inArray,
+  isNotNull,
   isNull,
   like,
+  lt,
+  lte,
   ne,
   notInArray,
   or,
@@ -61,6 +64,7 @@ import {
   abEvent,
   actionLog,
   battleHistory,
+  farmPlot,
   gameSetting,
   historicalIp,
   insertAiSchema,
@@ -89,6 +93,7 @@ import {
   war,
 } from "@/drizzle/schema";
 import { getReskinnedBloodline } from "@/libs/bloodline";
+import { getWorldCyclePosition } from "@/libs/dayNight";
 import {
   getGameSetting,
   getGameSettingBoost,
@@ -111,6 +116,7 @@ import {
   controlShownQuestLocationInformation,
   filterQuestTrackersForDbPersist,
   getNewTrackers,
+  getUserQuests,
   isAvailableUserQuests,
   mockAchievementHistoryEntries,
   questHasOverworldObjectives,
@@ -128,6 +134,7 @@ import { deleteUser } from "@/server/api/routers/staff";
 import type { DrizzleClient } from "@/server/db";
 import { scopedRead } from "@/server/requestScope";
 import { adjustSeichiSilverAtomically } from "@/server/utils/concurrency";
+import { getFarmCollectionCount } from "@/server/utils/farming";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
@@ -471,18 +478,55 @@ export const profileRouter = createTRPCRouter({
       mcp: { enabled: true, description: "Get current user's full profile data" },
     })
     .query(async ({ ctx }) => {
+      const now = new Date();
+      const currentDayCycleStartedAt = new Date(getWorldCyclePosition(now).cycleStart);
       // Query
-      const { user, settings, toastMessages, hasUnvotedPolls } = await fetchUpdatedUser(
-        {
+      const [
+        updatedUser,
+        readyFarmPlotsResult,
+        waterableFarmPlotsResult,
+        publishedAchievements,
+      ] = await Promise.all([
+        fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
           userIp: ctx.userIp,
           // forceRegen: true, // This should be disabled in prod to save on DB calls
-        },
-      );
+        }),
+        ctx.drizzle
+          .select({ count: count() })
+          .from(farmPlot)
+          .where(
+            and(
+              eq(farmPlot.userId, ctx.userId),
+              isNotNull(farmPlot.seedItemId),
+              isNotNull(farmPlot.finishAt),
+              lte(farmPlot.finishAt, now),
+            ),
+          ),
+        ctx.drizzle
+          .select({ count: count() })
+          .from(farmPlot)
+          .where(
+            and(
+              eq(farmPlot.userId, ctx.userId),
+              isNotNull(farmPlot.seedItemId),
+              isNotNull(farmPlot.finishAt),
+              gt(farmPlot.finishAt, now),
+              or(
+                isNull(farmPlot.lastWateredAt),
+                lt(farmPlot.lastWateredAt, currentDayCycleStartedAt),
+              ),
+            ),
+          ),
+        fetchPublishedAchievements(ctx.drizzle),
+      ]);
+      const { user, settings, toastMessages, hasUnvotedPolls } = updatedUser;
+      const readyFarmPlots = readyFarmPlotsResult[0]?.count ?? 0;
+      const waterableFarmPlots = waterableFarmPlotsResult[0]?.count ?? 0;
       // Ship achievement progress on its own; the definitions come from the catalogue query
       const achievementProgress = user
-        ? splitAchievementProgress(user, await fetchPublishedAchievements(ctx.drizzle))
+        ? splitAchievementProgress(user, publishedAchievements)
         : [];
       // Figure out notifications
       const notifications: NavBarDropdownLink[] = [];
@@ -491,6 +535,28 @@ export const profileRouter = createTRPCRouter({
       toastMessages.forEach((msg) => {
         notifications.push({ name: msg, color: "toast", href: "/profile" });
       });
+
+      if (readyFarmPlots > 0) {
+        notifications.push({
+          href: "/farm",
+          name:
+            readyFarmPlots === 1
+              ? "1 farm crop is ready to harvest"
+              : `${readyFarmPlots} farm crops are ready to harvest`,
+          color: "green",
+        });
+      }
+
+      if (waterableFarmPlots > 0) {
+        notifications.push({
+          href: "/farm",
+          name:
+            waterableFarmPlots === 1
+              ? "1 farm plant is ready to water"
+              : `${waterableFarmPlots} farm plants are ready to water`,
+          color: "blue",
+        });
+      }
 
       // Shrine notifications (use Set to avoid duplicate sectors)
       const userWithRelations = user as UserWithRelations;
@@ -2759,8 +2825,19 @@ export const fetchUpdatedUser = async (props: {
     }
   }
   if (user) {
+    const hasActiveFarmingCollectionObjective = getUserQuests(user).some((quest) =>
+      quest.content.objectives.some(
+        (objective) => objective.task === "farming_collection_log",
+      ),
+    );
+    const trackerUser = hasActiveFarmingCollectionObjective
+      ? {
+          ...user,
+          farmingCollectionCount: await getFarmCollectionCount(client, user.userId),
+        }
+      : user;
     // Get the latest quest trackers
-    const trackerResults = getNewTrackers(user, [{ task: "any" }]);
+    const trackerResults = getNewTrackers(trackerUser, [{ task: "any" }]);
 
     // Destructure for local usage
     const { trackers, notifications, consequences } = trackerResults;
@@ -3027,6 +3104,8 @@ export const fetchPublicUsers = async (info: {
         return [desc(userData.level), desc(userData.experience)];
       case "Crafting":
         return [desc(userData.craftingExperience), desc(userData.experience)];
+      case "Farming":
+        return [desc(userData.farmingExperience), desc(userData.experience)];
       case "Medical":
         return [desc(userData.medicalExperience), desc(userData.experience)];
       case "PvP":
@@ -3100,6 +3179,7 @@ export const fetchPublicUsers = async (info: {
         username: true,
         villageId: true,
         craftingExperience: true,
+        farmingExperience: true,
         medicalExperience: true,
         villagePrestige: true,
         tavernMessages: true,

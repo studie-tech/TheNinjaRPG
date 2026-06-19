@@ -1140,6 +1140,14 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
     addIssue(ctx, "Must have either a ryo, reputation points, or seichi silver cost");
   }
 
+  if (data.isFarmSeed && data.farmGrowTimeSeconds <= 0) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Farm seeds must have a grow time of at least 1 second",
+      path: ["farmGrowTimeSeconds"],
+    });
+  }
+
   if (data.itemType === "CONSUMABLE" && !data.destroyOnUse) {
     addIssue(ctx, "Consumable items must be destroyed on use");
   }
@@ -1486,6 +1494,18 @@ export const ItemValidatorRawSchema = z.object({
   canBeHunted: z.coerce.boolean().prefault(false),
   canBeGathered: z.coerce.boolean().prefault(false),
   canBeTraded: z.coerce.boolean().prefault(false),
+  isFarmSeed: z.coerce.boolean().prefault(false),
+  farmGrowTimeSeconds: z.coerce.number().int().min(0).prefault(0),
+  farmYieldItemId: z.string().nullable(),
+  farmMinLevel: z.coerce.number().int().min(1).max(100).prefault(1),
+  farmPlantExperience: z.coerce.number().int().min(0).prefault(0),
+  farmHarvestExperience: z.coerce.number().int().min(0).prefault(0),
+  farmSellValue: z.coerce.number().int().min(0).prefault(0),
+  farmExtractSeedItemId: z.string().nullable(),
+  farmExtractSeedCount: z.coerce.number().int().min(0).prefault(0),
+  isFarmFertilizer: z.coerce.boolean().prefault(false),
+  farmTimeReductionSeconds: z.coerce.number().int().min(0).prefault(0),
+  farmFertilizerExperience: z.coerce.number().int().min(0).prefault(0),
   craftingExperience: z.coerce.number().int().min(0).prefault(0),
   crystalTargetTypes: z.enum(ItemTypes).nullable(),
   bloodlineId: z.string().nullable(),

@@ -18,6 +18,7 @@ import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
 import Model3d from "@/layout/Model3d";
 import { getPreventTypeName } from "@/libs/combat/util";
+import { getFarmPlantExperience } from "@/libs/farming";
 import { getRewardArray } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -122,6 +123,19 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   // the jutsus/traininggrounds/items modals) where the evolution chain is meaningful.
   const isJutsuItem = "jutsuType" in item;
   const isGameItem = "itemType" in item && !("jutsuType" in item);
+  const farmYieldItemId = "farmYieldItemId" in item ? item.farmYieldItemId : null;
+  const farmExtractSeedItemId =
+    "farmExtractSeedItemId" in item ? item.farmExtractSeedItemId : null;
+  const { data: itemNames } = api.item.getAllNames.useQuery(undefined, {
+    enabled: !!farmYieldItemId || !!farmExtractSeedItemId,
+    staleTime: 5 * 60 * 1000,
+  });
+  const farmYieldItemName = itemNames?.find(
+    (itemName) => itemName.id === farmYieldItemId,
+  )?.name;
+  const farmExtractSeedItemName = itemNames?.find(
+    (itemName) => itemName.id === farmExtractSeedItemId,
+  )?.name;
   const { data: jutsuEvolutions } = api.jutsu.getEvolutions.useQuery(
     { jutsuId: item.id },
     { enabled: isJutsuItem && !hideData && !!showEvolutions, staleTime: 5 * 60 * 1000 },
@@ -464,6 +478,48 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {"canBeCrafted" in item && item.canBeCrafted && (
                 <p>
                   <b>Can be Crafted</b>: {item.canBeCrafted ? "yes" : "no"}
+                </p>
+              )}
+              {"isFarmSeed" in item && item.isFarmSeed && (
+                <p>
+                  <b>Farm Seed</b>: grow {item.farmGrowTimeSeconds}s · min grow lvl{" "}
+                  {item.farmMinLevel}
+                  {getFarmPlantExperience(item) > 0
+                    ? ` · plant ${getFarmPlantExperience(item)} XP`
+                    : ""}
+                  {farmYieldItemName ? ` · yields ${farmYieldItemName}` : ""}
+                  {item.farmSellValue > 0
+                    ? ` · farm shop ${item.farmSellValue} coins`
+                    : ""}
+                  {item.inShop && userData && canChangeContent(userData.role)
+                    ? " · ⚠ also in item shop (should be off)"
+                    : ""}
+                </p>
+              )}
+              {"farmSellValue" in item &&
+                item.farmSellValue > 0 &&
+                !item.isFarmSeed &&
+                !item.isFarmFertilizer && (
+                  <p>
+                    <b>Farm Sell Value</b>: {item.farmSellValue} coins
+                    {"farmHarvestExperience" in item && item.farmHarvestExperience > 0
+                      ? ` · harvest ${item.farmHarvestExperience} XP`
+                      : ""}
+                  </p>
+                )}
+              {"farmExtractSeedCount" in item && item.farmExtractSeedCount > 0 && (
+                <p>
+                  <b>Seed Extraction</b>: {item.farmExtractSeedCount}{" "}
+                  {farmExtractSeedItemName ?? "seeds"}
+                </p>
+              )}
+              {"isFarmFertilizer" in item && item.isFarmFertilizer && (
+                <p>
+                  <b>Farm Fertilizer</b>: −{item.farmTimeReductionSeconds}s grow time
+                  {"farmFertilizerExperience" in item &&
+                  item.farmFertilizerExperience > 0
+                    ? ` · apply ${item.farmFertilizerExperience} XP`
+                    : ""}
                 </p>
               )}
               {"statClassification" in item && item.statClassification && (

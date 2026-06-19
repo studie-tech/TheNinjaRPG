@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
+  FARM_GOLD_FED_TIME_REDUCTION_PERCENT,
   FED_EVENT_ITEMS_DEFAULT,
   FED_EVENT_ITEMS_GOLD,
   FED_EVENT_ITEMS_NORMAL,
@@ -519,6 +520,7 @@ const PayPalSubscriptionButton = (props: {
         <li>+{FED_EVENT_ITEMS_GOLD - FED_EVENT_ITEMS_DEFAULT} Event inventory space</li>
         <li>+{FED_GOLD_JUTSU_SLOTS} Jutsu slots</li>
         <li>+{FED_GOLD_BANK_INTEREST}% bank interest</li>
+        <li>{FARM_GOLD_FED_TIME_REDUCTION_PERCENT}% faster farming</li>
         <li>{FED_JUTSU_LOADOUTS_BASE + FED_GOLD_JUTSU_LOADOUTS} jutsu loadouts</li>
         <li>{FED_ITEM_LOADOUTS_BASE + FED_GOLD_ITEM_LOADOUTS} item loadouts</li>
         <li>+{SKILL_TREE_RESET_FREE_GOLD} skill tree resets per month</li>

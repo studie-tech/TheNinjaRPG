@@ -12,6 +12,7 @@ const user = {
   medicalExperience: 0,
   huntingExperience: 0,
   gatheringExperience: 0,
+  farmingExperience: 0,
   completedQuests: [],
 };
 
@@ -29,6 +30,7 @@ const quest: QuestAvailability = {
   prerequisiteQuestId: null,
   retryDelay: "none",
   requiredLevel: 1,
+  requiredFarmingLevel: 0,
   maxLevel: 100,
 };
 
@@ -89,6 +91,21 @@ describe("isAvailableUserQuests legacy compatibility", () => {
     expect(
       available({ requiredLevel: 20, maxLevel: 40 }, { level: 99, originalLevel: 30 })
         .check,
+    ).toBe(true);
+  });
+
+  it("gates quests by minimum farming level", () => {
+    expect(available({ requiredFarmingLevel: 2 }).message).toContain(
+      "farming level 2",
+    );
+    expect(
+      available({ requiredFarmingLevel: 2 }, { farmingExperience: 500 }).check,
+    ).toBe(true);
+  });
+
+  it("does not apply farming level gates to daily quests", () => {
+    expect(
+      available({ questType: "daily", requiredFarmingLevel: 100 }).check,
     ).toBe(true);
   });
 

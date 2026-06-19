@@ -44,6 +44,7 @@ import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import { useTutorialStep } from "@/hooks/tutorial";
 import AvatarImage from "@/layout/Avatar";
+import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
 import Image from "@/layout/Image";
 import { LogbookEntry, QuestDialogScene } from "@/layout/Logbook";
@@ -71,6 +72,7 @@ import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { getBackgroundColor } from "@/libs/threejs/biome";
+import { applyCanvasDayNightBrightness } from "@/libs/threejs/dayNight";
 import { OrbitControls } from "@/libs/threejs/OrbitControls";
 import {
   buildWindowNav,
@@ -2067,6 +2069,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         );
         // Clean up DOM element and event listeners before returning
         contextHandlers.cleanup();
+        applyCanvasDayNightBrightness(renderer?.domElement, 1);
         safeRemoveRendererElement(renderer, sceneRef);
         setWebglError(true);
         return;
@@ -2539,6 +2542,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
         // Render the scene (skip if WebGL context is lost)
         const endRender = profiler.mark("animate_render");
+        applyCanvasDayNightBrightness(renderer?.domElement);
         if (!contextHandlers.isContextLost() && renderer) {
           renderer.render(scene, camera);
         }
@@ -2652,7 +2656,12 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   return (
     <>
-      <div id="tutorial-travel-sector" ref={mountRef}></div>
+      <div className="relative">
+        <div id="tutorial-travel-sector" ref={mountRef}></div>
+        <div className="pointer-events-none absolute top-3 right-3 z-10">
+          <DayNightIndicator className="pointer-events-auto rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm" />
+        </div>
+      </div>
       {webglError && <WebGlError />}
       {currentStructure && (
         <div className="absolute bottom-4 left-4 z-20 rounded-lg bg-black/70 p-4 text-white shadow-lg">

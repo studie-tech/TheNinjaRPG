@@ -131,6 +131,9 @@ export const XP_BRACKETS = [
   { bracket: 6, min: 2_500_001, max: 3_000_000 },
   { bracket: 7, min: 3_000_001, max: Infinity },
 ] as const;
+export const PLAYER_LEVEL_XP_BASE_FACTOR = 500;
+export const PLAYER_LEVEL_XP_HIGH_FACTOR = 950;
+export const PLAYER_LEVEL_XP_HIGH_THRESHOLD = 80;
 
 /** How long (seconds) a player's bracket immunity is lifted after they initiate any attack */
 export const BRACKET_IMMUNITY_LIFT_SECS = 300; // 5 minutes
@@ -1939,6 +1942,71 @@ export const IMG_OCCUPATION_HUNTER =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2xooNenMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8.webp";
 export const IMG_OCCUPATION_CRAFTING =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7YhkcAXKPBOUWGyFuM4DlL1v5HNTZhkte0z6.webp";
+// Local until uploaded to production UploadThing (same app as other occupations).
+// Source copies: assets/occupations/farming.png, assets/farming/*
+export const IMG_OCCUPATION_FARMING = "/layouts/farming/farming-home.png";
+
+// Global day/night cycle (UTC, shared across world views)
+export const WORLD_CYCLE_SECONDS = 30 * 60;
+export const WORLD_DAY_SECONDS = 15 * 60;
+export const WORLD_NIGHT_SECONDS = 15 * 60;
+export const WORLD_CYCLE_TRANSITION_SECONDS = 45;
+export const WORLD_DAY_BRIGHTNESS = 1;
+export const WORLD_NIGHT_BRIGHTNESS = 0.38;
+
+// Farming occupation
+export const FARM_STARTING_PLOTS = 5;
+export const FARM_PLOT_COLUMNS = 5;
+export const FARM_MAX_PLOTS = 20;
+export const FARM_WATER_TIME_REDUCTION_SECONDS = 15 * 60;
+export const FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS = 60;
+export const FARM_PVP_LOSS_TIME_REDUCTION_SECONDS = 60;
+export const FARM_PVP_WIN_TIME_REDUCTION_SECONDS = 90;
+export const FARM_GOLD_FED_TIME_REDUCTION_PERCENT = 15;
+export const FARM_MAX_CROP_SELL_QUANTITY = 50;
+export const FARM_CROPS_PER_EXTRACTOR = 10;
+export const FARM_SEED_EXTRACTION_SECONDS_PER_CROP = 5 * 60;
+export const FARM_WATER_EXPERIENCE = 15;
+export const FARM_PLOT_PURCHASE_COST = 250;
+export const FARM_EXTRACTOR_PURCHASE_COST = 500;
+export const FARM_GROWTH_STAGES = 4;
+export const FARMING_MAX_LEVEL = 100;
+export const FARM_PLOT_PURCHASE_MIN_LEVEL = 10;
+export const FARM_PLOT_PURCHASE_LEVEL_INTERVAL = 6;
+
+export const FARM_LEVEL_EXTRACTOR_CAP: { level: number; max: number }[] = [
+  { level: 1, max: 0 },
+  { level: 10, max: 1 },
+  { level: 55, max: 2 },
+  { level: 100, max: 3 },
+];
+
+export type FarmShopEntryType = "PLOT" | "EXTRACTOR" | "SEED" | "FERTILIZER";
+
+export const FARM_SHOP_ENTRIES: {
+  type: FarmShopEntryType;
+  label: string;
+  cost: number;
+  minLevel: number;
+  itemId?: string;
+}[] = [
+  {
+    type: "PLOT",
+    label: "Extra Farm Plot",
+    cost: FARM_PLOT_PURCHASE_COST,
+    minLevel: FARM_PLOT_PURCHASE_MIN_LEVEL,
+  },
+  {
+    type: "EXTRACTOR",
+    label: "Seed Extractor",
+    cost: FARM_EXTRACTOR_PURCHASE_COST,
+    minLevel: 10,
+  },
+];
+
+// Farm scene textures (local until production CDN upload — see IMG_OCCUPATION_FARMING)
+export const IMG_FARM_BACKGROUND = "/layouts/farming/farm-background-v2.png";
+export const IMG_FARM_PLOT_SOIL = "/layouts/farming/farm-plot-soil-v5.png";
 
 // Marketing constants
 export const TOTAL_PLAYERS_MILESTONE = 1000000;

@@ -51,3 +51,6 @@ scripts/.artifacts/
 
 # World topology is generated deterministically and committed so the browser and
 # server always deploy the same neighbor graph.
+
+# clerk configuration (can include secrets)
+/.clerk/

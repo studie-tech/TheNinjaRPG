@@ -13,6 +13,7 @@ const quest = {
   id: "mission-1",
   name: "A-rank mission",
   questType: "mission",
+  requiredFarmingLevel: 0,
   questRank: "A",
   retryDelay: "none",
   hidden: false,
@@ -52,18 +53,45 @@ const user = {
 /** Minimal write client for the successful upsert + daily-counter assignment path. */
 const makeClient = (assignedQuest: { questId: string } | null = { questId: quest.id }) => {
   const where = vi.fn().mockResolvedValue({ rowsAffected: 1 });
-  const update = vi.fn(() => ({ set: vi.fn(() => ({ where })) }));
+  // Hoisted so tests can inspect what was written, not just that a write happened.
+  const set = vi.fn((_update: Record<string, unknown>) => ({ where }));
+  const update = vi.fn(() => ({ set }));
   const onDuplicateKeyUpdate = vi.fn().mockResolvedValue(undefined);
   const values = vi.fn(() => ({ onDuplicateKeyUpdate }));
   const insert = vi.fn(() => ({ values }));
   const findFirst = vi.fn().mockResolvedValue(assignedQuest);
+  // Farm collection catalog: seeds, then their yield crops, then the player's log.
+  const findItems = vi
+    .fn()
+    .mockResolvedValueOnce([
+      {
+        isFarmSeed: true,
+        hidden: false,
+        farmYieldItemId: "crop-1",
+        farmMinLevel: 1,
+        farmGrowTimeSeconds: 60,
+      },
+    ])
+    .mockResolvedValueOnce([
+      { id: "crop-1", name: "Carrot", image: "/carrot.png", hidden: false },
+    ]);
+  const findCollectionRows = vi
+    .fn()
+    .mockResolvedValue([
+      { itemId: "crop-1", firstHarvestedAt: new Date("2026-08-01T12:00:00Z") },
+    ]);
   return {
     client: {
       update,
       insert,
-      query: { overworldAiPlacementQuest: { findFirst } },
+      query: {
+        item: { findMany: findItems },
+        farmCollectionLog: { findMany: findCollectionRows },
+        overworldAiPlacementQuest: { findFirst },
+      },
     } as never,
     update,
+    set,
     insert,
     findFirst,
   };
@@ -507,5 +535,65 @@ describe("assignQuestToUser compatibility", () => {
     const goal = tracker?.goals.find((g) => g.id === "obj-1");
     expect(goal?.done).toBe(false);
     expect(goal?.value).toBe(0);
+  });
+
+  it("rejects a quest above the user's farming level before issuing writes", async () => {
+    const { client, update, insert } = makeClient();
+
+    const result = await assignQuestToUser({
+      client,
+      user: { ...user, userQuests: [] } as never,
+      quest: { ...quest, requiredFarmingLevel: 2 } as never,
+      source: "ui",
+      sectorVillage: null,
+      prevAttempt: undefined,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("farming level 2");
+    expect(insert).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+
+  it("hydrates collection progress when the quest is accepted", async () => {
+    const { client, set } = makeClient();
+    const collectionQuest = {
+      ...quest,
+      id: "farm-collection",
+      content: {
+        ...quest.content,
+        objectives: [
+          {
+            id: "collection-goal",
+            task: "farming_collection_log",
+            value: 1,
+            description: "",
+            successDescription: "",
+          },
+        ],
+      },
+    };
+
+    await upsertQuestEntry(
+      client,
+      { ...user, userQuests: [] } as never,
+      collectionQuest as never,
+      "system",
+      null,
+    );
+
+    const trackerWrite = set.mock.calls
+      .map(([update]) => update)
+      .find((update) => "questData" in update);
+    expect(trackerWrite?.questData).toBeInstanceOf(Array);
+    const questData = trackerWrite?.questData as
+      | { goals: { id: string; value: number; done: boolean }[] }[]
+      | undefined;
+    expect(questData?.[0]?.goals[0]).toMatchObject({
+      id: "collection-goal",
+      value: 1,
+      done: true,
+    });
   });
 });

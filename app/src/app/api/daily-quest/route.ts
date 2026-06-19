@@ -1,7 +1,6 @@
 import { and, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
-import type { UserRank } from "@/drizzle/constants";
-import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import { type UserRank, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import {
   handleEndpointError,
@@ -90,7 +89,11 @@ export async function GET() {
     // Book-keeping to do upsert afterwards more efficiently
     const memory: {
       questId: string;
-      combos: { rank: UserRank; villageId: string; level: number }[];
+      combos: {
+        rank: UserRank;
+        villageId: string;
+        level: number;
+      }[];
     }[] = [];
 
     // For each user rank+village+level combo, get a random daily quest

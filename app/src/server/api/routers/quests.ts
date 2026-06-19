@@ -18,6 +18,7 @@ import { baseServerResponse, errorResponse, serverError } from "@/api/trpc";
 import type { QuestType, UserRole } from "@/drizzle/constants";
 import {
   ERRANDS_PER_DAY,
+  FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS,
   IMG_AVATAR_DEFAULT,
   LetterRanks,
   MAX_SKILL_POINTS,
@@ -64,6 +65,7 @@ import {
   village,
   war,
 } from "@/drizzle/schema";
+import { getFarmingLevel, qualifiesForFarmActivityReward } from "@/libs/farming";
 import { getGatheringItemDrops } from "@/libs/gathering";
 import { getHuntingItemDrops } from "@/libs/hunting";
 import {
@@ -102,6 +104,10 @@ import { fetchSectorVillage } from "@/routers/village";
 import { fetchActiveWars } from "@/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
+import {
+  getFarmCollectionCount,
+  reduceActiveFarmPlotTimers,
+} from "@/server/utils/farming";
 import { chunkArray, getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -445,6 +451,7 @@ export const questsRouter = createTRPCRouter({
               eq(quest.questType, input.type),
               eq(quest.questRank, input.rank),
               lte(quest.requiredLevel, input.userLevel),
+              lte(quest.requiredFarmingLevel, getFarmingLevel(user.farmingExperience)),
               gte(quest.maxLevel, input.userLevel),
               or(isNull(quest.startsAt), lte(quest.startsAt, new Date().toISOString())),
               or(isNull(quest.endsAt), gte(quest.endsAt, new Date().toISOString())),
@@ -2014,6 +2021,9 @@ export const fetchUncompletedQuests = async (
         eq(quest.questType, type),
         gte(quest.maxLevel, user.level),
         lte(quest.requiredLevel, user.level),
+        ...(type === "daily"
+          ? []
+          : [lte(quest.requiredFarmingLevel, getFarmingLevel(user.farmingExperience))]),
         or(isNull(quest.startsAt), lte(quest.startsAt, now)),
         or(isNull(quest.endsAt), gte(quest.endsAt, now)),
         ...(availableLetters.length > 0
@@ -2611,7 +2621,15 @@ export const upsertQuestEntry = async (
   }
   // Get updated trackers and update user
   user.userQuests?.push({ ...entry, quest });
-  const { trackers } = getNewTrackers(user, [{ task: "any" }]);
+  const trackerUser = quest.content.objectives.some(
+    (objective) => objective.task === "farming_collection_log",
+  )
+    ? {
+        ...user,
+        farmingCollectionCount: await getFarmCollectionCount(client, user.userId),
+      }
+    : user;
+  const { trackers } = getNewTrackers(trackerUser, [{ task: "any" }]);
   promises.push(
     client
       .update(userData)
@@ -2922,21 +2940,42 @@ export const commitQuestObjectiveRewards = async (info: {
       ? { ...slotClearPatch, ...info.postClaimUserDataPatch }
       : undefined;
 
-  // Update database
-  const [{ items, jutsus, bloodlines, badges, sageModes }] = await Promise.all([
-    // Update rewards
-    updateRewards({
+  const farmRewardAt = new Date();
+  const shouldReduceFarmTimers =
+    resolved &&
+    !!userQuest &&
+    qualifiesForFarmActivityReward(
+      userQuest.quest.questType,
+      userQuest.quest.questRank,
+    );
+  const reduceFarmTimers = () =>
+    reduceActiveFarmPlotTimers(
       client,
-      user,
-      rewards,
-      questCounterField,
-      reason: "QUEST",
-      // Opt in to the herbs_gathered tracker: this is the gathering-claim path and `user`
-      // here is the fully-hydrated row (with quest relations).
-      questUser: user,
-      postClaimUserDataPatch: mergedUserDataPatch,
-      dropTrackerForQuestId: resolved ? userQuest?.questId : undefined,
-    }),
+      userId,
+      FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS,
+      farmRewardAt,
+    );
+
+  const rewardPromise = updateRewards({
+    client,
+    user,
+    rewards,
+    questCounterField,
+    reason: "QUEST",
+    // Opt in to the herbs_gathered tracker: this is the gathering-claim path and `user`
+    // here is the fully-hydrated row (with quest relations).
+    questUser: user,
+    postClaimUserDataPatch: mergedUserDataPatch,
+    dropTrackerForQuestId: resolved ? userQuest?.questId : undefined,
+  });
+
+  // Update database. Chain the farm bonus after payout so a failed reward write cannot still
+  // shorten crop timers and the established completion/snapshot/payout ordering is preserved.
+  const [rewardResult, farmRewardResult] = await Promise.all([
+    rewardPromise,
+    shouldReduceFarmTimers
+      ? rewardPromise.then(reduceFarmTimers)
+      : Promise.resolve(null),
     // Credit the sensei their per-mission ryo bonus
     ...(senseiId
       ? [
@@ -2955,6 +2994,11 @@ export const commitQuestObjectiveRewards = async (info: {
         ]
       : []),
   ]);
+  const { items, jutsus, bloodlines, badges, sageModes } = rewardResult;
+
+  if (farmRewardResult && farmRewardResult.rowsAffected > 0) {
+    postNotifications.push("Active crop growth times reduced by 1 minute.");
+  }
 
   // Restore the full (response) trackers only AFTER the DB write: updateRewards persists
   // user.questData, so during it user.questData must hold the filtered set, not the

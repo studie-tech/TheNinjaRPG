@@ -96,14 +96,23 @@ export const useItemEditForm = (
     name: "canBeCrafted",
   });
 
+  const isFarmSeed = useWatch({
+    control: form.control,
+    name: "isFarmSeed",
+  });
+
+  const isFarmFertilizer = useWatch({
+    control: form.control,
+    name: "isFarmFertilizer",
+  });
+
   // Watch for changes to itemType
   const itemType = useWatch({
     control: form.control,
     name: "itemType",
   });
 
-  // All item names, shared by the crafting-requirement and evolution parent pickers
-  // (the evolution picker always needs them, so a conditional query would be dead)
+  // All item names, shared by the crafting, farming, and evolution pickers.
   const { data: allItemNames } = api.item.getAllNames.useQuery();
 
   // Query for bloodlines for bloodline requirement dropdown
@@ -173,6 +182,53 @@ export const useItemEditForm = (
     { id: "canBeTraded", type: "boolean" },
     { id: "canBeImbued", type: "boolean" },
     { id: "craftingExperience", type: "number", label: "Crafting Experience" },
+    { id: "isFarmSeed", type: "boolean", label: "Farm Seed" },
+    { id: "farmGrowTimeSeconds", type: "number", label: "Grow Time (seconds)" },
+    {
+      id: "farmYieldItemId",
+      type: "db_values",
+      values: allItemNames?.filter((i) => i.id !== item.id) ?? [],
+      label: "Crop Item (yield)",
+      resetButton: true,
+    },
+    { id: "farmMinLevel", type: "number", label: "Min Grow Level (to plant)" },
+    ...(isFarmSeed
+      ? [
+          {
+            id: "farmPlantExperience" as const,
+            type: "number" as const,
+            label: "Plant XP",
+          },
+        ]
+      : !isFarmFertilizer
+        ? [
+            {
+              id: "farmHarvestExperience" as const,
+              type: "number" as const,
+              label: "Harvest XP",
+            },
+          ]
+        : []),
+    {
+      id: "farmSellValue",
+      type: "number",
+      label: isFarmSeed ? "Farm Shop Price (coins)" : "Farm Crop Sell Value (coins)",
+    },
+    {
+      id: "farmExtractSeedItemId",
+      type: "db_values",
+      values: allItemNames?.filter((i) => i.id !== item.id) ?? [],
+      label: "Extract → Seed Item",
+      resetButton: true,
+    },
+    { id: "farmExtractSeedCount", type: "number", label: "Seeds Per Extraction" },
+    { id: "isFarmFertilizer", type: "boolean", label: "Farm Fertilizer" },
+    {
+      id: "farmTimeReductionSeconds",
+      type: "number",
+      label: "Grow Time Reduction (seconds)",
+    },
+    { id: "farmFertilizerExperience", type: "number", label: "Apply XP" },
     { id: "expireFromStoreAt", type: "date", label: "Remove from store at" },
   ];
 

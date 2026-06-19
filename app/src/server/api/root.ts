@@ -16,6 +16,7 @@ import { combatRouter } from "./routers/combat";
 import { commentsRouter } from "./routers/comments";
 import { conceptartRouter } from "./routers/conceptart";
 import { dataRouter } from "./routers/data";
+import { farmingRouter } from "./routers/farming";
 import { forumRouter } from "./routers/forum";
 import { homeRouter } from "./routers/home";
 import { hospitalRouter } from "./routers/hospital";
@@ -111,6 +112,7 @@ export const appRouter = createTRPCRouter({
   bounty: bountyRouter,
   skillTree: skillTreeRouter,
   occupation: occupationRouter,
+  farming: farmingRouter,
   auction: auctionRouter,
   support: supportRouter,
   applications: applicationsRouter,

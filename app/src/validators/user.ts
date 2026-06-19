@@ -126,6 +126,7 @@ export const getPublicUsersSchema = z.object({
     "Online",
     "Strongest",
     "Crafting",
+    "Farming",
     "Medical",
     "Weakest",
     "PvP",

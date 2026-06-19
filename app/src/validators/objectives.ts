@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  FARMING_MAX_LEVEL,
   GATHERING_RANKS,
   HUNTING_RANKS,
   IMG_BADGE_A_CRIME_TOTAL,
@@ -47,6 +48,7 @@ import {
   IMG_BADGE_USE_JUTSU_COMBAT,
   IMG_BADGE_USER_LEVEL,
   IMG_BADGE_WIN_QUEST,
+  IMG_FARM_PLOT_SOIL,
   LetterRanks,
   MEDNIN_RANKS,
   QuestTypes,
@@ -103,6 +105,12 @@ export const SimpleTasks = [
   "items_crafted",
   "creatures_hunted",
   "herbs_gathered",
+  "seeds_planted",
+  "plants_watered",
+  "plants_fertilized",
+  "plants_harvested",
+  "farming_collection_log",
+  "farming_level",
   //"students_trained",
 ] as const;
 export type SimpleTask = (typeof SimpleTasks)[number];
@@ -295,6 +303,15 @@ export const objectiveImageMap: Record<
   items_crafted: { image: IMG_BADGE_ITEMS_CRAFTED, title: "Items Crafted" },
   creatures_hunted: { image: IMG_BADGE_CREATURES_HUNTED, title: "Creatures Hunted" },
   herbs_gathered: { image: IMG_BADGE_HERBS_GATHERED, title: "Herbs Gathered" },
+  seeds_planted: { image: IMG_FARM_PLOT_SOIL, title: "Seeds Planted" },
+  plants_watered: { image: IMG_FARM_PLOT_SOIL, title: "Plants Watered" },
+  plants_fertilized: { image: IMG_FARM_PLOT_SOIL, title: "Plants Fertilized" },
+  plants_harvested: { image: IMG_FARM_PLOT_SOIL, title: "Plants Harvested" },
+  farming_collection_log: {
+    image: IMG_FARM_PLOT_SOIL,
+    title: "Farming Collection",
+  },
+  farming_level: { image: IMG_FARM_PLOT_SOIL, title: "Farming Level" },
   move_to_location: { image: IMG_BADGE_MOVE_TO_LOCATION, title: "Travel" },
   win_encounter_at_location: {
     image: IMG_BADGE_RANDOM_ENCOUNTER_WINS,
@@ -655,6 +672,7 @@ export const QuestValidatorRawSchema = z.object({
   huntingRank: z.enum(HUNTING_RANKS).optional().nullish(),
   gatheringRank: z.enum(GATHERING_RANKS).optional().nullish(),
   requiredLevel: z.coerce.number().min(0).max(100).optional(),
+  requiredFarmingLevel: z.coerce.number().min(0).max(FARMING_MAX_LEVEL).optional(),
   maxLevel: z.coerce.number().min(0).max(100).optional(),
   maxAttempts: z.coerce.number().min(0).max(100).prefault(1),
   maxCompletes: z.coerce.number().min(0).max(100).prefault(1),

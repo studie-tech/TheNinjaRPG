@@ -6,6 +6,9 @@ import {
   getUserCaps,
   HomeTypeDetails,
   HP_PER_LVL,
+  PLAYER_LEVEL_XP_BASE_FACTOR,
+  PLAYER_LEVEL_XP_HIGH_FACTOR,
+  PLAYER_LEVEL_XP_HIGH_THRESHOLD,
   RANKS_RESTRICTED_FROM_PVP,
   SP_PER_LVL,
   XP_BRACKETS,
@@ -31,7 +34,10 @@ import type { StatSchemaType } from "@/validators/combat";
  */
 export function calcLevelRequirements(level: number): number {
   const prevLvl = level - 1;
-  const factor = level > 80 ? 950 : 500;
+  const factor =
+    level > PLAYER_LEVEL_XP_HIGH_THRESHOLD
+      ? PLAYER_LEVEL_XP_HIGH_FACTOR
+      : PLAYER_LEVEL_XP_BASE_FACTOR;
   const cost = factor + prevLvl * factor;
   const prevCost = prevLvl > 0 ? calcLevelRequirements(prevLvl) : 0;
   return cost + prevCost;
@@ -46,7 +52,10 @@ export const calcLevel = (experience: number) => {
   let level = 1;
   let exp = 0;
   while (exp < experience) {
-    const factor = level > 80 ? 950 : 500;
+    const factor =
+      level > PLAYER_LEVEL_XP_HIGH_THRESHOLD
+        ? PLAYER_LEVEL_XP_HIGH_FACTOR
+        : PLAYER_LEVEL_XP_BASE_FACTOR;
     exp += factor + level * factor;
     if (exp < experience) {
       level += 1;

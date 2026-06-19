@@ -1448,6 +1448,18 @@ export const item = mysqlTable(
     canBeHunted: boolean("canBeHunted").default(false).notNull(),
     canBeGathered: boolean("canBeGathered").default(false).notNull(),
     canBeTraded: boolean("canBeTraded").default(false).notNull(),
+    isFarmSeed: boolean("isFarmSeed").default(false).notNull(),
+    farmGrowTimeSeconds: int("farmGrowTimeSeconds").default(0).notNull(),
+    farmYieldItemId: varchar("farmYieldItemId", { length: 191 }),
+    farmMinLevel: int("farmMinLevel").default(1).notNull(),
+    farmPlantExperience: int("farmPlantExperience").default(0).notNull(),
+    farmHarvestExperience: int("farmHarvestExperience").default(0).notNull(),
+    farmSellValue: int("farmSellValue").default(0).notNull(),
+    farmExtractSeedItemId: varchar("farmExtractSeedItemId", { length: 191 }),
+    farmExtractSeedCount: int("farmExtractSeedCount").default(0).notNull(),
+    isFarmFertilizer: boolean("isFarmFertilizer").default(false).notNull(),
+    farmTimeReductionSeconds: int("farmTimeReductionSeconds").default(0).notNull(),
+    farmFertilizerExperience: int("farmFertilizerExperience").default(0).notNull(),
     craftingExperience: int("craftingExperience").default(0).notNull(),
     crystalTargetTypes: mysqlEnum("crystalTargetTypes", consts.ItemTypes),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
@@ -1497,6 +1509,7 @@ export const itemRelations = relations(item, ({ one, many }) => ({
   }),
   evolutions: many(item, { relationName: "itemEvolutions" }),
   variants: many(itemVariant),
+  farmCollectionLogs: many(farmCollectionLog),
 }));
 
 export const itemVariant = mysqlTable(
@@ -2408,6 +2421,14 @@ export const userData = mysqlTable(
     craftingExperience: int("craftingExperience").default(0).notNull(),
     huntingExperience: int("huntingExperience").default(0).notNull(),
     gatheringExperience: int("gatheringExperience").default(0).notNull(),
+    farmingExperience: int("farmingExperience").default(0).notNull(),
+    farmCurrency: int("farmCurrency").default(0).notNull(),
+    farmPlotsPurchased: smallint("farmPlotsPurchased", { unsigned: true })
+      .default(0)
+      .notNull(),
+    farmExtractorsOwned: smallint("farmExtractorsOwned", { unsigned: true })
+      .default(0)
+      .notNull(),
     // Settings
     preferredStat: mysqlEnum("preferredStat", consts.StatTypes),
     preferredGeneral1: mysqlEnum("preferredGeneral1", consts.GeneralTypes),
@@ -2622,6 +2643,8 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   completedQuests: many(questHistory, { relationName: "completedQuests" }),
   conversations: many(user2conversation),
   items: many(userItem),
+  farmPlots: many(farmPlot),
+  farmCollectionLogs: many(farmCollectionLog),
   jutsus: many(userJutsu),
   badges: many(userBadge),
   recruitedUsers: many(userData, { relationName: "recruiter" }),
@@ -3577,6 +3600,7 @@ export const quest = mysqlTable(
     huntingRank: mysqlEnum("huntingRank", consts.HUNTING_RANKS).default("NONE"),
     gatheringRank: mysqlEnum("gatheringRank", consts.GATHERING_RANKS).default("NONE"),
     requiredLevel: int("requiredLevel").default(1).notNull(),
+    requiredFarmingLevel: int("requiredFarmingLevel").default(0).notNull(),
     prerequisiteQuestId: varchar("prerequisiteQuestId", { length: 191 }),
     tierLevel: int("tierLevel"),
     questType: mysqlEnum("questType", consts.QuestTypes).notNull(),
@@ -3615,6 +3639,9 @@ export const quest = mysqlTable(
       questTypeIdx: index("Quest_questType_idx").on(table.questType),
       questRankIdx: index("Quest_questRank_idx").on(table.questRank),
       requiredLevelIdx: index("Quest_requiredLevel_idx").on(table.requiredLevel),
+      requiredFarmingLevelIdx: index("Quest_requiredFarmingLevel_idx").on(
+        table.requiredFarmingLevel,
+      ),
       maxLevelIdx: index("Quest_maxLevel_idx").on(table.maxLevel),
       requiredVillageIdx: index("Quest_requiredVillage_idx").on(table.requiredVillage),
       requiredBloodlineIdx: index("Quest_requiredBloodline_idx").on(
@@ -5335,5 +5362,131 @@ export const userStreakProgressRelations = relations(userStreakProgress, ({ one 
   config: one(activityStreakConfig, {
     fields: [userStreakProgress.configId],
     references: [activityStreakConfig.id],
+  }),
+}));
+
+export const farmPlot = mysqlTable(
+  "FarmPlot",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    slotIndex: smallint("slotIndex", { unsigned: true }).notNull(),
+    seedItemId: varchar("seedItemId", { length: 191 }),
+    plantedAt: datetime("plantedAt", { mode: "date", fsp: 3 }),
+    finishAt: datetime("finishAt", { mode: "date", fsp: 3 }),
+    lastWateredAt: datetime("lastWateredAt", { mode: "date", fsp: 3 }),
+    fertilizerApplied: boolean("fertilizerApplied").default(false).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("FarmPlot_userId_idx").on(table.userId),
+      userSlotKey: uniqueIndex("FarmPlot_userId_slotIndex_key").on(
+        table.userId,
+        table.slotIndex,
+      ),
+    };
+  },
+);
+export type FarmPlot = InferSelectModel<typeof farmPlot>;
+
+export const farmPlotRelations = relations(farmPlot, ({ one }) => ({
+  user: one(userData, {
+    fields: [farmPlot.userId],
+    references: [userData.userId],
+  }),
+  seedItem: one(item, {
+    fields: [farmPlot.seedItemId],
+    references: [item.id],
+  }),
+}));
+
+export const farmCollectionLog = mysqlTable(
+  "FarmCollectionLog",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    itemId: varchar("itemId", { length: 191 }).notNull(),
+    firstHarvestedAt: datetime("firstHarvestedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("FarmCollectionLog_userId_idx").on(table.userId),
+    itemIdIdx: index("FarmCollectionLog_itemId_idx").on(table.itemId),
+    userItemKey: uniqueIndex("FarmCollectionLog_userId_itemId_key").on(
+      table.userId,
+      table.itemId,
+    ),
+  }),
+);
+export type FarmCollectionLog = InferSelectModel<typeof farmCollectionLog>;
+
+export const farmCollectionLogRelations = relations(
+  farmCollectionLog,
+  ({ one }) => ({
+    user: one(userData, {
+      fields: [farmCollectionLog.userId],
+      references: [userData.userId],
+    }),
+    item: one(item, {
+      fields: [farmCollectionLog.itemId],
+      references: [item.id],
+    }),
+  }),
+);
+
+export const farmExtraction = mysqlTable(
+  "FarmExtraction",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    extractorSlot: smallint("extractorSlot", { unsigned: true }).notNull(),
+    cropItemId: varchar("cropItemId", { length: 191 }).notNull(),
+    seedItemId: varchar("seedItemId", { length: 191 }).notNull(),
+    cropQuantity: int("cropQuantity").notNull(),
+    seedQuantity: int("seedQuantity").notNull(),
+    startedAt: datetime("startedAt", { mode: "date", fsp: 3 }).notNull(),
+    finishAt: datetime("finishAt", { mode: "date", fsp: 3 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("FarmExtraction_userId_idx").on(table.userId),
+    userExtractorKey: uniqueIndex("FarmExtraction_userId_extractorSlot_key").on(
+      table.userId,
+      table.extractorSlot,
+    ),
+    userFinishIdx: index("FarmExtraction_userId_finishAt_idx").on(
+      table.userId,
+      table.finishAt,
+    ),
+  }),
+);
+export type FarmExtraction = InferSelectModel<typeof farmExtraction>;
+
+export const farmExtractionRelations = relations(farmExtraction, ({ one }) => ({
+  user: one(userData, {
+    fields: [farmExtraction.userId],
+    references: [userData.userId],
+  }),
+  cropItem: one(item, {
+    fields: [farmExtraction.cropItemId],
+    references: [item.id],
+    relationName: "farmExtractionCropItem",
+  }),
+  seedItem: one(item, {
+    fields: [farmExtraction.seedItemId],
+    references: [item.id],
+    relationName: "farmExtractionSeedItem",
   }),
 }));

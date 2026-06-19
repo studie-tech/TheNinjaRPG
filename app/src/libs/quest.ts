@@ -30,6 +30,7 @@ import {
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import type { GameSetting, Quest, UserData, UserItem } from "@/drizzle/schema";
+import { getFarmingLevel } from "@/libs/farming";
 import { getGatheringRank } from "@/libs/gathering";
 import { calcMedninRank } from "@/libs/hospital";
 import { getHuntingRank } from "@/libs/hunting";
@@ -852,7 +853,10 @@ export type ObjectiveTrackerTaskInput = {
  * @param atPlacementIds - Placement ids the user is authoritatively interacting with now.
  */
 export const getNewTrackers = (
-  user: NonNullable<UserWithRelations> & { useritems?: UserItem[] },
+  user: NonNullable<UserWithRelations> & {
+    useritems?: UserItem[];
+    farmingCollectionCount?: number;
+  },
   tasks: ObjectiveTrackerTaskInput[],
   combatContext?: CombatQuestContext,
   boundPlacementStatus?: ReadonlyMap<string, boolean>,
@@ -1054,6 +1058,13 @@ export const getNewTrackers = (
                 ? user.originalLevel
                 : (user.level ?? 1);
             status.value = userLevel;
+          } else if (task === "farming_level") {
+            status.value = getFarmingLevel(user.farmingExperience);
+          } else if (
+            task === "farming_collection_log" &&
+            typeof user.farmingCollectionCount === "number"
+          ) {
+            status.value = user.farmingCollectionCount;
           } else if (task === "days_in_village") {
             const days = Math.floor(secondsPassed(user.joinedVillageAt) / 60 / 60 / 24);
             status.value = days;
@@ -1168,7 +1179,7 @@ export const getNewTrackers = (
                 if (taskUpdate.increment && killCounts) {
                   status.value += taskUpdate.increment;
                 }
-                if (taskUpdate.value && killCounts) {
+                if (taskUpdate.value !== undefined && killCounts) {
                   status.value = taskUpdate.value;
                 }
               }
@@ -1661,6 +1672,7 @@ export const isAvailableUserQuests = (
     huntingRank?: HUNTING_RANK | null;
     gatheringRank?: GATHERING_RANK | null;
     requiredLevel?: number | null;
+    requiredFarmingLevel?: number | null;
     maxLevel?: number | null;
   },
   user: UserData & {
@@ -1717,6 +1729,11 @@ export const isAvailableUserQuests = (
   const medicalRankCheck = !reqMedRankIdx || userMedRankIdx >= reqMedRankIdx;
   const huntingRankCheck = !reqHuntRankIdx || userHuntRankIdx >= reqHuntRankIdx;
   const gatheringRankCheck = !reqGatherRankIdx || userGatherRankIdx >= reqGatherRankIdx;
+  const farmingLevelCheck =
+    questAndUserQuestInfo.questType === "daily" ||
+    !questAndUserQuestInfo.requiredFarmingLevel ||
+    getFarmingLevel(user.farmingExperience) >=
+      questAndUserQuestInfo.requiredFarmingLevel;
 
   // Level check - user must be >= requiredLevel and <= maxLevel
   // Use originalLevel if available (for combat-scaled users), otherwise use current level
@@ -1776,6 +1793,7 @@ export const isAvailableUserQuests = (
     medicalRankCheck &&
     huntingRankCheck &&
     gatheringRankCheck &&
+    farmingLevelCheck &&
     levelCheck;
 
   // If quest is not available, return the reason
@@ -1797,6 +1815,8 @@ export const isAvailableUserQuests = (
     message += `Quest requires hunting rank ${capitalizeFirstLetter(questHuntRank ?? "NONE")}\n`;
   if (!gatheringRankCheck)
     message += `Quest requires gathering rank ${capitalizeFirstLetter(questGatherRank ?? "NONE")}\n`;
+  if (!farmingLevelCheck)
+    message += `Quest requires farming level ${questAndUserQuestInfo.requiredFarmingLevel}\n`;
   if (!levelCheck) {
     if (
       questAndUserQuestInfo.requiredLevel &&
