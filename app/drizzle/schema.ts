@@ -173,6 +173,93 @@ export const aiProfileRelations = relations(aiProfile, ({ one }) => ({
   }),
 }));
 
+export const overworldAiPlacement = mysqlTable(
+  "OverworldAiPlacement",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    aiTemplateUserId: varchar("aiTemplateUserId", { length: 191 }).notNull(),
+    interactionType: mysqlEnum("interactionType", consts.OverworldInteractionTypes).notNull(),
+    isActive: boolean("isActive").default(true).notNull(),
+    sectorType: mysqlEnum("sectorType", consts.OverworldSectorTypes)
+      .default("specific")
+      .notNull(),
+    locationType: mysqlEnum("locationType", consts.OverworldLocationTypes)
+      .default("specific")
+      .notNull(),
+    sectorList: json("sectorList").$type<number[]>().notNull(),
+    sector: smallint("sector", { unsigned: true }).default(0).notNull(),
+    longitude: tinyint("longitude").default(0).notNull(),
+    latitude: tinyint("latitude").default(0).notNull(),
+    questGiveChance: smallint("questGiveChance", { unsigned: true }).default(0).notNull(),
+    positionVersion: int("positionVersion").default(0).notNull(),
+  },
+  (table) => {
+    return {
+      sectorIdx: index("OverworldAiPlacement_sector_idx").on(table.sector),
+      aiTemplateIdx: index("OverworldAiPlacement_aiTemplateUserId_idx").on(
+        table.aiTemplateUserId,
+      ),
+      activeSectorIdx: index("OverworldAiPlacement_isActive_sector_idx").on(
+        table.isActive,
+        table.sector,
+      ),
+    };
+  },
+);
+export type OverworldAiPlacement = InferSelectModel<typeof overworldAiPlacement>;
+
+export const overworldAiPlacementQuest = mysqlTable(
+  "OverworldAiPlacementQuest",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    placementId: varchar("placementId", { length: 191 }).notNull(),
+    questId: varchar("questId", { length: 191 }).notNull(),
+  },
+  (table) => {
+    return {
+      placementIdx: index("OverworldAiPlacementQuest_placementId_idx").on(table.placementId),
+      placementQuestKey: unique("OverworldAiPlacementQuest_placement_quest_key").on(
+        table.placementId,
+        table.questId,
+      ),
+    };
+  },
+);
+export type OverworldAiPlacementQuest = InferSelectModel<typeof overworldAiPlacementQuest>;
+
+export const overworldAiPlacementRelations = relations(
+  overworldAiPlacement,
+  ({ one, many }) => ({
+    aiTemplate: one(userData, {
+      fields: [overworldAiPlacement.aiTemplateUserId],
+      references: [userData.userId],
+    }),
+    questPool: many(overworldAiPlacementQuest),
+  }),
+);
+
+export const overworldAiPlacementQuestRelations = relations(
+  overworldAiPlacementQuest,
+  ({ one }) => ({
+    placement: one(overworldAiPlacement, {
+      fields: [overworldAiPlacementQuest.placementId],
+      references: [overworldAiPlacement.id],
+    }),
+    quest: one(quest, {
+      fields: [overworldAiPlacementQuest.questId],
+      references: [quest.id],
+    }),
+  }),
+);
+
+export const insertOverworldAiPlacementSchema = createInsertSchema(overworldAiPlacement);
+
 export const anbuSquad = mysqlTable(
   "AnbuSquad",
   {
@@ -2245,6 +2332,9 @@ export const userData = mysqlTable(
       .default(0)
       .notNull(),
     dailyTrainings: smallint("dailyTrainings", { unsigned: true }).default(0).notNull(),
+    dailyOverworldQuestRolls: smallint("dailyOverworldQuestRolls", { unsigned: true })
+      .default(0)
+      .notNull(),
     movedTooFastCount: int("movedTooFastCount").default(0).notNull(),
     extraItemSlots: smallint("extraItemSlots", { unsigned: true }).default(0).notNull(),
     extraJutsuSlots: tinyint("extraJutsuSlots", { unsigned: true })

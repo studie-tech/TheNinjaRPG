@@ -42,6 +42,7 @@ import {
   clan,
   item,
   jutsu,
+  overworldAiPlacement,
   quest,
   questHistory,
   raidDamageThreshold,
@@ -68,6 +69,7 @@ import {
   getMissionHallSettings,
   getNewTrackers,
   getReward,
+  getUserQuests,
   isAvailableUserQuests,
   verifyQuestObjectiveFlow,
 } from "@/libs/quest";
@@ -557,239 +559,21 @@ export const questsRouter = createTRPCRouter({
         fetchUserQuestByQuestId(ctx.drizzle, ctx.userId, input.questId),
       ]);
 
-      // Guards
+      // Cheap pre-fetch guards (UI-only)
       const { user } = updatedUser;
       if (!user) return errorResponse("User does not exist");
-      const ranks = availableQuestLetterRanks(user.rank);
       if (!questData) return errorResponse("Quest does not exist");
       if (user.sector !== input.userSector) return errorResponse("Sector mismatch");
       if (user.isBanned) return errorResponse("You are banned");
-      if (!ranks.includes(questData.questRank)) {
-        return errorResponse(`Rank ${user.rank} not allowed`);
-      }
-      // Availability checks
-      const { check, message } = isAvailableUserQuests(
-        { ...questData, ...prevAttempt },
+
+      return assignQuestToUser({
+        client: ctx.drizzle,
         user,
-      );
-      if (!check) {
-        return errorResponse(`Quest is not available for you: ${message}`);
-      }
-
-      // Check start and end dates
-      if (questData.startsAt && questData.startsAt > new Date().toISOString()) {
-        return errorResponse(`Quest starts in the future`);
-      }
-      if (questData.endsAt && questData.endsAt < new Date().toISOString()) {
-        return errorResponse(`Quest has ended`);
-      }
-
-      // Check if it's too early wrt. retry-limits
-      if (questData.retryDelay !== "none" && prevAttempt?.endAt) {
-        let retryDate = new Date();
-        const endedDate = prevAttempt.endAt;
-        if (questData.retryDelay === "daily") {
-          retryDate = secondsFromDate(DAY_S, endedDate);
-        } else if (questData.retryDelay === "weekly") {
-          retryDate = secondsFromDate(WEEK_S, endedDate);
-        } else if (questData.retryDelay === "monthly") {
-          retryDate = secondsFromDate(MONTH_S, endedDate);
-        }
-        if (retryDate > new Date()) {
-          const msLeft = -secondsPassed(retryDate) * 1000;
-          const timeLeft = getTimeLeftStr(...getDaysHoursMinutesSeconds(msLeft));
-          return errorResponse(`You must wait ${timeLeft} to retry this quest`);
-        }
-      }
-
-      // Check if user is already on this quest
-      const isAlreadyOnQuest = user.userQuests?.some(
-        (q) => q.questId === questData.id && !q.endAt,
-      );
-      if (isAlreadyOnQuest) {
-        return errorResponse(`You are already on this quest: ${questData.name}`);
-      }
-
-      // Handle different quest types
-      if (questData.questType === "story") {
-        if (!canAccessStructure(user, "/globalanbuhq", sectorVillage)) {
-          return errorResponse("Must be in the Global Anbu HQ to start story quests");
-        }
-        const current = user.userQuests?.filter(
-          (q) => q.quest.questType === "story" && !q.endAt,
-        );
-        if (current && current.length >= QUESTS_CONCURRENT_LIMIT) {
-          return errorResponse(
-            `Already ${QUESTS_CONCURRENT_LIMIT} active story quests; ${current.map((c) => c.quest.name).join(", ")}. Abandon one to start this quest.`,
-          );
-        }
-      } else if (questData.questType === "hunting") {
-        const current = user.userQuests?.filter(
-          (q) => q.quest.questType === "hunting" && !q.endAt,
-        );
-        if (user.occupation !== "HUNTER") {
-          return errorResponse("You are not a hunter");
-        }
-        if (current && current.length >= QUESTS_CONCURRENT_LIMIT) {
-          return errorResponse(
-            `Already ${QUESTS_CONCURRENT_LIMIT} active hunting quests; ${current.map((c) => c.quest.name).join(", ")}. Abandon one to start this quest.`,
-          );
-        }
-      } else if (questData.questType === "battlepyramid") {
-        const current = user.userQuests?.filter(
-          (q) => q.quest.questType === "battlepyramid" && !q.endAt,
-        );
-        if (current && current.length >= 1) {
-          return errorResponse(
-            `Already in active battle pyramid. Abandon if you want to restart.`,
-          );
-        }
-      } else if (questData.questType === "starter") {
-        const current = user.userQuests?.filter(
-          (q) => q.quest.questType === "starter" && !q.endAt,
-        );
-        if (current && current.length >= 1) {
-          return errorResponse(
-            `Already in active starter quest. Abandon if you want to restart.`,
-          );
-        }
-      } else if (questData.questType === "gathering") {
-        const current = user.userQuests?.filter(
-          (q) => q.quest.questType === "gathering" && !q.endAt,
-        );
-        if (user.occupation !== "GATHERING") {
-          return errorResponse("You are not a gatherer");
-        }
-        if (current && current.length >= QUESTS_CONCURRENT_LIMIT) {
-          return errorResponse(
-            `Already ${QUESTS_CONCURRENT_LIMIT} active gathering quests; ${current.map((c) => c.quest.name).join(", ")}. Abandon one to start this quest.`,
-          );
-        }
-      } else if (questData.questType === "anbu") {
-        if (!canAccessStructure(user, "/anbu", sectorVillage)) {
-          return errorResponse("Must be in the Anbu page to start anbu quests");
-        }
-        if (!user.anbuId) {
-          return errorResponse("You are not in an anbu squad");
-        }
-        const current = user.userQuests?.filter(
-          (q) => q.quest.questType === "anbu" && !q.endAt,
-        );
-        if (current && current.length >= QUESTS_CONCURRENT_LIMIT) {
-          return errorResponse(
-            `Already ${QUESTS_CONCURRENT_LIMIT} active anbu quests; ${current.map((c) => c.quest.name).join(", ")}. Abandon one to start this quest.`,
-          );
-        }
-      } else if (questData.questType === "event") {
-        if (!canAccessStructure(user, "/adminbuilding", sectorVillage)) {
-          return errorResponse("Must be in your allied village to start quest");
-        }
-        const current = user.userQuests?.filter(
-          (q) => q.quest.questType === "event" && !q.endAt,
-        );
-        if (current && current.length >= QUESTS_CONCURRENT_LIMIT) {
-          return errorResponse(
-            `Already ${QUESTS_CONCURRENT_LIMIT} active event quests; ${current.map((c) => c.quest.name).join(", ")}. Abandon one to start this quest.`,
-          );
-        }
-      } else if (questData.questType === "war") {
-        if (!user.villageId) {
-          return errorResponse("You must be in a village to accept war missions");
-        }
-        if (
-          !user.isOutlaw &&
-          !canAccessStructure(user, "/missionhall", sectorVillage)
-        ) {
-          return errorResponse("Must be in your allied village to start quest");
-        }
-        if (user.dailyWarMissions >= WAR_MISSIONS_PER_DAY) {
-          return errorResponse(
-            `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
-          );
-        }
-        const currentActive = user?.userQuests?.find(
-          (q) =>
-            ["mission", "crime", "errand", "medical", "pvp", "war"].includes(
-              q.quest.questType,
-            ) && !q.endAt,
-        );
-        if (currentActive) {
-          return errorResponse(
-            `Already have an active ${currentActive.quest.questType}`,
-          );
-        }
-        // fetchActiveWars is expensive (loads village structures); only fetch for war quests
-        // and only after all cheap guards have passed
-        const warList = await fetchActiveWars(ctx.drizzle, user.villageId);
-        if (warList.length === 0) {
-          return errorResponse("Your village is not in an active war");
-        }
-      } else if (["mission", "crime", "medical", "pvp"].includes(questData.questType)) {
-        if (
-          ["mission", "crime"].includes(questData.questType) &&
-          questData.questRank !== "A"
-        ) {
-          return errorResponse(`Only A rank missions/crimes are allowed`);
-        }
-        if (
-          !user.isOutlaw &&
-          !canAccessStructure(user, "/missionhall", sectorVillage)
-        ) {
-          return errorResponse("Must be in your allied village to start quest");
-        }
-        const current = user?.userQuests?.find(
-          (q) =>
-            ["mission", "crime", "errand", "medical", "pvp"].includes(
-              q.quest.questType,
-            ) && !q.endAt,
-        );
-        if (current) {
-          return errorResponse(`Already active ${current.questType}`);
-        }
-      } else {
-        // Should not happen, record error and hard throw for monitoring
-        throw serverError(
-          "PRECONDITION_FAILED",
-          `Invalid quest type to start: ${questData.questType}`,
-        );
-      }
-
-      // Insert quest entry; for war quests guard the daily limit with a CAS counter update.
-      // CAS runs first so that a user at the daily limit is rejected before any quest entry
-      // is written. PlanetScale has no transactions, so this ordering means a crash between
-      // the CAS success and the upsert burns one daily slot without delivering the quest
-      // (acceptable), whereas the reverse order would deliver a quest when the limit is reached
-      // (unacceptable — creates orphaned quest entries the user cannot access). The
-      // warParticipantUntil stamp rides on the same guarded CAS update so it costs no extra
-      // roundtrip; a crash before upsertQuestEntry then leaves a bounded (~2h) cross-bracket
-      // stamp without a quest — the same fail-safe leak the equivalent merge in initiateBattle
-      // accepts, and harmless since it only makes the user more attackable.
-      if (questData.questType === "war") {
-        const result = await ctx.drizzle
-          .update(userData)
-          .set({
-            dailyWarMissions: sql`${userData.dailyWarMissions} + 1`,
-            warParticipantUntil: extendWarParticipantSql(),
-          })
-          .where(
-            and(
-              eq(userData.userId, user.userId),
-              sql`${userData.dailyWarMissions} < ${WAR_MISSIONS_PER_DAY}`,
-            ),
-          );
-        if (result.rowsAffected === 0) {
-          return errorResponse(
-            `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
-          );
-        }
-        await upsertQuestEntry(ctx.drizzle, user, questData);
-      } else {
-        await Promise.all([
-          upsertQuestEntry(ctx.drizzle, user, questData),
-          incrementDailyQuestCounter(ctx.drizzle, user, questData.questType),
-        ]);
-      }
-      return { success: true, message: `Quest started: ${questData.name}` };
+        quest: questData,
+        source: "ui",
+        sectorVillage,
+        prevAttempt,
+      });
     }),
   abandon: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Abandon an active quest" } })
@@ -1234,167 +1018,56 @@ export const questsRouter = createTRPCRouter({
       // Figure out if any finished quests & get rewards
       const { rewards, trackers, userQuest, resolved, notifications, consequences } =
         getReward(user, input.questId, input.nextObjectiveId, settings);
-      const fullTrackersForResponse = trackers;
-      user.questData = filterQuestTrackersForDbPersist(trackers, user);
 
       // Persist completion before snapshot CAS so we cannot commit questData/updatedAt and then
-      // lose the completion race; if snapshot claim fails, revert completion below.
-      let resolvedCompletionCommitted = false;
-      if (resolved) {
-        // Achievements (and any quest shown only via mock rows) may have progress in questData
-        // without a QuestHistory row yet — create one at claim time only.
-        if (userQuest) {
-          if (!questHistoryPrefetch) {
-            // Must finish before the completion UPDATE below: that CAS requires an existing row with
-            // completed=0. Running insert and update in parallel can let the UPDATE run first and
-            // match zero rows.
-            await ctx.drizzle
-              .insert(questHistory)
-              .values({
-                id: nanoid(),
-                userId: ctx.userId,
+      // lose the completion race; if snapshot claim fails, revert completion below. Shared with
+      // the overworld friendly objective-target path so reward effects stay in one place.
+      const claim = await commitQuestObjectiveRewards({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        user,
+        rewards,
+        trackers,
+        userQuest,
+        resolved,
+        notifications,
+        consequences,
+        existingHistory: questHistoryPrefetch,
+      });
+
+      if (claim.outcome === "already_completed") {
+        const claimedQuest = user.userQuests.find((q) => q.questId === input.questId);
+        return {
+          success: true,
+          notifications: [],
+          rewards: PostProcessedRewardSchema.parse({}),
+          userQuest: claimedQuest?.quest
+            ? {
                 questId: input.questId,
-                questType: userQuest.quest.questType,
-                startedAt: new Date(),
-                endAt: null,
-                completed: 0,
-                previousCompletes: 0,
-                previousAttempts: 0,
-              })
-              .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-          }
-        }
-
-        const questCompletionResult = await ctx.drizzle
-          .update(questHistory)
-          .set({
-            completed: 1,
-            previousCompletes: sql`${questHistory.previousCompletes} + 1`,
-            endAt: new Date(),
-          })
-          .where(
-            and(
-              eq(questHistory.questId, input.questId),
-              eq(questHistory.userId, ctx.userId),
-              eq(questHistory.completed, 0),
-            ),
-          );
-
-        if (questCompletionResult.rowsAffected === 0) {
-          const historyRow = await ctx.drizzle.query.questHistory.findFirst({
-            where: and(
-              eq(questHistory.questId, input.questId),
-              eq(questHistory.userId, ctx.userId),
-            ),
-          });
-          if (historyRow && historyRow.completed >= 1) {
-            const claimedQuest = user.userQuests.find(
-              (q) => q.questId === input.questId,
-            );
-            return {
-              success: true,
-              notifications: [],
-              rewards: PostProcessedRewardSchema.parse({}),
-              userQuest: claimedQuest?.quest
-                ? {
-                    questId: input.questId,
-                    quest: {
-                      name: claimedQuest.quest.name,
-                      successDescription: claimedQuest.quest.successDescription,
-                    },
-                  }
-                : null,
-              resolved: true,
-              badges: [],
-            };
-          }
-          if (!historyRow) {
-            return errorResponse("Quest not found or not active");
-          }
-          return errorResponse("Quest state changed, please try again");
-        }
-        resolvedCompletionCommitted = true;
+                quest: {
+                  name: claimedQuest.quest.name,
+                  successDescription: claimedQuest.quest.successDescription,
+                },
+              }
+            : null,
+          resolved: true,
+          badges: [],
+        };
       }
-
-      const { notifications: postNotifications, claimed } =
-        await handleQuestConsequences(ctx.drizzle, user, consequences, notifications, {
-          alwaysClaimUserState: true,
-        });
-
-      if (!claimed) {
-        if (resolvedCompletionCommitted) {
-          await revertQuestCompletionAfterFailedClaim(
-            ctx.drizzle,
-            ctx.userId,
-            input.questId,
-          );
-        }
+      if (claim.outcome === "not_found") {
+        return errorResponse("Quest not found or not active");
+      }
+      if (claim.outcome === "state_changed") {
         return errorResponse("Quest state changed, please try again");
       }
 
-      user.questData = fullTrackersForResponse;
-
       // Handle immidiate consequences first
-      const finalNotifications = [...toastMessages, ...postNotifications];
+      const finalNotifications = [...toastMessages, ...claim.postNotifications];
 
-      // Sensei rewards
-      const hasSensei = user.senseiId && user.rank === "GENIN";
-      const isMission = userQuest?.quest.questType === "mission";
-      const senseiId = hasSensei && isMission ? user.senseiId : null;
-
-      await runCheckRewardsPrepInParallel(ctx.drizzle, user, resolved, userQuest);
-
-      // If the quest is finished, we update additional fields on the userData model
-      const questCounterField =
-        (resolved &&
-          getQuestCounterFieldName(
-            userQuest?.quest.questType,
-            userQuest?.quest.questRank,
-          )) ||
-        undefined;
-
-      // Update database
-      const [{ items, jutsus, bloodlines, badges }] = await Promise.all([
-        // Update rewards
-        updateRewards({
-          client: ctx.drizzle,
-          user,
-          rewards,
-          questCounterField,
-          reason: "QUEST",
-          // Opt in to the herbs_gathered tracker: this is the gathering-claim path and `user`
-          // here is the fully-hydrated fetchUpdatedUser row (with quest relations).
-          questUser: user,
-        }),
-        // Credit the sensei the per-mission ryo reward
-        ...(senseiId
-          ? [
-              ctx.drizzle
-                .update(userData)
-                .set({
-                  money: sql`${userData.money} + ${SENSEI_STUDENT_RYO_PER_MISSION}`,
-                })
-                .where(eq(userData.userId, senseiId)),
-              ctx.drizzle.insert(bankTransfers).values({
-                senderId: ctx.userId,
-                receiverId: senseiId,
-                amount: SENSEI_STUDENT_RYO_PER_MISSION,
-                type: "sensei",
-              }),
-            ]
-          : []),
-      ]);
-      // Update rewards for readability
-      rewards.reward_items = items.map((i) => i.name);
-      rewards.reward_jutsus = jutsus.map((i) => i.name);
-      rewards.reward_bloodlines = bloodlines.map((i) => i.name);
-      rewards.reward_badges = badges.map((i) => i.name);
-      // Note: the herbs_gathered tracker is credited inside updateRewards' single
-      // questData write (folded there to avoid a second UPDATE on this row).
       return {
         success: true,
         notifications: finalNotifications,
-        rewards,
+        rewards: claim.rewards,
         userQuest: userQuest
           ? {
               questId: userQuest.questId,
@@ -1405,7 +1078,7 @@ export const questsRouter = createTRPCRouter({
             }
           : null,
         resolved,
-        badges,
+        badges: claim.badges,
       };
     }),
   checkLocationQuest: protectedProcedure
@@ -1439,13 +1112,22 @@ export const questsRouter = createTRPCRouter({
         throw serverError("PRECONDITION_FAILED", "User does not exist");
       }
 
+      // Build the placement status so getNewTrackers can distinguish deleted
+      // (→ auto-fail) from deactivated (→ freeze/skip) placements.
+      const boundPlacementStatus = await fetchBoundPlacementStatus(ctx.drizzle, user);
+
       // Get updated quest information
-      const updatedTrackerResults = getNewTrackers({ ...user, useritems }, [
-        { task: "move_to_location" },
-        { task: "collect_item" },
-        { task: "deliver_item" },
-        { task: "defeat_opponents" },
-      ]);
+      const updatedTrackerResults = getNewTrackers(
+        { ...user, useritems },
+        [
+          { task: "move_to_location" },
+          { task: "collect_item" },
+          { task: "deliver_item" },
+          { task: "defeat_opponents" },
+        ],
+        undefined,
+        boundPlacementStatus,
+      );
 
       // Combine and destructure for local usage
       const { trackers, notifications, consequences, questIdsUpdated } =
@@ -2139,6 +1821,297 @@ export const incrementDailyQuestCounter = async (
   }
 };
 
+/**
+ * Returns a human-readable block message if the user has hit the per-type concurrent
+ * quest limit, or null if they may proceed. This is a pure function (no DB access).
+ */
+export const questTypeConcurrentBlockMessage = (
+  quest: Pick<Quest, "questType" | "name">,
+  user: NonNullable<UserWithRelations>,
+): string | null => {
+  const activeOfType = (type: string) =>
+    user.userQuests?.filter((q) => q.quest.questType === type && !q.endAt) ?? [];
+  switch (quest.questType) {
+    case "story":
+    case "hunting":
+    case "gathering":
+    case "anbu":
+    case "event": {
+      const cur = activeOfType(quest.questType);
+      if (cur.length >= QUESTS_CONCURRENT_LIMIT) {
+        return `Already ${QUESTS_CONCURRENT_LIMIT} active ${quest.questType} quests; ${cur
+          .map((c) => c.quest.name)
+          .join(", ")}. Abandon one to start this quest.`;
+      }
+      return null;
+    }
+    case "battlepyramid": {
+      if (activeOfType("battlepyramid").length >= 1) {
+        return `Already in active battle pyramid. Abandon if you want to restart.`;
+      }
+      return null;
+    }
+    case "starter": {
+      if (activeOfType("starter").length >= 1) {
+        return `Already in active starter quest. Abandon if you want to restart.`;
+      }
+      return null;
+    }
+    case "war": {
+      const blockers = ["mission", "crime", "errand", "medical", "pvp", "war"];
+      const found = user.userQuests?.find(
+        (q) => blockers.includes(q.quest.questType) && !q.endAt,
+      );
+      return found ? `Already have an active ${found.quest.questType}` : null;
+    }
+    case "mission":
+    case "crime":
+    case "medical":
+    case "pvp": {
+      const blockers = ["mission", "crime", "errand", "medical", "pvp"];
+      const found = user.userQuests?.find(
+        (q) => blockers.includes(q.quest.questType) && !q.endAt,
+      );
+      return found ? `Already active ${found.quest.questType}` : null;
+    }
+    default:
+      return null;
+  }
+};
+
+/**
+ * Structure/occupation/rank guards that only apply when a player starts a quest
+ * through the UI (Mission Hall, Anbu page, etc.). NPC-initiated quests skip these.
+ * Returns an errorResponse-shaped object on failure, or null to allow proceeding.
+ */
+const uiStructureAccessGuard = (
+  quest: Quest,
+  user: NonNullable<UserWithRelations>,
+  sectorVillage: Awaited<ReturnType<typeof fetchSectorVillage>>,
+): { success: false; message: string } | null => {
+  if (quest.questType === "story") {
+    if (!canAccessStructure(user, "/globalanbuhq", sectorVillage)) {
+      return errorResponse("Must be in the Global Anbu HQ to start story quests") as {
+        success: false;
+        message: string;
+      };
+    }
+  } else if (quest.questType === "hunting") {
+    if (user.occupation !== "HUNTER") {
+      return errorResponse("You are not a hunter") as {
+        success: false;
+        message: string;
+      };
+    }
+  } else if (quest.questType === "gathering") {
+    if (user.occupation !== "GATHERING") {
+      return errorResponse("You are not a gatherer") as {
+        success: false;
+        message: string;
+      };
+    }
+  } else if (quest.questType === "anbu") {
+    if (!canAccessStructure(user, "/anbu", sectorVillage)) {
+      return errorResponse("Must be in the Anbu page to start anbu quests") as {
+        success: false;
+        message: string;
+      };
+    }
+    if (!user.anbuId) {
+      return errorResponse("You are not in an anbu squad") as {
+        success: false;
+        message: string;
+      };
+    }
+  } else if (quest.questType === "event") {
+    if (!canAccessStructure(user, "/adminbuilding", sectorVillage)) {
+      return errorResponse("Must be in your allied village to start quest") as {
+        success: false;
+        message: string;
+      };
+    }
+  } else if (quest.questType === "war") {
+    if (!user.villageId) {
+      return errorResponse("You must be in a village to accept war missions") as {
+        success: false;
+        message: string;
+      };
+    }
+    if (!user.isOutlaw && !canAccessStructure(user, "/missionhall", sectorVillage)) {
+      return errorResponse("Must be in your allied village to start quest") as {
+        success: false;
+        message: string;
+      };
+    }
+    if (user.dailyWarMissions >= WAR_MISSIONS_PER_DAY) {
+      return errorResponse(
+        `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
+      ) as { success: false; message: string };
+    }
+  } else if (["mission", "crime", "medical", "pvp"].includes(quest.questType)) {
+    if (["mission", "crime"].includes(quest.questType) && quest.questRank !== "A") {
+      return errorResponse(`Only A rank missions/crimes are allowed`) as {
+        success: false;
+        message: string;
+      };
+    }
+    if (!user.isOutlaw && !canAccessStructure(user, "/missionhall", sectorVillage)) {
+      return errorResponse("Must be in your allied village to start quest") as {
+        success: false;
+        message: string;
+      };
+    }
+  }
+  return null;
+};
+
+/**
+ * Core quest-assignment orchestration shared by the UI (`startQuest`) and overworld
+ * NPC interactions. Runs all source-agnostic guards (rank, availability, date window,
+ * retry delay, already-on-quest, per-type concurrent limit, war daily-CAS), applies
+ * UI-only structure/occupation guards when `source === "ui"`, then writes the quest
+ * entry and increments the daily counter.
+ */
+export const assignQuestToUser = async (args: {
+  client: DrizzleClient;
+  user: NonNullable<UserWithRelations>;
+  quest: Quest;
+  source: "ui" | "overworld_npc";
+  sectorVillage?: Awaited<ReturnType<typeof fetchSectorVillage>>;
+  prevAttempt?: Awaited<ReturnType<typeof fetchUserQuestByQuestId>>;
+}): Promise<{ success: boolean; message: string }> => {
+  const { client, user, quest: questData, source, sectorVillage, prevAttempt } = args;
+
+  // Rank guard
+  const ranks = availableQuestLetterRanks(user.rank);
+  if (!ranks.includes(questData.questRank)) {
+    return errorResponse(`Rank ${user.rank} not allowed`);
+  }
+
+  // Availability checks (uses userQuests + completedQuests on user)
+  const { check, message } = isAvailableUserQuests(
+    { ...questData, ...prevAttempt },
+    user,
+  );
+  if (!check) {
+    return errorResponse(`Quest is not available for you: ${message}`);
+  }
+
+  // Check start and end dates
+  if (questData.startsAt && questData.startsAt > new Date().toISOString()) {
+    return errorResponse(`Quest starts in the future`);
+  }
+  if (questData.endsAt && questData.endsAt < new Date().toISOString()) {
+    return errorResponse(`Quest has ended`);
+  }
+
+  // Check if it's too early wrt. retry-limits
+  if (questData.retryDelay !== "none" && prevAttempt?.endAt) {
+    let retryDate = new Date();
+    const endedDate = prevAttempt.endAt;
+    if (questData.retryDelay === "daily") {
+      retryDate = secondsFromDate(DAY_S, endedDate);
+    } else if (questData.retryDelay === "weekly") {
+      retryDate = secondsFromDate(WEEK_S, endedDate);
+    } else if (questData.retryDelay === "monthly") {
+      retryDate = secondsFromDate(MONTH_S, endedDate);
+    }
+    if (retryDate > new Date()) {
+      const msLeft = -secondsPassed(retryDate) * 1000;
+      const timeLeft = getTimeLeftStr(...getDaysHoursMinutesSeconds(msLeft));
+      return errorResponse(`You must wait ${timeLeft} to retry this quest`);
+    }
+  }
+
+  // Check if user is already on this quest
+  const isAlreadyOnQuest = user.userQuests?.some(
+    (q) => q.questId === questData.id && !q.endAt,
+  );
+  if (isAlreadyOnQuest) {
+    return errorResponse(`You are already on this quest: ${questData.name}`);
+  }
+
+  // UI-only structure/occupation/rank guards
+  if (source === "ui") {
+    const guard = uiStructureAccessGuard(questData, user, sectorVillage ?? null);
+    if (guard) return guard;
+  }
+
+  // Reject unknown quest types before touching the DB (mirrors the original serverError throw)
+  const knownQuestTypes: string[] = [
+    "story",
+    "hunting",
+    "gathering",
+    "anbu",
+    "event",
+    "battlepyramid",
+    "starter",
+    "mission",
+    "crime",
+    "medical",
+    "pvp",
+    "war",
+  ];
+  if (!knownQuestTypes.includes(questData.questType)) {
+    throw serverError(
+      "PRECONDITION_FAILED",
+      `Invalid quest type to start: ${questData.questType}`,
+    );
+  }
+
+  // Per-type concurrent-limit guard (pure, no DB)
+  const block = questTypeConcurrentBlockMessage(questData, user);
+  if (block) return errorResponse(block);
+
+  // War: fetch active wars (expensive; only after all cheap guards pass)
+  if (questData.questType === "war") {
+    if (!user.villageId) {
+      return errorResponse("You must be in a village for war missions");
+    }
+    const warList = await fetchActiveWars(client, user.villageId);
+    if (warList.length === 0) {
+      return errorResponse("Your village is not in an active war");
+    }
+  }
+
+  // Insert quest entry; for war quests guard the daily limit with a CAS counter update.
+  // CAS runs first so that a user at the daily limit is rejected before any quest entry
+  // is written. PlanetScale has no transactions, so this ordering means a crash between
+  // the CAS success and the upsert burns one daily slot without delivering the quest
+  // (acceptable), whereas the reverse order would deliver a quest when the limit is reached
+  // (unacceptable — creates orphaned quest entries the user cannot access). The
+  // warParticipantUntil stamp rides on the same guarded CAS update so it costs no extra
+  // roundtrip; a crash before upsertQuestEntry then leaves a bounded (~2h) cross-bracket
+  // stamp without a quest — the same fail-safe leak the equivalent merge in initiateBattle
+  // accepts, and harmless since it only makes the user more attackable.
+  if (questData.questType === "war") {
+    const result = await client
+      .update(userData)
+      .set({
+        dailyWarMissions: sql`${userData.dailyWarMissions} + 1`,
+        warParticipantUntil: extendWarParticipantSql(),
+      })
+      .where(
+        and(
+          eq(userData.userId, user.userId),
+          sql`${userData.dailyWarMissions} < ${WAR_MISSIONS_PER_DAY}`,
+        ),
+      );
+    if (result.rowsAffected === 0) {
+      return errorResponse(
+        `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
+      );
+    }
+    await upsertQuestEntry(client, user, questData);
+  } else {
+    await Promise.all([
+      upsertQuestEntry(client, user, questData),
+      incrementDailyQuestCounter(client, user, questData.questType),
+    ]);
+  }
+  return { success: true, message: `Quest started: ${questData.name}` };
+};
+
 /** Upsert quest entry for a single user */
 export const upsertQuestEntry = async (
   client: DrizzleClient,
@@ -2267,6 +2240,219 @@ const runCheckRewardsPrepInParallel = async (
   if (prepTasks.length > 0) {
     await Promise.all(prepTasks);
   }
+};
+
+type GetRewardTrackers = ReturnType<typeof getReward>["trackers"];
+
+/**
+ * Outcome of {@link commitQuestObjectiveRewards}. Side-effecting work (completion CAS,
+ * snapshot claim, payout, sensei bonus, tier/achievement prep) lives in the helper; each
+ * caller renders its own tRPC response from this discriminated result so the helper stays
+ * a single source of truth for post-completion effects.
+ */
+type CommitQuestObjectiveRewardsResult =
+  | {
+      outcome: "claimed";
+      /** Notifications produced by handleQuestConsequences (caller prepends its own prefix). */
+      postNotifications: string[];
+      /** Same GetRewardResult passed in, mutated with resolved reward names for display. */
+      rewards: GetRewardResult;
+      items: { id: string; name: string }[];
+      jutsus: { id: string; name: string }[];
+      bloodlines: { id: string; name: string }[];
+      badges: { id: string; name: string; image: string }[];
+    }
+  /** Resolved completion lost the CAS and the row is already completed (idempotent re-claim). */
+  | { outcome: "already_completed" }
+  /** Resolved completion lost the CAS and no quest history row exists. */
+  | { outcome: "not_found" }
+  /** Completion CAS or snapshot claim failed; caller should ask the user to retry. */
+  | { outcome: "state_changed" };
+
+/**
+ * Shared post-`getReward` reward-claim sequence used by both `checkRewards` and the
+ * overworld friendly objective-target path. Encapsulates, in order:
+ *   1. The completion compare-and-swap (when `resolved`): insert a `completed=0` history row
+ *      if none exists, then atomically flip it to `completed=1` so a parallel claim cannot
+ *      double-pay the quest-level reward.
+ *   2. `handleQuestConsequences` with `alwaysClaimUserState`, reverting the completion if the
+ *      snapshot claim is lost.
+ *   3. Restoring the full trackers, the sensei +ryo mission bonus, the tier-bootstrap /
+ *      repeatable-achievement re-arm prep, and `updateRewards` (run together).
+ * Returns a discriminated outcome; the raw bytes of the reward names are mapped onto
+ * `rewards` so callers can render them directly.
+ */
+export const commitQuestObjectiveRewards = async (info: {
+  client: DrizzleClient;
+  userId: string;
+  user: NonNullable<UserWithRelations>;
+  rewards: GetRewardResult;
+  trackers: GetRewardTrackers;
+  userQuest: UserQuestFromGetReward;
+  resolved: boolean;
+  notifications: string[];
+  consequences: QuestConsequence[];
+  /** Pre-fetched questHistory row for this quest, if the caller already loaded it. */
+  existingHistory?: { completed: number } | null | undefined;
+}): Promise<CommitQuestObjectiveRewardsResult> => {
+  const {
+    client,
+    userId,
+    user,
+    rewards,
+    trackers,
+    userQuest,
+    resolved,
+    notifications,
+    consequences,
+  } = info;
+
+  const fullTrackersForResponse = trackers;
+  user.questData = filterQuestTrackersForDbPersist(trackers, user);
+
+  // Persist completion before snapshot CAS so we cannot commit questData/updatedAt and then
+  // lose the completion race; if snapshot claim fails, revert completion below.
+  let resolvedCompletionCommitted = false;
+  if (resolved) {
+    // Achievements (and any quest shown only via mock rows) may have progress in questData
+    // without a QuestHistory row yet — create one at claim time only.
+    if (userQuest) {
+      const existing =
+        info.existingHistory !== undefined
+          ? info.existingHistory
+          : await fetchUserQuestByQuestId(client, userId, userQuest.questId);
+      if (!existing) {
+        // Must finish before the completion UPDATE below: that CAS requires an existing row with
+        // completed=0. Running insert and update in parallel can let the UPDATE run first and
+        // match zero rows.
+        await client
+          .insert(questHistory)
+          .values({
+            id: nanoid(),
+            userId,
+            questId: userQuest.questId,
+            questType: userQuest.quest.questType,
+            startedAt: new Date(),
+            endAt: null,
+            completed: 0,
+            previousCompletes: 0,
+            previousAttempts: 0,
+          })
+          .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+      }
+    }
+
+    const questCompletionResult = await client
+      .update(questHistory)
+      .set({
+        completed: 1,
+        previousCompletes: sql`${questHistory.previousCompletes} + 1`,
+        endAt: new Date(),
+      })
+      .where(
+        and(
+          eq(questHistory.questId, userQuest?.questId ?? ""),
+          eq(questHistory.userId, userId),
+          eq(questHistory.completed, 0),
+        ),
+      );
+
+    if (questCompletionResult.rowsAffected === 0) {
+      const historyRow = await fetchUserQuestByQuestId(
+        client,
+        userId,
+        userQuest?.questId ?? "",
+      );
+      if (historyRow && historyRow.completed >= 1) {
+        return { outcome: "already_completed" };
+      }
+      if (!historyRow) {
+        return { outcome: "not_found" };
+      }
+      return { outcome: "state_changed" };
+    }
+    resolvedCompletionCommitted = true;
+  }
+
+  const { notifications: postNotifications, claimed } = await handleQuestConsequences(
+    client,
+    user,
+    consequences,
+    notifications,
+    { alwaysClaimUserState: true },
+  );
+
+  if (!claimed) {
+    if (resolvedCompletionCommitted && userQuest) {
+      await revertQuestCompletionAfterFailedClaim(client, userId, userQuest.questId);
+    }
+    return { outcome: "state_changed" };
+  }
+
+  user.questData = fullTrackersForResponse;
+
+  // Sensei rewards
+  const hasSensei = user.senseiId && user.rank === "GENIN";
+  const isMission = userQuest?.quest.questType === "mission";
+  const senseiId = hasSensei && isMission ? user.senseiId : null;
+
+  await runCheckRewardsPrepInParallel(client, user, resolved, userQuest);
+
+  // If the quest is finished, we update additional fields on the userData model
+  const questCounterField =
+    (resolved &&
+      getQuestCounterFieldName(
+        userQuest?.quest.questType,
+        userQuest?.quest.questRank,
+      )) ||
+    undefined;
+
+  // Update database
+  const [{ items, jutsus, bloodlines, badges }] = await Promise.all([
+    // Update rewards
+    updateRewards({
+      client,
+      user,
+      rewards,
+      questCounterField,
+      reason: "QUEST",
+      // Opt in to the herbs_gathered tracker: this is the gathering-claim path and `user`
+      // here is the fully-hydrated row (with quest relations).
+      questUser: user,
+    }),
+    // Credit the sensei the per-mission ryo reward
+    ...(senseiId
+      ? [
+          client
+            .update(userData)
+            .set({
+              money: sql`${userData.money} + ${SENSEI_STUDENT_RYO_PER_MISSION}`,
+            })
+            .where(eq(userData.userId, senseiId)),
+          client.insert(bankTransfers).values({
+            senderId: userId,
+            receiverId: senseiId,
+            amount: SENSEI_STUDENT_RYO_PER_MISSION,
+            type: "sensei",
+          }),
+        ]
+      : []),
+  ]);
+  // Update rewards for readability
+  rewards.reward_items = items.map((i) => i.name);
+  rewards.reward_jutsus = jutsus.map((i) => i.name);
+  rewards.reward_bloodlines = bloodlines.map((i) => i.name);
+  rewards.reward_badges = badges.map((i) => i.name);
+
+  return {
+    outcome: "claimed",
+    postNotifications,
+    rewards,
+    items,
+    jutsus,
+    bloodlines,
+    badges,
+  };
 };
 
 /** DB writes after claimUserSnapshot succeeds inside handleQuestConsequences. */
@@ -2497,4 +2683,46 @@ export const handleQuestConsequences = async (
     }
   }
   return { notifications, claimed: !shouldClaimUserState };
+};
+
+/**
+ * Returns two sets describing the DB state of all overworld placements that are
+ * referenced by the user's active quest objectives:
+ *
+ * - `existing`: every placement id whose row still exists in the DB (regardless
+ *   of isActive). A bound id absent from this set was hard-deleted.
+ * - `active`: subset of `existing` where `isActive = true`. A bound id in
+ *   `existing` but not in `active` is deactivated/hidden (should be frozen).
+ *
+ * Callers pass this object as `boundPlacementStatus` to `getNewTrackers`.
+ * Cheap-path: if no active objectives carry a bound placement id the DB is not
+ * queried and both sets are returned empty.
+ */
+export const fetchBoundPlacementStatus = async (
+  client: DrizzleClient,
+  user: NonNullable<UserWithRelations>,
+): Promise<{ existing: Set<string>; active: Set<string> }> => {
+  // Collect distinct placement ids referenced by the user's active objectives.
+  const boundIds = new Set<string>();
+  for (const q of getUserQuests(user)) {
+    for (const obj of q.content.objectives) {
+      if (obj.overworldPlacementId) {
+        boundIds.add(obj.overworldPlacementId);
+      }
+    }
+  }
+
+  // Cheap-path: no bound objectives → nothing to verify.
+  if (boundIds.size === 0)
+    return { existing: new Set<string>(), active: new Set<string>() };
+
+  // One query with NO isActive filter so we can distinguish deleted vs deactivated.
+  const rows = await client.query.overworldAiPlacement.findMany({
+    where: inArray(overworldAiPlacement.id, [...boundIds]),
+    columns: { id: true, isActive: true },
+  });
+
+  const existing = new Set(rows.map((r) => r.id));
+  const active = new Set(rows.filter((r) => r.isActive).map((r) => r.id));
+  return { existing, active };
 };

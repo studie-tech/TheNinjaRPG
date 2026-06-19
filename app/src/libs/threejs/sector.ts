@@ -798,48 +798,69 @@ export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
   Object.assign(sprite.position, new Vector3(w / 2, h * 1.0, USER_LAYER));
   group.add(sprite);
 
-  // Attack button
-  if (!RANKS_RESTRICTED_FROM_PVP.includes(userData.rank)) {
-    const attack = loadTexture(IMG_SECTOR_ATTACK);
-    const attackMat = new SpriteMaterial({ map: attack, depthTest: false });
-    const attackSprite = new Sprite(attackMat);
-    attackSprite.visible = false;
-    attackSprite.userData.userId = userData.userId;
-    attackSprite.userData.type = "attack";
-    Object.assign(attackSprite.scale, new Vector3(h * 0.8, h * 0.8, 1));
-    Object.assign(attackSprite.position, new Vector3(w * 0.9, h * 1.4, STATUS_LAYER));
-    attackSprite.name = `${userData.userId}-attack`;
-    group.add(attackSprite);
+  if (userData.isNpc) {
+    // NPC interaction sprite: "talk" for friendly, "attack" for hostile
+    const isHostile = userData.npcInteractionType === "HOSTILE";
+    const npcIcon = loadTexture(isHostile ? IMG_SECTOR_ATTACK : IMG_SECTOR_INFO);
+    const npcMat = new SpriteMaterial({ map: npcIcon, depthTest: false });
+    const npcSprite = new Sprite(npcMat);
+    npcSprite.visible = true;
+    npcSprite.userData.userId = userData.userId;
+    npcSprite.userData.npcPlacementId = userData.npcPlacementId;
+    npcSprite.userData.npcPositionVersion = userData.npcPositionVersion;
+    npcSprite.userData.type = isHostile ? "attack" : "talk";
+    Object.assign(npcSprite.scale, new Vector3(h * 0.8, h * 0.8, 1));
+    Object.assign(npcSprite.position, new Vector3(w * 0.9, h * 1.4, STATUS_LAYER));
+    npcSprite.name = `${userData.npcPlacementId ?? userData.userId}-npc`;
+    group.add(npcSprite);
+  } else {
+    // Attack button
+    if (!RANKS_RESTRICTED_FROM_PVP.includes(userData.rank)) {
+      const attack = loadTexture(IMG_SECTOR_ATTACK);
+      const attackMat = new SpriteMaterial({ map: attack, depthTest: false });
+      const attackSprite = new Sprite(attackMat);
+      attackSprite.visible = false;
+      attackSprite.userData.userId = userData.userId;
+      attackSprite.userData.type = "attack";
+      Object.assign(attackSprite.scale, new Vector3(h * 0.8, h * 0.8, 1));
+      Object.assign(attackSprite.position, new Vector3(w * 0.9, h * 1.4, STATUS_LAYER));
+      attackSprite.name = `${userData.userId}-attack`;
+      group.add(attackSprite);
+    }
+
+    // Heal button
+    const heal = loadTexture(IMG_ICON_HEAL);
+    const healMat = new SpriteMaterial({ map: heal, depthTest: false });
+    const healSprite = new Sprite(healMat);
+    healSprite.visible = false;
+    healSprite.userData.userId = userData.userId;
+    healSprite.userData.type = "heal";
+    Object.assign(healSprite.scale, new Vector3(h * 0.7, h * 0.7, 1));
+    Object.assign(healSprite.position, new Vector3(w, h * 0.5, STATUS_LAYER));
+    healSprite.name = `${userData.userId}-heal`;
+    group.add(healSprite);
+
+    // Info button
+    const info = loadTexture(IMG_SECTOR_INFO);
+    const infoMat = new SpriteMaterial({ map: info, depthTest: false });
+    const infoSprite = new Sprite(infoMat);
+    infoSprite.visible = false;
+    infoSprite.userData.userId = userData.userId;
+    infoSprite.userData.type = "info";
+    Object.assign(infoSprite.scale, new Vector3(h * 0.7, h * 0.7, 1));
+    Object.assign(infoSprite.position, new Vector3(w * 0.1, h * 1.4, STATUS_LAYER));
+    infoSprite.name = `${userData.userId}-info`;
+    group.add(infoSprite);
   }
 
-  // Heal button
-  const heal = loadTexture(IMG_ICON_HEAL);
-  const healMat = new SpriteMaterial({ map: heal, depthTest: false });
-  const healSprite = new Sprite(healMat);
-  healSprite.visible = false;
-  healSprite.userData.userId = userData.userId;
-  healSprite.userData.type = "heal";
-  Object.assign(healSprite.scale, new Vector3(h * 0.7, h * 0.7, 1));
-  Object.assign(healSprite.position, new Vector3(w, h * 0.5, STATUS_LAYER));
-  healSprite.name = `${userData.userId}-heal`;
-  group.add(healSprite);
-
-  // Info button
-  const info = loadTexture(IMG_SECTOR_INFO);
-  const infoMat = new SpriteMaterial({ map: info, depthTest: false });
-  const infoSprite = new Sprite(infoMat);
-  infoSprite.visible = false;
-  infoSprite.userData.userId = userData.userId;
-  infoSprite.userData.type = "info";
-  Object.assign(infoSprite.scale, new Vector3(h * 0.7, h * 0.7, 1));
-  Object.assign(infoSprite.position, new Vector3(w * 0.1, h * 1.4, STATUS_LAYER));
-  infoSprite.name = `${userData.userId}-info`;
-  group.add(infoSprite);
-
   // Name
-  group.name = userData.userId;
+  group.name = userData.isNpc
+    ? (userData.npcPlacementId ?? userData.userId)
+    : userData.userId;
   group.userData.type = "user";
   group.userData.userId = userData.userId;
+  group.userData.isNpc = userData.isNpc;
+  group.userData.npcPlacementId = userData.npcPlacementId;
   group.userData.hex = hex;
 
   return group;
@@ -1239,7 +1260,7 @@ export const drawUsers = (info: {
   // Group the users by their location
   const groups = groupBy(
     info.users
-      .filter((user) => passesBracketFilter(user, info.minBracket))
+      .filter((user) => user.isNpc || passesBracketFilter(user, info.minBracket))
       .map((user) => ({
         ...user,
         group: `${user.latitude},${user.longitude}`,
@@ -1267,7 +1288,10 @@ export const drawUsers = (info: {
       if (hex) {
         // Loop through the users in the group who are awake
         awakeUsers.forEach((user, i) => {
-          let userMesh = userMeshCache.get(user.userId);
+          const cacheKey = user.isNpc
+            ? (user.npcPlacementId ?? user.userId)
+            : user.userId;
+          let userMesh = userMeshCache.get(cacheKey);
           if (userMesh && userMesh.parent !== info.group_users) {
             userMesh = undefined;
           }
@@ -1275,7 +1299,7 @@ export const drawUsers = (info: {
           if (!userMesh) {
             userMesh = createUserSprite(user, hex);
             info.group_users.add(userMesh);
-            userMeshCache.set(user.userId, userMesh);
+            userMeshCache.set(cacheKey, userMesh);
           }
           // Get location
           if (userMesh) {
@@ -1289,7 +1313,7 @@ export const drawUsers = (info: {
               y -= spread * hex.height * Math.cos(angleChange);
             }
             userMesh.position.set(-x, -y, 0);
-            drawnIds.add(user.userId);
+            drawnIds.add(cacheKey);
           }
         });
         // Loop through the users in the group who are awake
@@ -1399,6 +1423,8 @@ export const intersectUsers = (info: {
       }
     }
     if (locationUsers.length === 1 && userMesh) {
+      // NPC groups have a different child layout; skip the player index-based sprite logic
+      if (userMesh.userData.isNpc) return newUserTooltips;
       const userId = userMesh.userData.userId as string | undefined;
       if (userId) {
         const user = users.filter(Boolean).find((u) => u.userId === userId);

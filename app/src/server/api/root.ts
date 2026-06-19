@@ -30,6 +30,7 @@ import { marriageRouter } from "./routers/marriage";
 import { miscRouter } from "./routers/misc";
 import { occupationRouter } from "./routers/occupation";
 import { generativeAiRouter } from "./routers/openai";
+import { overworldAiRouter } from "./routers/overworldAi";
 import { paypalRouter } from "./routers/paypal";
 import { pollRouter } from "./routers/poll";
 import { profileRouter } from "./routers/profile";
@@ -114,6 +115,7 @@ export const appRouter = createTRPCRouter({
   applications: applicationsRouter,
   towerDefense: towerDefenseRouter,
   stealth: stealthRouter,
+  overworldAi: overworldAiRouter,
   raids: raidsRouter,
   worldMap: worldMapRouter,
 });

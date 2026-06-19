@@ -216,6 +216,10 @@ const Sector: React.FC<SectorProps> = (props) => {
   const [logbookModalOpen, setLogbookModalOpen] = useState<boolean>(false);
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
   const [showRaidModal, setShowRaidModal] = useState<boolean>(false);
+  const [npcDialog, setNpcDialog] = useState<{
+    objectiveId: string;
+    branches: { text: string; nextObjectiveId?: string }[];
+  } | null>(null);
 
   // References which shouldn't update
   const originRef = useRef<TerrainHex | undefined>(undefined);
@@ -234,6 +238,9 @@ const Sector: React.FC<SectorProps> = (props) => {
   // can read it without the flag being a scene-build effect dependency (which
   // would tear down and rebuild the whole 3x3 world on every attack).
   const isAttackingRef = useRef<boolean>(false);
+  // Same for the NPC-interaction flag: the click guard reads it from a ref so a
+  // pending interaction never rebuilds the world.
+  const isInteractingRef = useRef<boolean>(false);
   // The hover-path raycast scans ~6000 window interaction meshes; only re-run it
   // when the pointer moved or the player's origin changed, reusing the previous
   // highlights on idle frames.
@@ -304,6 +311,10 @@ const Sector: React.FC<SectorProps> = (props) => {
   useEffect(() => {
     sectorRef.current = sector;
   }, [sector]);
+  const pendingNpcInteractRef = useRef<{
+    placementId: string;
+    positionVersion: number;
+  } | null>(null);
   const cameraRef = useRef<OrthographicCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const cameraTargetPositionRef = useRef<{ x: number; y: number } | null>(null);
@@ -341,7 +352,15 @@ const Sector: React.FC<SectorProps> = (props) => {
     { enabled: sector !== undefined, placeholderData: (previous) => previous },
   );
   const villageData = data?.village;
-  const fetchedUsers = data?.users;
+  // Overworld AIs share the sector-user rendering path, so merge them into the
+  // fetched user list before it reaches the scene
+  const fetchedUsers = useMemo(
+    () =>
+      data?.users === undefined
+        ? undefined
+        : [...data.users, ...(data.overworldAis ?? [])],
+    [data?.users, data?.overworldAis],
+  );
   const usersReady = fetchedUsers !== undefined;
   const warData = data?.warData;
   // Ensure a shrine exists for the sector without mutating the cached tRPC
@@ -1472,6 +1491,24 @@ const Sector: React.FC<SectorProps> = (props) => {
     },
   });
 
+  const { mutate: interactNpc, isPending: isInteracting } =
+    api.overworldAi.interactWithOverworldAi.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success && data.battleId) {
+          await updateUser({
+            status: "BATTLE",
+            battleId: data.battleId,
+            updatedAt: new Date(),
+          });
+        } else if (data.success && data.dialog) {
+          setNpcDialog(data.dialog);
+        } else {
+          await utils.travel.getSectorData.invalidate();
+        }
+      },
+    });
+
   useEffect(() => {
     minBracketDrawRef.current = storedBracket;
   }, [storedBracket]);
@@ -1521,6 +1558,10 @@ const Sector: React.FC<SectorProps> = (props) => {
   useEffect(() => {
     isAttackingRef.current = isAttacking;
   }, [isAttacking]);
+
+  useEffect(() => {
+    isInteractingRef.current = isInteracting;
+  }, [isInteracting]);
 
   // Auto-attack logic for ANBU users
   useEffect(() => {
@@ -1997,7 +2038,56 @@ const Sector: React.FC<SectorProps> = (props) => {
                 targetEntry.dy - currentEntry.dy,
               );
               return false;
+            } else if (showUsersRef.current && i.object.userData.type === "talk") {
+              const placementId = i.object.userData.npcPlacementId as string;
+              const talkTarget = usersRef.current?.find(
+                (u) => u.npcPlacementId === placementId,
+              );
+              if (
+                talkTarget &&
+                talkTarget.longitude === originRef.current?.col &&
+                talkTarget.latitude === originRef.current?.row &&
+                !isInteractingRef.current
+              ) {
+                pendingNpcInteractRef.current = {
+                  placementId,
+                  positionVersion: talkTarget.npcPositionVersion ?? 0,
+                };
+                interactNpc({
+                  placementId,
+                  positionVersion: talkTarget.npcPositionVersion ?? 0,
+                });
+              } else if (talkTarget) {
+                setTarget({ x: talkTarget.longitude, y: talkTarget.latitude });
+              }
+              return false;
             } else if (showUsersRef.current && i.object.userData.type === "attack") {
+              const npcPlacementId = i.object.userData.npcPlacementId as
+                | string
+                | undefined;
+              if (npcPlacementId) {
+                const npc = usersRef.current?.find(
+                  (u) => u.npcPlacementId === npcPlacementId,
+                );
+                if (
+                  npc &&
+                  npc.longitude === originRef.current?.col &&
+                  npc.latitude === originRef.current?.row &&
+                  !isInteractingRef.current
+                ) {
+                  pendingNpcInteractRef.current = {
+                    placementId: npcPlacementId,
+                    positionVersion: npc.npcPositionVersion ?? 0,
+                  };
+                  interactNpc({
+                    placementId: npcPlacementId,
+                    positionVersion: npc.npcPositionVersion ?? 0,
+                  });
+                } else if (npc) {
+                  setTarget({ x: npc.longitude, y: npc.latitude });
+                }
+                return false;
+              }
               const target = usersRef.current?.find(
                 (u) => u.userId === i.object.userData.userId,
               );
@@ -2501,6 +2591,39 @@ const Sector: React.FC<SectorProps> = (props) => {
             trigger={<div className="h-1 w-1 opacity-0" />}
           />
         </div>
+      )}
+      {npcDialog && pendingNpcInteractRef.current && (
+        <Modal2
+          isOpen={!!npcDialog}
+          setIsOpen={(open) => {
+            if (!open) setNpcDialog(null);
+          }}
+          title="NPC Dialog"
+        >
+          <div className="flex flex-col gap-2 p-2">
+            {npcDialog.branches.map((branch, idx) => (
+              <button
+                key={`${idx}-${branch.text}`}
+                type="button"
+                disabled={isInteracting}
+                className="rounded-md bg-blue-600 px-4 py-2 text-left text-sm text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                onClick={() => {
+                  const ctx = pendingNpcInteractRef.current;
+                  if (ctx && !isInteracting) {
+                    interactNpc({
+                      placementId: ctx.placementId,
+                      positionVersion: ctx.positionVersion,
+                      dialogContentId: branch.nextObjectiveId,
+                    });
+                  }
+                  setNpcDialog(null);
+                }}
+              >
+                {branch.text}
+              </button>
+            ))}
+          </div>
+        </Modal2>
       )}
     </>
   );

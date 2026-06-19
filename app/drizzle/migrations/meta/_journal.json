@@ -124,8 +124,15 @@
     {
       "idx": 17,
       "version": "5",
-      "when": 1781863757465,
-      "tag": "0017_uneven_sister_grimm",
+      "when": 1781882836834,
+      "tag": "0017_brief_leader",
+      "breakpoints": false
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1781883142139,
+      "tag": "0018_flat_lady_deathstrike",
       "breakpoints": false
     },
     {

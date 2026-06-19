@@ -33,6 +33,7 @@ const battleTypeLabels: Record<BattleType, string> = {
   RANKED_SPARRING: "Ranked Sparring",
   RANDOM_ENCOUNTER: "Random Encounter",
   RAID: "Raid",
+  OVERWORLD: "Overworld",
 };
 
 export default function ColosseumPage() {

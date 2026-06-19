@@ -619,6 +619,32 @@ export const killObjectiveCountsForQuest = (
 };
 
 /**
+ * Returns true when an objective is bound to a placement that no longer exists
+ * in the database (i.e. the row was hard-deleted). The `existing` set contains
+ * every placement id that was returned by the DB query (regardless of isActive).
+ */
+export const isBoundPlacementDeleted = (
+  objective: { overworldPlacementId?: string },
+  existing: Set<string>,
+): boolean =>
+  !!objective.overworldPlacementId && !existing.has(objective.overworldPlacementId);
+
+/**
+ * Returns true when an objective is bound to a placement that still exists in
+ * the database but is currently deactivated (isActive=false). The objective
+ * should be frozen — neither failed nor progressed — until the placement is
+ * re-activated.
+ */
+export const isBoundPlacementFrozen = (
+  objective: { overworldPlacementId?: string },
+  existing: Set<string>,
+  active: Set<string>,
+): boolean =>
+  !!objective.overworldPlacementId &&
+  existing.has(objective.overworldPlacementId) &&
+  !active.has(objective.overworldPlacementId);
+
+/**
  * Used to update the quest tracking data for a user. Takes in the user with his questData
  * information, as well as a task to update. The value is the value to update the task with,
  * e.g. if task is 'pvp_kills' and value is 1, then the user has killed 1 player. This function
@@ -629,6 +655,9 @@ export const killObjectiveCountsForQuest = (
  * @param value - Value to update task with
  * @param contentId - If provided, refers to ID of content, e.g. opponentID defeated
  * @param notifications - If provided, is used to set notifications
+ * @param boundPlacementStatus - When supplied, objectives bound to a deleted placement
+ *   are auto-failed, and objectives bound to a deactivated (frozen) placement are
+ *   skipped without failing. Omit to preserve existing behaviour exactly.
  */
 /**
  * For each content-gated task, the objective field holding its id-list (or, for
@@ -686,6 +715,7 @@ export const getNewTrackers = (
   user: NonNullable<UserWithRelations> & { useritems?: UserItem[] },
   tasks: ObjectiveTrackerTaskInput[],
   combatContext?: CombatQuestContext,
+  boundPlacementStatus?: { existing: Set<string>; active: Set<string> },
 ) => {
   const questData = user.questData ?? [];
   const activeQuests = getUserQuests(user);
@@ -829,6 +859,30 @@ export const getNewTrackers = (
           // If done, return status
           if (status.done) {
             return status;
+          }
+
+          // Three-way bound-placement check — only runs when the caller supplies
+          // boundPlacementStatus; omitting it preserves existing behaviour exactly.
+          if (boundPlacementStatus) {
+            const { existing, active } = boundPlacementStatus;
+            if (isBoundPlacementDeleted(objective, existing)) {
+              // Placement was hard-deleted → auto-fail the objective.
+              if ("failObjectiveId" in objective && objective.failObjectiveId) {
+                status.selectedNextObjectiveId = objective.failObjectiveId;
+              } else {
+                consequences.push({ type: "fail_quest", ids: [quest.id] });
+              }
+              status.done = true;
+              notifications.push(
+                `An objective for "${quest.name}" could not be completed because its destination was removed.`,
+              );
+              questIdsUpdated.push(quest.id);
+              return status;
+            } else if (isBoundPlacementFrozen(objective, existing, active)) {
+              // Placement exists but is deactivated → freeze: skip without failing.
+              return status;
+            }
+            // else: placement is active → fall through to normal matching.
           }
 
           // If not available yet, just skip

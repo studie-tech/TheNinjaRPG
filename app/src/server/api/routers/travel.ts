@@ -17,7 +17,15 @@ import {
   SECTOR_WIDTH,
   UserStatuses,
 } from "@/drizzle/constants";
-import { actionLog, clan, userData, village, war } from "@/drizzle/schema";
+import {
+  actionLog,
+  clan,
+  overworldAiPlacement,
+  userData,
+  village,
+  war,
+} from "@/drizzle/schema";
+import { placementToSectorUser } from "@/libs/overworldAi";
 import { calcLevel } from "@/libs/profile";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import {
@@ -298,7 +306,7 @@ export const travelRouter = createTRPCRouter({
       if (!["AWAKE", "TRAVEL", "QUEUED"].includes(user.status)) {
         return { users: [], village: null, sectorData: null, warData: null };
       }
-      const [users, villageData, sectorData, warData] = await Promise.all([
+      const [users, villageData, sectorData, warData, placements] = await Promise.all([
         ctx.drizzle.query.userData.findMany({
           columns: {
             userId: true,
@@ -369,6 +377,27 @@ export const travelRouter = createTRPCRouter({
             },
           },
         }),
+        ctx.drizzle.query.overworldAiPlacement.findMany({
+          where: and(
+            eq(overworldAiPlacement.sector, user.sector),
+            eq(overworldAiPlacement.isActive, true),
+          ),
+          with: {
+            aiTemplate: {
+              columns: {
+                userId: true,
+                username: true,
+                avatar: true,
+                avatarLight: true,
+                curHealth: true,
+                maxHealth: true,
+                level: true,
+                rank: true,
+                isAi: true,
+              },
+            },
+          },
+        }),
       ]);
 
       // Filter out stealthed players (unless it's the current user)
@@ -395,7 +424,17 @@ export const travelRouter = createTRPCRouter({
           return u;
         });
 
-      return { users: processedUsers, village: villageData, sectorData, warData };
+      const overworldAis = placements
+        .filter((p) => p.aiTemplate?.isAi)
+        .map((p) => placementToSectorUser(p, p.aiTemplate!));
+
+      return {
+        users: processedUsers,
+        village: villageData,
+        sectorData,
+        warData,
+        overworldAis,
+      };
     }),
   // Get village & alliance information for a given sector
   getVillageInSector: protectedProcedure
