@@ -50,6 +50,7 @@ import type { ComputedJutsuLoadout } from "@/libs/jutsu";
 import {
   computeJutsuLoadoutAssignments,
   getFreeTransfers,
+  getJutsuCapFlags,
   getReskinnedUserJutsu,
 } from "@/libs/jutsu";
 import {
@@ -573,14 +574,13 @@ export const jutsuRouter = createTRPCRouter({
         { task: "jutsus_mastered", increment: 1 },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
+      const evolutionCapFlags = getJutsuCapFlags(evolutionJutsu);
       const isRestrictedEquipType =
-        evolutionJutsu.jutsuType === "EVENT" ||
-        evolutionJutsu.effects.some((effect) => effect.type === "pierce") ||
-        evolutionJutsu.effects.some((effect) => effect.type === "barrier") ||
-        evolutionJutsu.effects.some((effect) => effect.type === "stun") ||
-        evolutionJutsu.effects.some(
-          (effect) => "residualModifier" in effect && effect.residualModifier,
-        );
+        evolutionCapFlags.isEvent ||
+        evolutionCapFlags.isPierce ||
+        evolutionCapFlags.isBarrier ||
+        evolutionCapFlags.isStun ||
+        evolutionCapFlags.isResidual;
       // Single compare-and-swap update that applies every userJutsu-row change at once:
       // - jutsuId/level/experience/finishTraining — the evolution itself
       // - equipped — force off for restricted types to avoid cap overflows
@@ -1028,18 +1028,20 @@ export const jutsuRouter = createTRPCRouter({
       const equippedJutsus = userjutsus.filter((uj) => uj.equipped);
       const curEquip = equippedJutsus.length;
       const maxEquip = calcJutsuEquipLimit(user);
-      const residualJutsus = equippedJutsus.filter((uj) =>
-        uj.jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
+      const residualJutsus = equippedJutsus.filter(
+        (uj) => getJutsuCapFlags(uj.jutsu).isResidual,
       );
-      const pierceJutsus = equippedJutsus.filter((uj) =>
-        uj.jutsu.effects.some((e) => e.type === "pierce"),
+      const pierceJutsus = equippedJutsus.filter(
+        (uj) => getJutsuCapFlags(uj.jutsu).isPierce,
       );
-      const eventJutsus = equippedJutsus.filter((uj) => uj.jutsu.jutsuType === "EVENT");
-      const barrierJutsus = equippedJutsus.filter((uj) =>
-        uj.jutsu.effects.some((e) => e.type === "barrier"),
+      const eventJutsus = equippedJutsus.filter(
+        (uj) => getJutsuCapFlags(uj.jutsu).isEvent,
       );
-      const stunJutsus = equippedJutsus.filter((uj) =>
-        uj.jutsu.effects.some((e) => e.type === "stun"),
+      const barrierJutsus = equippedJutsus.filter(
+        (uj) => getJutsuCapFlags(uj.jutsu).isBarrier,
+      );
+      const stunJutsus = equippedJutsus.filter(
+        (uj) => getJutsuCapFlags(uj.jutsu).isStun,
       );
 
       if (!info) return errorResponse("Jutsu not found");
@@ -1112,13 +1114,13 @@ export const jutsuRouter = createTRPCRouter({
           );
       } else {
         // Check if jutsu can be auto-equipped
-        const jutsuHasResidual = info.effects.some(
-          (e) => "residualModifier" in e && e.residualModifier,
-        );
-        const jutsuHasPierce = info.effects.some((e) => e.type === "pierce");
-        const jutsuIsEvent = info.jutsuType === "EVENT";
-        const jutsuHasBarrier = info.effects.some((e) => e.type === "barrier");
-        const jutsuHasStun = info.effects.some((e) => e.type === "stun");
+        const {
+          isResidual: jutsuHasResidual,
+          isPierce: jutsuHasPierce,
+          isEvent: jutsuIsEvent,
+          isBarrier: jutsuHasBarrier,
+          isStun: jutsuHasStun,
+        } = getJutsuCapFlags(info);
 
         const canAutoEquip =
           curEquip < maxEquip &&
@@ -1234,33 +1236,30 @@ export const jutsuRouter = createTRPCRouter({
       const equippedJutsus = userjutsus.filter((j) => j.equipped);
       const curEquip = equippedJutsus.length || 0;
       const maxEquip = calcJutsuEquipLimit(user);
-      const pierceEquipped = equippedJutsus.filter((j) =>
-        j.jutsu.effects.some((e) => e.type === "pierce"),
+      const curJutsuFlags = userjutsuObj
+        ? getJutsuCapFlags(userjutsuObj.jutsu)
+        : undefined;
+      const pierceEquipped = equippedJutsus.filter(
+        (j) => getJutsuCapFlags(j.jutsu).isPierce,
       ).length;
-      const curJutsuIsPierce = userjutsuObj?.jutsu.effects.some(
-        (e) => e.type === "pierce",
-      );
+      const curJutsuIsPierce = curJutsuFlags?.isPierce;
       const eventEquipped = equippedJutsus.filter(
-        (j) => j.jutsu.jutsuType === "EVENT",
+        (j) => getJutsuCapFlags(j.jutsu).isEvent,
       ).length;
-      const curJutsuIsEvent = userjutsuObj?.jutsu.jutsuType === "EVENT";
-      const barrierEquipped = equippedJutsus.filter((j) =>
-        j.jutsu.effects.some((e) => e.type === "barrier"),
+      const curJutsuIsEvent = curJutsuFlags?.isEvent ?? false;
+      const barrierEquipped = equippedJutsus.filter(
+        (j) => getJutsuCapFlags(j.jutsu).isBarrier,
       ).length;
-      const curJutsuIsBarrier = userjutsuObj?.jutsu.effects.some(
-        (e) => e.type === "barrier",
-      );
-      const stunEquipped = equippedJutsus.filter((j) =>
-        j.jutsu.effects.some((e) => e.type === "stun"),
+      const curJutsuIsBarrier = curJutsuFlags?.isBarrier;
+      const stunEquipped = equippedJutsus.filter(
+        (j) => getJutsuCapFlags(j.jutsu).isStun,
       ).length;
-      const curJutsuIsStun = userjutsuObj?.jutsu.effects.some((e) => e.type === "stun");
+      const curJutsuIsStun = curJutsuFlags?.isStun;
       const newEquippedState = !isEquipped;
       const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
       const isLoaded = userjutsuObj && loadout?.jutsuIds.includes(userjutsuObj.jutsuId);
       const residualJutsus = userjutsus.filter(
-        (uj) =>
-          uj.equipped &&
-          uj.jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
+        (uj) => uj.equipped && getJutsuCapFlags(uj.jutsu).isResidual,
       );
 
       // Guards
@@ -1399,6 +1398,16 @@ export const jutsuRouter = createTRPCRouter({
             .where(
               and(eq(jutsuLoadout.id, input.id), eq(jutsuLoadout.userId, ctx.userId)),
             ),
+        () =>
+          ctx.drizzle.query.jutsuLoadout
+            .findFirst({
+              columns: { id: true },
+              where: and(
+                eq(jutsuLoadout.id, input.id),
+                eq(jutsuLoadout.userId, ctx.userId),
+              ),
+            })
+            .then((row) => !!row),
       );
     }),
 

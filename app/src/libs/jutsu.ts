@@ -10,7 +10,7 @@ import {
   JUTSU_TRANSFER_FREE_NORMAL,
   JUTSU_TRANSFER_FREE_SILVER,
 } from "@/drizzle/constants";
-import type { UserJutsuWithRelations } from "@/drizzle/schema";
+import type { Jutsu, UserJutsuWithRelations } from "@/drizzle/schema";
 import { calcJutsuEquipLimit, canUseJutsu } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { canChangeContent } from "@/utils/permissions";
@@ -37,6 +37,30 @@ export interface ComputedJutsuLoadout {
   equipIds: string[];
   invalidJutsus: string[];
 }
+
+export interface JutsuCapFlags {
+  isResidual: boolean;
+  isPierce: boolean;
+  isEvent: boolean;
+  isBarrier: boolean;
+  isStun: boolean;
+}
+
+/**
+ * Which capped equip categories a jutsu counts against (residual / pierce /
+ * event / barrier / stun). Centralised so the loadout, toggle-equip and
+ * auto-equip paths share one definition and a new capped category only needs
+ * editing in one place.
+ */
+export const getJutsuCapFlags = (
+  jutsu: Pick<Jutsu, "effects" | "jutsuType">,
+): JutsuCapFlags => ({
+  isResidual: jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
+  isPierce: jutsu.effects.some((e) => e.type === "pierce"),
+  isEvent: jutsu.jutsuType === "EVENT",
+  isBarrier: jutsu.effects.some((e) => e.type === "barrier"),
+  isStun: jutsu.effects.some((e) => e.type === "stun"),
+});
 
 /**
  * Pure decision logic for applying a jutsu loadout. Validates every saved
@@ -86,13 +110,8 @@ export const computeJutsuLoadoutAssignments = (args: {
       invalidJutsus.push(`${jutsu.name}: missing requirements`);
       continue;
     }
-    const isResidual = jutsu.effects.some(
-      (e) => "residualModifier" in e && e.residualModifier,
-    );
-    const isPierce = jutsu.effects.some((e) => e.type === "pierce");
-    const isEvent = jutsu.jutsuType === "EVENT";
-    const isBarrier = jutsu.effects.some((e) => e.type === "barrier");
-    const isStun = jutsu.effects.some((e) => e.type === "stun");
+    const { isResidual, isPierce, isEvent, isBarrier, isStun } =
+      getJutsuCapFlags(jutsu);
     if (total >= maxEquip) {
       invalidJutsus.push(`${jutsu.name}: equip limit reached`);
       continue;
