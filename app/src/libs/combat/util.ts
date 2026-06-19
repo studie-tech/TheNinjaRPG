@@ -914,7 +914,13 @@ export const isUserImmobilized = (
   userEffects: UserEffect[] | undefined,
 ) => {
   return userEffects?.some(
-    (e) => e.type === "moveprevent" && e.targetId === userId && !e.castThisRound,
+    (e) =>
+      e.type === "moveprevent" &&
+      e.targetId === userId &&
+      !e.castThisRound &&
+      "rounds" in e &&
+      e.rounds &&
+      e.rounds > 0,
   );
 };
 
