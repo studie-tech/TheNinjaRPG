@@ -785,6 +785,8 @@ export const getDefaultBattleSizes = (battleType: BattleType, userLevel: number)
       return { width: 12, height: 10 };
     case "VILLAGE_PROTECTOR":
       return { width: 12, height: 10 };
+    case "OVERWORLD":
+      return { width: 12, height: 10 };
     case "RANKED_PVP":
       return { width: 12, height: 10 };
     case "RANKED_SPARRING":

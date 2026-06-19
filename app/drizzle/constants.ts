@@ -536,6 +536,7 @@ export const BattleTypes = [
   "RANKED_PVP",
   "RANKED_SPARRING",
   "RAID",
+  "OVERWORLD",
 ] as const;
 export type BattleType = (typeof BattleTypes)[number];
 
@@ -558,6 +559,7 @@ export const PveBattleTypes: BattleType[] = [
   "VILLAGE_PROTECTOR",
   "CLAN_CHALLENGE",
   "RAID",
+  "OVERWORLD",
 ];
 
 export const QuestBattleTypes: BattleType[] = ["QUEST", "RANDOM_ENCOUNTER", "RAID"];
@@ -1318,6 +1320,18 @@ export const FED_EVENT_ITEMS_DEFAULT = 10;
 // Missions config
 export const ERRANDS_PER_DAY = 50;
 export const MISSIONS_PER_DAY = 20;
+/** Overworld friendly-NPC quest-give attempts a player gets per day; mirrors the daily mission cap. */
+export const OVERWORLD_QUEST_ROLLS_PER_DAY = MISSIONS_PER_DAY;
+
+export const OverworldInteractionTypes = ["FRIENDLY", "HOSTILE"] as const;
+export type OverworldInteractionType = (typeof OverworldInteractionTypes)[number];
+
+export const OverworldSectorTypes = ["specific", "random", "from_list"] as const;
+export type OverworldSectorType = (typeof OverworldSectorTypes)[number];
+
+export const OverworldLocationTypes = ["specific", "random"] as const;
+export type OverworldLocationType = (typeof OverworldLocationTypes)[number];
+
 export const MEDICAL_MISSIONS_PER_DAY = 9;
 export const PVP_MISSIONS_PER_DAY = 12;
 export const ADDITIONAL_MISSION_REWARD_MULTIPLIER = 0.4;

@@ -364,6 +364,8 @@ export const baseObjectiveFields = {
   sector: z.coerce.number().optional(),
   longitude: z.coerce.number().optional(),
   latitude: z.coerce.number().optional(),
+  // Optional binding to a specific overworld NPC placement (authoritative over coordinates)
+  overworldPlacementId: z.string().optional(),
 };
 
 export const SimpleObjective = z.object({

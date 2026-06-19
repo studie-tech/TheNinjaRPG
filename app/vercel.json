@@ -91,6 +91,10 @@
     {
       "path": "/api/monthly-mcp-reset",
       "schedule": "0 0 1 * *"
+    },
+    {
+      "path": "/api/daily-overworld-ai",
+      "schedule": "0/5 0 * * *"
     }
   ],
   "functions": {

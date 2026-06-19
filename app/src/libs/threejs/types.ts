@@ -1,4 +1,9 @@
-import type { AllianceState, UserRank, UserStatus } from "@/drizzle/constants";
+import type {
+  AllianceState,
+  OverworldInteractionType,
+  UserRank,
+  UserStatus,
+} from "@/drizzle/constants";
 
 type NonEmptyArray<T> = T[] & { 0: T };
 
@@ -69,4 +74,9 @@ export interface SectorUser {
   allianceStatus: AllianceState;
   status: UserStatus;
   battleId: string | null;
+  // Overworld NPC fields (present only for staff-placed AI NPCs)
+  isNpc?: boolean;
+  npcPlacementId?: string;
+  npcInteractionType?: OverworldInteractionType;
+  npcPositionVersion?: number;
 }
