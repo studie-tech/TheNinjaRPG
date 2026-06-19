@@ -21,6 +21,14 @@ import type { UserWithRelations } from "@/routers/profile";
 import { canChangeContent } from "@/utils/permissions";
 import { calcJutsuEquipLimit } from "@/libs/train";
 
+const calcJutsuEquipLimitMock = calcJutsuEquipLimit as unknown as {
+  mockReturnValue: (value: number) => void;
+  mockReturnValueOnce: (value: number) => void;
+};
+const canChangeContentMock = canChangeContent as unknown as {
+  mockImplementation: (fn: (role: string) => boolean) => void;
+};
+
 // Minimal user-jutsu factory; only the fields the validator reads are set. The
 // extra `usable` flag is consumed by the canUseJutsu mock above.
 const uj = (over: {
@@ -50,10 +58,8 @@ const USER = { role: "USER" } as unknown as NonNullable<UserWithRelations>;
 
 describe("computeJutsuLoadoutAssignments", () => {
   beforeEach(() => {
-    vi.mocked(calcJutsuEquipLimit).mockReturnValue(100);
-    vi.mocked(canChangeContent).mockImplementation(
-      (role: string) => role === "CONTENT-ADMIN",
-    );
+    calcJutsuEquipLimitMock.mockReturnValue(100);
+    canChangeContentMock.mockImplementation((role) => role === "CONTENT-ADMIN");
   });
 
   it("equips all valid jutsu, preserving loadout order", () => {
@@ -116,7 +122,7 @@ describe("computeJutsuLoadoutAssignments", () => {
   });
 
   it("enforces the total equip limit", () => {
-    vi.mocked(calcJutsuEquipLimit).mockReturnValueOnce(2);
+    calcJutsuEquipLimitMock.mockReturnValueOnce(2);
     const userjutsus = [
       uj({ jutsuId: "a" }),
       uj({ jutsuId: "b" }),
@@ -146,7 +152,7 @@ describe("computeJutsuLoadoutAssignments", () => {
   });
 
   it("deduplicates repeated jutsuIds so they do not double-count toward caps", () => {
-    vi.mocked(calcJutsuEquipLimit).mockReturnValueOnce(2);
+    calcJutsuEquipLimitMock.mockReturnValueOnce(2);
     const userjutsus = [uj({ jutsuId: "a" }), uj({ jutsuId: "b" })];
     const out = computeJutsuLoadoutAssignments({
       jutsuIds: ["a", "a", "b"],

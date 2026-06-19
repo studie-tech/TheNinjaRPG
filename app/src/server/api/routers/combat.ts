@@ -35,7 +35,6 @@ import {
   BattleTypes,
   type CombatBiome,
   DURABILITY_USABILITY_THR,
-  GeneralTypes,
   HEXTILE_BIOMES,
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
@@ -56,7 +55,6 @@ import {
   REGEN_SECONDS,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
-  StatTypes,
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import type {
@@ -178,7 +176,6 @@ import { fetchSectorVillage } from "@/routers/village";
 import { fetchActiveWars } from "@/routers/war";
 import {
   fetchItemLoadouts,
-  fetchUserItems,
   fetchUserItemsWithVariants,
   selectItemLoadout,
 } from "@/server/api/routers/item";
@@ -195,12 +192,7 @@ import { randomInt } from "@/utils/math";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
 import type { StatSchemaType } from "@/validators/combat";
-import {
-  BarrierTag,
-  DecreaseDamageTakenTag,
-  performActionSchema,
-  statSchema,
-} from "@/validators/combat";
+import { BarrierTag, performActionSchema, statSchema } from "@/validators/combat";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 
 // Debug flag when testing battle
@@ -968,9 +960,7 @@ export const combatRouter = createTRPCRouter({
               (jutsuIds) => {
                 const equipIds = jutsuIds.filter((jutsuId) => {
                   const owned = userjutsus.find((uj) => uj.jutsuId === jutsuId);
-                  return owned
-                    ? checkJutsuBloodlineItem(owned.jutsu, useritems)
-                    : true;
+                  return owned ? checkJutsuBloodlineItem(owned.jutsu, useritems) : true;
                 });
                 return { equipIds, invalidJutsus: [] };
               },

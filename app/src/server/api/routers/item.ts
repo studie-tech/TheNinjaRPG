@@ -1,7 +1,6 @@
 import {
   and,
   asc,
-  desc,
   eq,
   exists,
   gte,
@@ -2389,7 +2388,9 @@ export const fetchUserItems = async (
       imbuements: { with: { item: true } },
     },
   });
-  return useritems.filter((ui) => ui.item && !ui.item.hidden);
+  return useritems.filter(
+    (ui) => ui.item && (options?.includeHidden || !ui.item.hidden),
+  );
 };
 
 export const fetchUserItemsWithVariants = async (
@@ -2403,9 +2404,7 @@ export const fetchUserItemsWithVariants = async (
       imbuements: { with: { item: true } },
     },
   });
-  return useritems.filter(
-    (ui) => ui.item && (options?.includeHidden || !ui.item.hidden),
-  );
+  return useritems.filter((ui) => ui.item && !ui.item.hidden);
 };
 
 export const fetchUserItem = async (
