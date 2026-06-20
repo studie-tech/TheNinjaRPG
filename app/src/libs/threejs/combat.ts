@@ -1349,8 +1349,9 @@ export const drawCombatUsers = (info: {
 const HIGHLIGHT_EDGE_Z_OFFSET = 0.5;
 const HIGHLIGHT_EDGE_Z_OFFSET_SELECTED = 0.6;
 
-// Cache for highlight edge geometries (keyed by tile name)
-const highlightEdgeGeometryCache = new Map<string, BufferGeometry>();
+// Cache highlight edges by the tile geometry object. Tile coordinates are reused across
+// battles, but generated terrain offsets can make the geometry differ per render.
+const highlightEdgeGeometryCache = new WeakMap<BufferGeometry, BufferGeometry>();
 
 // Reusable materials for highlight edges (created once, reused across frames)
 const highlightEdgeMaterials = {
@@ -1378,14 +1379,11 @@ type HighlightEdgePool = {
 /**
  * Get or create a cached edge geometry for a tile
  */
-const getOrCreateEdgeGeometry = (
-  mesh: HexagonalFaceMesh,
-  tileName: string,
-): BufferGeometry => {
-  let geometry = highlightEdgeGeometryCache.get(tileName);
+const getOrCreateEdgeGeometry = (mesh: HexagonalFaceMesh): BufferGeometry => {
+  let geometry = highlightEdgeGeometryCache.get(mesh.geometry);
   if (!geometry) {
     geometry = new EdgesGeometry(mesh.geometry);
-    highlightEdgeGeometryCache.set(tileName, geometry);
+    highlightEdgeGeometryCache.set(mesh.geometry, geometry);
   }
   return geometry;
 };
@@ -1497,7 +1495,7 @@ export const highlightTiles = (info: {
           newHighlights.add(mesh.name);
 
           // Get cached geometry and pooled mesh for highlight edge
-          const geometry = getOrCreateEdgeGeometry(mesh, tileName);
+          const geometry = getOrCreateEdgeGeometry(mesh);
           const edgeMesh = getPooledEdgeMesh(
             pool,
             geometry,
@@ -1557,7 +1555,7 @@ export const highlightTiles = (info: {
             mesh.material.color.copy(tintedColor);
           }
           // Get cached geometry and pooled mesh for selected edge
-          const geometry = getOrCreateEdgeGeometry(mesh, name);
+          const geometry = getOrCreateEdgeGeometry(mesh);
           const material =
             hasMove && tile === targetTile
               ? highlightEdgeMaterials.blue
@@ -1586,7 +1584,7 @@ export const highlightTiles = (info: {
             mesh.material.color.copy(tintedColor);
           }
           // Get cached geometry and pooled mesh for red edge
-          const geometry = getOrCreateEdgeGeometry(mesh, name);
+          const geometry = getOrCreateEdgeGeometry(mesh);
           const edgeMesh = getPooledEdgeMesh(
             pool,
             geometry,
