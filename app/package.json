@@ -170,7 +170,7 @@
     "@types/tweenjs": "^1.0.8",
     "@types/ua-parser-js": "^0.7.39",
     "@typescript/native-preview": "^7.0.0-dev.20260512.1",
-    "@vitejs/plugin-react": "^6.0.1",
+    "@vitejs/plugin-react": "^5",
     "autoprefixer": "^10.5.0",
     "drizzle-kit": "0.31.10",
     "globals": "^17.6.0",

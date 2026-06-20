@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useClerk } from "@clerk/nextjs";
 import * as Sentry from "@sentry/nextjs";
 import {
   MutationCache,
@@ -14,7 +14,7 @@ import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
-import { buildClerkAuthHeaders } from "./authHeaders";
+import { buildClerkAuthFailureHeaders, buildClerkAuthHeaders } from "./authHeaders";
 import {
   api,
   SIGN_IN_REQUIRED_MUTATION_MESSAGE,
@@ -35,6 +35,11 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
+  // Used only to count the browser's Clerk sessions when getToken() fails, so we
+  // fail closed against the shared cookie only in genuine multi-session cases.
+  const clerk = useClerk();
+  const clerkRef = useRef(clerk);
+  clerkRef.current = clerk;
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -101,8 +106,15 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
           url: `${getBaseUrl()}/api/trpc`,
           transformer: superjson,
           async headers() {
-            const token = await getTokenRef.current().catch(() => null);
-            return buildClerkAuthHeaders(token);
+            try {
+              const token = await getTokenRef.current();
+              return buildClerkAuthHeaders(token);
+            } catch {
+              // getToken() threw (e.g. offline/refresh blip). Do not silently fall
+              // back to the shared __session cookie in a multi-session browser.
+              const sessions = clerkRef.current?.client?.sessions?.length ?? 1;
+              return buildClerkAuthFailureHeaders(sessions > 1);
+            }
           },
         }),
       ],
