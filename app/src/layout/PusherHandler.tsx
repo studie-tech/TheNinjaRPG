@@ -71,8 +71,8 @@ export const usePusherHandler = (
           if (data?.battleId) {
             // NOTE: for some reason using updateUser does not work from this hook
             await utils.profile.getUser.cancel();
-            // Update user data with battle status
-            utils.profile.getUser.setData(undefined, (old) => {
+            // Update user data with battle status (scoped to this tab's account)
+            utils.profile.getUser.setData({ viewerId: userId }, (old) => {
               if (!old) return old;
               return {
                 ...old,

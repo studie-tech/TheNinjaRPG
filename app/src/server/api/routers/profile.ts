@@ -176,6 +176,7 @@ import {
   publicProcedure,
   serverError,
 } from "../trpc";
+import { assertViewerMatchesSession } from "../viewerGuard";
 
 const pusher = getServerPusher();
 
@@ -472,7 +473,12 @@ export const profileRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Get current user's full profile data" },
     })
-    .query(async ({ ctx }) => {
+    .input(z.object({ viewerId: z.string() }).optional())
+    .query(async ({ ctx, input }) => {
+      // Clerk multi-session: reject if the client's asserted account does not
+      // match the server-authenticated session. Identity for the fetch below
+      // always comes from ctx.userId, never from input.
+      assertViewerMatchesSession(ctx.userId, input?.viewerId);
       // Query
       const { user, settings, toastMessages, hasUnvotedPolls } = await fetchUpdatedUser(
         {

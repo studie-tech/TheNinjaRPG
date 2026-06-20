@@ -1,5 +1,6 @@
 "use client";
 
+import { useAuth } from "@clerk/nextjs";
 import * as Sentry from "@sentry/nextjs";
 import {
   MutationCache,
@@ -8,11 +9,12 @@ import {
   QueryClientProvider,
 } from "@tanstack/react-query";
 import { httpBatchLink, loggerLink, retryLink, TRPCClientError } from "@trpc/client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
+import { buildClerkAuthHeaders } from "./authHeaders";
 import {
   api,
   SIGN_IN_REQUIRED_MUTATION_MESSAGE,
@@ -27,6 +29,12 @@ const getBaseUrl = () => {
 
 const TrpcClientProvider = (props: { children: React.ReactNode }) => {
   const onMutateCheck = useGlobalOnMutateProtect();
+  // Clerk multi-session: capture this tab's getToken so every tRPC request can
+  // carry the tab's own session token. Stored in a ref so the once-created
+  // client always reads the latest value (the headers callback runs per batch).
+  const { getToken } = useAuth();
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -92,6 +100,10 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
         httpBatchLink({
           url: `${getBaseUrl()}/api/trpc`,
           transformer: superjson,
+          async headers() {
+            const token = await getTokenRef.current().catch(() => null);
+            return buildClerkAuthHeaders(token);
+          },
         }),
       ],
     }),
@@ -119,6 +131,18 @@ const handleTrpcError = (error: unknown) => {
     error instanceof TRPCClientError &&
     error.message.includes("Unauthorized for tRPC endpoint") &&
     (trpcErrorCode === undefined || trpcErrorCode === "UNAUTHORIZED")
+  ) {
+    return;
+  }
+
+  // Ignore the transient Clerk multi-session "Viewer/session mismatch" guard
+  // (server FORBIDDEN from assertViewerMatchesSession). It only fires in the rare
+  // window where a request authenticated as a different tab's account; the query
+  // refetches with the correct per-tab token, so it is not user-facing.
+  if (
+    error instanceof TRPCClientError &&
+    error.message.includes("Viewer/session mismatch") &&
+    (trpcErrorCode === undefined || trpcErrorCode === "FORBIDDEN")
   ) {
     return;
   }
