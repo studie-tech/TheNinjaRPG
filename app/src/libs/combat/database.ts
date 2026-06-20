@@ -1150,26 +1150,26 @@ export const updateUser = async (
     // Check if user has active PvP quests with pvp_kills or defeat_opponents objectives
     // Get user quests from extraState (static data that doesn't change during battle)
     const activeQuests = getUserQuestsFromBattle(curBattle, user.controllerId).filter(
-      (q) => q.quest?.content !== null,
+      (q) => Array.isArray(q.quest?.content?.objectives),
     );
+    const questHasObjective = (
+      uq: (typeof activeQuests)[number],
+      task: "pvp_kills" | "defeat_opponents",
+    ) => uq.quest?.content?.objectives.some((obj) => obj.task === task) ?? false;
     const activePvpQuests = activeQuests.filter((q) => q.questType === "pvp");
     const hasPvpKillsInPvpQuest = activePvpQuests.some((uq) =>
-      uq.quest.content.objectives.some((obj) => obj.task === "pvp_kills"),
+      questHasObjective(uq, "pvp_kills"),
     );
     const hasDefeatOpponentsInPvpQuest = activePvpQuests.some((uq) =>
-      uq.quest.content.objectives.some((obj) => obj.task === "defeat_opponents"),
+      questHasObjective(uq, "defeat_opponents"),
     );
     // Check if user has non-PvP quests with these objectives (should increment normally)
     const hasPvpKillsInNonPvpQuest = activeQuests
       .filter((q) => q.questType !== "pvp")
-      .some((uq) =>
-        uq.quest.content.objectives.some((obj) => obj.task === "pvp_kills"),
-      );
+      .some((uq) => questHasObjective(uq, "pvp_kills"));
     const hasDefeatOpponentsInNonPvpQuest = activeQuests
       .filter((q) => q.questType !== "pvp")
-      .some((uq) =>
-        uq.quest.content.objectives.some((obj) => obj.task === "defeat_opponents"),
-      );
+      .some((uq) => questHasObjective(uq, "defeat_opponents"));
     const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
     // Only increment pvp_kills if:
     // - User has non-PvP quest with that objective (increment normally), OR
