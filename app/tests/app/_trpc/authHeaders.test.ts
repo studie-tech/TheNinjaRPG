@@ -1,32 +1,37 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildClerkAuthFailureHeaders,
-  buildClerkAuthHeaders,
+  buildClerkRequestHeaders,
   TAB_AUTH_REQUIRED_HEADER,
 } from "@/app/_trpc/authHeaders";
 
-describe("buildClerkAuthHeaders", () => {
-  it("returns a Bearer Authorization header when a token is present", () => {
-    expect(buildClerkAuthHeaders("jwt-123")).toEqual({
+describe("buildClerkRequestHeaders", () => {
+  it("sends a Bearer Authorization header when the tab has its own token", () => {
+    expect(buildClerkRequestHeaders("jwt-123", false)).toEqual({
+      Authorization: "Bearer jwt-123",
+    });
+    // token wins regardless of session count
+    expect(buildClerkRequestHeaders("jwt-123", true)).toEqual({
       Authorization: "Bearer jwt-123",
     });
   });
 
-  it("omits the Authorization header when there is no token (never sends 'Bearer null')", () => {
-    expect(buildClerkAuthHeaders(null)).toEqual({});
-    expect(buildClerkAuthHeaders(undefined)).toEqual({});
-    expect(buildClerkAuthHeaders("")).toEqual({});
+  it("never sends an Authorization header when the token is absent (no 'Bearer null')", () => {
+    expect(buildClerkRequestHeaders(null, false)).not.toHaveProperty("Authorization");
+    expect(buildClerkRequestHeaders(undefined, false)).not.toHaveProperty("Authorization");
+    expect(buildClerkRequestHeaders("", false)).not.toHaveProperty("Authorization");
   });
-});
 
-describe("buildClerkAuthFailureHeaders", () => {
-  it("signals fail-closed only when the browser has multiple Clerk sessions", () => {
-    expect(buildClerkAuthFailureHeaders(true)).toEqual({
+  it("fails closed with a marker when there is no token AND the browser has multiple sessions", () => {
+    // covers both getToken() -> null and getToken() throwing (caller passes null)
+    expect(buildClerkRequestHeaders(null, true)).toEqual({
+      [TAB_AUTH_REQUIRED_HEADER]: "1",
+    });
+    expect(buildClerkRequestHeaders(undefined, true)).toEqual({
       [TAB_AUTH_REQUIRED_HEADER]: "1",
     });
   });
 
-  it("sends no marker for a single-session browser (cookie fallback is the user's own account)", () => {
-    expect(buildClerkAuthFailureHeaders(false)).toEqual({});
+  it("sends no marker for a single-session browser with no token (cookie is the user's own account)", () => {
+    expect(buildClerkRequestHeaders(null, false)).toEqual({});
   });
 });
