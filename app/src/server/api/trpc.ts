@@ -61,7 +61,7 @@ export const createAppTRPCContext = async (options: {
   // header arrived, do not authenticate via the shared __session cookie.
   const userId = resolveAuthedUserId(session.userId, {
     hasAuthorizationHeader: !!readHeaders.get("authorization"),
-    tabAuthFailed: readHeaders.get(TAB_AUTH_REQUIRED_HEADER) === "1",
+    tabAuthFailed: readHeaders.get(TAB_AUTH_REQUIRED_HEADER) != null,
   });
   // Get IP
   const userIp = getClientIp(readHeaders);

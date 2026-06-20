@@ -14,7 +14,7 @@ import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
-import { buildClerkAuthFailureHeaders, buildClerkAuthHeaders } from "./authHeaders";
+import { buildClerkRequestHeaders } from "./authHeaders";
 import {
   api,
   SIGN_IN_REQUIRED_MUTATION_MESSAGE,
@@ -106,14 +106,21 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
           url: `${getBaseUrl()}/api/trpc`,
           transformer: superjson,
           async headers() {
+            // signedInSessions excludes ended/expired/replaced sessions, so a
+            // single-account user who previously signed out of another account is
+            // not miscounted as multi-session.
+            const isMultiSession =
+              (clerkRef.current?.client?.signedInSessions?.length ?? 1) > 1;
             try {
-              const token = await getTokenRef.current();
-              return buildClerkAuthHeaders(token);
+              // getToken() returns null when the tab has no session and throws on
+              // an offline/refresh blip; both go through the no-token path, which
+              // fails closed under multi-session instead of using the shared cookie.
+              return buildClerkRequestHeaders(
+                await getTokenRef.current(),
+                isMultiSession,
+              );
             } catch {
-              // getToken() threw (e.g. offline/refresh blip). Do not silently fall
-              // back to the shared __session cookie in a multi-session browser.
-              const sessions = clerkRef.current?.client?.sessions?.length ?? 1;
-              return buildClerkAuthFailureHeaders(sessions > 1);
+              return buildClerkRequestHeaders(null, isMultiSession);
             }
           },
         }),
@@ -160,7 +167,7 @@ const handleTrpcError = (error: unknown) => {
   }
 
   // Note: HTML error pages (403 auth, 500 server errors) trigger JSON parse errors.
-  // - 403 auth errors: Handled by "Unauthorized for tRPC endpoint" check above (lines 118-124)
+  // - 403 auth errors: Handled by the "Unauthorized for tRPC endpoint" check above
   // - Network/CDN HTML responses: Handled by isRetryableTrpcError below (retried up to 3x)
   // - 500 server errors: Should NOT be silently suppressed - users need to see these
   // Therefore, we don't filter HTML responses here. Let them fall through to proper handling.

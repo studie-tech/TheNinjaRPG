@@ -62,6 +62,14 @@ export const UserContext = createContext<{
 });
 
 /**
+ * Per-account input for `profile.getUser`, so the React Query cache is scoped by
+ * Clerk account and cannot serve one account's data to another under multi-session.
+ */
+const getUserQueryInput = (
+  userId: string | null | undefined,
+): { viewerId: string } | undefined => (userId ? { viewerId: userId } : undefined);
+
+/**
  * UserContextProvider component provides a context for managing user-related data and functionality.
  * It includes features such as managing Clerk token, Pusher connection, current user battle, time difference between client and server, and user data retrieval.
  *
@@ -83,7 +91,7 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
   // Get user data. Pass the Clerk userId so the React Query cache is scoped per
   // account (Clerk multi-session) and the server can reject cross-account reads.
   const { data, status: userStatus } = api.profile.getUser.useQuery(
-    userId ? { viewerId: userId } : undefined,
+    getUserQueryInput(userId),
     {
       enabled: !!userId && isSignedIn && isLoaded,
       retry: false,
@@ -97,7 +105,7 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
   // Optimistic user info update function
   const updateUser = async (updatedData: Partial<UserWithRelations>) => {
     await utils.profile.getUser.cancel();
-    utils.profile.getUser.setData(userId ? { viewerId: userId } : undefined, (old) => {
+    utils.profile.getUser.setData(getUserQueryInput(userId), (old) => {
       return { ...old, userData: { ...old?.userData, ...updatedData } } as typeof old;
     });
   };
@@ -107,7 +115,7 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
     notifications: NavBarDropdownLink[] | undefined,
   ) => {
     await utils.profile.getUser.cancel();
-    utils.profile.getUser.setData(userId ? { viewerId: userId } : undefined, (old) => {
+    utils.profile.getUser.setData(getUserQueryInput(userId), (old) => {
       return { ...old, notifications } as typeof old;
     });
   };
