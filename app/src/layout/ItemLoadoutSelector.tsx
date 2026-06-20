@@ -34,8 +34,12 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getUser.invalidate();
-        await utils.item.getUserItems.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.item.getUserItems.invalidate(),
+          utils.item.getUserItemsWithVariants.invalidate(),
+          utils.item.getItemLoadouts.invalidate(),
+        ]);
       }
     },
   });
