@@ -80,12 +80,16 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
   // tRPC utility
   const utils = api.useUtils();
 
-  // Get user data
-  const { data, status: userStatus } = api.profile.getUser.useQuery(undefined, {
-    enabled: !!userId && isSignedIn && isLoaded,
-    retry: false,
-    refetchInterval: 300000,
-  });
+  // Get user data. Pass the Clerk userId so the React Query cache is scoped per
+  // account (Clerk multi-session) and the server can reject cross-account reads.
+  const { data, status: userStatus } = api.profile.getUser.useQuery(
+    userId ? { viewerId: userId } : undefined,
+    {
+      enabled: !!userId && isSignedIn && isLoaded,
+      retry: false,
+      refetchInterval: 300000,
+    },
+  );
 
   // Listen on user channel for live updates on things
   const pusher = usePusherHandler(userId, data?.userData);
@@ -93,7 +97,7 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
   // Optimistic user info update function
   const updateUser = async (updatedData: Partial<UserWithRelations>) => {
     await utils.profile.getUser.cancel();
-    utils.profile.getUser.setData(undefined, (old) => {
+    utils.profile.getUser.setData(userId ? { viewerId: userId } : undefined, (old) => {
       return { ...old, userData: { ...old?.userData, ...updatedData } } as typeof old;
     });
   };
@@ -103,7 +107,7 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
     notifications: NavBarDropdownLink[] | undefined,
   ) => {
     await utils.profile.getUser.cancel();
-    utils.profile.getUser.setData(undefined, (old) => {
+    utils.profile.getUser.setData(userId ? { viewerId: userId } : undefined, (old) => {
       return { ...old, notifications } as typeof old;
     });
   };
