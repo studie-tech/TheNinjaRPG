@@ -383,6 +383,7 @@ export const getDefaultBasicActions = (
     | undefined,
 ): BasicActions => {
   const healPower = calcCombatHealPercentage(user);
+  const basicAttackCooldown = user?.rank === "STUDENT" ? 0 : 1;
   const jutsuStatTypes = ["Ninjutsu", "Genjutsu", "Taijutsu", "Bukijutsu"] as const;
   const lastUsed = (id: string, def = -10) =>
     user?.basicActions?.find((ba) => ba.id === id)?.lastUsedRound ?? def;
@@ -402,8 +403,8 @@ export const getDefaultBasicActions = (
       actionCostPerc: 20,
       range: 1,
       updatedAt: Date.now(),
-      cooldown: 1,
-      originalCooldown: 1,
+      cooldown: basicAttackCooldown,
+      originalCooldown: basicAttackCooldown,
       lastUsedRound: lastUsed("basicAttack"),
       level: user?.level,
       effects: [
