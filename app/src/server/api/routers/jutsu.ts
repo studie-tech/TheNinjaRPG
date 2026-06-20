@@ -60,6 +60,7 @@ import {
 } from "@/libs/loadout";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { cancelJutsuQueueEntry, getJutsuQueueStatus } from "@/libs/queue";
 import { callDiscordContent } from "@/libs/socials";
 import {
   calcJutsuEquipLimit,
@@ -110,6 +111,7 @@ import {
 } from "@/validators/jutsu";
 import { renameLoadoutSchema } from "@/validators/loadout";
 import { QuestTracker } from "@/validators/objectives";
+import { activityQueueStatusSchema } from "@/validators/queue";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 
 export const jutsuRouter = createTRPCRouter({
@@ -999,6 +1001,34 @@ export const jutsuRouter = createTRPCRouter({
       ]);
       return { success: true, message: `Jutsu updated` };
     }),
+  getJutsuQueue: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Get jutsu training queue status" } })
+    .output(activityQueueStatusSchema)
+    .query(async ({ ctx }) => {
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      if (!user) throw serverError("NOT_FOUND", "User not found");
+      return getJutsuQueueStatus(ctx.drizzle, user);
+    }),
+
+  cancelJutsuQueueEntry: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Cancel a queued jutsu training entry" },
+    })
+    .input(z.object({ queueId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const result = await cancelJutsuQueueEntry(
+        ctx.drizzle,
+        ctx.userId,
+        input.queueId,
+      );
+      if (!result.success) return errorResponse(result.message);
+      return { success: true, message: result.message };
+    }),
+
   // Start training a given jutsu
   startTraining: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Start training a jutsu" } })

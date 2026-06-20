@@ -153,6 +153,23 @@ export const computeJutsuLoadoutAssignments = (args: {
  * @param userJutsu
  * @returns
  */
+/** Effective jutsu level for UI (DB level minus in-flight training increment). */
+export const getDisplayJutsuLevel = (
+  userJutsu: Pick<UserJutsuWithRelations, "level" | "finishTraining">,
+  now: Date,
+): number => {
+  if (userJutsu.finishTraining && userJutsu.finishTraining > now) {
+    return userJutsu.level - 1;
+  }
+  return userJutsu.level;
+};
+
+/** Level used for train cost/time when enqueueing same-jutsu queue entries. */
+export const getJutsuQueueCostBasis = (
+  baseCostLevel: number,
+  sameJutsuQueuedCount: number,
+): number => baseCostLevel + sameJutsuQueuedCount;
+
 export const getReskinnedUserJutsu = <T extends UserJutsuWithRelations>(
   userJutsu: T,
 ): T => {
