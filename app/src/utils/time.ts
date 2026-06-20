@@ -1,4 +1,4 @@
-import type { TimeUnit } from "@/drizzle/constants";
+import type { RetryQuestDelay, TimeUnit } from "@/drizzle/constants";
 
 /**
  * Get game time which is the UTC HH:MM:SS timestring
@@ -355,4 +355,23 @@ export const getCurrentSlotBoundary = (d: Date = new Date()): Date => {
 export const isNewSlotDue = (now: Date, prevTime: Date): boolean => {
   const boundary = getCurrentSlotBoundary(now);
   return boundary > prevTime && boundary <= now;
+};
+
+/**
+ * UTC calendar period start for a quest retry delay.
+ * daily = midnight UTC; weekly = Monday 00:00 UTC (ISO week); monthly = 1st 00:00 UTC.
+ */
+export const periodStart = (
+  delay: Exclude<RetryQuestDelay, "none">,
+  now: Date,
+): Date => {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const d = now.getUTCDate();
+  if (delay === "daily") return new Date(Date.UTC(y, m, d));
+  if (delay === "monthly") return new Date(Date.UTC(y, m, 1));
+  // weekly: back up to Monday (getUTCDay: 0=Sun..6=Sat)
+  const dow = now.getUTCDay();
+  const deltaToMonday = (dow + 6) % 7; // Sun→6, Mon→0, Tue→1, ...
+  return new Date(Date.UTC(y, m, d - deltaToMonday));
 };

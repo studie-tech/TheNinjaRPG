@@ -9,7 +9,7 @@
  * Failed CAS (`success: false` / `false`) means another request mutated the row first — return a
  * safe client error and retry-friendly message.
  */
-import { and, eq, exists, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, exists, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { BattleType } from "@/drizzle/constants";
 import {
   bloodlineRolls,
@@ -202,6 +202,40 @@ export const removeBloodlineFromPoolAtomically = async ({
       ),
   ]);
   return deleteResult.rowsAffected + updateResult.rowsAffected > 0;
+};
+
+type ActiveNpcQuestParams = {
+  client: DrizzleClient;
+  userId: string;
+  questId: string;
+};
+
+/** Claims the single "active NPC mission" slot. true iff the slot was free and is now ours. */
+export const claimActiveNpcQuest = async ({
+  client,
+  userId,
+  questId,
+}: ActiveNpcQuestParams) => {
+  const res = await client
+    .update(userData)
+    .set({ activeNpcQuestId: questId })
+    .where(and(eq(userData.userId, userId), isNull(userData.activeNpcQuestId)));
+  return res.rowsAffected === 1;
+};
+
+/**
+ * Releases the slot — CONDITIONAL on the specific questId so a concurrent interaction at a
+ * different NPC can't clear a slot another NPC legitimately owns.
+ */
+export const clearActiveNpcQuest = async ({
+  client,
+  userId,
+  questId,
+}: ActiveNpcQuestParams) => {
+  await client
+    .update(userData)
+    .set({ activeNpcQuestId: null })
+    .where(and(eq(userData.userId, userId), eq(userData.activeNpcQuestId, questId)));
 };
 
 /**

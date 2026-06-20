@@ -1,8 +1,8 @@
 {
+  "id": "49218220-0571-4716-87f6-dcccd02592b8",
+  "prevId": "0875d837-b94b-46ea-be77-aa99df383c30",
   "version": "5",
   "dialect": "mysql",
-  "id": "6a2f6c7d-a395-4044-b522-dfc5cec9fd36",
-  "prevId": "c9cf5e73-8c44-4b1a-8b7c-99e683dfb23d",
   "tables": {
     "AbEvent": {
       "name": "AbEvent",
@@ -1300,7 +1300,7 @@
         },
         "battleType": {
           "name": "battleType",
-          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD')",
+          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -1546,7 +1546,7 @@
         },
         "battleType": {
           "name": "battleType",
-          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD')",
+          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID')",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -1947,8 +1947,8 @@
           "notNull": false,
           "autoincrement": false,
           "generated": {
-            "as": "CASE WHEN `type` = 'NATURAL' THEN `userId` ELSE NULL END",
-            "type": "stored"
+            "type": "stored",
+            "as": "CASE WHEN `type` = 'NATURAL' THEN `userId` ELSE NULL END"
           }
         }
       },
@@ -3494,7 +3494,7 @@
         },
         "battleType": {
           "name": "battleType",
-          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD')",
+          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -5024,6 +5024,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "name": {
+          "name": "name",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "datetime(3)",
@@ -5600,6 +5608,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "name": {
+          "name": "name",
+          "type": "varchar(24)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "datetime(3)",
@@ -5936,7 +5952,7 @@
         },
         "battleType": {
           "name": "battleType",
-          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD')",
+          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -6080,7 +6096,7 @@
         },
         "battleType": {
           "name": "battleType",
-          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD')",
+          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -6392,208 +6408,6 @@
         }
       },
       "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "OverworldAiPlacement": {
-      "name": "OverworldAiPlacement",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        },
-        "aiTemplateUserId": {
-          "name": "aiTemplateUserId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "interactionType": {
-          "name": "interactionType",
-          "type": "enum('FRIENDLY','HOSTILE')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "isActive": {
-          "name": "isActive",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": true
-        },
-        "sectorType": {
-          "name": "sectorType",
-          "type": "enum('specific','random','from_list')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'specific'"
-        },
-        "locationType": {
-          "name": "locationType",
-          "type": "enum('specific','random')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'specific'"
-        },
-        "sectorList": {
-          "name": "sectorList",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "sector": {
-          "name": "sector",
-          "type": "smallint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "longitude": {
-          "name": "longitude",
-          "type": "tinyint",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "latitude": {
-          "name": "latitude",
-          "type": "tinyint",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "questGiveChance": {
-          "name": "questGiveChance",
-          "type": "smallint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "positionVersion": {
-          "name": "positionVersion",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        }
-      },
-      "indexes": {
-        "OverworldAiPlacement_sector_idx": {
-          "name": "OverworldAiPlacement_sector_idx",
-          "columns": [
-            "sector"
-          ],
-          "isUnique": false
-        },
-        "OverworldAiPlacement_aiTemplateUserId_idx": {
-          "name": "OverworldAiPlacement_aiTemplateUserId_idx",
-          "columns": [
-            "aiTemplateUserId"
-          ],
-          "isUnique": false
-        },
-        "OverworldAiPlacement_isActive_sector_idx": {
-          "name": "OverworldAiPlacement_isActive_sector_idx",
-          "columns": [
-            "isActive",
-            "sector"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "OverworldAiPlacement_id": {
-          "name": "OverworldAiPlacement_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "OverworldAiPlacementQuest": {
-      "name": "OverworldAiPlacementQuest",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "placementId": {
-          "name": "placementId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "questId": {
-          "name": "questId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "OverworldAiPlacementQuest_placementId_idx": {
-          "name": "OverworldAiPlacementQuest_placementId_idx",
-          "columns": [
-            "placementId"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "OverworldAiPlacementQuest_id": {
-          "name": "OverworldAiPlacementQuest_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {
-        "OverworldAiPlacementQuest_placement_quest_key": {
-          "name": "OverworldAiPlacementQuest_placement_quest_key",
-          "columns": [
-            "placementId",
-            "questId"
-          ]
-        }
-      },
       "checkConstraint": {}
     },
     "PaypalSubscription": {
@@ -11414,14 +11228,6 @@
           "autoincrement": false,
           "default": 0
         },
-        "dailyOverworldQuestRolls": {
-          "name": "dailyOverworldQuestRolls",
-          "type": "smallint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
         "movedTooFastCount": {
           "name": "movedTooFastCount",
           "type": "int",
@@ -13959,8 +13765,8 @@
           "notNull": false,
           "autoincrement": false,
           "generated": {
-            "as": "CASE WHEN `status` = 'PENDING' THEN 1 ELSE NULL END",
-            "type": "stored"
+            "type": "stored",
+            "as": "CASE WHEN `status` = 'PENDING' THEN 1 ELSE NULL END"
           }
         },
         "createdAt": {
@@ -14899,9 +14705,9 @@
   },
   "views": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
+    "tables": {}
   },
   "internal": {
     "tables": {},

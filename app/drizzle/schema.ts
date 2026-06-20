@@ -196,7 +196,6 @@ export const overworldAiPlacement = mysqlTable(
     sector: smallint("sector", { unsigned: true }).default(0).notNull(),
     longitude: tinyint("longitude").default(0).notNull(),
     latitude: tinyint("latitude").default(0).notNull(),
-    questGiveChance: smallint("questGiveChance", { unsigned: true }).default(0).notNull(),
     positionVersion: int("positionVersion").default(0).notNull(),
   },
   (table) => {
@@ -220,6 +219,7 @@ export const overworldAiPlacementQuest = mysqlTable(
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     placementId: varchar("placementId", { length: 191 }).notNull(),
     questId: varchar("questId", { length: 191 }).notNull(),
+    chance: smallint("chance", { unsigned: true }).default(0).notNull(),
   },
   (table) => {
     return {
@@ -2289,6 +2289,7 @@ export const userData = mysqlTable(
     unreadNotifications: smallint("unreadNotifications").default(0).notNull(),
     unreadNews: smallint("unreadNews").default(0).notNull(),
     questData: json("questData").$type<QuestTrackerType[]>(),
+    activeNpcQuestId: varchar("activeNpcQuestId", { length: 191 }),
     senseiId: varchar("senseiId", { length: 191 }),
     medicalExperience: int("medicalExperience").default(0).notNull(),
     craftingExperience: int("craftingExperience").default(0).notNull(),
@@ -3533,6 +3534,9 @@ export const questHistory = mysqlTable(
     completed: tinyint("completed").default(0).notNull(),
     previousCompletes: int("previousCompletes").default(0).notNull(),
     previousAttempts: int("previousAttempts").default(0).notNull(),
+    // #1348: completions counted within the current retryDelay calendar period.
+    periodCompletes: int("periodCompletes").default(0).notNull(),
+    periodStartAt: datetime("periodStartAt", { mode: "date", fsp: 3 }),
   },
   (table) => {
     return {

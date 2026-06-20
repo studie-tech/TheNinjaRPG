@@ -71,6 +71,8 @@ import {
   getReward,
   getUserQuests,
   isAvailableUserQuests,
+  periodCapReached,
+  periodCompletionSet,
   verifyQuestObjectiveFlow,
 } from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
@@ -95,16 +97,7 @@ import {
   canOnlyEditSelf,
   canPlayHiddenQuests,
 } from "@/utils/permissions";
-import {
-  DAY_S,
-  getDaysHoursMinutesSeconds,
-  getTimeLeftStr,
-  MONTH_S,
-  secondsFromDate,
-  secondsFromNow,
-  secondsPassed,
-  WEEK_S,
-} from "@/utils/time";
+import { secondsFromNow } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { canAccessStructure } from "@/utils/village";
@@ -379,6 +372,8 @@ export const questsRouter = createTRPCRouter({
                 ...getTableColumns(quest),
                 previousAttempts: questHistory.previousAttempts,
                 completed: questHistory.completed,
+                periodCompletes: questHistory.periodCompletes,
+                periodStartAt: questHistory.periodStartAt,
               })
               .from(quest)
               .leftJoin(
@@ -417,6 +412,8 @@ export const questsRouter = createTRPCRouter({
                 ...getTableColumns(quest),
                 previousAttempts: questHistory.previousAttempts,
                 completed: questHistory.completed,
+                periodCompletes: questHistory.periodCompletes,
+                periodStartAt: questHistory.periodStartAt,
               })
               .from(quest)
               .leftJoin(
@@ -523,6 +520,24 @@ export const questsRouter = createTRPCRouter({
         results.filter((e) => isAvailableUserQuests(e, user).check),
       );
       if (!result) return errorResponse("No assignments at this level could be found");
+
+      // #1348: random missions bypass assignQuestToUser, so enforce the per-period cap here too.
+      // `result` carries periodCompletes/periodStartAt from the widened LEFT JOIN above.
+      if (
+        periodCapReached(
+          {
+            retryDelay: result.retryDelay,
+            maxCompletes: result.maxCompletes,
+            periodCompletes: result.periodCompletes,
+            periodStartAt: result.periodStartAt,
+          },
+          new Date(),
+        )
+      ) {
+        return errorResponse(
+          `You've already completed this ${result.retryDelay} mission for this period.`,
+        );
+      }
 
       // Insert quest entry
       await Promise.all([
@@ -2005,22 +2020,22 @@ export const assignQuestToUser = async (args: {
     return errorResponse(`Quest has ended`);
   }
 
-  // Check if it's too early wrt. retry-limits
-  if (questData.retryDelay !== "none" && prevAttempt?.endAt) {
-    let retryDate = new Date();
-    const endedDate = prevAttempt.endAt;
-    if (questData.retryDelay === "daily") {
-      retryDate = secondsFromDate(DAY_S, endedDate);
-    } else if (questData.retryDelay === "weekly") {
-      retryDate = secondsFromDate(WEEK_S, endedDate);
-    } else if (questData.retryDelay === "monthly") {
-      retryDate = secondsFromDate(MONTH_S, endedDate);
-    }
-    if (retryDate > new Date()) {
-      const msLeft = -secondsPassed(retryDate) * 1000;
-      const timeLeft = getTimeLeftStr(...getDaysHoursMinutesSeconds(msLeft));
-      return errorResponse(`You must wait ${timeLeft} to retry this quest`);
-    }
+  // #1348: per-calendar-period completion cap (replaces the old rolling retryDelay timer).
+  // Applies to ALL player-facing accept/retry (UI startQuest + overworld NPC, both via this fn).
+  if (
+    periodCapReached(
+      {
+        retryDelay: questData.retryDelay,
+        maxCompletes: questData.maxCompletes,
+        periodCompletes: prevAttempt?.periodCompletes,
+        periodStartAt: prevAttempt?.periodStartAt,
+      },
+      new Date(),
+    )
+  ) {
+    return errorResponse(
+      `You've reached the limit for this ${questData.retryDelay} quest. Try again next ${questData.retryDelay === "daily" ? "day" : questData.retryDelay === "weekly" ? "week" : "month"}.`,
+    );
   }
 
   // Check if user is already on this quest
@@ -2150,6 +2165,8 @@ export const upsertQuestEntry = async (
       completed: 0,
       previousCompletes: 0,
       previousAttempts: 1,
+      periodCompletes: 0,
+      periodStartAt: null,
     };
     promises.push(client.insert(questHistory).values(entry));
   }
@@ -2201,12 +2218,15 @@ const revertQuestCompletionAfterFailedClaim = async (
   client: DrizzleClient,
   userId: string,
   questId: string,
+  completedEndAt: Date,
 ) => {
   await client
     .update(questHistory)
     .set({
       completed: 0,
-      previousCompletes: sql`${questHistory.previousCompletes} - 1`,
+      previousCompletes: sql`GREATEST(${questHistory.previousCompletes} - 1, 0)`,
+      // Only roll back the period counter if it still belongs to the same completion instance.
+      periodCompletes: sql`GREATEST(${questHistory.periodCompletes} - 1, 0)`,
       endAt: null,
     })
     .where(
@@ -2214,6 +2234,7 @@ const revertQuestCompletionAfterFailedClaim = async (
         eq(questHistory.questId, questId),
         eq(questHistory.userId, userId),
         eq(questHistory.completed, 1),
+        eq(questHistory.endAt, completedEndAt),
       ),
     );
 };
@@ -2313,6 +2334,8 @@ export const commitQuestObjectiveRewards = async (info: {
   // Persist completion before snapshot CAS so we cannot commit questData/updatedAt and then
   // lose the completion race; if snapshot claim fails, revert completion below.
   let resolvedCompletionCommitted = false;
+  // #1348: the exact endAt stamped by the completion CAS, reused to anchor the revert below.
+  let completedEndAt: Date | null = null;
   if (resolved) {
     // Achievements (and any quest shown only via mock rows) may have progress in questData
     // without a QuestHistory row yet — create one at claim time only.
@@ -2342,12 +2365,23 @@ export const commitQuestObjectiveRewards = async (info: {
       }
     }
 
+    const retryDelay = userQuest?.quest?.retryDelay ?? "none";
+    completedEndAt = new Date();
+    const { cps } = periodCompletionSet(retryDelay, completedEndAt);
+
     const questCompletionResult = await client
       .update(questHistory)
       .set({
         completed: 1,
         previousCompletes: sql`${questHistory.previousCompletes} + 1`,
-        endAt: new Date(),
+        endAt: completedEndAt,
+        // #1348: reset the period counter when this completion opens a new period, else increment.
+        ...(cps
+          ? {
+              periodCompletes: sql`CASE WHEN ${questHistory.periodStartAt} IS NULL OR ${questHistory.periodStartAt} < ${cps} THEN 1 ELSE ${questHistory.periodCompletes} + 1 END`,
+              periodStartAt: sql`CASE WHEN ${questHistory.periodStartAt} IS NULL OR ${questHistory.periodStartAt} < ${cps} THEN ${cps} ELSE ${questHistory.periodStartAt} END`,
+            }
+          : {}),
       })
       .where(
         and(
@@ -2383,8 +2417,13 @@ export const commitQuestObjectiveRewards = async (info: {
   );
 
   if (!claimed) {
-    if (resolvedCompletionCommitted && userQuest) {
-      await revertQuestCompletionAfterFailedClaim(client, userId, userQuest.questId);
+    if (resolvedCompletionCommitted && userQuest && completedEndAt) {
+      await revertQuestCompletionAfterFailedClaim(
+        client,
+        userId,
+        userQuest.questId,
+        completedEndAt,
+      );
     }
     return { outcome: "state_changed" };
   }

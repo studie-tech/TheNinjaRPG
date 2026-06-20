@@ -30,8 +30,14 @@ export const OverworldPlacementSchema = z
     sectorList: z
       .array(z.coerce.number().int().min(0).max(MAP_TOTAL_SECTORS))
       .prefault([]),
-    questGiveChance: z.coerce.number().int().min(0).max(100).prefault(0),
-    questIds: z.array(z.string()).prefault([]),
+    quests: z
+      .array(
+        z.object({
+          questId: z.string().min(1),
+          chance: z.coerce.number().int().min(0).max(100),
+        }),
+      )
+      .prefault([]),
     isActive: z.coerce.boolean().prefault(true),
   })
   .superRefine((val, ctx) => {
@@ -42,11 +48,20 @@ export const OverworldPlacementSchema = z
         path: ["sectorList"],
       });
     }
-    if (new Set(val.questIds).size !== val.questIds.length) {
+    const ids = val.quests.map((q) => q.questId);
+    if (new Set(ids).size !== ids.length) {
       ctx.addIssue({
         code: "custom",
         message: "Quest pool cannot contain duplicates",
-        path: ["questIds"],
+        path: ["quests"],
+      });
+    }
+    const sum = val.quests.reduce((s, q) => s + q.chance, 0);
+    if (sum > 100) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Quest chances sum to ${sum}%; must be ≤ 100`,
+        path: ["quests"],
       });
     }
   });

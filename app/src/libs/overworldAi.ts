@@ -121,6 +121,22 @@ type BoundObjective = {
   deliverItemIds?: string[];
 };
 
+/**
+ * Absolute-chance band-walk: each quest owns a [acc, acc+chance) band on [0,100).
+ * r past the summed chances → null ("nothing"). Order is the caller-provided (stable) order.
+ */
+export const pickWeightedQuest = (
+  eligible: { questId: string; chance: number }[],
+  r: number,
+): string | null => {
+  let acc = 0;
+  for (const q of eligible) {
+    acc += q.chance;
+    if (r < acc) return q.questId;
+  }
+  return null;
+};
+
 export const findActionableBoundObjective = (args: {
   activeQuests: { questId: string; objectives: BoundObjective[] }[];
   ownedItemIds: string[];
