@@ -106,25 +106,20 @@ export const availableUserActions = (
 
   // Concatenate all actions
   let availableActions = [
-    ...(basicMoves && !isStealth
-      ? [
-          basicActions.basicAttack,
-          basicActions.basicOffensiveStance,
-          basicActions.basicDefensiveStance,
-        ]
-      : []),
-    ...(!isImmobilized
-      ? [basicActions.basicMove, basicActions.basicReplacementTechnique]
-      : []),
+    ...(basicMoves && !isStealth ? [basicActions.basicAttack] : []),
+    ...(!isImmobilized ? [basicActions.basicMove] : []),
     ...(basicMoves && !isStealth && !isStudent
       ? [
           basicActions.basicHeal,
           basicActions.basicMeditate,
           basicActions.basicClear,
           basicActions.basicCleanse,
-          basicActions.basicFlee,
+          basicActions.basicOffensiveStance,
+          basicActions.basicDefensiveStance,
         ]
       : []),
+    ...(!isImmobilized && !isStudent ? [basicActions.basicReplacementTechnique] : []),
+    ...(basicMoves && !isStealth && !isStudent ? [basicActions.basicFlee] : []),
     ...(availableActionPoints && availableActionPoints > 0
       ? [
           {
