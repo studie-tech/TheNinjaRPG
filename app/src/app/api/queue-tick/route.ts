@@ -14,7 +14,7 @@ export async function GET() {
   try {
     const result = await processActivityQueueTick(drizzleDB);
     return new Response(
-      `Queue tick: ${result.statCompleted} stats completed, ${result.jutsuPromoted} jutsu promoted, ${result.craftPromoted} crafts promoted`,
+      `Queue tick: ${result.statCompleted} stats completed, ${result.jutsuPromoted} jutsu promoted, ${result.craftPromoted} crafts promoted, ${result.terminalPurged} terminal rows purged`,
       { status: 200 },
     );
   } catch (cause) {

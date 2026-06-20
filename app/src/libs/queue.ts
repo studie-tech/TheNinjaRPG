@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   type ActivityQueueType,
@@ -74,6 +74,7 @@ import type { ActivityQueueEntry, ActivityQueueStatus } from "@/validators/queue
 
 const PROCESS_BATCH_LIMIT = 500;
 const PROMOTE_CONCURRENCY = 25;
+const TERMINAL_QUEUE_PURGE_BATCH = 5000;
 
 type ActiveUser = NonNullable<UserWithRelations>;
 
@@ -566,6 +567,7 @@ export const promoteStatQueue = async (
       fetchQueuedEntries(client, userId, "STAT"),
     ]);
     if (!user || user.currentlyTraining || queued.length === 0) return false;
+    if (user.status !== "AWAKE") return false;
     if (user.dailyTrainings >= MAX_DAILY_TRAININGS) return false;
 
     const next = queued[0];
@@ -582,7 +584,7 @@ export const promoteStatQueue = async (
     const start = await startStatTrainingInternal(client, user, next.stat);
     if (!start.ok) {
       if (!(await revertFailedQueueClaim(client, next))) return false;
-      continue;
+      return false;
     }
 
     return true;
@@ -1505,6 +1507,36 @@ const countPromoted = async (
   return results.filter(Boolean).length;
 };
 
+/** Delete terminal queue rows (COMPLETED/CANCELLED) in bounded batches. */
+export const purgeTerminalActivityQueueEntries = async (
+  client: DrizzleClient,
+  options?: { maxBatches?: number },
+): Promise<number> => {
+  const maxBatches = options?.maxBatches ?? Number.POSITIVE_INFINITY;
+  let totalDeleted = 0;
+
+  for (let batch = 0; batch < maxBatches; batch++) {
+    const stale = await client
+      .select({ id: userActivityQueue.id })
+      .from(userActivityQueue)
+      .where(inArray(userActivityQueue.status, ["COMPLETED", "CANCELLED"]))
+      .limit(TERMINAL_QUEUE_PURGE_BATCH);
+
+    if (stale.length === 0) break;
+
+    const result = await client.delete(userActivityQueue).where(
+      inArray(
+        userActivityQueue.id,
+        stale.map((row) => row.id),
+      ),
+    );
+    totalDeleted += result.rowsAffected ?? 0;
+    if (stale.length < TERMINAL_QUEUE_PURGE_BATCH) break;
+  }
+
+  return totalDeleted;
+};
+
 export const processActivityQueueTick = async (client: DrizzleClient) => {
   const now = new Date();
 
@@ -1577,5 +1609,9 @@ export const processActivityQueueTick = async (client: DrizzleClient) => {
     client,
   );
 
-  return { statCompleted, jutsuPromoted, craftPromoted };
+  const terminalPurged = await purgeTerminalActivityQueueEntries(client, {
+    maxBatches: 1,
+  });
+
+  return { statCompleted, jutsuPromoted, craftPromoted, terminalPurged };
 };

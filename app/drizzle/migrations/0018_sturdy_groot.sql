@@ -22,4 +22,5 @@ CREATE TABLE `UserActivityQueue` (
 );
 
 CREATE INDEX `UserActivityQueue_userId_type_status_idx` ON `UserActivityQueue` (`userId`,`type`,`status`);
+CREATE INDEX `UserActivityQueue_type_status_userId_idx` ON `UserActivityQueue` (`type`,`status`,`userId`);
 CREATE INDEX `UserActivityQueue_userId_idx` ON `UserActivityQueue` (`userId`);

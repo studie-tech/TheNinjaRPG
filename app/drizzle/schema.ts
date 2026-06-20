@@ -1718,6 +1718,11 @@ export const userActivityQueue = mysqlTable(
         table.type,
         table.status,
       ),
+      typeStatusUserIdIdx: index("UserActivityQueue_type_status_userId_idx").on(
+        table.type,
+        table.status,
+        table.userId,
+      ),
       userIdIdx: index("UserActivityQueue_userId_idx").on(table.userId),
     };
   },
