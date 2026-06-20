@@ -60,12 +60,15 @@ import {
 } from "@/libs/loadout";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
-import { cancelJutsuQueueEntry, getJutsuQueueStatus } from "@/libs/queue";
+import {
+  cancelJutsuQueueEntry,
+  enqueueJutsuTraining,
+  getJutsuQueueStatus,
+  promoteJutsuQueue,
+} from "@/libs/queue";
 import { callDiscordContent } from "@/libs/socials";
 import {
   calcJutsuEquipLimit,
-  calcJutsuTrainCost,
-  calcJutsuTrainTime,
   canEvolveJutsu,
   canTrainJutsu,
   canUseJutsu,
@@ -73,7 +76,6 @@ import {
   hasRequiredLevel,
   hasRequiredRank,
 } from "@/libs/train";
-import { fetchStudents } from "@/routers/sensei";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -1041,143 +1043,12 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [data, info, userjutsus, students] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        fetchJutsu(ctx.drizzle, input.jutsuId),
-        fetchUserJutsus(ctx.drizzle, ctx.userId),
-        fetchStudents(ctx.drizzle, ctx.userId),
-      ]);
-      const { user } = data;
-      if (!user) return errorResponse("User not found");
-
-      // Derived
-      const userjutsuObj = userjutsus.find((j) => j.jutsuId === input.jutsuId);
-      const equippedJutsus = userjutsus.filter((uj) => uj.equipped);
-      const curEquip = equippedJutsus.length;
-      const maxEquip = calcJutsuEquipLimit(user);
-      const residualJutsus = equippedJutsus.filter(
-        (uj) => getJutsuCapFlags(uj.jutsu).isResidual,
-      );
-      const pierceJutsus = equippedJutsus.filter(
-        (uj) => getJutsuCapFlags(uj.jutsu).isPierce,
-      );
-      const eventJutsus = equippedJutsus.filter(
-        (uj) => getJutsuCapFlags(uj.jutsu).isEvent,
-      );
-      const barrierJutsus = equippedJutsus.filter(
-        (uj) => getJutsuCapFlags(uj.jutsu).isBarrier,
-      );
-      const stunJutsus = equippedJutsus.filter(
-        (uj) => getJutsuCapFlags(uj.jutsu).isStun,
-      );
-
-      if (!info) return errorResponse("Jutsu not found");
-      if (!canTrainJutsu(info, user) && !info.parentJutsuId)
-        return errorResponse("Jutsu not for you");
-      if (info.parentJutsuId && !userjutsuObj)
-        return errorResponse(
-          "Evolution jutsus can only be obtained by evolving the parent jutsu",
-        );
-      if (info.parentJutsuId && userjutsuObj && !canUseJutsu(info, user, true))
-        return errorResponse("Jutsu not for you");
-      if (
-        userjutsus.some(
-          (j) =>
-            j.jutsu.parentJutsuId === input.jutsuId ||
-            j.parentJutsuParentId === input.jutsuId,
-        )
-      )
-        return errorResponse("You have already evolved this jutsu");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake");
-
-      const level = userjutsuObj ? userjutsuObj.level : 0;
-      if (level >= JUTSU_LEVEL_CAP) {
-        return errorResponse("Jutsu is already at max level");
-      }
-      if (info.hidden && !canChangeContent(user.role)) {
-        return errorResponse("Jutsu is hidden, cannot be trained");
-      }
-      if (userjutsus.find((j) => j.finishTraining && j.finishTraining > new Date())) {
-        return errorResponse("You are already training a jutsu");
-      }
-
-      // Time & cost
-      const trainTime = calcJutsuTrainTime(info, level, user);
-      const trainCost = calcJutsuTrainCost(info, level, user, students);
-
-      // Quests
-      let questDataFull = user.questData ?? [];
-      if (!userjutsuObj) {
-        const { trackers } = getNewTrackers(user, [
-          { task: "jutsus_mastered", increment: 1 },
-        ]);
-        questDataFull = trackers;
-      }
-      const questDataForDb = filterQuestTrackersForDbPersist(questDataFull, user);
-
-      // Deduct money
-      const moneyUpdate = await ctx.drizzle
-        .update(userData)
-        .set({
-          money: sql`${userData.money} - ${trainCost}`,
-          questData: questDataForDb,
-        })
-        .where(and(eq(userData.userId, ctx.userId), gte(userData.money, trainCost)));
-      if (moneyUpdate.rowsAffected !== 1) {
-        return errorResponse("You don't have enough money");
-      }
-
-      // Insert or update user jutsu
-      if (userjutsuObj) {
-        await ctx.drizzle
-          .update(userJutsu)
-          .set({
-            level: sql`${userJutsu.level} + 1`,
-            finishTraining: new Date(Date.now() + trainTime),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(eq(userJutsu.id, userjutsuObj.id), eq(userJutsu.userId, ctx.userId)),
-          );
-      } else {
-        // Check if jutsu can be auto-equipped
-        const {
-          isResidual: jutsuHasResidual,
-          isPierce: jutsuHasPierce,
-          isEvent: jutsuIsEvent,
-          isBarrier: jutsuHasBarrier,
-          isStun: jutsuHasStun,
-        } = getJutsuCapFlags(info);
-
-        const canAutoEquip =
-          curEquip < maxEquip &&
-          checkJutsuBloodlineItem(info, user.items) &&
-          (!jutsuHasResidual || residualJutsus.length < JUTSU_MAX_RESIDUAL_EQUIPPED) &&
-          (!jutsuHasPierce || pierceJutsus.length < JUTSU_MAX_PIERCE_EQUIPPED) &&
-          (!jutsuIsEvent || eventJutsus.length < JUTSU_MAX_EVENT_EQUIPPED) &&
-          (!jutsuHasBarrier || barrierJutsus.length < JUTSU_MAX_BARRIER_EQUIPPED) &&
-          (!jutsuHasStun || stunJutsus.length < JUTSU_MAX_STUN_EQUIPPED);
-
-        // Use onDuplicateKeyUpdate to handle race conditions
-        await ctx.drizzle
-          .insert(userJutsu)
-          .values({
-            id: nanoid(),
-            userId: ctx.userId,
-            jutsuId: input.jutsuId,
-            finishTraining: new Date(Date.now() + trainTime),
-            equipped: canAutoEquip,
-          })
-          .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-      }
-
+      const result = await enqueueJutsuTraining(ctx.drizzle, ctx.userId, input.jutsuId);
+      if (!result.success) return errorResponse(result.message);
       return {
         success: true,
-        message: `You started training: ${info.name}`,
-        data: { money: user.money - trainCost, questData: questDataFull },
+        message: result.message,
+        data: result.data,
       };
     }),
 
@@ -1202,6 +1073,8 @@ export const jutsuRouter = createTRPCRouter({
         .where(
           and(eq(userJutsu.id, userjutsuObj.id), eq(userJutsu.userId, ctx.userId)),
         );
+
+      await promoteJutsuQueue(ctx.drizzle, ctx.userId);
 
       return {
         success: true,
