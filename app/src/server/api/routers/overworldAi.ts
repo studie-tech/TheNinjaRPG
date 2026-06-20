@@ -11,6 +11,7 @@ import {
 } from "@/drizzle/schema";
 import {
   findActionableBoundObjective,
+  pickWeightedQuest,
   resolveOverworldPosition,
 } from "@/libs/overworldAi";
 import { getReward, getUserQuests, isAvailableUserQuests } from "@/libs/quest";
@@ -23,6 +24,7 @@ import {
   questTypeConcurrentBlockMessage,
 } from "@/routers/quests";
 import type { DrizzleClient } from "@/server/db";
+import { claimActiveNpcQuest, clearActiveNpcQuest } from "@/server/utils/concurrency";
 import { canChangeContent } from "@/utils/permissions";
 import { OverworldPlacementSchema } from "@/validators/overworldAi";
 import {
@@ -42,6 +44,17 @@ export const overworldAiRouter = createTRPCRouter({
       }),
     ),
 
+  getAllPlacementNames: protectedProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.drizzle.query.overworldAiPlacement.findMany({
+      columns: { id: true, interactionType: true, sector: true, isActive: true },
+      with: { aiTemplate: { columns: { username: true } } },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      label: `${r.aiTemplate?.username ?? "?"} · ${r.interactionType} · sector ${r.sector}${r.isActive ? "" : " [inactive]"}`,
+    }));
+  }),
+
   upsertPlacement: protectedProcedure
     .input(z.object({ id: z.string().optional(), data: OverworldPlacementSchema }))
     .output(baseServerResponse)
@@ -51,7 +64,7 @@ export const overworldAiRouter = createTRPCRouter({
       // Guard
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       // Prepare
-      const { questIds, ...cfg } = input.data;
+      const { quests, ...cfg } = input.data;
       const pos = resolveOverworldPosition(cfg);
       const id = input.id ?? nanoid();
       const row = {
@@ -65,7 +78,6 @@ export const overworldAiRouter = createTRPCRouter({
         sector: pos.sector,
         longitude: pos.longitude,
         latitude: pos.latitude,
-        questGiveChance: cfg.questGiveChance,
       };
       // Mutate
       if (input.id) {
@@ -79,12 +91,15 @@ export const overworldAiRouter = createTRPCRouter({
       } else {
         await ctx.drizzle.insert(overworldAiPlacement).values(row);
       }
-      if (questIds.length > 0) {
-        await ctx.drizzle
-          .insert(overworldAiPlacementQuest)
-          .values(
-            questIds.map((questId) => ({ id: nanoid(), placementId: id, questId })),
-          );
+      if (quests.length > 0) {
+        await ctx.drizzle.insert(overworldAiPlacementQuest).values(
+          quests.map((q) => ({
+            id: nanoid(),
+            placementId: id,
+            questId: q.questId,
+            chance: q.chance,
+          })),
+        );
       }
       // Return
       return { success: true, message: input.id ? "Placement updated" : id };
@@ -273,6 +288,7 @@ export const overworldAiRouter = createTRPCRouter({
       }
 
       // 2) Quest-giver sub-path: only reached when no bound objective is actionable.
+      // Each pool row carries its own per-quest grant chance.
       const poolQuestIds = placement.questPool.map((p) => p.questId);
       if (poolQuestIds.length === 0) {
         return { success: true, message: "The NPC has nothing for you." };
@@ -288,13 +304,30 @@ export const overworldAiRouter = createTRPCRouter({
           ),
         }),
       ]);
-      const eligible = pool.filter((q) => {
-        const prev = prevByQuest.find((p) => p.questId === q.id);
-        return (
-          isAvailableUserQuests({ ...q, ...prev }, activeUser).check &&
-          !questTypeConcurrentBlockMessage(q, activeUser)
+      const questsById = new Map(pool.map((q) => [q.id, q]));
+
+      // Build the eligible pool, keeping each entry's chance. isAvailableUserQuests now
+      // includes the per-period cap, so period-capped quests drop out here automatically.
+      const eligible = placement.questPool
+        .map((p, poolIndex) => {
+          const q = questsById.get(p.questId);
+          if (!q) return null;
+          const prev = prevByQuest.find((ph) => ph.questId === q.id);
+          const available =
+            isAvailableUserQuests({ ...q, ...prev }, activeUser).check &&
+            !questTypeConcurrentBlockMessage(q, activeUser);
+          if (!available) return null;
+          return { quest: q, chance: p.chance, prev, poolIndex };
+        })
+        .filter((e): e is NonNullable<typeof e> => e !== null)
+        // Deterministic order: pool insertion order, tie-break by questId.
+        .sort((a, b) =>
+          a.poolIndex !== b.poolIndex
+            ? a.poolIndex - b.poolIndex
+            : a.quest.id.localeCompare(b.quest.id),
         );
-      });
+
+      // Eligible-empty check BEFORE the daily-roll CAS so an empty pool costs no roll.
       if (eligible.length === 0) {
         return {
           success: true,
@@ -302,8 +335,34 @@ export const overworldAiRouter = createTRPCRouter({
         };
       }
 
+      // One mission at a time: block if the player holds an active quest of a type this NPC
+      // gives. Read from the already-loaded user quests — no extra round-trip.
+      const npcPoolTypes = new Set(
+        placement.questPool
+          .map((p) => questsById.get(p.questId)?.questType)
+          .filter((t): t is NonNullable<typeof t> => Boolean(t)),
+      );
+      const heldPoolTypeQuest = getUserQuests(activeUser).find(
+        (q) => !q.endAt && npcPoolTypes.has(q.questType),
+      );
+      if (heldPoolTypeQuest) {
+        return {
+          success: true,
+          message: "Finish your current mission before asking for another.",
+        };
+      }
+      // Self-heal: no active pool-type quest, so any lingering claim is stale — clear that
+      // exact id so a concurrent NPC's legitimate claim is never disturbed.
+      if (activeUser.activeNpcQuestId) {
+        await clearActiveNpcQuest({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          questId: activeUser.activeNpcQuestId,
+        });
+      }
+
       // Consume one daily roll via CAS BEFORE rolling so a failed roll still costs a
-      // slot (prevents unlimited re-rolling against the questGiveChance).
+      // slot (prevents unlimited re-rolling against the per-quest chances).
       const claim = await ctx.drizzle
         .update(userData)
         .set({
@@ -319,25 +378,53 @@ export const overworldAiRouter = createTRPCRouter({
         return errorResponse("You've reached your daily mission allowance.");
       }
 
-      // Roll for the chance to receive a quest at all.
-      if (Math.random() * 100 >= placement.questGiveChance) {
-        return { success: true, message: "The NPC had nothing for you this time." };
-      }
-      const chosen = eligible[Math.floor(Math.random() * eligible.length)];
+      // Weighted band-walk: each quest owns [acc, acc+chance); a roll past the summed
+      // chances grants nothing this time.
+      const chosenId = pickWeightedQuest(
+        eligible.map((e) => ({ questId: e.quest.id, chance: e.chance })),
+        Math.random() * 100,
+      );
+      const chosen = chosenId
+        ? eligible.find((e) => e.quest.id === chosenId)
+        : undefined;
       if (!chosen) {
         return { success: true, message: "The NPC had nothing for you this time." };
       }
-      const prev = prevByQuest.find((p) => p.questId === chosen.id);
+      // Claim the single active-NPC-mission slot atomically before granting. If the slot is
+      // already taken (e.g. a concurrent interaction won the race), don't grant a second one.
+      const claimed = await claimActiveNpcQuest({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        questId: chosen.quest.id,
+      });
+      if (!claimed) {
+        return {
+          success: true,
+          message: "Finish your current mission before asking for another.",
+        };
+      }
       const result = await assignQuestToUser({
         client: ctx.drizzle,
         user: activeUser,
-        quest: chosen,
+        quest: chosen.quest,
         source: "overworld_npc",
-        prevAttempt: prev,
+        prevAttempt: chosen.prev,
       });
-      return result.success
-        ? { success: true, message: result.message, grantedQuestId: chosen.id }
-        : errorResponse(result.message);
+      if (!result.success) {
+        // Assign failed (e.g. cap/availability raced) — release the slot we just claimed so
+        // the player isn't stranded behind a claim that never produced a quest.
+        await clearActiveNpcQuest({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          questId: chosen.quest.id,
+        });
+        return errorResponse(result.message);
+      }
+      return {
+        success: true,
+        message: result.message,
+        grantedQuestId: chosen.quest.id,
+      };
     }),
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Pencil, Trash2 } from "lucide-react";
+import { Copy, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -82,8 +82,7 @@ const defaultFormValues = (aiId: string): OverworldPlacementInput => ({
   longitude: 0,
   latitude: 0,
   sectorList: [],
-  questGiveChance: 0,
-  questIds: [],
+  quests: [],
   isActive: true,
 });
 
@@ -120,11 +119,11 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
     name: "locationType",
     defaultValue: "specific",
   });
-  const watchedQuestIds = useWatch({
+  const watchedQuests = useWatch({
     control: form.control,
-    name: "questIds",
+    name: "quests",
     defaultValue: [],
-  }) as string[];
+  }) as { questId: string; chance: number }[];
   const watchedSectorList = useWatch({
     control: form.control,
     name: "sectorList",
@@ -180,8 +179,10 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
       longitude: placement.longitude,
       latitude: placement.latitude,
       sectorList: (placement.sectorList as number[] | null) ?? [],
-      questGiveChance: placement.questGiveChance,
-      questIds: placement.questPool.map((q) => q.questId),
+      quests: placement.questPool.map((q) => ({
+        questId: q.questId,
+        chance: q.chance,
+      })),
       isActive: placement.isActive,
     });
     setQuestSearch("");
@@ -196,15 +197,22 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
   };
 
   const addQuestId = (questId: string) => {
-    if (!questId || watchedQuestIds.includes(questId)) return;
-    form.setValue("questIds", [...watchedQuestIds, questId]);
+    if (!questId || watchedQuests.some((q) => q.questId === questId)) return;
+    form.setValue("quests", [...watchedQuests, { questId, chance: 0 }]);
     setQuestSearch("");
   };
 
   const removeQuestId = (questId: string) => {
     form.setValue(
-      "questIds",
-      watchedQuestIds.filter((id) => id !== questId),
+      "quests",
+      watchedQuests.filter((q) => q.questId !== questId),
+    );
+  };
+
+  const setQuestChance = (questId: string, chance: number) => {
+    form.setValue(
+      "quests",
+      watchedQuests.map((q) => (q.questId === questId ? { ...q, chance } : q)),
     );
   };
 
@@ -225,10 +233,11 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
   const filteredQuests = (questNames ?? []).filter(
     (q) =>
       q.name.toLowerCase().includes(questSearch.toLowerCase()) &&
-      !watchedQuestIds.includes(q.id),
+      !watchedQuests.some((w) => w.questId === q.id),
   );
 
   const isLoading = isUpserting || isRemoving;
+  const questChanceSum = watchedQuests.reduce((s, q) => s + (q.chance || 0), 0);
 
   return (
     <>
@@ -430,85 +439,80 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
               </div>
             )}
 
-            {/* Quest Give Chance + Quest Pool — only when interactionType === "FRIENDLY" */}
+            {/* Quest Pool with per-quest grant chances — only when interactionType === "FRIENDLY" */}
             {interactionType === "FRIENDLY" && (
-              <>
-                <FormField
-                  control={form.control}
-                  name="questGiveChance"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Quest Give Chance (0–100 %)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={field.value as number}
-                          onChange={field.onChange}
-                          onBlur={field.onBlur}
-                          name={field.name}
-                          ref={field.ref}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Quest Pool */}
-                <FormItem>
-                  <FormLabel>Quest Pool</FormLabel>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Search quests…"
-                      value={questSearch}
-                      onChange={(e) => setQuestSearch(e.target.value)}
-                    />
+              <FormItem>
+                <FormLabel>Quest Pool</FormLabel>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Search quests…"
+                    value={questSearch}
+                    onChange={(e) => setQuestSearch(e.target.value)}
+                  />
+                </div>
+                {questSearch && filteredQuests.length > 0 && (
+                  <div className="mt-1 max-h-40 overflow-y-auto rounded border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                    {filteredQuests.slice(0, 20).map((q) => (
+                      <button
+                        key={q.id}
+                        type="button"
+                        className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                        onClick={() => addQuestId(q.id)}
+                      >
+                        {q.name}
+                      </button>
+                    ))}
                   </div>
-                  {questSearch && filteredQuests.length > 0 && (
-                    <div className="mt-1 max-h-40 overflow-y-auto rounded border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-                      {filteredQuests.slice(0, 20).map((q) => (
-                        <button
-                          key={q.id}
-                          type="button"
-                          className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
-                          onClick={() => addQuestId(q.id)}
+                )}
+                {watchedQuests.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {watchedQuests.map((q) => {
+                      const quest = questNames?.find((n) => n.id === q.questId);
+                      return (
+                        <div
+                          key={q.questId}
+                          className="flex items-center gap-2 rounded bg-slate-200 px-2 py-1 text-sm dark:bg-slate-700"
                         >
-                          {q.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {watchedQuestIds.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {watchedQuestIds.map((id) => {
-                        const quest = questNames?.find((q) => q.id === id);
-                        return (
-                          <span
-                            key={id}
-                            className="flex items-center gap-1 rounded bg-slate-200 px-2 py-0.5 text-sm dark:bg-slate-700"
-                          >
-                            {quest?.name ?? id}
-                            <button
-                              type="button"
-                              className="text-red-500 hover:text-red-700"
-                              onClick={() => removeQuestId(id)}
-                            >
-                              ×
-                            </button>
+                          <span className="flex-1 truncate">
+                            {quest?.name ?? q.questId}
                           </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {form.formState.errors.questIds?.message && (
-                    <p className="text-destructive text-sm">
-                      {form.formState.errors.questIds.message}
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            className="h-8 w-20"
+                            value={q.chance}
+                            onChange={(e) =>
+                              setQuestChance(q.questId, Number(e.target.value))
+                            }
+                          />
+                          <span className="text-muted-foreground">%</span>
+                          <button
+                            type="button"
+                            className="text-red-500 hover:text-red-700"
+                            onClick={() => removeQuestId(q.questId)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <p className="text-muted-foreground text-xs">
+                      Σ assigned: {questChanceSum}% · nothing: {100 - questChanceSum}%
                     </p>
-                  )}
-                </FormItem>
-              </>
+                    {questChanceSum === 0 && (
+                      <p className="text-amber-600 text-xs dark:text-amber-500">
+                        All chances are 0 — this NPC will never grant a quest.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {form.formState.errors.quests?.message && (
+                  <p className="text-destructive text-sm">
+                    {form.formState.errors.quests.message}
+                  </p>
+                )}
+              </FormItem>
             )}
 
             {/* Is Active */}
@@ -575,10 +579,28 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                   </p>
                   {p.interactionType === "FRIENDLY" && (
                     <p>
-                      <span className="font-semibold">Quest chance:</span>{" "}
-                      {p.questGiveChance}% · {p.questPool.length} quest(s) in pool
+                      <span className="font-semibold">Quest pool:</span>{" "}
+                      {p.questPool.length} quest(s) ·{" "}
+                      {p.questPool.reduce((s, q) => s + q.chance, 0)}% assigned
                     </p>
                   )}
+                  <p className="flex items-center gap-1 font-mono text-muted-foreground text-xs">
+                    id: {p.id}
+                    <button
+                      type="button"
+                      title="Copy id"
+                      className="hover:text-orange-500"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(p.id);
+                        showMutationToast({
+                          success: true,
+                          message: "Placement id copied",
+                        });
+                      }}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <Button

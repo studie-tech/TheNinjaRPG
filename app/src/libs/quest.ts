@@ -19,6 +19,7 @@ import {
   MEDNIN_RANKS,
   type QuestType,
   QuestTypesWithMaxAttempts,
+  type RetryQuestDelay,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
   SENSEI_MAX_STUDENT_LEVEL,
@@ -39,7 +40,7 @@ import { getUnique } from "@/utils/grouping";
 import { randomInt } from "@/utils/math";
 import { canChangeContent, canPlayHiddenQuests } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import { secondsPassed } from "@/utils/time";
+import { periodStart, secondsPassed } from "@/utils/time";
 import { getShrineBoost, getStrucBoost } from "@/utils/village";
 import type {
   AllObjectivesType,
@@ -643,6 +644,34 @@ export const isBoundPlacementFrozen = (
   !!objective.overworldPlacementId &&
   existing.has(objective.overworldPlacementId) &&
   !active.has(objective.overworldPlacementId);
+
+/**
+ * #1348: true when a retryDelay != none quest already hit `maxCompletes` completions in the
+ * current calendar period. retryDelay "none" and maxCompletes <= 0 are never capped.
+ */
+export const periodCapReached = (
+  args: {
+    retryDelay: RetryQuestDelay;
+    maxCompletes: number;
+    periodCompletes?: number | null;
+    periodStartAt?: Date | string | null;
+  },
+  now: Date = new Date(),
+): boolean => {
+  if (args.retryDelay === "none" || args.maxCompletes <= 0) return false;
+  const cps = periodStart(args.retryDelay, now);
+  const startedAt = args.periodStartAt ? new Date(args.periodStartAt) : null;
+  // Counts from a prior period don't count toward this period.
+  const effective = startedAt && startedAt >= cps ? (args.periodCompletes ?? 0) : 0;
+  return effective >= args.maxCompletes;
+};
+
+/** #1348: period-start for a completion, or {} for retryDelay "none". */
+export const periodCompletionSet = (
+  retryDelay: RetryQuestDelay,
+  now: Date = new Date(),
+): { cps?: Date } =>
+  retryDelay === "none" ? {} : { cps: periodStart(retryDelay, now) };
 
 /**
  * Used to update the quest tracking data for a user. Takes in the user with his questData
@@ -1363,6 +1392,8 @@ export const mockAchievementHistoryEntries = (
       completed: 0,
       previousCompletes: 0,
       previousAttempts: 0,
+      periodCompletes: 0,
+      periodStartAt: null,
       quest: a,
       endAt: null,
       startedAt: new Date(),
@@ -1442,6 +1473,9 @@ export const isAvailableUserQuests = (
     previousAttempts?: number | null;
     previousCompletes?: number | null;
     completed?: number | null;
+    retryDelay: RetryQuestDelay;
+    periodCompletes?: number | null;
+    periodStartAt?: Date | string | null;
     medicalRank?: MEDNIN_RANK | null;
     huntingRank?: HUNTING_RANK | null;
     gatheringRank?: GATHERING_RANK | null;
@@ -1514,6 +1548,14 @@ export const isAvailableUserQuests = (
     !questAndUserQuestInfo.previousAttempts ||
     questAndUserQuestInfo.previousAttempts < maxAttempts;
 
+  // #1348: per-period completion cap (only meaningful when retryDelay != none).
+  const periodCapCheck = !periodCapReached({
+    retryDelay: questAndUserQuestInfo.retryDelay,
+    maxCompletes,
+    periodCompletes: questAndUserQuestInfo.periodCompletes,
+    periodStartAt: questAndUserQuestInfo.periodStartAt,
+  });
+
   // Check if prerequisite quest is completed
   const prerequisiteCheck =
     !questAndUserQuestInfo.prerequisiteQuestId ||
@@ -1529,6 +1571,7 @@ export const isAvailableUserQuests = (
     expiresCheck &&
     eventCompletedCheck &&
     eventAttemptsCheck &&
+    periodCapCheck &&
     villageCheck &&
     bloodlineCheck &&
     prerequisiteCheck &&
@@ -1543,6 +1586,7 @@ export const isAvailableUserQuests = (
   if (!expiresCheck) message += "Quest has expired\n";
   if (!eventCompletedCheck) message += "Quest has been completed too many times\n";
   if (!eventAttemptsCheck) message += "Quest has been attempted too many times\n";
+  if (!periodCapCheck) message += "Quest limit for this period reached\n";
   if (!villageCheck) message += "Quest is not available in your village\n";
   if (!bloodlineCheck) message += "Quest requires a specific bloodline\n";
   if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";

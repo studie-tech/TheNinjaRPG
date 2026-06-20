@@ -68,6 +68,11 @@ import type { ObjectiveRewardType } from "@/validators/rewards";
 import { ObjectiveReward } from "@/validators/rewards";
 
 export type FormDbValue = { id: string; name: string };
+
+// Sentinel value for a "— none —" option in single-select db_values dropdowns,
+// allowing an optional binding (e.g. overworldPlacementId) to be cleared. Selecting
+// it writes an empty string so truthy readers treat the field as unbound.
+const NONE_PLACEMENT_VALUE = "__none__";
 export type FormEntry<K> = {
   id: K;
   label?: string;
@@ -770,7 +775,13 @@ export const EditContent = <
                                                 onSelect={() => {
                                                   form.setValue(
                                                     id,
-                                                    option.value as PathValue<S, K>,
+                                                    (option.value ===
+                                                    NONE_PLACEMENT_VALUE
+                                                      ? ""
+                                                      : option.value) as PathValue<
+                                                      S,
+                                                      K
+                                                    >,
                                                     { shouldDirty: true },
                                                   );
                                                 }}
@@ -1961,6 +1972,11 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     enabled: fields.includes("newQuestIds") || fields.includes("completeQuestIds"),
   });
 
+  const { data: placementNames } = api.overworldAi.getAllPlacementNames.useQuery(
+    undefined,
+    { enabled: fields.includes("overworldPlacementId") },
+  );
+
   const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined, {
     enabled: fields.includes("reward_bloodlines"),
   });
@@ -2253,6 +2269,16 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
           id: value,
           values: quests,
           multiple: true,
+          type: "db_values",
+          label: FORM_LABEL_MAP[value] ?? value,
+        };
+      } else if (value === "overworldPlacementId" && placementNames) {
+        return {
+          id: value,
+          values: [
+            { id: NONE_PLACEMENT_VALUE, name: "— none —" },
+            ...placementNames.map((p) => ({ id: p.id, name: p.label })),
+          ],
           type: "db_values",
           label: FORM_LABEL_MAP[value] ?? value,
         };

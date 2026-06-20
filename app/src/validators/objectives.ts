@@ -681,6 +681,16 @@ const questSuperRefine = (
   val: z.infer<typeof QuestValidatorRawSchema>,
   ctx: z.RefinementCtx,
 ) => {
+  // #1348: a real retry period means maxCompletes is a per-period cap, so 0 would
+  // block the quest forever (or be silently uncapped). Require >= 1 to make intent
+  // explicit. retryDelay "none"/omitted keeps the lifetime-cap semantics, where 0 is allowed.
+  if (val.retryDelay && val.retryDelay !== "none" && val.maxCompletes < 1) {
+    ctx.addIssue({
+      code: "custom",
+      message: "maxCompletes must be at least 1 when a retry delay is set",
+      path: ["maxCompletes"],
+    });
+  }
   if (["daily"].includes(val.questType)) {
     if (val.content.objectives.length < 3 || val.content.objectives.length > 7) {
       ctx.addIssue({
