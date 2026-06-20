@@ -18,15 +18,17 @@ const Countdown: React.FC<CountdownProps> = (props) => {
 
   // Track whether we've called onFinish for this countdown
   const hasCalledOnFinishRef = useRef(false);
-  // Track the target time to detect when countdown resets
-  const prevTargetTimeRef = useRef(targetTime);
+  // Track the actual target date to detect when countdown resets. `timeDiff` can
+  // recalibrate without representing a new countdown.
+  const targetDateTime = targetDate.getTime();
+  const prevTargetDateTimeRef = useRef(targetDateTime);
   // Store onFinish in a ref to avoid it being a dependency (inline functions change every render)
   const onFinishRef = useRef(onFinish);
   onFinishRef.current = onFinish;
 
   // Reset finish flag when target changes
-  if (prevTargetTimeRef.current !== targetTime) {
-    prevTargetTimeRef.current = targetTime;
+  if (prevTargetDateTimeRef.current !== targetDateTime) {
+    prevTargetDateTimeRef.current = targetDateTime;
     hasCalledOnFinishRef.current = false;
   }
 
