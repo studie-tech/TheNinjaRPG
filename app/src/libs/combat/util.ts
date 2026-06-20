@@ -328,7 +328,9 @@ export const getQuestDataFromBattle = (
  */
 export const hydrateUserForQuests = (battle: CompleteBattle, user: BattleUserState) => {
   // Hydrate relations from extraState
-  const userQuests = getUserQuestsFromBattle(battle, user.controllerId);
+  const userQuests = getUserQuestsFromBattle(battle, user.controllerId).filter((q) =>
+    Array.isArray(q.quest?.content?.objectives),
+  );
   const completedQuests = getCompletedQuestsFromBattle(battle, user.controllerId);
   const questData = getQuestDataFromBattle(battle, user.controllerId);
   const village = user.villageId ? getVillage(battle, user.villageId) : undefined;
