@@ -254,7 +254,7 @@ describe("buildDamageModifierEligibilityById", () => {
       power: 20,
       fromType: "jutsu",
     });
-    activeInc.createdRound = 5;
+    activeInc.createdRound = 0;
 
     const withInc = computeDamagePacket({
       rawDamage: 100,
