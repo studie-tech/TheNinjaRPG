@@ -51,8 +51,14 @@ export const resolveOverworldPosition = (
     sector = pickPlaceableSector(rng);
   } else if (cfg.sectorType === "from_list") {
     const candidates = cfg.sectorList.filter(isPlaceableSector);
+    // Fall back to cfg.sector only if it is itself placeable; otherwise roll a placeable
+    // sector so an all-reserved list can never resolve to an invalid NPC position.
     sector =
-      candidates.length > 0 ? candidates[randInt(candidates.length, rng)]! : cfg.sector;
+      candidates.length > 0
+        ? candidates[randInt(candidates.length, rng)]!
+        : isPlaceableSector(cfg.sector)
+          ? cfg.sector
+          : pickPlaceableSector(rng);
   }
   const longitude =
     cfg.locationType === "random" ? randInt(SECTOR_WIDTH, rng) : cfg.longitude;

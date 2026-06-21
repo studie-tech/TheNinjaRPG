@@ -14,7 +14,12 @@ export const OverworldPlacementSchema = z
     interactionType: z.enum(OverworldInteractionTypes),
     sectorType: z.enum(OverworldSectorTypes).prefault("specific"),
     locationType: z.enum(OverworldLocationTypes).prefault("specific"),
-    sector: z.coerce.number().int().min(0).max(MAP_TOTAL_SECTORS).prefault(0),
+    sector: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(MAP_TOTAL_SECTORS - 1)
+      .prefault(0),
     longitude: z.coerce
       .number()
       .int()
@@ -28,7 +33,13 @@ export const OverworldPlacementSchema = z
       .max(SECTOR_HEIGHT - 1)
       .prefault(0),
     sectorList: z
-      .array(z.coerce.number().int().min(0).max(MAP_TOTAL_SECTORS))
+      .array(
+        z.coerce
+          .number()
+          .int()
+          .min(0)
+          .max(MAP_TOTAL_SECTORS - 1),
+      )
       .prefault([]),
     quests: z
       .array(

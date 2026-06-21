@@ -1504,7 +1504,12 @@ const Sector: React.FC<SectorProps> = (props) => {
         } else if (data.success && data.dialog) {
           setNpcDialog(data.dialog);
         } else {
-          await utils.travel.getSectorData.invalidate();
+          // Refresh sector data (the NPC may have moved/disappeared) and the user profile so
+          // a completed bound objective or granted mission shows immediately in the logbook.
+          await Promise.all([
+            utils.travel.getSectorData.invalidate(),
+            utils.profile.getUser.invalidate(),
+          ]);
         }
       },
     });

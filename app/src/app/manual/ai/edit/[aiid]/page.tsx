@@ -116,11 +116,11 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
         defaultBackHref="/manual/ai"
         topRightContent={
           <div className="flex flex-row gap-1">
-            <Link href={`/manual/ai/${processedUser.userId}/placements`}>
-              <Button id="ai-placements" hoverText="Overworld Placements">
+            <Button id="ai-placements" hoverText="Overworld Placements" asChild>
+              <Link href={`/manual/ai/${processedUser.userId}/placements`}>
                 <MapPin className="h-6 w-6" />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
             <AiHelper
               ai={{
                 userId: processedUser.userId,

@@ -11,9 +11,22 @@ import { drizzleDB } from "@/server/db";
 
 const ENDPOINT_NAME = "daily-overworld-ai";
 
-export async function GET() {
+export const GET = async (request: Request) => {
   // Touch a dynamic API so Next.js does not statically cache this GET handler
   await cookies();
+
+  // Verify CRON_SECRET header for authentication (Vercel injects it for scheduled crons)
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = request.headers.get("authorization");
+  if (!cronSecret) {
+    return Response.json({ error: "CRON_SECRET not configured" }, { status: 500 });
+  }
+  if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+    return Response.json(
+      { error: "Unauthorized - Invalid or missing authorization header" },
+      { status: 401 },
+    );
+  }
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
@@ -49,4 +62,4 @@ export async function GET() {
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
     return await handleEndpointError(cause);
   }
-}
+};

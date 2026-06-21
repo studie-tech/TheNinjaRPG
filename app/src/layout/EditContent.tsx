@@ -2272,12 +2272,14 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
           type: "db_values",
           label: FORM_LABEL_MAP[value] ?? value,
         };
-      } else if (value === "overworldPlacementId" && placementNames) {
+      } else if (value === "overworldPlacementId") {
+        // Always render a select (never a free-text fallback) so an arbitrary placement id
+        // can't be saved while the names query is still loading or has failed.
         return {
           id: value,
           values: [
             { id: NONE_PLACEMENT_VALUE, name: "— none —" },
-            ...placementNames.map((p) => ({ id: p.id, name: p.label })),
+            ...(placementNames ?? []).map((p) => ({ id: p.id, name: p.label })),
           ],
           type: "db_values",
           label: FORM_LABEL_MAP[value] ?? value,

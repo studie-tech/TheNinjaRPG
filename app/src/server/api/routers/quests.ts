@@ -521,7 +521,7 @@ export const questsRouter = createTRPCRouter({
       );
       if (!result) return errorResponse("No assignments at this level could be found");
 
-      // #1348: random missions bypass assignQuestToUser, so enforce the per-period cap here too.
+      // Random missions bypass assignQuestToUser, so enforce the per-period cap here too.
       // `result` carries periodCompletes/periodStartAt from the widened LEFT JOIN above.
       if (
         periodCapReached(
@@ -1840,6 +1840,28 @@ export const incrementDailyQuestCounter = async (
  * Returns a human-readable block message if the user has hit the per-type concurrent
  * quest limit, or null if they may proceed. This is a pure function (no DB access).
  */
+/**
+ * Quest types that {@link assignQuestToUser} can start. Errand (and meta types like
+ * achievement/tier) are intentionally excluded: errands are dispensed only via the
+ * `startRandom` procedure, which enforces the daily errand cap this centralized path does
+ * not. The overworld-NPC flow filters its pool to these so a mis-pooled type can never
+ * reach assignQuestToUser, throw, and strand a player's NPC-quest claim.
+ */
+export const ASSIGNABLE_QUEST_TYPES: string[] = [
+  "story",
+  "hunting",
+  "gathering",
+  "anbu",
+  "event",
+  "battlepyramid",
+  "starter",
+  "mission",
+  "crime",
+  "medical",
+  "pvp",
+  "war",
+];
+
 export const questTypeConcurrentBlockMessage = (
   quest: Pick<Quest, "questType" | "name">,
   user: NonNullable<UserWithRelations>,
@@ -2020,7 +2042,7 @@ export const assignQuestToUser = async (args: {
     return errorResponse(`Quest has ended`);
   }
 
-  // #1348: per-calendar-period completion cap (replaces the old rolling retryDelay timer).
+  // Per-calendar-period completion cap (replaces the old rolling retryDelay timer).
   // Applies to ALL player-facing accept/retry (UI startQuest + overworld NPC, both via this fn).
   if (
     periodCapReached(
@@ -2053,21 +2075,7 @@ export const assignQuestToUser = async (args: {
   }
 
   // Reject unknown quest types before touching the DB (mirrors the original serverError throw)
-  const knownQuestTypes: string[] = [
-    "story",
-    "hunting",
-    "gathering",
-    "anbu",
-    "event",
-    "battlepyramid",
-    "starter",
-    "mission",
-    "crime",
-    "medical",
-    "pvp",
-    "war",
-  ];
-  if (!knownQuestTypes.includes(questData.questType)) {
+  if (!ASSIGNABLE_QUEST_TYPES.includes(questData.questType)) {
     throw serverError(
       "PRECONDITION_FAILED",
       `Invalid quest type to start: ${questData.questType}`,
@@ -2334,7 +2342,7 @@ export const commitQuestObjectiveRewards = async (info: {
   // Persist completion before snapshot CAS so we cannot commit questData/updatedAt and then
   // lose the completion race; if snapshot claim fails, revert completion below.
   let resolvedCompletionCommitted = false;
-  // #1348: the exact endAt stamped by the completion CAS, reused to anchor the revert below.
+  // The exact endAt stamped by the completion CAS, reused to anchor the revert below.
   let completedEndAt: Date | null = null;
   if (resolved) {
     // Achievements (and any quest shown only via mock rows) may have progress in questData
@@ -2375,7 +2383,7 @@ export const commitQuestObjectiveRewards = async (info: {
         completed: 1,
         previousCompletes: sql`${questHistory.previousCompletes} + 1`,
         endAt: completedEndAt,
-        // #1348: reset the period counter when this completion opens a new period, else increment.
+        // Reset the period counter when this completion opens a new period, else increment.
         ...(cps
           ? {
               periodCompletes: sql`CASE WHEN ${questHistory.periodStartAt} IS NULL OR ${questHistory.periodStartAt} < ${cps} THEN 1 ELSE ${questHistory.periodCompletes} + 1 END`,
@@ -2428,8 +2436,6 @@ export const commitQuestObjectiveRewards = async (info: {
     return { outcome: "state_changed" };
   }
 
-  user.questData = fullTrackersForResponse;
-
   // Sensei rewards
   const hasSensei = user.senseiId && user.rank === "GENIN";
   const isMission = userQuest?.quest.questType === "mission";
@@ -2459,7 +2465,7 @@ export const commitQuestObjectiveRewards = async (info: {
       // here is the fully-hydrated row (with quest relations).
       questUser: user,
     }),
-    // Credit the sensei the per-mission ryo reward
+    // Credit the sensei their per-mission ryo bonus
     ...(senseiId
       ? [
           client
@@ -2477,6 +2483,12 @@ export const commitQuestObjectiveRewards = async (info: {
         ]
       : []),
   ]);
+
+  // Restore the full (response) trackers only AFTER the DB write: updateRewards persists
+  // user.questData, so during it user.questData must hold the filtered set, not the
+  // in-memory-only mock achievement trackers that filterQuestTrackersForDbPersist strips.
+  user.questData = fullTrackersForResponse;
+
   // Update rewards for readability
   rewards.reward_items = items.map((i) => i.name);
   rewards.reward_jutsus = jutsus.map((i) => i.name);
