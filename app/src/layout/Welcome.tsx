@@ -495,9 +495,10 @@ export default Welcome;
 
 const PixelWelcome: React.FC = () => {
   const scrollContainerRef = useRef<HTMLElement>(null);
-  usePixelLandingParallax(scrollContainerRef);
+  const heroVideoRef = useRef<HTMLVideoElement>(null);
   const heroLogoRef = useRef<HTMLDivElement>(null);
   const showHeaderLogo = usePixelHeaderLogoVisibility(heroLogoRef, scrollContainerRef);
+  usePixelHeroVideoPlayback(heroVideoRef, scrollContainerRef);
 
   const pixelClip = "tnr-pixel-clip";
   const inkPrimaryButton = "tnr-ink-btn tnr-ink-btn-primary tnr-ink-register";
@@ -533,6 +534,7 @@ const PixelWelcome: React.FC = () => {
         data-pixel-snap="hero"
       >
         <video
+          ref={heroVideoRef}
           className="absolute inset-0 h-full w-full object-cover"
           muted
           playsInline
@@ -951,68 +953,6 @@ const McpSetupDetails = ({
   );
 };
 
-const usePixelLandingParallax = (
-  scrollContainerRef: React.RefObject<HTMLElement | null>,
-) => {
-  useEffect(() => {
-    const scrollContainer = scrollContainerRef.current;
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const parallaxEls = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-pixel-parallax]"),
-    );
-
-    if (parallaxEls.length === 0 || reducedMotion.matches) {
-      parallaxEls.forEach((el) => {
-        el.style.removeProperty("--pixel-parallax-y");
-      });
-      return;
-    }
-
-    let ticking = false;
-    const updateParallax = () => {
-      const viewportHeight = window.innerHeight || 1;
-
-      parallaxEls.forEach((el) => {
-        const speed = Number(el.dataset.pixelParallax || 0);
-        const rect = el.getBoundingClientRect();
-        const centerOffset = rect.top + rect.height / 2 - viewportHeight / 2;
-        const movement = Math.max(-42, Math.min(42, -centerOffset * speed));
-        el.style.setProperty("--pixel-parallax-y", `${movement.toFixed(2)}px`);
-      });
-
-      ticking = false;
-    };
-
-    const requestParallax = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(updateParallax);
-        ticking = true;
-      }
-    };
-
-    const handleMotionChange = (event: MediaQueryListEvent) => {
-      if (event.matches) {
-        parallaxEls.forEach((el) => {
-          el.style.removeProperty("--pixel-parallax-y");
-        });
-      } else {
-        requestParallax();
-      }
-    };
-
-    scrollContainer?.addEventListener("scroll", requestParallax, { passive: true });
-    window.addEventListener("resize", requestParallax);
-    reducedMotion.addEventListener("change", handleMotionChange);
-    requestParallax();
-
-    return () => {
-      scrollContainer?.removeEventListener("scroll", requestParallax);
-      window.removeEventListener("resize", requestParallax);
-      reducedMotion.removeEventListener("change", handleMotionChange);
-    };
-  }, [scrollContainerRef]);
-};
-
 const usePixelHeaderLogoVisibility = (
   heroLogoRef: React.RefObject<HTMLElement | null>,
   scrollContainerRef: React.RefObject<HTMLElement | null>,
@@ -1021,40 +961,76 @@ const usePixelHeaderLogoVisibility = (
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
-    let ticking = false;
-    const updateVisibility = () => {
-      const heroLogo = heroLogoRef.current;
-      if (!heroLogo) {
-        ticking = false;
-        return;
-      }
+    const heroLogo = heroLogoRef.current;
+    if (!heroLogo) return;
 
-      const headerHeight = 80;
-      const rect = heroLogo.getBoundingClientRect();
-      setIsVisible(rect.bottom <= headerHeight + 8);
-      ticking = false;
-    };
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(!entry?.isIntersecting);
+      },
+      {
+        root: scrollContainer,
+        rootMargin: "-88px 0px 0px 0px",
+        threshold: 0,
+      },
+    );
 
-    const requestVisibilityUpdate = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(updateVisibility);
-        ticking = true;
-      }
-    };
-
-    scrollContainer?.addEventListener("scroll", requestVisibilityUpdate, {
-      passive: true,
-    });
-    window.addEventListener("resize", requestVisibilityUpdate);
-    requestVisibilityUpdate();
+    observer.observe(heroLogo);
 
     return () => {
-      scrollContainer?.removeEventListener("scroll", requestVisibilityUpdate);
-      window.removeEventListener("resize", requestVisibilityUpdate);
+      observer.disconnect();
     };
   }, [heroLogoRef, scrollContainerRef]);
 
   return isVisible;
+};
+
+const usePixelHeroVideoPlayback = (
+  videoRef: React.RefObject<HTMLVideoElement | null>,
+  scrollContainerRef: React.RefObject<HTMLElement | null>,
+) => {
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let isInView = true;
+
+    const syncPlayback = (shouldPlay: boolean) => {
+      if (reducedMotion.matches || !shouldPlay) {
+        video.pause();
+        return;
+      }
+
+      void video.play().catch(() => {
+        // Browser autoplay policies can reject play; the poster remains visible.
+      });
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isInView = entry?.isIntersecting ?? false;
+        syncPlayback(isInView);
+      },
+      {
+        root: scrollContainerRef.current,
+        threshold: 0.2,
+      },
+    );
+
+    const handleMotionChange = () => {
+      syncPlayback(isInView);
+    };
+
+    observer.observe(video);
+    reducedMotion.addEventListener("change", handleMotionChange);
+    handleMotionChange();
+
+    return () => {
+      observer.disconnect();
+      reducedMotion.removeEventListener("change", handleMotionChange);
+    };
+  }, [videoRef, scrollContainerRef]);
 };
 
 const SetReferal = () => {

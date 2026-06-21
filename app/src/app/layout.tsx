@@ -11,7 +11,6 @@ import TrpcClientProvider from "@/app/_trpc/Provider";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import PWAManager from "@/components/pwa/PWAManager";
-import ParticleProvider from "@/components/ui/particles";
 import { Toaster } from "@/components/ui/toaster";
 import { IMG_LOGO_FULL } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
@@ -77,7 +76,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <ActivityStreakPopup />
                   <PWAManager />
                   <InstallPrompt />
-                  <ParticleProvider />
                   <SpeedInsights sampleRate={0.03} />
                 </InstallPromptProvider>
               </UserContextProvider>

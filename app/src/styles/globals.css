@@ -301,11 +301,7 @@
   }
 
   .tnr-ink-register {
-    animation: tnr-ink-register-pulse 2.9s ease-in-out infinite;
-  }
-
-  .tnr-ink-register:hover {
-    animation-play-state: paused;
+    animation: none;
   }
 
   .tnr-ink-nav-link {
@@ -458,17 +454,6 @@
     box-shadow:
       3px 3px 0 rgb(107 184 255 / 0.52),
       inset 0 0 0 1px rgb(255 255 255 / 0.08);
-  }
-
-  @keyframes tnr-ink-register-pulse {
-    0%,
-    100% {
-      box-shadow: 5px 5px 0 #b7331f;
-    }
-
-    50% {
-      box-shadow: 5px 5px 0 #b7331f;
-    }
   }
 }
 
@@ -795,7 +780,7 @@
       linear-gradient(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.5)),
       linear-gradient(180deg, rgb(15 23 42 / 0.8), rgb(7 12 22 / 0.72)),
       radial-gradient(circle at top, rgb(250 204 21 / 0.1), transparent 42%);
-    backdrop-filter: blur(14px);
+    backdrop-filter: none;
   }
 
   .tnr-pixel-game .tnr-pixel-side-panel img {
@@ -831,8 +816,19 @@
   }
 
   .tnr-pixel-parallax {
-    transform: translate3d(0, var(--pixel-parallax-y, 0px), 0);
-    will-change: transform;
+    transform: none;
+  }
+
+  [data-layout-variant="pixel"] .backdrop-blur-sm,
+  [data-layout-variant="pixel"] .backdrop-blur-md,
+  [data-layout-variant="pixel"] .backdrop-blur-lg,
+  [data-layout-variant="pixel"] .backdrop-blur-xl,
+  [data-pixel-landing] .backdrop-blur-sm,
+  [data-pixel-landing] .backdrop-blur-md,
+  [data-pixel-landing] .backdrop-blur-lg,
+  [data-pixel-landing] .backdrop-blur-xl {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 
   .tnr-pixel-scroll-container {

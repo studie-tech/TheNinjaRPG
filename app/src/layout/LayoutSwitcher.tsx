@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import LayoutCore4Beta from "@/components/layout/core4_beta";
 import LayoutCore4Landing from "@/components/layout/core4_landing";
 import LayoutCore4Pixel from "@/components/layout/core4_pixel";
+import ParticleProvider from "@/components/ui/particles";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import {
   type EffectiveLayout,
@@ -65,6 +66,7 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   return (
     <LayoutContextProvider isPixelLanding={isPixelLanding} value={displayedLayout}>
       {content}
+      <ParticleProvider />
     </LayoutContextProvider>
   );
 };
