@@ -3,6 +3,7 @@ import { GenNames, StatNames } from "@/libs/combat/constants";
 import { emptyPreBattleGearModifiers, computeDamagePacket } from "@/libs/combat/process";
 import { clear, cleanse } from "@/libs/combat/tags";
 import type {
+  ActionEffect,
   BattleBasicAction,
   BattleUserItem,
   BattleUserJutsu,
@@ -177,7 +178,6 @@ export const makeBattleUser = (
   const longitude = Number(overrides.longitude ?? (id === "attacker" ? 0 : 1));
 
   return battleUserSchema.parse({
-    userId: id,
     controllerId: id,
     username: id,
     direction: id === "attacker" ? "left" : "right",
@@ -187,6 +187,7 @@ export const makeBattleUser = (
     ...overrides,
     usedGenerals: { ...usedGeneralDefaults, ...overrides.usedGenerals },
     usedStats: { ...usedStatDefaults, ...overrides.usedStats },
+    userId: id,
   }) as BattleUserState;
 };
 
@@ -410,89 +411,49 @@ export const makeBattleUserItem = (
 /**
  * Chainable test harness for battle-level setup.
  *
- * The class owns users, active user effects, per-user gear modifiers, and the
- * battle round. Use it for scenarios that need multiple users/effects or need
- * to run the same production helper against a coherent battle state.
+ * The scenario owns users, active user effects, per-user gear modifiers, and
+ * the battle round. Use it for scenarios that need multiple users/effects or
+ * need to run the same production helper against a coherent battle state.
  */
-export class BattleScenario {
-  users = new Map<string, BattleUserState>();
-  effects: UserEffect[] = [];
-  preBattleGearModifiers: Record<string, PreBattleGearModifiers> = {};
-  round = 1;
+export type BattleScenario = {
+  users: Map<string, BattleUserState>;
+  effects: UserEffect[];
+  preBattleGearModifiers: Record<string, PreBattleGearModifiers>;
+  round: number;
+  addUser: (id: string, overrides?: BattleUserOverrides) => BattleScenario;
+  addEffect: {
+    (effect: UserEffect): BattleScenario;
+    <T extends TagType>(
+      type: T,
+      tagFields?: TagFields<T>,
+      runtimeFields?: EffectRuntimeOverrides,
+    ): BattleScenario;
+  };
+  setGearModifiers: (
+    userId: string,
+    modifiers: Partial<PreBattleGearModifiers>,
+  ) => BattleScenario;
+  clearPositive: (targetId: string) => ActionEffect;
+  cleanseNegative: (targetId: string) => ActionEffect;
+  computeDamage: (rawDamage?: number, damageEffect?: UserEffect) => number;
+  getEffect: (id: string) => UserEffect;
+  getUser: (id: string) => BattleUserState;
+};
 
-  constructor() {
-    this.addUser("attacker");
-    this.addUser("defender");
-  }
+/**
+ * Creates the default attacker-vs-defender battle scenario.
+ */
+export const battleScenario = (): BattleScenario => {
+  const users = new Map<string, BattleUserState>();
+  const effects: UserEffect[] = [];
+  const preBattleGearModifiers: Record<string, PreBattleGearModifiers> = {};
 
-  /**
-   * Adds or replaces a battle user fixture and initializes empty gear modifiers
-   * for that user.
-   */
-  addUser(id: string, overrides: BattleUserOverrides = {}) {
-    const user = makeBattleUser(id, overrides);
-    this.users.set(user.userId, user);
-    this.preBattleGearModifiers[user.userId] ??= gearMods();
-    return this;
-  }
-
-  /**
-   * Adds a realized user effect, or builds one from a tag type plus tag/runtime
-   * fields before adding it.
-   */
-  addEffect(effect: UserEffect): this;
-  addEffect<T extends TagType>(
-    type: T,
-    tagFields?: TagFields<T>,
-    runtimeFields?: EffectRuntimeOverrides,
-  ): this;
-  addEffect<T extends TagType>(
-    effectOrType: UserEffect | T,
-    tagFields: TagFields<T> = {},
-    runtimeFields: EffectRuntimeOverrides = {},
-  ) {
-    const effect =
-      typeof effectOrType === "string"
-        ? makeEffect(effectOrType, tagFields, runtimeFields)
-        : effectOrType;
-    this.effects.push(effect);
-    return this;
-  }
-
-  /**
-   * Replaces a user's pre-battle gear modifiers with a zero-defaulted record.
-   */
-  setGearModifiers(userId: string, modifiers: Partial<PreBattleGearModifiers>) {
-    this.preBattleGearModifiers[userId] = gearMods(modifiers);
-    return this;
-  }
-
-  /**
-   * Applies a basic Clear action to the target using the production `clear`
-   * effect implementation.
-   */
-  clearPositive(targetId: string) {
-    return this.applyBasicEffect("clear", clear, targetId);
-  }
-
-  /**
-   * Applies a basic Cleanse action to the target using the production `cleanse`
-   * effect implementation.
-   */
-  cleanseNegative(targetId: string) {
-    return this.applyBasicEffect("cleanse", cleanse, targetId);
-  }
-
-  /**
-   * Builds and applies one of the basic status-removal effects against a target
-   * user in this scenario.
-   */
-  private applyBasicEffect(
+  const applyBasicEffect = (
     type: Extract<TagType, "clear" | "cleanse">,
     applyEffect: typeof clear,
     targetId: string,
-  ) {
-    const target = this.getUser(targetId);
+  ) => {
+    const target = scenario.getUser(targetId);
     const effect = makeEffect(
       type,
       { power: 100 },
@@ -501,54 +462,73 @@ export class BattleScenario {
         targetId,
         isNew: true,
         castThisRound: true,
-        createdRound: this.round,
+        createdRound: scenario.round,
         longitude: target.longitude,
         latitude: target.latitude,
         actionId: type,
         fromType: "basic",
       },
     );
-    return applyEffect(effect, this.effects, target);
-  }
+    return applyEffect(effect, effects, target);
+  };
 
-  /**
-   * Computes a damage packet against the scenario's active effects, gear
-   * modifiers, and current round.
-   */
-  computeDamage(rawDamage = 1000, damageEffect = makeDamageEffect()) {
-    return computeDamagePacket({
-      rawDamage,
-      damageEffect,
-      usersEffects: this.effects,
-      attackerId: damageEffect.creatorId,
-      defenderId: damageEffect.targetId,
-      preBattleGearModifiers: this.preBattleGearModifiers,
-      battleRound: this.round,
-    }).damage;
-  }
+  const scenario: BattleScenario = {
+    users,
+    effects,
+    preBattleGearModifiers,
+    round: 1,
+    addUser: (id, overrides = {}) => {
+      const user = makeBattleUser(id, overrides);
+      users.set(user.userId, user);
+      preBattleGearModifiers[user.userId] ??= gearMods();
+      return scenario;
+    },
+    addEffect: ((
+      effectOrType: UserEffect | TagType,
+      tagFields: TagFields<TagType> = {},
+      runtimeFields: EffectRuntimeOverrides = {},
+    ) => {
+      const effect =
+        typeof effectOrType === "string"
+          ? makeEffect(
+              effectOrType,
+              tagFields as TagFields<typeof effectOrType>,
+              runtimeFields,
+            )
+          : effectOrType;
+      effects.push(effect);
+      return scenario;
+    }) as BattleScenario["addEffect"],
+    setGearModifiers: (userId, modifiers) => {
+      preBattleGearModifiers[userId] = gearMods(modifiers);
+      return scenario;
+    },
+    clearPositive: (targetId) => applyBasicEffect("clear", clear, targetId),
+    cleanseNegative: (targetId) => applyBasicEffect("cleanse", cleanse, targetId),
+    computeDamage: (rawDamage = 1000, damageEffect = makeDamageEffect()) =>
+      computeDamagePacket({
+        rawDamage,
+        damageEffect,
+        usersEffects: effects,
+        attackerId: damageEffect.creatorId,
+        defenderId: damageEffect.targetId,
+        preBattleGearModifiers,
+        battleRound: scenario.round,
+      }).damage,
+    getEffect: (id) => {
+      const effect = effects.find((e) => e.id === id);
+      if (!effect) throw new Error(`Effect not found: ${id}`);
+      return effect;
+    },
+    getUser: (id) => {
+      const user = users.get(id);
+      if (!user) throw new Error(`User not found: ${id}`);
+      return user;
+    },
+  };
 
-  /**
-   * Returns an active user effect by id, failing loudly when the scenario setup
-   * did not create it.
-   */
-  getEffect(id: string) {
-    const effect = this.effects.find((e) => e.id === id);
-    if (!effect) throw new Error(`Effect not found: ${id}`);
-    return effect;
-  }
+  scenario.addUser("attacker");
+  scenario.addUser("defender");
 
-  /**
-   * Returns a battle user by id, failing loudly when the scenario setup did not
-   * create it.
-   */
-  getUser(id: string) {
-    const user = this.users.get(id);
-    if (!user) throw new Error(`User not found: ${id}`);
-    return user;
-  }
-}
-
-/**
- * Creates the default attacker-vs-defender battle scenario.
- */
-export const battleScenario = () => new BattleScenario();
+  return scenario;
+};
