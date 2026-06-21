@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAP_TOTAL_SECTORS } from "@/drizzle/constants";
 import { OverworldPlacementSchema } from "@/validators/overworldAi";
 
 describe("OverworldPlacementSchema", () => {
@@ -58,5 +59,11 @@ describe("OverworldPlacementSchema", () => {
 
   it("rejects longitude outside the sector grid", () => {
     expect(() => OverworldPlacementSchema.parse({ ...base, longitude: 99 })).toThrow();
+  });
+
+  it("rejects a sector at the grid upper bound (MAP_TOTAL_SECTORS)", () => {
+    expect(() =>
+      OverworldPlacementSchema.parse({ ...base, sector: MAP_TOTAL_SECTORS }),
+    ).toThrow();
   });
 });

@@ -52,4 +52,18 @@ describe("resolveOverworldPosition", () => {
     );
     expect(isPlaceableSector(pos.sector)).toBe(true);
   });
+
+  it("falls back to a placeable sector when from_list holds only reserved sectors", () => {
+    // List and the fixed fallback are both reserved → resolver must still pick a placeable one
+    const pos = resolveOverworldPosition(
+      {
+        ...cfg,
+        sectorType: "from_list",
+        sector: MAP_WAKE_ISLAND_SECTOR,
+        sectorList: [MAP_WAKE_ISLAND_SECTOR],
+      },
+      () => 0,
+    );
+    expect(isPlaceableSector(pos.sector)).toBe(true);
+  });
 });

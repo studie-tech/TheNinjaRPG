@@ -19,6 +19,7 @@ import { initiateBattle } from "@/routers/combat";
 import { fetchUserItems } from "@/routers/item";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import {
+  ASSIGNABLE_QUEST_TYPES,
   assignQuestToUser,
   commitQuestObjectiveRewards,
   questTypeConcurrentBlockMessage,
@@ -32,17 +33,23 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  serverError,
 } from "../trpc";
 
 export const overworldAiRouter = createTRPCRouter({
   getPlacementsForAi: protectedProcedure
     .input(z.object({ aiTemplateUserId: z.string() }))
-    .query(async ({ ctx, input }) =>
-      ctx.drizzle.query.overworldAiPlacement.findMany({
+    .query(async ({ ctx, input }) => {
+      // Guard: placement config is staff-only, same as the write/delete endpoints below.
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "Not allowed");
+      }
+      return ctx.drizzle.query.overworldAiPlacement.findMany({
         where: eq(overworldAiPlacement.aiTemplateUserId, input.aiTemplateUserId),
         with: { questPool: true },
-      }),
-    ),
+      });
+    }),
 
   getAllPlacementNames: protectedProcedure.query(async ({ ctx }) => {
     const rows = await ctx.drizzle.query.overworldAiPlacement.findMany({
@@ -78,13 +85,24 @@ export const overworldAiRouter = createTRPCRouter({
         sector: pos.sector,
         longitude: pos.longitude,
         latitude: pos.latitude,
+        // Bump on every edit so clients holding a stale position version are told to refresh
+        // (mirrors the daily cron's reposition bump); new placements start at 0.
+        positionVersion: input.id
+          ? sql`${overworldAiPlacement.positionVersion} + 1`
+          : 0,
       };
       // Mutate
       if (input.id) {
-        await ctx.drizzle
+        const updated = await ctx.drizzle
           .update(overworldAiPlacement)
           .set(row)
           .where(eq(overworldAiPlacement.id, input.id));
+        // Stale id (placement concurrently deleted): abort before writing child rows, which
+        // would otherwise orphan (no FK cascade on PlanetScale). The positionVersion bump
+        // above guarantees an existing row always changes, so rowsAffected reflects existence.
+        if (updated.rowsAffected === 0) {
+          return errorResponse("Placement no longer exists");
+        }
         await ctx.drizzle
           .delete(overworldAiPlacementQuest)
           .where(eq(overworldAiPlacementQuest.placementId, id));
@@ -312,6 +330,10 @@ export const overworldAiRouter = createTRPCRouter({
         .map((p, poolIndex) => {
           const q = questsById.get(p.questId);
           if (!q) return null;
+          // Skip types the centralized assigner can't start (e.g. errand, whose daily cap
+          // only startRandom enforces). Reaching assignQuestToUser with one throws and would
+          // strand the claimed active-NPC-quest slot, leaving the player permanently blocked.
+          if (!ASSIGNABLE_QUEST_TYPES.includes(q.questType)) return null;
           const prev = prevByQuest.find((ph) => ph.questId === q.id);
           const available =
             isAvailableUserQuests({ ...q, ...prev }, activeUser).check &&

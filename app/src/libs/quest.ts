@@ -646,7 +646,7 @@ export const isBoundPlacementFrozen = (
   !active.has(objective.overworldPlacementId);
 
 /**
- * #1348: true when a retryDelay != none quest already hit `maxCompletes` completions in the
+ * True when a retryDelay != none quest already hit `maxCompletes` completions in the
  * current calendar period. retryDelay "none" and maxCompletes <= 0 are never capped.
  */
 export const periodCapReached = (
@@ -666,7 +666,7 @@ export const periodCapReached = (
   return effective >= args.maxCompletes;
 };
 
-/** #1348: period-start for a completion, or {} for retryDelay "none". */
+/** Period-start for a completion, or {} for retryDelay "none". */
 export const periodCompletionSet = (
   retryDelay: RetryQuestDelay,
   now: Date = new Date(),
@@ -1548,7 +1548,7 @@ export const isAvailableUserQuests = (
     !questAndUserQuestInfo.previousAttempts ||
     questAndUserQuestInfo.previousAttempts < maxAttempts;
 
-  // #1348: per-period completion cap (only meaningful when retryDelay != none).
+  // Per-period completion cap (only meaningful when retryDelay != none).
   const periodCapCheck = !periodCapReached({
     retryDelay: questAndUserQuestInfo.retryDelay,
     maxCompletes,

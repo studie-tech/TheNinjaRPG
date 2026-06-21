@@ -1422,9 +1422,9 @@ export const intersectUsers = (info: {
         newUserTooltips.add(userMesh.name);
       }
     }
-    if (locationUsers.length === 1 && userMesh) {
-      // NPC groups have a different child layout; skip the player index-based sprite logic
-      if (userMesh.userData.isNpc) return newUserTooltips;
+    // NPC groups have a different child layout, so skip the player index-based sprite logic
+    // for them — but do NOT early-return: the tooltip-cleanup loop below must still run.
+    if (locationUsers.length === 1 && userMesh && !userMesh.userData.isNpc) {
       const userId = userMesh.userData.userId as string | undefined;
       if (userId) {
         const user = users.filter(Boolean).find((u) => u.userId === userId);
