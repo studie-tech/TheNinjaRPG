@@ -409,7 +409,10 @@ describe("computeDamagePacket", () => {
     });
 
     const boosted = 100 * (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100);
-    const floor = boosted * (1 - DMG_REDUCTION_CAP);
+    const floor =
+      boosted *
+      (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100) *
+      (1 - DMG_REDUCTION_CAP);
     expect(damage).toBeCloseTo(floor * 1.5, 2);
   });
 
@@ -633,7 +636,7 @@ describe("computeDamagePacket", () => {
       type: "decreasedamagetaken",
       targetId: "defender",
       fromType: "jutsu",
-      power: 80,
+      power: 100,
     });
 
     const { damage } = computeDamagePacket({
@@ -651,9 +654,236 @@ describe("computeDamagePacket", () => {
 
     const boosted = 100 * (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100);
     const afterOocDr = boosted * (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100);
-    const afterExtremeDr = afterOocDr * (1 - 0.8);
-    const floor = boosted * (1 - DMG_REDUCTION_CAP);
+    const afterExtremeDr = 0;
+    const floor = afterOocDr * (1 - DMG_REDUCTION_CAP);
     expect(damage).toBeCloseTo(Math.max(afterExtremeDr, floor), 2);
+  });
+
+  it("keeps the reported Element Divine DR stack active after crossing the old floor", () => {
+    // Regression test for: https://discord.com/channels/1080832341234159667/1375094434437271572/1518235151878983771
+    const rawDamage = 742.44;
+
+    const damageEffect = makeDamageEffect({
+      statTypes: ["Highest"],
+      generalTypes: ["Highest"],
+      elements: ["Fire"],
+      highestOffence: "bukijutsuOffence",
+      highestGenerals: ["strength", "speed"],
+    });
+
+    const namedModifier = (
+      id: string,
+      params: Parameters<typeof makeModifierEffect>[0],
+    ) =>
+      makeModifierEffect({
+        id,
+        ...params,
+        runtime: {
+          level: params.runtime?.level ?? 0,
+          isNew: false,
+          castThisRound: false,
+          createdRound: 1,
+          highestOffence: "bukijutsuOffence",
+          highestGenerals: ["strength", "speed"],
+          ...params.runtime,
+        },
+      });
+
+    const incEffects = [
+      namedModifier("gust-armor-inc-given", {
+        type: "increasedamagegiven",
+        targetId: "attacker",
+        fromType: "jutsu",
+        power: 20,
+        tag: {
+          powerPerLevel: 0.4,
+          statTypes: ["Bukijutsu"],
+          elements: ["Wind"],
+        },
+        runtime: { level: 25 },
+      }),
+      namedModifier("gust-armor-inc-taken", {
+        type: "increasedamagetaken",
+        targetId: "defender",
+        fromType: "jutsu",
+        power: 20,
+        tag: { powerPerLevel: 0.4, statTypes: ["Bukijutsu"] },
+        runtime: { level: 25 },
+      }),
+      namedModifier("fire-release-inc-taken", {
+        type: "increasedamagetaken",
+        targetId: "defender",
+        fromType: "jutsu",
+        power: 25,
+        tag: {
+          powerPerLevel: 0.4,
+          elements: ["Earth", "Fire", "Lightning", "Water", "Wind"],
+        },
+        runtime: { level: 25 },
+      }),
+      namedModifier("element-divine-inc-taken", {
+        type: "increasedamagetaken",
+        targetId: "defender",
+        fromType: "jutsu",
+        power: 20,
+        tag: {
+          powerPerLevel: 0.4,
+          elements: ["Earth", "Fire", "Lightning", "Water", "Wind"],
+        },
+        runtime: { level: 37.5 },
+      }),
+      namedModifier("stamina-pill-ii-inc-taken", {
+        type: "increasedamagetaken",
+        targetId: "defender",
+        fromType: "item",
+        power: 15,
+        tag: { statTypes: ["Highest"] },
+      }),
+    ];
+
+    const drEffectsBeforeBreakpoint = [
+      namedModifier("terra-shift-dr-taken", {
+        type: "decreasedamagetaken",
+        targetId: "defender",
+        fromType: "jutsu",
+        power: 15,
+        tag: {
+          powerPerLevel: 0.4,
+          statTypes: ["Bukijutsu", "Genjutsu", "Ninjutsu", "Taijutsu"],
+        },
+        runtime: { level: 25 },
+      }),
+      namedModifier("stamina-pill-ii-dr-taken", {
+        type: "decreasedamagetaken",
+        targetId: "defender",
+        fromType: "item",
+        power: 15,
+        tag: { statTypes: ["Bukijutsu", "Genjutsu", "Ninjutsu", "Taijutsu"] },
+      }),
+      namedModifier("elite-smoke-bomb-dr-taken", {
+        type: "decreasedamagetaken",
+        targetId: "defender",
+        fromType: "item",
+        power: 25,
+        tag: { statTypes: ["Bukijutsu", "Genjutsu", "Ninjutsu", "Taijutsu"] },
+      }),
+    ];
+
+    const smokeDamageGivenDr = namedModifier("elite-smoke-bomb-dr-given", {
+      type: "decreasedamagegiven",
+      targetId: "attacker",
+      fromType: "item",
+      power: 70,
+      tag: { statTypes: ["Bukijutsu", "Genjutsu", "Ninjutsu", "Taijutsu"] },
+    });
+
+    const beforeBreakpointDamage = computeDamagePacket({
+      rawDamage,
+      damageEffect,
+      usersEffects: [...incEffects, ...drEffectsBeforeBreakpoint],
+      attackerId: "attacker",
+      defenderId: "defender",
+      battleRound: 2,
+      preBattleGearModifiers: {
+        attacker: gearMods(),
+        defender: gearMods(),
+      },
+    }).damage;
+
+    const { damage: afterBreakpointDamage } = computeDamagePacket({
+      rawDamage,
+      damageEffect,
+      usersEffects: [
+        ...incEffects,
+        ...drEffectsBeforeBreakpoint,
+        smokeDamageGivenDr,
+      ],
+      attackerId: "attacker",
+      defenderId: "defender",
+      battleRound: 2,
+      preBattleGearModifiers: {
+        attacker: gearMods(),
+        defender: gearMods(),
+      },
+    });
+
+    const boostedDamage = [30, 30, 35, 35, 15].reduce(
+      (total, power) => total * (1 + power / 100),
+      rawDamage * (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100),
+    );
+    const expectedBeforeBreakpointDamage = [25, 15, 25].reduce(
+      (total, power) => total * (1 - power / 100),
+      boostedDamage * (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100),
+    );
+    const expectedAfterBreakpointDamage = expectedBeforeBreakpointDamage * 0.3;
+    const oldFloor = boostedDamage * (1 - DMG_REDUCTION_CAP);
+
+    expect(beforeBreakpointDamage).toBeCloseTo(
+      expectedBeforeBreakpointDamage,
+      2,
+    );
+    expect(beforeBreakpointDamage).toBeGreaterThan(oldFloor);
+    expect(expectedAfterBreakpointDamage).toBeLessThan(oldFloor);
+    expect(afterBreakpointDamage).toBeCloseTo(
+      expectedAfterBreakpointDamage,
+      2,
+    );
+    expect(afterBreakpointDamage).toBeCloseTo(beforeBreakpointDamage * 0.3, 2);
+  });
+
+  it("does not let base DR consume the player-applied reduction cap", () => {
+    const rawDamage = 742.44;
+    const incPowers = [30, 30, 35, 35, 15];
+    const drPowers = [25, 15, 25, 70];
+    const incEffects = incPowers.map((power, index) =>
+      makeModifierEffect({
+        id: `reported-inc-${index}`,
+        type: "increasedamagegiven",
+        targetId: "attacker",
+        fromType: "jutsu",
+        power,
+      }),
+    );
+    const drEffects = drPowers.map((power, index) =>
+      makeModifierEffect({
+        id: `reported-dr-${index}`,
+        type: "decreasedamagetaken",
+        targetId: "defender",
+        fromType: "jutsu",
+        power,
+      }),
+    );
+
+    const { damage } = computeDamagePacket({
+      rawDamage,
+      damageEffect: makeDamageEffect(),
+      usersEffects: [...incEffects, ...drEffects],
+      attackerId: "attacker",
+      defenderId: "defender",
+      battleRound: 2,
+      preBattleGearModifiers: {
+        attacker: gearMods(),
+        defender: gearMods(),
+      },
+    });
+
+    const boostedDamage = incPowers.reduce(
+      (total, power) => total * (1 + power / 100),
+      rawDamage * (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100),
+    );
+    const expectedDamage = drPowers.reduce(
+      (total, power) => total * (1 - power / 100),
+      boostedDamage * (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100),
+    );
+    const oldFloor = boostedDamage * (1 - DMG_REDUCTION_CAP);
+
+    expect(expectedDamage).toBeGreaterThan(
+      boostedDamage *
+        (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100) *
+        (1 - DMG_REDUCTION_CAP),
+    );
+    expect(expectedDamage).toBeLessThan(oldFloor);
+    expect(damage).toBeCloseTo(expectedDamage, 2);
   });
 
   it("applies static increase as flat addition immediately before static DR", () => {

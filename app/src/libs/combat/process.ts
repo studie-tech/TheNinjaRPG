@@ -1579,7 +1579,11 @@ export const computeDamagePacket = (
     damage = applyPercentageDrMultiplier(damage, (Math.abs(power) / 100) * ratio);
   }
 
-  const minDamage = baseDamageAfterBoosts * (1 - DMG_REDUCTION_CAP);
+  const baseDamageAfterSystemDr = applyPercentageDrMultiplier(
+    baseDamageAfterBoosts,
+    OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100,
+  );
+  const minDamage = baseDamageAfterSystemDr * (1 - DMG_REDUCTION_CAP);
   damage = Math.max(damage, minDamage);
 
   let totalStaticIncrease = 0;
