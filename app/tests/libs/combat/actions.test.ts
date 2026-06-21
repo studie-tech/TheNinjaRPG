@@ -10,8 +10,10 @@ vi.mock("@/libs/combat/process", () => ({
 }));
 
 vi.mock("@/libs/hexgrid", () => ({
-  getPossibleActionTiles: vi.fn(() => new Set()),
-  PathCalculator: vi.fn(),
+  getPossibleActionTiles: vi.fn((_action, _userHex, grid) => grid),
+  PathCalculator: vi.fn(() => ({
+    getShortestPath: vi.fn(() => []),
+  })),
 }));
 
 /** Avoid executing real db/env when transitive imports touch `@/server/db`. */
