@@ -16,7 +16,7 @@ export function assertViewerMatchesSession(
   sessionUserId: string,
   viewerId?: string,
 ): void {
-  if (viewerId && viewerId !== sessionUserId) {
+  if (viewerId !== undefined && viewerId !== sessionUserId) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Viewer/session mismatch",

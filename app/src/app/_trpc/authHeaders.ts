@@ -29,3 +29,19 @@ export function buildClerkRequestHeaders(
   if (token) return { Authorization: `Bearer ${token}` };
   return isMultiSession ? { [TAB_AUTH_REQUIRED_HEADER]: "1" } : {};
 }
+
+/**
+ * Whether the browser currently holds more than one signed-in Clerk session.
+ *
+ * `count` is the length of `client.signedInSessions`, which excludes
+ * ended/expired/replaced sessions — so a single-account user who previously
+ * signed out of another account is not miscounted as multi-session. It is
+ * `undefined` while Clerk is still loading: we treat that unknown state as
+ * multi-session so the no-token path fails closed against the shared `__session`
+ * cookie instead of risking a background tab authenticating as another account.
+ * A known single session (`count <= 1`) keeps the normal cookie path so transient
+ * token blips don't needlessly sign the user out.
+ */
+export function computeIsMultiSession(count: number | undefined): boolean {
+  return count === undefined ? true : count > 1;
+}

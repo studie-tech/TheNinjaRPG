@@ -473,7 +473,7 @@ export const profileRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Get current user's full profile data" },
     })
-    .input(z.object({ viewerId: z.string() }).optional())
+    .input(z.object({ viewerId: z.string().min(1) }).optional())
     .query(async ({ ctx, input }) => {
       // Clerk multi-session: reject if the client's asserted account does not
       // match the server-authenticated session. Identity for the fetch below

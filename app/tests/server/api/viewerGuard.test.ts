@@ -11,6 +11,11 @@ describe("assertViewerMatchesSession", () => {
     expect(() => assertViewerMatchesSession("user_A", undefined)).not.toThrow();
   });
 
+  it("throws FORBIDDEN for an empty asserted viewer id (not treated as unasserted)", () => {
+    // "" is never a valid Clerk id; the guard must not silently bypass on it.
+    expect(() => assertViewerMatchesSession("user_A", "")).toThrow(TRPCError);
+  });
+
   it("throws FORBIDDEN when the asserted viewer does not match the session user", () => {
     expect(() => assertViewerMatchesSession("user_A", "user_B")).toThrow(TRPCError);
     try {
