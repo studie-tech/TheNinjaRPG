@@ -14,7 +14,7 @@ import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
-import { buildClerkRequestHeaders } from "./authHeaders";
+import { buildClerkRequestHeaders, computeIsMultiSession } from "./authHeaders";
 import {
   api,
   SIGN_IN_REQUIRED_MUTATION_MESSAGE,
@@ -106,11 +106,12 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
           url: `${getBaseUrl()}/api/trpc`,
           transformer: superjson,
           async headers() {
-            // signedInSessions excludes ended/expired/replaced sessions, so a
-            // single-account user who previously signed out of another account is
-            // not miscounted as multi-session.
-            const isMultiSession =
-              (clerkRef.current?.client?.signedInSessions?.length ?? 1) > 1;
+            // Unknown session count (Clerk still loading) is treated as
+            // multi-session so the no-token path fails closed against the shared
+            // cookie; a known single session keeps the normal cookie path.
+            const isMultiSession = computeIsMultiSession(
+              clerkRef.current?.client?.signedInSessions?.length,
+            );
             try {
               // getToken() returns null when the tab has no session and throws on
               // an offline/refresh blip; both go through the no-token path, which
@@ -119,7 +120,20 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
                 await getTokenRef.current(),
                 isMultiSession,
               );
-            } catch {
+            } catch (error) {
+              // Expected on offline/refresh blips. Leave a breadcrumb (and a
+              // dev-only warning) so an unexpected getToken() regression stays
+              // diagnosable without adding production console noise.
+              if (process.env.NODE_ENV === "development") {
+                console.warn("tRPC headers: getToken() threw, failing closed", error);
+              }
+              Sentry.addBreadcrumb({
+                category: "auth",
+                level: "warning",
+                message:
+                  "tRPC headers: getToken() threw; failing closed on no-token path",
+                data: { isMultiSession },
+              });
               return buildClerkRequestHeaders(null, isMultiSession);
             }
           },
@@ -135,6 +149,11 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
 };
 
 export default TrpcClientProvider;
+
+// Fraction of suppressed "Viewer/session mismatch" guards to still report to
+// Sentry, so a persistent regression in the per-tab token mechanism surfaces as
+// a rate spike without flooding quota during normal occasional cross-tab races.
+const VIEWER_MISMATCH_SENTRY_SAMPLE_RATE = 0.05;
 
 const handleTrpcError = (error: unknown) => {
   const trpcErrorCode =
@@ -163,6 +182,16 @@ const handleTrpcError = (error: unknown) => {
     error.message.includes("Viewer/session mismatch") &&
     (trpcErrorCode === undefined || trpcErrorCode === "FORBIDDEN")
   ) {
+    // Not user-facing (self-heals on the next per-tab refetch), so no toast. But
+    // sample a low rate to Sentry with a stable fingerprint so a regression that
+    // makes this fire persistently stays visible in production monitoring.
+    if (Math.random() < VIEWER_MISMATCH_SENTRY_SAMPLE_RATE) {
+      Sentry.captureException(error, {
+        level: "warning",
+        fingerprint: ["trpc-viewer-session-mismatch"],
+        extra: { message: "Clerk multi-session Viewer/session mismatch (sampled)" },
+      });
+    }
     return;
   }
 
