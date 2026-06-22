@@ -562,7 +562,12 @@ export const PveBattleTypes: BattleType[] = [
   "OVERWORLD",
 ];
 
-export const QuestBattleTypes: BattleType[] = ["QUEST", "RANDOM_ENCOUNTER", "RAID"];
+export const QuestBattleTypes: BattleType[] = [
+  "QUEST",
+  "RANDOM_ENCOUNTER",
+  "RAID",
+  "OVERWORLD",
+];
 
 export const BattleUsageTypes = ["PVE", "PVP", "BOTH"] as const;
 export type BattleUsageType = (typeof BattleUsageTypes)[number];

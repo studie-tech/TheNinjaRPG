@@ -53,11 +53,19 @@ export const overworldAiRouter = createTRPCRouter({
 
   getAllPlacementNames: protectedProcedure.query(async ({ ctx }) => {
     const rows = await ctx.drizzle.query.overworldAiPlacement.findMany({
-      columns: { id: true, interactionType: true, sector: true, isActive: true },
+      columns: {
+        id: true,
+        aiTemplateUserId: true,
+        interactionType: true,
+        sector: true,
+        isActive: true,
+      },
       with: { aiTemplate: { columns: { username: true } } },
     });
     return rows.map((r) => ({
       id: r.id,
+      aiTemplateUserId: r.aiTemplateUserId,
+      interactionType: r.interactionType,
       label: `${r.aiTemplate?.username ?? "?"} · ${r.interactionType} · sector ${r.sector}${r.isActive ? "" : " [inactive]"}`,
     }));
   }),
@@ -70,6 +78,15 @@ export const overworldAiRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      // Guard: refuse to deactivate a placement that a quest objective references
+      if (input.id && !input.data.isActive) {
+        const binding = await fetchQuestsBindingPlacement(ctx.drizzle, input.id);
+        if (binding.length > 0) {
+          return errorResponse(
+            `Cannot deactivate: bound to quest(s): ${binding.map((q) => q.name).join(", ")}.`,
+          );
+        }
+      }
       // Prepare
       const { quests, ...cfg } = input.data;
       const pos = resolveOverworldPosition(cfg);
@@ -131,6 +148,13 @@ export const overworldAiRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      // Guard: refuse to delete a placement that a quest objective references
+      const binding = await fetchQuestsBindingPlacement(ctx.drizzle, input.id);
+      if (binding.length > 0) {
+        return errorResponse(
+          `Cannot delete: bound to quest(s): ${binding.map((q) => q.name).join(", ")}. Unbind them first.`,
+        );
+      }
       // Mutate: delete child pool rows first (no FK cascade in PlanetScale), then the placement
       await ctx.drizzle
         .delete(overworldAiPlacementQuest)
@@ -157,6 +181,9 @@ export const overworldAiRouter = createTRPCRouter({
         dialog: z
           .object({
             objectiveId: z.string(),
+            description: z.string(),
+            sceneBackground: z.string(),
+            sceneCharacters: z.array(z.string()),
             branches: z.array(
               z.object({ text: z.string(), nextObjectiveId: z.string().optional() }),
             ),
@@ -165,69 +192,59 @@ export const overworldAiRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Fetch placement and actor in parallel — both are needed regardless of interaction type.
-      const [placement, actor] = await Promise.all([
+      // Fetch placement + actor (with quest relations) + inventory in parallel. The
+      // bound-objective check needs quest relations before the HOSTILE branch, so load
+      // the full user up front (this also removes the previous duplicate user fetch in
+      // the FRIENDLY branch).
+      //
+      // forceRegen MUST be false here: fetchUpdatedUser persists passive regen to
+      // userData when forceRegen is true, which would add a DB write to EVERY overworld
+      // click (including plain HOSTILE fights). We only need the in-memory user + quest
+      // relations + settings. The battle snapshot is re-fetched/regenerated inside
+      // initiateBattle, and the reward paths use atomic SQL increments, so none of the
+      // paths below depend on persisted regen.
+      const [placement, { user: activeUser, settings }, useritems] = await Promise.all([
         fetchPlacement(ctx.drizzle, input.placementId),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          forceRegen: false,
+        }),
+        fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
 
       // Validate placement: must exist, be active, bind a still-AI template, and the
       // client's position version must match the authoritative server placement.
-      if (!placement || !placement.isActive || !placement.aiTemplate?.isAi) {
+      if (!placement?.isActive || !placement.aiTemplate?.isAi) {
         return errorResponse("This NPC is no longer here");
       }
       if (placement.positionVersion !== input.positionVersion) {
         return errorResponse("The NPC has moved - refresh the map");
       }
+      if (!activeUser) return errorResponse("User does not exist");
 
       // Validate actor state. Server placement coordinates are authoritative; the
       // client-supplied position is only a hint, so we compare the actor against the
       // placement's stored tile rather than trusting any client coordinates.
-      if (actor.isBanned) return errorResponse("You are banned");
-      if (actor.status !== "AWAKE") return errorResponse("You must be awake");
-      if (actor.travelFinishAt && actor.travelFinishAt > new Date()) {
+      if (activeUser.isBanned) return errorResponse("You are banned");
+      if (activeUser.status !== "AWAKE") return errorResponse("You must be awake");
+      if (activeUser.travelFinishAt && activeUser.travelFinishAt > new Date()) {
         return errorResponse("You are travelling");
       }
       if (
-        actor.sector !== placement.sector ||
-        actor.longitude !== placement.longitude ||
-        actor.latitude !== placement.latitude
+        activeUser.sector !== placement.sector ||
+        activeUser.longitude !== placement.longitude ||
+        activeUser.latitude !== placement.latitude
       ) {
         return errorResponse("You are not standing on the NPC's tile");
       }
 
-      // HOSTILE -> clean PvE fight against the AI template (no quest data needed).
-      if (placement.interactionType === "HOSTILE") {
-        const battle = await initiateBattle(
-          {
-            longitude: placement.longitude,
-            latitude: placement.latitude,
-            sector: placement.sector,
-            userIds: [ctx.userId],
-            targetIds: [placement.aiTemplateUserId],
-            client: ctx.drizzle,
-            scaleTarget: true,
-            biome: "default",
-          },
-          "OVERWORLD",
-        );
-        return battle.success
-          ? { success: true, message: "Battle started", battleId: battle.battleId }
-          : errorResponse(battle.message);
-      }
-
-      // FRIENDLY -> load quest relations, inventory and settings together.
-      const [{ user: activeUser, settings }, useritems] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId, forceRegen: true }),
-        fetchUserItems(ctx.drizzle, ctx.userId),
-      ]);
-      if (!activeUser) return errorResponse("User does not exist");
       // getNewTrackers (called inside getReward) reads useritems for deliver_item
       // possession checks; attach it to a single typed user object reused below.
       const userForTrackers = { ...activeUser, useritems };
       const ownedItemIds = useritems.map((i) => i.itemId);
 
-      // 1) Objective-target sub-path: advance a bound, actionable objective and pay it.
+      // 1) Bound-objective sub-path (defeat_opponents | dialog | deliver_item).
       const bound = findActionableBoundObjective({
         activeQuests: getUserQuests(activeUser).map((q) => {
           const tracker = (activeUser.questData ?? []).find((t) => t.id === q.id);
@@ -251,6 +268,32 @@ export const overworldAiRouter = createTRPCRouter({
       });
 
       if (bound) {
+        // Defeat target: start a battle vs the placement's AI. The win is recorded by
+        // the normal post-battle tracker path (updateUser -> getNewTrackers): the
+        // player's questData is loaded into battle state and opponentAIs == this
+        // placement's AI (derived at save).
+        if (bound.objective.task === "defeat_opponents") {
+          const full = getUserQuests(activeUser)
+            .flatMap((q) => q.content.objectives)
+            .find((o) => o.id === bound.objective.id);
+          const scaleTarget =
+            full && "opponent_scaled_to_user" in full
+              ? Boolean(full.opponent_scaled_to_user)
+              : false;
+          const scaleGains =
+            full && "scaleGains" in full ? Number(full.scaleGains ?? 1) : 1;
+          const battle = await startOverworldBattle({
+            client: ctx.drizzle,
+            placement,
+            userId: ctx.userId,
+            scaleTarget,
+            scaleGains,
+          });
+          return battle.success
+            ? { success: true, message: "Battle started", battleId: battle.battleId }
+            : errorResponse(battle.message);
+        }
+
         // Two-step dialog: the first call returns the available branches; the user
         // picks one and re-submits with dialogContentId to advance + pay.
         if (bound.objective.task === "dialog" && !input.dialogContentId) {
@@ -266,7 +309,15 @@ export const overworldAiRouter = createTRPCRouter({
           return {
             success: true,
             message: "dialog",
-            dialog: { objectiveId: bound.objective.id, branches },
+            dialog: {
+              objectiveId: bound.objective.id,
+              // description / sceneBackground / sceneCharacters are baseObjectiveFields,
+              // present on every objective — default safely.
+              description: dialogObjective?.description ?? "",
+              sceneBackground: dialogObjective?.sceneBackground ?? "",
+              sceneCharacters: dialogObjective?.sceneCharacters ?? [],
+              branches,
+            },
           };
         }
 
@@ -305,7 +356,22 @@ export const overworldAiRouter = createTRPCRouter({
         };
       }
 
-      // 2) Quest-giver sub-path: only reached when no bound objective is actionable.
+      // 2) Plain HOSTILE fight (no matching bound objective) — existing behavior via the
+      // shared helper.
+      if (placement.interactionType === "HOSTILE") {
+        const battle = await startOverworldBattle({
+          client: ctx.drizzle,
+          placement,
+          userId: ctx.userId,
+          scaleTarget: true,
+          scaleGains: 1,
+        });
+        return battle.success
+          ? { success: true, message: "Battle started", battleId: battle.battleId }
+          : errorResponse(battle.message);
+      }
+
+      // 3) Quest-giver sub-path: only reached when no bound objective is actionable.
       // Each pool row carries its own per-quest grant chance.
       const poolQuestIds = placement.questPool.map((p) => p.questId);
       if (poolQuestIds.length === 0) {
@@ -450,6 +516,17 @@ export const overworldAiRouter = createTRPCRouter({
     }),
 });
 
+/** Quests whose objective content binds to this placement (overworldPlacementId).
+ *  Exact JSON membership on the content column (admin-only guard). */
+const fetchQuestsBindingPlacement = async (
+  client: DrizzleClient,
+  placementId: string,
+) =>
+  client.query.quest.findMany({
+    columns: { id: true, name: true },
+    where: sql`JSON_CONTAINS(JSON_EXTRACT(${quest.content}, '$.objectives[*].overworldPlacementId'), JSON_QUOTE(${placementId})) = 1`,
+  });
+
 /** Load a placement with its quest pool and the AI template identity/isAi flag. */
 const fetchPlacement = async (client: DrizzleClient, placementId: string) =>
   client.query.overworldAiPlacement.findFirst({
@@ -459,3 +536,27 @@ const fetchPlacement = async (client: DrizzleClient, placementId: string) =>
       aiTemplate: { columns: { userId: true, isAi: true } },
     },
   });
+
+/** Start an OVERWORLD PvE battle against a placement's AI. Shared by the plain HOSTILE
+ *  fight and the quest-target (defeat_opponents) fight. */
+const startOverworldBattle = (opts: {
+  client: DrizzleClient;
+  placement: NonNullable<Awaited<ReturnType<typeof fetchPlacement>>>;
+  userId: string;
+  scaleTarget: boolean;
+  scaleGains: number;
+}) =>
+  initiateBattle(
+    {
+      longitude: opts.placement.longitude,
+      latitude: opts.placement.latitude,
+      sector: opts.placement.sector,
+      userIds: [opts.userId],
+      targetIds: [opts.placement.aiTemplateUserId],
+      client: opts.client,
+      scaleTarget: opts.scaleTarget,
+      biome: "default",
+    },
+    "OVERWORLD",
+    opts.scaleGains,
+  );

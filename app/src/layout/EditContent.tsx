@@ -40,6 +40,7 @@ import Modal2 from "@/layout/Modal2";
 import RichInput from "@/layout/RichInput";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import Table from "@/layout/Table";
+import { FRIENDLY_INTERACTION_TASKS, placementsForObjective } from "@/libs/overworldAi";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
@@ -585,6 +586,18 @@ export const EditContent = <
                                     | number
                                     | readonly string[]
                                     | undefined
+                                }
+                                onChange={
+                                  type === "number"
+                                    ? (e) =>
+                                        // Strip only a leading-zero run before a digit (e.g. "05" -> "5")
+                                        // so a zero-valued field can be typed over. Leaves "0", "0.5",
+                                        // and "" intact, so decimals and clearing still work; zod coerces
+                                        // the stored string to a number on submit.
+                                        field.onChange(
+                                          e.target.value.replace(/^0+(?=\d)/, ""),
+                                        )
+                                    : field.onChange
                                 }
                               />
                             </FormControl>
@@ -1974,7 +1987,10 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
 
   const { data: placementNames } = api.overworldAi.getAllPlacementNames.useQuery(
     undefined,
-    { enabled: fields.includes("overworldPlacementId") },
+    // The field renders from objectiveSchema.shape (see `attributes`), but overworldPlacementId
+    // is optional with no prefault, so it's absent from Object.keys(shownTag) until set — gating
+    // on `fields` left the dropdown empty forever. Gate on the schema, matching how it renders.
+    { enabled: "overworldPlacementId" in objectiveSchema.shape },
   );
 
   const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined, {
@@ -1994,6 +2010,14 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   // A few fields we need to watch
   const watchTask = useWatch({ control: form.control, name: "task" });
   const watchAll = useWatch({ control: form.control });
+  const watchPlacementId = useWatch({
+    control: form.control,
+    name: "overworldPlacementId",
+  });
+  const watchOpponentAis = useWatch({
+    control: form.control,
+    name: "opponentAIs",
+  });
 
   // When user changes type, we need to update the effects array to re-render form
   useEffect(() => {
@@ -2123,6 +2147,15 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
       return (
         !RaidTasks.includes(watchTask as RaidTask) ||
         !["longitude", "latitude"].includes(value)
+      );
+    })
+    .filter((value) => {
+      // Opponent is derived from the bound placement at save; hide manual opponentAIs entry
+      // for a placement-bound defeat_opponents objective to avoid double configuration.
+      return (
+        (value as string) !== "opponentAIs" ||
+        watchTask !== "defeat_opponents" ||
+        !watchPlacementId
       );
     })
     .map((value) => {
@@ -2275,11 +2308,38 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
       } else if (value === "overworldPlacementId") {
         // Always render a select (never a free-text fallback) so an arbitrary placement id
         // can't be saved while the names query is still loading or has failed.
+        //
+        // Narrow the list to placements for the AI chosen in opponentAIs (AI -> placement),
+        // so an author picks the AI then its placement. This stays filtered even after a
+        // placement is bound: opponentAIs hides (see the filter above) but its value persists,
+        // so re-opening the dropdown still shows that enemy's placements, not the full list.
+        // deliver_item/dialog instead show only FRIENDLY placements (placementsForObjective).
+        const selectedAiIds = (
+          (watchOpponentAis as { ids?: string[] }[] | undefined) ?? []
+        ).flatMap((o) => o.ids ?? []);
+        const matching = placementsForObjective(placementNames ?? [], {
+          task: watchTask,
+          selectedAiIds,
+        });
+        // Show guidance when a scope is applied (an AI is chosen, or a friendly-interaction
+        // task) yet nothing matches — i.e. the relevant placement hasn't been created yet.
+        const scoped =
+          selectedAiIds.length > 0 ||
+          (FRIENDLY_INTERACTION_TASKS as readonly string[]).includes(watchTask);
+        const noMatchingPlacement =
+          placementNames !== undefined && scoped && matching.length === 0;
         return {
           id: value,
           values: [
-            { id: NONE_PLACEMENT_VALUE, name: "— none —" },
-            ...(placementNames ?? []).map((p) => ({ id: p.id, name: p.label })),
+            {
+              id: NONE_PLACEMENT_VALUE,
+              name: noMatchingPlacement
+                ? selectedAiIds.length > 0
+                  ? "— none — (no placement for this AI; create one on its Overworld Placements page)"
+                  : "— none — (no FRIENDLY placement exists; create one on the Overworld Placements page)"
+                : "— none —",
+            },
+            ...matching.map((p) => ({ id: p.id, name: p.label })),
           ],
           type: "db_values",
           label: FORM_LABEL_MAP[value] ?? value,

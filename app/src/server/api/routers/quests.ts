@@ -59,6 +59,7 @@ import {
 } from "@/drizzle/schema";
 import { getGatheringItemDrops } from "@/libs/gathering";
 import { getHuntingItemDrops } from "@/libs/hunting";
+import { deriveOverworldOpponents } from "@/libs/overworldAi";
 import type { GetRewardResult, QuestConsequence } from "@/libs/quest";
 import {
   combineTrackerResults,
@@ -784,6 +785,35 @@ export const questsRouter = createTRPCRouter({
             success: false,
             message: `Ranks rewards are only allowed with starter or exam quests`,
           };
+        }
+        // Overworld defeat targets: the opponent is the bound placement's AI (single source of
+        // truth). Derive opponentAIs here so all downstream consumers (quest map auto-trigger,
+        // client progress, 3D markers) read a populated value. Errors if a binding is dangling.
+        const boundPlacementIds = [
+          ...new Set(
+            data.content.objectives
+              .filter((o) => o.task === "defeat_opponents" && o.overworldPlacementId)
+              .map((o) => o.overworldPlacementId as string),
+          ),
+        ];
+        if (boundPlacementIds.length > 0) {
+          const placements = await ctx.drizzle.query.overworldAiPlacement.findMany({
+            columns: { id: true, aiTemplateUserId: true },
+            where: inArray(overworldAiPlacement.id, boundPlacementIds),
+          });
+          const aiByPlacementId = new Map(
+            placements.map((p) => [p.id, p.aiTemplateUserId]),
+          );
+          const { objectives, missing } = deriveOverworldOpponents(
+            data.content.objectives,
+            aiByPlacementId,
+          );
+          if (missing.length > 0) {
+            return errorResponse(
+              `Bound overworld placement not found: ${missing.join(", ")}`,
+            );
+          }
+          data.content.objectives = objectives;
         }
         // Calculate diff
         const diff = calculateContentDiff(entry, {

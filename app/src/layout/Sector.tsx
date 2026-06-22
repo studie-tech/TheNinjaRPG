@@ -26,6 +26,7 @@ import {
   HEX_STACKING_DISPLACEMENT,
   IMG_AVATAR_DEFAULT,
   IMG_ICON_MOVE,
+  IMG_SCENE_BACKGROUND,
   IMG_SECTOR_ATTACK,
   IMG_SECTOR_INFO,
   IMG_SECTOR_ROB,
@@ -90,6 +91,7 @@ import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
 import { round } from "@/utils/math";
+import { parseHtml } from "@/utils/parse";
 import { sleep } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/travel";
@@ -218,6 +220,9 @@ const Sector: React.FC<SectorProps> = (props) => {
   const [showRaidModal, setShowRaidModal] = useState<boolean>(false);
   const [npcDialog, setNpcDialog] = useState<{
     objectiveId: string;
+    description: string;
+    sceneBackground: string;
+    sceneCharacters: string[];
     branches: { text: string; nextObjectiveId?: string }[];
   } | null>(null);
 
@@ -379,6 +384,15 @@ const Sector: React.FC<SectorProps> = (props) => {
     { enabled: userData?.sector === sector && sector !== undefined },
   );
   const activeRaid = sectorRaidsData?.raids?.[0] ?? null;
+
+  const dialogSceneAssetIds = npcDialog
+    ? [npcDialog.sceneBackground, ...(npcDialog.sceneCharacters ?? [])].filter(Boolean)
+    : [];
+  const { data: dialogSceneAssets } = api.gameAsset.getSceneAssets.useQuery(
+    { assetIds: dialogSceneAssetIds },
+    { enabled: dialogSceneAssetIds.length > 0 },
+  );
+
 
   // Router for forwarding
   const router = useRouter();
@@ -2605,7 +2619,44 @@ const Sector: React.FC<SectorProps> = (props) => {
           }}
           title="NPC Dialog"
         >
-          <div className="flex flex-col gap-2 p-2">
+          <div className="flex flex-col gap-3 p-2">
+            {(() => {
+              const background =
+                dialogSceneAssets?.find((a) => a.type === "SCENE_BACKGROUND")?.image ??
+                IMG_SCENE_BACKGROUND;
+              const characters =
+                dialogSceneAssets
+                  ?.filter((a) => a.type === "SCENE_CHARACTER")
+                  .map((a) => a.image) ?? [];
+              return (
+                <div className="relative w-full overflow-hidden rounded-md bg-black">
+                  {/* biome-ignore lint/performance/noImgElement: dynamic CDN scene background; next/image is impractical for this composited modal */}
+                  <img
+                    src={background}
+                    alt="scene"
+                    className="h-44 w-full object-cover"
+                  />
+                  {characters.length > 0 && (
+                    <div className="absolute inset-x-0 bottom-0 flex items-end justify-center gap-2">
+                      {characters.map((img, i) => (
+                        // biome-ignore lint/performance/noImgElement: dynamic CDN character sprite, variable intrinsic size
+                        <img
+                          key={`dlg-char-${i}`}
+                          src={img}
+                          alt=""
+                          className="h-40 object-contain"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            {npcDialog.description && (
+              <div className="rounded-md bg-popover p-2 text-popover-foreground text-sm">
+                {parseHtml(npcDialog.description)}
+              </div>
+            )}
             {npcDialog.branches.map((branch, idx) => (
               <button
                 key={`${idx}-${branch.text}`}

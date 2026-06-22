@@ -164,3 +164,58 @@ export const findActionableBoundObjective = (args: {
   }
   return null;
 };
+
+/**
+ * Single source of truth for overworld defeat targets: for each `defeat_opponents`
+ * objective bound to a placement, set its opponentAIs to that placement's AI. The
+ * placement is authoritative, so the admin never picks the AI twice. Returns the
+ * (new) objectives plus any placement ids that could not be resolved.
+ */
+export const deriveOverworldOpponents = <
+  T extends {
+    task: string;
+    overworldPlacementId?: string;
+    opponentAIs?: { ids: string[]; number: number }[];
+  },
+>(
+  objectives: T[],
+  aiByPlacementId: Map<string, string>,
+): { objectives: T[]; missing: string[] } => {
+  const missing: string[] = [];
+  const next = objectives.map((o) => {
+    if (o.task !== "defeat_opponents" || !o.overworldPlacementId) return o;
+    const ai = aiByPlacementId.get(o.overworldPlacementId);
+    if (!ai) {
+      missing.push(o.overworldPlacementId);
+      return o;
+    }
+    return { ...o, opponentAIs: [{ ids: [ai], number: 1 }] };
+  });
+  return { objectives: next, missing };
+};
+
+/** Placements to offer for an objective's overworld binding: when one or more opponent
+ *  AIs are selected, only placements whose AI is among them; otherwise all placements. */
+export const filterPlacementsByAi = <T extends { aiTemplateUserId: string }>(
+  placements: T[],
+  selectedAiIds: string[],
+): T[] =>
+  selectedAiIds.length === 0
+    ? placements
+    : placements.filter((p) => selectedAiIds.includes(p.aiTemplateUserId));
+
+/** Objective tasks completed by interacting with a friendly overworld NPC. */
+export const FRIENDLY_INTERACTION_TASKS = ["deliver_item", "dialog"] as const;
+
+/** Placements to offer for an objective's overworld binding, scoped by task:
+ *  friendly-interaction tasks (deliver_item/dialog) → only FRIENDLY placements;
+ *  otherwise narrow by the selected opponent AI(s) via filterPlacementsByAi. */
+export const placementsForObjective = <
+  T extends { aiTemplateUserId: string; interactionType: string },
+>(
+  placements: T[],
+  args: { task: string; selectedAiIds: string[] },
+): T[] =>
+  (FRIENDLY_INTERACTION_TASKS as readonly string[]).includes(args.task)
+    ? placements.filter((p) => p.interactionType === "FRIENDLY")
+    : filterPlacementsByAi(placements, args.selectedAiIds);

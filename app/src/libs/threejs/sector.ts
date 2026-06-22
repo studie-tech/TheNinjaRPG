@@ -24,6 +24,7 @@ import {
   HEX_STACKING_DISPLACEMENT,
   IMG_AVATAR_DEFAULT,
   IMG_ICON_HEAL,
+  IMG_MAP_QUEST_ICON,
   IMG_SECTOR_ATTACK,
   IMG_SECTOR_INFO,
   IMG_SECTOR_USER_MARKER,
@@ -801,7 +802,7 @@ export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
   if (userData.isNpc) {
     // NPC interaction sprite: "talk" for friendly, "attack" for hostile
     const isHostile = userData.npcInteractionType === "HOSTILE";
-    const npcIcon = loadTexture(isHostile ? IMG_SECTOR_ATTACK : IMG_SECTOR_INFO);
+    const npcIcon = loadTexture(isHostile ? IMG_SECTOR_ATTACK : IMG_MAP_QUEST_ICON);
     const npcMat = new SpriteMaterial({ map: npcIcon, depthTest: false });
     const npcSprite = new Sprite(npcMat);
     npcSprite.visible = true;
