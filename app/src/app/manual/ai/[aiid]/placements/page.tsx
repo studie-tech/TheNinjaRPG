@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Copy, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { type Control, useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -300,26 +300,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
 
             {/* Fixed sector — only when sectorType === "specific" */}
             {sectorType === "specific" && (
-              <FormField
-                control={form.control}
-                name="sector"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Sector</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        value={field.value as number}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <IntegerField control={form.control} name="sector" label="Sector" />
             )}
 
             {/* Sector list — only when sectorType === "from_list" */}
@@ -396,45 +377,17 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
             {/* Fixed longitude/latitude — only when locationType === "specific" */}
             {locationType === "specific" && (
               <div className="flex gap-4">
-                <FormField
+                <IntegerField
                   control={form.control}
                   name="longitude"
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel>Longitude</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          value={field.value as number}
-                          onChange={field.onChange}
-                          onBlur={field.onBlur}
-                          name={field.name}
-                          ref={field.ref}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Longitude"
+                  className="flex-1"
                 />
-                <FormField
+                <IntegerField
                   control={form.control}
                   name="latitude"
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel>Latitude</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          value={field.value as number}
-                          onChange={field.onChange}
-                          onBlur={field.onBlur}
-                          name={field.name}
-                          ref={field.ref}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Latitude"
+                  className="flex-1"
                 />
               </div>
             )}
@@ -633,3 +586,41 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
     </>
   );
 };
+
+/** Integer coordinate input (sector/longitude/latitude). Stores a parsed number, stripping
+ *  the leading zero so a 0-valued field can be typed over; empty clears to "". */
+const IntegerField = ({
+  control,
+  name,
+  label,
+  className,
+}: {
+  control: Control<OverworldPlacementInput>;
+  name: "sector" | "longitude" | "latitude";
+  label: string;
+  className?: string;
+}) => (
+  <FormField
+    control={control}
+    name={name}
+    render={({ field }) => (
+      <FormItem className={className}>
+        <FormLabel>{label}</FormLabel>
+        <FormControl>
+          <Input
+            type="number"
+            value={field.value as number}
+            onChange={(e) => {
+              const n = Number.parseInt(e.target.value, 10);
+              field.onChange(Number.isNaN(n) ? "" : n);
+            }}
+            onBlur={field.onBlur}
+            name={field.name}
+            ref={field.ref}
+          />
+        </FormControl>
+        <FormMessage />
+      </FormItem>
+    )}
+  />
+);
