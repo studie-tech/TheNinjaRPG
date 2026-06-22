@@ -1,6 +1,6 @@
 // app/tests/libs/quest.periodcap.test.ts
 import { describe, it, expect } from "vitest";
-import { periodCapReached } from "@/libs/quest";
+import { isAvailableUserQuests, periodCapReached } from "@/libs/quest";
 
 const NOW = new Date("2026-06-19T12:00:00Z"); // Fri; week start Mon 2026-06-15
 
@@ -19,5 +19,63 @@ describe("periodCapReached", () => {
   });
   it("null periodStartAt → not capped", () => {
     expect(periodCapReached({ retryDelay: "daily", maxCompletes: 1, periodCompletes: 0, periodStartAt: null }, NOW)).toBe(false);
+  });
+});
+
+describe("isAvailableUserQuests — period cap vs lifetime cap", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const priorPeriod = new Date(Date.now() - 2 * DAY);
+
+  // Minimal user that clears every non-completion gate (no rank/village/level requirements).
+  const user = {
+    role: "USER",
+    rank: "STUDENT",
+    villageId: "v1",
+    isOutlaw: false,
+    bloodlineId: null,
+    level: 50,
+    medicalExperience: 0,
+    huntingExperience: 0,
+    gatheringExperience: 0,
+    completedQuests: [],
+  } as never;
+
+  // event ∈ QuestTypesWithMaxAttempts, so the lifetime cap (eventCompletedCheck) applies.
+  const repeatable = {
+    hidden: false,
+    maxAttempts: 100,
+    maxCompletes: 1,
+    questType: "event",
+    requiredVillage: null,
+    retryDelay: "daily",
+  } as const;
+
+  it("repeatable quest is available in a new period despite lifetime completes >= maxCompletes", () => {
+    // Regression: lifetime previousCompletes(1) >= maxCompletes(1), but the only completion was
+    // a prior period — the period cap should govern, not the lifetime cap.
+    expect(
+      isAvailableUserQuests(
+        { ...repeatable, previousCompletes: 1, periodCompletes: 1, periodStartAt: priorPeriod },
+        user,
+      ).check,
+    ).toBe(true);
+  });
+
+  it("repeatable quest is still capped within the current period", () => {
+    expect(
+      isAvailableUserQuests(
+        { ...repeatable, previousCompletes: 1, periodCompletes: 1, periodStartAt: new Date() },
+        user,
+      ).check,
+    ).toBe(false);
+  });
+
+  it("one-shot quest (retryDelay none) keeps its lifetime cap", () => {
+    expect(
+      isAvailableUserQuests(
+        { ...repeatable, retryDelay: "none", previousCompletes: 1 },
+        user,
+      ).check,
+    ).toBe(false);
   });
 });

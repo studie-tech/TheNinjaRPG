@@ -1537,9 +1537,12 @@ export const isAvailableUserQuests = (
       userLevel >= questAndUserQuestInfo.requiredLevel) &&
     (!questAndUserQuestInfo.maxLevel || userLevel <= questAndUserQuestInfo.maxLevel);
 
-  // Event specific tests
+  // Lifetime completion cap. Period-capped quests (retryDelay != "none") are gated solely by
+  // periodCapCheck below; applying the lifetime cap to them as well would permanently block a
+  // repeatable quest once its lifetime completions reached maxCompletes.
   const eventCompletedCheck =
     !QuestTypesWithMaxAttempts.includes(questAndUserQuestInfo.questType) ||
+    questAndUserQuestInfo.retryDelay !== "none" ||
     !questAndUserQuestInfo.previousCompletes ||
     questAndUserQuestInfo.previousCompletes < maxCompletes;
   const eventAttemptsCheck =
