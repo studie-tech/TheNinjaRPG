@@ -52,6 +52,11 @@ export const overworldAiRouter = createTRPCRouter({
     }),
 
   getAllPlacementNames: protectedProcedure.query(async ({ ctx }) => {
+    // Guard: placement config is staff-only, same as the sibling endpoints below.
+    const user = await fetchUser(ctx.drizzle, ctx.userId);
+    if (!canChangeContent(user.role)) {
+      throw serverError("UNAUTHORIZED", "Not allowed");
+    }
     const rows = await ctx.drizzle.query.overworldAiPlacement.findMany({
       columns: {
         id: true,
