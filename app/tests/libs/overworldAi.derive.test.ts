@@ -19,7 +19,7 @@ describe("deriveOverworldOpponents", () => {
       { task: "defeat_opponents", overworldPlacementId: "", opponentAIs: [{ ids: ["x"], number: 2 }] },
       { task: "dialog", overworldPlacementId: "place-1" },
     ];
-    const { objectives, missing } = deriveOverworldOpponents(input as never, aiByPlacement);
+    const { objectives, missing } = deriveOverworldOpponents(input, aiByPlacement);
     const [first] = objectives;
     expect(first?.opponentAIs).toEqual([{ ids: ["x"], number: 2 }]);
     expect(missing).toEqual([]);
