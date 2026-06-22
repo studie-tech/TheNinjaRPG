@@ -5,6 +5,7 @@ import {
   OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
 } from "@/drizzle/constants";
 import {
+  applyDamageModifierPipelineToConsequences,
   buildDamageModifierEligibilityById,
   buildDamagePacketModifierLists,
   computeDamagePacket,
@@ -12,6 +13,7 @@ import {
   consolidatePreBattleDamageModifiers,
   isConsolidatedStage1PercentageModifier,
 } from "@/libs/combat/process";
+import type { Consequence } from "@/libs/combat/types";
 import {
   defaultTestGearModifiers,
   gearMods,
@@ -884,6 +886,223 @@ describe("computeDamagePacket", () => {
     );
     expect(expectedDamage).toBeLessThan(oldFloor);
     expect(damage).toBeCloseTo(expectedDamage, 2);
+  });
+
+  it("keeps the Colored Jewel DR stack active past the old cap breakpoint", () => {
+    // Regression test for: https://discord.com/channels/1080832341234159667/1375094434437271572/1518261616372744263
+    const reportedNoTagDamage = 743.74;
+    const rawDamage =
+      reportedNoTagDamage /
+      ((1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100) *
+        (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100));
+    const incPowers = [30, 35, 35, 35, 30];
+    const drPowers = [10, 35, 30, 30, 40, 25];
+    const incEffects = incPowers.map((power, index) =>
+      makeModifierEffect({
+        id: `colored-jewel-report-inc-${index}`,
+        type: "increasedamagegiven",
+        targetId: "attacker",
+        fromType: "jutsu",
+        power,
+      }),
+    );
+    const drEffects = drPowers.map((power, index) =>
+      makeModifierEffect({
+        id: `colored-jewel-report-dr-${index}`,
+        type: "decreasedamagetaken",
+        targetId: "defender",
+        fromType: index === 0 ? "item" : "jutsu",
+        power,
+      }),
+    );
+
+    const { damage } = computeDamagePacket({
+      rawDamage,
+      damageEffect: makeDamageEffect({ power: 50 }),
+      usersEffects: [...incEffects, ...drEffects],
+      attackerId: "attacker",
+      defenderId: "defender",
+      battleRound: 3,
+      preBattleGearModifiers: {
+        attacker: gearMods(),
+        defender: gearMods(),
+      },
+    });
+
+    const boostedDamage = incPowers.reduce(
+      (total, power) => total * (1 + power / 100),
+      reportedNoTagDamage,
+    );
+    const expectedDamage = drPowers.reduce(
+      (total, power) => total * (1 - power / 100),
+      boostedDamage,
+    );
+    const oldFloor =
+      rawDamage *
+      (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100) *
+      incPowers.reduce((total, power) => total * (1 + power / 100), 1) *
+      (1 - DMG_REDUCTION_CAP);
+
+    expect(expectedDamage).toBeCloseTo(398.91, 2);
+    expect(expectedDamage).toBeLessThan(oldFloor);
+    expect(damage).toBeCloseTo(expectedDamage, 2);
+    expect(damage).not.toBeCloseTo(883.57, 2);
+  });
+
+  it("keeps the smoke bomb DR stack active past the old cap breakpoint", () => {
+    // Regression test for: https://discord.com/channels/1080832341234159667/1375094434437271572/1518261967616475248
+    const reportedNoTagDamage = 743.74;
+    const rawDamage =
+      reportedNoTagDamage /
+      ((1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100) *
+        (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100));
+    const incPowers = [35, 30, 35, 35];
+    const defenderDrPowers = [25, 15, 25, 15];
+    const smokeDamageGivenDrPower = 70;
+    const incEffects = incPowers.map((power, index) =>
+      makeModifierEffect({
+        id: `smoke-bomb-report-inc-${index}`,
+        type: "increasedamagegiven",
+        targetId: "attacker",
+        fromType: "jutsu",
+        power,
+      }),
+    );
+    const defenderDrEffects = defenderDrPowers.map((power, index) =>
+      makeModifierEffect({
+        id: `smoke-bomb-report-dr-taken-${index}`,
+        type: "decreasedamagetaken",
+        targetId: "defender",
+        fromType: index === 2 || index === 3 ? "item" : "jutsu",
+        power,
+      }),
+    );
+    const smokeDamageGivenDr = makeModifierEffect({
+      id: "smoke-bomb-report-dr-given",
+      type: "decreasedamagegiven",
+      targetId: "attacker",
+      fromType: "item",
+      power: smokeDamageGivenDrPower,
+    });
+
+    const { damage } = computeDamagePacket({
+      rawDamage,
+      damageEffect: makeDamageEffect({ power: 50 }),
+      usersEffects: [...incEffects, ...defenderDrEffects, smokeDamageGivenDr],
+      attackerId: "attacker",
+      defenderId: "defender",
+      battleRound: 4,
+      preBattleGearModifiers: {
+        attacker: gearMods(),
+        defender: gearMods(),
+      },
+    });
+
+    const boostedDamage = incPowers.reduce(
+      (total, power) => total * (1 + power / 100),
+      reportedNoTagDamage,
+    );
+    const expectedDamage = [
+      25,
+      15,
+      smokeDamageGivenDrPower,
+      25,
+      15,
+    ].reduce((total, power) => total * (1 - power / 100), boostedDamage);
+    const oldFloor =
+      rawDamage *
+      (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100) *
+      incPowers.reduce((total, power) => total * (1 + power / 100), 1) *
+      (1 - DMG_REDUCTION_CAP);
+
+    expect(expectedDamage).toBeCloseTo(290.03, 2);
+    expect(expectedDamage).toBeLessThan(oldFloor);
+    expect(damage).toBeCloseTo(expectedDamage, 2);
+    expect(damage).not.toBeCloseTo(883.57, 2);
+  });
+
+  it("applies round-4 active modifiers to both same-round damage packets", () => {
+    const firstDamage = makeDamageEffect({
+      id: "first-60ap-damage",
+      actionId: "lightning-release",
+      power: 60,
+    });
+    const secondDamage = makeDamageEffect({
+      id: "second-60ap-damage",
+      actionId: "second-60ap-jutsu",
+      power: 60,
+    });
+    const round2Increase = makeModifierEffect({
+      id: "round-2-timeshift",
+      type: "increasedamagegiven",
+      targetId: "attacker",
+      fromType: "jutsu",
+      power: 30,
+      runtime: { createdRound: 2 },
+    });
+    const round3Increase = makeModifierEffect({
+      id: "round-3-cleave",
+      type: "increasedamagegiven",
+      targetId: "attacker",
+      fromType: "jutsu",
+      power: 35,
+      runtime: { createdRound: 3 },
+    });
+    const round3Reduction = makeModifierEffect({
+      id: "round-3-dr",
+      type: "decreasedamagetaken",
+      targetId: "defender",
+      fromType: "jutsu",
+      power: 15,
+      runtime: { createdRound: 3 },
+    });
+    const consequences = new Map<string, Consequence>([
+      [
+        firstDamage.id,
+        {
+          userId: "attacker",
+          targetId: "defender",
+          damage: 100,
+        } as Consequence,
+      ],
+      [
+        secondDamage.id,
+        {
+          userId: "attacker",
+          targetId: "defender",
+          damage: 100,
+        } as Consequence,
+      ],
+    ]);
+
+    applyDamageModifierPipelineToConsequences({
+      consequences,
+      usersEffects: [
+        firstDamage,
+        secondDamage,
+        round2Increase,
+        round3Increase,
+        round3Reduction,
+      ],
+      extraState: {
+        preBattleGearModifiers: {
+          attacker: gearMods(),
+          defender: gearMods(),
+        },
+      } as Parameters<typeof applyDamageModifierPipelineToConsequences>[0]["extraState"],
+      battleRound: 4,
+    });
+
+    const expectedDamage =
+      100 *
+      1.3 *
+      1.35 *
+      (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100) *
+      (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100) *
+      0.85;
+
+    expect(consequences.get(firstDamage.id)?.damage).toBeCloseTo(expectedDamage, 2);
+    expect(consequences.get(secondDamage.id)?.damage).toBeCloseTo(expectedDamage, 2);
   });
 
   it("applies static increase as flat addition immediately before static DR", () => {
