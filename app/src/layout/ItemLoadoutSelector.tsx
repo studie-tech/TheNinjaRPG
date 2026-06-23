@@ -38,7 +38,6 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
           utils.profile.getUser.invalidate(),
           utils.item.getUserItems.invalidate(),
           utils.item.getUserItemsWithVariants.invalidate(),
-          utils.item.getItemLoadouts.invalidate(),
         ]);
       }
     },
