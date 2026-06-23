@@ -1677,11 +1677,22 @@ export const verifyQuestObjectiveFlow = (
     const referencedIds = new Set<string>();
 
     for (const obj of objectives) {
-      // Dialog objectives must expose at least one option (branch)
+      // Dialog objectives must expose at least one option (branch), and every option must
+      // route to a next objective. A branch with no nextObjectiveId can never complete the
+      // objective — getNewTrackers only advances a dialog when contentId matches a branch's
+      // nextObjectiveId — which soft-locks the player on that branch.
       if (obj.task === "dialog") {
         const nextRef = (obj as { nextObjectiveId?: unknown }).nextObjectiveId;
         if (!Array.isArray(nextRef) || nextRef.length === 0) {
           throw new Error(`Dialog objective '${obj.id}' must have at least one option`);
+        }
+        for (const branch of nextRef) {
+          const branchNext = (branch as { nextObjectiveId?: unknown })?.nextObjectiveId;
+          if (typeof branchNext !== "string" || branchNext.length === 0) {
+            throw new Error(
+              `Dialog objective '${obj.id}' has an option with no nextObjectiveId`,
+            );
+          }
         }
       }
 
