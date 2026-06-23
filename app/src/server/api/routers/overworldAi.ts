@@ -11,6 +11,7 @@ import {
 } from "@/drizzle/schema";
 import {
   findActionableBoundObjective,
+  npcMissionSlotDecision,
   pickWeightedQuest,
   resolveOverworldPosition,
 } from "@/libs/overworldAi";
@@ -447,25 +448,21 @@ export const overworldAiRouter = createTRPCRouter({
         };
       }
 
-      // One mission at a time: block if the player holds an active quest of a type this NPC
-      // gives. Read from the already-loaded user quests — no extra round-trip.
-      const npcPoolTypes = new Set(
-        placement.questPool
-          .map((p) => questsById.get(p.questId)?.questType)
-          .filter((t): t is NonNullable<typeof t> => Boolean(t)),
+      // One NPC mission at a time, tracked by the authoritative activeNpcQuestId slot (the
+      // quest TYPE is not a reliable proxy — it both over-blocks unrelated quests and lets a
+      // mismatched-type active NPC quest be wrongly self-healed away). Block while the slot
+      // points to a still-active quest; release it when the slotted quest has completed/left.
+      const slotDecision = npcMissionSlotDecision(
+        activeUser.activeNpcQuestId,
+        activeUser.userQuests ?? [],
       );
-      const heldPoolTypeQuest = getUserQuests(activeUser).find(
-        (q) => !q.endAt && npcPoolTypes.has(q.questType),
-      );
-      if (heldPoolTypeQuest) {
+      if (slotDecision === "block") {
         return {
           success: true,
           message: "Finish your current mission before asking for another.",
         };
       }
-      // Self-heal: no active pool-type quest, so any lingering claim is stale — clear that
-      // exact id so a concurrent NPC's legitimate claim is never disturbed.
-      if (activeUser.activeNpcQuestId) {
+      if (slotDecision === "clear-stale" && activeUser.activeNpcQuestId) {
         await clearActiveNpcQuest({
           client: ctx.drizzle,
           userId: ctx.userId,
