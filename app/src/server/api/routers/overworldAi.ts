@@ -363,6 +363,17 @@ export const overworldAiRouter = createTRPCRouter({
           return errorResponse("Quest state changed, please try again");
         }
 
+        // Free the active-NPC-mission slot the moment this interaction completes the quest,
+        // instead of waiting for the next NPC visit's self-heal. clearActiveNpcQuest is
+        // questId-scoped, so it only releases the slot if it was held for this quest.
+        if (resolved) {
+          await clearActiveNpcQuest({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            questId: bound.questId,
+          });
+        }
+
         return {
           success: true,
           message: claim.postNotifications.join(" ") || "Interaction complete",
