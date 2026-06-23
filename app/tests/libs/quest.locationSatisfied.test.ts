@@ -36,6 +36,24 @@ describe("isObjectiveLocationSatisfied", () => {
     expect(isObjectiveLocationSatisfied(onNpcTile, boundDeliverWithStaleCoords)).toBe(false);
   });
 
+  it("does NOT complete a placement-bound objective via coordinates alone — the placement is authoritative", () => {
+    // Coords happen to match the player's tile, but the player isn't interacting with the
+    // placement. A bound objective must resolve off the placement, never coincidental coords
+    // (otherwise it could auto-complete on travel).
+    const boundCoordsMatch = DeliverItem.parse({
+      id: "o4",
+      overworldPlacementId: "p9",
+      sectorType: "specific",
+      sector: 1,
+      longitude: 1,
+      latitude: 1,
+      deliverItemIds: ["i1"],
+      item_name: "Secret scroll",
+    });
+    expect(isObjectiveLocationSatisfied(onNpcTile, boundCoordsMatch)).toBe(false);
+    expect(isObjectiveLocationSatisfied(onNpcTile, boundCoordsMatch, new Set(["p9"]))).toBe(true);
+  });
+
   it("still satisfies on exact coordinate match (existing isLocationObjective behavior preserved)", () => {
     const atTile = DeliverItem.parse({
       id: "o2",

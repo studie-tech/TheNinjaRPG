@@ -140,25 +140,22 @@ export const isLocationObjective = (
  * player is interacting with that placement (its id is in `atPlacementIds`),
  * since the placement — not the objective's stored coordinates — is the
  * authoritative location. Those stored coordinates drift from a roaming NPC's
- * daily reposition (and default to 0/0/0 for fixed NPCs), so they cannot gate a
- * placement-bound interaction. Callers without placement context (everything
- * outside the overworld NPC flow) fall back to plain coordinate matching.
+ * daily reposition (and default to 0/0/0 for fixed NPCs), so for a bound objective
+ * the coordinates are ignored entirely — it resolves only when the player is
+ * interacting with the bound placement. An unbound objective uses plain coordinate
+ * matching.
  */
 export const isObjectiveLocationSatisfied = (
   location: { latitude: number; longitude: number; sector: number },
   objective: AllObjectivesType,
   atPlacementIds?: ReadonlySet<string>,
 ) => {
-  if (isLocationObjective(location, objective)) return true;
-  if (
-    atPlacementIds &&
-    "overworldPlacementId" in objective &&
-    objective.overworldPlacementId &&
-    atPlacementIds.has(objective.overworldPlacementId)
-  ) {
-    return true;
+  // A placement-bound objective resolves off the placement, never its stored coordinates
+  // (which could otherwise coincidentally match a tile and auto-complete on travel).
+  if ("overworldPlacementId" in objective && objective.overworldPlacementId) {
+    return !!atPlacementIds && atPlacementIds.has(objective.overworldPlacementId);
   }
-  return false;
+  return isLocationObjective(location, objective);
 };
 
 /**
@@ -1655,14 +1652,16 @@ export const isAvailableUserQuests = (
 };
 
 /**
- * Validates that every dialog objective routes somewhere. A dialog branch with no
- * `nextObjectiveId` can never advance the objective — `getNewTrackers` only completes a
- * dialog when the chosen branch's `nextObjectiveId` is set — so it soft-locks the player.
- * This rule applies to ALL quests, independent of `consecutiveObjectives`.
+ * Validates that every dialog objective routes somewhere valid. A dialog branch with no
+ * `nextObjectiveId`, or one pointing to an objective that does not exist, can never advance
+ * the objective — `getNewTrackers` only completes a dialog when the chosen branch's
+ * `nextObjectiveId` matches a real objective — so it soft-locks the player. This rule
+ * applies to ALL quests, independent of `consecutiveObjectives`.
  */
 export const verifyDialogBranches = (
   objectives: AllObjectivesType[],
 ): { check: boolean; message: string } => {
+  const objectiveIds = new Set(objectives.map((o) => o.id));
   for (const obj of objectives) {
     if (obj.task !== "dialog") continue;
     const nextRef = (obj as { nextObjectiveId?: unknown }).nextObjectiveId;
@@ -1678,6 +1677,12 @@ export const verifyDialogBranches = (
         return {
           check: false,
           message: `Dialog objective '${obj.id}' has an option with no nextObjectiveId`,
+        };
+      }
+      if (!objectiveIds.has(branchNext)) {
+        return {
+          check: false,
+          message: `Dialog objective '${obj.id}' has an option pointing to unknown objective '${branchNext}'`,
         };
       }
     }
