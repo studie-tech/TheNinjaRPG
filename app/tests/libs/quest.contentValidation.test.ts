@@ -39,6 +39,13 @@ describe("verifyDialogBranches", () => {
     expect(verifyDialogBranches(routedDialog).check).toBe(true);
   });
 
+  it("rejects a dialog branch routing to a non-existent objective id", () => {
+    const dangling = objs([
+      { id: "d1", task: "dialog", nextObjectiveId: [{ text: "Continue", nextObjectiveId: "ghost" }] },
+    ]);
+    expect(verifyDialogBranches(dangling).check).toBe(false);
+  });
+
   it("is vacuously satisfied when there are no dialog objectives", () => {
     expect(verifyDialogBranches(parallelNonDialog).check).toBe(true);
   });
