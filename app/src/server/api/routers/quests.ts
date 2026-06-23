@@ -74,7 +74,7 @@ import {
   isAvailableUserQuests,
   periodCapReached,
   periodCompletionSet,
-  verifyQuestObjectiveFlow,
+  verifyQuestContentForSave,
 } from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
@@ -723,16 +723,15 @@ export const questsRouter = createTRPCRouter({
         if (editingStarterQuest && !canEditStarterQuests(user.role)) {
           return { success: false, message: `Not allowed to edit starter quests` };
         }
-        // Validate objective flow before updating. Check the INCOMING value, not the
-        // stored one, so turning "Sequential Objectives" off saves correctly (and turning
-        // it on is validated against the flow being saved).
-        if (input.data.consecutiveObjectives) {
-          const { check, message } = verifyQuestObjectiveFlow(
-            input.data.content.objectives,
-          );
-          if (!check) {
-            return { success: false, message: `Objective flow invalid: ${message}` };
-          }
+        // Validate objective content before updating, keyed off the INCOMING quest (not the
+        // stored row): dialog branches are always checked (a terminal branch soft-locks),
+        // and full chain/reachability flow is checked when the quest is consecutive.
+        const { check, message } = verifyQuestContentForSave(
+          input.data.content.objectives,
+          input.data.consecutiveObjectives,
+        );
+        if (!check) {
+          return { success: false, message: `Objective flow invalid: ${message}` };
         }
         // Validate that either main quest has sceneCharacters or each objective has sceneCharacters
         const hasMainSceneCharacters = input.data.content.sceneCharacters.length > 0;
@@ -953,6 +952,14 @@ export const questsRouter = createTRPCRouter({
             reward_reputation: 0,
           }),
         );
+      }
+      // Don't propagate content that would soft-lock or break flow (e.g. a terminal dialog branch).
+      const { check, message } = verifyQuestContentForSave(
+        questData.content.objectives,
+        questData.consecutiveObjectives,
+      );
+      if (!check) {
+        return errorResponse(`Objective flow invalid: ${message}`);
       }
       await ctx.drizzle.insert(quest).values(questData);
 

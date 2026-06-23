@@ -1655,6 +1655,37 @@ export const isAvailableUserQuests = (
 };
 
 /**
+ * Validates that every dialog objective routes somewhere. A dialog branch with no
+ * `nextObjectiveId` can never advance the objective — `getNewTrackers` only completes a
+ * dialog when the chosen branch's `nextObjectiveId` is set — so it soft-locks the player.
+ * This rule applies to ALL quests, independent of `consecutiveObjectives`.
+ */
+export const verifyDialogBranches = (
+  objectives: AllObjectivesType[],
+): { check: boolean; message: string } => {
+  for (const obj of objectives) {
+    if (obj.task !== "dialog") continue;
+    const nextRef = (obj as { nextObjectiveId?: unknown }).nextObjectiveId;
+    if (!Array.isArray(nextRef) || nextRef.length === 0) {
+      return {
+        check: false,
+        message: `Dialog objective '${obj.id}' must have at least one option`,
+      };
+    }
+    for (const branch of nextRef) {
+      const branchNext = (branch as { nextObjectiveId?: unknown })?.nextObjectiveId;
+      if (typeof branchNext !== "string" || branchNext.length === 0) {
+        return {
+          check: false,
+          message: `Dialog objective '${obj.id}' has an option with no nextObjectiveId`,
+        };
+      }
+    }
+  }
+  return { check: true, message: "" };
+};
+
+/**
  * Verifies that the objective flow is valid according to the following rules:
  * - There can only be one starting objective, i.e. an objective where no other objectives point to it
  * - All objectives must be connected to the starting objective via a chain of nextObjectiveId
@@ -1699,6 +1730,12 @@ export const verifyQuestObjectiveFlow = (
       throw new Error("No objectives provided");
     }
 
+    // Dialog branches must each route to a next objective (a terminal branch soft-locks).
+    const dialogCheck = verifyDialogBranches(objectives);
+    if (!dialogCheck.check) {
+      throw new Error(dialogCheck.message);
+    }
+
     // ------------------------------------------------------------------
     // 1. Build quick lookup map & guard against duplicate ids
     // ------------------------------------------------------------------
@@ -1717,25 +1754,6 @@ export const verifyQuestObjectiveFlow = (
     const referencedIds = new Set<string>();
 
     for (const obj of objectives) {
-      // Dialog objectives must expose at least one option (branch), and every option must
-      // route to a next objective. A branch with no nextObjectiveId can never complete the
-      // objective — getNewTrackers only advances a dialog when contentId matches a branch's
-      // nextObjectiveId — which soft-locks the player on that branch.
-      if (obj.task === "dialog") {
-        const nextRef = (obj as { nextObjectiveId?: unknown }).nextObjectiveId;
-        if (!Array.isArray(nextRef) || nextRef.length === 0) {
-          throw new Error(`Dialog objective '${obj.id}' must have at least one option`);
-        }
-        for (const branch of nextRef) {
-          const branchNext = (branch as { nextObjectiveId?: unknown })?.nextObjectiveId;
-          if (typeof branchNext !== "string" || branchNext.length === 0) {
-            throw new Error(
-              `Dialog objective '${obj.id}' has an option with no nextObjectiveId`,
-            );
-          }
-        }
-      }
-
       const neighbours = collectNextIds(obj);
       if (neighbours.length === 0) {
         adjacency.set(obj.id, adjacency.get(obj.id) ?? []);
@@ -1814,6 +1832,24 @@ export const verifyQuestObjectiveFlow = (
   } catch (err) {
     return { check: false, message: (err as Error).message };
   }
+};
+
+/**
+ * Validation a quest's objective content must pass before it is persisted (used by both
+ * the `update` and `clone` quest mutations). Dialog branches are always validated (a
+ * terminal branch soft-locks the player regardless of quest shape); the full
+ * chain/reachability flow is validated only for consecutive quests, since a
+ * non-consecutive quest legitimately has multiple independent objectives that
+ * {@link verifyQuestObjectiveFlow} would otherwise reject.
+ */
+export const verifyQuestContentForSave = (
+  objectives: AllObjectivesType[],
+  consecutiveObjectives: boolean,
+): { check: boolean; message: string } => {
+  const dialogCheck = verifyDialogBranches(objectives);
+  if (!dialogCheck.check) return dialogCheck;
+  if (consecutiveObjectives) return verifyQuestObjectiveFlow(objectives);
+  return { check: true, message: "" };
 };
 
 /**
