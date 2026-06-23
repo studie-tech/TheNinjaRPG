@@ -1,4 +1,4 @@
-import { eq, ne, sql } from "drizzle-orm";
+import { eq, ne, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { overworldAiPlacement } from "@/drizzle/schema";
 import {
@@ -33,9 +33,14 @@ export const GET = async (request: Request) => {
   if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
   try {
-    // Fetch all non-fixed placements (sectorType !== "specific")
+    // Fetch placements with any positional randomness — a random sector OR a random tile
+    // within a fixed sector (sectorType=specific, locationType=random). Only fully-fixed
+    // placements (specific/specific) stay put; resolveOverworldPosition keeps the fixed axes.
     const placements = await drizzleDB.query.overworldAiPlacement.findMany({
-      where: ne(overworldAiPlacement.sectorType, "specific"),
+      where: or(
+        ne(overworldAiPlacement.sectorType, "specific"),
+        ne(overworldAiPlacement.locationType, "specific"),
+      ),
     });
 
     // Re-randomize positions for all active non-fixed placements in parallel
