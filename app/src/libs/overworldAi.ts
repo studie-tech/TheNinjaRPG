@@ -194,6 +194,23 @@ export const deriveOverworldOpponents = <
   return { objectives: next, missing };
 };
 
+/**
+ * Decision for the single "active NPC mission" slot (`activeNpcQuestId`). The slot — not the
+ * quest type — is authoritative: "block" while it points to a still-active quest,
+ * "clear-stale" when it points to a completed/absent quest (release it so a new grant can
+ * claim it), and "free" when no slot is held.
+ */
+export const npcMissionSlotDecision = (
+  activeNpcQuestId: string | null | undefined,
+  activeQuests: { questId: string; endAt?: Date | string | null }[],
+): "free" | "block" | "clear-stale" => {
+  if (!activeNpcQuestId) return "free";
+  const stillActive = activeQuests.some(
+    (q) => q.questId === activeNpcQuestId && !q.endAt,
+  );
+  return stillActive ? "block" : "clear-stale";
+};
+
 /** Placements to offer for an objective's overworld binding: when one or more opponent
  *  AIs are selected, only placements whose AI is among them; otherwise all placements. */
 export const filterPlacementsByAi = <T extends { aiTemplateUserId: string }>(
@@ -206,6 +223,40 @@ export const filterPlacementsByAi = <T extends { aiTemplateUserId: string }>(
 
 /** Objective tasks completed by interacting with a friendly overworld NPC. */
 export const FRIENDLY_INTERACTION_TASKS = ["deliver_item", "dialog"] as const;
+
+/**
+ * Validates that every deliver_item/dialog objective binds to an EXISTING FRIENDLY overworld
+ * placement. The editor scopes its placement dropdown to FRIENDLY, but the save path must
+ * enforce it too so a dangling or HOSTILE binding (which the player could never resolve)
+ * cannot be persisted. defeat_opponents bindings are validated separately via opponent derivation.
+ */
+export const validateFriendlyPlacementBindings = (
+  objectives: { task: string; overworldPlacementId?: string }[],
+  placementById: Map<string, { interactionType: string }>,
+): { check: boolean; message: string } => {
+  for (const o of objectives) {
+    if (
+      !(FRIENDLY_INTERACTION_TASKS as readonly string[]).includes(o.task) ||
+      !o.overworldPlacementId
+    ) {
+      continue;
+    }
+    const placement = placementById.get(o.overworldPlacementId);
+    if (!placement) {
+      return {
+        check: false,
+        message: `Bound overworld placement not found: ${o.overworldPlacementId}`,
+      };
+    }
+    if (placement.interactionType !== "FRIENDLY") {
+      return {
+        check: false,
+        message: `deliver_item/dialog objectives must bind to a FRIENDLY overworld placement (${o.overworldPlacementId} is ${placement.interactionType})`,
+      };
+    }
+  }
+  return { check: true, message: "" };
+};
 
 /** Placements to offer for an objective's overworld binding, scoped by task:
  *  friendly-interaction tasks (deliver_item/dialog) → only FRIENDLY placements;

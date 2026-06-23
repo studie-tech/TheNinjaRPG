@@ -59,7 +59,10 @@ import {
 } from "@/drizzle/schema";
 import { getGatheringItemDrops } from "@/libs/gathering";
 import { getHuntingItemDrops } from "@/libs/hunting";
-import { deriveOverworldOpponents } from "@/libs/overworldAi";
+import {
+  deriveOverworldOpponents,
+  validateFriendlyPlacementBindings,
+} from "@/libs/overworldAi";
 import type { GetRewardResult, QuestConsequence } from "@/libs/quest";
 import {
   combineTrackerResults,
@@ -785,19 +788,20 @@ export const questsRouter = createTRPCRouter({
             message: `Ranks rewards are only allowed with starter or exam quests`,
           };
         }
-        // Overworld defeat targets: the opponent is the bound placement's AI (single source of
-        // truth). Derive opponentAIs here so all downstream consumers (quest map auto-trigger,
-        // client progress, 3D markers) read a populated value. Errors if a binding is dangling.
+        // Overworld placement bindings (single source of truth, validated at save so a
+        // dangling/wrong-type binding can never reach players): defeat_opponents derives its
+        // opponentAIs from the bound placement's AI; deliver_item/dialog must bind to an
+        // existing FRIENDLY placement.
         const boundPlacementIds = [
           ...new Set(
             data.content.objectives
-              .filter((o) => o.task === "defeat_opponents" && o.overworldPlacementId)
+              .filter((o) => o.overworldPlacementId)
               .map((o) => o.overworldPlacementId as string),
           ),
         ];
         if (boundPlacementIds.length > 0) {
           const placements = await ctx.drizzle.query.overworldAiPlacement.findMany({
-            columns: { id: true, aiTemplateUserId: true },
+            columns: { id: true, aiTemplateUserId: true, interactionType: true },
             where: inArray(overworldAiPlacement.id, boundPlacementIds),
           });
           const aiByPlacementId = new Map(
@@ -813,6 +817,13 @@ export const questsRouter = createTRPCRouter({
             );
           }
           data.content.objectives = objectives;
+          const friendlyCheck = validateFriendlyPlacementBindings(
+            data.content.objectives,
+            new Map(placements.map((p) => [p.id, p])),
+          );
+          if (!friendlyCheck.check) {
+            return errorResponse(friendlyCheck.message);
+          }
         }
         // Calculate diff
         const diff = calculateContentDiff(entry, {
