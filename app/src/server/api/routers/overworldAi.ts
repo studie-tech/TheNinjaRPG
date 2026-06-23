@@ -335,7 +335,15 @@ export const overworldAiRouter = createTRPCRouter({
         // repeatable-achievement re-arm, and the reward payout via updateRewards), so the
         // overworld path stays in parity with the canonical reward claim.
         const { rewards, trackers, userQuest, resolved, notifications, consequences } =
-          getReward(userForTrackers, bound.questId, input.dialogContentId, settings);
+          getReward(
+            userForTrackers,
+            bound.questId,
+            input.dialogContentId,
+            settings,
+            // The player is validated as standing on this placement's tile above, so a
+            // bound deliver_item/objective resolves off the placement, not stored coords.
+            new Set([placement.id]),
+          );
 
         const claim = await commitQuestObjectiveRewards({
           client: ctx.drizzle,

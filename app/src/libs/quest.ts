@@ -135,6 +135,33 @@ export const isLocationObjective = (
 };
 
 /**
+ * Whether an objective's location requirement is satisfied for the user. An
+ * objective bound to an overworld NPC placement is location-satisfied when the
+ * player is interacting with that placement (its id is in `atPlacementIds`),
+ * since the placement — not the objective's stored coordinates — is the
+ * authoritative location. Those stored coordinates drift from a roaming NPC's
+ * daily reposition (and default to 0/0/0 for fixed NPCs), so they cannot gate a
+ * placement-bound interaction. Callers without placement context (everything
+ * outside the overworld NPC flow) fall back to plain coordinate matching.
+ */
+export const isObjectiveLocationSatisfied = (
+  location: { latitude: number; longitude: number; sector: number },
+  objective: AllObjectivesType,
+  atPlacementIds?: ReadonlySet<string>,
+) => {
+  if (isLocationObjective(location, objective)) return true;
+  if (
+    atPlacementIds &&
+    "overworldPlacementId" in objective &&
+    objective.overworldPlacementId &&
+    atPlacementIds.has(objective.overworldPlacementId)
+  ) {
+    return true;
+  }
+  return false;
+};
+
+/**
  * Go through current user quests, and return updated list of questData &
  * list of rewards to award the user
  * @param user - User with questData
@@ -147,14 +174,20 @@ export const getReward = (
   questId: string,
   dialogNextObjectiveId?: string,
   settings?: GameSetting[],
+  atPlacementIds?: ReadonlySet<string>,
 ) => {
   // Derived
   let rawRewards = ObjectiveReward.parse({});
-  const { trackers, notifications, consequences } = getNewTrackers(user, [
-    { task: "any" },
-    { task: "collect_item" },
-    { task: "dialog", contentId: dialogNextObjectiveId },
-  ]);
+  const { trackers, notifications, consequences } = getNewTrackers(
+    user,
+    [
+      { task: "any" },
+      { task: "collect_item" },
+      { task: "dialog", contentId: dialogNextObjectiveId },
+    ],
+    undefined,
+    atPlacementIds,
+  );
   const userQuest = user.userQuests.find((uq) => uq.questId === questId);
   let resolved = false;
   // Start mutating
@@ -745,6 +778,7 @@ export const getNewTrackers = (
   tasks: ObjectiveTrackerTaskInput[],
   combatContext?: CombatQuestContext,
   boundPlacementStatus?: { existing: Set<string>; active: Set<string> },
+  atPlacementIds?: ReadonlySet<string>,
 ) => {
   const questData = user.questData ?? [];
   const activeQuests = getUserQuests(user);
@@ -1108,8 +1142,14 @@ export const getNewTrackers = (
                 status.selectedNextObjectiveId = objective.nextObjectiveId;
               }
 
-              // If objective has a location (sector & longitude/latitude), set to completed
-              if (status && isLocationObjective(user, objective)) {
+              // If objective has a location (sector & longitude/latitude), set to completed.
+              // A placement-bound objective is also satisfied when the player is interacting
+              // with that placement (atPlacementIds), since the placement is authoritative
+              // over the objective's stored coordinates.
+              if (
+                status &&
+                isObjectiveLocationSatisfied(user, objective, atPlacementIds)
+              ) {
                 if (task === "move_to_location") {
                   notifications.push(`You arrived at destination for ${quest.name}.`);
                   status.done = true;
