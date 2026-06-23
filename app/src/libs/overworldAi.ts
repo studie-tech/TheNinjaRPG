@@ -258,6 +258,21 @@ export const validateFriendlyPlacementBindings = (
   return { check: true, message: "" };
 };
 
+/**
+ * Whether any deliver_item/dialog (FRIENDLY-interaction) objective binds the given placement.
+ * Such bindings can only resolve at a FRIENDLY NPC, so a placement carrying one must not be
+ * flipped to HOSTILE — the inverse of {@link validateFriendlyPlacementBindings}.
+ */
+export const hasFriendlyBindingToPlacement = (
+  objectives: { task: string; overworldPlacementId?: string }[],
+  placementId: string,
+): boolean =>
+  objectives.some(
+    (o) =>
+      (FRIENDLY_INTERACTION_TASKS as readonly string[]).includes(o.task) &&
+      o.overworldPlacementId === placementId,
+  );
+
 /** Placements to offer for an objective's overworld binding, scoped by task:
  *  friendly-interaction tasks (deliver_item/dialog) → only FRIENDLY placements;
  *  otherwise narrow by the selected opponent AI(s) via filterPlacementsByAi. */

@@ -11,6 +11,7 @@ import {
 } from "@/drizzle/schema";
 import {
   findActionableBoundObjective,
+  hasFriendlyBindingToPlacement,
   npcMissionSlotDecision,
   pickWeightedQuest,
   resolveOverworldPosition,
@@ -84,13 +85,29 @@ export const overworldAiRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
-      // Guard: refuse to deactivate a placement that a quest objective references
-      if (input.id && !input.data.isActive) {
-        const binding = await fetchQuestsBindingPlacement(ctx.drizzle, input.id);
-        if (binding.length > 0) {
+      // Referential-safety guards on a single binding fetch: a bound placement can't be
+      // deactivated, and a placement carrying deliver_item/dialog objectives can't be made
+      // HOSTILE — those only resolve at a FRIENDLY NPC (the inverse of the quest-save check).
+      const placementId = input.id;
+      const makingHostile = input.data.interactionType === "HOSTILE";
+      if (placementId && (!input.data.isActive || makingHostile)) {
+        const binding = await fetchQuestsBindingPlacement(ctx.drizzle, placementId);
+        if (!input.data.isActive && binding.length > 0) {
           return errorResponse(
             `Cannot deactivate: bound to quest(s): ${binding.map((q) => q.name).join(", ")}.`,
           );
+        }
+        if (makingHostile) {
+          const friendlyBound = binding.filter((q) =>
+            hasFriendlyBindingToPlacement(q.content.objectives, placementId),
+          );
+          if (friendlyBound.length > 0) {
+            return errorResponse(
+              `Cannot set HOSTILE: deliver/dialog objectives in quest(s) ${friendlyBound
+                .map((q) => q.name)
+                .join(", ")} require a FRIENDLY NPC. Unbind them first.`,
+            );
+          }
         }
       }
       // Prepare
@@ -544,7 +561,7 @@ const fetchQuestsBindingPlacement = async (
   placementId: string,
 ) =>
   client.query.quest.findMany({
-    columns: { id: true, name: true },
+    columns: { id: true, name: true, content: true },
     where: sql`JSON_CONTAINS(JSON_EXTRACT(${quest.content}, '$.objectives[*].overworldPlacementId'), JSON_QUOTE(${placementId})) = 1`,
   });
 
