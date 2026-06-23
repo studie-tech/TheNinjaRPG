@@ -6,6 +6,7 @@ import {
   Cog,
   Compass,
   Dumbbell,
+  GraduationCap,
   HeartPulse,
   Inbox,
   Landmark,
@@ -28,9 +29,10 @@ export interface MobileNavOption {
   href: string;
 }
 
-// All available options (12 village pages + 6 existing defaults)
+// All available options (village pages + existing defaults)
 export const MOBILE_NAV_OPTIONS: MobileNavOption[] = [
   // Village pages (from requirements)
+  { id: "academy", name: "Academy", href: "/academy" },
   { id: "traininggrounds", name: "Training", href: "/traininggrounds" },
   { id: "townhall", name: "Town Hall", href: "/townhall" },
   { id: "ramenshop", name: "Ramen Shop", href: "/ramenshop" },
@@ -75,6 +77,7 @@ export const getNavOptionById = (id: string): MobileNavOption | undefined => {
 // Icon mapping function - returns the appropriate icon component for each option ID
 export const getMobileNavIcon = (id: string): LucideIcon => {
   const iconMap: Record<string, LucideIcon> = {
+    academy: GraduationCap,
     traininggrounds: Dumbbell,
     townhall: Landmark,
     ramenshop: UtensilsCrossed,

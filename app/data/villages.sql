@@ -166,7 +166,6 @@ VALUES
 	('wY4rItGdX9-AcUpOdF1S', 'Auction House', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmcDNSqHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap', 'XN9oEb5tKAv', '1', '1', '100', '100', '6', '12', '1', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '1', '/auctionhouse', '2026-03-17 00:00:00.000', '1'),
 	('rHN3laRV2C-df7kkGGFK', 'Auction House', 'https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmcDNSqHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap', 'ryBk0qD4EgvPPyav2K4OC', '1', '1', '100', '100', '6', '12', '1', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '1', '/auctionhouse', '2026-03-17 00:00:00.000', '1');
 
-
 INSERT INTO `Conversation` (`id`, `title`, `createdById`, `createdAt`, `updatedAt`, `isLocked`, `isPublic`)
 VALUES
 	('-A-EJA451-6bbmxXRWstEG', 'Freedom State ', NULL, '2024-02-07 12:06:58.316', '2024-02-07 12:06:58.316', 0, 1),

@@ -828,7 +828,7 @@ export const canEditQuests = (role: UserRole) => {
 };
 
 export const canEditStarterQuests = (role: UserRole) => {
-  return ["OWNER"].includes(role);
+  return ["OWNER", "CONTENT-ADMIN"].includes(role);
 };
 
 export const canEditStaffAccountFlag = (role: UserRole) => {
