@@ -9,6 +9,7 @@ import type React from "react";
 import { createContext, useContext, useEffect, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
+import { useSessionPin } from "@/app/_trpc/SessionPinProvider";
 import type { StructureRoute } from "@/drizzle/constants";
 import { usePusherHandler } from "@/layout/PusherHandler";
 import type { ReturnedBattle } from "@/libs/combat/types";
@@ -81,19 +82,22 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
   // Difference between client time and server time
   const [timeDiff, setTimeDiff] = useState<number>(0);
 
-  // Get logged in user
-  const { isSignedIn, isLoaded, user } = useUser();
-  const userId = user?.id;
+  // Identity is the tab's PINNED Clerk session, not the browser-global active
+  // session, so the displayed profile cannot flip to another signed-in account
+  // when the active session changes (reload/refocus/background under multi-session).
+  const { isLoaded, user } = useUser();
+  const { pinnedUserId } = useSessionPin();
+  const userId = pinnedUserId;
 
   // tRPC utility
   const utils = api.useUtils();
 
-  // Get user data. Pass the Clerk userId so the React Query cache is scoped per
-  // account (Clerk multi-session) and the server can reject cross-account reads.
+  // Get user data. Pass the pinned Clerk userId so the React Query cache is scoped
+  // per account (Clerk multi-session) and the server can reject cross-account reads.
   const { data, status: userStatus } = api.profile.getUser.useQuery(
     getUserQueryInput(userId),
     {
-      enabled: !!userId && isSignedIn && isLoaded,
+      enabled: !!userId && isLoaded,
       retry: false,
       refetchInterval: 300000,
     },
@@ -158,13 +162,18 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
       Sentry.setUser({
         id: data.userData.userId,
         username: data.userData.username,
-        email: user?.primaryEmailAddress?.emailAddress,
+        // Only attach the Clerk email when the browser-active user matches the
+        // pinned account; otherwise it could be another signed-in account's email.
+        email:
+          user?.id === data.userData.userId
+            ? user?.primaryEmailAddress?.emailAddress
+            : undefined,
       });
     } else {
       // Clear user context when logged out
       Sentry.setUser(null);
     }
-  }, [data?.userData, user?.primaryEmailAddress?.emailAddress]);
+  }, [data?.userData, user?.id, user?.primaryEmailAddress?.emailAddress]);
 
   return (
     <UserContext
