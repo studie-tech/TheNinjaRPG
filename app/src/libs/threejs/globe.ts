@@ -10,6 +10,7 @@ import {
 } from "three";
 import { IMG_AVATAR_DEFAULT, IMG_SECTOR_USER_SPRITE_MASK } from "@/drizzle/constants";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
+import { pickSpriteAvatar } from "@/libs/overworldAi";
 import type { GlobalMapData, GlobalPoint, GlobalTile } from "@/libs/threejs/types";
 import { createBorderTexture, loadTexture } from "@/libs/threejs/util";
 import { fetchWithRetry } from "@/utils/http";
@@ -128,7 +129,7 @@ export const createUserAvatarSprite = (info: {
 
   // User avatar sprite
   const alphaMap = loadTexture(IMG_SECTOR_USER_SPRITE_MASK);
-  const avatar = userData?.avatarLight || userData?.avatar || IMG_AVATAR_DEFAULT;
+  const avatar = pickSpriteAvatar(userData);
   const avatarTexture = loadTexture(avatar);
   avatarTexture.generateMipmaps = false;
   avatarTexture.minFilter = LinearFilter;
