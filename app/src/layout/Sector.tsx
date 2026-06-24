@@ -50,6 +50,7 @@ import WebGlError from "@/layout/WebGLError";
 import type { HexagonalFaceMesh, TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
+import { arrivalPromptDecision, pickSpriteAvatar } from "@/libs/overworldAi";
 import { calcLevel, getExpBracket, passesBracketFilter } from "@/libs/profile";
 import { GATHERING_CANCEL_PREFIX, isLocationObjective } from "@/libs/quest";
 import { mergeDecorationAssets } from "@/libs/sector-map/decorations";
@@ -225,6 +226,7 @@ const Sector: React.FC<SectorProps> = (props) => {
     sceneCharacters: string[];
     branches: { text: string; nextObjectiveId?: string }[];
   } | null>(null);
+  const [arrivalNpc, setArrivalNpc] = useState<SectorUser | null>(null);
 
   // References which shouldn't update
   const originRef = useRef<TerrainHex | undefined>(undefined);
@@ -320,6 +322,7 @@ const Sector: React.FC<SectorProps> = (props) => {
     placementId: string;
     positionVersion: number;
   } | null>(null);
+  const lastPromptedPlacementIdRef = useRef<string | null>(null);
   const cameraRef = useRef<OrthographicCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const cameraTargetPositionRef = useRef<{ x: number; y: number } | null>(null);
@@ -1528,6 +1531,23 @@ const Sector: React.FC<SectorProps> = (props) => {
       },
     });
 
+  // Single entry point for interacting with an overworld NPC the player is standing on:
+  // sets the pending-interaction ref (so the dialog-continuation flow keeps working) and
+  // fires the existing mutation. Used by both the sprite click and the arrival modal.
+  const interactWithNpc = (npc: SectorUser) => {
+    // Read through the ref: the scene's click handler closes over this callback
+    // for the lifetime of the build, so the state value would go stale.
+    if (isInteractingRef.current || !npc.npcPlacementId) return;
+    pendingNpcInteractRef.current = {
+      placementId: npc.npcPlacementId,
+      positionVersion: npc.npcPositionVersion ?? 0,
+    };
+    interactNpc({
+      placementId: npc.npcPlacementId,
+      positionVersion: npc.npcPositionVersion ?? 0,
+    });
+  };
+
   useEffect(() => {
     minBracketDrawRef.current = storedBracket;
   }, [storedBracket]);
@@ -1581,6 +1601,44 @@ const Sector: React.FC<SectorProps> = (props) => {
   useEffect(() => {
     isInteractingRef.current = isInteracting;
   }, [isInteracting]);
+
+  // Close an open arrival prompt if its NPC has moved/despawned out of the sector data.
+  useEffect(() => {
+    if (
+      arrivalNpc &&
+      !(data?.overworldAis ?? []).some(
+        (n) => n.npcPlacementId === arrivalNpc.npcPlacementId,
+      )
+    ) {
+      setArrivalNpc(null);
+    }
+  }, [data?.overworldAis, arrivalNpc]);
+
+  useEffect(() => {
+    const longitude = userData?.longitude;
+    const latitude = userData?.latitude;
+    const status = userData?.status;
+    if (longitude === undefined || latitude === undefined) return;
+
+    // Suppression gates first: never stack on an in-flight interaction, a battle, or an open dialog.
+    if (isInteracting || status === "BATTLE" || npcDialog) return;
+
+    const decision = arrivalPromptDecision({
+      playerLongitude: longitude,
+      playerLatitude: latitude,
+      npcs: data?.overworldAis ?? [],
+      lastPromptedPlacementId: lastPromptedPlacementIdRef.current,
+    });
+    lastPromptedPlacementIdRef.current = decision.lastPromptedPlacementId;
+    if (decision.prompt) setArrivalNpc(decision.prompt);
+  }, [
+    userData?.longitude,
+    userData?.latitude,
+    userData?.status,
+    data?.overworldAis,
+    isInteracting,
+    npcDialog,
+  ]);
 
   // Auto-attack logic for ANBU users
   useEffect(() => {
@@ -2065,17 +2123,9 @@ const Sector: React.FC<SectorProps> = (props) => {
               if (
                 talkTarget &&
                 talkTarget.longitude === originRef.current?.col &&
-                talkTarget.latitude === originRef.current?.row &&
-                !isInteractingRef.current
+                talkTarget.latitude === originRef.current?.row
               ) {
-                pendingNpcInteractRef.current = {
-                  placementId,
-                  positionVersion: talkTarget.npcPositionVersion ?? 0,
-                };
-                interactNpc({
-                  placementId,
-                  positionVersion: talkTarget.npcPositionVersion ?? 0,
-                });
+                interactWithNpc(talkTarget);
               } else if (talkTarget) {
                 setTarget({ x: talkTarget.longitude, y: talkTarget.latitude });
               }
@@ -2091,17 +2141,9 @@ const Sector: React.FC<SectorProps> = (props) => {
                 if (
                   npc &&
                   npc.longitude === originRef.current?.col &&
-                  npc.latitude === originRef.current?.row &&
-                  !isInteractingRef.current
+                  npc.latitude === originRef.current?.row
                 ) {
-                  pendingNpcInteractRef.current = {
-                    placementId: npcPlacementId,
-                    positionVersion: npc.npcPositionVersion ?? 0,
-                  };
-                  interactNpc({
-                    placementId: npcPlacementId,
-                    positionVersion: npc.npcPositionVersion ?? 0,
-                  });
+                  interactWithNpc(npc);
                 } else if (npc) {
                   setTarget({ x: npc.longitude, y: npc.latitude });
                 }
@@ -2610,6 +2652,55 @@ const Sector: React.FC<SectorProps> = (props) => {
             trigger={<div className="h-1 w-1 opacity-0" />}
           />
         </div>
+      )}
+      {arrivalNpc && (
+        <Modal2
+          isOpen={!!arrivalNpc}
+          setIsOpen={(open) => {
+            if (!open) setArrivalNpc(null);
+          }}
+          title={arrivalNpc.username}
+        >
+          <div className="flex flex-col items-center gap-4 p-2">
+            {/* biome-ignore lint/performance/noImgElement: dynamic CDN avatar, variable intrinsic size */}
+            <img
+              src={pickSpriteAvatar(arrivalNpc)}
+              alt={arrivalNpc.username}
+              className="h-28 w-28 rounded-md object-contain"
+            />
+            <p className="text-center text-sm">
+              {arrivalNpc.npcInteractionType === "HOSTILE"
+                ? `Attack ${arrivalNpc.username}?`
+                : `Request a mission from ${arrivalNpc.username}?`}
+            </p>
+            <div className="flex w-full gap-2">
+              <button
+                type="button"
+                disabled={isInteracting}
+                className={`flex-1 rounded-md px-4 py-2 text-sm text-white transition-colors disabled:opacity-50 ${
+                  arrivalNpc.npcInteractionType === "HOSTILE"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-blue-600 hover:bg-blue-700"
+                }`}
+                onClick={() => {
+                  interactWithNpc(arrivalNpc);
+                  setArrivalNpc(null);
+                }}
+              >
+                {arrivalNpc.npcInteractionType === "HOSTILE"
+                  ? "Attack"
+                  : "Request mission"}
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-md bg-gray-500 px-4 py-2 text-sm text-white transition-colors hover:bg-gray-600"
+                onClick={() => setArrivalNpc(null)}
+              >
+                {arrivalNpc.npcInteractionType === "HOSTILE" ? "Leave" : "Not now"}
+              </button>
+            </div>
+          </div>
+        </Modal2>
       )}
       {npcDialog && pendingNpcInteractRef.current && (
         <Modal2

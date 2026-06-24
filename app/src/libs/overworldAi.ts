@@ -135,6 +135,38 @@ export const pickSpriteAvatar = (user: {
   (user.isNpc ? user.avatar || user.avatarLight : user.avatarLight || user.avatar) ||
   IMG_AVATAR_DEFAULT;
 
+/**
+ * Decides whether to auto-open the arrival prompt for an overworld NPC and for which one.
+ * Fresh-arrival semantics, keyed on `npcPlacementId`:
+ *  - NPC on the player's tile that is not the last-prompted one → prompt it (and arm its id).
+ *  - The already-prompted NPC is still under the player → no prompt (no nag while standing).
+ *  - No NPC on the player's tile → re-arm (clear), so returning later prompts again.
+ * Deterministic `find` means two NPCs sharing a tile never double-prompt: the first match wins
+ * and stays armed while it remains.
+ */
+export const arrivalPromptDecision = <
+  T extends { npcPlacementId?: string | null; longitude: number; latitude: number },
+>(args: {
+  playerLongitude: number;
+  playerLatitude: number;
+  npcs: T[];
+  lastPromptedPlacementId: string | null;
+}): { prompt: T | null; lastPromptedPlacementId: string | null } => {
+  const npcHere = args.npcs.find(
+    (n) =>
+      !!n.npcPlacementId &&
+      n.longitude === args.playerLongitude &&
+      n.latitude === args.playerLatitude,
+  );
+  if (!npcHere?.npcPlacementId) {
+    return { prompt: null, lastPromptedPlacementId: null };
+  }
+  if (npcHere.npcPlacementId === args.lastPromptedPlacementId) {
+    return { prompt: null, lastPromptedPlacementId: args.lastPromptedPlacementId };
+  }
+  return { prompt: npcHere, lastPromptedPlacementId: npcHere.npcPlacementId };
+};
+
 type BoundObjective = {
   id: string;
   task: string;
