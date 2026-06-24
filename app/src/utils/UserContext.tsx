@@ -106,20 +106,26 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
   // Listen on user channel for live updates on things
   const pusher = usePusherHandler(userId, data?.userData);
 
-  // Optimistic user info update function
+  // Optimistic user info update function. Fail closed when there is no pinned
+  // account: writing with an undefined input would land on the legacy unscoped
+  // profile.getUser cache key, which no account reads.
   const updateUser = async (updatedData: Partial<UserWithRelations>) => {
-    await utils.profile.getUser.cancel();
-    utils.profile.getUser.setData(getUserQueryInput(userId), (old) => {
+    const queryInput = getUserQueryInput(userId);
+    if (!queryInput) return;
+    await utils.profile.getUser.cancel(queryInput);
+    utils.profile.getUser.setData(queryInput, (old) => {
       return { ...old, userData: { ...old?.userData, ...updatedData } } as typeof old;
     });
   };
 
-  // Optimistic notification update function
+  // Optimistic notification update function (see updateUser for the fail-closed note)
   const updateNotifications = async (
     notifications: NavBarDropdownLink[] | undefined,
   ) => {
-    await utils.profile.getUser.cancel();
-    utils.profile.getUser.setData(getUserQueryInput(userId), (old) => {
+    const queryInput = getUserQueryInput(userId);
+    if (!queryInput) return;
+    await utils.profile.getUser.cancel(queryInput);
+    utils.profile.getUser.setData(queryInput, (old) => {
       return { ...old, notifications } as typeof old;
     });
   };
