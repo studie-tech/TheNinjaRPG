@@ -40,6 +40,7 @@ import {
   USER_LAYER,
 } from "@/drizzle/constants";
 import type { VillageStructure } from "@/drizzle/schema";
+import { pickSpriteAvatar } from "@/libs/overworldAi";
 import { passesBracketFilter } from "@/libs/profile";
 import { getActiveObjectives } from "@/libs/quest";
 import {
@@ -757,45 +758,54 @@ export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
   const group = new Group();
   const { height: h, width: w } = hex;
 
-  // Highlight sprite
-  const highlightTexture = loadTexture(IMG_SECTOR_USER_MARKER);
-  const highlightMaterial = new SpriteMaterial({
-    map: highlightTexture,
-    alphaMap: highlightTexture,
-  });
-  const highlightColor =
-    userData.allianceStatus === "ALLY"
-      ? 0x008000
-      : userData.allianceStatus === "NEUTRAL"
-        ? 0x2986cc
-        : 0xff0000;
-  const highlightSprite = new Sprite(highlightMaterial);
-  highlightSprite.userData.type = "marker";
-  highlightSprite.scale.set(h * 1.1, h * 1.3, 1);
-  highlightSprite.position.set(w / 2, h * 0.9, USER_LAYER);
-  highlightSprite.userData.type = "userMarker";
-  highlightSprite.userData.userId = userData.userId;
-  highlightSprite.material.color.setHex(highlightColor);
-  group.add(highlightSprite);
+  // Players render as an alliance-coloured portrait inside a map pin. Overworld NPCs render
+  // as a free-standing character standing on the tile instead, so they skip the pin entirely.
+  if (!userData.isNpc) {
+    // Highlight sprite
+    const highlightTexture = loadTexture(IMG_SECTOR_USER_MARKER);
+    const highlightMaterial = new SpriteMaterial({
+      map: highlightTexture,
+      alphaMap: highlightTexture,
+    });
+    const highlightColor =
+      userData.allianceStatus === "ALLY"
+        ? 0x008000
+        : userData.allianceStatus === "NEUTRAL"
+          ? 0x2986cc
+          : 0xff0000;
+    const highlightSprite = new Sprite(highlightMaterial);
+    highlightSprite.scale.set(h * 1.1, h * 1.3, 1);
+    highlightSprite.position.set(w / 2, h * 0.9, USER_LAYER);
+    highlightSprite.userData.type = "userMarker";
+    highlightSprite.userData.userId = userData.userId;
+    highlightSprite.material.color.setHex(highlightColor);
+    group.add(highlightSprite);
 
-  // Marker
-  const marker = loadTexture(IMG_SECTOR_USER_MARKER);
-  const markerMat = new SpriteMaterial({ map: marker, alphaMap: marker });
-  const markerSprite = new Sprite(markerMat);
-  markerSprite.userData.type = "marker";
-  Object.assign(markerSprite.scale, new Vector3(h, h * 1.2, 1));
-  Object.assign(markerSprite.position, new Vector3(w / 2, h * 0.9, USER_LAYER));
-  group.add(markerSprite);
+    // Marker
+    const marker = loadTexture(IMG_SECTOR_USER_MARKER);
+    const markerMat = new SpriteMaterial({ map: marker, alphaMap: marker });
+    const markerSprite = new Sprite(markerMat);
+    markerSprite.userData.type = "marker";
+    Object.assign(markerSprite.scale, new Vector3(h, h * 1.2, 1));
+    Object.assign(markerSprite.position, new Vector3(w / 2, h * 0.9, USER_LAYER));
+    group.add(markerSprite);
+  }
 
-  // Avatar Sprite
-  const alphaMap = loadTexture(IMG_SECTOR_USER_SPRITE_MASK);
-  const avatar = userData?.avatarLight || userData?.avatar || IMG_AVATAR_DEFAULT;
+  // Avatar Sprite. Players are cropped to a circular portrait via the sprite mask; NPCs use
+  // the avatar's own transparency so the full character shows, sized up to read on the tile.
+  const avatar = pickSpriteAvatar(userData);
   const map = loadTexture(avatar);
   map.generateMipmaps = false;
   map.minFilter = LinearFilter;
-  const material = new SpriteMaterial({ map: map, alphaMap: alphaMap });
+  const material = userData.isNpc
+    ? new SpriteMaterial({ map: map, transparent: true })
+    : new SpriteMaterial({
+        map: map,
+        alphaMap: loadTexture(IMG_SECTOR_USER_SPRITE_MASK),
+      });
   const sprite = new Sprite(material);
-  Object.assign(sprite.scale, new Vector3(h * 0.8, h * 0.8, 1));
+  const avatarScale = userData.isNpc ? h * 1.3 : h * 0.8;
+  Object.assign(sprite.scale, new Vector3(avatarScale, avatarScale, 1));
   Object.assign(sprite.position, new Vector3(w / 2, h * 1.0, USER_LAYER));
   group.add(sprite);
 

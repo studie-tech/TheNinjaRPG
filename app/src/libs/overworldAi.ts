@@ -4,6 +4,7 @@ import type {
   OverworldSectorType,
 } from "@/drizzle/constants";
 import {
+  IMG_AVATAR_DEFAULT,
   MAP_TOTAL_SECTORS,
   MAP_WAKE_ISLAND_SECTOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
@@ -118,6 +119,21 @@ export const placementToSectorUser = (
   npcInteractionType: placement.interactionType,
   npcPositionVersion: placement.positionVersion,
 });
+
+/**
+ * Avatar URL for a sector/globe user sprite. Regular players prefer the lightweight
+ * `avatarLight` thumbnail (cheaper to render in crowded sectors); overworld NPCs prefer
+ * the full `avatar`, because AI templates frequently carry an un-generated default
+ * placeholder in `avatarLight` — preferring it would render every NPC with the generic
+ * portrait instead of its own art.
+ */
+export const pickSpriteAvatar = (user: {
+  isNpc?: boolean | null;
+  avatar?: string | null;
+  avatarLight?: string | null;
+}): string =>
+  (user.isNpc ? user.avatar || user.avatarLight : user.avatarLight || user.avatar) ||
+  IMG_AVATAR_DEFAULT;
 
 type BoundObjective = {
   id: string;
