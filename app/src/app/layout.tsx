@@ -1,5 +1,4 @@
 import { ClerkProvider } from "@clerk/nextjs";
-import { MultisessionAppSupport } from "@clerk/nextjs/internal";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
@@ -8,6 +7,7 @@ import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import { extractRouterConfig } from "uploadthing/server";
 import TrpcClientProvider from "@/app/_trpc/Provider";
+import { SessionPinProvider } from "@/app/_trpc/SessionPinProvider";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import PWAManager from "@/components/pwa/PWAManager";
@@ -57,7 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             },
           }}
         >
-          <MultisessionAppSupport>
+          <SessionPinProvider>
             <TrpcClientProvider>
               <UserContextProvider>
                 <InstallPromptProvider>
@@ -80,7 +80,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </InstallPromptProvider>
               </UserContextProvider>
             </TrpcClientProvider>
-          </MultisessionAppSupport>
+          </SessionPinProvider>
         </ClerkProvider>
       </body>
     </html>

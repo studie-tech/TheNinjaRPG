@@ -1,6 +1,5 @@
 "use client";
 
-import { useAuth, useClerk } from "@clerk/nextjs";
 import * as Sentry from "@sentry/nextjs";
 import {
   MutationCache,
@@ -20,6 +19,7 @@ import {
   SIGN_IN_REQUIRED_MUTATION_MESSAGE,
   useGlobalOnMutateProtect,
 } from "./client";
+import { useSessionPin } from "./SessionPinProvider";
 
 const getBaseUrl = () => {
   if (typeof window !== "undefined") return "";
@@ -29,17 +29,18 @@ const getBaseUrl = () => {
 
 const TrpcClientProvider = (props: { children: React.ReactNode }) => {
   const onMutateCheck = useGlobalOnMutateProtect();
-  // Clerk multi-session: capture this tab's getToken so every tRPC request can
-  // carry the tab's own session token. Stored in a ref so the once-created
-  // client always reads the latest value (the headers callback runs per batch).
-  const { getToken } = useAuth();
-  const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
-  // Used only to count the browser's Clerk sessions when getToken() fails, so we
-  // fail closed against the shared cookie only in genuine multi-session cases.
-  const clerk = useClerk();
-  const clerkRef = useRef(clerk);
-  clerkRef.current = clerk;
+  // Clerk multi-session: authenticate every tRPC request as THIS tab's PINNED
+  // session (not the browser-global active session), so a background change to the
+  // active account cannot make a request authenticate as the wrong account. Stored
+  // in refs so the once-created client always reads the latest values (the headers
+  // callback runs per request batch).
+  const { getPinnedToken, signedInSessionCount } = useSessionPin();
+  const getPinnedTokenRef = useRef(getPinnedToken);
+  getPinnedTokenRef.current = getPinnedToken;
+  // Used only to count the browser's Clerk sessions when no token is available, so
+  // we fail closed against the shared cookie only in genuine multi-session cases.
+  const signedInSessionCountRef = useRef(signedInSessionCount);
+  signedInSessionCountRef.current = signedInSessionCount;
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -110,14 +111,15 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
             // multi-session so the no-token path fails closed against the shared
             // cookie; a known single session keeps the normal cookie path.
             const isMultiSession = computeIsMultiSession(
-              clerkRef.current?.client?.signedInSessions?.length,
+              signedInSessionCountRef.current,
             );
             try {
-              // getToken() returns null when the tab has no session and throws on
-              // an offline/refresh blip; both go through the no-token path, which
-              // fails closed under multi-session instead of using the shared cookie.
+              // getPinnedToken() returns null when the tab's pinned session is not
+              // signed in, and getToken() throws on an offline/refresh blip; both
+              // go through the no-token path, which fails closed under multi-session
+              // instead of using the shared cookie.
               return buildClerkRequestHeaders(
-                await getTokenRef.current(),
+                await getPinnedTokenRef.current(),
                 isMultiSession,
               );
             } catch (error) {
