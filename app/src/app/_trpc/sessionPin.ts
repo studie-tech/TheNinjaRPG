@@ -55,3 +55,39 @@ export function resolvePinnedSession<T extends { id: string; status: string }>(
     sessions.find((s) => s.id === pinnedSessionId && s.status === "active") ?? null
   );
 }
+
+export type PinDecision = { type: "keep" } | { type: "set"; id: string };
+
+/**
+ * Decides this tab's pinned session id from the current Clerk state, WITHOUT ever
+ * letting a background active-session change reassign a tab that already holds a
+ * valid pin. The in-memory pin (`inMemoryPinnedId`) is the source of truth — it is
+ * NOT re-derived from `sessionStorage`, so a failed/empty `sessionStorage` read
+ * can never cause the tab to flip identities.
+ *
+ * Order: keep a still-signed-in in-memory pin → recover a still-signed-in stored
+ * pin (e.g. after reload) → otherwise, only once the sessions list is populated
+ * (never mid-refresh when it is momentarily empty), adopt the active session.
+ */
+export function decidePinnedSession<T extends { id: string; status: string }>(args: {
+  sessions: readonly T[] | undefined | null;
+  inMemoryPinnedId: string | null;
+  storedPinnedId: string | null;
+  activeSessionId: string | null;
+}): PinDecision {
+  const { sessions, inMemoryPinnedId, storedPinnedId, activeSessionId } = args;
+  if (resolvePinnedSession(sessions, inMemoryPinnedId)) return { type: "keep" };
+  const storedSession = resolvePinnedSession(sessions, storedPinnedId);
+  if (storedSession) {
+    return storedSession.id === inMemoryPinnedId
+      ? { type: "keep" }
+      : { type: "set", id: storedSession.id };
+  }
+  // Sessions momentarily empty (Clerk mid-refresh): leave the pin untouched rather
+  // than re-adopting and flipping the tab.
+  if (!sessions || sessions.length === 0) return { type: "keep" };
+  // No pinned session is signed in (first load, or the pinned account was signed
+  // out and another remains) → adopt the active session.
+  if (activeSessionId) return { type: "set", id: activeSessionId };
+  return { type: "keep" };
+}

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clearPinnedSessionId,
+  decidePinnedSession,
   readPinnedSessionId,
   resolvePinnedSession,
   writePinnedSessionId,
@@ -65,5 +66,69 @@ describe("pinned session id storage", () => {
     expect(() => writePinnedSessionId("x")).not.toThrow();
     expect(() => clearPinnedSessionId()).not.toThrow();
     expect(readPinnedSessionId()).toBeNull();
+  });
+});
+
+describe("decidePinnedSession", () => {
+  const sessions = [
+    { id: "sess_main", status: "active", user: { id: "user_main" } },
+    { id: "sess_alt", status: "active", user: { id: "user_alt" } },
+  ];
+
+  it("keeps a still-signed-in in-memory pin even when the stored read returns null (no flip)", () => {
+    // The reported bug: sessionStorage read fails -> null, active session changed
+    // to the alt -> the tab must NOT re-adopt the alt.
+    expect(
+      decidePinnedSession({
+        sessions,
+        inMemoryPinnedId: "sess_main",
+        storedPinnedId: null,
+        activeSessionId: "sess_alt",
+      }),
+    ).toEqual({ type: "keep" });
+  });
+
+  it("adopts the active session on first load when there is no pin", () => {
+    expect(
+      decidePinnedSession({
+        sessions,
+        inMemoryPinnedId: null,
+        storedPinnedId: null,
+        activeSessionId: "sess_main",
+      }),
+    ).toEqual({ type: "set", id: "sess_main" });
+  });
+
+  it("recovers a still-signed-in stored pin (e.g. after reload)", () => {
+    expect(
+      decidePinnedSession({
+        sessions,
+        inMemoryPinnedId: null,
+        storedPinnedId: "sess_alt",
+        activeSessionId: "sess_main",
+      }),
+    ).toEqual({ type: "set", id: "sess_alt" });
+  });
+
+  it("does not disturb the pin while the sessions list is momentarily empty", () => {
+    expect(
+      decidePinnedSession({
+        sessions: [],
+        inMemoryPinnedId: "sess_main",
+        storedPinnedId: null,
+        activeSessionId: null,
+      }),
+    ).toEqual({ type: "keep" });
+  });
+
+  it("re-adopts the active session when the pinned account was signed out and another remains", () => {
+    expect(
+      decidePinnedSession({
+        sessions, // sess_main is gone in this scenario
+        inMemoryPinnedId: "sess_signedout",
+        storedPinnedId: "sess_signedout",
+        activeSessionId: "sess_alt",
+      }),
+    ).toEqual({ type: "set", id: "sess_alt" });
   });
 });

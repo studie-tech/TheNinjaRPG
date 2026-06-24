@@ -13,6 +13,7 @@ import {
 } from "react";
 import {
   clearPinnedSessionId,
+  decidePinnedSession,
   readPinnedSessionId,
   resolvePinnedSession,
   writePinnedSessionId,
@@ -69,23 +70,21 @@ export function SessionPinProvider(props: { children: React.ReactNode }) {
   const pinnedIdRef = useRef(pinnedSessionId);
   pinnedIdRef.current = pinnedSessionId;
 
-  // Adopt the active session as this tab's pin on first load, and re-adopt only if
-  // the stored pin is no longer a signed-in session (e.g. signed out elsewhere). A
-  // still-valid stored pin is NEVER overridden by a background active-session
-  // change — that is what keeps the tab on its account.
+  // Adopt the active session as this tab's pin on first load. A still-signed-in pin
+  // (in memory, the source of truth) is NEVER overridden by a background
+  // active-session change — that is what keeps the tab on its account. See
+  // decidePinnedSession for the full ordering and the transient-empty guard.
   useEffect(() => {
     if (!isLoaded) return;
-    const stored = readPinnedSessionId();
-    if (resolvePinnedSession(sessions, stored)) {
-      if (pinnedIdRef.current !== stored) setPinnedSessionId(stored);
-      return;
-    }
-    if (activeSessionId) {
-      writePinnedSessionId(activeSessionId);
-      setPinnedSessionId(activeSessionId);
-    } else if (pinnedIdRef.current !== null) {
-      clearPinnedSessionId();
-      setPinnedSessionId(null);
+    const decision = decidePinnedSession({
+      sessions,
+      inMemoryPinnedId: pinnedIdRef.current,
+      storedPinnedId: readPinnedSessionId(),
+      activeSessionId,
+    });
+    if (decision.type === "set") {
+      writePinnedSessionId(decision.id);
+      setPinnedSessionId(decision.id);
     }
   }, [isLoaded, sessions, activeSessionId]);
 
