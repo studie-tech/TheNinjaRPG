@@ -124,11 +124,23 @@ describe("decidePinnedSession", () => {
   it("re-adopts the active session when the pinned account was signed out and another remains", () => {
     expect(
       decidePinnedSession({
-        sessions, // sess_main is gone in this scenario
+        // The pinned sess_signedout is no longer in sessions; sess_main + sess_alt remain.
+        sessions,
         inMemoryPinnedId: "sess_signedout",
         storedPinnedId: "sess_signedout",
         activeSessionId: "sess_alt",
       }),
     ).toEqual({ type: "set", id: "sess_alt" });
+  });
+
+  it("does not pin an active session that is not a signed-in session (no phantom pin)", () => {
+    expect(
+      decidePinnedSession({
+        sessions,
+        inMemoryPinnedId: null,
+        storedPinnedId: null,
+        activeSessionId: "sess_not_in_list",
+      }),
+    ).toEqual({ type: "keep" });
   });
 });

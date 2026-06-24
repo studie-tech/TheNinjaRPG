@@ -87,7 +87,10 @@ export function decidePinnedSession<T extends { id: string; status: string }>(ar
   // than re-adopting and flipping the tab.
   if (!sessions || sessions.length === 0) return { type: "keep" };
   // No pinned session is signed in (first load, or the pinned account was signed
-  // out and another remains) → adopt the active session.
-  if (activeSessionId) return { type: "set", id: activeSessionId };
+  // out and another remains) → adopt the active session, but only when it resolves
+  // to a signed-in session (like the in-memory and stored paths) so getPinnedToken
+  // can still mint a token for it.
+  const activeSession = resolvePinnedSession(sessions, activeSessionId);
+  if (activeSession) return { type: "set", id: activeSession.id };
   return { type: "keep" };
 }
