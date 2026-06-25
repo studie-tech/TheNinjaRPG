@@ -8,6 +8,7 @@ import {
   quest,
   questHistory,
   userData,
+  userQuestAttempt,
 } from "@/drizzle/schema";
 import {
   findActionableBoundObjective,
@@ -16,7 +17,12 @@ import {
   pickWeightedQuest,
   resolveOverworldPosition,
 } from "@/libs/overworldAi";
-import { getReward, getUserQuests, isAvailableUserQuests } from "@/libs/quest";
+import {
+  attemptCapReached,
+  getReward,
+  getUserQuests,
+  isAvailableUserQuests,
+} from "@/libs/quest";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUserItems } from "@/routers/item";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
@@ -419,7 +425,8 @@ export const overworldAiRouter = createTRPCRouter({
       if (poolQuestIds.length === 0) {
         return { success: true, message: "The NPC has nothing for you." };
       }
-      const [pool, prevByQuest] = await Promise.all([
+      const now = new Date();
+      const [pool, prevByQuest, attemptRows] = await Promise.all([
         ctx.drizzle.query.quest.findMany({
           where: inArray(quest.id, poolQuestIds),
         }),
@@ -429,7 +436,19 @@ export const overworldAiRouter = createTRPCRouter({
             inArray(questHistory.questId, poolQuestIds),
           ),
         }),
+        ctx.drizzle
+          .select()
+          .from(userQuestAttempt)
+          .where(
+            and(
+              eq(userQuestAttempt.userId, ctx.userId),
+              inArray(userQuestAttempt.questId, poolQuestIds),
+            ),
+          ),
       ]);
+      const attemptByQuest = new Map(
+        attemptRows.map((r) => [r.questId, r.lastAttemptAt]),
+      );
       const questsById = new Map(pool.map((q) => [q.id, q]));
 
       // Build the eligible pool, keeping each entry's chance. isAvailableUserQuests now
@@ -445,7 +464,11 @@ export const overworldAiRouter = createTRPCRouter({
           const prev = prevByQuest.find((ph) => ph.questId === q.id);
           const available =
             isAvailableUserQuests({ ...q, ...prev }, activeUser).check &&
-            !questTypeConcurrentBlockMessage(q, activeUser);
+            !questTypeConcurrentBlockMessage(q, activeUser) &&
+            !attemptCapReached(
+              { attemptDelay: q.attemptDelay, lastAttemptAt: attemptByQuest.get(q.id) },
+              now,
+            );
           if (!available) return null;
           return { quest: q, chance: p.chance, prev, poolIndex };
         })
@@ -503,6 +526,24 @@ export const overworldAiRouter = createTRPCRouter({
       if (claim.rowsAffected === 0) {
         return errorResponse("You've reached your daily mission allowance.");
       }
+
+      // The roll is now committed — record an attempt for every eligible cooldown quest so a
+      // 99% "nothing" still spends today's attempt (mirrors how the completion cap works on grant).
+      await Promise.all(
+        eligible
+          .filter((e) => e.quest.attemptDelay !== "none")
+          .map((e) =>
+            ctx.drizzle
+              .insert(userQuestAttempt)
+              .values({
+                id: nanoid(),
+                userId: ctx.userId,
+                questId: e.quest.id,
+                lastAttemptAt: now,
+              })
+              .onDuplicateKeyUpdate({ set: { lastAttemptAt: now } }),
+          ),
+      );
 
       // Weighted band-walk: each quest owns [acc, acc+chance); a roll past the summed
       // chances grants nothing this time.

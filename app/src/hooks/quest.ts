@@ -238,6 +238,12 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     formData.push({ id: "maxCompletes", type: "number", label: "Max Completes" });
     formData.push({ id: "retryDelay", type: "str_array", values: RetryQuestDelays });
   }
+  formData.push({
+    id: "attemptDelay",
+    type: "str_array",
+    values: RetryQuestDelays,
+    label: "Attempt Delay",
+  });
 
   // Add prerequisite quest if quests exist
   if (quests) {

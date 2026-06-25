@@ -3463,6 +3463,7 @@ export const quest = mysqlTable(
     retryDelay: mysqlEnum("retryDelay", consts.RetryQuestDelays)
       .default("none")
       .notNull(),
+    attemptDelay: mysqlEnum("attemptDelay", consts.RetryQuestDelays).default("none").notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -3587,6 +3588,23 @@ export const questHistoryRelations = relations(questHistory, ({ one }) => ({
     references: [quest.id],
   }),
 }));
+
+export const userQuestAttempt = mysqlTable(
+  "UserQuestAttempt",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    questId: varchar("questId", { length: 191 }).notNull(),
+    lastAttemptAt: datetime("lastAttemptAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (table) => {
+    return {
+      userQuestKey: unique("UserQuestAttempt_user_quest_key").on(table.userId, table.questId),
+      userIdx: index("UserQuestAttempt_userId_idx").on(table.userId),
+    };
+  },
+);
+export type UserQuestAttempt = InferSelectModel<typeof userQuestAttempt>;
 
 // ============================================
 // Raid System Tables

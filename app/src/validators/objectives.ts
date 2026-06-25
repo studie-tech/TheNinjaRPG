@@ -669,6 +669,7 @@ export const QuestValidatorRawSchema = z.object({
   }),
   hidden: z.coerce.boolean(),
   retryDelay: z.enum(RetryQuestDelays).optional(),
+  attemptDelay: z.enum(RetryQuestDelays).optional(),
   consecutiveObjectives: z.coerce.boolean(),
   endsAt: z.string().regex(DateTimeRegExp, "Must be of format YYYY-MM-DD").nullable(),
   startsAt: z.string().regex(DateTimeRegExp, "Must be of format YYYY-MM-DD").nullable(),

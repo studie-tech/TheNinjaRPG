@@ -696,6 +696,19 @@ export const periodCapReached = (
   return effective >= args.maxCompletes;
 };
 
+/**
+ * True when this quest was already attempted within the current attemptDelay period. attemptDelay
+ * "none" or no prior attempt is never capped. Sibling of periodCapReached, but keyed off attempts
+ * (every overworld roll) rather than completions.
+ */
+export const attemptCapReached = (
+  args: { attemptDelay: RetryQuestDelay; lastAttemptAt?: Date | string | null },
+  now: Date = new Date(),
+): boolean => {
+  if (args.attemptDelay === "none" || !args.lastAttemptAt) return false;
+  return new Date(args.lastAttemptAt) >= periodStart(args.attemptDelay, now);
+};
+
 /** Period-start for a completion, or {} for retryDelay "none". */
 export const periodCompletionSet = (
   retryDelay: RetryQuestDelay,
