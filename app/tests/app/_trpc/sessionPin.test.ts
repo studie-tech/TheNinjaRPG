@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   clearPinnedSessionId,
   decidePinnedSession,
@@ -18,8 +18,12 @@ const makeFakeWindow = () => {
   };
 };
 
+// CI runs `bun test`, whose `vi` shim lacks `stubGlobal`/`unstubAllGlobals`, so swap
+// `window` by direct assignment and restore the value captured at module load.
+const g = globalThis as unknown as { window?: unknown };
+const originalWindow = g.window;
 afterEach(() => {
-  vi.unstubAllGlobals();
+  g.window = originalWindow;
 });
 
 describe("resolvePinnedSession", () => {
@@ -53,7 +57,7 @@ describe("resolvePinnedSession", () => {
 
 describe("pinned session id storage", () => {
   it("round-trips read/write/clear via sessionStorage", () => {
-    vi.stubGlobal("window", makeFakeWindow());
+    g.window = makeFakeWindow();
     expect(readPinnedSessionId()).toBeNull();
     writePinnedSessionId("sess_a");
     expect(readPinnedSessionId()).toBe("sess_a");
@@ -62,7 +66,7 @@ describe("pinned session id storage", () => {
   });
 
   it("is a safe no-op without window (SSR)", () => {
-    vi.stubGlobal("window", undefined);
+    g.window = undefined;
     expect(() => writePinnedSessionId("x")).not.toThrow();
     expect(() => clearPinnedSessionId()).not.toThrow();
     expect(readPinnedSessionId()).toBeNull();

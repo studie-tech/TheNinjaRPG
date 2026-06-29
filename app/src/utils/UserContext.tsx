@@ -9,6 +9,7 @@ import type React from "react";
 import { createContext, useContext, useEffect, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
+import { getUserQueryInput } from "@/app/_trpc/getUserQueryInput";
 import { useSessionPin } from "@/app/_trpc/SessionPinProvider";
 import type { StructureRoute } from "@/drizzle/constants";
 import { usePusherHandler } from "@/layout/PusherHandler";
@@ -61,14 +62,6 @@ export const UserContext = createContext<{
     // do nothing
   },
 });
-
-/**
- * Per-account input for `profile.getUser`, so the React Query cache is scoped by
- * Clerk account and cannot serve one account's data to another under multi-session.
- */
-const getUserQueryInput = (
-  userId: string | null | undefined,
-): { viewerId: string } | undefined => (userId ? { viewerId: userId } : undefined);
 
 /**
  * UserContextProvider component provides a context for managing user-related data and functionality.
