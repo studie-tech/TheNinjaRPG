@@ -6,6 +6,7 @@ import Pusher from "pusher-js";
 import { useEffect, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
+import { getUserQueryInput } from "@/app/_trpc/getUserQueryInput";
 import { ToastAction } from "@/components/ui/toast";
 import { env } from "@/env/client.mjs";
 import { showMutationToast } from "@/libs/toast";
@@ -72,7 +73,7 @@ export const usePusherHandler = (
             // NOTE: for some reason using updateUser does not work from this hook
             await utils.profile.getUser.cancel();
             // Update user data with battle status (scoped to this tab's account)
-            utils.profile.getUser.setData({ viewerId: userId }, (old) => {
+            utils.profile.getUser.setData(getUserQueryInput(userId), (old) => {
               if (!old) return old;
               return {
                 ...old,
