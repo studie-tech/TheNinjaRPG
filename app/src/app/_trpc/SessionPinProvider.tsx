@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession, useSessionList } from "@clerk/nextjs";
+import { usePathname } from "next/navigation";
 import {
   createContext,
   Fragment,
@@ -14,6 +15,7 @@ import {
 import {
   clearPinnedSessionId,
   decidePinnedSession,
+  isAuthRoute,
   readPinnedSessionId,
   resolvePinnedSession,
   writePinnedSessionId,
@@ -56,6 +58,10 @@ export function SessionPinProvider(props: { children: React.ReactNode }) {
   const { isLoaded, sessions, setActive } = useSessionList();
   const { session: activeSession } = useSession();
   const activeSessionId = activeSession?.id ?? null;
+  // The tab defers adopting the active session while on the sign-in / sign-up flow,
+  // so signing in a different account there cleanly becomes this tab's account
+  // instead of being blocked by an eagerly-adopted pre-existing one.
+  const onAuthRoute = isAuthRoute(usePathname());
 
   // The tRPC headers() callback is created once and reads the latest values via
   // refs (it runs per request batch, outside React's render).
@@ -70,10 +76,11 @@ export function SessionPinProvider(props: { children: React.ReactNode }) {
   const pinnedIdRef = useRef(pinnedSessionId);
   pinnedIdRef.current = pinnedSessionId;
 
-  // Adopt the active session as this tab's pin on first load. A still-signed-in pin
-  // (in memory, the source of truth) is NEVER overridden by a background
-  // active-session change — that is what keeps the tab on its account. See
-  // decidePinnedSession for the full ordering and the transient-empty guard.
+  // Adopt the active session as this tab's pin on first load (but not while on the
+  // sign-in flow — see decidePinnedSession). A still-signed-in pin (in memory, the
+  // source of truth) is NEVER overridden by a background active-session change —
+  // that is what keeps the tab on its account. Re-runs when the tab leaves the auth
+  // route so the just-signed-in account is adopted after the redirect.
   useEffect(() => {
     if (!isLoaded) return;
     const decision = decidePinnedSession({
@@ -81,12 +88,13 @@ export function SessionPinProvider(props: { children: React.ReactNode }) {
       inMemoryPinnedId: pinnedIdRef.current,
       storedPinnedId: readPinnedSessionId(),
       activeSessionId,
+      onAuthRoute,
     });
     if (decision.type === "set") {
       writePinnedSessionId(decision.id);
       setPinnedSessionId(decision.id);
     }
-  }, [isLoaded, sessions, activeSessionId]);
+  }, [isLoaded, sessions, activeSessionId, onAuthRoute]);
 
   const pinnedSession = useMemo(
     () => resolvePinnedSession(sessions, pinnedSessionId),

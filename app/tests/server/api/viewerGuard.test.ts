@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { describe, expect, it } from "vitest";
+import { VIEWER_SESSION_MISMATCH_MESSAGE } from "@/app/_trpc/authHeaders";
 import { assertViewerMatchesSession } from "@/server/api/viewerGuard";
 
 describe("assertViewerMatchesSession", () => {
@@ -24,6 +25,9 @@ describe("assertViewerMatchesSession", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(TRPCError);
       expect((error as TRPCError).code).toBe("FORBIDDEN");
+      // The message is the shared contract the client filters on; pin it so a
+      // server-side reword can't silently break the client's suppression.
+      expect((error as TRPCError).message).toBe(VIEWER_SESSION_MISMATCH_MESSAGE);
     }
   });
 });

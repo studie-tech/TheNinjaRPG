@@ -56,6 +56,24 @@ export function resolvePinnedSession<T extends { id: string; status: string }>(
   );
 }
 
+/**
+ * Whether `pathname` is part of Clerk's sign-in / sign-up flow (`/login`, `/signup`,
+ * and their sub-routes such as `/login/factor-one` or `/login/sso-callback`).
+ *
+ * On these routes the tab must NOT eagerly adopt the browser-global active session
+ * (see `decidePinnedSession`): the user may be about to sign in a DIFFERENT account.
+ * Matches on segment boundaries so look-alikes like `/login-help` are not auth routes.
+ */
+export function isAuthRoute(pathname: string | null | undefined): boolean {
+  if (!pathname) return false;
+  return (
+    pathname === "/login" ||
+    pathname.startsWith("/login/") ||
+    pathname === "/signup" ||
+    pathname.startsWith("/signup/")
+  );
+}
+
 export type PinDecision = { type: "keep" } | { type: "set"; id: string };
 
 /**
@@ -67,15 +85,18 @@ export type PinDecision = { type: "keep" } | { type: "set"; id: string };
  *
  * Order: keep a still-signed-in in-memory pin → recover a still-signed-in stored
  * pin (e.g. after reload) → otherwise, only once the sessions list is populated
- * (never mid-refresh when it is momentarily empty), adopt the active session.
+ * (never mid-refresh when it is momentarily empty), and only off the sign-in flow,
+ * adopt the active session.
  */
 export function decidePinnedSession<T extends { id: string; status: string }>(args: {
   sessions: readonly T[] | undefined | null;
   inMemoryPinnedId: string | null;
   storedPinnedId: string | null;
   activeSessionId: string | null;
+  onAuthRoute: boolean;
 }): PinDecision {
-  const { sessions, inMemoryPinnedId, storedPinnedId, activeSessionId } = args;
+  const { sessions, inMemoryPinnedId, storedPinnedId, activeSessionId, onAuthRoute } =
+    args;
   if (resolvePinnedSession(sessions, inMemoryPinnedId)) return { type: "keep" };
   const storedSession = resolvePinnedSession(sessions, storedPinnedId);
   if (storedSession) {
@@ -86,6 +107,13 @@ export function decidePinnedSession<T extends { id: string; status: string }>(ar
   // Sessions momentarily empty (Clerk mid-refresh): leave the pin untouched rather
   // than re-adopting and flipping the tab.
   if (!sessions || sessions.length === 0) return { type: "keep" };
+  // On the sign-in / sign-up flow, do NOT eagerly adopt the browser-global active
+  // session: the user may be about to sign in a DIFFERENT account, and an eager pin
+  // here would later block that in-tab switch (the active session changes to the new
+  // account, but the now-"valid" eager pin keeps the old one). Adoption happens once
+  // the completed sign-in redirects the tab onto an app route. An already-established
+  // pin is honored above, so a pinned tab visiting /login keeps its own account.
+  if (onAuthRoute) return { type: "keep" };
   // No pinned session is signed in (first load, or the pinned account was signed
   // out and another remains) → adopt the active session, but only when it resolves
   // to a signed-in session (like the in-memory and stored paths) so getPinnedToken

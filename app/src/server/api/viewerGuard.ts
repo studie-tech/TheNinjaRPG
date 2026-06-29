@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { VIEWER_SESSION_MISMATCH_MESSAGE } from "@/app/_trpc/authHeaders";
 
 /**
  * Defense-in-depth guard for Clerk multi-session.
@@ -19,7 +20,7 @@ export function assertViewerMatchesSession(
   if (viewerId !== undefined && viewerId !== sessionUserId) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Viewer/session mismatch",
+      message: VIEWER_SESSION_MISMATCH_MESSAGE,
     });
   }
 }

@@ -7,6 +7,17 @@
 export const TAB_AUTH_REQUIRED_HEADER = "x-tnr-auth-required";
 
 /**
+ * Message thrown by `assertViewerMatchesSession` (server `@/server/api/viewerGuard`)
+ * when a request's client-asserted account does not match the server-authenticated
+ * session, and matched by the client's silent-suppression in `Provider.tsx` (the
+ * transient cross-tab guard error is not user-facing). Shared so the two sides stay
+ * in lockstep — if the wording drifts the client filter breaks and users would see
+ * a destructive toast. Lives here, the pure isomorphic module both layers already
+ * import (alongside `TAB_AUTH_REQUIRED_HEADER`), so neither side hardcodes the literal.
+ */
+export const VIEWER_SESSION_MISMATCH_MESSAGE = "Viewer/session mismatch";
+
+/**
  * Builds the auth headers for an outgoing tRPC request under Clerk multi-session.
  *
  * The `__session` cookie is shared across all browser tabs and reflects whichever

@@ -13,7 +13,11 @@ import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
-import { buildClerkRequestHeaders, computeIsMultiSession } from "./authHeaders";
+import {
+  buildClerkRequestHeaders,
+  computeIsMultiSession,
+  VIEWER_SESSION_MISMATCH_MESSAGE,
+} from "./authHeaders";
 import {
   api,
   SIGN_IN_REQUIRED_MUTATION_MESSAGE,
@@ -175,13 +179,14 @@ const handleTrpcError = (error: unknown) => {
     return;
   }
 
-  // Ignore the transient Clerk multi-session "Viewer/session mismatch" guard
-  // (server FORBIDDEN from assertViewerMatchesSession). It only fires in the rare
-  // window where a request authenticated as a different tab's account; the query
-  // refetches with the correct per-tab token, so it is not user-facing.
+  // Ignore the transient Clerk multi-session viewer/session mismatch guard (server
+  // FORBIDDEN from assertViewerMatchesSession; message shared via
+  // VIEWER_SESSION_MISMATCH_MESSAGE). It only fires in the rare window where a
+  // request authenticated as a different tab's account; the query refetches with the
+  // correct per-tab token, so it is not user-facing.
   if (
     error instanceof TRPCClientError &&
-    error.message.includes("Viewer/session mismatch") &&
+    error.message.includes(VIEWER_SESSION_MISMATCH_MESSAGE) &&
     (trpcErrorCode === undefined || trpcErrorCode === "FORBIDDEN")
   ) {
     // Not user-facing (self-heals on the next per-tab refetch), so no toast. But
