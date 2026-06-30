@@ -851,6 +851,10 @@ export const canEditRankedLp = (role: UserRole) => {
   ].includes(role);
 };
 
+export const canEditSeichiSilver = (role: UserRole) => canEditRankedLp(role);
+
+export const canRemoveBloodlineFromPool = (role: UserRole) => canEditRankedLp(role);
+
 export const canSeeHiddenBountyInfo = (role: UserRole) => {
   return role !== "USER";
 };

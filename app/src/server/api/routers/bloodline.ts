@@ -52,13 +52,21 @@ import { validateUserUpdateReason } from "@/libs/moderator";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
-import { claimUserSnapshot } from "@/server/utils/concurrency";
+import {
+  claimUserSnapshot,
+  removeBloodlineFromPoolAtomically,
+} from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { getUnique } from "@/utils/grouping";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { canChangeContent, canSwapBloodline, isStaffMember } from "@/utils/permissions";
+import {
+  canChangeContent,
+  canRemoveBloodlineFromPool,
+  canSwapBloodline,
+  isStaffMember,
+} from "@/utils/permissions";
 import {
   DAY_S,
   getDaysHoursMinutesSeconds,
@@ -72,6 +80,7 @@ import {
   bloodlineFilteringSchema,
   bloodlineReskinCreateSchema,
   bloodlineReskinUpdateSchema,
+  removeBloodlineFromPoolSchema,
 } from "@/validators/bloodline";
 import type { ZodAllTags } from "@/validators/combat";
 import { BloodlineValidator } from "@/validators/combat";
@@ -151,6 +160,16 @@ export const bloodlineRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Get user's historic bloodlines" } })
     .query(async ({ ctx }) => {
       return await fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId);
+    }),
+  getUserHistoricBloodlinesForStaff: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get a user's historic bloodlines (staff)" },
+    })
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const actor = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!actor || !canRemoveBloodlineFromPool(actor.role)) return [];
+      return await fetchUserHistoricBloodlines(ctx.drizzle, input.userId);
     }),
   // Get bloodline swap info
   getSwapInfo: protectedProcedure
@@ -440,6 +459,68 @@ export const bloodlineRouter = createTRPCRouter({
         }),
       ]);
       return { success: true, message: "Bloodline reskin deleted" };
+    }),
+  removeBloodlineFromPool: protectedProcedure
+    .input(removeBloodlineFromPoolSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [actor, target, targetPool] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, input.userId),
+        fetchUserHistoricBloodlines(ctx.drizzle, input.userId),
+      ]);
+      // Guards
+      if (!actor || !target) return errorResponse("User not found");
+      if (actor.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
+      if (!canRemoveBloodlineFromPool(actor.role)) return errorResponse("Unauthorized");
+      const poolBloodline = targetPool.find((b) => b.id === input.bloodlineId);
+      if (!poolBloodline) return errorResponse("Bloodline is not in the player's pool");
+      if (target.bloodlineId === input.bloodlineId) {
+        return errorResponse(
+          "Cannot remove the player's equipped bloodline; change it first",
+        );
+      }
+      // AI moderation of reason
+      const change = `Removed bloodline ${poolBloodline.name} from pool`;
+      const aiCheck = await validateUserUpdateReason(change, input.reason);
+      if (!aiCheck.allowUpdate) {
+        await ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "bloodline",
+          changes: [],
+          relatedId: target.userId,
+          relatedMsg: `Bloodline pool removal rejected by AI: ${input.reason}`,
+          relatedImage: target.avatarLight,
+        });
+        return errorResponse(aiCheck.comment);
+      }
+      // Mutation (atomic, NOT EXISTS equipped guard) + audit
+      const now = new Date();
+      const success = await removeBloodlineFromPoolAtomically({
+        client: ctx.drizzle,
+        userId: target.userId,
+        bloodlineId: input.bloodlineId,
+        now,
+      });
+      if (!success) {
+        return errorResponse("Bloodline became equipped; please retry");
+      }
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "bloodline",
+        changes: [change],
+        relatedId: target.userId,
+        relatedMsg: input.reason,
+        relatedImage: target.avatarLight,
+      });
+      return {
+        success: true,
+        message: `Removed ${poolBloodline.name} from ${target.username}'s pool`,
+      };
     }),
   getReskin: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get a specific bloodline reskin" } })

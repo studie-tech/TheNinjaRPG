@@ -4,8 +4,10 @@ import { UserRoles } from "@/drizzle/constants";
 import {
   canApproveApplications,
   canDeleteConceptArt,
+  canEditSeichiSilver,
   canModifyCombatSettings,
   canModifyEventGains,
+  canRemoveBloodlineFromPool,
   canViewAllApplications,
   getApprovalGroup,
 } from "@/utils/permissions";
@@ -109,4 +111,32 @@ test("combat settings use balance/content permissions instead of event gain perm
   expect(canModifyCombatSettings("CODER")).toBe(true);
   expect(canModifyCombatSettings("EVENT")).toBe(true);
   expect(canModifyCombatSettings("HEAD_EVENT")).toBe(true);
+});
+
+test("seichi silver + bloodline-pool admin actions mirror the ranked LP role set", () => {
+  const allowed = [
+    "CONTENT-ADMIN",
+    "OWNER",
+    "CODING-ADMIN",
+    "EVENT-ADMIN",
+    "MODERATOR-ADMIN",
+  ] as const satisfies readonly UserRole[];
+  const denied = [
+    "USER",
+    "CONTENT",
+    "BALANCE",
+    "EVENT",
+    "CODER",
+    "HEAD_CONTENT",
+    "HEAD_BALANCE",
+    "HEAD_EVENT",
+  ] as const satisfies readonly UserRole[];
+  for (const role of allowed) {
+    expect(canEditSeichiSilver(role)).toBe(true);
+    expect(canRemoveBloodlineFromPool(role)).toBe(true);
+  }
+  for (const role of denied) {
+    expect(canEditSeichiSilver(role)).toBe(false);
+    expect(canRemoveBloodlineFromPool(role)).toBe(false);
+  }
 });

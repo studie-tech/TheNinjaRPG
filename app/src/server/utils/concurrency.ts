@@ -9,8 +9,8 @@
  * Failed CAS (`success: false` / `false`) means another request mutated the row first — return a
  * safe client error and retry-friendly message.
  */
-import { and, eq } from "drizzle-orm";
-import { userData, userItem } from "@/drizzle/schema";
+import { and, eq, gte, ne, sql } from "drizzle-orm";
+import { bloodlineRolls, userData, userItem } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { QueryCondition } from "@/utils/typeutils";
 
@@ -109,4 +109,80 @@ export const consumeUserItemAtomically = async ({
     expectedQuantity,
     nextQuantity: expectedQuantity - 1,
   });
+};
+
+type AdjustSeichiSilverParams = {
+  client: DrizzleClient;
+  userId: string;
+  delta: number;
+};
+
+/**
+ * Atomically adds `delta` to a user's Seichi Silver. For a negative delta a CAS floor
+ * (`seichiSilver >= -delta`) prevents the balance going negative and guards against clobbering a
+ * concurrent earn/spend. Returns false when the floor blocks the change (no row updated).
+ */
+export const adjustSeichiSilverAtomically = async ({
+  client,
+  userId,
+  delta,
+}: AdjustSeichiSilverParams) => {
+  const result = await client
+    .update(userData)
+    .set({ seichiSilver: sql`${userData.seichiSilver} + ${delta}` })
+    .where(
+      and(
+        eq(userData.userId, userId),
+        delta < 0 ? gte(userData.seichiSilver, -delta) : undefined,
+      ),
+    );
+  return result.rowsAffected === 1;
+};
+
+type RemoveBloodlineFromPoolParams = {
+  client: DrizzleClient;
+  userId: string;
+  bloodlineId: string;
+  now: Date;
+};
+
+/**
+ * Removes a bloodline from a user's swappable pool. NATURAL rows are nulled (preserving the
+ * one-natural-roll unique constraint, so the player gets no free re-roll); every other roll type
+ * is deleted, because nulling an ITEM success row would match the failed-roll/pity bucket keyed on
+ * `goal && !bloodlineId` and corrupt pity accounting. Both statements carry a `NOT EXISTS` guard so
+ * the bloodline cannot be removed while it is the user's equipped bloodline (closes the read->write
+ * race). Returns false when nothing changed (e.g. it became equipped concurrently).
+ */
+export const removeBloodlineFromPoolAtomically = async ({
+  client,
+  userId,
+  bloodlineId,
+  now,
+}: RemoveBloodlineFromPoolParams) => {
+  const notEquipped = sql`NOT EXISTS (SELECT 1 FROM ${userData} WHERE ${userData.userId} = ${userId} AND ${userData.bloodlineId} = ${bloodlineId})`;
+  const [deleteResult, updateResult] = await Promise.all([
+    client
+      .delete(bloodlineRolls)
+      .where(
+        and(
+          eq(bloodlineRolls.userId, userId),
+          eq(bloodlineRolls.bloodlineId, bloodlineId),
+          ne(bloodlineRolls.type, "NATURAL"),
+          notEquipped,
+        ),
+      ),
+    client
+      .update(bloodlineRolls)
+      .set({ bloodlineId: null, updatedAt: now })
+      .where(
+        and(
+          eq(bloodlineRolls.userId, userId),
+          eq(bloodlineRolls.bloodlineId, bloodlineId),
+          eq(bloodlineRolls.type, "NATURAL"),
+          notEquipped,
+        ),
+      ),
+  ]);
+  return deleteResult.rowsAffected + updateResult.rowsAffected > 0;
 };
