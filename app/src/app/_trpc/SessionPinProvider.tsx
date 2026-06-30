@@ -16,6 +16,7 @@ import {
   clearPinnedSessionId,
   decidePinnedSession,
   isAuthRoute,
+  pinChangeRequiresRemount,
   readPinnedSessionId,
   resolvePinnedSession,
   writePinnedSessionId,
@@ -50,9 +51,12 @@ const SessionPinContext = createContext<SessionPinContextValue | null>(null);
  *
  * It also replaces Clerk's `MultisessionAppSupport`: that component remounts the
  * app keyed on the ACTIVE session, which would re-flip the tab on every global
- * active-session change. Here we key the subtree on the PINNED session, so an
- * intentional in-tab account switch cleanly remounts (fresh tRPC client + React
- * Query cache) while a background active-session change does not.
+ * active-session change. Here we remount the subtree (fresh tRPC client + React
+ * Query cache) only on a cross-account pin change — an intentional in-tab switch, a
+ * sign-out, or a reload that adopts a different account (see
+ * `pinChangeRequiresRemount`). A background active-session change does not remount,
+ * and neither does the first-load adoption of the tab's own account, so the normal
+ * signed-in first load and post-sign-in redirect do not pay a tree-wide remount.
  */
 export function SessionPinProvider(props: { children: React.ReactNode }) {
   const { isLoaded, sessions, setActive } = useSessionList();
@@ -75,6 +79,21 @@ export function SessionPinProvider(props: { children: React.ReactNode }) {
   );
   const pinnedIdRef = useRef(pinnedSessionId);
   pinnedIdRef.current = pinnedSessionId;
+
+  // Bump a remount key only on a cross-account pin change, so the keyed subtree below
+  // gets a fresh tRPC client + React Query cache when (and only when) the tab moves
+  // off one signed-in account — never on the first-load null → id adoption of the
+  // tab's own account. Done with React's "adjust state during render" pattern (not an
+  // effect) so the new key is in place before children render, avoiding a stale-key
+  // commit that would mount then immediately remount the tree.
+  const [remountKey, setRemountKey] = useState(0);
+  const [prevPinnedId, setPrevPinnedId] = useState(pinnedSessionId);
+  if (prevPinnedId !== pinnedSessionId) {
+    if (pinChangeRequiresRemount(prevPinnedId, pinnedSessionId)) {
+      setRemountKey((key) => key + 1);
+    }
+    setPrevPinnedId(pinnedSessionId);
+  }
 
   // Adopt the active session as this tab's pin on first load (but not while on the
   // sign-in flow — see decidePinnedSession). A still-signed-in pin (in memory, the
@@ -149,7 +168,7 @@ export function SessionPinProvider(props: { children: React.ReactNode }) {
 
   return (
     <SessionPinContext.Provider value={value}>
-      <Fragment key={pinnedSessionId ?? "no-pin"}>{props.children}</Fragment>
+      <Fragment key={remountKey}>{props.children}</Fragment>
     </SessionPinContext.Provider>
   );
 }
