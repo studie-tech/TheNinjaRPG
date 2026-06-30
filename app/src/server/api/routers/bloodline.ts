@@ -23,6 +23,7 @@ import {
   serverError,
 } from "@/api/trpc";
 import {
+  ACTION_LOG_RELATED_MSG_MAX_LENGTH,
   BLOODLINE_COST,
   BLOODLINE_SWAP_COOLDOWN_HOURS,
   BLOODLINE_SWAP_FREE_DAYS,
@@ -168,7 +169,9 @@ export const bloodlineRouter = createTRPCRouter({
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
       const actor = await fetchUser(ctx.drizzle, ctx.userId);
-      if (!actor || !canRemoveBloodlineFromPool(actor.role)) return [];
+      if (!actor || actor.isBanned || !canRemoveBloodlineFromPool(actor.role)) {
+        return [];
+      }
       return await fetchUserHistoricBloodlines(ctx.drizzle, input.userId);
     }),
   // Get bloodline swap info
@@ -492,7 +495,10 @@ export const bloodlineRouter = createTRPCRouter({
           tableName: "bloodline",
           changes: [],
           relatedId: target.userId,
-          relatedMsg: `Bloodline pool removal rejected by AI: ${input.reason}`,
+          relatedMsg: `Bloodline pool removal rejected by AI: ${input.reason}`.slice(
+            0,
+            ACTION_LOG_RELATED_MSG_MAX_LENGTH,
+          ),
           relatedImage: target.avatarLight,
         });
         return errorResponse(aiCheck.comment);
@@ -514,7 +520,7 @@ export const bloodlineRouter = createTRPCRouter({
         tableName: "bloodline",
         changes: [change],
         relatedId: target.userId,
-        relatedMsg: input.reason,
+        relatedMsg: input.reason.slice(0, ACTION_LOG_RELATED_MSG_MAX_LENGTH),
         relatedImage: target.avatarLight,
       });
       return {

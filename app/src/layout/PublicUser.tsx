@@ -71,6 +71,7 @@ import {
   type BattleType,
   BattleTypes,
   IMG_AVATAR_DEFAULT,
+  SEICHI_SILVER_ADJUST_LIMIT,
   TrainingSpeeds,
   XP_BRACKETS,
 } from "@/drizzle/constants";
@@ -560,11 +561,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             )}
 
             {userData && canEditSeichiSilver(userData.role) && !profile.isAi && (
-              <AdjustSeichiSilver
-                userId={profile.userId}
-                username={profile.username}
-                currentSilver={profile.seichiSilver}
-              />
+              <AdjustSeichiSilver userId={profile.userId} username={profile.username} />
             )}
 
             {userData && canRemoveBloodlineFromPool(userData.role) && !profile.isAi && (
@@ -2309,21 +2306,28 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
 interface AdjustSeichiSilverProps {
   userId: string;
   username: string;
-  currentSilver: number;
 }
 
 const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
   userId,
   username,
-  currentSilver,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [delta, setDelta] = useState("");
   const [reason, setReason] = useState("");
   const utils = api.useUtils();
-  const parsedDelta = Number.parseInt(delta, 10);
+  const { data: currentSilver, isPending: silverLoading } =
+    api.profile.getSeichiSilverForStaff.useQuery({ userId }, { enabled: isOpen });
+  const trimmedDelta = delta.trim();
+  const parsedDelta = Number(trimmedDelta);
   const isValid =
-    Number.isInteger(parsedDelta) && parsedDelta !== 0 && reason.trim().length >= 10;
+    // Plain signed integer only — rejects "1.5", "1e3", "", and whitespace so the
+    // submitted value always matches what staff typed.
+    /^-?\d+$/.test(trimmedDelta) &&
+    Number.isSafeInteger(parsedDelta) &&
+    parsedDelta !== 0 &&
+    Math.abs(parsedDelta) <= SEICHI_SILVER_ADJUST_LIMIT &&
+    reason.trim().length >= 10;
 
   const { mutate, isPending } = api.profile.adjustSeichiSilver.useMutation({
     onSuccess: async (data) => {
@@ -2332,7 +2336,7 @@ const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
         setIsOpen(false);
         setDelta("");
         setReason("");
-        await utils.profile.getPublicUser.invalidate();
+        await utils.profile.getSeichiSilverForStaff.invalidate({ userId });
       }
     },
   });
@@ -2342,10 +2346,15 @@ const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
       <TooltipProvider delayDuration={50}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Coins
-              className="h-6 w-6 cursor-pointer hover:text-orange-500"
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Adjust Seichi Silver"
+              className="hover:text-orange-500"
               onClick={() => setIsOpen(true)}
-            />
+            >
+              <Coins className="h-6 w-6" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent>Adjust Seichi Silver</TooltipContent>
         </Tooltip>
@@ -2355,7 +2364,11 @@ const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
         isOpen={isOpen}
         setIsOpen={setIsOpen}
         proceed_label={isPending ? "Saving..." : "Apply"}
-        isValid={isValid}
+        // Modal2 auto-closes on Apply when isValid is true/undefined. Pass false so a
+        // failed mutation (AI rejection / insufficient balance) keeps the form open
+        // with the entered amount + reason; we close in onSuccess instead. The accept
+        // button stays gated via proceedDisabled below.
+        isValid={false}
         proceedDisabled={!isValid || isPending}
         onAccept={(e) => {
           e.preventDefault();
@@ -2366,7 +2379,8 @@ const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
         <div className="space-y-4">
           <p className="text-muted-foreground text-sm">
             Adjust <strong>{username}</strong>&apos;s Seichi Silver (current:{" "}
-            {currentSilver}). Use a negative number to subtract. This action is logged.
+            {silverLoading ? "…" : (currentSilver ?? 0)}). Use a negative number to
+            subtract. This action is logged.
           </p>
           <div className="space-y-2">
             <Label htmlFor="silver-delta">Amount (+/-)</Label>
@@ -2440,10 +2454,15 @@ const BloodlinePoolManager: React.FC<BloodlinePoolManagerProps> = ({
       <TooltipProvider delayDuration={50}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Droplets
-              className="h-6 w-6 cursor-pointer hover:text-orange-500"
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Manage Bloodline Pool"
+              className="hover:text-orange-500"
               onClick={() => setIsOpen(true)}
-            />
+            >
+              <Droplets className="h-6 w-6" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent>Manage Bloodline Pool</TooltipContent>
         </Tooltip>

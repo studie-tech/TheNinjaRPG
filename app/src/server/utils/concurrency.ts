@@ -153,6 +153,16 @@ type RemoveBloodlineFromPoolParams = {
  * `goal && !bloodlineId` and corrupt pity accounting. Both statements carry a `NOT EXISTS` guard so
  * the bloodline cannot be removed while it is the user's equipped bloodline (closes the read->write
  * race). Returns false when nothing changed (e.g. it became equipped concurrently).
+ *
+ * Known residual (the swap-vs-removal race the PR documents, viewed from this side): the DELETE and
+ * UPDATE are two separate statements, not atomic relative to each other. If a concurrent `swapBloodline`
+ * equips this bloodline in the gap between them, one statement's guard can pass while the other's blocks,
+ * leaving a partial removal (one roll type gone, the other retained) while this helper still returns
+ * true. We run them in PARALLEL on purpose: that gap is a sub-millisecond skew, whereas sequencing them
+ * would widen it to a full round-trip. PlanetScale/Vitess has no cheap serialization primitive across
+ * the two writes (interactive transactions are disallowed; advisory locks aren't viable on pooled
+ * serverless), so fully closing this would require guarding the equip side in `swapBloodline` — out of
+ * scope for this QoL change.
  */
 export const removeBloodlineFromPoolAtomically = async ({
   client,
