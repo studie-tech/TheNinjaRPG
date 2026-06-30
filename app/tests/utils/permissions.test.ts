@@ -113,7 +113,7 @@ test("combat settings use balance/content permissions instead of event gain perm
   expect(canModifyCombatSettings("HEAD_EVENT")).toBe(true);
 });
 
-test("seichi silver + bloodline-pool admin actions mirror the ranked LP role set", () => {
+test("seichi silver + bloodline-pool admin actions gate to their own admin role set", () => {
   const allowed = [
     "CONTENT-ADMIN",
     "OWNER",
