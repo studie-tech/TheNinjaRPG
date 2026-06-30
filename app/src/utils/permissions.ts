@@ -851,9 +851,25 @@ export const canEditRankedLp = (role: UserRole) => {
   ].includes(role);
 };
 
-export const canEditSeichiSilver = (role: UserRole) => canEditRankedLp(role);
+export const canEditSeichiSilver = (role: UserRole) => {
+  return [
+    "CONTENT-ADMIN",
+    "OWNER",
+    "CODING-ADMIN",
+    "EVENT-ADMIN",
+    "MODERATOR-ADMIN",
+  ].includes(role);
+};
 
-export const canRemoveBloodlineFromPool = (role: UserRole) => canEditRankedLp(role);
+export const canRemoveBloodlineFromPool = (role: UserRole) => {
+  return [
+    "CONTENT-ADMIN",
+    "OWNER",
+    "CODING-ADMIN",
+    "EVENT-ADMIN",
+    "MODERATOR-ADMIN",
+  ].includes(role);
+};
 
 export const canSeeHiddenBountyInfo = (role: UserRole) => {
   return role !== "USER";
