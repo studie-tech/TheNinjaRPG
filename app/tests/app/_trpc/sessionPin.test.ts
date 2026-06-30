@@ -3,6 +3,7 @@ import {
   clearPinnedSessionId,
   decidePinnedSession,
   isAuthRoute,
+  pinChangeRequiresRemount,
   readPinnedSessionId,
   resolvePinnedSession,
   writePinnedSessionId,
@@ -234,5 +235,28 @@ describe("decidePinnedSession", () => {
         onAuthRoute: false,
       }),
     ).toEqual({ type: "keep" });
+  });
+});
+
+describe("pinChangeRequiresRemount", () => {
+  it("does NOT remount on the first-load null -> id adoption", () => {
+    // The tab adopts its own account; the unpinned window authenticated as that same
+    // account (or fetched nothing), so a tree-wide remount + refetch would be waste.
+    expect(pinChangeRequiresRemount(null, "sess_a")).toBe(false);
+  });
+
+  it("remounts on an intentional in-tab account switch (A -> B)", () => {
+    // switchPinnedAccount / a reload that adopts a different account: account A's data
+    // may sit in unscoped React Query caches and must be discarded.
+    expect(pinChangeRequiresRemount("sess_a", "sess_b")).toBe(true);
+  });
+
+  it("remounts on sign-out (id -> null)", () => {
+    expect(pinChangeRequiresRemount("sess_a", null)).toBe(true);
+  });
+
+  it("does not remount when the pin is unchanged", () => {
+    expect(pinChangeRequiresRemount("sess_a", "sess_a")).toBe(false);
+    expect(pinChangeRequiresRemount(null, null)).toBe(false);
   });
 });

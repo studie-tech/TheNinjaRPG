@@ -122,3 +122,34 @@ export function decidePinnedSession<T extends { id: string; status: string }>(ar
   if (activeSession) return { type: "set", id: activeSession.id };
   return { type: "keep" };
 }
+
+/**
+ * Whether a change of this tab's pinned session id should remount the app subtree
+ * (fresh tRPC client + React Query cache). True only when the pin moves OFF a
+ * signed-in account to a different value — an intentional in-tab switch
+ * (`switchPinnedAccount`), a sign-out (`clearPin`), or a reload whose stored account
+ * is gone and a different one is adopted. Those are the only changes that can leave a
+ * different account's data behind in React Query caches that are not scoped per
+ * account (`profile.getUser` is scoped via `getUserQueryInput`, but other queries are
+ * not), so the subtree must remount to discard it.
+ *
+ * The first-load `null → id` adoption returns false (no remount): the brief unpinned
+ * window does not populate any account-private cache. Account-private queries are
+ * gated on the pinned user — `profile.getUser` is `enabled: !!userId`, and everything
+ * private cascades from its `userData` — so they do not run while the pin is null.
+ * The only always-mounted query that runs unpinned is the public, account-agnostic
+ * leaderboard (`profile.getPublicUsers`), whose data is identical for every viewer.
+ *
+ * INVARIANT this relies on: an always-mounted, account-private query must gate its
+ * `enabled` on the pinned user (`userData`/`pinnedUserId`), NOT on Clerk's browser-
+ * global `isSignedIn`/`useUser`. Gating on the latter would let it fetch and cache the
+ * browser-active account's private data during the null-pin window (e.g. on `/login`
+ * before adopting a just-signed-in second account), which this skipped remount would
+ * then fail to discard.
+ */
+export function pinChangeRequiresRemount(
+  prev: string | null,
+  next: string | null,
+): boolean {
+  return prev !== null && prev !== next;
+}
