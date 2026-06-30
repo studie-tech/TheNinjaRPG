@@ -175,3 +175,15 @@ export type TitleChangeSchema = z.infer<typeof titleChangeSchema>;
 
 export const genderChangeSchema = z.object({ gender: z.enum(genders) });
 export type GenderChangeSchema = z.infer<typeof genderChangeSchema>;
+
+export const adjustSeichiSilverSchema = z.object({
+  userId: z.string(),
+  delta: z.coerce
+    .number()
+    .int()
+    .min(-1_000_000)
+    .max(1_000_000)
+    .refine((d) => d !== 0, { message: "Delta cannot be zero" }),
+  reason: z.string().min(10).max(500),
+});
+export type AdjustSeichiSilverSchema = z.infer<typeof adjustSeichiSilverSchema>;

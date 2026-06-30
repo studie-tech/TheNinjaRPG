@@ -122,6 +122,7 @@ import { handleQuestConsequences, insertNextQuest } from "@/routers/quests";
 import { fetchVillage } from "@/routers/village";
 import { deleteUser } from "@/server/api/routers/staff";
 import type { DrizzleClient } from "@/server/db";
+import { adjustSeichiSilverAtomically } from "@/server/utils/concurrency";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
@@ -136,6 +137,7 @@ import {
   canEditJutsus,
   canEditRank,
   canEditRankedLp,
+  canEditSeichiSilver,
   canEditStaffAccountFlag,
   canEditUsername,
   canEditVillage,
@@ -160,6 +162,7 @@ import { mutateContentSchema } from "@/validators/comments";
 import { attributes, colors, skin_colors, usernameSchema } from "@/validators/register";
 import type { GetPublicUsersSchema } from "@/validators/user";
 import {
+  adjustSeichiSilverSchema,
   getPublicUsersSchema,
   updateUserPreferencesSchema,
   updateUserSchema,
@@ -1715,6 +1718,7 @@ export const profileRouter = createTRPCRouter({
             bloodlineReskinId: true,
             bracketImmunityLiftedUntil: true,
             warParticipantUntil: true,
+            seichiSilver: true,
           },
           with: {
             village: true,
@@ -1974,6 +1978,56 @@ export const profileRouter = createTRPCRouter({
         success: true,
         message: "Successfully claimed reputation points for voting",
       };
+    }),
+  // Adjust Seichi Silver for a user (staff only)
+  adjustSeichiSilver: protectedProcedure
+    .input(adjustSeichiSilverSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [actor, target] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, input.userId),
+      ]);
+      // Guards
+      if (!actor || !target) return errorResponse("User not found");
+      if (actor.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
+      if (!canEditSeichiSilver(actor.role)) {
+        return errorResponse("You don't have permission to edit Seichi Silver");
+      }
+      // AI moderation of reason
+      const change = `Adjusted Seichi Silver by ${input.delta} (${target.seichiSilver} -> ${target.seichiSilver + input.delta})`;
+      const aiCheck = await validateUserUpdateReason(change, input.reason);
+      if (!aiCheck.allowUpdate) {
+        await ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "user",
+          changes: [],
+          relatedId: target.userId,
+          relatedMsg: `Seichi Silver adjustment rejected by AI: ${input.reason}`,
+          relatedImage: target.avatarLight,
+        });
+        return errorResponse(aiCheck.comment);
+      }
+      // Mutation (atomic CAS) + audit
+      const success = await adjustSeichiSilverAtomically({
+        client: ctx.drizzle,
+        userId: target.userId,
+        delta: input.delta,
+      });
+      if (!success) return errorResponse("Insufficient Seichi Silver");
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "user",
+        changes: [change],
+        relatedId: target.userId,
+        relatedMsg: input.reason,
+        relatedImage: target.avatarLight,
+      });
+      return { success: true, message: `Seichi Silver adjusted by ${input.delta}` };
     }),
   // Award experience to a user (staff only)
   awardExperience: protectedProcedure

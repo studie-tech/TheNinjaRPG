@@ -10,7 +10,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Chart as ChartJS } from "chart.js/auto";
 import {
   Award,
+  Coins,
   CopyCheck,
+  Droplets,
   Flag,
   IdCard,
   Medal,
@@ -117,10 +119,12 @@ import {
   canEditQuests,
   canEditRank,
   canEditRankedLp,
+  canEditSeichiSilver,
   canEditStaffAccountFlag,
   canEditUsername,
   canEditVillage,
   canModifyUserBadges,
+  canRemoveBloodlineFromPool,
   canSeeActivityEvents,
   canSeeIps,
   canSeeSecretData,
@@ -553,6 +557,22 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   </form>
                 </Form>
               </Confirm2>
+            )}
+
+            {userData && canEditSeichiSilver(userData.role) && !profile.isAi && (
+              <AdjustSeichiSilver
+                userId={profile.userId}
+                username={profile.username}
+                currentSilver={profile.seichiSilver}
+              />
+            )}
+
+            {userData && canRemoveBloodlineFromPool(userData.role) && !profile.isAi && (
+              <BloodlinePoolManager
+                userId={profile.userId}
+                username={profile.username}
+                equippedBloodlineId={profile.bloodlineId ?? null}
+              />
             )}
 
             {userData && canAwardExperience(userData) && (
@@ -2283,5 +2303,213 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
     <p className="font-medium text-red-500 text-sm">
       ✗ Protected (lower bracket — {targetBracket} vs your {attackerBracket})
     </p>
+  );
+};
+
+interface AdjustSeichiSilverProps {
+  userId: string;
+  username: string;
+  currentSilver: number;
+}
+
+const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
+  userId,
+  username,
+  currentSilver,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [delta, setDelta] = useState("");
+  const [reason, setReason] = useState("");
+  const utils = api.useUtils();
+  const parsedDelta = Number.parseInt(delta, 10);
+  const isValid =
+    Number.isInteger(parsedDelta) && parsedDelta !== 0 && reason.trim().length >= 10;
+
+  const { mutate, isPending } = api.profile.adjustSeichiSilver.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        setIsOpen(false);
+        setDelta("");
+        setReason("");
+        await utils.profile.getPublicUser.invalidate();
+      }
+    },
+  });
+
+  return (
+    <>
+      <TooltipProvider delayDuration={50}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Coins
+              className="h-6 w-6 cursor-pointer hover:text-orange-500"
+              onClick={() => setIsOpen(true)}
+            />
+          </TooltipTrigger>
+          <TooltipContent>Adjust Seichi Silver</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <Modal2
+        title="Adjust Seichi Silver"
+        isOpen={isOpen}
+        setIsOpen={setIsOpen}
+        proceed_label={isPending ? "Saving..." : "Apply"}
+        isValid={isValid}
+        proceedDisabled={!isValid || isPending}
+        onAccept={(e) => {
+          e.preventDefault();
+          if (!isValid) return;
+          mutate({ userId, delta: parsedDelta, reason: reason.trim() });
+        }}
+      >
+        <div className="space-y-4">
+          <p className="text-muted-foreground text-sm">
+            Adjust <strong>{username}</strong>&apos;s Seichi Silver (current:{" "}
+            {currentSilver}). Use a negative number to subtract. This action is logged.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="silver-delta">Amount (+/-)</Label>
+            <Input
+              id="silver-delta"
+              type="number"
+              value={delta}
+              onChange={(e) => setDelta(e.target.value)}
+              placeholder="e.g. 500 or -250"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="silver-reason">Reason *</Label>
+            <Input
+              id="silver-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Reason (minimum 10 characters)..."
+            />
+          </div>
+        </div>
+      </Modal2>
+    </>
+  );
+};
+
+interface BloodlinePoolManagerProps {
+  userId: string;
+  username: string;
+  equippedBloodlineId: string | null;
+}
+
+const BloodlinePoolManager: React.FC<BloodlinePoolManagerProps> = ({
+  userId,
+  username,
+  equippedBloodlineId,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const utils = api.useUtils();
+
+  const { data: pool, isPending: poolLoading } =
+    api.bloodline.getUserHistoricBloodlinesForStaff.useQuery(
+      { userId },
+      { enabled: isOpen },
+    );
+
+  const { mutate, isPending } = api.bloodline.removeBloodlineFromPool.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        // getPublicUser + the staff pool query refresh the admin's view of the
+        // target. The two self-scoped queries below only matter when an admin
+        // manages their OWN pool (userId === ctx.userId); a *different* player's
+        // open tab is a separate client we cannot invalidate from here — that
+        // staleness is harmless (a stale swap is rejected server-side).
+        await Promise.all([
+          utils.profile.getPublicUser.invalidate(),
+          utils.bloodline.getUserHistoricBloodlinesForStaff.invalidate({ userId }),
+          utils.bloodline.getUserHistoricBloodlines.invalidate(),
+          utils.bloodline.getSwapInfo.invalidate(),
+        ]);
+      }
+    },
+  });
+
+  const reasonValid = reason.trim().length >= 10;
+
+  return (
+    <>
+      <TooltipProvider delayDuration={50}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Droplets
+              className="h-6 w-6 cursor-pointer hover:text-orange-500"
+              onClick={() => setIsOpen(true)}
+            />
+          </TooltipTrigger>
+          <TooltipContent>Manage Bloodline Pool</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <Modal2
+        title={`Manage Bloodline Pool — ${username}`}
+        isOpen={isOpen}
+        setIsOpen={setIsOpen}
+        proceed_label={null}
+      >
+        <div className="space-y-4">
+          <p className="text-muted-foreground text-sm">
+            Remove a bloodline from this player&apos;s swappable pool. The equipped
+            bloodline cannot be removed — change it first. All removals are logged.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="pool-reason">Reason * (applies to the removal)</Label>
+            <Input
+              id="pool-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Reason (minimum 10 characters)..."
+            />
+          </div>
+          {poolLoading && <p className="text-sm">Loading pool...</p>}
+          {!poolLoading && (pool?.length ?? 0) === 0 && (
+            <p className="text-sm">No bloodlines in this player&apos;s pool.</p>
+          )}
+          <div className="space-y-2">
+            {pool?.map((bloodline) => {
+              const isEquipped = bloodline.id === equippedBloodlineId;
+              return (
+                <div
+                  key={bloodline.id}
+                  className="flex items-center justify-between gap-2 rounded-md border p-2"
+                >
+                  <span className="text-sm">
+                    {bloodline.name}
+                    {isEquipped ? " (equipped)" : ""}
+                  </span>
+                  <Button
+                    variant="destructive"
+                    disabled={isEquipped || !reasonValid || isPending}
+                    title={
+                      isEquipped
+                        ? "Change the equipped bloodline first"
+                        : !reasonValid
+                          ? "Enter a reason (10+ characters)"
+                          : undefined
+                    }
+                    onClick={() =>
+                      mutate({
+                        userId,
+                        bloodlineId: bloodline.id,
+                        reason: reason.trim(),
+                      })
+                    }
+                  >
+                    Remove
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Modal2>
+    </>
   );
 };
