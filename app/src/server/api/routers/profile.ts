@@ -17,6 +17,7 @@ import {
 import { customAlphabet, nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  ACTION_LOG_RELATED_MSG_MAX_LENGTH,
   ACTIVE_VOTING_SITES,
   ALLIANCEHALL_LAT,
   ALLIANCEHALL_LONG,
@@ -1718,7 +1719,6 @@ export const profileRouter = createTRPCRouter({
             bloodlineReskinId: true,
             bracketImmunityLiftedUntil: true,
             warParticipantUntil: true,
-            seichiSilver: true,
           },
           with: {
             village: true,
@@ -1979,6 +1979,24 @@ export const profileRouter = createTRPCRouter({
         message: "Successfully claimed reputation points for voting",
       };
     }),
+  // Read a user's Seichi Silver balance (staff only) — kept off the public profile
+  // response so spendable-currency balances aren't exposed to every viewer.
+  getSeichiSilverForStaff: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get a user's Seichi Silver balance (staff)" },
+    })
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [actor, target] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.userData.findFirst({
+          columns: { seichiSilver: true },
+          where: eq(userData.userId, input.userId),
+        }),
+      ]);
+      if (!actor || actor.isBanned || !canEditSeichiSilver(actor.role)) return 0;
+      return target?.seichiSilver ?? 0;
+    }),
   // Adjust Seichi Silver for a user (staff only)
   adjustSeichiSilver: protectedProcedure
     .input(adjustSeichiSilverSchema)
@@ -1996,8 +2014,16 @@ export const profileRouter = createTRPCRouter({
       if (!canEditSeichiSilver(actor.role)) {
         return errorResponse("You don't have permission to edit Seichi Silver");
       }
-      // AI moderation of reason
-      const change = `Adjusted Seichi Silver by ${input.delta} (${target.seichiSilver} -> ${target.seichiSilver + input.delta})`;
+      // Early sufficiency check: gives the admin the precise "Insufficient"
+      // message and keeps the AI moderator from seeing a negative projected
+      // balance. The atomic CAS in adjustSeichiSilverAtomically remains the
+      // authoritative floor against a concurrent earn/spend.
+      if (input.delta < 0 && target.seichiSilver + input.delta < 0) {
+        return errorResponse("Insufficient Seichi Silver");
+      }
+      // AI moderation of reason. Log the delta only — a concurrent adjustment
+      // makes any pre-mutation before/after snapshot stale.
+      const change = `Adjusted Seichi Silver by ${input.delta}`;
       const aiCheck = await validateUserUpdateReason(change, input.reason);
       if (!aiCheck.allowUpdate) {
         await ctx.drizzle.insert(actionLog).values({
@@ -2006,7 +2032,10 @@ export const profileRouter = createTRPCRouter({
           tableName: "user",
           changes: [],
           relatedId: target.userId,
-          relatedMsg: `Seichi Silver adjustment rejected by AI: ${input.reason}`,
+          relatedMsg: `Seichi Silver adjustment rejected by AI: ${input.reason}`.slice(
+            0,
+            ACTION_LOG_RELATED_MSG_MAX_LENGTH,
+          ),
           relatedImage: target.avatarLight,
         });
         return errorResponse(aiCheck.comment);
@@ -2024,7 +2053,7 @@ export const profileRouter = createTRPCRouter({
         tableName: "user",
         changes: [change],
         relatedId: target.userId,
-        relatedMsg: input.reason,
+        relatedMsg: input.reason.slice(0, ACTION_LOG_RELATED_MSG_MAX_LENGTH),
         relatedImage: target.avatarLight,
       });
       return { success: true, message: `Seichi Silver adjusted by ${input.delta}` };

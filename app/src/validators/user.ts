@@ -1,6 +1,12 @@
 import { z } from "zod";
 import type { ElementName, LetterRank, QuestType } from "@/drizzle/constants";
-import { GeneralTypes, StatTypes, UserRanks, UserRoles } from "@/drizzle/constants";
+import {
+  GeneralTypes,
+  SEICHI_SILVER_ADJUST_LIMIT,
+  StatTypes,
+  UserRanks,
+  UserRoles,
+} from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 import type { ZodAllTags } from "@/validators/combat";
 import { genders, usernameSchema } from "@/validators/register";
@@ -181,9 +187,9 @@ export const adjustSeichiSilverSchema = z.object({
   delta: z.coerce
     .number()
     .int()
-    .min(-1_000_000)
-    .max(1_000_000)
+    .min(-SEICHI_SILVER_ADJUST_LIMIT)
+    .max(SEICHI_SILVER_ADJUST_LIMIT)
     .refine((d) => d !== 0, { message: "Delta cannot be zero" }),
-  reason: z.string().min(10).max(500),
+  reason: z.string().trim().min(10).max(500),
 });
 export type AdjustSeichiSilverSchema = z.infer<typeof adjustSeichiSilverSchema>;

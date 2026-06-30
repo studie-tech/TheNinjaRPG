@@ -37,7 +37,7 @@ export type BloodlineReskinUpdateSchema = z.infer<typeof bloodlineReskinUpdateSc
 export const removeBloodlineFromPoolSchema = z.object({
   userId: z.string(),
   bloodlineId: z.string(),
-  reason: z.string().min(10).max(500),
+  reason: z.string().trim().min(10).max(500),
 });
 export type RemoveBloodlineFromPoolSchema = z.infer<
   typeof removeBloodlineFromPoolSchema
