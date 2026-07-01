@@ -639,9 +639,10 @@ export const applyEffects = (
         if (c.damage !== undefined && c.damage >= 0) {
           target.curHealth -= c.damage;
           target.curHealth = Math.max(0, target.curHealth);
-          // Accumulate per-attacker damage dealt to real opponents (non-self, non-summon) for
-          // the damage_dealt quest tracker. Reflect/recoil hit the attacker via separate
-          // consequence branches and are intentionally excluded here.
+          // Accumulate per-attacker damage dealt to real opponents (non-self, non-summon)
+          // for the damage_dealt quest tracker. Direct damage plus DoT/drain (residual,
+          // wound, afterburn, drain_hp) all count via their own branches below; reflect and
+          // recoil hit the attacker's own HP and are intentionally excluded.
           if (c.damage > 0 && isOpponentDamageTarget(user, target)) {
             user.damageDealt = (user.damageDealt ?? 0) + c.damage;
           }
@@ -684,6 +685,9 @@ export const applyEffects = (
         if (c.residual !== undefined && c.residual >= 0) {
           target.curHealth -= c.residual;
           target.curHealth = Math.max(0, target.curHealth);
+          if (c.residual > 0 && isOpponentDamageTarget(user, target)) {
+            user.damageDealt = (user.damageDealt ?? 0) + c.residual;
+          }
           actionEffects.push({
             txt: `${target.username} takes ${c.residual.toFixed(2)} residual damage`,
             color: "red",
@@ -707,6 +711,9 @@ export const applyEffects = (
         if (c.wound !== undefined && c.wound >= 0) {
           target.curHealth -= c.wound;
           target.curHealth = Math.max(0, target.curHealth);
+          if (c.wound > 0 && isOpponentDamageTarget(user, target)) {
+            user.damageDealt = (user.damageDealt ?? 0) + c.wound;
+          }
           actionEffects.push({
             txt: `${target.username} takes ${c.wound.toFixed(2)} wound damage`,
             color: "red",
@@ -774,6 +781,9 @@ export const applyEffects = (
         if (c.afterburn !== undefined && c.afterburn >= 0) {
           target.curHealth -= c.afterburn;
           target.curHealth = Math.max(0, target.curHealth);
+          if (c.afterburn > 0 && isOpponentDamageTarget(user, target)) {
+            user.damageDealt = (user.damageDealt ?? 0) + c.afterburn;
+          }
           actionEffects.push({
             txt: `${target.username} takes ${c.afterburn.toFixed(2)} afterburn damage`,
             color: "red",
@@ -829,6 +839,9 @@ export const applyEffects = (
         // Handle drain effects for each pool
         if (c.drain_hp !== undefined && c.drain_hp >= 0 && target.curHealth > 0) {
           target.curHealth = Math.max(0, target.curHealth - c.drain_hp);
+          if (c.drain_hp > 0 && isOpponentDamageTarget(user, target)) {
+            user.damageDealt = (user.damageDealt ?? 0) + c.drain_hp;
+          }
           actionEffects.push({
             txt: `${target.username} loses ${c.drain_hp.toFixed(2)} HP to drain`,
             color: "purple",

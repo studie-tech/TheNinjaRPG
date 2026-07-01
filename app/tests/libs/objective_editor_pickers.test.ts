@@ -5,8 +5,8 @@ import { getObjectiveSchema } from "@/validators/objectives";
 // Each new specific-X objective task must (a) expose its id-list field in the
 // schema and (b) carry a FORM_LABEL_MAP entry, or the EditContent render chain
 // falls through to the `allowAddNew` free-text branch and silently renders a
-// text box instead of the intended db_values picker (dual-keying touchpoint,
-// spec section 2 #7). This locks the field name and the editor label together.
+// text box instead of the intended db_values picker. This locks each field name
+// and its editor label together so a new picker field can't silently regress.
 const ID_LIST_PICKERS = [
   { task: "craft_specific_item", field: "craftItemIds" },
   { task: "train_specific_jutsu", field: "trainJutsuIds" },

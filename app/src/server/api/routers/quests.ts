@@ -1354,54 +1354,40 @@ export const questsRouter = createTRPCRouter({
         undefined;
 
       // Update database
-      const [{ items, jutsus, bloodlines, badges, droppedGatheringItems }] =
-        await Promise.all([
-          // Update rewards
-          updateRewards({
-            client: ctx.drizzle,
-            user,
-            rewards,
-            questCounterField,
-            reason: "QUEST",
-          }),
-          // Update sensei with 1000 ryo for missions
-          ...(senseiId
-            ? [
-                ctx.drizzle
-                  .update(userData)
-                  .set({
-                    money: sql`${userData.money} + ${SENSEI_STUDENT_RYO_PER_MISSION}`,
-                  })
-                  .where(eq(userData.userId, senseiId)),
-                ctx.drizzle.insert(bankTransfers).values({
-                  senderId: ctx.userId,
-                  receiverId: senseiId,
-                  amount: 1000,
-                  type: "sensei",
-                }),
-              ]
-            : []),
-        ]);
+      const [{ items, jutsus, bloodlines, badges }] = await Promise.all([
+        // Update rewards
+        updateRewards({
+          client: ctx.drizzle,
+          user,
+          rewards,
+          questCounterField,
+          reason: "QUEST",
+        }),
+        // Credit the sensei the per-mission ryo reward
+        ...(senseiId
+          ? [
+              ctx.drizzle
+                .update(userData)
+                .set({
+                  money: sql`${userData.money} + ${SENSEI_STUDENT_RYO_PER_MISSION}`,
+                })
+                .where(eq(userData.userId, senseiId)),
+              ctx.drizzle.insert(bankTransfers).values({
+                senderId: ctx.userId,
+                receiverId: senseiId,
+                amount: SENSEI_STUDENT_RYO_PER_MISSION,
+                type: "sensei",
+              }),
+            ]
+          : []),
+      ]);
       // Update rewards for readability
       rewards.reward_items = items.map((i) => i.name);
       rewards.reward_jutsus = jutsus.map((i) => i.name);
       rewards.reward_bloodlines = bloodlines.map((i) => i.name);
       rewards.reward_badges = badges.map((i) => i.name);
-      // Herbs-gathered tracker: credit the number of gathered drops. updateRewards
-      // already persisted questData without this increment, so fold it onto the
-      // current (post-reward) user.questData — preserving other quest progress — and
-      // do a single dedicated questData write. Only runs on a gathering claim that
-      // actually dropped herbs; a 0-drop gather is a no-op.
-      if (droppedGatheringItems.length > 0) {
-        const { trackers: herbTrackers } = getNewTrackers(user, [
-          { task: "herbs_gathered", increment: droppedGatheringItems.length },
-        ]);
-        user.questData = filterQuestTrackersForDbPersist(herbTrackers, user);
-        await ctx.drizzle
-          .update(userData)
-          .set({ questData: user.questData })
-          .where(eq(userData.userId, ctx.userId));
-      }
+      // Note: the herbs_gathered tracker is credited inside updateRewards' single
+      // questData write (folded there to avoid a second UPDATE on this row).
       return {
         success: true,
         notifications: finalNotifications,
@@ -1754,6 +1740,21 @@ export const updateRewards = async (info: {
       quantity: 1,
     })),
   ];
+
+  // Fold the herbs-gathered tracker into this single questData write (avoids a second
+  // UPDATE in the caller). Only the gathering-claim path drops gatherer items, and that
+  // caller loads the quest relations; every other caller drops nothing here, so this is
+  // skipped and their questData write is unchanged.
+  if (droppedGatheringItems.length > 0 && "userQuests" in user) {
+    const { trackers } = getNewTrackers(
+      user as unknown as Parameters<typeof getNewTrackers>[0],
+      [{ task: "herbs_gathered", increment: droppedGatheringItems.length }],
+    );
+    user.questData = filterQuestTrackersForDbPersist(
+      trackers,
+      user as unknown as Parameters<typeof filterQuestTrackersForDbPersist>[1],
+    );
+  }
 
   // Update userdata
   const getNewRank = rewards.reward_rank !== "NONE";

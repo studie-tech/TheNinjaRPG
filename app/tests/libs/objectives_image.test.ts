@@ -14,6 +14,7 @@ describe("objectiveImageMap / getObjectiveImage", () => {
       expect(meta, `missing metadata for ${task}`).toBeDefined();
       expect(meta.image).not.toBe("");
       expect(meta.title).not.toBe("???");
+      expect(meta.title.trim().length).toBeGreaterThan(0);
     }
   });
 
