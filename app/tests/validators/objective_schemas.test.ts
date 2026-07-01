@@ -37,6 +37,17 @@ describe("specific-X / tag / damage objective schemas", () => {
     }
   });
 
+  it("parses a freshly-added objective (id + task only) so the editor renders its pickers", () => {
+    // The editor safeParses the objective and renders fields from the PARSED result; a
+    // required field with no default makes parse fail, the raw object is used instead, and
+    // that field's picker never renders. Every new task must parse from just id + task
+    // (e.g. tag_usage_win's tagType must default to a valid tag).
+    for (const task of NEW_TASKS) {
+      const result = getObjectiveSchema(task).safeParse(base({ task }));
+      expect(result.success, `fresh ${task} must parse for the editor`).toBe(true);
+    }
+  });
+
   it("parses a minimal craft_specific_item objective with value defaulting to 1", () => {
     const parsed = getObjectiveSchema("craft_specific_item").parse(
       base({ task: "craft_specific_item", craftItemIds: ["item-1"] }),

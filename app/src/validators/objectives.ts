@@ -568,7 +568,9 @@ export const UseSpecificJutsuCombat = z.object({
 export const TagUsageWin = z.object({
   ...baseObjectiveFields,
   task: z.literal("tag_usage_win").prefault("tag_usage_win"),
-  tagType: z.enum(OBJECTIVE_TAG_TYPES),
+  // Default to a valid tag so a freshly-added objective parses (otherwise the editor's
+  // safeParse fails, falls back to the raw object, and never renders the tag picker).
+  tagType: z.enum(OBJECTIVE_TAG_TYPES).prefault(OBJECTIVE_TAG_TYPES[0]),
   value: z.coerce.number().min(0).prefault(1),
   ...rewardFields,
 });
