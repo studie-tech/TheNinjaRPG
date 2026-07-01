@@ -923,8 +923,10 @@ export const questsRouter = createTRPCRouter({
         if (editingStarterQuest && !canEditStarterQuests(user.role)) {
           return { success: false, message: `Not allowed to edit starter quests` };
         }
-        // Validate objective flow before updating
-        if (entry.consecutiveObjectives) {
+        // Validate objective flow before updating. Check the INCOMING value, not the
+        // stored one, so turning "Sequential Objectives" off saves correctly (and turning
+        // it on is validated against the flow being saved).
+        if (input.data.consecutiveObjectives) {
           const { check, message } = verifyQuestObjectiveFlow(
             input.data.content.objectives,
           );
