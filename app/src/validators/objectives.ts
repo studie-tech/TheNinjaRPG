@@ -2,6 +2,51 @@ import { z } from "zod";
 import {
   GATHERING_RANKS,
   HUNTING_RANKS,
+  IMG_BADGE_A_CRIME_TOTAL,
+  IMG_BADGE_A_MISSION_TOTAL,
+  IMG_BADGE_ARENAKILLS,
+  IMG_BADGE_B_CRIME_TOTAL,
+  IMG_BADGE_B_MISSION_TOTAL,
+  IMG_BADGE_BUY_ITEM,
+  IMG_BADGE_C_CRIME_TOTAL,
+  IMG_BADGE_C_MISSION_TOTAL,
+  IMG_BADGE_COLLECT_ITEM,
+  IMG_BADGE_COMPLETE_SPECIFIC_QUEST,
+  IMG_BADGE_CRAFT_SPECIFIC_ITEM,
+  IMG_BADGE_CRAFTING_EXPERIENCE,
+  IMG_BADGE_CREATURES_HUNTED,
+  IMG_BADGE_D_CRIME_TOTAL,
+  IMG_BADGE_D_MISSION_TOTAL,
+  IMG_BADGE_DAMAGE_DEALT,
+  IMG_BADGE_DAYS_IN_VILLAGE,
+  IMG_BADGE_DEFEAT_OPPONENTS,
+  IMG_BADGE_DIALOG,
+  IMG_BADGE_ERRANDS_TOTAL,
+  IMG_BADGE_EXCLUSIVE_RAID,
+  IMG_BADGE_FAIL_QUEST,
+  IMG_BADGE_GATHERING_EXPERIENCE,
+  IMG_BADGE_HERBS_GATHERED,
+  IMG_BADGE_HUNTING_EXPERIENCE,
+  IMG_BADGE_ITEMS_CRAFTED,
+  IMG_BADGE_JUTSUS_MASTERED,
+  IMG_BADGE_MEDICAL_EXPERIENCE,
+  IMG_BADGE_MINUTES_PASSED,
+  IMG_BADGE_MINUTES_TRAINING,
+  IMG_BADGE_MOVE_TO_LOCATION,
+  IMG_BADGE_NEW_QUEST,
+  IMG_BADGE_OPEN_RAID,
+  IMG_BADGE_PVPKILLS,
+  IMG_BADGE_RANDOM_ENCOUNTER_WINS,
+  IMG_BADGE_REPUTATION_POINTS,
+  IMG_BADGE_RESET_QUEST,
+  IMG_BADGE_START_BATTLE,
+  IMG_BADGE_STATS_TRAINED,
+  IMG_BADGE_TAG_USAGE_WIN,
+  IMG_BADGE_TRAIN_SPECIFIC_JUTSU,
+  IMG_BADGE_USE_ITEM_COMBAT,
+  IMG_BADGE_USE_JUTSU_COMBAT,
+  IMG_BADGE_USER_LEVEL,
+  IMG_BADGE_WIN_QUEST,
   LetterRanks,
   MEDNIN_RANKS,
   QuestTypes,
@@ -54,6 +99,9 @@ export const SimpleTasks = [
   "hunting_experience_gained",
   "gathering_experience",
   "gathering_experience_gained",
+  "items_crafted",
+  "creatures_hunted",
+  "herbs_gathered",
   //"students_trained",
 ] as const;
 export type SimpleTask = (typeof SimpleTasks)[number];
@@ -69,6 +117,77 @@ export type InstantTasksType = (typeof InstantTasks)[number];
 export const RaidTasks = ["open_raid", "exclusive_raid"] as const;
 export type RaidTask = (typeof RaidTasks)[number];
 
+// Curated subset of combat effect types (`effectFilters` in @/validators/combat) that can
+// be applied during a winnable battle, used by the tag_usage_win objective picker + schema.
+// Excludes non-combat / out-of-battle tag types (noncombat*, marriage, reskin,
+// unlockitemvariant, repair, rollbloodline) AND combat tags that never resolve on a user
+// target (barrier, clone, summon, move — ground-only / special handlers). Locked to the
+// canonical list by tests/validators/objective_tag_types.test.ts (fails if a new effect type
+// is added).
+export const OBJECTIVE_TAG_TYPES = [
+  "absorb",
+  "afterburn",
+  "buffprevent",
+  "cleanse",
+  "cleanseprevent",
+  "clear",
+  "clearprevent",
+  "copy",
+  "damage",
+  "debuffprevent",
+  "decreasecooldown",
+  "decreasedamagegiven",
+  "decreasedamagetaken",
+  "decreaseheal",
+  "decreasemaxpools",
+  "decreasepoolcost",
+  "decreasestat",
+  "drain",
+  "elementalseal",
+  "finalstand",
+  "flee",
+  "fleeprevent",
+  "heal",
+  "healprevent",
+  "immunity",
+  "increasecooldown",
+  "increasedamagegiven",
+  "increasedamagetaken",
+  "increaseheal",
+  "increasemaxpools",
+  "increasepoolcost",
+  "increaserange",
+  "increasestat",
+  "injectjutsus",
+  "lifesteal",
+  "mirror",
+  "moveprevent",
+  "onehitkill",
+  "onehitkillprevent",
+  "pierce",
+  "poison",
+  "recoil",
+  "redirection",
+  "reflect",
+  "removebloodline",
+  "rob",
+  "robprevent",
+  "seal",
+  "sealprevent",
+  "shield",
+  "stealth",
+  "stun",
+  "stunprevent",
+  "summonprevent",
+  "timecompression",
+  "timedilation",
+  "vamp",
+  "visual",
+  "weakness",
+  "wound",
+] as const;
+export type ObjectiveTagType = (typeof OBJECTIVE_TAG_TYPES)[number];
+
 export const LocationTasks = [
   "move_to_location",
   "win_encounter_at_location",
@@ -78,15 +197,140 @@ export const LocationTasks = [
 ] as const;
 export type LocationTasksType = (typeof LocationTasks)[number];
 
+export const TrackerObjectiveTasks = [
+  "craft_specific_item",
+  "train_specific_jutsu",
+  "complete_specific_quest",
+  "buy_item",
+  "use_specific_item_combat",
+  "use_specific_jutsu_combat",
+  "tag_usage_win",
+  "damage_dealt",
+] as const;
+export type TrackerObjectiveTask = (typeof TrackerObjectiveTasks)[number];
+
 export const allObjectiveTasks = [
   ...SimpleTasks,
   ...LocationTasks,
   ...InstantTasks,
   ...RaidTasks,
+  ...TrackerObjectiveTasks,
   "reset_quest",
   "dialog",
 ] as const;
 export type AllObjectiveTask = (typeof allObjectiveTasks)[number];
+
+/**
+ * Badge image + human-readable title for every objective task. Keyed by the
+ * canonical task union, so adding a task to `allObjectiveTasks` without supplying
+ * metadata here is a compile error rather than a silent "???" icon at runtime.
+ */
+export const objectiveImageMap: Record<
+  AllObjectiveTask,
+  { image: string; title: string }
+> = {
+  pvp_kills: { image: IMG_BADGE_PVPKILLS, title: "PVP kills" },
+  arena_kills: { image: IMG_BADGE_ARENAKILLS, title: "Arena kills" },
+  minutes_passed: { image: IMG_BADGE_MINUTES_PASSED, title: "Minutes passed" },
+  days_as_kage: { image: IMG_BADGE_DAYS_IN_VILLAGE, title: "Days as Kage" },
+  errands_total: { image: IMG_BADGE_ERRANDS_TOTAL, title: "Errands" },
+  a_missions_total: { image: IMG_BADGE_A_MISSION_TOTAL, title: "A-rank Missions" },
+  b_missions_total: { image: IMG_BADGE_B_MISSION_TOTAL, title: "B-rank Missions" },
+  c_missions_total: { image: IMG_BADGE_C_MISSION_TOTAL, title: "C-rank Missions" },
+  d_missions_total: { image: IMG_BADGE_D_MISSION_TOTAL, title: "D-rank Missions" },
+  a_crimes_total: { image: IMG_BADGE_A_CRIME_TOTAL, title: "A-rank crimes" },
+  b_crimes_total: { image: IMG_BADGE_B_CRIME_TOTAL, title: "B-rank crimes" },
+  c_crimes_total: { image: IMG_BADGE_C_CRIME_TOTAL, title: "C-rank crimes" },
+  d_crimes_total: { image: IMG_BADGE_D_CRIME_TOTAL, title: "D-rank crimes" },
+  minutes_training: { image: IMG_BADGE_MINUTES_TRAINING, title: "Minutes Training" },
+  stats_trained: { image: IMG_BADGE_STATS_TRAINED, title: "Stats Trained" },
+  days_in_village: { image: IMG_BADGE_DAYS_IN_VILLAGE, title: "Days in Village" },
+  jutsus_mastered: { image: IMG_BADGE_JUTSUS_MASTERED, title: "Jutsus Mastered" },
+  user_level: { image: IMG_BADGE_USER_LEVEL, title: "User Level" },
+  reputation_points: {
+    image: IMG_BADGE_REPUTATION_POINTS,
+    title: "Reputation Bought",
+  },
+  random_encounter_wins: {
+    image: IMG_BADGE_RANDOM_ENCOUNTER_WINS,
+    title: "Encounter Wins",
+  },
+  spars_won: { image: IMG_BADGE_ARENAKILLS, title: "Spars Won" },
+  medical_experience: {
+    image: IMG_BADGE_MEDICAL_EXPERIENCE,
+    title: "Medical Experience",
+  },
+  medical_experience_gained: {
+    image: IMG_BADGE_MEDICAL_EXPERIENCE,
+    title: "Medical Experience Gained",
+  },
+  crafting_experience: {
+    image: IMG_BADGE_CRAFTING_EXPERIENCE,
+    title: "Crafting Experience",
+  },
+  crafting_experience_gained: {
+    image: IMG_BADGE_CRAFTING_EXPERIENCE,
+    title: "Crafting Experience Gained",
+  },
+  hunting_experience: {
+    image: IMG_BADGE_HUNTING_EXPERIENCE,
+    title: "Hunting Experience",
+  },
+  hunting_experience_gained: {
+    image: IMG_BADGE_HUNTING_EXPERIENCE,
+    title: "Hunting Experience Gained",
+  },
+  gathering_experience: {
+    image: IMG_BADGE_GATHERING_EXPERIENCE,
+    title: "Gathering Experience",
+  },
+  gathering_experience_gained: {
+    image: IMG_BADGE_GATHERING_EXPERIENCE,
+    title: "Gathering Experience Gained",
+  },
+  items_crafted: { image: IMG_BADGE_ITEMS_CRAFTED, title: "Items Crafted" },
+  creatures_hunted: { image: IMG_BADGE_CREATURES_HUNTED, title: "Creatures Hunted" },
+  herbs_gathered: { image: IMG_BADGE_HERBS_GATHERED, title: "Herbs Gathered" },
+  move_to_location: { image: IMG_BADGE_MOVE_TO_LOCATION, title: "Travel" },
+  win_encounter_at_location: {
+    image: IMG_BADGE_RANDOM_ENCOUNTER_WINS,
+    title: "Encounters at Location",
+  },
+  collect_item: { image: IMG_BADGE_COLLECT_ITEM, title: "Collect Item" },
+  deliver_item: { image: IMG_BADGE_COLLECT_ITEM, title: "Deliver Item" },
+  defeat_opponents: { image: IMG_BADGE_DEFEAT_OPPONENTS, title: "Defeat" },
+  fail_quest: { image: IMG_BADGE_FAIL_QUEST, title: "Fail Quest" },
+  win_quest: { image: IMG_BADGE_WIN_QUEST, title: "Win Quest" },
+  new_quest: { image: IMG_BADGE_NEW_QUEST, title: "New Quest" },
+  start_battle: { image: IMG_BADGE_START_BATTLE, title: "Start Battle" },
+  open_raid: { image: IMG_BADGE_OPEN_RAID, title: "Open Raid" },
+  exclusive_raid: { image: IMG_BADGE_EXCLUSIVE_RAID, title: "Exclusive Raid" },
+  reset_quest: { image: IMG_BADGE_RESET_QUEST, title: "Reset Quest" },
+  dialog: { image: IMG_BADGE_DIALOG, title: "Dialog" },
+  craft_specific_item: {
+    image: IMG_BADGE_CRAFT_SPECIFIC_ITEM,
+    title: "Craft Specific Item",
+  },
+  train_specific_jutsu: {
+    image: IMG_BADGE_TRAIN_SPECIFIC_JUTSU,
+    title: "Train Specific Jutsu",
+  },
+  complete_specific_quest: {
+    image: IMG_BADGE_COMPLETE_SPECIFIC_QUEST,
+    title: "Complete Specific Quest",
+  },
+  buy_item: { image: IMG_BADGE_BUY_ITEM, title: "Buy Item" },
+  use_specific_item_combat: {
+    image: IMG_BADGE_USE_ITEM_COMBAT,
+    title: "Use Item in Combat",
+  },
+  use_specific_jutsu_combat: {
+    image: IMG_BADGE_USE_JUTSU_COMBAT,
+    title: "Use Jutsu in Combat",
+  },
+  tag_usage_win: { image: IMG_BADGE_TAG_USAGE_WIN, title: "Tag Usage (Win)" },
+  damage_dealt: { image: IMG_BADGE_DAMAGE_DEALT, title: "Damage Dealt" },
+};
 
 export const attackerFields = {
   attackers: idsWithNumberField,
@@ -266,7 +510,80 @@ export const RaidObjective = z.object({
 });
 export type RaidObjectiveType = z.infer<typeof RaidObjective>;
 
-export const AllObjectives = z.union([
+// contentId stores the crafted item id (matched against craftItemIds).
+export const CraftSpecificItem = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("craft_specific_item").prefault("craft_specific_item"),
+  craftItemIds: z.array(z.string()).prefault([]),
+  value: z.coerce.number().min(0).prefault(1),
+  ...rewardFields,
+});
+
+// contentId stores the trained jutsu id (matched against trainJutsuIds).
+export const TrainSpecificJutsu = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("train_specific_jutsu").prefault("train_specific_jutsu"),
+  trainJutsuIds: z.array(z.string()).prefault([]),
+  value: z.coerce.number().min(0).prefault(1),
+  ...rewardFields,
+});
+
+// contentId stores the completed quest id (matched against completeQuestIds).
+export const CompleteSpecificQuest = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("complete_specific_quest").prefault("complete_specific_quest"),
+  completeQuestIds: z.array(z.string()).prefault([]),
+  value: z.coerce.number().min(0).prefault(1),
+  ...rewardFields,
+});
+
+// contentId stores the purchased item id (matched against buyItemIds). NPC shop only (v1).
+export const BuyItem = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("buy_item").prefault("buy_item"),
+  buyItemIds: z.array(z.string()).prefault([]),
+  value: z.coerce.number().min(0).prefault(1),
+  ...rewardFields,
+});
+
+// contentId stores a used item id from this battle (matched against useItemIds).
+export const UseSpecificItemCombat = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("use_specific_item_combat").prefault("use_specific_item_combat"),
+  useItemIds: z.array(z.string()).prefault([]),
+  value: z.coerce.number().min(0).prefault(1),
+  ...rewardFields,
+});
+
+// contentId stores a used jutsu id from this battle (matched against useJutsuIds).
+export const UseSpecificJutsuCombat = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("use_specific_jutsu_combat").prefault("use_specific_jutsu_combat"),
+  useJutsuIds: z.array(z.string()).prefault([]),
+  value: z.coerce.number().min(0).prefault(1),
+  ...rewardFields,
+});
+
+// contentId stores an applied combat tag type from a won battle (matched against tagType).
+export const TagUsageWin = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("tag_usage_win").prefault("tag_usage_win"),
+  tagType: z.enum(OBJECTIVE_TAG_TYPES),
+  value: z.coerce.number().min(0).prefault(1),
+  ...rewardFields,
+});
+
+// value = damage threshold. singleBattle=false accumulates across the quest's battles;
+// singleBattle=true tracks the best single battle (monotonic max).
+export const DamageDealt = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("damage_dealt").prefault("damage_dealt"),
+  singleBattle: z.coerce.boolean().prefault(false),
+  value: z.coerce.number().min(0).prefault(1),
+  ...rewardFields,
+});
+
+export const AllObjectives = z.discriminatedUnion("task", [
   SimpleObjective,
   InstantWinLoseObjective,
   ResetQuestObjective,
@@ -279,6 +596,14 @@ export const AllObjectives = z.union([
   DialogObjective,
   EncountersAtLocation,
   RaidObjective,
+  CraftSpecificItem,
+  TrainSpecificJutsu,
+  CompleteSpecificQuest,
+  BuyItem,
+  UseSpecificItemCombat,
+  UseSpecificJutsuCombat,
+  TagUsageWin,
+  DamageDealt,
 ]);
 export type AllObjectivesType = z.infer<typeof AllObjectives>;
 
@@ -470,6 +795,22 @@ export const getObjectiveSchema = (type: string) => {
     return EncountersAtLocation;
   } else if (type === "open_raid" || type === "exclusive_raid") {
     return RaidObjective;
+  } else if (type === "craft_specific_item") {
+    return CraftSpecificItem;
+  } else if (type === "train_specific_jutsu") {
+    return TrainSpecificJutsu;
+  } else if (type === "complete_specific_quest") {
+    return CompleteSpecificQuest;
+  } else if (type === "buy_item") {
+    return BuyItem;
+  } else if (type === "use_specific_item_combat") {
+    return UseSpecificItemCombat;
+  } else if (type === "use_specific_jutsu_combat") {
+    return UseSpecificJutsuCombat;
+  } else if (type === "tag_usage_win") {
+    return TagUsageWin;
+  } else if (type === "damage_dealt") {
+    return DamageDealt;
   }
   throw new Error(`Unknown objective task ${type}`);
 };
@@ -480,6 +821,14 @@ export const allObjectiveSchema = z.union([
   CollectItem,
   DeliverItem,
   DefeatOpponents,
+  CraftSpecificItem,
+  TrainSpecificJutsu,
+  CompleteSpecificQuest,
+  BuyItem,
+  UseSpecificItemCombat,
+  UseSpecificJutsuCombat,
+  TagUsageWin,
+  DamageDealt,
 ]);
 
 /**

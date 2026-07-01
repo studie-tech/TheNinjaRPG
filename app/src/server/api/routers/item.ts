@@ -49,6 +49,7 @@ import {
   itemLoadout,
   itemVariant,
   quest,
+  questHistory,
   userData,
   userItem,
   userItemImbuement,
@@ -70,7 +71,12 @@ import {
   decideRename,
   resolveSelectableLoadout,
 } from "@/libs/loadout";
-import { collapseRewards, postProcessRewards } from "@/libs/quest";
+import {
+  collapseRewards,
+  filterQuestTrackersForDbPersist,
+  getNewTrackers,
+  postProcessRewards,
+} from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
@@ -1906,11 +1912,12 @@ export const itemRouter = createTRPCRouter({
       // Query
       const iid = input.itemId;
       const uid = ctx.userId;
-      const [user, info, useritems, structures] = await Promise.all([
+      const [user, info, useritems, structures, questState] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchItem(ctx.drizzle, iid),
         fetchUserItems(ctx.drizzle, uid),
         fetchStructures(ctx.drizzle, input.villageId),
+        fetchUserQuestState(ctx.drizzle, ctx.userId),
       ]);
       // Derived
       const regularItems = useritems?.filter(
@@ -1996,13 +2003,29 @@ export const itemRouter = createTRPCRouter({
           }
         });
       }
-      // Mutate
+      // buy_item quest tracker. fetchUser returns the bare userdata row (no quest
+      // relations), so hydrate userQuests/completedQuests from the thin fetch above
+      // (NOT fetchUpdatedUser, which pulls achievements/wars/raids and runs regen
+      // writes). Null-check the fetched state before deref. NPC item shop only;
+      // auction buyouts are a separate, out-of-scope path.
+      const buyer = {
+        ...user,
+        userQuests: questState?.userQuests ?? [],
+        completedQuests: questState?.completedQuests ?? [],
+      } as unknown as Parameters<typeof getNewTrackers>[0];
+      const { trackers } = getNewTrackers(buyer, [
+        { task: "buy_item", increment: input.stack, contentId: iid },
+      ]);
+      const questDataForDb = filterQuestTrackersForDbPersist(trackers, buyer);
+      // Mutate — fold questData into the same CAS UPDATE so it only persists when the
+      // fund deduction succeeds (one UPDATE per row, no separate questData write).
       const result = await ctx.drizzle
         .update(userData)
         .set({
           money: sql`${userData.money} - ${ryoCost}`,
           reputationPoints: sql`${userData.reputationPoints} - ${repsCost}`,
           seichiSilver: sql`${userData.seichiSilver} - ${seichiSilverCost}`,
+          questData: questDataForDb,
         })
         .where(
           and(
@@ -2386,6 +2409,31 @@ const getVariantCurrencyOps = (
     },
   };
   return ops[costType];
+};
+
+/**
+ * Thin quest-state fetch for tracker emits: only the relations getNewTrackers needs
+ * (active + achievement userQuests, plus completedQuests for availability checks).
+ * Avoids fetchUpdatedUser's fat row and its regen side-writes.
+ */
+const fetchUserQuestState = async (client: DrizzleClient, userId: string) => {
+  return await client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    columns: { userId: true },
+    with: {
+      userQuests: {
+        where: or(
+          and(isNull(questHistory.endAt), eq(questHistory.completed, 0)),
+          eq(questHistory.questType, "achievement"),
+        ),
+        with: { quest: true },
+      },
+      completedQuests: {
+        columns: { id: true, questId: true, completed: true },
+        where: gte(questHistory.completed, 1),
+      },
+    },
+  });
 };
 
 export const fetchItem = async (client: DrizzleClient, id: string) => {

@@ -291,9 +291,18 @@ export const occupationRouter = createTRPCRouter({
       const baseExpGain =
         (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
       const expGain = Math.floor(baseExpGain * (1 + clanCraftingExpBoost));
-      // Update trackers with crafting experience gained
+      // Update trackers: crafting experience, total items crafted, and any
+      // craft-this-specific-item objectives. Emitted here (behind the craft CAS /
+      // expUpdate rowsAffected guard below) — NOT from the quest-reward EXP path
+      // (quest.ts:367-377), which must stay experience-only to avoid double-counting.
       const { trackers } = getNewTrackers(user, [
         { task: "crafting_experience_gained", increment: expGain },
+        { task: "items_crafted", increment: input.quantity },
+        {
+          task: "craft_specific_item",
+          increment: input.quantity,
+          contentId: input.itemId,
+        },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       const expUpdate = ctx.drizzle

@@ -313,7 +313,7 @@ export const getReward = (
 
     // Chunin mission experience bonus (≤ level 40)
     if (
-      !!user.senseiId &&
+      user.senseiId &&
       user.level <= SENSEI_MAX_STUDENT_LEVEL &&
       userQuest.quest.questType === "mission"
     ) {
@@ -364,12 +364,27 @@ export const getReward = (
       increment: rewards.reward_gathering_experience,
     });
   }
-  if (experienceTrackerTasks.length > 0) {
-    // Run experience-gain updates on top of the already-updated questData,
-    // so we preserve progress changes from the first getNewTrackers call.
+  // Fold follow-up trackers onto the already-updated questData so progress from the
+  // first getNewTrackers call is preserved (single authoritative questData write).
+  // complete_specific_quest fires once on the active -> completed transition: `resolved`
+  // is only true the moment this quest resolves and false once it is already completed,
+  // so other quests that list this questId are credited exactly once. Single-level only
+  // — a chained A -> B -> C will not fully resolve in one request (B's own completion
+  // emits on its next checkRewards).
+  const followupTrackerTasks: Parameters<typeof getNewTrackers>[1] = [
+    ...experienceTrackerTasks,
+  ];
+  if (resolved && userQuest) {
+    followupTrackerTasks.push({
+      task: "complete_specific_quest",
+      increment: 1,
+      contentId: userQuest.questId,
+    });
+  }
+  if (followupTrackerTasks.length > 0) {
     const { trackers: updatedTrackers } = getNewTrackers(
       { ...user, questData: trackers },
-      experienceTrackerTasks,
+      followupTrackerTasks,
     );
     // Replace in-place to keep the original `trackers` array reference.
     trackers.length = 0;
@@ -608,16 +623,62 @@ export const killObjectiveCountsForQuest = (
  * @param contentId - If provided, refers to ID of content, e.g. opponentID defeated
  * @param notifications - If provided, is used to set notifications
  */
+/**
+ * Tasks whose progress is gated by a contentId that must match one of the objective's own
+ * configured ids. Single source of truth for BOTH the generic-block guard and the shared
+ * content-gated matcher in getNewTrackers.
+ */
+const CONTENT_GATED_TASKS: Set<AllObjectiveTask> = new Set([
+  "craft_specific_item",
+  "train_specific_jutsu",
+  "complete_specific_quest",
+  "buy_item",
+  "use_specific_item_combat",
+  "use_specific_jutsu_combat",
+  "tag_usage_win",
+]);
+
+/**
+ * For each content-gated task, the objective field holding its id-list (or, for
+ * tag_usage_win, the single tagType value). Reading the field by name avoids a silent
+ * undefined.includes() since the schemas use distinct field names.
+ */
+const CONTENT_ID_FIELD: Partial<Record<AllObjectiveTask, string>> = {
+  craft_specific_item: "craftItemIds",
+  train_specific_jutsu: "trainJutsuIds",
+  complete_specific_quest: "completeQuestIds",
+  buy_item: "buyItemIds",
+  use_specific_item_combat: "useItemIds",
+  use_specific_jutsu_combat: "useJutsuIds",
+  tag_usage_win: "tagType",
+};
+
+/**
+ * Returns the content ids an objective matches against. For id-list tasks this is the array
+ * field; for tag_usage_win it is the single tagType wrapped in an array.
+ */
+const objectiveContentIds = (objective: AllObjectivesType): string[] => {
+  const field = CONTENT_ID_FIELD[objective.task];
+  if (!field) return [];
+  const raw = (objective as Record<string, unknown>)[field];
+  if (Array.isArray(raw)) {
+    return raw.filter((v): v is string => typeof v === "string");
+  }
+  return typeof raw === "string" ? [raw] : [];
+};
+
+export type ObjectiveTrackerTaskInput = {
+  task: AllObjectiveTask | "any";
+  increment?: number;
+  value?: number;
+  text?: string;
+  contentId?: string;
+  warFoe?: boolean;
+};
+
 export const getNewTrackers = (
   user: NonNullable<UserWithRelations> & { useritems?: UserItem[] },
-  tasks: {
-    task: AllObjectiveTask | "any";
-    increment?: number;
-    value?: number;
-    text?: string;
-    contentId?: string;
-    warFoe?: boolean;
-  }[],
+  tasks: ObjectiveTrackerTaskInput[],
   combatContext?: CombatQuestContext,
 ) => {
   const questData = user.questData ?? [];
@@ -883,13 +944,40 @@ export const getNewTrackers = (
               const killCounts =
                 !isWarContextKillTask ||
                 killObjectiveCountsForQuest(quest.questType, combatContext, taskWarFoe);
-              // If objective has a value, increment it
-              if (status && "value" in objective) {
+              // Generic counter objectives: increment/set on task-name match. Content-gated
+              // (specific-X + tag_usage_win) and damage_dealt tasks own the gated branches
+              // below and must NOT also run this path, or they would double-count.
+              if (
+                status &&
+                "value" in objective &&
+                !CONTENT_GATED_TASKS.has(task) &&
+                task !== "damage_dealt"
+              ) {
                 if (taskUpdate.increment && killCounts) {
                   status.value += taskUpdate.increment;
                 }
                 if (taskUpdate.value && killCounts) {
                   status.value = taskUpdate.value;
+                }
+              }
+              // Content-gated objectives: credit only when the emitted contentId belongs to
+              // this objective's own id-list. One shared matcher across all content-gated tasks.
+              if (
+                status &&
+                "value" in objective &&
+                CONTENT_GATED_TASKS.has(task) &&
+                taskUpdate.contentId !== undefined &&
+                objectiveContentIds(objective).includes(taskUpdate.contentId)
+              ) {
+                status.value += taskUpdate.increment ?? 1;
+              }
+              // Damage dealt: cumulative across the quest, or single-battle max when toggled.
+              if (status && task === "damage_dealt" && "value" in objective) {
+                const dealt = taskUpdate.increment ?? 0;
+                if ("singleBattle" in objective && objective.singleBattle) {
+                  status.value = Math.max(status.value, dealt);
+                } else {
+                  status.value += dealt;
                 }
               }
               // Dialog objective

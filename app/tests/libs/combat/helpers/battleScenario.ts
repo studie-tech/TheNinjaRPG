@@ -139,6 +139,8 @@ export const battleUserSchema = z
         })
         .passthrough(),
     ).prefault([]),
+    usedTagTypes: z.array(z.string()).prefault([]),
+    damageDealt: num(),
     basicActions: z.array(z.custom<BattleBasicAction>()).prefault([]),
     relationIds: z.array(z.string()).prefault([]),
     warIds: z.array(z.string()).prefault([]),

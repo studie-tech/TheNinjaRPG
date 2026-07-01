@@ -1905,7 +1905,10 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   });
 
   const { data: jutsuData } = api.jutsu.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("reward_jutsus"),
+    enabled:
+      fields.includes("reward_jutsus") ||
+      fields.includes("trainJutsuIds") ||
+      fields.includes("useJutsuIds"),
   });
 
   const { data: badgeData } = api.badge.getAll.useQuery(undefined, {
@@ -1916,7 +1919,10 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     enabled:
       fields.includes("reward_items") ||
       fields.includes("collectItemIds") ||
-      fields.includes("deliverItemIds"),
+      fields.includes("deliverItemIds") ||
+      fields.includes("craftItemIds") ||
+      fields.includes("buyItemIds") ||
+      fields.includes("useItemIds"),
   });
 
   const { data: sceneBackgrounds } = api.gameAsset.getAllNames.useQuery(
@@ -1930,7 +1936,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   );
 
   const { data: quests } = api.quests.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("newQuestIds"),
+    enabled: fields.includes("newQuestIds") || fields.includes("completeQuestIds"),
   });
 
   const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined, {
@@ -2144,10 +2150,27 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values",
         };
-      } else if (["collectItemIds", "deliverItemIds"].includes(value) && itemData) {
+      } else if (
+        [
+          "collectItemIds",
+          "deliverItemIds",
+          "craftItemIds",
+          "buyItemIds",
+          "useItemIds",
+        ].includes(value) &&
+        itemData
+      ) {
         return {
           id: value,
           values: itemData,
+          multiple: true,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values",
+        };
+      } else if (["trainJutsuIds", "useJutsuIds"].includes(value) && jutsuData) {
+        return {
+          id: value,
+          values: jutsuData,
           multiple: true,
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values",
@@ -2203,7 +2226,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
           label: FORM_LABEL_MAP[value] ?? value,
           resetButton: true,
         };
-      } else if (([value] as string[]).includes("newQuestIds") && quests) {
+      } else if (["newQuestIds", "completeQuestIds"].includes(value) && quests) {
         return {
           id: value,
           values: quests,
@@ -2502,6 +2525,13 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   attackers_scale_gains: "Scale random encounter combat gains",
   attackers_max_per_battle: "Max number of AI in random encounter",
   skillId: "Skill Unlocked by Consumption",
+  craftItemIds: "Items to Craft",
+  buyItemIds: "Items to Buy (NPC shop)",
+  useItemIds: "Items to Use in Combat",
+  trainJutsuIds: "Jutsu to Train",
+  useJutsuIds: "Jutsu to Use in Combat",
+  completeQuestIds: "Quests to Complete",
+  tagType: "Combat Tag Type",
 };
 
 /**
