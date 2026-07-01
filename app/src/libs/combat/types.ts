@@ -38,7 +38,7 @@ import type {
 } from "@/drizzle/schema";
 import type { GenNames, publicState, StatNames } from "@/libs/combat/constants";
 import type { TerrainHex } from "@/libs/hexgrid";
-import type { ZodAllTags } from "@/validators/combat";
+import type { EffectType, ZodAllTags } from "@/validators/combat";
 import type { QuestTrackerType } from "@/validators/objectives";
 import type { DmgConfig } from "./constants";
 
@@ -162,6 +162,10 @@ export type CombatUserFields = {
   moneyStolen: number;
   allyVillage: boolean;
   usedActions: { id: string; type: "jutsu" | "item" | "basic" | "bloodline" }[];
+  /** Distinct tag types the user applied this battle (for tag_usage_win tracker). Array not Set — serializes to JSON. */
+  usedTagTypes: EffectType[];
+  /** Total damage this user dealt to opponents this battle (for damage_dealt tracker). */
+  damageDealt: number;
   initiative: number;
   basicActions: BattleBasicAction[];
   hex?: TerrainHex;

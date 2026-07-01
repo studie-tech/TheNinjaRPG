@@ -113,6 +113,7 @@ import {
   getEffectStage,
   getItem,
   isEffectActive,
+  isOpponentDamageTarget,
   sortEffects,
 } from "./util";
 
@@ -638,6 +639,12 @@ export const applyEffects = (
         if (c.damage !== undefined && c.damage >= 0) {
           target.curHealth -= c.damage;
           target.curHealth = Math.max(0, target.curHealth);
+          // Accumulate per-attacker damage dealt to real opponents (non-self, non-summon) for
+          // the damage_dealt quest tracker. Reflect/recoil hit the attacker via separate
+          // consequence branches and are intentionally excluded here.
+          if (c.damage > 0 && isOpponentDamageTarget(user, target)) {
+            user.damageDealt = (user.damageDealt ?? 0) + c.damage;
+          }
           actionEffects.push({
             txt: `${target.username} takes ${c.damage.toFixed(2)} damage`,
             color: "red",
@@ -995,6 +1002,14 @@ export const applySingleEffect = (
       // Figure if tag should be applied
       const ratio = calcApplyRatio(effect, battle, effect.targetId, isTargetOrNew);
       if (ratio > 0) {
+        // Record the APPLIED (resolved, ratio>0) tag type on the caster for the tag_usage_win
+        // tracker. Recorded at resolution — not cast — so resisted/missed/immune effects do
+        // not count; deduped so a multi-round tag counts once. Defensive init covers battles
+        // whose JSON state predates the field.
+        newUser.usedTagTypes = newUser.usedTagTypes ?? [];
+        if (!newUser.usedTagTypes.includes(effect.type)) {
+          newUser.usedTagTypes.push(effect.type);
+        }
         // Tags only applied when target is user or new
         if (isTargetOrNew) {
           if (effect.type === "damage" && isTargetOrNew) {

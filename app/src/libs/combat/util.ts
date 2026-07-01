@@ -377,6 +377,78 @@ export const hydrateUserForQuests = (battle: CompleteBattle, user: BattleUserSta
   };
 };
 
+import type { ObjectiveTrackerTaskInput as ObjectiveTrackerTask } from "@/libs/quest";
+
+/**
+ * True when `target` is a real opponent of `attacker` for damage tracking: a different user
+ * (not self), not a summon, and on the opposing side (direction differs). Used by both
+ * damage_dealt accumulation in process.ts and creatures_hunted counting in buildCombatTrackerTasks
+ * so that both trackers agree on what constitutes a "real opponent".
+ */
+export const isOpponentDamageTarget = (
+  attacker: BattleUserState,
+  target: BattleUserState,
+): boolean =>
+  target.userId !== attacker.userId &&
+  !target.isSummon &&
+  target.direction !== attacker.direction;
+
+/**
+ * Build the issue-#1353 objective tracker tasks from pre-loaded battle state.
+ *
+ * Pure: reads only accumulated battle-state fields (usedActions, usedTagTypes, damageDealt)
+ * and the opponent list — no DB fetch — so it folds into the single getNewTrackers call in
+ * updateUser (database.ts) without breaking the combat-performance rule. Win-only trackers
+ * gate on result.didWin > 0; combat usage/damage trackers count on any outcome.
+ */
+export const buildCombatTrackerTasks = (
+  curBattle: CompleteBattle,
+  user: BattleUserState,
+  result: CombatResult,
+): ObjectiveTrackerTask[] => {
+  const tasks: ObjectiveTrackerTask[] = [];
+
+  // #11/#12 use_specific_item_combat / use_specific_jutsu_combat: one tick per DISTINCT used
+  // id, any outcome (cast-time usage is the intent). In usedActions a jutsu action's `id` is
+  // the jutsuId and an item action's `id` is the itemId (actions.ts insertAction).
+  const usedJutsuIds = [
+    ...new Set(user.usedActions.filter((a) => a.type === "jutsu").map((a) => a.id)),
+  ];
+  const usedItemIds = [
+    ...new Set(user.usedActions.filter((a) => a.type === "item").map((a) => a.id)),
+  ];
+  for (const id of usedJutsuIds) {
+    tasks.push({ task: "use_specific_jutsu_combat", increment: 1, contentId: id });
+  }
+  for (const id of usedItemIds) {
+    tasks.push({ task: "use_specific_item_combat", increment: 1, contentId: id });
+  }
+
+  // #13 damage_dealt: total damage this user dealt to real opponents this battle (accumulated
+  // at consequence application in process.ts). Any outcome; skip a no-op zero emit.
+  if ((user.damageDealt ?? 0) > 0) {
+    tasks.push({ task: "damage_dealt", increment: user.damageDealt ?? 0 });
+  }
+
+  if (result.didWin > 0) {
+    // #3 creatures_hunted: +1 per opposing-side (non-self, non-summon) opponent when the
+    // battle is won. Uses isOpponentDamageTarget so the predicate matches damage_dealt.
+    // Gating is implicit — these objectives are authored only on hunting-rank quests.
+    for (const u of curBattle.usersState) {
+      if (isOpponentDamageTarget(user, u)) {
+        tasks.push({ task: "creatures_hunted", increment: 1 });
+      }
+    }
+    // #9 tag_usage_win: one tick per DISTINCT tag type the user APPLIED (resolved) this
+    // battle. usedTagTypes is populated at effect resolution in process.ts.
+    for (const t of new Set(user.usedTagTypes ?? [])) {
+      tasks.push({ task: "tag_usage_win", increment: 1, contentId: t });
+    }
+  }
+
+  return tasks;
+};
+
 /**
  * Get bounties from extraState for a user
  */

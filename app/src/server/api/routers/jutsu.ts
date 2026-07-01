@@ -572,6 +572,11 @@ export const jutsuRouter = createTRPCRouter({
       // Quest tracking
       const { trackers } = getNewTrackers(user, [
         { task: "jutsus_mastered", increment: 1 },
+        {
+          task: "train_specific_jutsu",
+          increment: 1,
+          contentId: input.evolutionJutsuId,
+        },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       const evolutionCapFlags = getJutsuCapFlags(evolutionJutsu);
@@ -1083,6 +1088,7 @@ export const jutsuRouter = createTRPCRouter({
       if (!userjutsuObj) {
         const { trackers } = getNewTrackers(user, [
           { task: "jutsus_mastered", increment: 1 },
+          { task: "train_specific_jutsu", increment: 1, contentId: input.jutsuId },
         ]);
         questDataFull = trackers;
       }

@@ -2475,6 +2475,8 @@ export const processUsersForBattle = async (
       moneyStolen: 0,
       allyVillage: false,
       usedActions: [],
+      usedTagTypes: [],
+      damageDealt: 0,
       initiative: 0,
       basicActions: [],
       // Add default AI profile if not set

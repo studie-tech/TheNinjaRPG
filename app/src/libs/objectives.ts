@@ -1,149 +1,15 @@
 import type { ElementDefinition } from "cytoscape";
-import {
-  IMG_BADGE_A_CRIME_TOTAL,
-  IMG_BADGE_A_MISSION_TOTAL,
-  IMG_BADGE_ARENAKILLS,
-  IMG_BADGE_B_CRIME_TOTAL,
-  IMG_BADGE_B_MISSION_TOTAL,
-  IMG_BADGE_C_CRIME_TOTAL,
-  IMG_BADGE_C_MISSION_TOTAL,
-  IMG_BADGE_COLLECT_ITEM,
-  IMG_BADGE_CRAFTING_EXPERIENCE,
-  IMG_BADGE_D_CRIME_TOTAL,
-  IMG_BADGE_D_MISSION_TOTAL,
-  IMG_BADGE_DAYS_IN_VILLAGE,
-  IMG_BADGE_DEFEAT_OPPONENTS,
-  IMG_BADGE_DIALOG,
-  IMG_BADGE_ERRANDS_TOTAL,
-  IMG_BADGE_EXCLUSIVE_RAID,
-  IMG_BADGE_FAIL_QUEST,
-  IMG_BADGE_GATHERING_EXPERIENCE,
-  IMG_BADGE_HUNTING_EXPERIENCE,
-  IMG_BADGE_JUTSUS_MASTERED,
-  IMG_BADGE_MEDICAL_EXPERIENCE,
-  IMG_BADGE_MINUTES_PASSED,
-  IMG_BADGE_MINUTES_TRAINING,
-  IMG_BADGE_MOVE_TO_LOCATION,
-  IMG_BADGE_NEW_QUEST,
-  IMG_BADGE_OPEN_RAID,
-  IMG_BADGE_PVPKILLS,
-  IMG_BADGE_RANDOM_ENCOUNTER_WINS,
-  IMG_BADGE_REPUTATION_POINTS,
-  IMG_BADGE_RESET_QUEST,
-  IMG_BADGE_START_BATTLE,
-  IMG_BADGE_STATS_TRAINED,
-  IMG_BADGE_USER_LEVEL,
-  IMG_BADGE_WIN_QUEST,
-} from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
+import {
+  type AllObjectivesType,
+  objectiveImageMap,
+  type QuestTrackerType,
+} from "@/validators/objectives";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 
 export const getObjectiveImage = (objective: AllObjectivesType) => {
-  switch (objective.task) {
-    case "pvp_kills":
-      return { image: IMG_BADGE_PVPKILLS, title: "PVP kills" };
-    case "arena_kills":
-      return { image: IMG_BADGE_ARENAKILLS, title: "Arena kills" };
-    case "minutes_passed":
-      return { image: IMG_BADGE_MINUTES_PASSED, title: "Minutes passed" };
-    case "errands_total":
-      return { image: IMG_BADGE_ERRANDS_TOTAL, title: "Errands" };
-    case "d_missions_total":
-      return { image: IMG_BADGE_D_MISSION_TOTAL, title: "D-rank Missions" };
-    case "c_missions_total":
-      return { image: IMG_BADGE_C_MISSION_TOTAL, title: "C-rank Missions" };
-    case "b_missions_total":
-      return { image: IMG_BADGE_B_MISSION_TOTAL, title: "B-rank Missions" };
-    case "a_missions_total":
-      return { image: IMG_BADGE_A_MISSION_TOTAL, title: "A-rank Missions" };
-    case "d_crimes_total":
-      return { image: IMG_BADGE_D_CRIME_TOTAL, title: "D-rank crimes" };
-    case "c_crimes_total":
-      return { image: IMG_BADGE_C_CRIME_TOTAL, title: "C-rank crimes" };
-    case "b_crimes_total":
-      return { image: IMG_BADGE_B_CRIME_TOTAL, title: "B-rank crimes" };
-    case "a_crimes_total":
-      return { image: IMG_BADGE_A_CRIME_TOTAL, title: "A-rank crimes" };
-    case "minutes_training":
-      return { image: IMG_BADGE_MINUTES_TRAINING, title: "Minutes Training" };
-    case "jutsus_mastered":
-      return { image: IMG_BADGE_JUTSUS_MASTERED, title: "Jutsus Mastered" };
-    case "stats_trained":
-      return { image: IMG_BADGE_STATS_TRAINED, title: "Stats Trained" };
-    case "days_in_village":
-      return { image: IMG_BADGE_DAYS_IN_VILLAGE, title: "Days in Village" };
-    case "days_as_kage":
-      return { image: IMG_BADGE_DAYS_IN_VILLAGE, title: "Days as Kage" };
-    case "reputation_points":
-      return { image: IMG_BADGE_REPUTATION_POINTS, title: "Reputation Bought" };
-    case "user_level":
-      return { image: IMG_BADGE_USER_LEVEL, title: "User Level" };
-    case "medical_experience":
-      return { image: IMG_BADGE_MEDICAL_EXPERIENCE, title: "Medical Experience" };
-    case "medical_experience_gained":
-      return {
-        image: IMG_BADGE_MEDICAL_EXPERIENCE,
-        title: "Medical Experience Gained",
-      };
-    case "crafting_experience":
-      return { image: IMG_BADGE_CRAFTING_EXPERIENCE, title: "Crafting Experience" };
-    case "crafting_experience_gained":
-      return {
-        image: IMG_BADGE_CRAFTING_EXPERIENCE,
-        title: "Crafting Experience Gained",
-      };
-    case "hunting_experience":
-      return { image: IMG_BADGE_HUNTING_EXPERIENCE, title: "Hunting Experience" };
-    case "hunting_experience_gained":
-      return {
-        image: IMG_BADGE_HUNTING_EXPERIENCE,
-        title: "Hunting Experience Gained",
-      };
-    case "gathering_experience":
-      return { image: IMG_BADGE_GATHERING_EXPERIENCE, title: "Gathering Experience" };
-    case "gathering_experience_gained":
-      return {
-        image: IMG_BADGE_GATHERING_EXPERIENCE,
-        title: "Gathering Experience Gained",
-      };
-    case "move_to_location":
-      return { image: IMG_BADGE_MOVE_TO_LOCATION, title: "Travel" };
-    case "collect_item":
-      return { image: IMG_BADGE_COLLECT_ITEM, title: "Collect Item" };
-    case "deliver_item":
-      return { image: IMG_BADGE_COLLECT_ITEM, title: "Deliver Item" };
-    case "defeat_opponents":
-      return { image: IMG_BADGE_DEFEAT_OPPONENTS, title: "Defeat" };
-    case "random_encounter_wins":
-      return { image: IMG_BADGE_RANDOM_ENCOUNTER_WINS, title: "Encounter Wins" };
-    case "spars_won":
-      return { image: IMG_BADGE_ARENAKILLS, title: "Spars Won" };
-    case "win_encounter_at_location":
-      return {
-        image: IMG_BADGE_RANDOM_ENCOUNTER_WINS,
-        title: "Encounters at Location",
-      };
-    case "fail_quest":
-      return { image: IMG_BADGE_FAIL_QUEST, title: "Fail Quest" };
-    case "reset_quest":
-      return { image: IMG_BADGE_RESET_QUEST, title: "Reset Quest" };
-    case "win_quest":
-      return { image: IMG_BADGE_WIN_QUEST, title: "Win Quest" };
-    case "new_quest":
-      return { image: IMG_BADGE_NEW_QUEST, title: "New Quest" };
-    case "start_battle":
-      return { image: IMG_BADGE_START_BATTLE, title: "Start Battle" };
-    case "dialog":
-      return { image: IMG_BADGE_DIALOG, title: "Dialog" };
-    case "open_raid":
-      return { image: IMG_BADGE_OPEN_RAID, title: "Open Raid" };
-    case "exclusive_raid":
-      return { image: IMG_BADGE_EXCLUSIVE_RAID, title: "Exclusive Raid" };
-    default:
-      return { image: "", title: "???" };
-  }
+  return objectiveImageMap[objective.task] ?? { image: "", title: "???" };
 };
 
 /**
