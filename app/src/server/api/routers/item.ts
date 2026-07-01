@@ -2006,17 +2006,25 @@ export const itemRouter = createTRPCRouter({
       // buy_item quest tracker. fetchUser returns the bare userdata row (no quest
       // relations), so hydrate userQuests/completedQuests from the thin fetch above
       // (NOT fetchUpdatedUser, which pulls achievements/wars/raids and runs regen
-      // writes). Null-check the fetched state before deref. NPC item shop only;
-      // auction buyouts are a separate, out-of-scope path.
-      const buyer = {
-        ...user,
-        userQuests: questState?.userQuests ?? [],
-        completedQuests: questState?.completedQuests ?? [],
-      } as unknown as Parameters<typeof getNewTrackers>[0];
-      const { trackers } = getNewTrackers(buyer, [
-        { task: "buy_item", increment: input.stack, contentId: iid },
-      ]);
-      const questDataForDb = filterQuestTrackersForDbPersist(trackers, buyer);
+      // writes). If the thin fetch failed (null), SKIP tracking entirely — writing an
+      // empty questData would wipe the user's existing quest progress. NPC item shop
+      // only; auction buyouts are a separate, out-of-scope path.
+      let questDataUpdate: {
+        questData?: ReturnType<typeof filterQuestTrackersForDbPersist>;
+      } = {};
+      if (questState) {
+        const buyer = {
+          ...user,
+          userQuests: questState.userQuests,
+          completedQuests: questState.completedQuests,
+        } as unknown as Parameters<typeof getNewTrackers>[0];
+        const { trackers } = getNewTrackers(buyer, [
+          { task: "buy_item", increment: input.stack, contentId: iid },
+        ]);
+        questDataUpdate = {
+          questData: filterQuestTrackersForDbPersist(trackers, buyer),
+        };
+      }
       // Mutate — fold questData into the same CAS UPDATE so it only persists when the
       // fund deduction succeeds (one UPDATE per row, no separate questData write).
       const result = await ctx.drizzle
@@ -2025,7 +2033,7 @@ export const itemRouter = createTRPCRouter({
           money: sql`${userData.money} - ${ryoCost}`,
           reputationPoints: sql`${userData.reputationPoints} - ${repsCost}`,
           seichiSilver: sql`${userData.seichiSilver} - ${seichiSilverCost}`,
-          questData: questDataForDb,
+          ...questDataUpdate,
         })
         .where(
           and(
