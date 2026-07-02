@@ -71,7 +71,12 @@ export const filterQuestTrackersForDbPersist = (
 ) => {
   const inMemoryOnlyAchievementQuestIds = new Set(
     user.userQuests
-      .filter((uq) => uq.quest.questType === "achievement" && uq.id === uq.questId)
+      // `uq.quest` is null for an orphaned QuestHistory row (its quest was deleted). Most callers
+      // pass userQuests from fetchUpdatedUser, which already strips these, but item.ts's buy path
+      // uses a bespoke fetch that does not — so guard the deref here as a defensive backstop for
+      // every caller. An orphan is not an in-memory achievement, so skipping it is correct;
+      // getNewTrackers already drops orphans, so no tracker is emitted for them anyway.
+      .filter((uq) => uq.quest?.questType === "achievement" && uq.id === uq.questId)
       .map((uq) => uq.questId),
   );
   return trackers.filter((t) => !inMemoryOnlyAchievementQuestIds.has(t.id));

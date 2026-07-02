@@ -2015,7 +2015,10 @@ export const itemRouter = createTRPCRouter({
       if (questState) {
         const buyer = {
           ...user,
-          userQuests: questState.userQuests,
+          // Drop orphaned rows (quest deleted → `quest` is null) to match the convention
+          // fetchUpdatedUser applies; this bespoke fetch is the one caller that otherwise
+          // leaks nulls into the tracker/persist path.
+          userQuests: questState.userQuests.filter((q) => q.quest),
           completedQuests: questState.completedQuests,
         } as unknown as Parameters<typeof getNewTrackers>[0];
         const { trackers } = getNewTrackers(buyer, [
