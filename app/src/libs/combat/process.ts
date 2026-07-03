@@ -114,6 +114,7 @@ import {
   getItem,
   isEffectActive,
   isOpponentDamageTarget,
+  resolveDamageCreditUser,
   sortEffects,
 } from "./util";
 
@@ -636,6 +637,11 @@ export const applyEffects = (
       // Apply all the consequences
       if (target && user) {
         let appliedVampHeal = 0;
+        // damage_dealt tracker credit goes to the controller when the attacker is a
+        // summon/clone, matching creatures_hunted attribution (kills a summon secures
+        // already count for the summoner). Summons copy the summoner's direction at
+        // spawn, so the opponent predicate is evaluated from the controller too.
+        const damageCreditUser = resolveDamageCreditUser(newUsersState, user);
         if (c.damage !== undefined && c.damage >= 0) {
           target.curHealth -= c.damage;
           target.curHealth = Math.max(0, target.curHealth);
@@ -643,8 +649,9 @@ export const applyEffects = (
           // for the damage_dealt quest tracker. Direct damage plus DoT/drain (residual,
           // wound, afterburn, drain_hp) all count via their own branches below; reflect and
           // recoil hit the attacker's own HP and are intentionally excluded.
-          if (c.damage > 0 && isOpponentDamageTarget(user, target)) {
-            user.damageDealt = (user.damageDealt ?? 0) + c.damage;
+          if (c.damage > 0 && isOpponentDamageTarget(damageCreditUser, target)) {
+            damageCreditUser.damageDealt =
+              (damageCreditUser.damageDealt ?? 0) + c.damage;
           }
           actionEffects.push({
             txt: `${target.username} takes ${c.damage.toFixed(2)} damage`,
@@ -685,8 +692,9 @@ export const applyEffects = (
         if (c.residual !== undefined && c.residual >= 0) {
           target.curHealth -= c.residual;
           target.curHealth = Math.max(0, target.curHealth);
-          if (c.residual > 0 && isOpponentDamageTarget(user, target)) {
-            user.damageDealt = (user.damageDealt ?? 0) + c.residual;
+          if (c.residual > 0 && isOpponentDamageTarget(damageCreditUser, target)) {
+            damageCreditUser.damageDealt =
+              (damageCreditUser.damageDealt ?? 0) + c.residual;
           }
           actionEffects.push({
             txt: `${target.username} takes ${c.residual.toFixed(2)} residual damage`,
@@ -711,8 +719,9 @@ export const applyEffects = (
         if (c.wound !== undefined && c.wound >= 0) {
           target.curHealth -= c.wound;
           target.curHealth = Math.max(0, target.curHealth);
-          if (c.wound > 0 && isOpponentDamageTarget(user, target)) {
-            user.damageDealt = (user.damageDealt ?? 0) + c.wound;
+          if (c.wound > 0 && isOpponentDamageTarget(damageCreditUser, target)) {
+            damageCreditUser.damageDealt =
+              (damageCreditUser.damageDealt ?? 0) + c.wound;
           }
           actionEffects.push({
             txt: `${target.username} takes ${c.wound.toFixed(2)} wound damage`,
@@ -781,8 +790,9 @@ export const applyEffects = (
         if (c.afterburn !== undefined && c.afterburn >= 0) {
           target.curHealth -= c.afterburn;
           target.curHealth = Math.max(0, target.curHealth);
-          if (c.afterburn > 0 && isOpponentDamageTarget(user, target)) {
-            user.damageDealt = (user.damageDealt ?? 0) + c.afterburn;
+          if (c.afterburn > 0 && isOpponentDamageTarget(damageCreditUser, target)) {
+            damageCreditUser.damageDealt =
+              (damageCreditUser.damageDealt ?? 0) + c.afterburn;
           }
           actionEffects.push({
             txt: `${target.username} takes ${c.afterburn.toFixed(2)} afterburn damage`,
@@ -839,8 +849,9 @@ export const applyEffects = (
         // Handle drain effects for each pool
         if (c.drain_hp !== undefined && c.drain_hp >= 0 && target.curHealth > 0) {
           target.curHealth = Math.max(0, target.curHealth - c.drain_hp);
-          if (c.drain_hp > 0 && isOpponentDamageTarget(user, target)) {
-            user.damageDealt = (user.damageDealt ?? 0) + c.drain_hp;
+          if (c.drain_hp > 0 && isOpponentDamageTarget(damageCreditUser, target)) {
+            damageCreditUser.damageDealt =
+              (damageCreditUser.damageDealt ?? 0) + c.drain_hp;
           }
           actionEffects.push({
             txt: `${target.username} loses ${c.drain_hp.toFixed(2)} HP to drain`,

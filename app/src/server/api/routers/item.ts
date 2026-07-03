@@ -75,6 +75,7 @@ import {
   collapseRewards,
   filterQuestTrackersForDbPersist,
   getNewTrackers,
+  objectiveContentIds,
   postProcessRewards,
 } from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
@@ -2009,10 +2010,32 @@ export const itemRouter = createTRPCRouter({
       // writes). If the thin fetch failed (null), SKIP tracking entirely — writing an
       // empty questData would wipe the user's existing quest progress. NPC item shop
       // only; auction buyouts are a separate, out-of-scope path.
+      // Only touch questData when the purchase can actually advance a buy_item
+      // objective for this item: buy_item is content-gated (unlike the always-on
+      // counters in craft/train), so any other purchase would re-serialize an
+      // unchanged snapshot — and since this read-modify-write has no CAS on
+      // questData, that write could clobber a concurrent tracker update for no
+      // benefit. Objectives already marked done are skipped for the same reason:
+      // completed achievements stay in fetchUserQuestState's result forever, so
+      // without the done-check every later matching purchase would re-open the
+      // redundant-write window. When it does advance, the full-snapshot write
+      // matches every other tracker path (hospital/jutsu/occupation), which all
+      // accept that same window.
+      const advancesBuyItemObjective = questState?.userQuests.some((uq) =>
+        uq.quest?.content?.objectives?.some((o) => {
+          if (o.task !== "buy_item" || !objectiveContentIds(o).includes(iid)) {
+            return false;
+          }
+          const goal = user.questData
+            ?.find((tracker) => tracker.id === uq.questId)
+            ?.goals.find((g) => g.id === o.id);
+          return !goal?.done;
+        }),
+      );
       let questDataUpdate: {
         questData?: ReturnType<typeof filterQuestTrackersForDbPersist>;
       } = {};
-      if (questState) {
+      if (questState && advancesBuyItemObjective) {
         const buyer = {
           ...user,
           // Drop orphaned rows (quest deleted → `quest` is null) to match the convention

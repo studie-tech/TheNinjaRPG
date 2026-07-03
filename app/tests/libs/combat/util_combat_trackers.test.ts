@@ -9,13 +9,17 @@ const makeResult = (didWin: number): CombatResult =>
 const makeBattle = (
   usersState: ReturnType<typeof makeBattleUser>[],
 ): CompleteBattle =>
-  ({ battleType: "COMBAT", usersState }) as unknown as CompleteBattle;
+  ({
+    battleType: "COMBAT",
+    usersState,
+    usersEffects: [],
+  }) as unknown as CompleteBattle;
 
 describe("buildCombatTrackerTasks — creatures_hunted (#3)", () => {
   it("emits +1 per defeated non-self, non-summon opponent on a win", () => {
     const me = makeBattleUser("attacker");
-    const foeA = makeBattleUser("foe-a");
-    const foeB = makeBattleUser("foe-b");
+    const foeA = makeBattleUser("foe-a", { curHealth: 0 });
+    const foeB = makeBattleUser("foe-b", { curHealth: 0 });
 
     const tasks = buildCombatTrackerTasks(makeBattle([me, foeA, foeB]), me, makeResult(1));
 
@@ -25,10 +29,27 @@ describe("buildCombatTrackerTasks — creatures_hunted (#3)", () => {
     ]);
   });
 
+  it("excludes fled opponents; counts defeated ones that already left the battle", () => {
+    const me = makeBattleUser("attacker");
+    // Fled with full health: the win must not credit an opponent that escaped.
+    const fledFoe = makeBattleUser("foe-fled", { fledBattle: true });
+    // Killed earlier in the battle: their own calcBattleResult already set
+    // leftBattle=true, which must NOT disqualify them from being counted.
+    const deadFoe = makeBattleUser("foe-dead", { curHealth: 0, leftBattle: true });
+
+    const hunted = buildCombatTrackerTasks(
+      makeBattle([me, fledFoe, deadFoe]),
+      me,
+      makeResult(1),
+    ).filter((t) => t.task === "creatures_hunted");
+
+    expect(hunted).toEqual([{ task: "creatures_hunted", increment: 1 }]);
+  });
+
   it("excludes self and summons, and emits nothing on a loss", () => {
     const me = makeBattleUser("attacker");
-    const realFoe = makeBattleUser("foe");
-    const summon = makeBattleUser("summon", { isSummon: true });
+    const realFoe = makeBattleUser("foe", { curHealth: 0 });
+    const summon = makeBattleUser("summon", { isSummon: true, curHealth: 0 });
     const battle = makeBattle([me, realFoe, summon]);
 
     expect(
@@ -47,8 +68,8 @@ describe("buildCombatTrackerTasks — creatures_hunted (#3)", () => {
     // me is direction "left" (attacker id); opponent is direction "right" (non-attacker id);
     // ally is explicitly set to "left" (same side as me).
     const me = makeBattleUser("attacker");
-    const opponent = makeBattleUser("foe");
-    const ally = makeBattleUser("ally", { direction: "left" });
+    const opponent = makeBattleUser("foe", { curHealth: 0 });
+    const ally = makeBattleUser("ally", { direction: "left", curHealth: 0 });
     const battle = makeBattle([me, opponent, ally]);
 
     const hunted = buildCombatTrackerTasks(battle, me, makeResult(1)).filter(

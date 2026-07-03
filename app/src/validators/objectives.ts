@@ -576,7 +576,9 @@ export const TagUsageWin = z.object({
 });
 
 // value = damage threshold. singleBattle=false accumulates across the quest's battles;
-// singleBattle=true tracks the best single battle (monotonic max).
+// singleBattle=true tracks the best single battle (monotonic max). Flipping singleBattle
+// on a live quest re-interprets the already-stored counter (a cumulative sum reads as a
+// single-battle max), so such edits must ship with a reset of affected user trackers.
 export const DamageDealt = z.object({
   ...baseObjectiveFields,
   task: z.literal("damage_dealt").prefault("damage_dealt"),
