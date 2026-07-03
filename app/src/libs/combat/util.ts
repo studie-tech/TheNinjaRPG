@@ -55,6 +55,7 @@ import type {
 } from "@/drizzle/schema";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
+import type { ObjectiveTrackerTaskInput as ObjectiveTrackerTask } from "@/libs/quest";
 import { calculateLpEloChange } from "@/libs/ranked_pvp";
 import { findWarsWithUser } from "@/libs/war";
 import { randomInt } from "@/utils/math";
@@ -377,8 +378,6 @@ export const hydrateUserForQuests = (battle: CompleteBattle, user: BattleUserSta
   };
 };
 
-import type { ObjectiveTrackerTaskInput as ObjectiveTrackerTask } from "@/libs/quest";
-
 /**
  * True when `target` is a real opponent of `attacker` for damage tracking: a different user
  * (not self), not a summon, and on the opposing side (direction differs). Used by both
@@ -392,6 +391,23 @@ export const isOpponentDamageTarget = (
   target.userId !== attacker.userId &&
   !target.isSummon &&
   target.direction !== attacker.direction;
+
+/**
+ * Resolves which user is credited with damage for the damage_dealt tracker: summons and
+ * clones credit their controller — matching creatures_hunted, which already credits kills
+ * a summon secures to the summoner — while everyone else credits themselves. Falls back
+ * to the attacker when the controller is not in the battle state. Known narrow edge:
+ * damage a summon deals in rounds after its controller's own battle result has already
+ * been persisted (controller died/fled while the summon lingers) accumulates in battle
+ * state but no longer reaches that controller's quest trackers.
+ */
+export const resolveDamageCreditUser = (
+  usersState: BattleUserState[],
+  attacker: BattleUserState,
+): BattleUserState =>
+  attacker.isSummon
+    ? (usersState.find((u) => u.userId === attacker.controllerId) ?? attacker)
+    : attacker;
 
 /**
  * Build the issue-#1353 objective tracker tasks from pre-loaded battle state.
@@ -425,17 +441,26 @@ export const buildCombatTrackerTasks = (
   }
 
   // #13 damage_dealt: total damage this user dealt to real opponents this battle (accumulated
-  // at consequence application in process.ts). Any outcome; skip a no-op zero emit.
+  // at consequence application in process.ts; damage from the user's summons/clones is
+  // credited here via controllerId). Any outcome; skip a no-op zero emit.
   if ((user.damageDealt ?? 0) > 0) {
     tasks.push({ task: "damage_dealt", increment: user.damageDealt ?? 0 });
   }
 
   if (result.didWin > 0) {
-    // #3 creatures_hunted: +1 per opposing-side (non-self, non-summon) opponent when the
-    // battle is won. Uses isOpponentDamageTarget so the predicate matches damage_dealt.
-    // Gating is implicit — these objectives are authored only on hunting-rank quests.
+    // #3 creatures_hunted: +1 per opposing-side (non-self, non-summon) opponent that was
+    // actually defeated when the battle is won. Uses isOpponentDamageTarget so the predicate
+    // matches damage_dealt, plus the engine's own defeat check (!stillInBattle) with a flee
+    // exclusion so opponents that escaped are not credited as hunted. Defeated opponents may
+    // already have leftBattle=true (set by their own calcBattleResult), so leftBattle must
+    // not be part of this filter. Gating is implicit — these objectives are authored only on
+    // hunting-rank quests.
     for (const u of curBattle.usersState) {
-      if (isOpponentDamageTarget(user, u)) {
+      if (
+        isOpponentDamageTarget(user, u) &&
+        !u.fledBattle &&
+        !stillInBattle(u, curBattle.usersEffects)
+      ) {
         tasks.push({ task: "creatures_hunted", increment: 1 });
       }
     }

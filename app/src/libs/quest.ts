@@ -629,26 +629,12 @@ export const killObjectiveCountsForQuest = (
  * @param notifications - If provided, is used to set notifications
  */
 /**
- * Tasks whose progress is gated by a contentId that must match one of the objective's own
- * configured ids. Single source of truth for BOTH the generic-block guard and the shared
- * content-gated matcher in getNewTrackers.
- */
-const CONTENT_GATED_TASKS: Set<AllObjectiveTask> = new Set([
-  "craft_specific_item",
-  "train_specific_jutsu",
-  "complete_specific_quest",
-  "buy_item",
-  "use_specific_item_combat",
-  "use_specific_jutsu_combat",
-  "tag_usage_win",
-]);
-
-/**
  * For each content-gated task, the objective field holding its id-list (or, for
- * tag_usage_win, the single tagType value). Reading the field by name avoids a silent
- * undefined.includes() since the schemas use distinct field names.
+ * tag_usage_win, the single tagType value). The `satisfies` clause ties every entry to a
+ * real key of that task's objective schema, so renaming a schema field without updating
+ * this map is a compile error rather than a silently un-completable objective.
  */
-const CONTENT_ID_FIELD: Partial<Record<AllObjectiveTask, string>> = {
+const CONTENT_ID_FIELD = {
   craft_specific_item: "craftItemIds",
   train_specific_jutsu: "trainJutsuIds",
   complete_specific_quest: "completeQuestIds",
@@ -656,14 +642,27 @@ const CONTENT_ID_FIELD: Partial<Record<AllObjectiveTask, string>> = {
   use_specific_item_combat: "useItemIds",
   use_specific_jutsu_combat: "useJutsuIds",
   tag_usage_win: "tagType",
+} as const satisfies {
+  [K in AllObjectiveTask]?: keyof Extract<AllObjectivesType, { task: K }>;
 };
+
+/**
+ * Tasks whose progress is gated by a contentId that must match one of the objective's own
+ * configured ids. Derived from CONTENT_ID_FIELD so the guard in getNewTrackers and the
+ * matcher below can never disagree on which tasks are content-gated.
+ */
+const CONTENT_GATED_TASKS: Set<AllObjectiveTask> = new Set(
+  Object.keys(CONTENT_ID_FIELD) as (keyof typeof CONTENT_ID_FIELD)[],
+);
 
 /**
  * Returns the content ids an objective matches against. For id-list tasks this is the array
  * field; for tag_usage_win it is the single tagType wrapped in an array.
  */
-const objectiveContentIds = (objective: AllObjectivesType): string[] => {
-  const field = CONTENT_ID_FIELD[objective.task];
+export const objectiveContentIds = (objective: AllObjectivesType): string[] => {
+  const field = (CONTENT_ID_FIELD as Partial<Record<AllObjectiveTask, string>>)[
+    objective.task
+  ];
   if (!field) return [];
   const raw = (objective as Record<string, unknown>)[field];
   if (Array.isArray(raw)) {
@@ -977,6 +976,9 @@ export const getNewTrackers = (
                 status.value += taskUpdate.increment ?? 1;
               }
               // Damage dealt: cumulative across the quest, or single-battle max when toggled.
+              // The stored counter is not reset when a designer flips singleBattle on a live
+              // quest, so an accumulated sum would be re-read as a single-battle max (and vice
+              // versa) — content edits that flip the flag must ship with a user-tracker reset.
               if (status && task === "damage_dealt" && "value" in objective) {
                 const dealt = taskUpdate.increment ?? 0;
                 if ("singleBattle" in objective && objective.singleBattle) {
