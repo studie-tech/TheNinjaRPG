@@ -168,11 +168,14 @@ export const bloodlineRouter = createTRPCRouter({
     })
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const actor = await fetchUser(ctx.drizzle, ctx.userId);
+      const [actor, historic] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserHistoricBloodlines(ctx.drizzle, input.userId),
+      ]);
       if (!actor || actor.isBanned || !canRemoveBloodlineFromPool(actor.role)) {
         return [];
       }
-      return await fetchUserHistoricBloodlines(ctx.drizzle, input.userId);
+      return historic;
     }),
   // Get bloodline swap info
   getSwapInfo: protectedProcedure
