@@ -56,7 +56,7 @@ describe("resolveDamageCreditUser", () => {
   });
 });
 
-describe("applyEffects — damage_dealt credit (#13)", () => {
+describe("applyEffects — damage_dealt credit", () => {
   it("credits damage dealt by a summon to its controller", () => {
     const player = makeBattleUser("attacker");
     const summon = makeBattleUser("summon-1", {

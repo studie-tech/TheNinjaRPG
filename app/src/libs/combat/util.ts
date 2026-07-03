@@ -410,7 +410,7 @@ export const resolveDamageCreditUser = (
     : attacker;
 
 /**
- * Build the issue-#1353 objective tracker tasks from pre-loaded battle state.
+ * Build the combat objective tracker tasks from pre-loaded battle state.
  *
  * Pure: reads only accumulated battle-state fields (usedActions, usedTagTypes, damageDealt)
  * and the opponent list — no DB fetch — so it folds into the single getNewTrackers call in
@@ -424,7 +424,7 @@ export const buildCombatTrackerTasks = (
 ): ObjectiveTrackerTask[] => {
   const tasks: ObjectiveTrackerTask[] = [];
 
-  // #11/#12 use_specific_item_combat / use_specific_jutsu_combat: one tick per DISTINCT used
+  // use_specific_item_combat / use_specific_jutsu_combat: one tick per DISTINCT used
   // id, any outcome (cast-time usage is the intent). In usedActions a jutsu action's `id` is
   // the jutsuId and an item action's `id` is the itemId (actions.ts insertAction).
   const usedJutsuIds = [
@@ -440,7 +440,7 @@ export const buildCombatTrackerTasks = (
     tasks.push({ task: "use_specific_item_combat", increment: 1, contentId: id });
   }
 
-  // #13 damage_dealt: total damage this user dealt to real opponents this battle (accumulated
+  // damage_dealt: total damage this user dealt to real opponents this battle (accumulated
   // at consequence application in process.ts; damage from the user's summons/clones is
   // credited here via controllerId). Any outcome; skip a no-op zero emit.
   if ((user.damageDealt ?? 0) > 0) {
@@ -448,7 +448,7 @@ export const buildCombatTrackerTasks = (
   }
 
   if (result.didWin > 0) {
-    // #3 creatures_hunted: +1 per opposing-side (non-self, non-summon) opponent that was
+    // creatures_hunted: +1 per opposing-side (non-self, non-summon) opponent that was
     // actually defeated when the battle is won. Uses isOpponentDamageTarget so the predicate
     // matches damage_dealt, plus the engine's own defeat check (!stillInBattle) with a flee
     // exclusion so opponents that escaped are not credited as hunted. Defeated opponents may
@@ -464,7 +464,7 @@ export const buildCombatTrackerTasks = (
         tasks.push({ task: "creatures_hunted", increment: 1 });
       }
     }
-    // #9 tag_usage_win: one tick per DISTINCT tag type the user APPLIED (resolved) this
+    // tag_usage_win: one tick per DISTINCT tag type the user APPLIED (resolved) this
     // battle. usedTagTypes is populated at effect resolution in process.ts.
     for (const t of new Set(user.usedTagTypes ?? [])) {
       tasks.push({ task: "tag_usage_win", increment: 1, contentId: t });

@@ -31,6 +31,7 @@ const runResolution = (
   newUsersState: ReturnType<typeof makeBattleUser>[],
   effect: UserEffect,
   appliedEffects = new Set<string>(),
+  actorId = "attacker",
 ) => {
   const battle = {
     id: "battle-1",
@@ -50,12 +51,12 @@ const runResolution = (
     [] as ActionEffect[],
     appliedEffects,
     battle,
-    "attacker",
+    actorId,
     effect,
   );
 };
 
-describe("usedTagTypes resolution tracking (#9)", () => {
+describe("usedTagTypes resolution tracking", () => {
   it("records an applied tag type on the caster", () => {
     const attacker = makeBattleUser("attacker");
     const defender = makeBattleUser("defender");
@@ -70,5 +71,32 @@ describe("usedTagTypes resolution tracking (#9)", () => {
     runResolution([attacker, defender], makeStun(), applied);
     runResolution([attacker, defender], makeStun(), applied);
     expect(attacker.usedTagTypes.filter((t) => t === "stun")).toHaveLength(1);
+  });
+
+  it("credits a tag applied by a summon to its controller", () => {
+    const player = makeBattleUser("attacker");
+    const summon = makeBattleUser("summon-1", {
+      isSummon: true,
+      controllerId: "attacker",
+      direction: "left",
+    });
+    const defender = makeBattleUser("defender");
+    const effect = makeEffect(
+      "stun",
+      { power: 100, rounds: 2 },
+      {
+        id: "stun-summon",
+        creatorId: "summon-1",
+        targetId: "defender",
+        targetType: "user",
+        isNew: true,
+        castThisRound: true,
+        createdRound: 1,
+        actionId: "stun-action",
+      },
+    );
+    runResolution([player, summon, defender], effect, new Set(), "summon-1");
+    expect(player.usedTagTypes).toContain("stun");
+    expect(summon.usedTagTypes).not.toContain("stun");
   });
 });

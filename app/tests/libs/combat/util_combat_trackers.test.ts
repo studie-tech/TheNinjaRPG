@@ -15,7 +15,7 @@ const makeBattle = (
     usersEffects: [],
   }) as unknown as CompleteBattle;
 
-describe("buildCombatTrackerTasks — creatures_hunted (#3)", () => {
+describe("buildCombatTrackerTasks — creatures_hunted", () => {
   it("emits +1 per defeated non-self, non-summon opponent on a win", () => {
     const me = makeBattleUser("attacker");
     const foeA = makeBattleUser("foe-a", { curHealth: 0 });
@@ -81,7 +81,7 @@ describe("buildCombatTrackerTasks — creatures_hunted (#3)", () => {
   });
 });
 
-describe("buildCombatTrackerTasks — use_specific item/jutsu (#11/#12)", () => {
+describe("buildCombatTrackerTasks — use_specific item/jutsu", () => {
   it("emits one tick per distinct used jutsu and item id, regardless of outcome", () => {
     const me = makeBattleUser("attacker", {
       usedActions: [
@@ -106,7 +106,7 @@ describe("buildCombatTrackerTasks — use_specific item/jutsu (#11/#12)", () => 
   });
 });
 
-describe("buildCombatTrackerTasks — tag_usage_win (#9)", () => {
+describe("buildCombatTrackerTasks — tag_usage_win", () => {
   it("emits one tick per distinct applied tag, win only", () => {
     const me = makeBattleUser("attacker", { usedTagTypes: ["stun", "stun", "poison"] });
     const battle = makeBattle([me, makeBattleUser("foe")]);
@@ -124,7 +124,7 @@ describe("buildCombatTrackerTasks — tag_usage_win (#9)", () => {
   });
 });
 
-describe("buildCombatTrackerTasks — damage_dealt (#13)", () => {
+describe("buildCombatTrackerTasks — damage_dealt", () => {
   it("emits the accumulated damage on any outcome and skips a zero emit", () => {
     const me = makeBattleUser("attacker", { damageDealt: 1500 });
     expect(
