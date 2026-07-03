@@ -1230,7 +1230,7 @@ export const updateUser = async (
     ];
     trackerTasks.push(...trackerEvents);
 
-    // New objective trackers (#1353): creatures hunted, combat item/jutsu/tag usage, and
+    // Combat objective trackers: creatures hunted, combat item/jutsu/tag usage, and
     // damage dealt — all derived from pre-loaded battle state (no extra fetch), folded into
     // the single getNewTrackers call below.
     trackerTasks.push(...buildCombatTrackerTasks(curBattle, user, result));

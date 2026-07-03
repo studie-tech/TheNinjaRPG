@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isOpponentDamageTarget } from "@/libs/combat/util";
 import { makeBattleUser } from "./helpers/battleScenario";
 
-describe("isOpponentDamageTarget (#13 damage attribution)", () => {
+describe("isOpponentDamageTarget (damage attribution)", () => {
   it("is true for a real opposing-side opponent", () => {
     const attacker = makeBattleUser("attacker"); // direction left
     const defender = makeBattleUser("defender"); // direction right

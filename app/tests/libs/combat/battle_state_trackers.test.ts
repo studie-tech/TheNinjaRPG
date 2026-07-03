@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { makeBattleUser } from "./helpers/battleScenario";
 
-describe("battle-state tracker fields (#1353)", () => {
+describe("battle-state tracker fields", () => {
   it("initializes usedTagTypes to an empty array and damageDealt to 0", () => {
     const user = makeBattleUser("attacker");
     expect(user.usedTagTypes).toEqual([]);

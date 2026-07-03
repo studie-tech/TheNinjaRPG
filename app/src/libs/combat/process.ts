@@ -647,8 +647,8 @@ export const applyEffects = (
           target.curHealth = Math.max(0, target.curHealth);
           // Accumulate per-attacker damage dealt to real opponents (non-self, non-summon)
           // for the damage_dealt quest tracker. Direct damage plus DoT/drain (residual,
-          // wound, afterburn, drain_hp) all count via their own branches below; reflect and
-          // recoil hit the attacker's own HP and are intentionally excluded.
+          // wound, afterburn, drain_hp, poison) all count via their own branches below;
+          // reflect and recoil hit the attacker's own HP and are intentionally excluded.
           if (c.damage > 0 && isOpponentDamageTarget(damageCreditUser, target)) {
             damageCreditUser.damageDealt =
               (damageCreditUser.damageDealt ?? 0) + c.damage;
@@ -877,6 +877,10 @@ export const applyEffects = (
             0,
             Math.min(target.maxHealth, target.curHealth - c.poison),
           );
+          if (c.poison > 0 && isOpponentDamageTarget(damageCreditUser, target)) {
+            damageCreditUser.damageDealt =
+              (damageCreditUser.damageDealt ?? 0) + c.poison;
+          }
           actionEffects.push({
             txt: `${target.username} takes ${c.poison.toFixed(2)} poison damage`,
             color: "purple",
@@ -1026,13 +1030,16 @@ export const applySingleEffect = (
       // Figure if tag should be applied
       const ratio = calcApplyRatio(effect, battle, effect.targetId, isTargetOrNew);
       if (ratio > 0) {
-        // Record the APPLIED (resolved, ratio>0) tag type on the caster for the tag_usage_win
-        // tracker. Recorded at resolution — not cast — so resisted/missed/immune effects do
-        // not count; deduped so a multi-round tag counts once. Defensive init covers battles
-        // whose JSON state predates the field.
-        newUser.usedTagTypes = newUser.usedTagTypes ?? [];
-        if (!newUser.usedTagTypes.includes(effect.type)) {
-          newUser.usedTagTypes.push(effect.type);
+        // Record the APPLIED (resolved, ratio>0) tag type for the tag_usage_win tracker,
+        // credited to the controller when the caster is a summon/clone — matching the
+        // damage_dealt attribution, since only real users' battle state reaches
+        // buildCombatTrackerTasks. Recorded at resolution — not cast — so resisted/missed/
+        // immune effects do not count; deduped so a multi-round tag counts once. Defensive
+        // init covers battles whose JSON state predates the field.
+        const tagCreditUser = resolveDamageCreditUser(newUsersState, newUser);
+        tagCreditUser.usedTagTypes = tagCreditUser.usedTagTypes ?? [];
+        if (!tagCreditUser.usedTagTypes.includes(effect.type)) {
+          tagCreditUser.usedTagTypes.push(effect.type);
         }
         // Tags only applied when target is user or new
         if (isTargetOrNew) {
