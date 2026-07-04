@@ -410,6 +410,22 @@ export const resolveDamageCreditUser = (
     : attacker;
 
 /**
+ * Credits `amount` of damage to `attacker.damageDealt` for the damage_dealt quest tracker,
+ * but only for positive damage to a real opponent (isOpponentDamageTarget). Single point of
+ * maintenance for every damage source in process.ts (direct damage plus each DoT/drain
+ * branch) so that adding a new damage type can't silently skip the tracker.
+ */
+export const creditDamageDealt = (
+  attacker: BattleUserState,
+  target: BattleUserState,
+  amount: number,
+): void => {
+  if (amount > 0 && isOpponentDamageTarget(attacker, target)) {
+    attacker.damageDealt = (attacker.damageDealt ?? 0) + amount;
+  }
+};
+
+/**
  * Build the combat objective tracker tasks from pre-loaded battle state.
  *
  * Pure: reads only accumulated battle-state fields (usedActions, usedTagTypes, damageDealt)
