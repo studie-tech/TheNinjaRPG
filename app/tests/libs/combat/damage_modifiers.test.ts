@@ -1089,7 +1089,9 @@ describe("computeDamagePacket", () => {
           attacker: gearMods(),
           defender: gearMods(),
         },
-      } as Parameters<typeof applyDamageModifierPipelineToConsequences>[0]["extraState"],
+      } as unknown as Parameters<
+        typeof applyDamageModifierPipelineToConsequences
+      >[0]["extraState"],
       battleRound: 4,
     });
 

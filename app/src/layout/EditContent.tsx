@@ -2532,6 +2532,7 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   useJutsuIds: "Jutsu to Use in Combat",
   completeQuestIds: "Quests to Complete",
   tagType: "Combat Tag Type",
+  singleBattle: "Track best single-battle only (else cumulative)",
 };
 
 /**
