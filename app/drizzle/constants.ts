@@ -162,7 +162,7 @@ export const SHARED_COOLDOWN_TAGS = [
   "pierce",
   "poison",
   "seal",
-  "shield",
+  "stun",
   "summon",
   "vamp",
 ] as const;
