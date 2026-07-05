@@ -158,13 +158,11 @@ export const SHARED_COOLDOWN_TAGS = [
   "clearprevent",
   "debuffprevent",
   "drain",
-  "increasepoolcost",
   "moveprevent",
   "pierce",
   "poison",
   "seal",
   "shield",
-  "stun",
   "summon",
   "vamp",
 ] as const;
@@ -693,7 +691,7 @@ export const JUTSU_MAX_RESIDUAL_EQUIPPED = 4;
 export const JUTSU_MAX_PIERCE_EQUIPPED = 9999;
 export const JUTSU_MAX_EVENT_EQUIPPED = 2;
 export const JUTSU_MAX_BARRIER_EQUIPPED = 1;
-export const JUTSU_MAX_STUN_EQUIPPED = 1;
+export const JUTSU_MAX_STUN_EQUIPPED = 3;
 
 // Content difficulty ratings
 export const BloodlineDifficultyRatings = ["Easy", "Medium", "Hard", "Expert"] as const;
