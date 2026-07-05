@@ -541,7 +541,7 @@ export const getDefaultBasicActions = (
       level: user?.level,
       effects: [
         HealTag.parse({
-          power: healPower,
+          power: 30,
           powerPerLevel: 0.0,
           calculation: "static",
           rounds: 0,
