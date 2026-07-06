@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  clearPinnedSessionId,
   decidePinnedSession,
   isAuthRoute,
   pinChangeRequiresRemount,
@@ -58,19 +57,18 @@ describe("resolvePinnedSession", () => {
 });
 
 describe("pinned session id storage", () => {
-  it("round-trips read/write/clear via sessionStorage", () => {
+  it("round-trips read/write via sessionStorage", () => {
     g.window = makeFakeWindow();
     expect(readPinnedSessionId()).toBeNull();
     writePinnedSessionId("sess_a");
     expect(readPinnedSessionId()).toBe("sess_a");
-    clearPinnedSessionId();
-    expect(readPinnedSessionId()).toBeNull();
+    writePinnedSessionId("sess_b");
+    expect(readPinnedSessionId()).toBe("sess_b");
   });
 
   it("is a safe no-op without window (SSR)", () => {
     g.window = undefined;
     expect(() => writePinnedSessionId("x")).not.toThrow();
-    expect(() => clearPinnedSessionId()).not.toThrow();
     expect(readPinnedSessionId()).toBeNull();
   });
 });
@@ -245,13 +243,13 @@ describe("pinChangeRequiresRemount", () => {
     expect(pinChangeRequiresRemount(null, "sess_a")).toBe(false);
   });
 
-  it("remounts on an intentional in-tab account switch (A -> B)", () => {
-    // switchPinnedAccount / a reload that adopts a different account: account A's data
-    // may sit in unscoped React Query caches and must be discarded.
+  it("remounts when the tab adopts a different account (A -> B)", () => {
+    // The pinned account signed out and the effect adopted another still-signed-in
+    // account: account A's data may sit in unscoped React Query caches, discard it.
     expect(pinChangeRequiresRemount("sess_a", "sess_b")).toBe(true);
   });
 
-  it("remounts on sign-out (id -> null)", () => {
+  it("remounts on an id -> null change (defensive; no live path nulls the pin today)", () => {
     expect(pinChangeRequiresRemount("sess_a", null)).toBe(true);
   });
 
