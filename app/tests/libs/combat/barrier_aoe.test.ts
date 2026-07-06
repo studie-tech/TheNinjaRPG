@@ -14,11 +14,14 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/server/db", () => ({ drizzleDB: {} }));
 
 /**
- * insertAction only needs `checkFriendlyFire` (force pass) from process; it never
- * calls applyEffects. Mocking the module also avoids loading the Three.js graph.
+ * insertAction only needs `checkFriendlyFire` (force pass) from process; it never calls
+ * applyEffects. Override ONLY checkFriendlyFire — do NOT stub applyEffects. Under `bun test`
+ * vi.mock merges the factory over the real module and the override is process-global, so stubbing
+ * applyEffects here leaks into sibling suites that drive the real applyEffects (summon/poison/
+ * used_tag_types damage-credit tests) and crashes them (newBattle.usersState undefined). Leaving
+ * applyEffects real is inert here since this suite never calls it.
  */
 vi.mock("@/libs/combat/process", () => ({
-  applyEffects: vi.fn(() => ({ newBattle: {}, actionEffects: [] })),
   checkFriendlyFire: vi.fn(() => true),
 }));
 

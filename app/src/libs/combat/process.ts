@@ -114,6 +114,7 @@ import {
   getEffectStage,
   getItem,
   isEffectActive,
+  recordUsedTag,
   resolveDamageCreditUser,
   sortEffects,
 } from "./util";
@@ -413,6 +414,16 @@ export const applyEffects = (
         actionEffects.push(eligibility.preventInfo);
         return;
       }
+
+      // Record the applied damage-modifier tag for the tag_usage_win tracker. These four tags
+      // bypass applySingleEffect's resolution branch (they run only in this dedicated loop), so
+      // mirror that credit here: past the preventInfo guard the modifier is applied (not
+      // blocked) — the same "applied, not resisted" bar the resolution branch uses. Deliberately
+      // NOT gated on `info` below: that is only the cast-round display text (isNew && rounds), so
+      // it would miss every later active round and any rounds:0 tag. Caster is effect.creatorId
+      // (its controller for a summon/clone), matching damage_dealt attribution.
+      const modifierCaster = usersStateById.get(effect.creatorId);
+      if (modifierCaster) recordUsedTag(newUsersState, modifierCaster, effect.type);
 
       let info: ActionEffect | undefined;
       switch (effect.type) {
@@ -1012,17 +1023,10 @@ export const applySingleEffect = (
       // Figure if tag should be applied
       const ratio = calcApplyRatio(effect, battle, effect.targetId, isTargetOrNew);
       if (ratio > 0) {
-        // Record the APPLIED (resolved, ratio>0) tag type for the tag_usage_win tracker,
-        // credited to the controller when the caster is a summon/clone — matching the
-        // damage_dealt attribution, since only real users' battle state reaches
-        // buildCombatTrackerTasks. Recorded at resolution — not cast — so resisted/missed/
-        // immune effects do not count; deduped so a multi-round tag counts once. Defensive
-        // init covers battles whose JSON state predates the field.
-        const tagCreditUser = resolveDamageCreditUser(newUsersState, newUser);
-        tagCreditUser.usedTagTypes = tagCreditUser.usedTagTypes ?? [];
-        if (!tagCreditUser.usedTagTypes.includes(effect.type)) {
-          tagCreditUser.usedTagTypes.push(effect.type);
-        }
+        // Record the APPLIED (resolved, ratio>0) tag type for the tag_usage_win tracker.
+        // The damage-modifier loop in applyEffects records the same way past its preventInfo
+        // guard, so both write sites share recordUsedTag's single definition of "applied".
+        recordUsedTag(newUsersState, newUser, effect.type);
         // Tags only applied when target is user or new
         if (isTargetOrNew) {
           if (effect.type === "damage" && isTargetOrNew) {

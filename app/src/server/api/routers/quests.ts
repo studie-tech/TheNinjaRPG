@@ -1362,6 +1362,9 @@ export const questsRouter = createTRPCRouter({
           rewards,
           questCounterField,
           reason: "QUEST",
+          // Opt in to the herbs_gathered tracker: this is the gathering-claim path and `user`
+          // here is the fully-hydrated fetchUpdatedUser row (with quest relations).
+          questUser: user,
         }),
         // Credit the sensei the per-mission ryo reward
         ...(senseiId
@@ -1586,9 +1589,13 @@ export const updateRewards = async (info: {
   reason: string;
   rewards: GetRewardResult;
   questCounterField?: QuestCounterFieldName;
+  // Fully-hydrated user (with quest relations) passed ONLY by callers that want gathering drops
+  // to advance the herbs_gathered tracker. Explicit opt-in — the herbs branch below no longer
+  // sniffs `"userQuests" in user`, so a future caller cannot silently start incrementing it.
+  questUser?: NonNullable<UserWithRelations>;
 }) => {
   // Destructure
-  const { client, user, rewards, questCounterField, reason } = info;
+  const { client, user, rewards, questCounterField, reason, questUser } = info;
   // Check if we need to fetch war data
   const hasWarRewards =
     (rewards.reward_war_damage > 0 || rewards.reward_war_healing > 0) && user.villageId;
@@ -1741,19 +1748,17 @@ export const updateRewards = async (info: {
     })),
   ];
 
-  // Fold the herbs-gathered tracker into this single questData write (avoids a second
-  // UPDATE in the caller). Only the gathering-claim path drops gatherer items, and that
-  // caller loads the quest relations; every other caller drops nothing here, so this is
-  // skipped and their questData write is unchanged.
-  if (droppedGatheringItems.length > 0 && "userQuests" in user) {
-    const { trackers } = getNewTrackers(
-      user as unknown as Parameters<typeof getNewTrackers>[0],
-      [{ task: "herbs_gathered", increment: droppedGatheringItems.length }],
-    );
-    user.questData = filterQuestTrackersForDbPersist(
-      trackers,
-      user as unknown as Parameters<typeof filterQuestTrackersForDbPersist>[1],
-    );
+  // Fold the herbs-gathered tracker into this single questData write (avoids a second UPDATE in
+  // the caller). Only the gathering-claim path drops gatherer items AND opts in via `questUser`;
+  // every other caller drops nothing (or does not pass questUser), so this is skipped and their
+  // questData write is unchanged. Tracker computation starts from `user.questData` (the
+  // authoritative snapshot this function writes) so it stays correct even if `questUser` carries
+  // a staler questData than the row being updated.
+  if (droppedGatheringItems.length > 0 && questUser) {
+    const { trackers } = getNewTrackers({ ...questUser, questData: user.questData }, [
+      { task: "herbs_gathered", increment: droppedGatheringItems.length },
+    ]);
+    user.questData = filterQuestTrackersForDbPersist(trackers, questUser);
   }
 
   // Update userdata
