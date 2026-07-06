@@ -62,7 +62,7 @@ import { randomInt } from "@/utils/math";
 import { secondsPassed } from "@/utils/time";
 import { getEffectiveStructureLevel, getShrineBoost } from "@/utils/village";
 import { checkAssassin, checkCoLeader } from "@/validators/clan";
-import type { ZodAllTags } from "@/validators/combat";
+import type { EffectType, ZodAllTags } from "@/validators/combat";
 import type { PathCalculator, TerrainHex } from "../hexgrid";
 import { defineHex } from "../hexgrid";
 import { availableUserActions, calcActiveUser, stillInBattle } from "./actions";
@@ -426,6 +426,37 @@ export const creditDamageDealt = (
 };
 
 /**
+ * Records an applied effect tag on the crediting user's `usedTagTypes` for the `tag_usage_win`
+ * tracker. Summons/clones credit their controller (resolveDamageCreditUser), matching
+ * damage_dealt; everyone else credits themselves. Deduped so a tag re-applied across rounds
+ * counts once, and defensively inits the field for battle JSON that predates it. Both write
+ * sites in process.ts (the resolution branch and the damage-modifier loop) share this helper so
+ * they agree on what "applied" means.
+ */
+export const recordUsedTag = (
+  usersState: BattleUserState[],
+  caster: BattleUserState,
+  tagType: EffectType,
+): void => {
+  const creditUser = resolveDamageCreditUser(usersState, caster);
+  creditUser.usedTagTypes = creditUser.usedTagTypes ?? [];
+  if (!creditUser.usedTagTypes.includes(tagType)) {
+    creditUser.usedTagTypes.push(tagType);
+  }
+};
+
+/**
+ * True when `u` was defeated (not fled), for the creatures_hunted tracker. Wraps the engine's
+ * own effective-health defeat check (stillInBattle, which already returns false for a fled user)
+ * with an explicit flee exclusion, so a foe that escaped is never counted as hunted. Centralized
+ * so the defeat predicate — and the reason leftBattle is intentionally excluded (a foe killed
+ * earlier already has leftBattle=true from its own calcBattleResult) — lives in one documented
+ * place rather than being re-derived at each call site.
+ */
+export const wasDefeated = (u: BattleUserState, effects: UserEffect[]): boolean =>
+  !u.fledBattle && !stillInBattle(u, effects);
+
+/**
  * Build the combat objective tracker tasks from pre-loaded battle state.
  *
  * Pure: reads only accumulated battle-state fields (usedActions, usedTagTypes, damageDealt)
@@ -464,19 +495,12 @@ export const buildCombatTrackerTasks = (
   }
 
   if (result.didWin > 0) {
-    // creatures_hunted: +1 per opposing-side (non-self, non-summon) opponent that was
-    // actually defeated when the battle is won. Uses isOpponentDamageTarget so the predicate
-    // matches damage_dealt, plus the engine's own defeat check (!stillInBattle) with a flee
-    // exclusion so opponents that escaped are not credited as hunted. Defeated opponents may
-    // already have leftBattle=true (set by their own calcBattleResult), so leftBattle must
-    // not be part of this filter. Gating is implicit — these objectives are authored only on
-    // hunting-rank quests.
+    // creatures_hunted: +1 per opposing-side (non-self, non-summon) opponent that was actually
+    // defeated when the battle is won. isOpponentDamageTarget keeps the predicate aligned with
+    // damage_dealt; wasDefeated wraps the engine's own defeat check plus a flee exclusion. Gating
+    // is implicit — these objectives are authored only on hunting-rank quests.
     for (const u of curBattle.usersState) {
-      if (
-        isOpponentDamageTarget(user, u) &&
-        !u.fledBattle &&
-        !stillInBattle(u, curBattle.usersEffects)
-      ) {
+      if (isOpponentDamageTarget(user, u) && wasDefeated(u, curBattle.usersEffects)) {
         tasks.push({ task: "creatures_hunted", increment: 1 });
       }
     }

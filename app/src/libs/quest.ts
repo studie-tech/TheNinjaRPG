@@ -971,7 +971,14 @@ export const getNewTrackers = (
                 "value" in objective &&
                 CONTENT_GATED_TASKS.has(task) &&
                 taskUpdate.contentId !== undefined &&
-                objectiveContentIds(objective).includes(taskUpdate.contentId)
+                objectiveContentIds(objective).includes(taskUpdate.contentId) &&
+                // A quest can never satisfy its own complete_specific_quest objective: the
+                // resolving quest is still active in getUserQuests when getReward emits this
+                // (its `completed` flag flips later in checkRewards), so guard the self-tick.
+                !(
+                  task === "complete_specific_quest" &&
+                  quest.id === taskUpdate.contentId
+                )
               ) {
                 status.value += taskUpdate.increment ?? 1;
               }
