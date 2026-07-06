@@ -22,8 +22,10 @@ import {
   JUTSU_LEVEL_CAP,
   JUTSU_MAX_BARRIER_EQUIPPED,
   JUTSU_MAX_EVENT_EQUIPPED,
+  JUTSU_MAX_FORBIDDEN_EQUIPPED,
   JUTSU_MAX_PIERCE_EQUIPPED,
   JUTSU_MAX_RESIDUAL_EQUIPPED,
+  JUTSU_MAX_SHIELD_EQUIPPED,
   JUTSU_MAX_STUN_EQUIPPED,
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_TRANSFER_COST,
@@ -582,8 +584,10 @@ export const jutsuRouter = createTRPCRouter({
       const evolutionCapFlags = getJutsuCapFlags(evolutionJutsu);
       const isRestrictedEquipType =
         evolutionCapFlags.isEvent ||
+        evolutionCapFlags.isForbidden ||
         evolutionCapFlags.isPierce ||
         evolutionCapFlags.isBarrier ||
+        evolutionCapFlags.isShield ||
         evolutionCapFlags.isStun ||
         evolutionCapFlags.isResidual;
       // Single compare-and-swap update that applies every userJutsu-row change at once:
@@ -1042,8 +1046,14 @@ export const jutsuRouter = createTRPCRouter({
       const eventJutsus = equippedJutsus.filter(
         (uj) => getJutsuCapFlags(uj.jutsu).isEvent,
       );
+      const forbiddenJutsus = equippedJutsus.filter(
+        (uj) => getJutsuCapFlags(uj.jutsu).isForbidden,
+      );
       const barrierJutsus = equippedJutsus.filter(
         (uj) => getJutsuCapFlags(uj.jutsu).isBarrier,
+      );
+      const shieldJutsus = equippedJutsus.filter(
+        (uj) => getJutsuCapFlags(uj.jutsu).isShield,
       );
       const stunJutsus = equippedJutsus.filter(
         (uj) => getJutsuCapFlags(uj.jutsu).isStun,
@@ -1124,7 +1134,9 @@ export const jutsuRouter = createTRPCRouter({
           isResidual: jutsuHasResidual,
           isPierce: jutsuHasPierce,
           isEvent: jutsuIsEvent,
+          isForbidden: jutsuIsForbidden,
           isBarrier: jutsuHasBarrier,
+          isShield: jutsuHasShield,
           isStun: jutsuHasStun,
         } = getJutsuCapFlags(info);
 
@@ -1134,7 +1146,10 @@ export const jutsuRouter = createTRPCRouter({
           (!jutsuHasResidual || residualJutsus.length < JUTSU_MAX_RESIDUAL_EQUIPPED) &&
           (!jutsuHasPierce || pierceJutsus.length < JUTSU_MAX_PIERCE_EQUIPPED) &&
           (!jutsuIsEvent || eventJutsus.length < JUTSU_MAX_EVENT_EQUIPPED) &&
+          (!jutsuIsForbidden ||
+            forbiddenJutsus.length < JUTSU_MAX_FORBIDDEN_EQUIPPED) &&
           (!jutsuHasBarrier || barrierJutsus.length < JUTSU_MAX_BARRIER_EQUIPPED) &&
+          (!jutsuHasShield || shieldJutsus.length < JUTSU_MAX_SHIELD_EQUIPPED) &&
           (!jutsuHasStun || stunJutsus.length < JUTSU_MAX_STUN_EQUIPPED);
 
         // Use onDuplicateKeyUpdate to handle race conditions
@@ -1253,10 +1268,18 @@ export const jutsuRouter = createTRPCRouter({
         (j) => getJutsuCapFlags(j.jutsu).isEvent,
       ).length;
       const curJutsuIsEvent = curJutsuFlags?.isEvent ?? false;
+      const forbiddenEquipped = equippedJutsus.filter(
+        (j) => getJutsuCapFlags(j.jutsu).isForbidden,
+      ).length;
+      const curJutsuIsForbidden = curJutsuFlags?.isForbidden;
       const barrierEquipped = equippedJutsus.filter(
         (j) => getJutsuCapFlags(j.jutsu).isBarrier,
       ).length;
       const curJutsuIsBarrier = curJutsuFlags?.isBarrier;
+      const shieldEquipped = equippedJutsus.filter(
+        (j) => getJutsuCapFlags(j.jutsu).isShield,
+      ).length;
+      const curJutsuIsShield = curJutsuFlags?.isShield;
       const stunEquipped = equippedJutsus.filter(
         (j) => getJutsuCapFlags(j.jutsu).isStun,
       ).length;
@@ -1308,11 +1331,29 @@ export const jutsuRouter = createTRPCRouter({
       }
       if (
         !isEquipped &&
+        curJutsuIsForbidden &&
+        forbiddenEquipped >= JUTSU_MAX_FORBIDDEN_EQUIPPED
+      ) {
+        return errorResponse(
+          `You cannot equip more than ${JUTSU_MAX_FORBIDDEN_EQUIPPED} forbidden jutsu`,
+        );
+      }
+      if (
+        !isEquipped &&
         curJutsuIsBarrier &&
         barrierEquipped >= JUTSU_MAX_BARRIER_EQUIPPED
       ) {
         return errorResponse(
           `You cannot equip more than ${JUTSU_MAX_BARRIER_EQUIPPED} barrier jutsu`,
+        );
+      }
+      if (
+        !isEquipped &&
+        curJutsuIsShield &&
+        shieldEquipped >= JUTSU_MAX_SHIELD_EQUIPPED
+      ) {
+        return errorResponse(
+          `You cannot equip more than ${JUTSU_MAX_SHIELD_EQUIPPED} shield jutsu`,
         );
       }
       if (!isEquipped && curJutsuIsStun && stunEquipped >= JUTSU_MAX_STUN_EQUIPPED) {

@@ -2,8 +2,10 @@ import type { FederalStatus } from "@/drizzle/constants";
 import {
   JUTSU_MAX_BARRIER_EQUIPPED,
   JUTSU_MAX_EVENT_EQUIPPED,
+  JUTSU_MAX_FORBIDDEN_EQUIPPED,
   JUTSU_MAX_PIERCE_EQUIPPED,
   JUTSU_MAX_RESIDUAL_EQUIPPED,
+  JUTSU_MAX_SHIELD_EQUIPPED,
   JUTSU_MAX_STUN_EQUIPPED,
   JUTSU_TRANSFER_FREE_AMOUNT,
   JUTSU_TRANSFER_FREE_GOLD,
@@ -42,15 +44,17 @@ export interface JutsuCapFlags {
   isResidual: boolean;
   isPierce: boolean;
   isEvent: boolean;
+  isForbidden: boolean;
   isBarrier: boolean;
+  isShield: boolean;
   isStun: boolean;
 }
 
 /**
  * Which capped equip categories a jutsu counts against (residual / pierce /
- * event / barrier / stun). Centralised so the loadout, toggle-equip and
- * auto-equip paths share one definition and a new capped category only needs
- * editing in one place.
+ * event / forbidden / barrier / shield / stun). Centralised so the loadout,
+ * toggle-equip and auto-equip paths share one definition and a new capped
+ * category only needs editing in one place.
  */
 export const getJutsuCapFlags = (
   jutsu: Pick<Jutsu, "effects" | "jutsuType">,
@@ -58,7 +62,9 @@ export const getJutsuCapFlags = (
   isResidual: jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
   isPierce: jutsu.effects.some((e) => e.type === "pierce"),
   isEvent: jutsu.jutsuType === "EVENT",
+  isForbidden: jutsu.jutsuType === "FORBIDDEN",
   isBarrier: jutsu.effects.some((e) => e.type === "barrier"),
+  isShield: jutsu.effects.some((e) => e.type === "shield"),
   isStun: jutsu.effects.some((e) => e.type === "stun"),
 });
 
@@ -85,7 +91,9 @@ export const computeJutsuLoadoutAssignments = (args: {
   let total = 0;
   let pierce = 0;
   let event = 0;
+  let forbidden = 0;
   let barrier = 0;
+  let shield = 0;
   let stun = 0;
   let residual = 0;
 
@@ -110,8 +118,15 @@ export const computeJutsuLoadoutAssignments = (args: {
       invalidJutsus.push(`${jutsu.name}: missing requirements`);
       continue;
     }
-    const { isResidual, isPierce, isEvent, isBarrier, isStun } =
-      getJutsuCapFlags(jutsu);
+    const {
+      isResidual,
+      isPierce,
+      isEvent,
+      isForbidden,
+      isBarrier,
+      isShield,
+      isStun,
+    } = getJutsuCapFlags(jutsu);
     if (total >= maxEquip) {
       invalidJutsus.push(`${jutsu.name}: equip limit reached`);
       continue;
@@ -128,8 +143,16 @@ export const computeJutsuLoadoutAssignments = (args: {
       invalidJutsus.push(`${jutsu.name}: event jutsu limit reached`);
       continue;
     }
+    if (isForbidden && forbidden >= JUTSU_MAX_FORBIDDEN_EQUIPPED) {
+      invalidJutsus.push(`${jutsu.name}: forbidden jutsu limit reached`);
+      continue;
+    }
     if (isBarrier && barrier >= JUTSU_MAX_BARRIER_EQUIPPED) {
       invalidJutsus.push(`${jutsu.name}: barrier jutsu limit reached`);
+      continue;
+    }
+    if (isShield && shield >= JUTSU_MAX_SHIELD_EQUIPPED) {
+      invalidJutsus.push(`${jutsu.name}: shield jutsu limit reached`);
       continue;
     }
     if (isStun && stun >= JUTSU_MAX_STUN_EQUIPPED) {
@@ -141,7 +164,9 @@ export const computeJutsuLoadoutAssignments = (args: {
     if (isResidual) residual += 1;
     if (isPierce) pierce += 1;
     if (isEvent) event += 1;
+    if (isForbidden) forbidden += 1;
     if (isBarrier) barrier += 1;
+    if (isShield) shield += 1;
     if (isStun) stun += 1;
   }
 

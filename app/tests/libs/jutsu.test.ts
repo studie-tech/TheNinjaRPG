@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   JUTSU_MAX_BARRIER_EQUIPPED,
   JUTSU_MAX_EVENT_EQUIPPED,
+  JUTSU_MAX_FORBIDDEN_EQUIPPED,
+  JUTSU_MAX_SHIELD_EQUIPPED,
+  JUTSU_MAX_STUN_EQUIPPED,
 } from "@/drizzle/constants";
 import type { UserJutsuWithRelations } from "@/drizzle/schema";
 
@@ -145,6 +148,22 @@ describe("computeJutsuLoadoutAssignments", () => {
     expect(out.invalidJutsus[0]).toMatch(/event/);
   });
 
+  it("allows one forbidden jutsu and rejects any beyond the cap", () => {
+    const count = JUTSU_MAX_FORBIDDEN_EQUIPPED + 1;
+    const userjutsus = Array.from({ length: count }, (_, i) =>
+      uj({ jutsuId: `forbidden${i}`, jutsuType: "FORBIDDEN" }),
+    );
+    const out = computeJutsuLoadoutAssignments({
+      jutsuIds: userjutsus.map((j) => j.jutsuId),
+      userjutsus,
+      user: USER,
+    });
+
+    expect(JUTSU_MAX_FORBIDDEN_EQUIPPED).toBe(1);
+    expect(out.equipIds).toHaveLength(1);
+    expect(out.invalidJutsus[0]).toMatch(/forbidden/);
+  });
+
   it("deduplicates repeated jutsuIds so they do not double-count toward caps", () => {
     calcJutsuEquipLimitMock.mockReturnValueOnce(2);
     const userjutsus = [uj({ jutsuId: "a" }), uj({ jutsuId: "b" })];
@@ -171,5 +190,37 @@ describe("computeJutsuLoadoutAssignments", () => {
     });
     expect(out.equipIds).toHaveLength(JUTSU_MAX_BARRIER_EQUIPPED);
     expect(out.invalidJutsus[0]).toMatch(/barrier/);
+  });
+
+  it("allows up to two shield jutsu and rejects any beyond the cap", () => {
+    const count = JUTSU_MAX_SHIELD_EQUIPPED + 1;
+    const userjutsus = Array.from({ length: count }, (_, i) =>
+      uj({ jutsuId: `shield${i}`, effectTypes: ["shield"] }),
+    );
+    const out = computeJutsuLoadoutAssignments({
+      jutsuIds: userjutsus.map((j) => j.jutsuId),
+      userjutsus,
+      user: USER,
+    });
+
+    expect(JUTSU_MAX_SHIELD_EQUIPPED).toBe(2);
+    expect(out.equipIds).toHaveLength(2);
+    expect(out.invalidJutsus[0]).toMatch(/shield/);
+  });
+
+  it("allows up to two stun jutsu and rejects any beyond the cap", () => {
+    const count = JUTSU_MAX_STUN_EQUIPPED + 1;
+    const userjutsus = Array.from({ length: count }, (_, i) =>
+      uj({ jutsuId: `stun${i}`, effectTypes: ["stun"] }),
+    );
+    const out = computeJutsuLoadoutAssignments({
+      jutsuIds: userjutsus.map((j) => j.jutsuId),
+      userjutsus,
+      user: USER,
+    });
+
+    expect(JUTSU_MAX_STUN_EQUIPPED).toBe(2);
+    expect(out.equipIds).toHaveLength(2);
+    expect(out.invalidJutsus[0]).toMatch(/stun/);
   });
 });

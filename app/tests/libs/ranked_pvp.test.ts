@@ -1,6 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { calculateLpEloChange, getRankedRadius } from "@/libs/ranked_pvp";
-import { RANKED_MIN_LP_GAIN, RANKED_QUEUE_MAX_WAIT_SECS } from "@/drizzle/constants";
+import {
+  calculateLpEloChange,
+  getRankedRadius,
+  validateJutsuLoadout,
+} from "@/libs/ranked_pvp";
+import {
+  JUTSU_MAX_FORBIDDEN_EQUIPPED,
+  JUTSU_MAX_SHIELD_EQUIPPED,
+  RANKED_MIN_LP_GAIN,
+  RANKED_QUEUE_MAX_WAIT_SECS,
+} from "@/drizzle/constants";
+import type { Jutsu } from "@/drizzle/schema";
 
 describe("calculateLpEloChange", () => {
   it("floors a win to RANKED_MIN_LP_GAIN when the raw Elo gain is below it", () => {
@@ -51,5 +61,38 @@ describe("getRankedRadius", () => {
     expect(getRankedRadius(RANKED_QUEUE_MAX_WAIT_SECS)).toBe(Infinity);
     expect(getRankedRadius(600)).toBe(Infinity);
     expect(getRankedRadius(5000)).toBe(Infinity);
+  });
+});
+
+describe("validateJutsuLoadout", () => {
+  it("rejects ranked loadouts with more than two shield jutsu", () => {
+    const jutsus = Array.from({ length: JUTSU_MAX_SHIELD_EQUIPPED + 1 }, (_, i) =>
+      ({
+        id: `shield${i}`,
+        jutsuType: "NORMAL",
+        effects: [{ type: "shield" }],
+      }) as Jutsu,
+    );
+
+    const result = validateJutsuLoadout(jutsus);
+
+    expect(result.check).toBe(false);
+    expect(result.message).toMatch(/up to 2 shield jutsu/);
+  });
+
+  it("rejects ranked loadouts with more than one forbidden jutsu", () => {
+    const jutsus = Array.from({ length: JUTSU_MAX_FORBIDDEN_EQUIPPED + 1 }, (_, i) =>
+      ({
+        id: `forbidden${i}`,
+        jutsuType: "FORBIDDEN",
+        effects: [],
+      }) as Jutsu,
+    );
+
+    const result = validateJutsuLoadout(jutsus);
+
+    expect(JUTSU_MAX_FORBIDDEN_EQUIPPED).toBe(1);
+    expect(result.check).toBe(false);
+    expect(result.message).toMatch(/up to 1 forbidden jutsu/);
   });
 });

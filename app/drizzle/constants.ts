@@ -690,8 +690,10 @@ export type TrainingSpeed = (typeof TrainingSpeeds)[number];
 export const JUTSU_MAX_RESIDUAL_EQUIPPED = 4;
 export const JUTSU_MAX_PIERCE_EQUIPPED = 9999;
 export const JUTSU_MAX_EVENT_EQUIPPED = 2;
+export const JUTSU_MAX_FORBIDDEN_EQUIPPED = 1;
 export const JUTSU_MAX_BARRIER_EQUIPPED = 1;
-export const JUTSU_MAX_STUN_EQUIPPED = 3;
+export const JUTSU_MAX_SHIELD_EQUIPPED = 2;
+export const JUTSU_MAX_STUN_EQUIPPED = 2;
 
 // Content difficulty ratings
 export const BloodlineDifficultyRatings = ["Easy", "Medium", "Hard", "Expert"] as const;
