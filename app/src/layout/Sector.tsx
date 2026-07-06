@@ -33,6 +33,7 @@ import {
   MEDNIN_MIN_RANK,
   RANKS_RESTRICTED_FROM_PVP,
   STRUCTURE_ADJACENTS,
+  TERMINAL_DIALOG_PREFIX,
   WAR_SHRINE_IMAGE_BY_BIOME,
   XP_BRACKETS,
 } from "@/drizzle/constants";
@@ -2760,7 +2761,12 @@ const Sector: React.FC<SectorProps> = (props) => {
                     interactNpc({
                       placementId: ctx.placementId,
                       positionVersion: ctx.positionVersion,
-                      dialogContentId: branch.nextObjectiveId,
+                      // A terminal branch has no follow-up objective; send an objective-scoped
+                      // sentinel so the server completes this dialog objective instead of
+                      // re-opening the same dialog.
+                      dialogContentId:
+                        branch.nextObjectiveId ??
+                        `${TERMINAL_DIALOG_PREFIX}${npcDialog.objectiveId}`,
                     });
                   }
                   setNpcDialog(null);
