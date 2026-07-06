@@ -1328,6 +1328,17 @@ export const MISSIONS_PER_DAY = 20;
 /** Overworld friendly-NPC quest-give attempts a player gets per day; mirrors the daily mission cap. */
 export const OVERWORLD_QUEST_ROLLS_PER_DAY = MISSIONS_PER_DAY;
 
+/**
+ * Sentinel a client sends as a dialog "contentId"/"nextObjectiveId" when the player picks
+ * a terminal dialog branch (a branch with no follow-up objective). The suffix is the dialog
+ * objective's own id, so the server completes exactly that objective without routing onward.
+ * The prefix distinguishes it from a real next-objective id (plain nanoids, never prefixed),
+ * so it can never be mistaken for routing. Terminal branches are no longer saveable, but
+ * already-saved legacy content can still contain them, so the runtime honours them instead of
+ * re-opening the same dialog forever.
+ */
+export const TERMINAL_DIALOG_PREFIX = "__terminal__:";
+
 export const OverworldInteractionTypes = ["FRIENDLY", "HOSTILE"] as const;
 export type OverworldInteractionType = (typeof OverworldInteractionTypes)[number];
 

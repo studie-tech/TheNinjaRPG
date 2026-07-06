@@ -24,6 +24,7 @@ import {
   SECTOR_WIDTH,
   SENSEI_MAX_STUDENT_LEVEL,
   SENSEI_STUDENT_MISSION_EXP_BOOST_PERC,
+  TERMINAL_DIALOG_PREFIX,
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import type { GameSetting, Quest, UserData, UserItem } from "@/drizzle/schema";
@@ -182,7 +183,8 @@ export const getReward = (
       { task: "collect_item" },
       { task: "dialog", contentId: dialogNextObjectiveId },
     ],
-    undefined,
+    undefined, // combatContext
+    undefined, // boundPlacementStatus (getReward binds via atPlacementIds instead)
     atPlacementIds,
   );
   const userQuest = user.userQuests.find((uq) => uq.questId === questId);
@@ -1136,12 +1138,26 @@ export const getNewTrackers = (
               }
               // Dialog objective
               if (task === "dialog" && taskUpdate.contentId) {
-                const objectiveHasNext = objective.nextObjectiveId?.find(
-                  (next) => next.nextObjectiveId === taskUpdate.contentId,
-                );
-                if (objectiveHasNext) {
+                // A terminal branch carries no follow-up objective, so the client sends an
+                // objective-scoped sentinel (prefix + this objective's id) instead of a next id.
+                // Complete this objective without routing onward — but only if it genuinely owns
+                // a terminal branch, so a spoofed sentinel can't finish an arbitrary dialog
+                // objective (parity with the routing branch, which requires a matching branch id).
+                const isTerminalForThis =
+                  taskUpdate.contentId === `${TERMINAL_DIALOG_PREFIX}${objective.id}` &&
+                  objective.nextObjectiveId?.some(
+                    (next) => next.nextObjectiveId === undefined,
+                  );
+                if (isTerminalForThis) {
                   status.done = true;
-                  status.selectedNextObjectiveId = taskUpdate.contentId;
+                } else {
+                  const objectiveHasNext = objective.nextObjectiveId?.find(
+                    (next) => next.nextObjectiveId === taskUpdate.contentId,
+                  );
+                  if (objectiveHasNext) {
+                    status.done = true;
+                    status.selectedNextObjectiveId = taskUpdate.contentId;
+                  }
                 }
               } else if (
                 quest.consecutiveObjectives &&
