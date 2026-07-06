@@ -13,7 +13,6 @@ import {
   useState,
 } from "react";
 import {
-  clearPinnedSessionId,
   decidePinnedSession,
   isAuthRoute,
   pinChangeRequiresRemount,
@@ -31,10 +30,6 @@ interface SessionPinContextValue {
   signedInSessionCount: number | undefined;
   /** Mints a token for THIS tab's pinned session (not the browser-active one). */
   getPinnedToken: () => Promise<string | null>;
-  /** Pins this tab to a different signed-in session (an intentional in-tab switch). */
-  switchPinnedAccount: (sessionId: string) => void;
-  /** Clears the pin (used on sign-out). */
-  clearPin: () => void;
 }
 
 const SessionPinContext = createContext<SessionPinContextValue | null>(null);
@@ -52,14 +47,14 @@ const SessionPinContext = createContext<SessionPinContextValue | null>(null);
  * It also replaces Clerk's `MultisessionAppSupport`: that component remounts the
  * app keyed on the ACTIVE session, which would re-flip the tab on every global
  * active-session change. Here we remount the subtree (fresh tRPC client + React
- * Query cache) only on a cross-account pin change — an intentional in-tab switch, a
- * sign-out, or a reload that adopts a different account (see
+ * Query cache) only on a cross-account pin change — i.e. when the pinned account is
+ * no longer signed in and the tab adopts a different signed-in account (see
  * `pinChangeRequiresRemount`). A background active-session change does not remount,
  * and neither does the first-load adoption of the tab's own account, so the normal
  * signed-in first load and post-sign-in redirect do not pay a tree-wide remount.
  */
 export function SessionPinProvider(props: { children: React.ReactNode }) {
-  const { isLoaded, sessions, setActive } = useSessionList();
+  const { isLoaded, sessions } = useSessionList();
   const { session: activeSession } = useSession();
   const activeSessionId = activeSession?.id ?? null;
   // The tab defers adopting the active session while on the sign-in / sign-up flow,
@@ -71,8 +66,6 @@ export function SessionPinProvider(props: { children: React.ReactNode }) {
   // refs (it runs per request batch, outside React's render).
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
-  const setActiveRef = useRef(setActive);
-  setActiveRef.current = setActive;
 
   const [pinnedSessionId, setPinnedSessionId] = useState<string | null>(() =>
     readPinnedSessionId(),
@@ -126,19 +119,6 @@ export function SessionPinProvider(props: { children: React.ReactNode }) {
     return pinned.getToken();
   }, []);
 
-  const switchPinnedAccount = useCallback((sessionId: string) => {
-    writePinnedSessionId(sessionId);
-    setPinnedSessionId(sessionId);
-    // Align Clerk's active session for UI consistency (e.g. UserButton); the app's
-    // data/auth use the pin directly and do not depend on this succeeding.
-    void setActiveRef.current?.({ session: sessionId });
-  }, []);
-
-  const clearPin = useCallback(() => {
-    clearPinnedSessionId();
-    setPinnedSessionId(null);
-  }, []);
-
   // Mirror Clerk's `client.signedInSessions` (active + pending) so the fail-closed
   // multi-session detection never under-counts and falls back to the shared cookie.
   const signedInSessionCount = useMemo(
@@ -153,17 +133,8 @@ export function SessionPinProvider(props: { children: React.ReactNode }) {
       pinnedUserId: pinnedSession?.user?.id ?? null,
       signedInSessionCount,
       getPinnedToken,
-      switchPinnedAccount,
-      clearPin,
     }),
-    [
-      pinnedSessionId,
-      pinnedSession,
-      signedInSessionCount,
-      getPinnedToken,
-      switchPinnedAccount,
-      clearPin,
-    ],
+    [pinnedSessionId, pinnedSession, signedInSessionCount, getPinnedToken],
   );
 
   return (

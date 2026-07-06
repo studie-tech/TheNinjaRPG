@@ -31,15 +31,6 @@ export function writePinnedSessionId(sessionId: string): void {
   }
 }
 
-export function clearPinnedSessionId(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.removeItem(PINNED_SESSION_STORAGE_KEY);
-  } catch {
-    // ignore — see writePinnedSessionId
-  }
-}
-
 /**
  * Resolves the pinned session from the browser's Clerk sessions. Returns the
  * matching signed-in (`status === "active"`) session, or null when the pin is
@@ -125,13 +116,18 @@ export function decidePinnedSession<T extends { id: string; status: string }>(ar
 
 /**
  * Whether a change of this tab's pinned session id should remount the app subtree
- * (fresh tRPC client + React Query cache). True only when the pin moves OFF a
- * signed-in account to a different value — an intentional in-tab switch
- * (`switchPinnedAccount`), a sign-out (`clearPin`), or a reload whose stored account
- * is gone and a different one is adopted. Those are the only changes that can leave a
- * different account's data behind in React Query caches that are not scoped per
- * account (`profile.getUser` is scoped via `getUserQueryInput`, but other queries are
- * not), so the subtree must remount to discard it.
+ * (fresh tRPC client + React Query cache). True whenever the pin moves OFF a
+ * signed-in account to a different value — in practice when the pinned account is no
+ * longer signed in and the tab adopts a different signed-in account (e.g. the pinned
+ * account signs out while another remains, so the adoption effect re-pins A → B).
+ * Such a move can leave a different account's data behind in React Query caches that
+ * are not scoped per account (`profile.getUser` is scoped via `getUserQueryInput`,
+ * but other queries are not), so the subtree must remount to discard it.
+ *
+ * The `prev !== null` guard also covers an `id → null` change. No live path nulls the
+ * pin after mount today (sign-out is Clerk-UI-driven and does not clear the pin — it
+ * simply stops resolving), so that branch is defensive: it keeps the remount correct
+ * if a future intentional switch/clear ever nulls the pin.
  *
  * The first-load `null → id` adoption returns false (no remount): the brief unpinned
  * window does not populate any account-private cache. Account-private queries are
