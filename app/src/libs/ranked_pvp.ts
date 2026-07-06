@@ -1,7 +1,6 @@
 import type { RankedRank } from "@/drizzle/constants";
 import {
   JUTSU_MAX_EVENT_EQUIPPED,
-  JUTSU_MAX_FORBIDDEN_EQUIPPED,
   JUTSU_MAX_SHIELD_EQUIPPED,
   RANKED_DIVISIONS,
   RANKED_LEGEND_LP_REQUIREMENT,
@@ -218,13 +217,6 @@ export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
   if (eventJutsus.length > JUTSU_MAX_EVENT_EQUIPPED) {
     check = false;
     message = `You can only equip up to ${JUTSU_MAX_EVENT_EQUIPPED} event jutsu in ranked PvP`;
-  }
-
-  // Check forbidden jutsu limit
-  const forbiddenJutsus = jutsus.filter((jutsu) => jutsu.jutsuType === "FORBIDDEN");
-  if (forbiddenJutsus.length > JUTSU_MAX_FORBIDDEN_EQUIPPED) {
-    check = false;
-    message = `You can only equip up to ${JUTSU_MAX_FORBIDDEN_EQUIPPED} forbidden jutsu in ranked PvP`;
   }
 
   if (jutsus.length > RANKED_LOADOUT_MAX_JUTSUS) {

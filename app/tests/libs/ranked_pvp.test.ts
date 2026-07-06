@@ -5,7 +5,6 @@ import {
   validateJutsuLoadout,
 } from "@/libs/ranked_pvp";
 import {
-  JUTSU_MAX_FORBIDDEN_EQUIPPED,
   JUTSU_MAX_SHIELD_EQUIPPED,
   RANKED_MIN_LP_GAIN,
   RANKED_QUEUE_MAX_WAIT_SECS,
@@ -78,21 +77,5 @@ describe("validateJutsuLoadout", () => {
 
     expect(result.check).toBe(false);
     expect(result.message).toMatch(/up to 2 shield jutsu/);
-  });
-
-  it("rejects ranked loadouts with more than one forbidden jutsu", () => {
-    const jutsus = Array.from({ length: JUTSU_MAX_FORBIDDEN_EQUIPPED + 1 }, (_, i) =>
-      ({
-        id: `forbidden${i}`,
-        jutsuType: "FORBIDDEN",
-        effects: [],
-      }) as Jutsu,
-    );
-
-    const result = validateJutsuLoadout(jutsus);
-
-    expect(JUTSU_MAX_FORBIDDEN_EQUIPPED).toBe(1);
-    expect(result.check).toBe(false);
-    expect(result.message).toMatch(/up to 1 forbidden jutsu/);
   });
 });
