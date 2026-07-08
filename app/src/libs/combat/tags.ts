@@ -1964,8 +1964,11 @@ export const drain = (
     !effect.castThisRound &&
     (effect.rounds === undefined || effect.rounds > 0)
   ) {
+    // Merge all drains on one target into a single consequence (keyed by targetId so
+    // multiple drain effects accumulate), but attribute it to the caster so the drain_hp
+    // branch in process.ts credits damage_dealt to the drainer like the other DoTs.
     const consequence: Consequence = consequences.get(effect.targetId) || {
-      userId: effect.targetId,
+      userId: effect.creatorId,
       targetId: effect.targetId,
       drain_hp: 0,
       drain_cp: 0,
