@@ -1965,8 +1965,13 @@ export const drain = (
     (effect.rounds === undefined || effect.rounds > 0)
   ) {
     // Merge all drains on one target into a single consequence (keyed by targetId so
-    // multiple drain effects accumulate), but attribute it to the caster so the drain_hp
-    // branch in process.ts credits damage_dealt to the drainer like the other DoTs.
+    // multiple drain effects accumulate), attributed to the caster so the drain_hp branch
+    // in process.ts credits damage_dealt to the drainer like the other DoTs. Credit is
+    // first-consequence-owner: if two DIFFERENT creators drain the same target in a round,
+    // their ticks merge here (and again in collapseConsequences, which merges by targetId and
+    // keeps the first userId), so the later drainer's share goes uncredited. Same multi-
+    // attacker limitation collapseConsequences already has for damage/residual/wound/poison;
+    // a per-attacker fix belongs in that shared merge, not here.
     const consequence: Consequence = consequences.get(effect.targetId) || {
       userId: effect.creatorId,
       targetId: effect.targetId,
