@@ -948,12 +948,15 @@ export const getNewTrackers = (
               const killCounts =
                 !isWarContextKillTask ||
                 killObjectiveCountsForQuest(quest.questType, combatContext, taskWarFoe);
-              // Generic counter objectives: increment/set on task-name match. Content-gated
-              // (specific-X + tag_usage_win) and damage_dealt tasks own the gated branches
+              // Generic counter objectives: increment/set on task-name match. Requires an exact
+              // `taskUpdate.task === task` (not the `"any"` re-evaluation trigger, which carries
+              // no increment/value) so a future `"any"` update can't inflate counters. Content-
+              // gated (specific-X + tag_usage_win) and damage_dealt tasks own the gated branches
               // below and must NOT also run this path, or they would double-count.
               if (
                 status &&
                 "value" in objective &&
+                taskUpdate.task === task &&
                 !CONTENT_GATED_TASKS.has(task) &&
                 task !== "damage_dealt"
               ) {
@@ -983,10 +986,18 @@ export const getNewTrackers = (
                 status.value += taskUpdate.increment ?? 1;
               }
               // Damage dealt: cumulative across the quest, or single-battle max when toggled.
-              // The stored counter is not reset when a designer flips singleBattle on a live
-              // quest, so an accumulated sum would be re-read as a single-battle max (and vice
-              // versa) — content edits that flip the flag must ship with a user-tracker reset.
-              if (status && task === "damage_dealt" && "value" in objective) {
+              // Requires an exact `taskUpdate.task === "damage_dealt"` (not the `"any"` re-
+              // evaluation trigger) so a future `"any"` update carrying an increment can't
+              // inflate progress toward the damage threshold. The stored counter is not reset
+              // when a designer flips singleBattle on a live quest, so an accumulated sum would
+              // be re-read as a single-battle max (and vice versa) — content edits that flip the
+              // flag must ship with a user-tracker reset.
+              if (
+                status &&
+                task === "damage_dealt" &&
+                taskUpdate.task === "damage_dealt" &&
+                "value" in objective
+              ) {
                 const dealt = taskUpdate.increment ?? 0;
                 if ("singleBattle" in objective && objective.singleBattle) {
                   status.value = Math.max(status.value, dealt);

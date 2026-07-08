@@ -2004,12 +2004,13 @@ export const itemRouter = createTRPCRouter({
           }
         });
       }
-      // buy_item quest tracker. fetchUser returns the bare userdata row (no quest
-      // relations), so hydrate userQuests/completedQuests from the thin fetch above
-      // (NOT fetchUpdatedUser, which pulls achievements/wars/raids and runs regen
-      // writes). If the thin fetch failed (null), SKIP tracking entirely — writing an
-      // empty questData would wipe the user's existing quest progress. NPC item shop
-      // only; auction buyouts are a separate, out-of-scope path.
+      // buy_item quest tracker. Source questData + userQuests/completedQuests together from
+      // the single fetchUserQuestState read above (NOT fetchUpdatedUser, which pulls
+      // achievements/wars/raids and runs regen writes) — one snapshot keeps the tracker read
+      // internally consistent, instead of pairing questData from one fetch with userQuests
+      // from another. If that fetch failed (null), SKIP tracking entirely — writing an empty
+      // questData would wipe the user's existing quest progress. NPC item shop only; auction
+      // buyouts are a separate, out-of-scope path.
       // Only touch questData when the purchase can actually advance a buy_item
       // objective for this item: buy_item is content-gated (unlike the always-on
       // counters in craft/train), so any other purchase would re-serialize an
@@ -2026,7 +2027,7 @@ export const itemRouter = createTRPCRouter({
           if (o.task !== "buy_item" || !objectiveContentIds(o).includes(iid)) {
             return false;
           }
-          const goal = user.questData
+          const goal = questState?.questData
             ?.find((tracker) => tracker.id === uq.questId)
             ?.goals.find((g) => g.id === o.id);
           return !goal?.done;
@@ -2038,9 +2039,13 @@ export const itemRouter = createTRPCRouter({
       if (questState && advancesBuyItemObjective) {
         const buyer = {
           ...user,
-          // Drop orphaned rows (quest deleted → `quest` is null) to match the convention
-          // fetchUpdatedUser applies; this bespoke fetch is the one caller that otherwise
-          // leaks nulls into the tracker/persist path.
+          // Source questData + userQuests + completedQuests from the SAME fetchUserQuestState
+          // snapshot so the tracker read is internally consistent. Drop orphaned rows (quest
+          // deleted → `quest` is null) to match the convention fetchUpdatedUser applies; this
+          // bespoke fetch is the one caller that otherwise leaks nulls into the tracker/persist
+          // path. (The scalar fields getNewTrackers' "every time" block reads still come from
+          // fetchUser — a pre-existing, accepted torn-read this consolidation does not widen.)
+          questData: questState.questData,
           userQuests: questState.userQuests.filter((q) => q.quest),
           completedQuests: questState.completedQuests,
         } as unknown as Parameters<typeof getNewTrackers>[0];
@@ -2453,7 +2458,7 @@ const getVariantCurrencyOps = (
 const fetchUserQuestState = async (client: DrizzleClient, userId: string) => {
   return await client.query.userData.findFirst({
     where: eq(userData.userId, userId),
-    columns: { userId: true },
+    columns: { userId: true, questData: true },
     with: {
       userQuests: {
         where: or(
