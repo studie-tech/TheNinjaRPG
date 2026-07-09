@@ -18,6 +18,13 @@ export const COMBAT_LOBBY_SECONDS = 15;
 
 export const SPAR_EXPIRY_SECONDS = 120;
 
+/**
+ * Max fraction of a hit's pre-shield damage that vamp + lifesteal can together
+ * return to the attacker as HP. Shared budget: vamp fills first, lifesteal takes
+ * the remainder.
+ */
+export const DAMAGE_LEECH_CAP_RATIO = 0.6;
+
 export const BARRIER_DAMAGE_TAG_TYPES = new Set<string>(["damage", "pierce"]);
 
 /**
