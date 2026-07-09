@@ -1621,8 +1621,11 @@ const Sector: React.FC<SectorProps> = (props) => {
     const status = userData?.status;
     if (longitude === undefined || latitude === undefined) return;
 
-    // Suppression gates first: never stack on an in-flight interaction, a battle, or an open dialog.
-    if (isInteracting || status === "BATTLE" || npcDialog) return;
+    // Suppression gates first: never stack on an in-flight interaction or an open dialog, and only
+    // prompt when the interaction can actually succeed — interactWithOverworldAi rejects every
+    // non-AWAKE status (BATTLE, HOSPITALIZED, ASLEEP, TRAVEL, QUEUED, …), so gate on `!== "AWAKE"`
+    // rather than BATTLE alone to avoid showing a modal whose CTA would immediately error.
+    if (isInteracting || status !== "AWAKE" || npcDialog) return;
 
     const decision = arrivalPromptDecision({
       playerLongitude: longitude,

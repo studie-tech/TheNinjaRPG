@@ -786,10 +786,15 @@ export const EditContent = <
                                                 key={option.value}
                                                 keywords={[option.label]}
                                                 onSelect={() => {
+                                                  // The __none__ sentinel is a placement-picker
+                                                  // concern only; scope the empty-string rewrite to
+                                                  // that field so an unrelated dropdown that happens
+                                                  // to carry a "__none__" option isn't clobbered.
                                                   form.setValue(
                                                     id,
-                                                    (option.value ===
-                                                    NONE_PLACEMENT_VALUE
+                                                    (id === "overworldPlacementId" &&
+                                                    option.value ===
+                                                      NONE_PLACEMENT_VALUE
                                                       ? ""
                                                       : option.value) as PathValue<
                                                       S,
