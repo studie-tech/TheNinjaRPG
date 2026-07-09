@@ -44,6 +44,11 @@ import {
   serverError,
 } from "../trpc";
 
+/** Shown when a player asks an NPC for a mission while their single active-NPC-mission slot is
+ *  still held — both on the pre-roll slot decision and when the atomic claim loses a race. */
+const ACTIVE_NPC_MISSION_BLOCKED_MESSAGE =
+  "Finish your current mission before asking for another.";
+
 export const overworldAiRouter = createTRPCRouter({
   getPlacementsForAi: protectedProcedure
     .input(z.object({ aiTemplateUserId: z.string() }))
@@ -383,6 +388,13 @@ export const overworldAiRouter = createTRPCRouter({
             activeUser.userQuests?.find((q) => q.questId === bound.questId) ?? null,
         });
 
+        // `already_completed` means the completion actually landed server-side on an earlier
+        // (double-click / raced) claim; commitQuestObjectiveRewards is idempotent and the reward
+        // was granted then, so surface it as success rather than a spurious "state changed" toast.
+        // Only not_found / state_changed are genuinely retryable errors.
+        if (claim.outcome === "already_completed") {
+          return { success: true, message: "Interaction complete" };
+        }
         if (claim.outcome !== "claimed") {
           return errorResponse("Quest state changed, please try again");
         }
@@ -497,32 +509,36 @@ export const overworldAiRouter = createTRPCRouter({
         activeUser.userQuests ?? [],
       );
       if (slotDecision === "block") {
-        return {
-          success: true,
-          message: "Finish your current mission before asking for another.",
-        };
-      }
-      if (slotDecision === "clear-stale" && activeUser.activeNpcQuestId) {
-        await clearActiveNpcQuest({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          questId: activeUser.activeNpcQuestId,
-        });
+        return { success: true, message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE };
       }
 
-      // Consume one daily roll via CAS BEFORE rolling so a failed roll still costs a
-      // slot (prevents unlimited re-rolling against the per-quest chances).
-      const claim = await ctx.drizzle
-        .update(userData)
-        .set({
-          dailyOverworldQuestRolls: sql`${userData.dailyOverworldQuestRolls} + 1`,
-        })
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            sql`${userData.dailyOverworldQuestRolls} < ${OVERWORLD_QUEST_ROLLS_PER_DAY}`,
+      // Consume one daily roll via CAS BEFORE rolling so a failed roll still costs a slot
+      // (prevents unlimited re-rolling against the per-quest chances). The stale-slot clear is
+      // independent of this CAS — it targets a different questId's slot and the roll's
+      // success/failure doesn't depend on it — so dispatch both writes in parallel to keep this
+      // hot NPC-interaction path to a single round-trip.
+      const clearStale =
+        slotDecision === "clear-stale" && activeUser.activeNpcQuestId
+          ? clearActiveNpcQuest({
+              client: ctx.drizzle,
+              userId: ctx.userId,
+              questId: activeUser.activeNpcQuestId,
+            })
+          : Promise.resolve();
+      const [, claim] = await Promise.all([
+        clearStale,
+        ctx.drizzle
+          .update(userData)
+          .set({
+            dailyOverworldQuestRolls: sql`${userData.dailyOverworldQuestRolls} + 1`,
+          })
+          .where(
+            and(
+              eq(userData.userId, ctx.userId),
+              sql`${userData.dailyOverworldQuestRolls} < ${OVERWORLD_QUEST_ROLLS_PER_DAY}`,
+            ),
           ),
-        );
+      ]);
       if (claim.rowsAffected === 0) {
         return errorResponse("You've reached your daily mission allowance.");
       }
@@ -540,12 +556,17 @@ export const overworldAiRouter = createTRPCRouter({
           questId: e.quest.id,
           lastAttemptAt: now,
         }));
-      if (attemptRowsToInsert.length > 0) {
-        await ctx.drizzle
-          .insert(userQuestAttempt)
-          .values(attemptRowsToInsert)
-          .onDuplicateKeyUpdate({ set: { lastAttemptAt: now } });
-      }
+      // Kick off (don't await yet) the attempt upsert: it's independent of the slot claim below
+      // (different table, different WHERE) and doesn't depend on which quest the roll picks, so
+      // it runs concurrently with the claim on the grant path instead of costing an extra
+      // round-trip. Awaited on both exits below so the write is never left floating.
+      const attemptPromise =
+        attemptRowsToInsert.length > 0
+          ? ctx.drizzle
+              .insert(userQuestAttempt)
+              .values(attemptRowsToInsert)
+              .onDuplicateKeyUpdate({ set: { lastAttemptAt: now } })
+          : Promise.resolve();
 
       // Weighted band-walk: each quest owns [acc, acc+chance); a roll past the summed
       // chances grants nothing this time.
@@ -557,20 +578,21 @@ export const overworldAiRouter = createTRPCRouter({
         ? eligible.find((e) => e.quest.id === chosenId)
         : undefined;
       if (!chosen) {
+        await attemptPromise;
         return { success: true, message: "The NPC had nothing for you this time." };
       }
       // Claim the single active-NPC-mission slot atomically before granting. If the slot is
       // already taken (e.g. a concurrent interaction won the race), don't grant a second one.
-      const claimed = await claimActiveNpcQuest({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        questId: chosen.quest.id,
-      });
+      const [, claimed] = await Promise.all([
+        attemptPromise,
+        claimActiveNpcQuest({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          questId: chosen.quest.id,
+        }),
+      ]);
       if (!claimed) {
-        return {
-          success: true,
-          message: "Finish your current mission before asking for another.",
-        };
+        return { success: true, message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE };
       }
       const result = await assignQuestToUser({
         client: ctx.drizzle,

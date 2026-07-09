@@ -237,6 +237,11 @@ export const deriveOverworldOpponents = <
       missing.push(o.overworldPlacementId);
       return o;
     }
+    // A placement is exactly one NPC on one tile: startOverworldBattle spawns a single target
+    // (that placement's AI) and defeat_opponents completes on the first matching kill, not on a
+    // wave count. So the count is fixed at 1 here rather than carried over from any prior
+    // opponentAIs edit — a higher stored `number` would be dead metadata that contradicts the
+    // one-NPC fight the placement actually starts. Multi-wave doesn't fit the placement model.
     return { ...o, opponentAIs: [{ ids: [ai], number: 1 }] };
   });
   return { objectives: next, missing };
