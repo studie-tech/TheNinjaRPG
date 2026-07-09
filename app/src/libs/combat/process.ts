@@ -679,7 +679,10 @@ export const applyEffects = (
           // Fills the shared leech budget first; lifesteal later takes whatever remains.
           const rawVampHeal = c.vampHeal ?? 0;
           if (rawVampHeal > 0 && user.curHealth > 0) {
-            const vampHeal = Math.min(Math.floor(rawVampHeal), leechBudget);
+            const vampHeal = Math.min(
+              Math.floor(rawVampHeal),
+              leechBudget - leechConsumed,
+            );
             if (vampHeal > 0) {
               leechConsumed += vampHeal;
               user.curHealth = Math.min(user.maxHealth, user.curHealth + vampHeal);
