@@ -529,21 +529,23 @@ export const overworldAiRouter = createTRPCRouter({
 
       // The roll is now committed — record an attempt for every eligible cooldown quest so a
       // 99% "nothing" still spends today's attempt (mirrors how the completion cap works on grant).
-      await Promise.all(
-        eligible
-          .filter((e) => e.quest.attemptDelay !== "none")
-          .map((e) =>
-            ctx.drizzle
-              .insert(userQuestAttempt)
-              .values({
-                id: nanoid(),
-                userId: ctx.userId,
-                questId: e.quest.id,
-                lastAttemptAt: now,
-              })
-              .onDuplicateKeyUpdate({ set: { lastAttemptAt: now } }),
-          ),
-      );
+      // One multi-row upsert rather than a statement per quest: the unique (userId, questId) key
+      // drives ON DUPLICATE KEY UPDATE, and lastAttemptAt is the same `now` for every row, so a
+      // single `set` clause covers all conflicts. Guarded because drizzle rejects empty values().
+      const attemptRowsToInsert = eligible
+        .filter((e) => e.quest.attemptDelay !== "none")
+        .map((e) => ({
+          id: nanoid(),
+          userId: ctx.userId,
+          questId: e.quest.id,
+          lastAttemptAt: now,
+        }));
+      if (attemptRowsToInsert.length > 0) {
+        await ctx.drizzle
+          .insert(userQuestAttempt)
+          .values(attemptRowsToInsert)
+          .onDuplicateKeyUpdate({ set: { lastAttemptAt: now } });
+      }
 
       // Weighted band-walk: each quest owns [acc, acc+chance); a roll past the summed
       // chances grants nothing this time.
