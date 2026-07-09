@@ -1284,7 +1284,11 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
         : val.lifesteal_hp;
     }
     if (val.vampRatio) {
-      current.vampHeal = (current.vampHeal ?? 0) + val.vampRatio * (val.damage ?? 0);
+      // Vamp heals off the FULL pre-shield hit (matches lifesteal + the 60% cap, which
+      // both use preShieldDamage). Fallback to damage when preShieldDamage is unset.
+      current.vampHeal =
+        (current.vampHeal ?? 0) +
+        val.vampRatio * (val.preShieldDamage ?? val.damage ?? 0);
     }
     if (val.preShieldDamage) {
       current.preShieldDamage = current.preShieldDamage
@@ -1332,7 +1336,8 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
     }
   } else {
     if (val.vampRatio) {
-      val.vampHeal = (val.vampHeal ?? 0) + val.vampRatio * (val.damage ?? 0);
+      val.vampHeal =
+        (val.vampHeal ?? 0) + val.vampRatio * (val.preShieldDamage ?? val.damage ?? 0);
     }
     acc.push(val);
   }

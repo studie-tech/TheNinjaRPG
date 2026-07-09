@@ -15,6 +15,7 @@ import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
 import {
   BARRIER_DAMAGE_TAG_TYPES,
+  DAMAGE_LEECH_CAP_RATIO,
   damageBoostTypes,
   damageModifierTypes,
   damageReductionTypes,
@@ -647,7 +648,13 @@ export const applyEffects = (
 
       // Apply all the consequences
       if (target && user) {
-        let appliedVampHeal = 0;
+        // Vamp + lifesteal share one 60%-of-damage budget per consequence. Declared
+        // before the damage block because lifesteal is applied later, outside it, and
+        // still needs the budget when a shield-reduced damage===0 was dropped in merge.
+        const leechBudget = Math.floor(
+          (c.preShieldDamage ?? c.damage ?? 0) * DAMAGE_LEECH_CAP_RATIO,
+        );
+        let leechConsumed = 0;
         // damage_dealt tracker credit goes to the controller when the attacker is a
         // summon/clone, matching creatures_hunted attribution (kills a summon secures
         // already count for the summoner). Summons copy the summoner's direction at
@@ -666,15 +673,15 @@ export const applyEffects = (
             color: "red",
             types: c.types,
           });
-          // Vamp: heal the attacker based on the final damage dealt (post-boost, post-shield).
+          // Vamp: heal the attacker based on the full pre-shield damage dealt (post-boost,
+          // pre-shield; matches lifesteal, so a shield doesn't shrink the vamp heal).
           // Intentional: this can trigger on killing blows (no target.curHealth > 0 guard).
+          // Fills the shared leech budget first; lifesteal later takes whatever remains.
           const rawVampHeal = c.vampHeal ?? 0;
           if (rawVampHeal > 0 && user.curHealth > 0) {
-            const preShieldDamage = c.preShieldDamage ?? c.damage ?? 0;
-            const maxVamp = preShieldDamage * 0.6;
-            const vampHeal = Math.min(Math.floor(rawVampHeal), Math.floor(maxVamp));
-            appliedVampHeal = vampHeal;
+            const vampHeal = Math.min(Math.floor(rawVampHeal), leechBudget);
             if (vampHeal > 0) {
+              leechConsumed += vampHeal;
               user.curHealth = Math.min(user.maxHealth, user.curHealth + vampHeal);
               actionEffects.push({
                 txt: `${user.username} vamps ${vampHeal} damage as health`,
@@ -798,24 +805,26 @@ export const applyEffects = (
             color: "red",
           });
         }
-        // Vamp and lifesteal are mutually exclusive: if vamp drained this packet, suppress lifesteal.
+        // Lifesteal shares the leech budget with vamp: it takes whatever vamp left unused
+        // (both cap the combined heal at DAMAGE_LEECH_CAP_RATIO of the pre-shield damage).
+        // Still requires the target to have survived the whole tick and the attacker alive.
         if (
-          appliedVampHeal <= 0 &&
           c.lifesteal_hp !== undefined &&
           c.lifesteal_hp >= 0 &&
           target.curHealth > 0 &&
           user.curHealth > 0
         ) {
-          // Use pre-shield damage for the 60% cap calculation to avoid shield interference
-          const preShieldDamage = c.preShieldDamage ?? 0;
-          const maxLifesteal = preShieldDamage * 0.6;
-          const finalLifesteal = Math.min(c.lifesteal_hp, maxLifesteal);
-          user.curHealth += finalLifesteal;
-          user.curHealth = Math.min(user.maxHealth, user.curHealth);
-          actionEffects.push({
-            txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health`,
-            color: "green",
-          });
+          const remaining = Math.max(0, leechBudget - leechConsumed);
+          const finalLifesteal = Math.min(c.lifesteal_hp, remaining);
+          if (finalLifesteal > 0) {
+            leechConsumed += finalLifesteal;
+            user.curHealth += finalLifesteal;
+            user.curHealth = Math.min(user.maxHealth, user.curHealth);
+            actionEffects.push({
+              txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health`,
+              color: "green",
+            });
+          }
         }
         if (c.absorb_hp !== undefined && c.absorb_hp >= 0 && target.curHealth > 0) {
           // Use pre-shield damage for the 60% cap calculation to avoid shield interference

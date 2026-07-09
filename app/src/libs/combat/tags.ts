@@ -1904,7 +1904,7 @@ export const lifesteal = (
   return getInfo(target, effect, `will steal ${qualifier} damage as health`);
 };
 
-/** Instantly heal the caster based on damage dealt by this jutsu. Applies independently of lifesteal. */
+/** Instantly heal the caster based on damage dealt by this jutsu. Shares a combined 60% cap with lifesteal. */
 export const vamp = (
   effect: UserEffect,
   usersEffects: UserEffect[],
@@ -1922,7 +1922,8 @@ export const vamp = (
   if (casterHealPrevented) return preventResponse(effect, target, "cannot vamp");
   const { power, qualifier } = getPower(effect);
   // Store vampRatio on each outgoing damage consequence so the application phase
-  // can compute the heal from the truly final damage total (post-boost, post-shield).
+  // can compute the heal from the full pre-shield damage total (post-boost, pre-shield;
+  // matches lifesteal, which also heals off the full hit a shield would otherwise reduce).
   if (effect.isNew && effect.castThisRound) {
     consequences.forEach((c) => {
       if (
