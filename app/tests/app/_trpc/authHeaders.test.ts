@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildClerkRequestHeaders,
   computeIsMultiSession,
+  isTransientMultiSessionAuthError,
   TAB_AUTH_REQUIRED_HEADER,
+  VIEWER_SESSION_MISMATCH_MESSAGE,
 } from "@/app/_trpc/authHeaders";
 
 describe("buildClerkRequestHeaders", () => {
@@ -34,6 +36,35 @@ describe("buildClerkRequestHeaders", () => {
 
   it("sends no marker for a single-session browser with no token (cookie is the user's own account)", () => {
     expect(buildClerkRequestHeaders(null, false)).toEqual({});
+  });
+});
+
+describe("isTransientMultiSessionAuthError", () => {
+  it("matches the server's fail-closed UNAUTHORIZED regardless of message", () => {
+    expect(
+      isTransientMultiSessionAuthError(
+        "UNAUTHORIZED",
+        "Unauthorized for tRPC endpoint. Path: profile.getUser",
+      ),
+    ).toBe(true);
+  });
+
+  it("matches the FORBIDDEN viewer/session mismatch guard", () => {
+    expect(
+      isTransientMultiSessionAuthError("FORBIDDEN", VIEWER_SESSION_MISMATCH_MESSAGE),
+    ).toBe(true);
+  });
+
+  it("does not match other FORBIDDEN errors or other codes", () => {
+    expect(isTransientMultiSessionAuthError("FORBIDDEN", "No access to feature")).toBe(
+      false,
+    );
+    expect(isTransientMultiSessionAuthError("INTERNAL_SERVER_ERROR", "boom")).toBe(
+      false,
+    );
+    expect(
+      isTransientMultiSessionAuthError(undefined, VIEWER_SESSION_MISMATCH_MESSAGE),
+    ).toBe(false);
   });
 });
 

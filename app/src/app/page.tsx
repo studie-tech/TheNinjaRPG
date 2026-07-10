@@ -15,13 +15,19 @@ export default function Index() {
   const { data: userData, status: userStatus, userId } = useUserData();
   const setReferral = api.register.setReferralSource.useMutation();
 
+  // Clerk multi-session: the tab is signed in when its pinned session resolves
+  // (`userId`), even when the browser-global active session momentarily is not —
+  // treating the global signal alone as truth showed the logged-out landing page
+  // to signed-in users.
+  const isSignedInTab = !!isSignedIn || !!userId;
+
   // Navigation
   const router = useRouter();
 
   // Redirect based on user status
   useEffect(() => {
     // When user is signed in (Clerk) but has not created a character yet, set referral immediately
-    if (isSignedIn && !userData && userStatus !== "pending") {
+    if (isSignedInTab && !userData && userStatus !== "pending") {
       // attempt to read utm_source from localStorage if present
       const utm = safeLocalStorageGetItem("utm_source");
       setReferral.mutate({ utmSource: utm ?? undefined });
@@ -36,10 +42,10 @@ export default function Index() {
     if (userData && userId) {
       void router.push("/profile");
     }
-  }, [isSignedIn, userData, userId, userStatus]);
+  }, [isSignedInTab, userData, userId, userStatus]);
 
   // Guard
-  if (!isSignedIn && !userData) {
+  if (!isSignedInTab && !userData) {
     return <Welcome />;
   } else {
     return <Loader explanation="Forwarding to profile" />;

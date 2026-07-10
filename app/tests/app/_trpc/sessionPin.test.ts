@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  clearPinnedSessionStorage,
   decidePinnedSession,
   isAuthRoute,
   pinChangeRequiresRemount,
   readPinnedSessionId,
+  readPinnedUserId,
   resolvePinnedSession,
   writePinnedSessionId,
+  writePinnedUserId,
 } from "@/app/_trpc/sessionPin";
 
 const makeFakeWindow = () => {
@@ -66,10 +69,23 @@ describe("pinned session id storage", () => {
     expect(readPinnedSessionId()).toBe("sess_b");
   });
 
+  it("round-trips the pinned user id and clears both keys together", () => {
+    g.window = makeFakeWindow();
+    writePinnedSessionId("sess_a");
+    writePinnedUserId("user_a");
+    expect(readPinnedUserId()).toBe("user_a");
+    clearPinnedSessionStorage();
+    expect(readPinnedSessionId()).toBeNull();
+    expect(readPinnedUserId()).toBeNull();
+  });
+
   it("is a safe no-op without window (SSR)", () => {
     g.window = undefined;
     expect(() => writePinnedSessionId("x")).not.toThrow();
+    expect(() => writePinnedUserId("x")).not.toThrow();
+    expect(() => clearPinnedSessionStorage()).not.toThrow();
     expect(readPinnedSessionId()).toBeNull();
+    expect(readPinnedUserId()).toBeNull();
   });
 });
 
@@ -107,6 +123,7 @@ describe("decidePinnedSession", () => {
         sessions,
         inMemoryPinnedId: "sess_main",
         storedPinnedId: null,
+        storedPinnedUserId: null,
         activeSessionId: "sess_alt",
         onAuthRoute: false,
       }),
@@ -119,6 +136,7 @@ describe("decidePinnedSession", () => {
         sessions,
         inMemoryPinnedId: null,
         storedPinnedId: null,
+        storedPinnedUserId: null,
         activeSessionId: "sess_main",
         onAuthRoute: false,
       }),
@@ -131,6 +149,7 @@ describe("decidePinnedSession", () => {
         sessions,
         inMemoryPinnedId: null,
         storedPinnedId: "sess_alt",
+        storedPinnedUserId: "user_alt",
         activeSessionId: "sess_main",
         onAuthRoute: false,
       }),
@@ -143,23 +162,70 @@ describe("decidePinnedSession", () => {
         sessions: [],
         inMemoryPinnedId: "sess_main",
         storedPinnedId: null,
+        storedPinnedUserId: "user_main",
         activeSessionId: null,
         onAuthRoute: false,
       }),
     ).toEqual({ type: "keep" });
   });
 
-  it("re-adopts the active session when the pinned account was signed out and another remains", () => {
+  it("releases (never silently adopts) when the pinned account died and a DIFFERENT account is active", () => {
+    // The "randomly swapped to my other account" bug: the pinned session expired /
+    // was signed out while the alt remains. The tab must not silently become the
+    // alt — it releases the pin and routes through the sign-in flow instead.
     expect(
       decidePinnedSession({
-        // The pinned sess_signedout is no longer in sessions; sess_main + sess_alt remain.
         sessions,
-        inMemoryPinnedId: "sess_signedout",
-        storedPinnedId: "sess_signedout",
+        inMemoryPinnedId: "sess_dead",
+        storedPinnedId: "sess_dead",
+        storedPinnedUserId: "user_main",
         activeSessionId: "sess_alt",
         onAuthRoute: false,
       }),
-    ).toEqual({ type: "set", id: "sess_alt" });
+    ).toEqual({ type: "release" });
+  });
+
+  it("releases when the pinned account died and its account is unknown (no stored user id)", () => {
+    // Without a stored user id we cannot prove the active session is the same
+    // account, so the safe decision is the explicit sign-in flow, never adoption.
+    expect(
+      decidePinnedSession({
+        sessions,
+        inMemoryPinnedId: "sess_dead",
+        storedPinnedId: "sess_dead",
+        storedPinnedUserId: null,
+        activeSessionId: "sess_alt",
+        onAuthRoute: false,
+      }),
+    ).toEqual({ type: "release" });
+  });
+
+  it("silently re-adopts a fresh session of the SAME account after the pinned one died", () => {
+    // E.g. the session expired and the user signed in again: new session id, same
+    // account. This must not bounce the user through the sign-in flow.
+    expect(
+      decidePinnedSession({
+        sessions,
+        inMemoryPinnedId: "sess_dead",
+        storedPinnedId: "sess_dead",
+        storedPinnedUserId: "user_main",
+        activeSessionId: "sess_main",
+        onAuthRoute: false,
+      }),
+    ).toEqual({ type: "set", id: "sess_main" });
+  });
+
+  it("keeps a dead pin while no signed-in active session exists (nothing to adopt or release to)", () => {
+    expect(
+      decidePinnedSession({
+        sessions,
+        inMemoryPinnedId: "sess_dead",
+        storedPinnedId: "sess_dead",
+        storedPinnedUserId: "user_main",
+        activeSessionId: null,
+        onAuthRoute: false,
+      }),
+    ).toEqual({ type: "keep" });
   });
 
   it("does not pin an active session that is not a signed-in session (no phantom pin)", () => {
@@ -168,6 +234,7 @@ describe("decidePinnedSession", () => {
         sessions,
         inMemoryPinnedId: null,
         storedPinnedId: null,
+        storedPinnedUserId: null,
         activeSessionId: "sess_not_in_list",
         onAuthRoute: false,
       }),
@@ -185,6 +252,7 @@ describe("decidePinnedSession", () => {
         sessions: [{ id: "sess_main", status: "active", user: { id: "user_main" } }],
         inMemoryPinnedId: null,
         storedPinnedId: null,
+        storedPinnedUserId: null,
         activeSessionId: "sess_main",
         onAuthRoute: true,
       }),
@@ -199,21 +267,40 @@ describe("decidePinnedSession", () => {
         sessions,
         inMemoryPinnedId: null,
         storedPinnedId: null,
+        storedPinnedUserId: null,
         activeSessionId: "sess_alt",
         onAuthRoute: true,
       }),
     ).toEqual({ type: "keep" });
   });
 
+  it("clears a dead pin on the sign-in flow so the chosen account adopts cleanly afterwards", () => {
+    // A released tab lands on /login still carrying the dead pin. Clearing it here
+    // is what prevents the post-sign-in adoption from reading as a cross-account
+    // move and bouncing the tab straight back to /login.
+    expect(
+      decidePinnedSession({
+        sessions,
+        inMemoryPinnedId: "sess_dead",
+        storedPinnedId: "sess_dead",
+        storedPinnedUserId: "user_main",
+        activeSessionId: "sess_alt",
+        onAuthRoute: true,
+      }),
+    ).toEqual({ type: "clear" });
+  });
+
   it("adopts the just-signed-in account once redirected off the auth flow", () => {
     // <SignIn> redirected onto an app route. onAuthRoute is false only BECAUSE that
     // navigation ran, which is downstream of Clerk setting the new active session —
-    // so activeSessionId is already the new account here (not a stale value).
+    // so activeSessionId is already the new account here (not a stale value). The
+    // dead pin was cleared while on the auth route, so this is a no-pin adoption.
     expect(
       decidePinnedSession({
         sessions,
         inMemoryPinnedId: null,
         storedPinnedId: null,
+        storedPinnedUserId: null,
         activeSessionId: "sess_alt",
         onAuthRoute: false,
       }),
@@ -229,6 +316,7 @@ describe("decidePinnedSession", () => {
         sessions,
         inMemoryPinnedId: "sess_main",
         storedPinnedId: "sess_main",
+        storedPinnedUserId: "user_main",
         activeSessionId: "sess_alt",
         onAuthRoute: false,
       }),
@@ -243,13 +331,12 @@ describe("pinChangeRequiresRemount", () => {
     expect(pinChangeRequiresRemount(null, "sess_a")).toBe(false);
   });
 
-  it("remounts when the tab adopts a different account (A -> B)", () => {
-    // The pinned account signed out and the effect adopted another still-signed-in
-    // account: account A's data may sit in unscoped React Query caches, discard it.
+  it("remounts when the pin moves to a different session (e.g. same account, fresh session)", () => {
+    // The previous session's data may sit in unscoped React Query caches, discard it.
     expect(pinChangeRequiresRemount("sess_a", "sess_b")).toBe(true);
   });
 
-  it("remounts on an id -> null change (defensive; no live path nulls the pin today)", () => {
+  it("remounts on an id -> null change (clear/release of a dead pin)", () => {
     expect(pinChangeRequiresRemount("sess_a", null)).toBe(true);
   });
 

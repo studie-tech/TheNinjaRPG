@@ -7,6 +7,7 @@ import { TRPCClientError } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/api/root";
+import { useSessionPin } from "@/app/_trpc/SessionPinProvider";
 import { toast } from "@/components/ui/use-toast";
 
 /** A set of type-safe react-query hooks for your tRPC API. */
@@ -55,13 +56,19 @@ export const onError = (err: unknown) => {
 export const PUBLIC_MUTATIONS: string[] = ["towerDefense.initiateGuestSession"];
 
 export const useGlobalOnMutateProtect = () => {
+  // Clerk multi-session: the tab's identity is its PINNED session, and the
+  // browser-global active session can flip or drop while the pinned session is
+  // still signed in (e.g. the other account signs out, or cross-tab active-context
+  // races). Either signal proves the tab can act — only block a mutation when
+  // NEITHER the pinned session nor the browser-global session is signed in.
   const { isSignedIn } = useUser();
+  const { pinnedUserId } = useSessionPin();
   return (mutationPath?: string) => {
     // Skip check for public mutations
     if (mutationPath && PUBLIC_MUTATIONS.includes(mutationPath)) {
       return;
     }
-    if (!isSignedIn) {
+    if (!isSignedIn && !pinnedUserId) {
       throw new Error(SIGN_IN_REQUIRED_MUTATION_MESSAGE);
     }
   };

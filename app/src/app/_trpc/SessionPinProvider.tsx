@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, useSessionList } from "@clerk/nextjs";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
   Fragment,
@@ -13,12 +13,15 @@ import {
   useState,
 } from "react";
 import {
+  clearPinnedSessionStorage,
   decidePinnedSession,
   isAuthRoute,
   pinChangeRequiresRemount,
   readPinnedSessionId,
+  readPinnedUserId,
   resolvePinnedSession,
   writePinnedSessionId,
+  writePinnedUserId,
 } from "./sessionPin";
 
 interface SessionPinContextValue {
@@ -47,10 +50,13 @@ const SessionPinContext = createContext<SessionPinContextValue | null>(null);
  * It also replaces Clerk's `MultisessionAppSupport`: that component remounts the
  * app keyed on the ACTIVE session, which would re-flip the tab on every global
  * active-session change. Here we remount the subtree (fresh tRPC client + React
- * Query cache) only on a cross-account pin change — i.e. when the pinned account is
- * no longer signed in and the tab adopts a different signed-in account (see
- * `pinChangeRequiresRemount`). A background active-session change does not remount,
- * and neither does the first-load adoption of the tab's own account, so the normal
+ * Query cache) only when the pin moves off a signed-in account (see
+ * `pinChangeRequiresRemount`) — re-pinning the same account's fresh session, or
+ * clearing a dead pin before the tab heads to the sign-in flow. The tab NEVER
+ * silently adopts a different signed-in account: when the pinned session dies while
+ * another account remains, the pin is released and the user picks an account on
+ * /login explicitly. A background active-session change does not remount, and
+ * neither does the first-load adoption of the tab's own account, so the normal
  * signed-in first load and post-sign-in redirect do not pay a tree-wide remount.
  */
 export function SessionPinProvider(props: { children: React.ReactNode }) {
@@ -93,20 +99,57 @@ export function SessionPinProvider(props: { children: React.ReactNode }) {
   // source of truth) is NEVER overridden by a background active-session change —
   // that is what keeps the tab on its account. Re-runs when the tab leaves the auth
   // route so the just-signed-in account is adopted after the redirect.
+  //
+  // When the pinned session is DEAD (no longer signed in) and the active session
+  // belongs to a DIFFERENT account, the decision is "release": clear the pin and
+  // send the tab to the sign-in flow so the user picks an account explicitly. The
+  // tab must never silently switch accounts. Nulling the pin remounts the app
+  // subtree (see pinChangeRequiresRemount), which drops the old account's caches.
+  const router = useRouter();
+  // True from a "release" until the tab reaches the sign-in flow. In that window
+  // the tab has no pin, so a Clerk sessions refresh re-running the effect before
+  // the /login navigation completes would otherwise read as a first-load and adopt
+  // the other account — the exact silent switch release exists to prevent.
+  const releasedRef = useRef(false);
   useEffect(() => {
     if (!isLoaded) return;
+    if (releasedRef.current) {
+      if (!onAuthRoute) {
+        // Still between release and the sign-in flow: adopt nothing, keep steering
+        // to /login (re-issued in case the original navigation was interrupted).
+        router.push("/login");
+        return;
+      }
+      releasedRef.current = false;
+    }
     const decision = decidePinnedSession({
       sessions,
       inMemoryPinnedId: pinnedIdRef.current,
       storedPinnedId: readPinnedSessionId(),
+      storedPinnedUserId: readPinnedUserId(),
       activeSessionId,
       onAuthRoute,
     });
     if (decision.type === "set") {
       writePinnedSessionId(decision.id);
+      const pinnedUser = resolvePinnedSession(sessions, decision.id)?.user?.id;
+      if (pinnedUser) writePinnedUserId(pinnedUser);
       setPinnedSessionId(decision.id);
+    } else if (decision.type === "clear" || decision.type === "release") {
+      clearPinnedSessionStorage();
+      setPinnedSessionId(null);
+      if (decision.type === "release") {
+        releasedRef.current = true;
+        router.push("/login");
+      }
+    } else {
+      // Backfill the stored user id for pins written before it existed, so a later
+      // dead-pin recovery can tell "same account again" from "different account".
+      const pinnedUser = resolvePinnedSession(sessions, pinnedIdRef.current)?.user?.id;
+      if (pinnedUser && readPinnedUserId() !== pinnedUser)
+        writePinnedUserId(pinnedUser);
     }
-  }, [isLoaded, sessions, activeSessionId, onAuthRoute]);
+  }, [isLoaded, sessions, activeSessionId, onAuthRoute, router]);
 
   const pinnedSession = useMemo(
     () => resolvePinnedSession(sessions, pinnedSessionId),
