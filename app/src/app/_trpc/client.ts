@@ -6,6 +6,7 @@ import { useUser } from "@clerk/nextjs";
 import { TRPCClientError } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
+import { useRef, useState } from "react";
 import type { AppRouter } from "@/api/root";
 import { toast } from "@/components/ui/use-toast";
 
@@ -54,15 +55,34 @@ export const onError = (err: unknown) => {
  */
 export const PUBLIC_MUTATIONS: string[] = ["towerDefense.initiateGuestSession"];
 
-export const useGlobalOnMutateProtect = () => {
-  const { isSignedIn } = useUser();
+/**
+ * Builds the mutation guard from a GETTER so the signed-in state is read at
+ * mutation time, never captured. The guard is stored once inside the
+ * QueryClient's MutationCache (created in a one-shot useState in
+ * TrpcClientProvider), so a closed-over boolean would freeze whatever value the
+ * first render had — and the first render happens before clerk-js loads, when
+ * `isSignedIn` is still undefined. That frozen value would block every mutation
+ * with a false "sign in" error for the tab's whole lifetime.
+ */
+export const createMutationGuard = (
+  getIsSignedIn: () => boolean | undefined,
+): ((mutationPath?: string) => void) => {
   return (mutationPath?: string) => {
     // Skip check for public mutations
     if (mutationPath && PUBLIC_MUTATIONS.includes(mutationPath)) {
       return;
     }
-    if (!isSignedIn) {
+    if (!getIsSignedIn()) {
       throw new Error(SIGN_IN_REQUIRED_MUTATION_MESSAGE);
     }
   };
+};
+
+export const useGlobalOnMutateProtect = () => {
+  const { isSignedIn } = useUser();
+  // Ref keeps the guard reading the LIVE Clerk state (see createMutationGuard).
+  const isSignedInRef = useRef(isSignedIn);
+  isSignedInRef.current = isSignedIn;
+  const [guard] = useState(() => createMutationGuard(() => isSignedInRef.current));
+  return guard;
 };
