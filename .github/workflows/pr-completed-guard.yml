@@ -18,7 +18,7 @@ permissions:
   statuses: read
 
 concurrency:
-  group: pr-completed-guard-${{ github.event.pull_request.number || github.event.issue.number || github.event.check_run.head_sha || github.sha }}
+  group: pr-completed-guard-${{ github.event.pull_request.number || github.event.issue.number || github.event.check_run.head_sha || github.event.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -134,12 +134,18 @@ jobs:
                 continue;
               }
 
-              // Query unresolved review threads and check rollup via GraphQL
+              // Query unresolved review threads and check rollup via GraphQL,
+              // following pagination cursors so PRs with more than 100 review
+              // threads or check contexts are fully evaluated
               const query = `
-                query($owner: String!, $repo: String!, $prNumber: Int!) {
+                query($owner: String!, $repo: String!, $prNumber: Int!, $threadCursor: String, $contextCursor: String) {
                   repository(owner: $owner, name: $repo) {
                     pullRequest(number: $prNumber) {
-                      reviewThreads(first: 100) {
+                      reviewThreads(first: 100, after: $threadCursor) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
                         nodes {
                           isResolved
                           isOutdated
@@ -157,7 +163,11 @@ jobs:
                         nodes {
                           commit {
                             statusCheckRollup {
-                              contexts(first: 100) {
+                              contexts(first: 100, after: $contextCursor) {
+                                pageInfo {
+                                  hasNextPage
+                                  endCursor
+                                }
                                 nodes {
                                   __typename
                                   ... on CheckRun {
@@ -179,22 +189,45 @@ jobs:
                 }
               `;
 
-              const result = await github.graphql(query, {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                prNumber: prNumber,
-              });
+              const threads = [];
+              const rollupContexts = [];
+              let threadCursor = null;
+              let contextCursor = null;
+              let hasMoreThreads = true;
+              let hasMoreContexts = true;
+              while (hasMoreThreads || hasMoreContexts) {
+                const result = await github.graphql(query, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  prNumber: prNumber,
+                  threadCursor,
+                  contextCursor,
+                });
+                const pullRequest = result.repository.pullRequest;
 
-              const pullRequest = result.repository.pullRequest;
+                if (hasMoreThreads) {
+                  const page = pullRequest.reviewThreads;
+                  threads.push(...page.nodes);
+                  hasMoreThreads = page.pageInfo.hasNextPage;
+                  threadCursor = page.pageInfo.endCursor;
+                }
+                if (hasMoreContexts) {
+                  const page =
+                    pullRequest.commits.nodes[0]?.commit?.statusCheckRollup
+                      ?.contexts;
+                  if (page) {
+                    rollupContexts.push(...page.nodes);
+                    hasMoreContexts = page.pageInfo.hasNextPage;
+                    contextCursor = page.pageInfo.endCursor;
+                  } else {
+                    hasMoreContexts = false;
+                  }
+                }
+              }
 
-              const threads = pullRequest.reviewThreads.nodes;
               const unresolvedThreads = threads.filter(
                 (t) => !t.isResolved && !t.isOutdated,
               );
-
-              const rollupContexts =
-                pullRequest.commits.nodes[0]?.commit?.statusCheckRollup
-                  ?.contexts?.nodes ?? [];
               const failingChecks = rollupContexts.filter((c) => {
                 if (c.__typename === "CheckRun") {
                   return (
@@ -232,9 +265,13 @@ jobs:
                 });
               } catch (removeError) {
                 if (removeError.status !== 404) throw removeError;
+                // A concurrent run (e.g. a check_run event racing a review
+                // event in a different concurrency group) already removed the
+                // label and posted the explanation; skip the duplicate comment
                 core.info(
                   `"${LABEL_NAME}" label was already removed from PR #${prNumber}.`,
                 );
+                continue;
               }
 
               // Post a comment explaining the removal
