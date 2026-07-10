@@ -8,22 +8,16 @@ import {
   QueryClientProvider,
 } from "@tanstack/react-query";
 import { httpBatchLink, loggerLink, retryLink, TRPCClientError } from "@trpc/client";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
 import {
-  buildClerkRequestHeaders,
-  computeIsMultiSession,
-  VIEWER_SESSION_MISMATCH_MESSAGE,
-} from "./authHeaders";
-import {
   api,
   SIGN_IN_REQUIRED_MUTATION_MESSAGE,
   useGlobalOnMutateProtect,
 } from "./client";
-import { useSessionPin } from "./SessionPinProvider";
 
 const getBaseUrl = () => {
   if (typeof window !== "undefined") return "";
@@ -33,18 +27,6 @@ const getBaseUrl = () => {
 
 const TrpcClientProvider = (props: { children: React.ReactNode }) => {
   const onMutateCheck = useGlobalOnMutateProtect();
-  // Clerk multi-session: authenticate every tRPC request as THIS tab's PINNED
-  // session (not the browser-global active session), so a background change to the
-  // active account cannot make a request authenticate as the wrong account. Stored
-  // in refs so the once-created client always reads the latest values (the headers
-  // callback runs per request batch).
-  const { getPinnedToken, signedInSessionCount } = useSessionPin();
-  const getPinnedTokenRef = useRef(getPinnedToken);
-  getPinnedTokenRef.current = getPinnedToken;
-  // Used only to count the browser's Clerk sessions when no token is available, so
-  // we fail closed against the shared cookie only in genuine multi-session cases.
-  const signedInSessionCountRef = useRef(signedInSessionCount);
-  signedInSessionCountRef.current = signedInSessionCount;
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -110,39 +92,6 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
         httpBatchLink({
           url: `${getBaseUrl()}/api/trpc`,
           transformer: superjson,
-          async headers() {
-            // Unknown session count (Clerk still loading) is treated as
-            // multi-session so the no-token path fails closed against the shared
-            // cookie; a known single session keeps the normal cookie path.
-            const isMultiSession = computeIsMultiSession(
-              signedInSessionCountRef.current,
-            );
-            try {
-              // getPinnedToken() returns null when the tab's pinned session is not
-              // signed in, and getToken() throws on an offline/refresh blip; both
-              // go through the no-token path, which fails closed under multi-session
-              // instead of using the shared cookie.
-              return buildClerkRequestHeaders(
-                await getPinnedTokenRef.current(),
-                isMultiSession,
-              );
-            } catch (error) {
-              // Expected on offline/refresh blips. Leave a breadcrumb (and a
-              // dev-only warning) so an unexpected getToken() regression stays
-              // diagnosable without adding production console noise.
-              if (process.env.NODE_ENV === "development") {
-                console.warn("tRPC headers: getToken() threw, failing closed", error);
-              }
-              Sentry.addBreadcrumb({
-                category: "auth",
-                level: "warning",
-                message:
-                  "tRPC headers: getToken() threw; failing closed on no-token path",
-                data: { isMultiSession },
-              });
-              return buildClerkRequestHeaders(null, isMultiSession);
-            }
-          },
         }),
       ],
     }),
@@ -155,11 +104,6 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
 };
 
 export default TrpcClientProvider;
-
-// Fraction of suppressed "Viewer/session mismatch" guards to still report to
-// Sentry, so a persistent regression in the per-tab token mechanism surfaces as
-// a rate spike without flooding quota during normal occasional cross-tab races.
-const VIEWER_MISMATCH_SENTRY_SAMPLE_RATE = 0.05;
 
 const handleTrpcError = (error: unknown) => {
   const trpcErrorCode =
@@ -179,31 +123,8 @@ const handleTrpcError = (error: unknown) => {
     return;
   }
 
-  // Ignore the transient Clerk multi-session viewer/session mismatch guard (server
-  // FORBIDDEN from assertViewerMatchesSession; message shared via
-  // VIEWER_SESSION_MISMATCH_MESSAGE). It only fires in the rare window where a
-  // request authenticated as a different tab's account; the query refetches with the
-  // correct per-tab token, so it is not user-facing.
-  if (
-    error instanceof TRPCClientError &&
-    error.message.includes(VIEWER_SESSION_MISMATCH_MESSAGE) &&
-    (trpcErrorCode === undefined || trpcErrorCode === "FORBIDDEN")
-  ) {
-    // Not user-facing (self-heals on the next per-tab refetch), so no toast. But
-    // sample a low rate to Sentry with a stable fingerprint so a regression that
-    // makes this fire persistently stays visible in production monitoring.
-    if (Math.random() < VIEWER_MISMATCH_SENTRY_SAMPLE_RATE) {
-      Sentry.captureException(error, {
-        level: "warning",
-        fingerprint: ["trpc-viewer-session-mismatch"],
-        extra: { message: "Clerk multi-session Viewer/session mismatch (sampled)" },
-      });
-    }
-    return;
-  }
-
   // Note: HTML error pages (403 auth, 500 server errors) trigger JSON parse errors.
-  // - 403 auth errors: Handled by the "Unauthorized for tRPC endpoint" check above
+  // - 403 auth errors: Handled by "Unauthorized for tRPC endpoint" check above (lines 118-124)
   // - Network/CDN HTML responses: Handled by isRetryableTrpcError below (retried up to 3x)
   // - 500 server errors: Should NOT be silently suppressed - users need to see these
   // Therefore, we don't filter HTML responses here. Let them fall through to proper handling.

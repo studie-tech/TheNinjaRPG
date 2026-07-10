@@ -19,7 +19,6 @@ import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension
 import type { NextRequest } from "next/server";
 import superjson from "superjson";
 import { ZodError, z } from "zod";
-import { TAB_AUTH_REQUIRED_HEADER } from "@/app/_trpc/authHeaders";
 import { userData } from "@/drizzle/schema";
 import {
   AB_PIXEL_LAYOUT_COOKIE,
@@ -35,7 +34,6 @@ import type { McpMeta } from "@/libs/mcp";
  * processing a request
  *
  */
-import { resolveAuthedUserId } from "@/server/api/authContext";
 import { drizzleDB } from "@/server/db";
 import { getClientIp } from "@/utils/network";
 
@@ -53,17 +51,11 @@ export const createAppTRPCContext = async (options: {
   readHeaders: ReadonlyHeaders;
   readCookies: ReadonlyRequestCookies;
 }) => {
-  // Get user ID
+  // Get user ID - SIMPLE
   const session = await auth();
-  const { readHeaders } = options;
-  // Clerk multi-session fail-closed: if the client signalled it intended a per-tab
-  // bearer token but couldn't produce one (getToken failed) and no Authorization
-  // header arrived, do not authenticate via the shared __session cookie.
-  const userId = resolveAuthedUserId(session.userId, {
-    hasAuthorizationHeader: !!readHeaders.get("authorization"),
-    tabAuthFailed: readHeaders.get(TAB_AUTH_REQUIRED_HEADER) != null,
-  });
+  const userId = session.userId;
   // Get IP
+  const { readHeaders } = options;
   const userIp = getClientIp(readHeaders);
   // Get agent
   const userAgent = readHeaders.get("user-agent") ?? undefined;

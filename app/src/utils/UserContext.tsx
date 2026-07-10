@@ -8,10 +8,7 @@ import type Pusher from "pusher-js";
 import type React from "react";
 import { createContext, useContext, useEffect, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
-import { isTransientMultiSessionAuthError } from "@/app/_trpc/authHeaders";
 import { api } from "@/app/_trpc/client";
-import { getUserQueryInput } from "@/app/_trpc/getUserQueryInput";
-import { useSessionPin } from "@/app/_trpc/SessionPinProvider";
 import type { StructureRoute } from "@/drizzle/constants";
 import { usePusherHandler } from "@/layout/PusherHandler";
 import type { ReturnedBattle } from "@/libs/combat/types";
@@ -76,55 +73,37 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
   // Difference between client time and server time
   const [timeDiff, setTimeDiff] = useState<number>(0);
 
-  // Identity is the tab's PINNED Clerk session, not the browser-global active
-  // session, so the displayed profile cannot flip to another signed-in account
-  // when the active session changes (reload/refocus/background under multi-session).
-  const { isLoaded, user } = useUser();
-  const { pinnedUserId } = useSessionPin();
-  const userId = pinnedUserId;
+  // Get logged in user
+  const { isSignedIn, isLoaded, user } = useUser();
+  const userId = user?.id;
 
   // tRPC utility
   const utils = api.useUtils();
 
-  // Get user data. Pass the pinned Clerk userId so the React Query cache is scoped
-  // per account (Clerk multi-session) and the server can reject cross-account reads.
-  // The transient multi-session auth failures (fail-closed UNAUTHORIZED, viewer
-  // mismatch FORBIDDEN) self-heal on the next per-tab-token request, so retry them
-  // instead of settling into a terminal error that reads as "signed out".
-  const { data, status: userStatus } = api.profile.getUser.useQuery(
-    getUserQueryInput(userId),
-    {
-      enabled: !!userId && isLoaded,
-      retry: (failureCount, error) =>
-        failureCount < 3 &&
-        isTransientMultiSessionAuthError(error.data?.code, error.message),
-      refetchInterval: 300000,
-    },
-  );
+  // Get user data
+  const { data, status: userStatus } = api.profile.getUser.useQuery(undefined, {
+    enabled: !!userId && isSignedIn && isLoaded,
+    retry: false,
+    refetchInterval: 300000,
+  });
 
   // Listen on user channel for live updates on things
   const pusher = usePusherHandler(userId, data?.userData);
 
-  // Optimistic user info update function. Fail closed when there is no pinned
-  // account: writing with an undefined input would land on the legacy unscoped
-  // profile.getUser cache key, which no account reads.
+  // Optimistic user info update function
   const updateUser = async (updatedData: Partial<UserWithRelations>) => {
-    const queryInput = getUserQueryInput(userId);
-    if (!queryInput) return;
-    await utils.profile.getUser.cancel(queryInput);
-    utils.profile.getUser.setData(queryInput, (old) => {
+    await utils.profile.getUser.cancel();
+    utils.profile.getUser.setData(undefined, (old) => {
       return { ...old, userData: { ...old?.userData, ...updatedData } } as typeof old;
     });
   };
 
-  // Optimistic notification update function (see updateUser for the fail-closed note)
+  // Optimistic notification update function
   const updateNotifications = async (
     notifications: NavBarDropdownLink[] | undefined,
   ) => {
-    const queryInput = getUserQueryInput(userId);
-    if (!queryInput) return;
-    await utils.profile.getUser.cancel(queryInput);
-    utils.profile.getUser.setData(queryInput, (old) => {
+    await utils.profile.getUser.cancel();
+    utils.profile.getUser.setData(undefined, (old) => {
       return { ...old, notifications } as typeof old;
     });
   };
@@ -167,18 +146,13 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
       Sentry.setUser({
         id: data.userData.userId,
         username: data.userData.username,
-        // Only attach the Clerk email when the browser-active user matches the
-        // pinned account; otherwise it could be another signed-in account's email.
-        email:
-          user?.id === data.userData.userId
-            ? user?.primaryEmailAddress?.emailAddress
-            : undefined,
+        email: user?.primaryEmailAddress?.emailAddress,
       });
     } else {
       // Clear user context when logged out
       Sentry.setUser(null);
     }
-  }, [data?.userData, user?.id, user?.primaryEmailAddress?.emailAddress]);
+  }, [data?.userData, user?.primaryEmailAddress?.emailAddress]);
 
   return (
     <UserContext
@@ -211,23 +185,15 @@ export const useRequiredUserData = () => {
   const router = useRouter();
   // Get auth information
   const { isLoaded, isSignedIn } = useUser();
-  // Clerk multi-session: this TAB is signed in as long as its pinned session is —
-  // the browser-global active session can flip or drop (other account signed out,
-  // cross-tab active-context races) while the pinned session is perfectly valid.
-  // Redirecting on the browser-global signal alone booted signed-in users to the
-  // logged-out landing page; only treat the tab as signed out when NEITHER the
-  // pinned session nor the browser-global session is signed in.
-  const { pinnedUserId } = useSessionPin();
   // Get user information
   const info = useUserData();
   // Redirection if not logged in
   const { data, status } = info;
   useEffect(() => {
-    const signedOutTab = !isSignedIn && !pinnedUserId;
-    if (isLoaded && (signedOutTab || (data === undefined && status !== "pending"))) {
+    if (isLoaded && (!isSignedIn || (data === undefined && status !== "pending"))) {
       router.push("/");
     }
-  }, [status, data, isLoaded, isSignedIn, pinnedUserId]);
+  }, [status, data, isLoaded, isSignedIn]);
 
   // Return state
   return info;
