@@ -11,6 +11,7 @@
  */
 
 export const PINNED_SESSION_STORAGE_KEY = "tnr-pinned-clerk-session-id";
+export const PINNED_USER_STORAGE_KEY = "tnr-pinned-clerk-user-id";
 
 export function readPinnedSessionId(): string | null {
   if (typeof window === "undefined") return null;
@@ -28,6 +29,44 @@ export function writePinnedSessionId(sessionId: string): void {
   } catch {
     // sessionStorage can throw (private mode / quota). Pinning then falls back to
     // the active session, i.e. the pre-existing behavior — no worse than before.
+  }
+}
+
+/**
+ * The Clerk USER id of the pinned session, stored alongside the session id. A
+ * session id alone cannot tell whether a replacement session belongs to the same
+ * account once the original session is gone from the sessions list, so this is
+ * what lets a dead pin distinguish "same account signed in again" (silently
+ * re-adopt) from "a different account is active" (never silently switch — see
+ * `decidePinnedSession`).
+ */
+export function readPinnedUserId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(PINNED_USER_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writePinnedUserId(userId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(PINNED_USER_STORAGE_KEY, userId);
+  } catch {
+    // Same failure mode as writePinnedSessionId: a missing stored user id only
+    // means a later dead-pin recovery routes through the explicit sign-in flow
+    // instead of silently re-adopting — safe, never account-swapping.
+  }
+}
+
+export function clearPinnedSessionStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(PINNED_SESSION_STORAGE_KEY);
+    window.sessionStorage.removeItem(PINNED_USER_STORAGE_KEY);
+  } catch {
+    // Ignore: with storage unavailable there is nothing stale to clear.
   }
 }
 
@@ -65,7 +104,11 @@ export function isAuthRoute(pathname: string | null | undefined): boolean {
   );
 }
 
-export type PinDecision = { type: "keep" } | { type: "set"; id: string };
+export type PinDecision =
+  | { type: "keep" }
+  | { type: "set"; id: string }
+  | { type: "clear" }
+  | { type: "release" };
 
 /**
  * Decides this tab's pinned session id from the current Clerk state, WITHOUT ever
@@ -76,18 +119,41 @@ export type PinDecision = { type: "keep" } | { type: "set"; id: string };
  *
  * Order: keep a still-signed-in in-memory pin → recover a still-signed-in stored
  * pin (e.g. after reload) → otherwise, only once the sessions list is populated
- * (never mid-refresh when it is momentarily empty), and only off the sign-in flow,
- * adopt the active session.
+ * (never mid-refresh when it is momentarily empty), decide what a tab without a
+ * usable pin does:
+ *
+ * - A tab that never had a pin adopts the active session on first load (but not
+ *   while on the sign-in flow — adoption happens after the redirect).
+ * - A tab whose pin is DEAD (the pinned session is no longer signed in) only
+ *   silently re-adopts the active session when it belongs to the SAME account
+ *   (matched via the stored pinned user id — e.g. the user signed in again after
+ *   expiry). When the active session belongs to a different account — or the
+ *   pinned account is unknown — the decision is `release`: the tab must never
+ *   silently switch to another signed-in account; the caller clears the pin and
+ *   sends the tab through the sign-in flow so the user picks an account
+ *   explicitly.
+ * - On the sign-in flow a dead pin is `clear`ed (not kept): the user is about to
+ *   choose an account there, and a lingering dead pin would otherwise read as a
+ *   cross-account move and bounce the tab straight back to sign-in afterwards.
  */
-export function decidePinnedSession<T extends { id: string; status: string }>(args: {
+export function decidePinnedSession<
+  T extends { id: string; status: string; user?: { id: string } | null },
+>(args: {
   sessions: readonly T[] | undefined | null;
   inMemoryPinnedId: string | null;
   storedPinnedId: string | null;
+  storedPinnedUserId: string | null;
   activeSessionId: string | null;
   onAuthRoute: boolean;
 }): PinDecision {
-  const { sessions, inMemoryPinnedId, storedPinnedId, activeSessionId, onAuthRoute } =
-    args;
+  const {
+    sessions,
+    inMemoryPinnedId,
+    storedPinnedId,
+    storedPinnedUserId,
+    activeSessionId,
+    onAuthRoute,
+  } = args;
   if (resolvePinnedSession(sessions, inMemoryPinnedId)) return { type: "keep" };
   const storedSession = resolvePinnedSession(sessions, storedPinnedId);
   if (storedSession) {
@@ -98,36 +164,42 @@ export function decidePinnedSession<T extends { id: string; status: string }>(ar
   // Sessions momentarily empty (Clerk mid-refresh): leave the pin untouched rather
   // than re-adopting and flipping the tab.
   if (!sessions || sessions.length === 0) return { type: "keep" };
+  // From here on the tab either never had a pin, or its pin is dead (the pinned
+  // session is no longer signed in).
+  const hadPin = inMemoryPinnedId !== null || storedPinnedId !== null;
   // On the sign-in / sign-up flow, do NOT eagerly adopt the browser-global active
   // session: the user may be about to sign in a DIFFERENT account, and an eager pin
   // here would later block that in-tab switch (the active session changes to the new
   // account, but the now-"valid" eager pin keeps the old one). Adoption happens once
   // the completed sign-in redirects the tab onto an app route. An already-established
-  // pin is honored above, so a pinned tab visiting /login keeps its own account.
-  if (onAuthRoute) return { type: "keep" };
-  // No pinned session is signed in (first load, or the pinned account was signed
-  // out and another remains) → adopt the active session, but only when it resolves
-  // to a signed-in session (like the in-memory and stored paths) so getPinnedToken
-  // can still mint a token for it.
+  // pin is honored above, so a pinned tab visiting /login keeps its own account. A
+  // DEAD pin is cleared here so whatever account comes out of the sign-in flow is
+  // adopted cleanly instead of being mistaken for a cross-account move.
+  if (onAuthRoute) return hadPin ? { type: "clear" } : { type: "keep" };
+  // Only a signed-in active session can be adopted (like the in-memory and stored
+  // paths) so getPinnedToken can still mint a token for it.
   const activeSession = resolvePinnedSession(sessions, activeSessionId);
-  if (activeSession) return { type: "set", id: activeSession.id };
-  return { type: "keep" };
+  if (!activeSession) return { type: "keep" };
+  // First load with no pin: adopt the active session.
+  if (!hadPin) return { type: "set", id: activeSession.id };
+  // Dead pin: silently re-adopt only the SAME account (e.g. a fresh session after
+  // the old one expired). A different or unknown account must never be adopted
+  // silently — that is exactly the "randomly swapped to my other account" bug.
+  if (storedPinnedUserId && activeSession.user?.id === storedPinnedUserId) {
+    return { type: "set", id: activeSession.id };
+  }
+  return { type: "release" };
 }
 
 /**
  * Whether a change of this tab's pinned session id should remount the app subtree
  * (fresh tRPC client + React Query cache). True whenever the pin moves OFF a
- * signed-in account to a different value — in practice when the pinned account is no
- * longer signed in and the tab adopts a different signed-in account (e.g. the pinned
- * account signs out while another remains, so the adoption effect re-pins A → B).
- * Such a move can leave a different account's data behind in React Query caches that
- * are not scoped per account (`profile.getUser` is scoped via `getUserQueryInput`,
- * but other queries are not), so the subtree must remount to discard it.
- *
- * The `prev !== null` guard also covers an `id → null` change. No live path nulls the
- * pin after mount today (sign-out is Clerk-UI-driven and does not clear the pin — it
- * simply stops resolving), so that branch is defensive: it keeps the remount correct
- * if a future intentional switch/clear ever nulls the pin.
+ * signed-in account to a different value — re-pinning to the same account's fresh
+ * session (A → A'), or nulling the pin on a `clear`/`release` decision before the
+ * tab heads to the sign-in flow. Such a move can leave the previous account's data
+ * behind in React Query caches that are not scoped per account (`profile.getUser`
+ * is scoped via `getUserQueryInput`, but other queries are not), so the subtree
+ * must remount to discard it.
  *
  * The first-load `null → id` adoption returns false (no remount): the brief unpinned
  * window does not populate any account-private cache. Account-private queries are

@@ -8,6 +8,7 @@ import type Pusher from "pusher-js";
 import type React from "react";
 import { createContext, useContext, useEffect, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
+import { isTransientMultiSessionAuthError } from "@/app/_trpc/authHeaders";
 import { api } from "@/app/_trpc/client";
 import { getUserQueryInput } from "@/app/_trpc/getUserQueryInput";
 import { useSessionPin } from "@/app/_trpc/SessionPinProvider";
@@ -87,11 +88,16 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
 
   // Get user data. Pass the pinned Clerk userId so the React Query cache is scoped
   // per account (Clerk multi-session) and the server can reject cross-account reads.
+  // The transient multi-session auth failures (fail-closed UNAUTHORIZED, viewer
+  // mismatch FORBIDDEN) self-heal on the next per-tab-token request, so retry them
+  // instead of settling into a terminal error that reads as "signed out".
   const { data, status: userStatus } = api.profile.getUser.useQuery(
     getUserQueryInput(userId),
     {
       enabled: !!userId && isLoaded,
-      retry: false,
+      retry: (failureCount, error) =>
+        failureCount < 3 &&
+        isTransientMultiSessionAuthError(error.data?.code, error.message),
       refetchInterval: 300000,
     },
   );
@@ -205,15 +211,23 @@ export const useRequiredUserData = () => {
   const router = useRouter();
   // Get auth information
   const { isLoaded, isSignedIn } = useUser();
+  // Clerk multi-session: this TAB is signed in as long as its pinned session is —
+  // the browser-global active session can flip or drop (other account signed out,
+  // cross-tab active-context races) while the pinned session is perfectly valid.
+  // Redirecting on the browser-global signal alone booted signed-in users to the
+  // logged-out landing page; only treat the tab as signed out when NEITHER the
+  // pinned session nor the browser-global session is signed in.
+  const { pinnedUserId } = useSessionPin();
   // Get user information
   const info = useUserData();
   // Redirection if not logged in
   const { data, status } = info;
   useEffect(() => {
-    if (isLoaded && (!isSignedIn || (data === undefined && status !== "pending"))) {
+    const signedOutTab = !isSignedIn && !pinnedUserId;
+    if (isLoaded && (signedOutTab || (data === undefined && status !== "pending"))) {
       router.push("/");
     }
-  }, [status, data, isLoaded, isSignedIn]);
+  }, [status, data, isLoaded, isSignedIn, pinnedUserId]);
 
   // Return state
   return info;

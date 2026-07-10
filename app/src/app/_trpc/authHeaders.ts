@@ -18,6 +18,23 @@ export const TAB_AUTH_REQUIRED_HEADER = "x-tnr-auth-required";
 export const VIEWER_SESSION_MISMATCH_MESSAGE = "Viewer/session mismatch";
 
 /**
+ * Whether a failed request is one of the transient multi-session auth failures that
+ * self-heal once the per-tab token path recovers: the server's fail-closed
+ * UNAUTHORIZED (the tab intended a per-tab bearer token but none arrived — e.g. a
+ * `getToken()` blip) or the FORBIDDEN viewer/session mismatch guard (the request
+ * authenticated as another tab's account via the shared cookie). The client retries
+ * these instead of treating the tab as signed out — surfacing them immediately is
+ * what bounced signed-in users to the logged-out landing page.
+ */
+export function isTransientMultiSessionAuthError(
+  code: string | undefined,
+  message: string,
+): boolean {
+  if (code === "UNAUTHORIZED") return true;
+  return code === "FORBIDDEN" && message.includes(VIEWER_SESSION_MISMATCH_MESSAGE);
+}
+
+/**
  * Builds the auth headers for an outgoing tRPC request under Clerk multi-session.
  *
  * The `__session` cookie is shared across all browser tabs and reflects whichever
