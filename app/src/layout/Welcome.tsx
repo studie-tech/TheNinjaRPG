@@ -29,7 +29,6 @@ import { LEGAL_LINKS } from "@/libs/legalLinks";
 import { cn } from "@/libs/shadui";
 import { useActiveLayout, useIsPixelLanding } from "@/utils/LayoutContext";
 import { getFirstOfNextMonth } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
 
 const Welcome: React.FC = () => {
   const activeLayout = useActiveLayout();
@@ -1037,9 +1036,6 @@ const usePixelHeroVideoPlayback = (
 const SetReferal = () => {
   const searchParams = useSearchParams();
   const { isSignedIn, isLoaded } = useUser();
-  // Clerk multi-session: a tab whose pinned session is signed in is not an
-  // anonymous visitor, even if the browser-global active session momentarily is.
-  const { userId } = useUserData();
   const { mutate: trackVisitor } = api.misc.trackVisitor.useMutation({
     onMutate: undefined,
   });
@@ -1052,13 +1048,13 @@ const SetReferal = () => {
     if (utm_source) safeLocalStorageSetItem("utm_source", utm_source);
     // Track anonymous visitor once
     const alreadyTracked = safeLocalStorageGetItem("visitor_tracked");
-    if (!alreadyTracked && isLoaded && !isSignedIn && !userId) {
+    if (!alreadyTracked && isLoaded && !isSignedIn) {
       const savedRef = safeLocalStorageGetItem("ref") ?? undefined;
       const savedUtm = safeLocalStorageGetItem("utm_source") ?? undefined;
       trackVisitor({ ref: savedRef, utmSource: savedUtm });
       safeLocalStorageSetItem("visitor_tracked", "1");
     }
-  }, [searchParams, isLoaded, isSignedIn, userId, trackVisitor]);
+  }, [searchParams, isLoaded, isSignedIn, trackVisitor]);
   return null;
 };
 
