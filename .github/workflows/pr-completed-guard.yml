@@ -7,13 +7,18 @@ on:
     types: [submitted]
   pull_request_review_comment:
     types: [created]
+  check_run:
+    types: [completed]
+  status: {}
 
 permissions:
   pull-requests: write
   issues: write
+  checks: read
+  statuses: read
 
 concurrency:
-  group: pr-completed-guard-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: pr-completed-guard-${{ github.event.pull_request.number || github.event.issue.number || github.event.check_run.head_sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -25,22 +30,26 @@ jobs:
         github.event.action == 'labeled' &&
         github.actor == 'github-actions[bot]')
     steps:
-      - name: Check for unresolved review threads
+      - name: Check for unresolved review threads and failing checks
         uses: actions/github-script@v8
         with:
           script: |
             const LABEL_NAME = "Completed";
+            const SELF_CHECK_NAME = "Guard Completed label";
+            // Conclusions/states that indicate a genuinely failing check.
+            // Excludes skipped/cancelled/neutral so concurrency cancellations
+            // and optional checks don't strip the label.
+            const FAILING_CHECK_CONCLUSIONS = [
+              "failure",
+              "timed_out",
+              "action_required",
+            ];
+            const FAILING_STATUS_STATES = ["failure", "error"];
 
-            const prNumber =
-              context.payload.pull_request?.number ??
-              context.payload.issue?.number;
+            // Determine which PRs to evaluate based on the triggering event
+            let prNumbers = [];
+            let headSha = null;
 
-            if (!prNumber) {
-              core.info("Could not determine PR number. Skipping.");
-              return;
-            }
-
-            // For "labeled" events, only proceed if the label is "Completed"
             if (
               context.eventName === "pull_request" &&
               context.payload.action === "labeled"
@@ -51,14 +60,62 @@ jobs:
                 );
                 return;
               }
-            }
-
-            // For review and review_comment events, check if the PR currently
-            // has the "Completed" label. If not, nothing to guard.
-            if (
+              prNumbers = [context.payload.pull_request.number];
+            } else if (
               context.eventName === "pull_request_review" ||
               context.eventName === "pull_request_review_comment"
             ) {
+              prNumbers = [context.payload.pull_request.number];
+            } else if (context.eventName === "check_run") {
+              const run = context.payload.check_run;
+              if (run.name === SELF_CHECK_NAME) {
+                core.info("Ignoring this workflow's own check run.");
+                return;
+              }
+              if (!FAILING_CHECK_CONCLUSIONS.includes(run.conclusion)) {
+                core.info(
+                  `Check "${run.name}" concluded "${run.conclusion}". Not a failure. Skipping.`,
+                );
+                return;
+              }
+              headSha = run.head_sha;
+            } else if (context.eventName === "status") {
+              if (!FAILING_STATUS_STATES.includes(context.payload.state)) {
+                core.info(
+                  `Status "${context.payload.context}" is "${context.payload.state}". Not a failure. Skipping.`,
+                );
+                return;
+              }
+              headSha = context.payload.sha;
+            }
+
+            // check_run/status events carry no PR context; resolve open PRs
+            // whose current head matches the commit the check ran against
+            if (headSha) {
+              const { data: prs } =
+                await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  commit_sha: headSha,
+                });
+              prNumbers = prs
+                .filter((pr) => pr.state === "open" && pr.head.sha === headSha)
+                .map((pr) => pr.number);
+              if (prNumbers.length === 0) {
+                core.info(
+                  `No open PRs with head ${headSha}. Skipping.`,
+                );
+                return;
+              }
+            }
+
+            if (prNumbers.length === 0) {
+              core.info("Could not determine PR number(s). Skipping.");
+              return;
+            }
+
+            for (const prNumber of prNumbers) {
+              // Only guard PRs that currently carry the "Completed" label
               const { data: labels } =
                 await github.rest.issues.listLabelsOnIssue({
                   owner: context.repo.owner,
@@ -74,24 +131,45 @@ jobs:
                 core.info(
                   `PR #${prNumber} does not have "${LABEL_NAME}" label. Skipping.`,
                 );
-                return;
+                continue;
               }
-            }
 
-            // Query unresolved review threads via GraphQL
-            const query = `
-              query($owner: String!, $repo: String!, $prNumber: Int!) {
-                repository(owner: $owner, name: $repo) {
-                  pullRequest(number: $prNumber) {
-                    reviewThreads(first: 100) {
-                      nodes {
-                        isResolved
-                        isOutdated
-                        comments(first: 1) {
-                          nodes {
-                            body
-                            author {
-                              login
+              // Query unresolved review threads and check rollup via GraphQL
+              const query = `
+                query($owner: String!, $repo: String!, $prNumber: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                      reviewThreads(first: 100) {
+                        nodes {
+                          isResolved
+                          isOutdated
+                          comments(first: 1) {
+                            nodes {
+                              body
+                              author {
+                                login
+                              }
+                            }
+                          }
+                        }
+                      }
+                      commits(last: 1) {
+                        nodes {
+                          commit {
+                            statusCheckRollup {
+                              contexts(first: 100) {
+                                nodes {
+                                  __typename
+                                  ... on CheckRun {
+                                    name
+                                    conclusion
+                                  }
+                                  ... on StatusContext {
+                                    context
+                                    state
+                                  }
+                                }
+                              }
                             }
                           }
                         }
@@ -99,77 +177,129 @@ jobs:
                     }
                   }
                 }
-              }
-            `;
+              `;
 
-            const result = await github.graphql(query, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              prNumber: prNumber,
-            });
+              const result = await github.graphql(query, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                prNumber: prNumber,
+              });
 
-            const threads =
-              result.repository.pullRequest.reviewThreads.nodes;
-            const unresolvedThreads = threads.filter(
-              (t) => !t.isResolved && !t.isOutdated,
-            );
+              const pullRequest = result.repository.pullRequest;
 
-            if (unresolvedThreads.length === 0) {
-              core.info(
-                `PR #${prNumber} has no unresolved review threads. "${LABEL_NAME}" label is valid.`,
+              const threads = pullRequest.reviewThreads.nodes;
+              const unresolvedThreads = threads.filter(
+                (t) => !t.isResolved && !t.isOutdated,
               );
-              return;
-            }
 
-            // There are unresolved threads -- remove the label
-            core.info(
-              `PR #${prNumber} has ${unresolvedThreads.length} unresolved review thread(s). Removing "${LABEL_NAME}" label.`,
-            );
+              const rollupContexts =
+                pullRequest.commits.nodes[0]?.commit?.statusCheckRollup
+                  ?.contexts?.nodes ?? [];
+              const failingChecks = rollupContexts.filter((c) => {
+                if (c.__typename === "CheckRun") {
+                  return (
+                    c.name !== SELF_CHECK_NAME &&
+                    FAILING_CHECK_CONCLUSIONS.includes(
+                      (c.conclusion ?? "").toLowerCase(),
+                    )
+                  );
+                }
+                if (c.__typename === "StatusContext") {
+                  return FAILING_STATUS_STATES.includes(
+                    (c.state ?? "").toLowerCase(),
+                  );
+                }
+                return false;
+              });
 
-            try {
-              await github.rest.issues.removeLabel({
+              if (unresolvedThreads.length === 0 && failingChecks.length === 0) {
+                core.info(
+                  `PR #${prNumber} has no unresolved review threads or failing checks. "${LABEL_NAME}" label is valid.`,
+                );
+                continue;
+              }
+
+              core.info(
+                `PR #${prNumber} has ${unresolvedThreads.length} unresolved review thread(s) and ${failingChecks.length} failing check(s). Removing "${LABEL_NAME}" label.`,
+              );
+
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: LABEL_NAME,
+                });
+              } catch (removeError) {
+                if (removeError.status !== 404) throw removeError;
+                core.info(
+                  `"${LABEL_NAME}" label was already removed from PR #${prNumber}.`,
+                );
+              }
+
+              // Post a comment explaining the removal
+              const bodyParts = [
+                `## "${LABEL_NAME}" label removed`,
+                "",
+              ];
+
+              if (unresolvedThreads.length > 0) {
+                const threadSummary = unresolvedThreads
+                  .slice(0, 5)
+                  .map((t) => {
+                    const comment = t.comments.nodes[0];
+                    const author = comment?.author?.login ?? "unknown";
+                    const snippet =
+                      (comment?.body ?? "").substring(0, 80) +
+                      ((comment?.body ?? "").length > 80 ? "..." : "");
+                    return `- **@${author}**: ${snippet}`;
+                  })
+                  .join("\n");
+                const remaining =
+                  unresolvedThreads.length > 5
+                    ? `\n- ...and ${unresolvedThreads.length - 5} more`
+                    : "";
+                bodyParts.push(
+                  `This PR has **${unresolvedThreads.length} unresolved review thread(s)**.`,
+                  "",
+                  "**Unresolved threads:**",
+                  threadSummary + remaining,
+                  "",
+                );
+              }
+
+              if (failingChecks.length > 0) {
+                const checkSummary = failingChecks
+                  .slice(0, 10)
+                  .map((c) => {
+                    const name =
+                      c.__typename === "CheckRun" ? c.name : c.context;
+                    const outcome =
+                      c.__typename === "CheckRun" ? c.conclusion : c.state;
+                    return `- **${name}**: ${outcome}`;
+                  })
+                  .join("\n");
+                const remaining =
+                  failingChecks.length > 10
+                    ? `\n- ...and ${failingChecks.length - 10} more`
+                    : "";
+                bodyParts.push(
+                  `This PR has **${failingChecks.length} failing check(s)**.`,
+                  "",
+                  "**Failing checks:**",
+                  checkSummary + remaining,
+                  "",
+                );
+              }
+
+              bodyParts.push(
+                "Please resolve all review threads and fix failing checks before re-applying the label.",
+              );
+
+              await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                name: LABEL_NAME,
+                body: bodyParts.join("\n"),
               });
-            } catch (removeError) {
-              if (removeError.status !== 404) throw removeError;
-              core.info(
-                `"${LABEL_NAME}" label was already removed from PR #${prNumber}.`,
-              );
             }
-
-            // Post a comment explaining the removal
-            const threadSummary = unresolvedThreads
-              .slice(0, 5)
-              .map((t) => {
-                const comment = t.comments.nodes[0];
-                const author = comment?.author?.login ?? "unknown";
-                const snippet =
-                  (comment?.body ?? "").substring(0, 80) +
-                  ((comment?.body ?? "").length > 80 ? "..." : "");
-                return `- **@${author}**: ${snippet}`;
-              })
-              .join("\n");
-
-            const remaining =
-              unresolvedThreads.length > 5
-                ? `\n- ...and ${unresolvedThreads.length - 5} more`
-                : "";
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body: [
-                `## "${LABEL_NAME}" label removed`,
-                "",
-                `This PR has **${unresolvedThreads.length} unresolved review thread(s)**. The "${LABEL_NAME}" label has been automatically removed.`,
-                "",
-                "Please resolve all review threads before re-applying the label.",
-                "",
-                "**Unresolved threads:**",
-                threadSummary + remaining,
-              ].join("\n"),
-            });
