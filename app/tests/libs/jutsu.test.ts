@@ -7,26 +7,21 @@ import type { UserJutsuWithRelations } from "@/drizzle/schema";
 
 // Stub the dependency decisions so these tests target the validator's own logic
 // (ownership, hidden gate, equip caps, ordering) rather than canUseJutsu's
-// requirement rules or the federal-tier equip-limit maths.
+// requirement rules or the federal-tier equip-limit maths. The hidden-jutsu
+// gate uses the real canChangeContent, since module mocks leak across test
+// files under bun's test runner and would corrupt the permissions tests.
 vi.mock("@/libs/train", () => ({
   canUseJutsu: vi.fn((jutsu: { usable?: boolean }) => jutsu?.usable !== false),
   calcJutsuEquipLimit: vi.fn(() => 100),
 }));
-vi.mock("@/utils/permissions", () => ({
-  canChangeContent: vi.fn((role: string) => role === "CONTENT-ADMIN"),
-}));
 
 import { computeJutsuLoadoutAssignments } from "@/libs/jutsu";
 import type { UserWithRelations } from "@/routers/profile";
-import { canChangeContent } from "@/utils/permissions";
 import { calcJutsuEquipLimit } from "@/libs/train";
 
 const calcJutsuEquipLimitMock = calcJutsuEquipLimit as unknown as {
   mockReturnValue: (value: number) => void;
   mockReturnValueOnce: (value: number) => void;
-};
-const canChangeContentMock = canChangeContent as unknown as {
-  mockImplementation: (fn: (role: string) => boolean) => void;
 };
 
 // Minimal user-jutsu factory; only the fields the validator reads are set. The
@@ -59,7 +54,6 @@ const USER = { role: "USER" } as unknown as NonNullable<UserWithRelations>;
 describe("computeJutsuLoadoutAssignments", () => {
   beforeEach(() => {
     calcJutsuEquipLimitMock.mockReturnValue(100);
-    canChangeContentMock.mockImplementation((role) => role === "CONTENT-ADMIN");
   });
 
   it("equips all valid jutsu, preserving loadout order", () => {
