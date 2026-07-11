@@ -380,6 +380,14 @@ export const questsRouter = createTRPCRouter({
             completed: questHistory.completed,
             periodCompletes: questHistory.periodCompletes,
             periodStartAt: questHistory.periodStartAt,
+            // Extra history columns, aliased so they do NOT feed isAvailableUserQuests's flat
+            // reads (esp. `previousCompletes`, which would change mission-hall availability).
+            // Used only to reconstruct a prevEntry for upsertQuestEntry below, so it skips its
+            // internal questHistory.findFirst on every random mission start.
+            questHistoryId: questHistory.id,
+            historyPreviousCompletes: questHistory.previousCompletes,
+            historyStartedAt: questHistory.startedAt,
+            historyEndAt: questHistory.endAt,
           })
           .from(quest)
           .leftJoin(
@@ -499,9 +507,29 @@ export const questsRouter = createTRPCRouter({
         );
       }
 
+      // Reuse the history row already loaded by the widened LEFT JOIN above so upsertQuestEntry
+      // skips its own findFirst. A NULL join (never-attempted quest) → `null` → the idempotent
+      // insert branch; a real row → the update branch keyed on the REAL questHistory id.
+      const prevEntry =
+        result.questHistoryId != null
+          ? {
+              id: result.questHistoryId,
+              userId: user.userId,
+              questId: result.id,
+              questType: result.questType,
+              startedAt: result.historyStartedAt ?? new Date(),
+              endAt: result.historyEndAt,
+              completed: result.completed ?? 0,
+              previousCompletes: result.historyPreviousCompletes ?? 0,
+              previousAttempts: result.previousAttempts ?? 0,
+              periodCompletes: result.periodCompletes ?? 0,
+              periodStartAt: result.periodStartAt,
+            }
+          : null;
+
       // Insert quest entry
       await Promise.all([
-        upsertQuestEntry(ctx.drizzle, user, result),
+        upsertQuestEntry(ctx.drizzle, user, result, prevEntry),
         ctx.drizzle
           .update(userData)
           .set(
@@ -1294,9 +1322,22 @@ export const updateRewards = async (info: {
   // to advance the herbs_gathered tracker. Explicit opt-in — the herbs branch below no longer
   // sniffs `"userQuests" in user`, so a future caller cannot silently start incrementing it.
   questUser?: NonNullable<UserWithRelations>;
+  // Extra userData columns folded into the single UPDATE below, so a caller that must also patch
+  // this user's row on the reward-claim path (e.g. release an NPC-mission slot) does it in the
+  // same round-trip instead of a trailing sequential write. Values may be raw scalars or `sql`
+  // expressions and win over the reward keys on any name clash.
+  postClaimUserDataPatch?: Record<string, unknown>;
 }) => {
   // Destructure
-  const { client, user, rewards, questCounterField, reason, questUser } = info;
+  const {
+    client,
+    user,
+    rewards,
+    questCounterField,
+    reason,
+    questUser,
+    postClaimUserDataPatch,
+  } = info;
   // Check if we need to fetch war data
   const hasWarRewards =
     (rewards.reward_war_damage > 0 || rewards.reward_war_healing > 0) && user.villageId;
@@ -1487,6 +1528,11 @@ export const updateRewards = async (info: {
   if (questCounterField) {
     updatedUserData.questFinishAt = new Date();
     updatedUserData[questCounterField] = sql`${userData[questCounterField]} + 1`;
+  }
+  // Fold any caller-supplied column patch into the same UPDATE (independent per-column, so it
+  // does not disturb the atomic reward increments above).
+  if (postClaimUserDataPatch) {
+    Object.assign(updatedUserData, postClaimUserDataPatch);
   }
 
   // Recruitment logic
@@ -2371,6 +2417,14 @@ export const commitQuestObjectiveRewards = async (info: {
   consequences: QuestConsequence[];
   /** Pre-fetched questHistory row for this quest, if the caller already loaded it. */
   existingHistory?: { completed: number } | null | undefined;
+  /**
+   * Extra userData columns for updateRewards to fold into its single UPDATE on the claim path.
+   * Only applied when this commit actually reaches the reward payout (i.e. the completion CAS
+   * won / a non-resolved advance was claimed), never on already_completed / not_found / state
+   * changed, which return before updateRewards. Gate on `resolved` at the callsite if the patch
+   * should only land on terminal completions.
+   */
+  postClaimUserDataPatch?: Record<string, unknown>;
 }): Promise<CommitQuestObjectiveRewardsResult> => {
   const {
     client,
@@ -2512,6 +2566,7 @@ export const commitQuestObjectiveRewards = async (info: {
       // Opt in to the herbs_gathered tracker: this is the gathering-claim path and `user`
       // here is the fully-hydrated row (with quest relations).
       questUser: user,
+      postClaimUserDataPatch: info.postClaimUserDataPatch,
     }),
     // Credit the sensei their per-mission ryo bonus
     ...(senseiId

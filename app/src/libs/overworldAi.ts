@@ -177,6 +177,12 @@ type BoundObjective = {
   overworldPlacementId?: string;
   done?: boolean;
   deliverItemIds?: string[];
+  /**
+   * For `consecutiveObjectives` quests, the caller sets this to `false` for objectives that are
+   * not yet reachable in the tracker's `selectedNextObjectiveId` chain. Absent/`true` = actionable
+   * (non-consecutive quests, and fresh quests with no tracker, never set it to `false`).
+   */
+  available?: boolean;
 };
 
 /**
@@ -205,6 +211,11 @@ export const findActionableBoundObjective = (args: {
     for (const objective of quest.objectives) {
       if (objective.done) continue;
       if (objective.overworldPlacementId !== args.placementId) continue;
+      // Consecutive-ordering gate: an objective bound to this tile but not yet reachable in the
+      // quest's objective chain is not actionable. Without this, a player who walks straight to a
+      // later objective's placement would trigger its dialog / delivery / PvE battle out of
+      // sequence — getNewTrackers refuses to credit it, so they'd fight (and risk HP) for nothing.
+      if (objective.available === false) continue;
       if (
         objective.task === "deliver_item" &&
         !(objective.deliverItemIds ?? []).every((id) => owned.has(id))
