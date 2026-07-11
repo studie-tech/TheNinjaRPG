@@ -66,6 +66,15 @@ export const getUserQuests = (user: NonNullable<UserWithRelations>) => {
 };
 
 /**
+ * A `QuestHistory`-shaped row is an in-memory-only mock from {@link mockAchievementHistoryEntries}
+ * (an achievement with no backing `QuestHistory` yet) when its `id` equals its `questId`; real rows
+ * carry a nanoid `id` distinct from `questId`. Use this to skip mocks wherever a real, persisted row
+ * is required — e.g. before a completion CAS that needs an existing row to update.
+ */
+export const isMockQuestHistoryRow = (row: { id: string; questId: string }): boolean =>
+  row.id === row.questId;
+
+/**
  * Strip in-memory-only achievement trackers before persisting `UserData.questData`.
  * Mock rows from `mockAchievementHistoryEntries` use `id === questId`; real `QuestHistory.id` is a nanoid.
  */
@@ -80,7 +89,9 @@ export const filterQuestTrackersForDbPersist = (
       // uses a bespoke fetch that does not — so guard the deref here as a defensive backstop for
       // every caller. An orphan is not an in-memory achievement, so skipping it is correct;
       // getNewTrackers already drops orphans, so no tracker is emitted for them anyway.
-      .filter((uq) => uq.quest?.questType === "achievement" && uq.id === uq.questId)
+      .filter(
+        (uq) => uq.quest?.questType === "achievement" && isMockQuestHistoryRow(uq),
+      )
       .map((uq) => uq.questId),
   );
   return trackers.filter((t) => !inMemoryOnlyAchievementQuestIds.has(t.id));

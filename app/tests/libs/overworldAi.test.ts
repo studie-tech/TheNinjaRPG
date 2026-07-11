@@ -66,4 +66,14 @@ describe("resolveOverworldPosition", () => {
     );
     expect(isPlaceableSector(pos.sector)).toBe(true);
   });
+
+  it("never pins a specific NPC to a reserved sector", () => {
+    // An admin-chosen reserved sector must be rerouted to a placeable one, matching the
+    // exclusion the random/from_list branches already enforce.
+    const pos = resolveOverworldPosition(
+      { ...cfg, sectorType: "specific", sector: MAP_WAKE_ISLAND_SECTOR },
+      () => 0,
+    );
+    expect(isPlaceableSector(pos.sector)).toBe(true);
+  });
 });

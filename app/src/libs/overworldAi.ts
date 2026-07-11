@@ -60,6 +60,10 @@ export const resolveOverworldPosition = (
         : isPlaceableSector(cfg.sector)
           ? cfg.sector
           : pickPlaceableSector(rng);
+  } else {
+    // "specific": honor the admin-chosen sector, but guard it the same way random/from_list
+    // do so a reserved sector (Wake Island / War-Torn Battleground) can never be pinned.
+    sector = isPlaceableSector(cfg.sector) ? cfg.sector : pickPlaceableSector(rng);
   }
   const longitude =
     cfg.locationType === "random" ? randInt(SECTOR_WIDTH, rng) : cfg.longitude;
