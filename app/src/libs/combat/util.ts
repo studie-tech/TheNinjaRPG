@@ -1117,6 +1117,7 @@ export const sortEffects = (
     // Pre-modifiers
     "elementalseal",
     "injectjutsus",
+    "activatesagemode",
     "cleanse",
     "clear",
     "decreasepoolcost",
@@ -2447,6 +2448,8 @@ export const alignBattle = (
       }
       return true; // Keep active effects
     });
+    // Sage exhaustion + clearing `sageModeActivated` runs in `applySageModeAfterRoundTransition`
+    // (called from combat router when `progressRound` — avoids util ↔ process circular imports).
     // Note: Pool adjustments are handled centrally in applyEffects post-pass
     // (process.ts) to avoid double-application or drift
   }

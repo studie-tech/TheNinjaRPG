@@ -80,6 +80,7 @@ export const ContentTypes = [
   "jutsu",
   "jutsu_reskin",
   "quest",
+  "sageMode",
   "user",
   "skillTree",
   "towerDefenseCharacter",
@@ -932,6 +933,56 @@ export const BLOODLINE_SWAP_FREE_AMOUNT = 0;
 export const BLOODLINE_SWAP_FREE_NORMAL = 0;
 export const BLOODLINE_SWAP_FREE_SILVER = 0;
 export const BLOODLINE_SWAP_FREE_GOLD = 1;
+
+// Sage Mode config
+export const SAGE_MODE_ROLL_TYPES = [
+  "NATURAL",
+  "ITEM",
+  "PITY",
+  "DIRECT",
+  "QUEST",
+] as const;
+export const SAGE_MODE_COST = {
+  ["H"]: 999999,
+  ["S"]: 999999,
+  ["A"]: 200,
+  ["B"]: 190,
+  ["C"]: 180,
+  ["D"]: 170,
+} as const;
+export const COST_SWAP_SAGE_MODE = 50;
+export const SAGE_MODE_SWAP_COOLDOWN_HOURS = 48;
+export const SAGE_MODE_SWAP_FREE_DAYS = 30;
+export const SAGE_MODE_SWAP_FREE_AMOUNT = 0;
+export const SAGE_MODE_SWAP_FREE_NORMAL = 0;
+export const SAGE_MODE_SWAP_FREE_SILVER = 0;
+export const SAGE_MODE_SWAP_FREE_GOLD = 1;
+export const PITY_SAGE_MODE_ROLLS = 200;
+
+// Sage Mastery ranks
+export const SAGE_MASTERY_RANKS = [
+  "NONE",
+  "INITIATE",
+  "ADEPT",
+  "MASTER",
+  "LEGENDARY",
+] as const;
+export type SAGE_MASTERY_RANK = (typeof SAGE_MASTERY_RANKS)[number];
+
+export const SAGE_MASTERY_REQUIRED_EXP: Record<SAGE_MASTERY_RANK, number> = {
+  NONE: 0,
+  INITIATE: 0,
+  ADEPT: 50000,
+  MASTER: 150000,
+  LEGENDARY: 400000,
+};
+export const SAGE_MASTERY_EXP_CAP = 1_000_000; // 1 million sage mastery experience cap
+
+// Battle types where sage mode is NOT allowed
+export const SAGE_MODE_DISABLED_BATTLES: BattleType[] = ["RANKED_PVP", "RANKED_SPARRING"];
+
+/** Injectable jutsu that runs sage-mode activation (costs + effects come from `SageMode` row). */
+export const SAGE_MODE_ACTIVATION_JUTSU_ID = "cmj8sagemodeactivatejutsu000000";
 
 // Skill tree config
 export const SKILL_TREE_RESET_FREE_NORMAL = 0;
@@ -1952,6 +2003,8 @@ export const IMG_MANUAL_TRAVEL =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu1h1uHCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
 export const IMG_MANUAL_BLOODLINE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaCMo8gYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk";
+export const IMG_MANUAL_SAGE_MODE =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJunUUX2bCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8";
 export const IMG_MANUAL_JUTSU =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMI7fE4tsO4cexqW2RDgkE3zZbNXSFGitmnar";
 export const IMG_MANUAL_JUTSU_RESKINS =

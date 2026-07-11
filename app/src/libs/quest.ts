@@ -231,6 +231,10 @@ export const getReward = (
           rawRewards.reward_gathering_experience +=
             objective.reward_gathering_experience;
         }
+        if (objective.reward_sage_mastery_experience) {
+          rawRewards.reward_sage_mastery_experience +=
+            objective.reward_sage_mastery_experience;
+        }
         if (objective.reward_war_damage) {
           rawRewards.reward_war_damage += objective.reward_war_damage;
         }
@@ -284,6 +288,9 @@ export const getReward = (
     );
     rawRewards.reward_gathering_experience = Math.floor(
       rawRewards.reward_gathering_experience * factor,
+    );
+    rawRewards.reward_sage_mastery_experience = Math.floor(
+      rawRewards.reward_sage_mastery_experience * factor,
     );
     rawRewards.reward_seichi_silver = Math.floor(
       rawRewards.reward_seichi_silver * factor,
@@ -456,6 +463,7 @@ export const collapseRewards = (
     reward_hunting_experience: 0,
     reward_crafting_experience: 0,
     reward_gathering_experience: 0,
+    reward_sage_mastery_experience: 0,
     reward_items: [],
     reward_jutsus: [],
     reward_bloodlines: [],
@@ -510,6 +518,9 @@ export const collapseRewards = (
     }
     if (reward.reward_gathering_experience) {
       collapsed.reward_gathering_experience += reward.reward_gathering_experience;
+    }
+    if (reward.reward_sage_mastery_experience) {
+      collapsed.reward_sage_mastery_experience += reward.reward_sage_mastery_experience;
     }
     if (reward.reward_war_damage) {
       collapsed.reward_war_damage += reward.reward_war_damage;

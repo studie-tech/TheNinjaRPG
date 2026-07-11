@@ -36,6 +36,7 @@ import { questsRouter } from "./routers/quests";
 import { raidsRouter } from "./routers/raids";
 import { registerRouter } from "./routers/register";
 import { reportsRouter } from "./routers/reports";
+import { sageModeRouter } from "./routers/sageMode";
 import { senseiRouter } from "./routers/sensei";
 import { shrineRouter } from "./routers/shrine";
 import { simulatorRouter } from "./routers/simulator";
@@ -110,6 +111,7 @@ export const appRouter = createTRPCRouter({
   towerDefense: towerDefenseRouter,
   stealth: stealthRouter,
   raids: raidsRouter,
+  sageMode: sageModeRouter,
 });
 
 // export type definition of API

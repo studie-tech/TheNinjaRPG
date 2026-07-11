@@ -50,6 +50,7 @@ import {
   itemVariant,
   quest,
   questHistory,
+  sageModeRolls,
   userData,
   userItem,
   userItemImbuement,
@@ -79,6 +80,11 @@ import {
   objectiveContentIds,
   postProcessRewards,
 } from "@/libs/quest";
+import {
+  fetchItemSageModeRolls,
+  fetchSageModes,
+  filterRollableSageModes,
+} from "@/libs/sageMode";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
@@ -1260,18 +1266,27 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ userItemId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [updatedUser, useritem, allBloodlines, previousRolls, userSkills] =
-        await Promise.all([
-          fetchUpdatedUser({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            forceRegen: true,
-          }),
-          fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
-          fetchBloodlines(ctx.drizzle),
-          fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
-          fetchUserSkills(ctx.drizzle, ctx.userId),
-        ]);
+      const [
+        updatedUser,
+        useritem,
+        allBloodlines,
+        previousRolls,
+        previousSageRolls,
+        allSageModes,
+        userSkills,
+      ] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          forceRegen: true,
+        }),
+        fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
+        fetchBloodlines(ctx.drizzle),
+        fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
+        fetchItemSageModeRolls(ctx.drizzle, ctx.userId),
+        fetchSageModes(ctx.drizzle),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
+      ]);
       const { user } = updatedUser;
 
       // Guard
@@ -1301,6 +1316,7 @@ export const itemRouter = createTRPCRouter({
       const messages: string[] = [];
       const updates = {
         bloodlineId: user.bloodlineId,
+        sageModeId: user.sageModeId,
         curHealth: user.curHealth,
         curStamina: user.curStamina,
         curChakra: user.curChakra,
@@ -1374,6 +1390,49 @@ export const itemRouter = createTRPCRouter({
             messages.push(`You rolled a new bloodline: ${randomBloodline.name}. `);
           } else {
             messages.push(`You rolled for a new bloodline, but none was found. `);
+          }
+        } else if (effect.type === "rollsagemode") {
+          const sageModePool = filterRollableSageModes({
+            sageModes: allSageModes,
+            user,
+            previousRolls: previousSageRolls,
+            rank: effect.rank,
+          });
+          data.push(sageModePool);
+          const randomSageMode = getRandomElement(sageModePool);
+          if (!randomSageMode) throw serverError("NOT_FOUND", "No sage mode found");
+          const roll = Math.random() * 100;
+          const success = roll < effect.power;
+          data.push({ roll, success });
+          const previousRoll = previousSageRolls.find((r) =>
+            success
+              ? r.sageModeId === randomSageMode.id
+              : r.goal === effect.rank && !r.sageModeId,
+          );
+          if (previousRoll) {
+            promises.push(
+              ctx.drizzle
+                .update(sageModeRolls)
+                .set({ used: sql`${sageModeRolls.used} + 1`, updatedAt: new Date() })
+                .where(eq(sageModeRolls.id, previousRoll.id)),
+            );
+          } else {
+            promises.push(
+              ctx.drizzle.insert(sageModeRolls).values({
+                id: nanoid(),
+                userId: ctx.userId,
+                type: "ITEM",
+                sageModeId: success ? randomSageMode.id : null,
+                goal: effect.rank,
+                used: 1,
+              }),
+            );
+          }
+          if (success) {
+            updates.sageModeId = randomSageMode.id;
+            messages.push(`You rolled a new sage mode: ${randomSageMode.name}. `);
+          } else {
+            messages.push(`You rolled for a new sage mode, but none was found. `);
           }
         } else if (effect.type === "noncombatconsumereward") {
           rewards.push(ObjectiveReward.parse(effect));

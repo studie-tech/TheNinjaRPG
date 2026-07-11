@@ -205,6 +205,23 @@ export default function Profile() {
                 "None"
               )}
             </p>
+            <p>
+              Sage Mode:{" "}
+              {userData.sageMode ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <span className="cursor-pointer font-bold hover:text-orange-500">
+                      {userData.sageMode.name}
+                    </span>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[500px] max-w-[90vw]">
+                    <ItemWithEffects item={userData.sageMode} />
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                "None"
+              )}
+            </p>
             <p>ANBU: {userData.anbuSquad?.name || "None"}</p>
             <p>
               {userData.isOutlaw ? "Faction" : "Clan"}: {userData.clan?.name || "None"}

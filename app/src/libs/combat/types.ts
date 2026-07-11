@@ -24,6 +24,7 @@ import type {
   Jutsu,
   JutsuReskin,
   Quest,
+  SageMode,
   SkillTree,
   UserData,
   UserItem,
@@ -106,6 +107,7 @@ export type CombatQueryCompletedQuest = {
 export type CombatQueryUser = UserData & {
   bloodline: Bloodline | null;
   activeReskin?: BloodlineReskin | null; // For bloodline reskinning
+  sageMode?: SageMode | null; // Sage mode (must be manually activated)
   village: CombatQueryVillage | null;
   loadout?: { jutsuIds: string[] } | null;
   clan?: Clan | null;
@@ -193,6 +195,12 @@ export type CombatUserFields = {
   _prevHealthAdj?: number;
   _prevChakraAdj?: number;
   _prevStaminaAdj?: number;
+  // Sage mode (battle-only; mirrored on BattleUserState)
+  sageModeActivated?: boolean;
+  sageModeActivatedRound?: number | null;
+  sageModeExpiresRound?: number | null;
+  /** Set when sage mode has been entered this battle; never cleared until battle ends */
+  sageModeUsedThisBattle?: boolean;
 };
 
 /**
@@ -328,6 +336,7 @@ export type ExtraState = {
   jutsuReskins: Record<string, JutsuReskin>; // reskinId -> Reskin data
   items: Record<string, Item>; // itemId -> Item
   bloodlines: Record<string, Bloodline>; // bloodlineId -> Bloodline
+  sageModes: Record<string, SageMode>; // sageModeId -> SageMode
   villages: Record<string, CombatQueryVillage>; // villageId -> Village
   anbuSquads: Record<string, AnbuSquad>; // anbuId -> AnbuSquad
   keystoneItems: Record<string, Item>; // itemId -> Item
@@ -567,7 +576,9 @@ export type UserEffect = BattleEffect & {
     | "bloodline"
     | "village"
     | "skill"
-    | "ranked";
+    | "ranked"
+    | "sageMode"
+    | "sageModeAfter";
   elements?: ElementName[];
   cpSpent?: number;
   spSpent?: number;

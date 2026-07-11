@@ -24,6 +24,8 @@ import {
   NO_DURABILITY_LOSS_COMBATS,
   NonActionItemTypes,
   QuestBattleTypes,
+  SAGE_MODE_ACTIVATION_JUTSU_ID,
+  SAGE_MODE_DISABLED_BATTLES,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { BARRIER_DAMAGE_TAG_TYPES, COMBAT_SECONDS } from "@/libs/combat/constants";
@@ -776,6 +778,19 @@ export const handleInjectedJutsus = (
       if (!userCurrentExtraJutsuIds.includes(j.id)) {
         toBeAddedJutsuPower[j.id] = e.power ?? 1;
       }
+    }
+  }
+
+  const sageActivationId = SAGE_MODE_ACTIVATION_JUTSU_ID;
+  if (
+    user.sageModeId &&
+    !SAGE_MODE_DISABLED_BATTLES.includes(battle.battleType) &&
+    user.sageModeUsedThisBattle !== true &&
+    allJutsus[sageActivationId]
+  ) {
+    allInjectedJutsuIdsFromEffects.add(sageActivationId);
+    if (!userCurrentExtraJutsuIds.includes(sageActivationId)) {
+      toBeAddedJutsuPower[sageActivationId] = 1;
     }
   }
 
