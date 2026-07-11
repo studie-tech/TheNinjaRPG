@@ -3,6 +3,13 @@
 import { Folder, Pencil } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { LOADOUT_NAME_MAX_LENGTH } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import Loader from "@/layout/Loader";
@@ -33,6 +40,8 @@ interface LoadoutSelectorConfig<T extends LoadoutData> {
 interface LoadoutSelectorProps<T extends LoadoutData> {
   size?: "small" | "large";
   label?: string;
+  /** "icons" shows folder buttons; "dropdown" uses a compact select */
+  variant?: "icons" | "dropdown";
   onSelectOverride?: (loadoutId: string) => void;
   selectedOverrideId?: string | null;
   config: LoadoutSelectorConfig<T>;
@@ -47,6 +56,7 @@ const LoadoutSelector = <T extends LoadoutData>(
   const { mutate: selectLoadout, isPending } = props.config.selectMutation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const renameMutation = props.config.renameMutation?.();
+  const variant = props.variant ?? "icons";
 
   // Derived values (calculated after all hooks)
   const maxLoadouts = userData ? props.config.maxLoadoutsFn(userData) : 0;
@@ -74,6 +84,33 @@ const LoadoutSelector = <T extends LoadoutData>(
     }
   };
 
+  const getDisplayName = (loadout: LoadoutData, index: number) =>
+    loadout.name || `${props.label || "Loadout"} ${index + 1}`;
+
+  if (variant === "dropdown") {
+    return (
+      <div className="min-w-0 flex-1">
+        {props.label && <p className="mb-1 text-sm">{props.label}</p>}
+        <Select
+          value={selectedId ?? undefined}
+          onValueChange={handleSelect}
+          disabled={isPending}
+        >
+          <SelectTrigger className="h-8 w-full min-w-[8rem]">
+            <SelectValue placeholder="Select loadout" />
+          </SelectTrigger>
+          <SelectContent>
+            {data?.map((loadout, index) => (
+              <SelectItem key={loadout.id} value={loadout.id}>
+                {getDisplayName(loadout, index)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
   const submitRename = (id: string, value: string, currentName?: string) => {
     const trimmed = value.trim();
     setEditingId(null);
@@ -90,8 +127,7 @@ const LoadoutSelector = <T extends LoadoutData>(
       <div className="flex flex-row gap-1">
         {data?.map((loadout, index) => {
           const isSelected = selectedId === loadout.id;
-          const displayName =
-            loadout.name || `${props.label || "Loadout"} ${index + 1}`;
+          const displayName = getDisplayName(loadout, index);
           const isEditing = editingId === loadout.id;
           return (
             <div key={loadout.id} className="flex flex-col items-center">

@@ -10,6 +10,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 interface ItemLoadoutSelectorProps {
   size?: "small" | "large";
   label?: string;
+  variant?: "icons" | "dropdown";
   onSelectOverride?: (loadoutId: string) => void;
   selectedOverrideId?: string | null;
 }
