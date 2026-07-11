@@ -63,6 +63,7 @@ import {
   calcMaxEventItems,
   calcMaxItems,
   calcMaxMaterials,
+  canEquipAdditional,
   computeLoadoutAssignments,
   nonCombatConsume,
 } from "@/libs/item";
@@ -1975,31 +1976,25 @@ export const itemRouter = createTRPCRouter({
       const instancesEquipped = useritems.filter(
         (ui) => ui.itemId === info.id && ui.equipped !== "NONE",
       ).length;
-      const hasBloodlineItemEquipped = useritems.some(
-        (ui) => ui.equipped !== "NONE" && ui.item.bloodlineId,
-      );
       const canAutoEquip =
         !info.effects.find((e) => e.type.includes("bloodline")) &&
         instancesEquipped < info.maxEquips &&
         user.level >= info.requiredLevel &&
         (!info.bloodlineId || info.bloodlineId === user.bloodlineId) &&
-        (!info.bloodlineId || !hasBloodlineItemEquipped);
+        canEquipAdditional(
+          info,
+          useritems
+            .filter((ui) => ui.equipped !== "NONE")
+            .map((ui) => ({
+              slot: ui.equipped,
+              itemType: ui.item.itemType,
+              bloodlineId: ui.item.bloodlineId,
+            })),
+        ) === null;
 
       if (canAutoEquip) {
-        // Check if hand armor restriction applies
-        const isHandArmor = info.itemType === "ARMOR" && info.slot === "HAND";
-        const hasHandArmorEquipped = useritems.some(
-          (ui) =>
-            (ui.equipped === "HAND_1" || ui.equipped === "HAND_2") &&
-            ui.item.itemType === "ARMOR",
-        );
-
         ItemSlots.forEach((slot) => {
           if (slot.includes(info.slot) && !useritems.find((i) => i.equipped === slot)) {
-            // Skip auto-equip for hand armors if one is already equipped
-            if (isHandArmor && hasHandArmorEquipped) {
-              return;
-            }
             equipped = slot;
           }
         });
@@ -2092,10 +2087,13 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Fetch user items
-      const [useritems, user] = await Promise.all([
+      const [fetchedItems, user] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
+      // Mutable inventory snapshot so each successful equip is visible to the next
+      // toggleEquipItem call (canEquipAdditional category limits).
+      let useritems = fetchedItems;
 
       // Get unequipped items that are not stored at home, sorted by cost (descending)
       const unequippedItems = useritems
@@ -2136,6 +2134,7 @@ export const itemRouter = createTRPCRouter({
             nEquipped++;
             updatePromises.push(...result.promises);
             availableSlots = availableSlots.filter((s) => s !== slot);
+            useritems = result.newUserItems;
           }
         }
       }
@@ -2631,26 +2630,20 @@ export const toggleEquipItem = async (
       `No more than ${info.maxEquips} instances. Already have ${instancesEquipped} equipped.`,
     );
   }
-  // Check bloodline item limit - only one item with a bloodline can be equipped
-  if (doEquip && info.bloodlineId) {
-    const equippedBloodlineItems = newUserItems.filter(
-      (ui) => ui.equipped !== "NONE" && ui.id !== useritem.id && ui.item.bloodlineId,
+  // Category limits (bloodline / hand armor / accessory) shared with loadout + buyItem
+  if (doEquip) {
+    const categoryError = canEquipAdditional(
+      info,
+      newUserItems
+        .filter((ui) => ui.equipped !== "NONE" && ui.id !== useritem.id)
+        .map((ui) => ({
+          slot: ui.equipped,
+          itemType: ui.item.itemType,
+          bloodlineId: ui.item.bloodlineId,
+        })),
     );
-    if (equippedBloodlineItems.length > 0) {
-      return errorResponse("You can only equip one item with a bloodline requirement");
-    }
-  }
-  // Check hand slot armor limit - only one armor item can be equipped in hand slots
-  if (doEquip && info.itemType === "ARMOR" && info.slot === "HAND") {
-    const equippedHandArmors = newUserItems.filter(
-      (ui) =>
-        ui.equipped !== "NONE" &&
-        ui.id !== useritem.id &&
-        (ui.equipped === "HAND_1" || ui.equipped === "HAND_2") &&
-        ui.item.itemType === "ARMOR",
-    );
-    if (equippedHandArmors.length > 0) {
-      return errorResponse("You can only equip one armor item in your hand slots");
+    if (categoryError) {
+      return errorResponse(categoryError);
     }
   }
   // Determine equipment slot (first empty slots, then any slot)

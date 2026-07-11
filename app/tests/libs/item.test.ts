@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
+  canEquipAdditional,
   checkEquipConstraints,
   computeLoadoutAssignments,
   type EquipConstraintInfo,
   type EquippedAssignment,
+  type EquippedConstraintState,
   isEquippableUserItem,
 } from "@/libs/item";
 import type { ItemSlot } from "@/drizzle/constants";
@@ -72,6 +74,56 @@ const info = (over: Partial<EquipConstraintInfo>): EquipConstraintInfo => ({
   ...over,
 });
 
+const equipped = (over: Partial<EquippedConstraintState>): EquippedConstraintState => ({
+  slot: "ITEM_1",
+  itemType: "WEAPON",
+  bloodlineId: null,
+  ...over,
+});
+
+describe("canEquipAdditional", () => {
+  it("allows an item when nothing is equipped", () => {
+    expect(canEquipAdditional(info({}), [])).toBeNull();
+  });
+  it("blocks a second bloodline item", () => {
+    expect(
+      canEquipAdditional(info({ bloodlineId: "bl1" }), [
+        equipped({ bloodlineId: "bl1" }),
+      ]),
+    ).toMatch(/one item with a bloodline/);
+  });
+  it("blocks a second ARMOR item in hand slots", () => {
+    expect(
+      canEquipAdditional(info({ itemType: "ARMOR", slot: "HAND" }), [
+        equipped({ slot: "HAND_1", itemType: "ARMOR" }),
+      ]),
+    ).toMatch(/one armor item in your hand/);
+  });
+  it("allows a non-armor hand item alongside an armor hand item", () => {
+    expect(
+      canEquipAdditional(info({ itemType: "WEAPON", slot: "HAND" }), [
+        equipped({ slot: "HAND_1", itemType: "ARMOR" }),
+      ]),
+    ).toBeNull();
+  });
+  it("blocks a second ACCESSORY", () => {
+    expect(
+      canEquipAdditional(info({ itemType: "ACCESSORY", slot: "ITEM" }), [
+        equipped({ itemType: "ACCESSORY" }),
+      ]),
+    ).toMatch(/one accessory/);
+  });
+  it("does not enforce maxEquips (callers own that check)", () => {
+    // Two already-equipped instances of the same item — still null here.
+    expect(
+      canEquipAdditional(info({ itemId: "i1", maxEquips: 1 }), [
+        equipped({ slot: "ITEM_1" }),
+        equipped({ slot: "ITEM_2" }),
+      ]),
+    ).toBeNull();
+  });
+});
+
 describe("checkEquipConstraints", () => {
   it("allows an item when nothing is equipped", () => {
     expect(checkEquipConstraints(info({}), [])).toBeNull();
@@ -90,29 +142,16 @@ describe("checkEquipConstraints", () => {
     ];
     expect(checkEquipConstraints(info({ itemId: "i1", maxEquips: 2 }), current)).toBeNull();
   });
-  it("blocks a second bloodline item", () => {
+  it("delegates category limits to canEquipAdditional", () => {
     const current: EquippedAssignment[] = [
-      { slot: "ITEM_1", info: info({ itemId: "b1", bloodlineId: "bl1" }) },
+      { slot: "ITEM_1", info: info({ itemId: "acc1", itemType: "ACCESSORY", slot: "ITEM" }) },
     ];
     expect(
-      checkEquipConstraints(info({ itemId: "b2", bloodlineId: "bl1" }), current),
-    ).toMatch(/one item with a bloodline/);
-  });
-  it("blocks a second ARMOR item in hand slots", () => {
-    const current: EquippedAssignment[] = [
-      { slot: "HAND_1", info: info({ itemId: "a1", itemType: "ARMOR", slot: "HAND" }) },
-    ];
-    expect(
-      checkEquipConstraints(info({ itemId: "a2", itemType: "ARMOR", slot: "HAND" }), current),
-    ).toMatch(/one armor item in your hand/);
-  });
-  it("allows a non-armor hand item alongside an armor hand item", () => {
-    const current: EquippedAssignment[] = [
-      { slot: "HAND_1", info: info({ itemId: "a1", itemType: "ARMOR", slot: "HAND" }) },
-    ];
-    expect(
-      checkEquipConstraints(info({ itemId: "w1", itemType: "WEAPON", slot: "HAND" }), current),
-    ).toBeNull();
+      checkEquipConstraints(
+        info({ itemId: "acc2", itemType: "ACCESSORY", slot: "ITEM" }),
+        current,
+      ),
+    ).toMatch(/one accessory/);
   });
 });
 
@@ -246,6 +285,35 @@ describe("computeLoadoutAssignments", () => {
     );
     expect(out.assignments.length).toBe(1);
     expect(out.invalidItems.length).toBe(1);
+  });
+
+  it("enforces a single accessory across the loadout", () => {
+    const items = [
+      ui({
+        id: "r1",
+        itemId: "acc1",
+        name: "Ring A",
+        slotType: "ITEM",
+        itemType: "ACCESSORY",
+      }),
+      ui({
+        id: "r2",
+        itemId: "acc2",
+        name: "Ring B",
+        slotType: "ITEM",
+        itemType: "ACCESSORY",
+      }),
+    ];
+    const out = computeLoadoutAssignments(
+      [
+        { itemId: "acc1", slot: "ITEM_1" },
+        { itemId: "acc2", slot: "ITEM_2" },
+      ],
+      items,
+      USER,
+    );
+    expect(out.assignments).toEqual([{ userItemId: "r1", slot: "ITEM_1" }]);
+    expect(out.invalidItems[0]).toMatch(/one accessory/);
   });
 
   it("skips home / level / bloodline / auction items", () => {

@@ -237,13 +237,53 @@ export interface EquippedAssignment {
   info: EquipConstraintInfo;
 }
 
+/** Minimal equipped-item shape for category equip limits (bloodline / hand armor / accessory). */
+export interface EquippedConstraintState {
+  slot: string;
+  itemType: string;
+  bloodlineId: string | null;
+}
+
 /**
- * Equip-limit rules (per-item max, one-bloodline-item, one-hand-armor) for the
- * loadout application path. toggleEquipItem applies the equivalent rules inline
- * rather than calling this, because it counts maxEquips against the live
- * `equipped` state (which can include the candidate row when re-slotting),
- * whereas this counts only the assignments built so far. Returns an error
- * message if `candidate` cannot be equipped given `current`, otherwise null.
+ * Category equip limits shared by loadout application, buyItem auto-equip, and
+ * toggleEquipItem: at most one bloodline-gated item, one hand armor, and one
+ * accessory. maxEquips is intentionally excluded — callers count that against
+ * their own notion of already-equipped instances (assignments built so far vs
+ * live equipped rows that may include the candidate when re-slotting). Returns
+ * an error message if `candidate` cannot be equipped given `equippedItems`,
+ * otherwise null.
+ */
+export const canEquipAdditional = (
+  candidate: Pick<EquipConstraintInfo, "bloodlineId" | "itemType" | "slot">,
+  equippedItems: EquippedConstraintState[],
+): string | null => {
+  if (candidate.bloodlineId) {
+    if (equippedItems.some((a) => a.bloodlineId)) {
+      return "You can only equip one item with a bloodline requirement";
+    }
+  }
+  if (candidate.itemType === "ARMOR" && candidate.slot === "HAND") {
+    const handArmor = equippedItems.some(
+      (a) => (a.slot === "HAND_1" || a.slot === "HAND_2") && a.itemType === "ARMOR",
+    );
+    if (handArmor) {
+      return "You can only equip one armor item in your hand slots";
+    }
+  }
+  if (candidate.itemType === "ACCESSORY") {
+    if (equippedItems.some((a) => a.itemType === "ACCESSORY")) {
+      return "You can only equip one accessory";
+    }
+  }
+  return null;
+};
+
+/**
+ * Equip-limit rules (per-item max + category limits from canEquipAdditional)
+ * for the loadout application path. toggleEquipItem / buyItem call
+ * canEquipAdditional directly and apply maxEquips against live equipped state
+ * themselves. Returns an error message if `candidate` cannot be equipped given
+ * `current`, otherwise null.
  */
 export const checkEquipConstraints = (
   candidate: EquipConstraintInfo,
@@ -253,21 +293,14 @@ export const checkEquipConstraints = (
   if (sameItem >= candidate.maxEquips) {
     return `No more than ${candidate.maxEquips} instances. Already have ${sameItem} equipped.`;
   }
-  if (candidate.bloodlineId) {
-    if (current.some((a) => a.info.bloodlineId)) {
-      return "You can only equip one item with a bloodline requirement";
-    }
-  }
-  if (candidate.itemType === "ARMOR" && candidate.slot === "HAND") {
-    const handArmor = current.some(
-      (a) =>
-        (a.slot === "HAND_1" || a.slot === "HAND_2") && a.info.itemType === "ARMOR",
-    );
-    if (handArmor) {
-      return "You can only equip one armor item in your hand slots";
-    }
-  }
-  return null;
+  return canEquipAdditional(
+    candidate,
+    current.map((a) => ({
+      slot: a.slot,
+      itemType: a.info.itemType,
+      bloodlineId: a.info.bloodlineId,
+    })),
+  );
 };
 
 /**
@@ -385,7 +418,7 @@ export const computeLoadoutAssignments = (
       );
       continue;
     }
-    // Equip limits shared with toggleEquipItem.
+    // Equip limits via checkEquipConstraints (maxEquips + canEquipAdditional).
     const info: EquipConstraintInfo = {
       itemId: useritem.itemId,
       bloodlineId: item.bloodlineId,
