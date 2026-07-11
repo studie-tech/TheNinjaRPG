@@ -1894,7 +1894,6 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
       const sorted = [...sageMode.afterEffects].sort((a, b) =>
         sortEffects(a as UserEffect, b as UserEffect),
       );
-      const realizedAfterEffects: UserEffect[] = [];
       for (const raw of sorted) {
         const tag = structuredClone(raw) as UserEffect;
         const realized = realizeTag({
@@ -1920,29 +1919,20 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
         }
         realized.isNew = false;
         realized.castThisRound = false;
-        realizedAfterEffects.push(realized);
+        // Queue onto the battle's effect pool so the normal round pipeline (the applyEffects
+        // call that runs immediately after this transition) ticks these alongside every other
+        // active effect. Running a separate isolated applyEffects here would fire its global
+        // pool post-pass over every combatant while only these effects are visible, wrongly
+        // reverting other users' active max-pool adjustments.
+        battle.usersEffects.push(realized);
       }
-      // Apply ONLY the freshly-realized after-effects through main's damage/effect pipeline by
-      // running applyEffects on a battle view carrying just these effects (and no ground
-      // effects, so nothing else re-ticks), then merge the results back into the live battle.
-      const { newBattle } = applyEffects(
-        { ...battle, usersEffects: realizedAfterEffects, groundEffects: [] },
-        u.userId,
-        undefined,
-      );
-      battle.usersState = newBattle.usersState;
-      battle.usersEffects = [...battle.usersEffects, ...newBattle.usersEffects];
-      battle.groundEffects = [...battle.groundEffects, ...newBattle.groundEffects];
     }
 
-    // Mutate the user on the live `battle.usersState` — `u` may be orphaned after
-    // `battle.usersState = newBattle.usersState` when after-effects ran.
-    const liveUser = battle.usersState.find((x) => x.userId === u.userId);
-    if (liveUser) {
-      liveUser.sageModeUsedThisBattle = true;
-      liveUser.sageModeActivated = false;
-      liveUser.sageModeActivatedRound = null;
-      liveUser.sageModeExpiresRound = null;
-    }
+    // Sage mode is spent for the rest of the battle. `u` is a live element of
+    // `battle.usersState` (never reassigned here), so mutate it directly.
+    u.sageModeUsedThisBattle = true;
+    u.sageModeActivated = false;
+    u.sageModeActivatedRound = null;
+    u.sageModeExpiresRound = null;
   });
 }
