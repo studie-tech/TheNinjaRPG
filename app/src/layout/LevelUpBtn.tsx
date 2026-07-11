@@ -62,7 +62,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
   // Derived
   const expRequired = userData ? Math.max(calcLevelRequirements(userData.level)) : 0;
   const canLevel =
-    userData && userData.experience > expRequired && userData.level < 100;
+    userData && userData.experience >= expRequired && userData.level < 100;
 
   // If current tutorial step is "Level Up!", but user can't level up yet, progress the tutorial
   useEffect(() => {

@@ -29,7 +29,6 @@ import {
   KAGE_PRESTIGE_REQUIREMENT,
   MAX_ATTRIBUTES,
   MAX_SKILL_POINTS,
-  MAX_SKILL_POINTS_FROM_LEVELING,
   REGEN_SECONDS,
   SENSEI_MAX_STUDENT_LEVEL,
   SHRINE_BOOST_TYPES,
@@ -404,23 +403,13 @@ export const profileRouter = createTRPCRouter({
       const { trackers } = getNewTrackers(user, [
         { task: "user_level", value: newLevel },
       ]);
-      // Calculate skill points reward for chunin+ ranks - levels 21-40 give 1 skill point each
+      // Chunin+ ranks get 1 skill point per level from SKILL_POINT_MIN_LEVEL–MAX.
+      // The LEAST(..., MAX_SKILL_POINTS) in the SQL update caps the running total.
       const isChunin = UserRolesWithSkillTreeAccess.includes(user.rank);
-      // Calculate how many skillpoints they should have from leveling (max 20)
-      // Chunin+ ranks get 1 skillpoint per level from levels 21-40
-      const expectedSkillPointsFromLeveling =
-        isChunin && newLevel >= SKILL_POINT_MIN_LEVEL
-          ? Math.min(
-              newLevel - SKILL_POINT_MIN_LEVEL + 1,
-              MAX_SKILL_POINTS_FROM_LEVELING,
-            )
-          : 0;
-      // Only give skillpoints if they haven't received all their leveling skillpoints yet
       const skillPointsGain =
         isChunin &&
         newLevel >= SKILL_POINT_MIN_LEVEL &&
-        newLevel <= SKILL_POINT_MAX_LEVEL &&
-        expectedSkillPointsFromLeveling <= MAX_SKILL_POINTS_FROM_LEVELING
+        newLevel <= SKILL_POINT_MAX_LEVEL
           ? 1
           : 0;
 
