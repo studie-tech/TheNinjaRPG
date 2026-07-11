@@ -41,6 +41,7 @@ import {
   USER_LAYER,
 } from "@/drizzle/constants";
 import type { VillageStructure } from "@/drizzle/schema";
+import { passesBracketFilter } from "@/libs/profile";
 import { getActiveObjectives } from "@/libs/quest";
 import { generateWallPlacements, getTileInfo } from "@/libs/threejs/biome";
 import {
@@ -786,19 +787,13 @@ export const drawUsers = (info: {
   grid: Grid<TerrainHex>;
   lastTime: number;
   angle: number;
-  minLevel: number;
-  /** When true, do not draw Academy (STUDENT) or Genin — same set as PvP-restricted ranks */
-  hideStudentAndGenin?: boolean;
+  minBracket: number;
 }) => {
   const endMark = profiler.mark("drawUsers");
   // Group the users by their location
   const groups = groupBy(
     info.users
-      .filter((user) => user.level >= info.minLevel)
-      .filter(
-        (user) =>
-          !info.hideStudentAndGenin || !RANKS_RESTRICTED_FROM_PVP.includes(user.rank),
-      )
+      .filter((user) => passesBracketFilter(user, info.minBracket))
       .map((user) => ({
         ...user,
         group: `${user.latitude},${user.longitude}`,

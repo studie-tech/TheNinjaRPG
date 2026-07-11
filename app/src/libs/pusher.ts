@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { UserStatus } from "@/drizzle/constants";
+import type { UserRank, UserStatus } from "@/drizzle/constants";
 import { env } from "@/env/server.mjs";
 
 // declare Pusher class with async send method
@@ -89,6 +89,8 @@ export type PusherClient = ReturnType<typeof getServerPusher>;
 
 /**
  * Updates the user's information on the map using Pusher, pushing it out to all users in the sector.
+ * experience and rank are required so bracket filters never fail closed on a missing field
+ * for a non-stealth presence update.
  * @param pusher - The Pusher client instance.
  * @param user - The user object containing the updated information.
  */
@@ -109,6 +111,8 @@ export const updateUserOnMap = async (
     curHealth?: number;
     maxHealth?: number;
     level: number;
+    experience: number;
+    rank: UserRank;
     status: UserStatus;
     stealthActive?: boolean;
   },
@@ -126,6 +130,8 @@ export const updateUserOnMap = async (
     villageId: user?.villageId ?? null,
     battleId: user?.battleId ?? null,
     level: user.level,
+    experience: user.experience,
+    rank: user.rank,
     stealthActive: user?.stealthActive ?? false,
     ...(user.curHealth ? { curHealth: user.curHealth } : {}),
     ...(user.maxHealth ? { maxHealth: user.maxHealth } : {}),

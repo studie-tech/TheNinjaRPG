@@ -298,6 +298,7 @@ export const travelRouter = createTRPCRouter({
             avatar: true,
             avatarLight: true,
             level: true,
+            experience: true,
             rank: true,
             isOutlaw: true,
             isBanned: true,
@@ -638,8 +639,12 @@ export const travelRouter = createTRPCRouter({
         const output = { ...input, location, userId: userId, status: "AWAKE" as const };
 
         // Only broadcast if user is NOT stealthed (to hide from other players)
-        if (!user || !isUserCurrentlyStealthed(user)) {
-          void updateUserOnMap(pusher, input.sector, output);
+        if (user && !isUserCurrentlyStealthed(user)) {
+          void updateUserOnMap(pusher, input.sector, {
+            ...output,
+            experience: user.experience,
+            rank: user.rank,
+          });
         }
         return { success: true, message: "OK", data: output };
       } else {

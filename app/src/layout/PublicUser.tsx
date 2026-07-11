@@ -71,6 +71,7 @@ import {
   type BattleType,
   BattleTypes,
   IMG_AVATAR_DEFAULT,
+  RANKS_RESTRICTED_FROM_PVP,
   SEICHI_SILVER_ADJUST_LIMIT,
   TrainingSpeeds,
   XP_BRACKETS,
@@ -729,7 +730,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             <b>Experience</b>
             <p>Experience: {profile.experience}</p>
             <p>
-              PvP Bracket: {getExpBracket(profile.experience)}/{XP_BRACKETS.length}
+              PvP Bracket: {getExpBracket(profile.experience, profile.rank)}/
+              {XP_BRACKETS.length}
             </p>
             {canSeeSecrets && <p>Unclaimed Exp: {profile.earnedExperience}</p>}
             <p>Experience for lvl: ---</p>
@@ -740,8 +742,10 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             {userData && userData.userId !== profile.userId && !profile.isAi && (
               <BracketEligibilityBadge
                 viewerExperience={userData.experience}
+                viewerRank={userData.rank}
                 viewerWarParticipantUntil={userData.warParticipantUntil}
                 targetExperience={profile.experience}
+                targetRank={profile.rank}
                 targetBracketImmunityLiftedUntil={profile.bracketImmunityLiftedUntil}
                 targetWarParticipantUntil={profile.warParticipantUntil}
               />
@@ -2233,26 +2237,32 @@ const CombatHistoryTab: React.FC<TabComponentProps> = ({
 
 interface BracketEligibilityBadgeProps {
   viewerExperience: number;
+  viewerRank: UserRank;
   viewerWarParticipantUntil: Date;
   targetExperience: number;
+  targetRank: UserRank;
   targetBracketImmunityLiftedUntil: Date;
   targetWarParticipantUntil: Date;
 }
 
 const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
   viewerExperience,
+  viewerRank,
   viewerWarParticipantUntil,
   targetExperience,
+  targetRank,
   targetBracketImmunityLiftedUntil,
   targetWarParticipantUntil,
 }) => {
   const now = Date.now();
-  const attackerBracket = getExpBracket(viewerExperience);
-  const targetBracket = getExpBracket(targetExperience);
+  const attackerBracket = getExpBracket(viewerExperience, viewerRank);
+  const targetBracket = getExpBracket(targetExperience, targetRank);
   const immunityLifted = targetBracketImmunityLiftedUntil.getTime() > now;
   const bothWarParticipants =
     viewerWarParticipantUntil.getTime() > now &&
     targetWarParticipantUntil.getTime() > now;
+  const viewerIsPvpRestricted = RANKS_RESTRICTED_FROM_PVP.includes(viewerRank);
+  const targetIsPvpRestricted = RANKS_RESTRICTED_FROM_PVP.includes(targetRank);
 
   // Re-render when the next time window (immunity lift or war participation) elapses, so the badge
   // does not keep showing stale eligibility while the profile stays open past an expiry.
@@ -2272,6 +2282,21 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
     );
     return () => clearTimeout(id);
   }, [nextExpiry]);
+
+  if (viewerIsPvpRestricted) {
+    return (
+      <p className="font-medium text-red-500 text-sm">
+        ✗ Cannot attack (Academy students &amp; Genin cannot do PvP)
+      </p>
+    );
+  }
+  if (targetIsPvpRestricted) {
+    return (
+      <p className="font-medium text-red-500 text-sm">
+        ✗ Protected (Academy students &amp; Genin cannot be attacked)
+      </p>
+    );
+  }
 
   if (attackerBracket <= targetBracket) {
     return (

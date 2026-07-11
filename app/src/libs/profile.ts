@@ -6,6 +6,7 @@ import {
   getUserCaps,
   HomeTypeDetails,
   HP_PER_LVL,
+  RANKS_RESTRICTED_FROM_PVP,
   SP_PER_LVL,
   XP_BRACKETS,
 } from "@/drizzle/constants";
@@ -55,15 +56,32 @@ export const calcLevel = (experience: number) => {
 };
 
 /**
- * Returns the XP bracket number (1–7) for a given experience value.
+ * Returns the PvP bracket number (0–7) for a given experience value and optional rank.
+ * Academy students and Genin are always bracket 0 (PvP-restricted ranks).
  * Bracket 1 covers 0–500,000 XP; Bracket 7 covers 3,000,001+ XP.
  */
-export const getExpBracket = (experience: number): number => {
+export const getExpBracket = (experience: number, rank?: UserRank): number => {
+  if (rank && RANKS_RESTRICTED_FROM_PVP.includes(rank)) return 0;
   const xp = Math.max(0, experience);
   for (const b of XP_BRACKETS) {
     if (xp >= b.min && xp <= b.max) return b.bracket;
   }
   return XP_BRACKETS[XP_BRACKETS.length - 1]!.bracket;
+};
+
+/**
+ * Whether a user passes a scout/map bracket filter.
+ * Matches the exact selected bracket when filterBracket >= 0;
+ * use filterBracket < 0 to disable filtering entirely.
+ * Unknown experience fails closed when a filter is active.
+ */
+export const passesBracketFilter = (
+  user: { experience?: number | null; rank?: UserRank },
+  filterBracket: number,
+): boolean => {
+  if (filterBracket < 0) return true;
+  if (user.experience == null) return false;
+  return getExpBracket(user.experience, user.rank) === filterBracket;
 };
 
 export const calcHP = (level: number) => {

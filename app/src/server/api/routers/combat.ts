@@ -1862,13 +1862,13 @@ export const initiateBattle = async (
         }
 
         // Guard 3: Bracket restrictions
-        const attackerBracket = getExpBracket(user.experience);
+        const attackerBracket = getExpBracket(user.experience, user.rank);
 
         // Collect every lower-bracket target — protection is one-directional:
         // higher-bracket attackers cannot target lower-bracket players (without exemption),
         // but lower-bracket players may freely attack higher-bracket players.
         const crossBracketTargets = nonAiTargets.filter(
-          (t) => getExpBracket(t.experience) < attackerBracket,
+          (t) => getExpBracket(t.experience, t.rank) < attackerBracket,
         );
 
         if (crossBracketTargets.length > 0) {
@@ -1893,7 +1893,10 @@ export const initiateBattle = async (
           });
 
           if (blockedTarget) {
-            const targetBracket = getExpBracket(blockedTarget.experience);
+            const targetBracket = getExpBracket(
+              blockedTarget.experience,
+              blockedTarget.rank,
+            );
             return {
               success: false,
               message: `Cannot attack ${blockedTarget.username} — different combat bracket (${attackerBracket} vs ${targetBracket})`,

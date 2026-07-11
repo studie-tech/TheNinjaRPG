@@ -27,6 +27,7 @@ import {
   SECTOR_WIDTH,
   STRUCTURE_ADJACENTS,
   WAR_SHRINE_IMAGE,
+  XP_BRACKETS,
 } from "@/drizzle/constants";
 import type { UserData, VillageStructure } from "@/drizzle/schema";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
@@ -42,6 +43,7 @@ import WebGlError from "@/layout/WebGLError";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
+import { getExpBracket, passesBracketFilter } from "@/libs/profile";
 import { GATHERING_CANCEL_PREFIX, isLocationObjective } from "@/libs/quest";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { getBackgroundColor } from "@/libs/threejs/biome";
@@ -75,7 +77,7 @@ import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
 import { round } from "@/utils/math";
 import { sleep } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { type LevelSliderSchema, levelSliderSchema } from "@/validators/travel";
+import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/travel";
 
 interface SectorProps {
   sector: number;
@@ -107,11 +109,10 @@ const Sector: React.FC<SectorProps> = (props) => {
   const [moves, setMoves] = useState(0);
   const [sorrounding, setSorrounding] = useState<SectorUser[]>([]);
   const [allyAttack, setAllyAttack] = useLocalStorage<boolean>("friendlyAttack", false);
-  const [hideStudentGeninScout, setHideStudentGeninScout] = useLocalStorage<boolean>(
-    "hideScoutStudentGenin",
-    false,
+  const [storedBracket, setStoredBracket] = useLocalStorage<number>(
+    "minBracketOnScout",
+    -1,
   );
-  const [storedLvl, setStoredLvl] = useLocalStorage<number>("minLevelOnScout", 1);
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("sectorZoom", 2);
   const [currentStructure, setCurrentStructure] = useState<VillageStructure | null>(
     null,
@@ -127,9 +128,8 @@ const Sector: React.FC<SectorProps> = (props) => {
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const usersRef = useRef<SectorUser[]>([]);
   const showUsersRef = useRef<boolean>(showActive);
-  const minLevelDrawRef = useRef<number>(storedLvl);
+  const minBracketDrawRef = useRef<number>(storedBracket);
   const showAllyAttackRef = useRef<boolean>(allyAttack);
-  const hideStudentGeninScoutRef = useRef<boolean>(hideStudentGeninScout);
   const userRef = useRef<UserWithRelations>(undefined);
   const lastAutoAttackTimeRef = useRef<number | null>(null);
   const cameraRef = useRef<OrthographicCamera | null>(null);
@@ -287,7 +287,13 @@ const Sector: React.FC<SectorProps> = (props) => {
         if (idx !== -1 && usersRef.current[idx]) {
           if (instantMove) {
             // User exists - instant movement
-            usersRef.current[idx] = { ...data, allianceStatus };
+            usersRef.current[idx] = {
+              ...usersRef.current[idx],
+              ...data,
+              allianceStatus,
+              experience: data.experience ?? usersRef.current[idx].experience,
+              rank: data.rank ?? usersRef.current[idx].rank,
+            };
           } else {
             // User exists - animate movement
             const currentHex = findHex(gridRef.current, {
@@ -304,10 +310,13 @@ const Sector: React.FC<SectorProps> = (props) => {
                 for (const tile of path) {
                   if (usersRef.current[idx]) {
                     usersRef.current[idx] = {
+                      ...usersRef.current[idx],
                       ...data,
                       avatar: usersRef.current[idx].avatar,
                       avatarLight: usersRef.current[idx].avatarLight,
                       username: usersRef.current[idx].username,
+                      experience: data.experience ?? usersRef.current[idx].experience,
+                      rank: data.rank ?? usersRef.current[idx].rank,
                       allianceStatus,
                       longitude: tile.col,
                       latitude: tile.row,
@@ -319,7 +328,7 @@ const Sector: React.FC<SectorProps> = (props) => {
             }
           }
         } else {
-          // New user enters
+          // New user enters — do not invent experience; unknown XP fails closed in bracket filters
           usersRef.current.push({ ...data, allianceStatus });
         }
         // Remove users who are no longer in the sector
@@ -483,16 +492,12 @@ const Sector: React.FC<SectorProps> = (props) => {
   });
 
   useEffect(() => {
-    minLevelDrawRef.current = storedLvl;
-  }, [storedLvl]);
+    minBracketDrawRef.current = storedBracket;
+  }, [storedBracket]);
 
   useEffect(() => {
     showAllyAttackRef.current = allyAttack;
   }, [allyAttack]);
-
-  useEffect(() => {
-    hideStudentGeninScoutRef.current = hideStudentGeninScout;
-  }, [hideStudentGeninScout]);
 
   // Listening to webcket events
   useEffect(() => {
@@ -956,8 +961,7 @@ const Sector: React.FC<SectorProps> = (props) => {
             grid: gridRef.current,
             lastTime: lastTime,
             angle: userAngle,
-            minLevel: minLevelDrawRef.current,
-            hideStudentAndGenin: hideStudentGeninScoutRef.current,
+            minBracket: minBracketDrawRef.current,
           });
           lastTime = Date.now();
           endUsers();
@@ -1141,10 +1145,8 @@ const Sector: React.FC<SectorProps> = (props) => {
           hex={originRef.current}
           allyAttack={allyAttack}
           setAllyAttack={setAllyAttack}
-          hideStudentGeninScout={hideStudentGeninScout}
-          setHideStudentGeninScout={setHideStudentGeninScout}
-          storedLvl={storedLvl}
-          setStoredLvl={setStoredLvl}
+          storedBracket={storedBracket}
+          setStoredBracket={setStoredBracket}
           attackUser={(userId) => {
             const target = sorrounding.find((u) => u.userId === userId);
             if (target && !isAttacking) {
@@ -1237,10 +1239,8 @@ interface SorroundingUsersProps {
   users: SectorUser[];
   allyAttack: boolean;
   setAllyAttack: (newValue: boolean) => void;
-  hideStudentGeninScout: boolean;
-  setHideStudentGeninScout: (newValue: boolean) => void;
-  storedLvl: number;
-  setStoredLvl: (newValue: number) => void;
+  storedBracket: number;
+  setStoredBracket: (newValue: number) => void;
   attackUser: (userId: string) => void;
   robUser: (userId: string) => void;
   move: (longitude: number, latitude: number) => void;
@@ -1248,7 +1248,7 @@ interface SorroundingUsersProps {
 
 const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
   // Destructure props
-  const { userData, timeDiff, updateUser, storedLvl, setStoredLvl } = props;
+  const { userData, timeDiff, updateUser, storedBracket, setStoredBracket } = props;
 
   // Query
   const { data } = api.village.getAll.useQuery(undefined);
@@ -1259,26 +1259,23 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
     setValue,
     control,
     formState: { errors },
-  } = useForm<LevelSliderSchema>({
-    resolver: zodResolver(levelSliderSchema),
-    defaultValues: { value: storedLvl || 1 },
+  } = useForm<BracketSliderSchema>({
+    resolver: zodResolver(bracketSliderSchema),
+    defaultValues: { value: storedBracket ?? -1 },
   });
-  const watchedLevel = round(useWatch({ control, name: "value" }));
+  const watchedBracket = round(useWatch({ control, name: "value" }));
+  const isBracketFilterActive = watchedBracket >= 0;
 
   // Filter users
   const users = props.users
     .filter((user) => user.userId !== userData.userId)
     .filter((user) => user.status === "AWAKE")
-    .filter((user) => user.level >= watchedLevel)
-    .filter(
-      (user) =>
-        !props.hideStudentGeninScout || !RANKS_RESTRICTED_FROM_PVP.includes(user.rank),
-    );
+    .filter((user) => passesBracketFilter(user, watchedBracket));
 
   // Update the localStorage whenever we change
   useEffect(() => {
-    setStoredLvl(watchedLevel);
-  }, [watchedLevel]);
+    setStoredBracket(watchedBracket);
+  }, [watchedBracket]);
 
   return (
     <Modal2
@@ -1290,8 +1287,9 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
     >
       {users.length === 0 && (
         <p className="text-red-500">
-          No awake users match your scouting filters (min level {watchedLevel}
-          {props.hideStudentGeninScout ? "; Academy & Genin hidden" : ""})
+          {isBracketFilterActive
+            ? `No awake users match your scouting filters (bracket ${watchedBracket})`
+            : "No awake users in this sector"}
         </p>
       )}
       <div className="grid grid-cols-3 gap-4 pb-3 text-center sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 xl:grid-cols-14">
@@ -1310,6 +1308,8 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
           const isPvpRestrictedRank = RANKS_RESTRICTED_FROM_PVP.includes(user.rank);
           const showAttack = !isPvpRestrictedRank && (props.allyAttack || !isAlly);
           const showRob = !isPvpRestrictedRank && sameHex && userData.isOutlaw;
+          const userBracket =
+            user.experience == null ? null : getExpBracket(user.experience, user.rank);
 
           // Show user
           return (
@@ -1394,7 +1394,9 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
               </div>
               <p>{user.username}</p>
               <p className="text-xs">
-                Lvl. {user.level} [{user.longitude}, {user.latitude}]
+                Bracket{" "}
+                {userBracket == null ? "?" : `${userBracket}/${XP_BRACKETS.length}`} [
+                {user.longitude}, {user.latitude}]
               </p>
               <p style={{ color: villageColor }} className="font-bold">
                 {villageName}
@@ -1407,14 +1409,17 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
       <div className="pt-3">
         <SliderField
           id="value"
-          default={0}
-          min={0}
-          max={100}
-          unit="value"
-          label="Select min level to show"
+          default={-1}
+          min={-1}
+          max={XP_BRACKETS.length}
+          unit="bracket"
+          label="Select bracket to show"
           register={register}
           setValue={setValue}
-          watchedValue={watchedLevel}
+          watchedValue={watchedBracket}
+          formatWatchedValue={(value) =>
+            value < 0 ? "Selected: Off (no filter)" : `Selected: bracket ${value}`
+          }
           error={errors.value?.message}
         />
         <div className="flex flex-row items-center">
@@ -1424,16 +1429,6 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
             onCheckedChange={() => props.setAllyAttack(!props.allyAttack)}
           />
           <Label>Attack button on allies</Label>
-        </div>
-        <div className="flex flex-row items-center">
-          <Checkbox
-            className="m-1 mr-3"
-            checked={props.hideStudentGeninScout}
-            onCheckedChange={() =>
-              props.setHideStudentGeninScout(!props.hideStudentGeninScout)
-            }
-          />
-          <Label>Hide Academy students &amp; Genin</Label>
         </div>
       </div>
     </Modal2>

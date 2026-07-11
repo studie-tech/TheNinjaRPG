@@ -1,6 +1,6 @@
 // sum.test.js
 import { expect, test } from "vitest";
-import { calcLevelRequirements, calcLevel, getExpBracket } from "@/libs/profile";
+import { calcLevelRequirements, calcLevel, getExpBracket, passesBracketFilter } from "@/libs/profile";
 
 test("Confirm that level<->experience calculations are consistent", () => {
   for (const level of [
@@ -29,4 +29,28 @@ test("getExpBracket returns correct bracket for boundary values", () => {
   expect(getExpBracket(3_000_000)).toBe(6);
   expect(getExpBracket(3_000_001)).toBe(7);
   expect(getExpBracket(99_999_999)).toBe(7);
+});
+
+test("getExpBracket returns 0 for Academy students and Genin", () => {
+  expect(getExpBracket(0, "STUDENT")).toBe(0);
+  expect(getExpBracket(500_000, "STUDENT")).toBe(0);
+  expect(getExpBracket(99_999_999, "STUDENT")).toBe(0);
+  expect(getExpBracket(0, "GENIN")).toBe(0);
+  expect(getExpBracket(1_000_001, "GENIN")).toBe(0);
+  expect(getExpBracket(99_999_999, "GENIN")).toBe(0);
+  expect(getExpBracket(500_001, "CHUNIN")).toBe(2);
+  expect(getExpBracket(3_000_001, "JONIN")).toBe(7);
+});
+
+test("passesBracketFilter matches exact bracket only", () => {
+  expect(passesBracketFilter({ experience: undefined, rank: "JONIN" }, 5)).toBe(false);
+  expect(passesBracketFilter({ experience: null, rank: "JONIN" }, 5)).toBe(false);
+  expect(passesBracketFilter({ experience: undefined, rank: "JONIN" }, -1)).toBe(true);
+  expect(passesBracketFilter({ experience: 0, rank: "CHUNIN" }, 1)).toBe(true);
+  expect(passesBracketFilter({ experience: 0, rank: "CHUNIN" }, 2)).toBe(false);
+  expect(passesBracketFilter({ experience: 3_000_001, rank: "JONIN" }, 7)).toBe(true);
+  expect(passesBracketFilter({ experience: 3_000_001, rank: "JONIN" }, 2)).toBe(false);
+  expect(passesBracketFilter({ experience: 0, rank: "STUDENT" }, -1)).toBe(true);
+  expect(passesBracketFilter({ experience: 0, rank: "STUDENT" }, 0)).toBe(true);
+  expect(passesBracketFilter({ experience: 0, rank: "STUDENT" }, 1)).toBe(false);
 });

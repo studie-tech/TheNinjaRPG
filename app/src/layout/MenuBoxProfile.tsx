@@ -362,13 +362,15 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger asChild>
                   <p className="cursor-default">
                     <b>Bracket: </b>
-                    {getExpBracket(userData.experience)}/{XP_BRACKETS.length}
+                    {getExpBracket(userData.experience, userData.rank)}/
+                    {XP_BRACKETS.length}
                   </p>
                 </TooltipTrigger>
                 <TooltipContent>
-                  PvP bracket based on experience. You can freely attack players in your
-                  bracket or higher. Players below your bracket are protected unless
-                  their immunity is lifted or both sides are active war participants.
+                  PvP bracket based on experience (Academy & Genin are bracket 0). You
+                  can freely attack players in your bracket or higher. Players below
+                  your bracket are protected unless their immunity is lifted or both
+                  sides are active war participants.
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
