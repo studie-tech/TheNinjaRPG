@@ -1108,9 +1108,9 @@ const Combat: React.FC<CombatProps> = (props) => {
                     );
                   })}
               </div>
-              <div className="mt-3 flex flex-row items-center gap-4">
+              <div className="mt-3 flex flex-row items-end gap-3">
                 <ItemLoadoutSelector
-                  size="small"
+                  variant="dropdown"
                   label="Item Loadout"
                   onSelectOverride={(loadoutId) => {
                     if (battleRef?.current) {
@@ -1123,7 +1123,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                   selectedOverrideId={battleSessionUser?.itemLoadout}
                 />
                 <JutsuLoadoutSelector
-                  size="small"
+                  variant="dropdown"
                   label="Jutsu Loadout"
                   onSelectOverride={(loadoutId) => {
                     if (battleRef?.current) {
@@ -1137,6 +1137,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                 />
                 <Button
                   variant="secondary"
+                  className="shrink-0"
                   disabled={battleSessionUser?.iAmHere}
                   onClick={() => {
                     if (battleRef.current && suid) {

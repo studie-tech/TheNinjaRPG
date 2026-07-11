@@ -101,6 +101,8 @@ export const privateState = [
   "highestGenerals",
   "highestOffence",
   "intelligence",
+  "itemLoadout",
+  "jutsuLoadout",
   "ninjutsuDefence",
   "ninjutsuOffence",
   "speed",
