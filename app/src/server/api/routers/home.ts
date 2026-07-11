@@ -99,6 +99,8 @@ export const homeRouter = createTRPCRouter({
         avatar: user.avatar,
         avatarLight: user.avatarLight,
         level: user.level,
+        experience: user.experience,
+        rank: user.rank,
         villageId: user.villageId,
         battleId: user.battleId,
         username: user.username,

@@ -96,7 +96,8 @@ export const MAP_WAKE_ISLAND_SECTOR = 222;
 export const MAP_WAR_TORN_BATTLEGROUND_SECTOR = 335;
 export const MAP_GLOBAL_TRAVEL_TIME_CAP_SECS = 10;
 
-// XP Bracket system — maps experience to one of 7 protection tiers for PvP eligibility
+// XP Bracket system — maps experience to protection tiers for PvP eligibility.
+// Bracket 0 is reserved for Academy students & Genin (RANKS_RESTRICTED_FROM_PVP).
 export const XP_BRACKETS = [
   { bracket: 1, min: 0,         max: 500_000 },
   { bracket: 2, min: 500_001,   max: 1_000_000 },

@@ -13,6 +13,7 @@ interface SliderFieldProps {
   error?: string;
   watchedValue: number;
   watchedTotal?: number;
+  formatWatchedValue?: (value: number) => string;
   setValue: UseFormSetValue<any>;
   register: UseFormRegister<any>;
   preventDebounce?: boolean;
@@ -34,13 +35,17 @@ const SliderField: React.FC<SliderFieldProps> = (props) => {
     }
   };
 
+  const selectedLabel = props.formatWatchedValue
+    ? props.formatWatchedValue(props.watchedValue)
+    : props.watchedValue
+      ? `Selected: ${props.watchedValue.toFixed(2)} ${props.watchedTotal ? `/ ${props.watchedTotal.toFixed(2)}` : ""} ${props.unit ?? ""}`
+      : "";
+
   return (
     <div className="m-1">
       <label htmlFor={props.id} className="mb-2 block font-medium">
         {props.label ? `${props.label}.` : ""}
-        {props.watchedValue
-          ? ` Selected: ${props.watchedValue.toFixed(2)} ${props.watchedTotal ? `/ ${props.watchedTotal.toFixed(2)}` : ""} ${props.unit ?? ""}`
-          : ""}
+        {selectedLabel ? ` ${selectedLabel}` : ""}
       </label>
       <div className="flex flex-row items-center">
         <MinusCircle

@@ -388,6 +388,8 @@ export const staffRouter = createTRPCRouter({
         avatar: targetUser.avatar,
         avatarLight: targetUser.avatarLight,
         level: targetUser.level,
+        experience: targetUser.experience,
+        rank: targetUser.rank,
         villageId: targetUser.villageId,
         battleId: null as string | null, // We're forcing awake, so battleId should be null
         username: targetUser.username,

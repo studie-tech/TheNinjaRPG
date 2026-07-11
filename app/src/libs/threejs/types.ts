@@ -37,6 +37,8 @@ export interface SectorUser {
   location: string | null;
   villageId: string | null;
   level: number;
+  /** May be absent on partial live map updates until sector data reloads */
+  experience?: number;
   rank: UserRank;
   isOutlaw: boolean;
   isBanned: boolean;
