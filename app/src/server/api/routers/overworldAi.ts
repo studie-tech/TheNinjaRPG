@@ -22,6 +22,7 @@ import {
   getReward,
   getUserQuests,
   isAvailableUserQuests,
+  isMockQuestHistoryRow,
 } from "@/libs/quest";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUserItems } from "@/routers/item";
@@ -384,8 +385,14 @@ export const overworldAiRouter = createTRPCRouter({
           resolved,
           notifications,
           consequences,
+          // Match only a real, persisted questHistory row. Achievements carry an in-memory
+          // mock row (id === questId, no DB row) that would make existingHistory truthy and
+          // skip the required INSERT in commitQuestObjectiveRewards — leaving the completion
+          // CAS with no row to update (not_found). Excluding mocks lets that INSERT run.
           existingHistory:
-            activeUser.userQuests?.find((q) => q.questId === bound.questId) ?? null,
+            activeUser.userQuests?.find(
+              (q) => q.questId === bound.questId && !isMockQuestHistoryRow(q),
+            ) ?? null,
         });
 
         // `already_completed` means the completion actually landed server-side on an earlier
@@ -594,21 +601,31 @@ export const overworldAiRouter = createTRPCRouter({
       if (!claimed) {
         return { success: true, message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE };
       }
-      const result = await assignQuestToUser({
-        client: ctx.drizzle,
-        user: activeUser,
-        quest: chosen.quest,
-        source: "overworld_npc",
-        prevAttempt: chosen.prev,
-      });
-      if (!result.success) {
-        // Assign failed (e.g. cap/availability raced) — release the slot we just claimed so
-        // the player isn't stranded behind a claim that never produced a quest.
-        await clearActiveNpcQuest({
+      // Release the slot we just claimed on ANY assign failure — a `!success` return or an
+      // unexpected throw — so a failed assign never strands the player behind a claim that
+      // produced no quest.
+      const releaseClaimedSlot = () =>
+        clearActiveNpcQuest({
           client: ctx.drizzle,
           userId: ctx.userId,
           questId: chosen.quest.id,
         });
+      let result: Awaited<ReturnType<typeof assignQuestToUser>>;
+      try {
+        result = await assignQuestToUser({
+          client: ctx.drizzle,
+          user: activeUser,
+          quest: chosen.quest,
+          source: "overworld_npc",
+          prevAttempt: chosen.prev,
+        });
+      } catch (e) {
+        await releaseClaimedSlot();
+        throw e;
+      }
+      if (!result.success) {
+        // Assign failed (e.g. cap/availability raced).
+        await releaseClaimedSlot();
         return errorResponse(result.message);
       }
       return {

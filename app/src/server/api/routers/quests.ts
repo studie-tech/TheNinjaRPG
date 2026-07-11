@@ -370,87 +370,43 @@ export const questsRouter = createTRPCRouter({
       // Fetch remaining data in parallel
       const [sectorVillage, results] = await Promise.all([
         fetchSectorVillage(ctx.drizzle, input.userSector),
-        input.type === "medical"
-          ? ctx.drizzle
-              .select({
-                ...getTableColumns(quest),
-                previousAttempts: questHistory.previousAttempts,
-                completed: questHistory.completed,
-                periodCompletes: questHistory.periodCompletes,
-                periodStartAt: questHistory.periodStartAt,
-              })
-              .from(quest)
-              .leftJoin(
-                questHistory,
-                and(
-                  eq(quest.id, questHistory.questId),
-                  eq(questHistory.userId, ctx.userId),
-                ),
-              )
-              .where(
-                and(
-                  eq(quest.questType, input.type),
-                  eq(quest.questRank, input.rank),
-                  lte(quest.requiredLevel, input.userLevel),
-                  gte(quest.maxLevel, input.userLevel),
-                  or(
-                    isNull(quest.startsAt),
-                    gte(quest.startsAt, new Date().toISOString()),
-                  ),
-                  or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
-                  or(
-                    isNull(quest.requiredVillage),
-                    eq(
-                      quest.requiredVillage,
-                      input.userVillageId ?? VILLAGE_SYNDICATE_ID,
-                    ),
-                  ),
-                  or(
-                    isNull(quest.requiredBloodlineId),
-                    eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
-                  ),
-                ),
-              )
-          : ctx.drizzle
-              .select({
-                ...getTableColumns(quest),
-                previousAttempts: questHistory.previousAttempts,
-                completed: questHistory.completed,
-                periodCompletes: questHistory.periodCompletes,
-                periodStartAt: questHistory.periodStartAt,
-              })
-              .from(quest)
-              .leftJoin(
-                questHistory,
-                and(
-                  eq(quest.id, questHistory.questId),
-                  eq(questHistory.userId, ctx.userId),
-                ),
-              )
-              .where(
-                and(
-                  eq(quest.questType, input.type),
-                  eq(quest.questRank, input.rank),
-                  lte(quest.requiredLevel, input.userLevel),
-                  gte(quest.maxLevel, input.userLevel),
-                  or(
-                    isNull(quest.startsAt),
-                    gte(quest.startsAt, new Date().toISOString()),
-                  ),
-                  or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
-                  or(
-                    isNull(quest.requiredVillage),
-                    eq(
-                      quest.requiredVillage,
-                      input.userVillageId ?? VILLAGE_SYNDICATE_ID,
-                    ),
-                  ),
-                  or(
-                    isNull(quest.requiredBloodlineId),
-                    eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
-                  ),
-                ),
+        // Random missions/crimes/errands/medical/pvp all resolve the candidate pool the same
+        // way (same widened LEFT JOIN + filters); the quest type is already carried by the
+        // `eq(quest.questType, input.type)` predicate, so no per-type query branch is needed.
+        ctx.drizzle
+          .select({
+            ...getTableColumns(quest),
+            previousAttempts: questHistory.previousAttempts,
+            completed: questHistory.completed,
+            periodCompletes: questHistory.periodCompletes,
+            periodStartAt: questHistory.periodStartAt,
+          })
+          .from(quest)
+          .leftJoin(
+            questHistory,
+            and(
+              eq(quest.id, questHistory.questId),
+              eq(questHistory.userId, ctx.userId),
+            ),
+          )
+          .where(
+            and(
+              eq(quest.questType, input.type),
+              eq(quest.questRank, input.rank),
+              lte(quest.requiredLevel, input.userLevel),
+              gte(quest.maxLevel, input.userLevel),
+              or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
+              or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
+              or(
+                isNull(quest.requiredVillage),
+                eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
               ),
+              or(
+                isNull(quest.requiredBloodlineId),
+                eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
+              ),
+            ),
+          ),
       ]);
       if (!user) return errorResponse("User does not exist");
 
@@ -2063,7 +2019,9 @@ export const assignQuestToUser = async (args: {
   quest: Quest;
   source: "ui" | "overworld_npc";
   sectorVillage?: Awaited<ReturnType<typeof fetchSectorVillage>>;
-  prevAttempt?: Awaited<ReturnType<typeof fetchUserQuestByQuestId>>;
+  // Required: it feeds the availability / period-cap guards below and is threaded into
+  // upsertQuestEntry to skip its findFirst round-trip. Both callers already fetch it.
+  prevAttempt: Awaited<ReturnType<typeof fetchUserQuestByQuestId>>;
 }): Promise<{ success: boolean; message: string }> => {
   const { client, user, quest: questData, source, sectorVillage, prevAttempt } = args;
 
@@ -2173,43 +2131,68 @@ export const assignQuestToUser = async (args: {
         `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
       );
     }
-    await upsertQuestEntry(client, user, questData);
+    await upsertQuestEntry(client, user, questData, prevAttempt ?? null);
   } else {
     await Promise.all([
-      upsertQuestEntry(client, user, questData),
+      upsertQuestEntry(client, user, questData, prevAttempt ?? null),
       incrementDailyQuestCounter(client, user, questData.questType),
     ]);
   }
   return { success: true, message: `Quest started: ${questData.name}` };
 };
 
-/** Upsert quest entry for a single user */
+/**
+ * Upsert quest entry for a single user.
+ *
+ * `prevEntry` lets a caller that already loaded this user's `questHistory` row (e.g. via
+ * {@link fetchUserQuestByQuestId} in its opening `Promise.all`) hand it in so the initial
+ * `findFirst` round-trip is skipped: `undefined` = not provided (fetch it here), a row or
+ * `null` = already resolved (use as-is). Mirrors the `existingHistory` sentinel that
+ * {@link commitQuestObjectiveRewards} uses. The insert branch is idempotent on the
+ * `(userId, questId)` unique key, so a stale `null` that races a concurrent insert restarts
+ * the existing row rather than throwing.
+ */
 export const upsertQuestEntry = async (
   client: DrizzleClient,
   user: NonNullable<UserWithRelations>,
   quest: Quest,
+  prevEntry?: Awaited<ReturnType<typeof fetchUserQuestByQuestId>> | null,
 ) => {
-  // Fetch the current quest history entry
-  let entry = await client.query.questHistory.findFirst({
-    where: and(
-      eq(questHistory.questId, quest.id),
-      eq(questHistory.userId, user.userId),
-    ),
-  });
+  // Reuse the caller's pre-fetched history row when supplied; otherwise load it here.
+  let entry =
+    prevEntry !== undefined
+      ? prevEntry
+      : await client.query.questHistory.findFirst({
+          where: and(
+            eq(questHistory.questId, quest.id),
+            eq(questHistory.userId, user.userId),
+          ),
+        });
   // Promises to be executed
   const promises: Promise<unknown>[] = [];
   // Check if the quest has already been started
   if (entry) {
-    const logUpdate = {
-      startedAt: new Date(),
+    const startedAt = new Date();
+    promises.push(
+      client
+        .update(questHistory)
+        .set({
+          startedAt,
+          endAt: null,
+          completed: 0,
+          // Atomic increment so a concurrent restart of the same row can't lose a count to a
+          // stale JS-side base; matches the insert branch's onDuplicateKeyUpdate below.
+          previousAttempts: sql`${questHistory.previousAttempts} + 1`,
+        })
+        .where(eq(questHistory.id, entry.id)),
+    );
+    entry = {
+      ...entry,
+      startedAt,
       endAt: null,
       completed: 0,
       previousAttempts: entry.previousAttempts + 1,
     };
-    promises.push(
-      client.update(questHistory).set(logUpdate).where(eq(questHistory.id, entry.id)),
-    );
-    entry = { ...entry, ...logUpdate };
   } else {
     entry = {
       id: nanoid(),
@@ -2224,7 +2207,24 @@ export const upsertQuestEntry = async (
       periodCompletes: 0,
       periodStartAt: null,
     };
-    promises.push(client.insert(questHistory).values(entry));
+    // Idempotent on the (userId, questId) unique key: if a concurrent start (double-tap, or a
+    // UI + overworld race, possibly past a stale `prevEntry`) already inserted the row, restart
+    // it in place with the same mutation the update branch applies instead of throwing a
+    // duplicate-key error. On the overworld path that throw would skip the caller's
+    // clearActiveNpcQuest cleanup and strand the just-claimed NPC-mission slot.
+    promises.push(
+      client
+        .insert(questHistory)
+        .values(entry)
+        .onDuplicateKeyUpdate({
+          set: {
+            startedAt: entry.startedAt,
+            endAt: null,
+            completed: 0,
+            previousAttempts: sql`${questHistory.previousAttempts} + 1`,
+          },
+        }),
+    );
   }
   // Get updated trackers and update user
   user.userQuests?.push({ ...entry, quest });
