@@ -10,6 +10,7 @@ import {
   userData,
   userQuestAttempt,
 } from "@/drizzle/schema";
+import { isQuestObjectiveAvailable } from "@/libs/objectives";
 import {
   findActionableBoundObjective,
   hasFriendlyBindingToPlacement,
@@ -285,7 +286,7 @@ export const overworldAiRouter = createTRPCRouter({
           const tracker = (activeUser.questData ?? []).find((t) => t.id === q.id);
           return {
             questId: q.id,
-            objectives: q.content.objectives.map((objective) => {
+            objectives: q.content.objectives.map((objective, i) => {
               const goal = tracker?.goals.find((g) => g.id === objective.id);
               return {
                 id: objective.id,
@@ -294,6 +295,13 @@ export const overworldAiRouter = createTRPCRouter({
                 done: goal?.done,
                 deliverItemIds:
                   "deliverItemIds" in objective ? objective.deliverItemIds : undefined,
+                // Reachability in the consecutive-objective chain. Mirror the getNewTrackers
+                // gate: with no tracker yet (fresh quest) treat as available, matching the
+                // first-interaction behavior; isQuestObjectiveAvailable short-circuits to true
+                // for non-consecutive quests so nothing changes for them.
+                available: tracker
+                  ? isQuestObjectiveAvailable(q.quest, tracker, i)
+                  : true,
               };
             }),
           };
@@ -393,6 +401,16 @@ export const overworldAiRouter = createTRPCRouter({
             activeUser.userQuests?.find(
               (q) => q.questId === bound.questId && !isMockQuestHistoryRow(q),
             ) ?? null,
+          // Free the active-NPC-mission slot in the SAME userData UPDATE updateRewards already
+          // runs on this claim path, instead of a trailing sequential clearActiveNpcQuest. Only
+          // on terminal completion (`resolved`), and the IF preserves clearActiveNpcQuest's
+          // questId-scoping — the slot is nulled only if it is still held for THIS quest, so a
+          // concurrent interaction at a different NPC can't clear a slot another NPC owns.
+          postClaimUserDataPatch: resolved
+            ? {
+                activeNpcQuestId: sql`IF(${userData.activeNpcQuestId} = ${bound.questId}, NULL, ${userData.activeNpcQuestId})`,
+              }
+            : undefined,
         });
 
         // `already_completed` means the completion actually landed server-side on an earlier
@@ -404,17 +422,6 @@ export const overworldAiRouter = createTRPCRouter({
         }
         if (claim.outcome !== "claimed") {
           return errorResponse("Quest state changed, please try again");
-        }
-
-        // Free the active-NPC-mission slot the moment this interaction completes the quest,
-        // instead of waiting for the next NPC visit's self-heal. clearActiveNpcQuest is
-        // questId-scoped, so it only releases the slot if it was held for this quest.
-        if (resolved) {
-          await clearActiveNpcQuest({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            questId: bound.questId,
-          });
         }
 
         return {
