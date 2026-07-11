@@ -239,6 +239,7 @@ export const copy = (
         "item",
         "village",
         "skill",
+        "sageMode",
       ];
       const allowedEffectTypes = [
         "increasedamagegiven",
@@ -332,6 +333,7 @@ export const mirror = (
         "item",
         "village",
         "skill",
+        "sageMode",
       ];
       const excludedEffectTypes = [
         "damage",
@@ -1139,6 +1141,7 @@ const persistentEffectSourceTypes = new Set<UserEffect["fromType"]>([
   "skill",
   "ranked",
   "village",
+  "sageMode",
 ]);
 
 export const clear = (

@@ -599,7 +599,7 @@ export const bloodlineRolls = mysqlTable(
     userId: varchar("userId", { length: 191 }).notNull(),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
     used: smallint("used").default(0).notNull(),
-    pityRolls: tinyint("pityRolls").default(0).notNull(),
+    pityRolls: smallint("pityRolls").default(0).notNull(),
     type: mysqlEnum("type", consts.BLOODLINE_ROLL_TYPES).default("NATURAL").notNull(),
     goal: mysqlEnum("rank", consts.LetterRanks),
     // Stored generated column: userId when type is NATURAL, NULL otherwise.
@@ -625,6 +625,88 @@ export const bloodlineRollsRelations = relations(bloodlineRolls, ({ one }) => ({
   bloodline: one(bloodline, {
     fields: [bloodlineRolls.bloodlineId],
     references: [bloodline.id],
+  }),
+}));
+
+// Sage Mode - similar to bloodline but requires manual activation in combat
+export const sageMode = mysqlTable(
+  "SageMode",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    image: varchar("image", { length: 191 }).notNull(),
+    description: text("description").notNull(),
+    // Effects while sage mode is active
+    effects: json("effects").$type<ZodAllTags[]>().default([]).notNull(),
+    // Effects applied after sage mode expires (debuffs/exhaustion)
+    afterEffects: json("afterEffects").$type<ZodAllTags[]>().default([]).notNull(),
+    // Duration configuration
+    activationRounds: tinyint("activationRounds").default(5).notNull(),
+    afterEffectRounds: tinyint("afterEffectRounds").default(3).notNull(),
+    // Activation costs
+    chakraCostPerc: tinyint("chakraCostPerc").default(20).notNull(),
+    staminaCostPerc: tinyint("staminaCostPerc").default(20).notNull(),
+    // Two-level system (level 2 unlocks automatically at higher mastery)
+    level: tinyint("level").default(1).notNull(),
+    requiredSageMastery: int("requiredSageMastery").default(0).notNull(),
+    // General settings
+    rank: mysqlEnum("rank", consts.LetterRanks).notNull(),
+    hidden: boolean("hidden").default(false).notNull(),
+    villageId: varchar("villageId", { length: 191 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    nameKey: uniqueIndex("SageMode_name_key").on(table.name),
+    levelIdx: index("SageMode_level_idx").on(table.level),
+    rankIdx: index("SageMode_rank_idx").on(table.rank),
+    villageIdx: index("SageMode_villageId_idx").on(table.villageId),
+    hiddenIdx: index("SageMode_hidden_idx").on(table.hidden),
+  }),
+);
+export type SageMode = InferSelectModel<typeof sageMode>;
+
+export const sageModeRelations = relations(sageMode, ({ one, many }) => ({
+  users: many(userData),
+  village: one(village, {
+    fields: [sageMode.villageId],
+    references: [village.id],
+  }),
+}));
+
+// Sage Mode rolls for pity system
+export const sageModeRolls = mysqlTable(
+  "SageModeRolls",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    sageModeId: varchar("sageModeId", { length: 191 }),
+    used: smallint("used").default(0).notNull(),
+    pityRolls: smallint("pityRolls").default(0).notNull(),
+    type: mysqlEnum("type", consts.SAGE_MODE_ROLL_TYPES).default("NATURAL").notNull(),
+    goal: mysqlEnum("rank", consts.LetterRanks),
+  },
+  (table) => ({
+    userIdIdx: index("SageModeRolls_userId_idx").on(table.userId),
+    sageModeIdIdx: index("SageModeRolls_sageModeId_idx").on(table.sageModeId),
+  }),
+);
+export type SageModeRolls = InferSelectModel<typeof sageModeRolls>;
+
+export const sageModeRollsRelations = relations(sageModeRolls, ({ one }) => ({
+  sageMode: one(sageMode, {
+    fields: [sageModeRolls.sageModeId],
+    references: [sageMode.id],
   }),
 }));
 
@@ -2103,6 +2185,8 @@ export const userData = mysqlTable(
     villageId: varchar("villageId", { length: 191 }),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
     bloodlineReskinId: varchar("bloodlineReskinId", { length: 191 }),
+    sageModeId: varchar("sageModeId", { length: 191 }),
+    sageMasteryExperience: int("sageMasteryExperience").default(0).notNull(),
     status: mysqlEnum("status", consts.UserStatuses).default("AWAKE").notNull(),
     strength: double("strength").default(10).notNull(),
     intelligence: double("intelligence").default(10).notNull(),
@@ -2308,6 +2392,7 @@ export const userData = mysqlTable(
       bloodlineReskinIdIdx: index("UserData_bloodlineReskinId_idx").on(
         table.bloodlineReskinId,
       ),
+      sageModeIdIdx: index("UserData_sageModeId_idx").on(table.sageModeId),
       villageIdIdx: index("UserData_villageId_idx").on(table.villageId),
       battleIdIdx: index("UserData_battleId_idx").on(table.battleId),
       statusIdx: index("UserData_status_idx").on(table.status),
@@ -2388,6 +2473,10 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   activeReskin: one(bloodlineReskin, {
     fields: [userData.bloodlineReskinId],
     references: [bloodlineReskin.id],
+  }),
+  sageMode: one(sageMode, {
+    fields: [userData.sageModeId],
+    references: [sageMode.id],
   }),
   village: one(village, {
     fields: [userData.villageId],

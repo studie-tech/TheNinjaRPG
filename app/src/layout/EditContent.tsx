@@ -1446,7 +1446,7 @@ export const EditContent = <
 
 interface EffectFormWrapperProps {
   idx: number;
-  type: "jutsu" | "bloodline" | "item" | "skillTree";
+  type: "jutsu" | "bloodline" | "item" | "skillTree" | "sageMode";
   availableTags: readonly string[];
   formClassName?: string;
   hideTagType?: boolean;
@@ -1613,7 +1613,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
 
   // Parse how to present the tag form
   const ignore = ["timeTracker", "type"];
-  if (props.type === "bloodline") {
+  if (props.type === "bloodline" || props.type === "sageMode") {
     ignore.push(...["rounds", "friendlyFire"]);
   }
   // Add direction to ignore list if not increasestat, decreasestat, or redirection
@@ -1658,9 +1658,12 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     })
     .filter((value) => {
       return (
-        !["rollbloodline", "removebloodline", "marriageslotincrease"].includes(
-          watchType,
-        ) ||
+        ![
+          "rollbloodline",
+          "rollsagemode",
+          "removebloodline",
+          "marriageslotincrease",
+        ].includes(watchType) ||
         ![
           "staticAnimation",
           "staticAssetPath",

@@ -10,7 +10,9 @@ import {
   OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,
   OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
   POST_DAMAGE_MODIFIER_TYPES,
+  SAGE_MODE_DISABLED_BATTLES,
 } from "@/drizzle/constants";
+import type { SageMode } from "@/drizzle/schema";
 import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
 import {
@@ -70,6 +72,7 @@ import {
   onehitkill,
   onehitkillPrevent,
   poison,
+  realizeTag,
   recoil,
   redirection,
   reflect,
@@ -990,6 +993,8 @@ export const applySingleEffect = (
     ? true
     : !appliedEffects.has(idx) ||
       effect.fromType === "bloodline" ||
+      effect.fromType === "sageMode" ||
+      effect.fromType === "sageModeAfter" ||
       isPreBattleGearFromType(effect.fromType);
   // Special cases
   if (
@@ -1153,6 +1158,20 @@ export const applySingleEffect = (
           info = poison(effect, action, actorId, consequences, curTarget, usersEffects);
         } else if (effect.type === "injectjutsus") {
           info = injectjutsus(effect, newTarget);
+        } else if (effect.type === "activatesagemode") {
+          info = applyActivateSageMode(
+            consequences,
+            newUsersState,
+            newUsersEffects,
+            newGroundEffects,
+            actionEffects,
+            appliedEffects,
+            battle,
+            actorId,
+            effect,
+            action,
+            newTarget,
+          );
         } else if (effect.type === "copy") {
           info = copy(effect, usersEffects, curUser, curTarget);
         } else if (effect.type === "mirror") {
@@ -1173,7 +1192,9 @@ export const applySingleEffect = (
         } else if (effect.type === "finalstand") {
           info = finalStand(effect, curTarget);
         }
-        updateStatUsage(newTarget, effect, true);
+        if (effect.type !== "activatesagemode") {
+          updateStatUsage(newTarget, effect, true);
+        }
       }
     }
   }
@@ -1742,3 +1763,186 @@ export const applyDamageModifierPipelineToConsequences = ({
     consequence.baseDamageForModifiers ??= rawDamage;
   }
 };
+
+/**
+ * Pays sage mode activation costs and applies `SageMode.effects` from extra state.
+ */
+function applyActivateSageMode(
+  consequences: Map<string, Consequence>,
+  newUsersState: BattleUserState[],
+  newUsersEffects: UserEffect[],
+  newGroundEffects: GroundEffect[],
+  actionEffects: ActionEffect[],
+  appliedEffects: Set<string>,
+  battle: CompleteBattle,
+  actorId: string,
+  effect: UserEffect,
+  action: CombatAction | undefined,
+  newTarget: BattleUserState,
+): ActionEffect | undefined {
+  if (effect.targetId !== actorId) {
+    return { txt: "Sage mode can only be activated on yourself", color: "gray" };
+  }
+  if (SAGE_MODE_DISABLED_BATTLES.includes(battle.battleType)) {
+    return { txt: "Sage mode cannot be used in this battle type", color: "gray" };
+  }
+  const sageModeId = newTarget.sageModeId;
+  if (!sageModeId) {
+    return { txt: `${newTarget.username} has no sage mode equipped`, color: "gray" };
+  }
+  const sageMode: SageMode | undefined = (battle.extraState.sageModes ?? {})[
+    sageModeId
+  ];
+  if (!sageMode) {
+    return { txt: "Sage mode data is missing", color: "gray" };
+  }
+  if (newTarget.sageModeActivated) {
+    return { txt: `${newTarget.username} is already in sage mode`, color: "gray" };
+  }
+  if (newTarget.sageModeUsedThisBattle) {
+    return { txt: "Sage mode can only be used once per battle", color: "gray" };
+  }
+
+  // "Active Duration (rounds)" on the SageMode row (`activationRounds`) — duration for all sage effects.
+  const activeDurationRounds = sageMode.activationRounds;
+
+  const cpCost = Math.floor((newTarget.maxChakra * sageMode.chakraCostPerc) / 100);
+  const spCost = Math.floor((newTarget.maxStamina * sageMode.staminaCostPerc) / 100);
+  if (newTarget.curChakra < cpCost || newTarget.curStamina < spCost) {
+    return {
+      txt: `${newTarget.username} does not have enough chakra or stamina to enter sage mode`,
+      color: "gray",
+    };
+  }
+
+  newTarget.curChakra = Math.max(0, newTarget.curChakra - cpCost);
+  newTarget.curStamina = Math.max(0, newTarget.curStamina - spCost);
+
+  newTarget.sageModeActivated = true;
+  newTarget.sageModeUsedThisBattle = true;
+  newTarget.sageModeActivatedRound = battle.round;
+  newTarget.sageModeExpiresRound = battle.round + activeDurationRounds;
+
+  const sorted = [...sageMode.effects].sort((a, b) =>
+    sortEffects(a as UserEffect, b as UserEffect),
+  );
+  for (const raw of sorted) {
+    const tag = structuredClone(raw) as UserEffect;
+    const realized = realizeTag({
+      tag,
+      user: newTarget,
+      actionId: effect.actionId,
+      target: newTarget,
+      level: sageMode.level,
+      round: battle.round,
+      battle,
+    });
+    realized.longitude = newTarget.longitude;
+    realized.latitude = newTarget.latitude;
+    realized.fromType = "sageMode";
+    realized.targetId = newTarget.userId;
+    // Ignore per-effect `rounds` in the JSON for duration; use only `activationRounds` above.
+    // Exception: `rounds === 0` means an instant / one-shot tag — leave unchanged.
+    if (realized.rounds !== 0) {
+      realized.rounds = activeDurationRounds;
+    }
+    // Tick duration on every round boundary like bloodline passives (not the cast-this-round skip).
+    realized.isNew = false;
+    realized.castThisRound = false;
+    applySingleEffect(
+      consequences,
+      newUsersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      actorId,
+      realized,
+      action,
+    );
+  }
+
+  return {
+    txt: `${newTarget.username} enters sage mode`,
+    color: "green",
+  };
+}
+
+/**
+ * After a round advances: when sage activation buffs (`fromType: sageMode`) have all expired,
+ * apply `SageMode.afterEffects` for `afterEffectRounds` (After-Effect Duration on the row).
+ */
+export function applySageModeAfterRoundTransition(battle: CompleteBattle): void {
+  battle.usersState.forEach((u) => {
+    if (!u.sageModeActivated) return;
+
+    const activeSageFx = battle.usersEffects.filter(
+      (e) => e.fromType === "sageMode" && e.targetId === u.userId,
+    );
+    const hasActiveSage = activeSageFx.some((e) => isEffectActive(e));
+    if (hasActiveSage) return;
+
+    const sageModeId = u.sageModeId;
+    const sageMode: SageMode | undefined = sageModeId
+      ? (battle.extraState.sageModes ?? {})[sageModeId]
+      : undefined;
+
+    const afterRounds = sageMode?.afterEffectRounds ?? 0;
+
+    if (sageMode?.afterEffects?.length) {
+      const sorted = [...sageMode.afterEffects].sort((a, b) =>
+        sortEffects(a as UserEffect, b as UserEffect),
+      );
+      const realizedAfterEffects: UserEffect[] = [];
+      for (const raw of sorted) {
+        const tag = structuredClone(raw) as UserEffect;
+        const realized = realizeTag({
+          tag,
+          user: u,
+          actionId: "sageModeAfter",
+          target: u,
+          level: sageMode.level,
+          round: battle.round,
+          battle,
+        });
+        realized.longitude = u.longitude;
+        realized.latitude = u.latitude;
+        realized.fromType = "sageModeAfter";
+        realized.targetId = u.userId;
+        // `applySingleEffect` sets castThisRound from (createdRound === battle.round). Same
+        // round would skip modifier tags (`!castThisRound` in tags.ts). Use previous round so
+        // exhaustion applies the same round it is applied.
+        realized.createdRound = Math.max(0, battle.round - 1);
+        // Duration from Sage Mode "After-Effect Duration (rounds)" — not per-tag rounds.
+        if (realized.rounds !== 0) {
+          realized.rounds = afterRounds;
+        }
+        realized.isNew = false;
+        realized.castThisRound = false;
+        realizedAfterEffects.push(realized);
+      }
+      // Apply ONLY the freshly-realized after-effects through main's damage/effect pipeline by
+      // running applyEffects on a battle view carrying just these effects (and no ground
+      // effects, so nothing else re-ticks), then merge the results back into the live battle.
+      const { newBattle } = applyEffects(
+        { ...battle, usersEffects: realizedAfterEffects, groundEffects: [] },
+        u.userId,
+        undefined,
+      );
+      battle.usersState = newBattle.usersState;
+      battle.usersEffects = [...battle.usersEffects, ...newBattle.usersEffects];
+      battle.groundEffects = [...battle.groundEffects, ...newBattle.groundEffects];
+    }
+
+    // Mutate the user on the live `battle.usersState` — `u` may be orphaned after
+    // `battle.usersState = newBattle.usersState` when after-effects ran.
+    const liveUser = battle.usersState.find((x) => x.userId === u.userId);
+    if (liveUser) {
+      liveUser.sageModeUsedThisBattle = true;
+      liveUser.sageModeActivated = false;
+      liveUser.sageModeActivatedRound = null;
+      liveUser.sageModeExpiresRound = null;
+    }
+  });
+}

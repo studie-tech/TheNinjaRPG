@@ -10,6 +10,7 @@ import type {
   ItemRarity,
   Jutsu,
   Quest,
+  SageMode,
 } from "@/drizzle/schema";
 import Confirm2 from "@/layout/Confirm2";
 import ContentImage from "@/layout/ContentImage";
@@ -48,6 +49,7 @@ export type GenericObject = {
 export interface ItemWithEffectsProps {
   item:
     | Bloodline
+    | SageMode
     | (Item & { imbuements?: Item[]; curDurability?: number })
     | Jutsu
     | Quest
@@ -67,7 +69,8 @@ export interface ItemWithEffectsProps {
     | "quest"
     | "badge"
     | "asset"
-    | "skillTree";
+    | "skillTree"
+    | "sageMode";
   showStatistic?: "bloodline" | "item" | "jutsu" | "ai";
   showCopy?: "quest" | "ai" | "item";
   show3d?: boolean;

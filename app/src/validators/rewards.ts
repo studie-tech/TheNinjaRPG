@@ -48,6 +48,7 @@ export const rewardFields = {
   reward_hunting_experience: z.coerce.number().prefault(0),
   reward_crafting_experience: z.coerce.number().prefault(0),
   reward_gathering_experience: z.coerce.number().prefault(0),
+  reward_sage_mastery_experience: z.coerce.number().prefault(0),
   reward_war_damage: z.coerce.number().prefault(0), // Damage to enemy war health
   reward_war_healing: z.coerce.number().prefault(0), // Heal own war health
 };
@@ -101,6 +102,7 @@ export const hasReward = (reward: ObjectiveRewardType) => {
     parsedReward.reward_hunting_experience > 0 ||
     parsedReward.reward_crafting_experience > 0 ||
     parsedReward.reward_gathering_experience > 0 ||
+    parsedReward.reward_sage_mastery_experience > 0 ||
     parsedReward.reward_war_damage > 0 ||
     parsedReward.reward_war_healing > 0
   );
