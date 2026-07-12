@@ -202,7 +202,14 @@ export const availableUserActions = (
               !elementalSeal.elements.some((e: ElementName) => jutsuElements.has(e))
             );
           })
-          .map((uj) => userJutsuToAction(uj, battle))
+          .map((uj) => {
+            const action = userJutsuToAction(uj, battle);
+            if (uj.jutsuId === SAGE_MODE_ACTIVATION_JUTSU_ID && user.sageModeId) {
+              action.image =
+                battle.extraState.sageModes?.[user.sageModeId]?.image ?? action.image;
+            }
+            return action;
+          })
       : []),
     ...(user?.items && !isStealth && battle
       ? user.items

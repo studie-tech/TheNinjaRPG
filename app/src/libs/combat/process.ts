@@ -13,7 +13,7 @@ import {
   SAGE_MODE_DISABLED_BATTLES,
 } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
-import { getSageDailyCap } from "@/libs/sageMode";
+import { getActiveSageLevel, getSageDailyCap } from "@/libs/sageMode";
 import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
 import {
@@ -1859,7 +1859,7 @@ function applyActivateSageMode(
       user: newTarget,
       actionId: effect.actionId,
       target: newTarget,
-      level: sageMode.level,
+      level: getActiveSageLevel(newTarget.sageMasteryExperience, sageMode),
       round: battle.round,
       battle,
     });
@@ -1927,7 +1927,7 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
           user: u,
           actionId: "sageModeAfter",
           target: u,
-          level: sageMode.level,
+          level: getActiveSageLevel(u.sageMasteryExperience, sageMode),
           round: battle.round,
           battle,
         });

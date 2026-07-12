@@ -1393,6 +1393,7 @@ export const isAvailableUserQuests = (
     endsAt?: string | null;
     requiredVillage: string | null;
     requiredBloodlineId?: string | null;
+    requiredSageModeId?: string | null;
     prerequisiteQuestId?: string | null;
     previousAttempts?: number | null;
     previousCompletes?: number | null;
@@ -1441,6 +1442,9 @@ export const isAvailableUserQuests = (
   const bloodlineCheck =
     !questAndUserQuestInfo.requiredBloodlineId ||
     questAndUserQuestInfo.requiredBloodlineId === user.bloodlineId;
+  const sageModeCheck =
+    !questAndUserQuestInfo.requiredSageModeId ||
+    questAndUserQuestInfo.requiredSageModeId === user.sageModeId;
 
   // Medical rank check for quests that require it
   const medicalRankCheck = !reqMedRankIdx || userMedRankIdx >= reqMedRankIdx;
@@ -1486,6 +1490,7 @@ export const isAvailableUserQuests = (
     eventAttemptsCheck &&
     villageCheck &&
     bloodlineCheck &&
+    sageModeCheck &&
     prerequisiteCheck &&
     medicalRankCheck &&
     huntingRankCheck &&
@@ -1500,6 +1505,7 @@ export const isAvailableUserQuests = (
   if (!eventAttemptsCheck) message += "Quest has been attempted too many times\n";
   if (!villageCheck) message += "Quest is not available in your village\n";
   if (!bloodlineCheck) message += "Quest requires a specific bloodline\n";
+  if (!sageModeCheck) message += "Quest requires a specific sage mode\n";
   if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";
   if (!medicalRankCheck)
     message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;

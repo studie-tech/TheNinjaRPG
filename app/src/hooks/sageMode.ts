@@ -76,7 +76,7 @@ export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
   const formData: FormEntry<keyof ZodSageModeType>[] = [
     { id: "name", type: "text" },
     { id: "image", type: "avatar", href: imageUrl },
-    { id: "level", type: "number", label: "Level (1 or 2)" },
+    { id: "level", type: "number", label: "Roll Pool Level (1 = rollable)" },
     { id: "requiredSageMastery", type: "number", label: "Required Sage Mastery" },
     { id: "activationRounds", type: "number", label: "Active Duration (rounds)" },
     {
