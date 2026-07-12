@@ -6,8 +6,9 @@ import type { Jutsu } from "@/drizzle/schema";
 import type { ZodAllTags } from "@/validators/combat";
 
 /**
- * Fallback row when the DB migration has not been applied yet.
- * Must stay in sync with `0004_sage_mode_activation_jutsu.sql`.
+ * Fallback definition backing the in-combat Activation action. No DB row is seeded for
+ * this jutsu; it is injected into battle state from this constant during initiateBattle,
+ * and its image is overridden per equipped sage mode at action-build time.
  */
 const effects: ZodAllTags[] = [
   {
@@ -30,7 +31,7 @@ const effects: ZodAllTags[] = [
 
 export const SAGE_MODE_ACTIVATION_JUTSU_FALLBACK: Jutsu = {
   id: SAGE_MODE_ACTIVATION_JUTSU_ID,
-  name: "Sage Mode",
+  name: "Activation",
   description:
     "Channel natural energy to enter sage mode. Activation costs and combat effects are defined on your sage mode.",
   createdAt: new Date(0),

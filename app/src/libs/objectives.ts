@@ -357,6 +357,11 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
   if (questReward.reward_gathering_experience) {
     rewards.push(`${questReward.reward_gathering_experience} gathering experience`);
   }
+  if (questReward.reward_sage_mastery_experience) {
+    rewards.push(
+      `${questReward.reward_sage_mastery_experience} sage mastery experience`,
+    );
+  }
   if (questReward.reward_hunter_items) {
     if (questReward.reward_hunter_items_ids.length > 0) {
       rewards.push(`drop specific hunter materials`);

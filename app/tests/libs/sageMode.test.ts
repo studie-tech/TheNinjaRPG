@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getSageMasteryRank, getSageDailyCap, getActiveSageLevel } from "@/libs/sageMode";
+import {
+  getSageMasteryRank,
+  getSageDailyCap,
+  getActiveSageLevel,
+  getSageModePityRolls,
+} from "@/libs/sageMode";
+import { PITY_SAGE_MODE_ROLLS } from "@/drizzle/constants";
 
 describe("getSageMasteryRank", () => {
   it("maps sage mastery experience to the correct rank at each threshold", () => {
@@ -29,5 +35,22 @@ describe("getActiveSageLevel", () => {
   it("unlocks level 2 at/above the threshold", () => {
     expect(getActiveSageLevel(49_999, { requiredSageMastery: 50_000 })).toBe(1);
     expect(getActiveSageLevel(50_000, { requiredSageMastery: 50_000 })).toBe(2);
+  });
+});
+
+describe("getSageModePityRolls", () => {
+  const T = PITY_SAGE_MODE_ROLLS;
+  it("returns 0 below the threshold", () => {
+    expect(getSageModePityRolls({ used: 0, pityRolls: 0 })).toBe(0);
+    expect(getSageModePityRolls({ used: T - 1, pityRolls: 0 })).toBe(0);
+  });
+  it("grants one pity roll at the threshold", () => {
+    expect(getSageModePityRolls({ used: T, pityRolls: 0 })).toBe(1);
+  });
+  it("grants multiple pity rolls at multiples of the threshold", () => {
+    expect(getSageModePityRolls({ used: T * 2, pityRolls: 0 })).toBe(2);
+  });
+  it("subtracts already-claimed pity rolls", () => {
+    expect(getSageModePityRolls({ used: T * 2, pityRolls: 1 })).toBe(1);
   });
 });

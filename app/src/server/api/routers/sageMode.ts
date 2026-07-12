@@ -15,7 +15,6 @@ import {
   COST_SWAP_SAGE_MODE,
   IMG_AVATAR_DEFAULT,
   LetterRanks,
-  PITY_SAGE_MODE_ROLLS,
   PITY_SYSTEM_ENABLED,
   REMOVAL_COST,
   ROLL_CHANCE,
@@ -33,6 +32,7 @@ import {
   fetchItemSageModeRolls,
   fetchSageModes,
   filterRollableSageModes,
+  getSageModePityRolls,
 } from "@/libs/sageMode";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
@@ -651,7 +651,12 @@ export const fetchSageMode = async (client: DrizzleClient, sageModeId: string) =
 };
 
 /** Re-export for callers that imported from the router module */
-export { fetchItemSageModeRolls, fetchSageModes, filterRollableSageModes };
+export {
+  fetchItemSageModeRolls,
+  fetchSageModes,
+  filterRollableSageModes,
+  getSageModePityRolls,
+};
 
 /**
  * Get free sage mode swaps based on federal status
@@ -669,18 +674,6 @@ export const getFreeSageModeSwaps = (
     default:
       return SAGE_MODE_SWAP_FREE_AMOUNT;
   }
-};
-
-/**
- * Get pity rolls for sage mode
- */
-export const getSageModePityRolls = (roll: { pityRolls: number; used: number }) => {
-  const totalRolls = roll.used + roll.pityRolls;
-  const pityThreshold = PITY_SAGE_MODE_ROLLS;
-  if (totalRolls >= pityThreshold) {
-    return Math.floor(totalRolls / pityThreshold) - roll.pityRolls;
-  }
-  return 0;
 };
 
 /**

@@ -2507,6 +2507,7 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   reward_hunting_experience: "Hunting Exp",
   reward_crafting_experience: "Crafting Exp",
   reward_gathering_experience: "Gathering Exp",
+  reward_sage_mastery_experience: "Sage Mastery Exp",
   reward_rank: "Reward Rank",
   reward_village_membership: "Village Membership",
   reward_tokens: "Tokens",
