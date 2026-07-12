@@ -3314,6 +3314,7 @@ export const quest = mysqlTable(
     consecutiveObjectives: boolean("consecutiveObjectives").default(true).notNull(),
     requiredVillage: varchar("requiredVillage", { length: 191 }),
     requiredBloodlineId: varchar("requiredBloodlineId", { length: 191 }),
+    requiredSageModeId: varchar("requiredSageModeId", { length: 191 }),
     maxLevel: int("maxLevel").default(100).notNull(),
     maxAttempts: int("maxAttempts").default(1).notNull(),
     maxCompletes: int("maxCompletes").default(1).notNull(),
@@ -3346,6 +3347,9 @@ export const quest = mysqlTable(
       requiredBloodlineIdx: index("Quest_requiredBloodline_idx").on(
         table.requiredBloodlineId,
       ),
+      requiredSageModeIdx: index("Quest_requiredSageMode_idx").on(
+        table.requiredSageModeId,
+      ),
       endsAtIdx: index("Quest_endsAt_idx").on(table.endsAt),
       startsAtIdx: index("Quest_startsAt_idx").on(table.startsAt),
       prerequisiteQuestIdIdx: index("Quest_prerequisiteQuestId_idx").on(
@@ -3372,6 +3376,10 @@ export const questRelations = relations(quest, ({ one, many }) => ({
   bloodline: one(bloodline, {
     fields: [quest.requiredBloodlineId],
     references: [bloodline.id],
+  }),
+  sageMode: one(sageMode, {
+    fields: [quest.requiredSageModeId],
+    references: [sageMode.id],
   }),
   raidParticipations: many(raidParticipation),
   raidDamageThresholds: many(raidDamageThreshold),

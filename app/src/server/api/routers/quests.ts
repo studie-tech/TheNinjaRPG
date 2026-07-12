@@ -153,6 +153,7 @@ export const questsRouter = createTRPCRouter({
           ...(input?.rank ? [eq(quest.questRank, input.rank)] : []),
           ...(input?.village ? [eq(quest.requiredVillage, input.village)] : []),
           ...(input?.bloodline ? [eq(quest.requiredBloodlineId, input.bloodline)] : []),
+          ...(input?.sageMode ? [eq(quest.requiredSageModeId, input.sageMode)] : []),
           ...(input?.userLevel
             ? [
                 gte(quest.maxLevel, input.userLevel),
@@ -409,6 +410,10 @@ export const questsRouter = createTRPCRouter({
                     isNull(quest.requiredBloodlineId),
                     eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
                   ),
+                  or(
+                    isNull(quest.requiredSageModeId),
+                    eq(quest.requiredSageModeId, user.sageModeId ?? ""),
+                  ),
                 ),
               )
           : ctx.drizzle
@@ -446,6 +451,10 @@ export const questsRouter = createTRPCRouter({
                   or(
                     isNull(quest.requiredBloodlineId),
                     eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
+                  ),
+                  or(
+                    isNull(quest.requiredSageModeId),
+                    eq(quest.requiredSageModeId, user.sageModeId ?? ""),
                   ),
                 ),
               ),
@@ -2060,6 +2069,10 @@ export const fetchUncompletedQuests = async (
         or(
           isNull(quest.requiredBloodlineId),
           eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
+        ),
+        or(
+          isNull(quest.requiredSageModeId),
+          eq(quest.requiredSageModeId, user.sageModeId ?? ""),
         ),
       ),
     )

@@ -1,0 +1,86 @@
+import { describe, expect, it } from "vitest";
+import { isAvailableUserQuests } from "@/libs/quest";
+
+// ---------------------------------------------------------------------------
+// Fixtures: minimal quest + user objects accepted by isAvailableUserQuests.
+// We cast through `unknown` since the full types are large and only the
+// fields exercised by the requiredSageModeId check matter at runtime.
+// ---------------------------------------------------------------------------
+
+const makeQuest = (requiredSageModeId: string | null) =>
+  ({
+    hidden: false,
+    maxAttempts: 100,
+    maxCompletes: 100,
+    questType: "mission",
+    endsAt: null,
+    requiredVillage: null,
+    requiredBloodlineId: null,
+    requiredSageModeId,
+    prerequisiteQuestId: null,
+    previousAttempts: 0,
+    previousCompletes: 0,
+    completed: 0,
+    medicalRank: null,
+    huntingRank: null,
+    gatheringRank: null,
+    requiredLevel: null,
+    maxLevel: null,
+  }) as unknown as Parameters<typeof isAvailableUserQuests>[0];
+
+const makeUser = (sageModeId: string | null) =>
+  ({
+    role: "USER",
+    rank: "GENIN",
+    medicalExperience: 0,
+    huntingExperience: 0,
+    gatheringExperience: 0,
+    level: 1,
+    villageId: null,
+    isOutlaw: false,
+    bloodlineId: null,
+    sageModeId,
+    completedQuests: [],
+  }) as unknown as Parameters<typeof isAvailableUserQuests>[1];
+
+describe("isAvailableUserQuests - requiredSageModeId", () => {
+  it("is unmet when the quest requires a sage mode the user does not have", () => {
+    const quest = makeQuest("sage-fire");
+    const user = makeUser("sage-water");
+    const result = isAvailableUserQuests(quest, user);
+    expect(result.check).toBe(false);
+    expect(result.message).toContain("Quest requires a specific sage mode");
+  });
+
+  it("is unmet when the quest requires a sage mode and the user has none", () => {
+    const quest = makeQuest("sage-fire");
+    const user = makeUser(null);
+    const result = isAvailableUserQuests(quest, user);
+    expect(result.check).toBe(false);
+    expect(result.message).toContain("Quest requires a specific sage mode");
+  });
+
+  it("is met when the user's sage mode matches the requirement", () => {
+    const quest = makeQuest("sage-fire");
+    const user = makeUser("sage-fire");
+    const result = isAvailableUserQuests(quest, user);
+    expect(result.check).toBe(true);
+    expect(result.message).not.toContain("Quest requires a specific sage mode");
+  });
+
+  it("is met when the quest has no sage mode requirement, regardless of user sage mode", () => {
+    const quest = makeQuest(null);
+    const user = makeUser(null);
+    const result = isAvailableUserQuests(quest, user);
+    expect(result.check).toBe(true);
+    expect(result.message).not.toContain("Quest requires a specific sage mode");
+  });
+
+  it("is met when the quest has no sage mode requirement and the user has a sage mode", () => {
+    const quest = makeQuest(null);
+    const user = makeUser("sage-fire");
+    const result = isAvailableUserQuests(quest, user);
+    expect(result.check).toBe(true);
+    expect(result.message).not.toContain("Quest requires a specific sage mode");
+  });
+});

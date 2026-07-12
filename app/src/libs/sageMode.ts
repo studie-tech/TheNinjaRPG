@@ -62,3 +62,15 @@ export const getSageMasteryRank = (exp: number): SAGE_MASTERY_RANK => {
  */
 export const getSageDailyCap = (exp: number): number =>
   SAGE_MASTERY_DAILY_ACTIVATIONS[getSageMasteryRank(exp)];
+
+/**
+ * A mode's ACTIVE level is computed, not stored: the catalog `level` column only
+ * gates the roll pool. A user unlocks level 2 once their sage mastery experience
+ * reaches the equipped mode's `requiredSageMastery` threshold (0 means no level-2
+ * variant is defined, so it stays level 1 regardless of experience).
+ */
+export const getActiveSageLevel = (
+  exp: number,
+  sageMode: Pick<SageMode, "requiredSageMastery">,
+): number =>
+  sageMode.requiredSageMastery > 0 && exp >= sageMode.requiredSageMastery ? 2 : 1;

@@ -654,6 +654,7 @@ export const QuestValidatorRawSchema = z.object({
   maxCompletes: z.coerce.number().min(0).max(100).prefault(1),
   requiredVillage: z.string().min(0).max(30).optional().nullish(),
   requiredBloodlineId: z.string().min(0).max(191).optional().nullish(),
+  requiredSageModeId: z.string().min(0).max(191).optional().nullish(),
   prerequisiteQuestId: z.string().min(0).max(191).optional().nullish(),
   tierLevel: z.coerce.number().min(0).max(100).nullable(),
   questType: z.enum(QuestTypes),

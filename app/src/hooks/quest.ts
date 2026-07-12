@@ -82,6 +82,8 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   });
   const { data: bloodlines, isPending: l9 } =
     api.bloodline.getAllNames.useQuery(undefined);
+  const { data: sageModes, isPending: l10 } =
+    api.sageMode.getAllNames.useQuery(undefined);
 
   // Mutation for updating item
   const { mutate: updateQuest } = api.quests.update.useMutation({
@@ -194,7 +196,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   };
 
   // Are we loading data
-  const loading = l1 || l2 || l3 || l4 || l5 || l6 || l7 || l8 || l9;
+  const loading = l1 || l2 || l3 || l4 || l5 || l6 || l7 || l8 || l9 || l10;
 
   // Watch for changes
   const imageUrl = useWatch({
@@ -269,6 +271,17 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
       values: bloodlines,
       resetButton: true,
       label: "Required Bloodline",
+    });
+  }
+
+  // Add sage modes if they exist
+  if (sageModes) {
+    formData.push({
+      id: "requiredSageModeId",
+      type: "db_values",
+      values: sageModes,
+      resetButton: true,
+      label: "Required Sage Mode",
     });
   }
 

@@ -435,11 +435,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 </p>
               )}
 
-              {"level" in item && item.level !== undefined && item.level > 0 && (
-                <p>
-                  <b>Level</b>: {item.level}
-                </p>
-              )}
+              {"level" in item &&
+                item.level !== undefined &&
+                item.level > 0 &&
+                !("requiredSageMastery" in item) && (
+                  <p>
+                    <b>Level</b>: {item.level}
+                  </p>
+                )}
               {"regenIncrease" in item && item.regenIncrease > 0 && (
                 <p>
                   <b>Regen</b>: +{item.regenIncrease}

@@ -38,6 +38,8 @@ const effectSourceTypes = [
   "village",
   "skill",
   "ranked",
+  "sageMode",
+  "sageModeAfter",
 ] as const satisfies readonly NonNullable<UserEffect["fromType"]>[];
 
 const statNameSchema = z.enum(StatNames);

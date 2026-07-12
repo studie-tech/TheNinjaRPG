@@ -1,5 +1,5 @@
 import { randomInt } from "crypto";
-import { and, eq, gte, isNotNull, like } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, like } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -54,6 +54,8 @@ import type { ZodAllTags } from "@/validators/combat";
 import { SageModeValidator } from "@/validators/combat";
 import type { SageModeFilteringSchema } from "@/validators/sageMode";
 import { sageModeFilteringSchema } from "@/validators/sageMode";
+
+const ALREADY_HAS_SAGE_MODE_ERROR = "Already have sage mode, please remove first";
 
 export const sageModeRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
@@ -379,6 +381,9 @@ export const sageModeRouter = createTRPCRouter({
         "Academy students cannot roll for sage mode. You must graduate first.",
       );
     }
+    if (user.sageModeId) {
+      return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
+    }
 
     const doRoll = async () => {
       const rand = randomInt(0, 1_000_000) / 1_000_000;
@@ -401,18 +406,19 @@ export const sageModeRouter = createTRPCRouter({
         });
         const randomSageMode = getRandomElement(sageModePool);
         if (randomSageMode) {
-          await Promise.all([
-            ctx.drizzle
-              .update(userData)
-              .set({ sageModeId: randomSageMode.id })
-              .where(eq(userData.userId, ctx.userId)),
-            ctx.drizzle.insert(sageModeRolls).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              used: 0,
-              sageModeId: randomSageMode.id,
-            }),
-          ]);
+          const result = await ctx.drizzle
+            .update(userData)
+            .set({ sageModeId: randomSageMode.id })
+            .where(and(eq(userData.userId, ctx.userId), isNull(userData.sageModeId)));
+          if (result.rowsAffected === 0) {
+            return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
+          }
+          await ctx.drizzle.insert(sageModeRolls).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            used: 0,
+            sageModeId: randomSageMode.id,
+          });
           return {
             success: true,
             message: `After meditation, you have awakened a sage mode: ${randomSageMode.name}`,
@@ -443,6 +449,9 @@ export const sageModeRouter = createTRPCRouter({
         fetchSageModes(ctx.drizzle),
         fetchItemSageModeRolls(ctx.drizzle, ctx.userId),
       ]);
+      if (user.sageModeId) {
+        return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
+      }
       const sageModePool = filterRollableSageModes({
         sageModes,
         user,
@@ -522,7 +531,7 @@ export const sageModeRouter = createTRPCRouter({
       ]);
       if (!mode) return errorResponse("Sage Mode does not exist");
       if (user.sageModeId) {
-        return errorResponse("Already have sage mode, please remove first");
+        return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
       }
       if (SAGE_MODE_COST[mode.rank] > user.reputationPoints) {
         return errorResponse("You do not have enough reputation points");
