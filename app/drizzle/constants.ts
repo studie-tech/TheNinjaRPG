@@ -978,6 +978,14 @@ export const SAGE_MASTERY_REQUIRED_EXP: Record<SAGE_MASTERY_RANK, number> = {
 };
 export const SAGE_MASTERY_EXP_CAP = 1_000_000; // 1 million sage mastery experience cap
 
+export const SAGE_MASTERY_DAILY_ACTIVATIONS: Record<SAGE_MASTERY_RANK, number> = {
+  NONE: 10,
+  INITIATE: 10,
+  ADEPT: 12,
+  MASTER: 15,
+  LEGENDARY: 20,
+};
+
 // Battle types where sage mode is NOT allowed
 export const SAGE_MODE_DISABLED_BATTLES: BattleType[] = ["RANKED_PVP", "RANKED_SPARRING"];
 

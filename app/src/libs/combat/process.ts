@@ -13,6 +13,7 @@ import {
   SAGE_MODE_DISABLED_BATTLES,
 } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
+import { getSageDailyCap } from "@/libs/sageMode";
 import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
 import {
@@ -1817,6 +1818,15 @@ function applyActivateSageMode(
   if (newTarget.sageModeUsedThisBattle) {
     return { txt: "Sage mode can only be used once per battle", color: "gray" };
   }
+  if (
+    (newTarget.dailySageActivations ?? 0) >=
+    getSageDailyCap(newTarget.sageMasteryExperience)
+  ) {
+    return {
+      txt: "You have reached today's sage mode activation limit",
+      color: "gray",
+    };
+  }
 
   // "Active Duration (rounds)" on the SageMode row (`activationRounds`) — duration for all sage effects.
   const activeDurationRounds = sageMode.activationRounds;
@@ -1835,6 +1845,7 @@ function applyActivateSageMode(
 
   newTarget.sageModeActivated = true;
   newTarget.sageModeUsedThisBattle = true;
+  newTarget.dailySageActivations = (newTarget.dailySageActivations ?? 0) + 1;
   newTarget.sageModeActivatedRound = battle.round;
   newTarget.sageModeExpiresRound = battle.round + activeDurationRounds;
 

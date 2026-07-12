@@ -1453,6 +1453,7 @@ export const updateUser = async (
           bukijutsuDefence: sql`bukijutsuDefence + ${result.bukijutsuDefence}`,
           villagePrestige: sql`villagePrestige + ${result.villagePrestige}`,
           dailyArenaFights: sql`dailyArenaFights + ${curBattle.battleType === "ARENA" ? 1 : 0}`,
+          dailySageActivations: sql`dailySageActivations + ${user.sageModeUsedThisBattle ? 1 : 0}`,
           questData: updatedQuestData,
           battleId: null,
           regenAt: new Date(),

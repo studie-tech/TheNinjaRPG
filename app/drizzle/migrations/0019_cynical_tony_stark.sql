@@ -1,0 +1,1 @@
+ALTER TABLE `UserData` ADD `dailySageActivations` smallint unsigned DEFAULT 0 NOT NULL;
