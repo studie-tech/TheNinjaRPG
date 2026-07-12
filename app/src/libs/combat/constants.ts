@@ -50,6 +50,8 @@ export const publicState = [
   "sageModeActivatedRound",
   "sageModeExpiresRound",
   "sageModeUsedThisBattle",
+  "sageMasteryExperience",
+  "dailySageActivations",
   "controllerId",
   "curChakra",
   "curHealth",

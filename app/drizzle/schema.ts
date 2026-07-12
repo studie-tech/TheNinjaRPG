@@ -2309,6 +2309,9 @@ export const userData = mysqlTable(
     dailyArenaFights: smallint("dailyArenaFights", { unsigned: true })
       .default(0)
       .notNull(),
+    dailySageActivations: smallint("dailySageActivations", { unsigned: true })
+      .default(0)
+      .notNull(),
     dailyMissions: smallint("dailyMissions", { unsigned: true }).default(0).notNull(),
     dailyErrands: smallint("dailyErrands", { unsigned: true }).default(0).notNull(),
     dailyMedicalMissions: smallint("dailyMedicalMissions", { unsigned: true })

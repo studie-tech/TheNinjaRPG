@@ -66,6 +66,7 @@ import {
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
 import { calcCombatHealPercentage } from "@/libs/hospital";
+import { getSageDailyCap } from "@/libs/sageMode";
 import {
   CleanseTag,
   ClearTag,
@@ -771,6 +772,7 @@ export const handleInjectedJutsus = (
     user.sageModeId &&
     !SAGE_MODE_DISABLED_BATTLES.includes(battle.battleType) &&
     user.sageModeUsedThisBattle !== true &&
+    (user.dailySageActivations ?? 0) < getSageDailyCap(user.sageMasteryExperience) &&
     allJutsus[sageActivationId]
   ) {
     allInjectedJutsuIdsFromEffects.add(sageActivationId);

@@ -324,6 +324,7 @@ const runMcpReset = async () => {
     dailyMedicalMissions: 0,
     dailyPvpMissions: 0,
     dailyTrainings: 0,
+    dailySageActivations: 0,
     pvpActivity: 0,
     pvpFights: 0,
     pveFights: 0,
