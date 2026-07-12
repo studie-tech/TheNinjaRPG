@@ -145,6 +145,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
             reward_hunting_experience: data.reward_hunting_experience,
             reward_crafting_experience: data.reward_crafting_experience,
             reward_gathering_experience: data.reward_gathering_experience,
+            reward_sage_mastery_experience: data.reward_sage_mastery_experience,
             reward_tokens: data.reward_tokens,
             reward_prestige: data.reward_prestige,
             reward_reputation: data.reward_reputation,
@@ -345,6 +346,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   formData.push({ id: "reward_hunting_experience", type: "number" });
   formData.push({ id: "reward_crafting_experience", type: "number" });
   formData.push({ id: "reward_gathering_experience", type: "number" });
+  formData.push({ id: "reward_sage_mastery_experience", type: "number" });
   formData.push({ id: "reward_war_damage", type: "number" });
   formData.push({ id: "reward_war_healing", type: "number" });
   formData.push({ id: "reward_rank", type: "str_array", values: UserRanks });

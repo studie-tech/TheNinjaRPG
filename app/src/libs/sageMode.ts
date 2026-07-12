@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { LetterRank, SAGE_MASTERY_RANK } from "@/drizzle/constants";
 import {
+  PITY_SAGE_MODE_ROLLS,
   SAGE_MASTERY_DAILY_ACTIVATIONS,
   SAGE_MASTERY_REQUIRED_EXP,
 } from "@/drizzle/constants";
@@ -74,3 +75,17 @@ export const getActiveSageLevel = (
   sageMode: Pick<SageMode, "requiredSageMastery">,
 ): number =>
   sageMode.requiredSageMastery > 0 && exp >= sageMode.requiredSageMastery ? 2 : 1;
+
+/**
+ * The number of guaranteed ("pity") rolls a user has earned for a given item-roll
+ * accumulator: one per PITY_SAGE_MODE_ROLLS rolls, minus any already claimed. Shared
+ * by the pity-claim server check and the client's claim button so they never disagree.
+ */
+export const getSageModePityRolls = (roll: { pityRolls: number; used: number }) => {
+  const totalRolls = roll.used + roll.pityRolls;
+  const pityThreshold = PITY_SAGE_MODE_ROLLS;
+  if (totalRolls >= pityThreshold) {
+    return Math.floor(totalRolls / pityThreshold) - roll.pityRolls;
+  }
+  return 0;
+};

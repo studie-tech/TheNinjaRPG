@@ -69,7 +69,9 @@ import {
   COST_RESET_STATS,
   COST_SKILL_RESET,
   COST_SWAP_BLOODLINE,
+  COST_SWAP_SAGE_MODE,
   COST_SWAP_VILLAGE,
+  SAGE_MODE_SWAP_COOLDOWN_HOURS,
 } from "@/drizzle/constants";
 import type { Bloodline, Village } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
@@ -86,6 +88,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
 import NindoChange from "@/layout/NindoChange";
+import { CurrentSageMode, SageModePityRolls, SwapSageMode } from "@/layout/SageMode";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
 import UserRequestSystem from "@/layout/UserRequestSystem";
@@ -111,6 +114,7 @@ import {
   canClearSectors,
   canEnableGlobalTavern,
   canSwapBloodline,
+  canSwapSageMode,
   canSwapVillage,
   canUnequipAllUsers,
   isStaffMember,
@@ -386,6 +390,33 @@ export default function EditProfile() {
             onClick={setActiveElement}
           >
             <SwapBloodline />
+          </Accordion>
+        )}
+        <Accordion
+          title="Sage Mode"
+          selectedTitle={activeElement}
+          unselectedSubtitle="View or remove your sage mode"
+          selectedSubtitle="Your awakened sage mode and item-based roll progress."
+          icon={Sparkles}
+          onClick={setActiveElement}
+        >
+          {userData.sageModeId ? (
+            <CurrentSageMode sageModeId={userData.sageModeId} />
+          ) : (
+            <p className="p-3 italic">You have not awakened a sage mode yet.</p>
+          )}
+          <SageModePityRolls />
+        </Accordion>
+        {canSwapSageMode(userData.role) && (
+          <Accordion
+            title="Swap Sage Mode"
+            selectedTitle={activeElement}
+            unselectedSubtitle="Change your sage mode of choice"
+            selectedSubtitle={`You can swap your sage mode to any your character has previously owned. Free swaps depend on your federal support status, otherwise ${COST_SWAP_SAGE_MODE} reputation points. You must wait ${SAGE_MODE_SWAP_COOLDOWN_HOURS} hours between swaps. You have ${userData.reputationPoints} reputation points.`}
+            icon={Sparkles}
+            onClick={setActiveElement}
+          >
+            <SwapSageMode />
           </Accordion>
         )}
         {canSwapVillage(userData.role) && (
