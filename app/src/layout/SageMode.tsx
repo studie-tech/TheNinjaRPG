@@ -49,9 +49,6 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
       },
     });
 
-  const canAfford =
-    userData?.reputationPoints && userData.reputationPoints >= REMOVAL_COST;
-
   return (
     <ContentBox
       title="Sage Mode"
@@ -64,11 +61,7 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
           <ItemWithEffects item={data} key={data.id} />
           <Confirm2
             title="Sage Mode Removal"
-            proceed_label={
-              canAfford
-                ? `Remove for ${REMOVAL_COST} reps`
-                : `Need ${REMOVAL_COST - userData.reputationPoints} more reps`
-            }
+            proceed_label="Remove Sage Mode"
             isValid={!isFetching}
             button={
               <Button id="check" className="w-full">
@@ -78,12 +71,12 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
             }
             onAccept={(e) => {
               e.preventDefault();
-              if (canAfford) remove();
+              remove();
             }}
           >
             <p>
-              Confirm using <b>{REMOVAL_COST} reputation points</b> to abandon your
-              current sage mode.
+              Abandon your current sage mode. This is <b>free</b> if you awakened it
+              naturally; otherwise it costs <b>{REMOVAL_COST} reputation points</b>.
             </p>
           </Confirm2>
         </>

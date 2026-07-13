@@ -65,6 +65,21 @@ export const getSageDailyCap = (exp: number): number =>
   SAGE_MASTERY_DAILY_ACTIVATIONS[getSageMasteryRank(exp)];
 
 /**
+ * The chakra/stamina cost of activating a sage mode, as a flat amount derived from
+ * the user's max pools and the mode's percentage costs. Shared by the combat
+ * availability gate (so an unaffordable Activation is never offered) and the
+ * activation processor (which charges the pools), so the two never disagree.
+ */
+export const getSageModeActivationCost = (
+  sageMode: Pick<SageMode, "chakraCostPerc" | "staminaCostPerc">,
+  maxChakra: number,
+  maxStamina: number,
+) => ({
+  cpCost: Math.floor((maxChakra * sageMode.chakraCostPerc) / 100),
+  spCost: Math.floor((maxStamina * sageMode.staminaCostPerc) / 100),
+});
+
+/**
  * A mode's ACTIVE level is computed, not stored: the catalog `level` column only
  * gates the roll pool. A user unlocks level 2 once their sage mastery experience
  * reaches the equipped mode's `requiredSageMastery` threshold (0 means no level-2

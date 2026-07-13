@@ -1,5 +1,5 @@
 import { randomInt } from "crypto";
-import { and, eq, gte, isNotNull, isNull, like } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, like, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -530,6 +530,11 @@ export const sageModeRouter = createTRPCRouter({
         fetchSageMode(ctx.drizzle, input.sageModeId),
       ]);
       if (!mode) return errorResponse("Sage Mode does not exist");
+      // fetchSageMode is unfiltered, so mirror the roll-pool gating here: hidden and
+      // non-level-1 catalog rows must not be acquirable by ID via a direct purchase.
+      if (mode.hidden || mode.level !== 1) {
+        return errorResponse("Sage Mode is not available for purchase");
+      }
       if (user.sageModeId) {
         return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
       }
@@ -572,10 +577,19 @@ export const updateSageMode = async (
     .update(userData)
     .set({
       sageModeId: mode?.id || null,
-      reputationPoints: user.reputationPoints - repCost,
+      reputationPoints: sql`${userData.reputationPoints} - ${repCost}`,
     })
     .where(
-      and(eq(userData.userId, user.userId), gte(userData.reputationPoints, repCost)),
+      and(
+        eq(userData.userId, user.userId),
+        gte(userData.reputationPoints, repCost),
+        // Compare-and-swap on the current mode: if another request already changed
+        // it (concurrent swap/purchase/remove), rowsAffected is 0 and we abort rather
+        // than double-debit reputation or clobber the other write.
+        user.sageModeId
+          ? eq(userData.sageModeId, user.sageModeId)
+          : isNull(userData.sageModeId),
+      ),
     );
 
   if (!updateResult.rowsAffected) {

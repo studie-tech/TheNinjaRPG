@@ -13,7 +13,11 @@ import {
   SAGE_MODE_DISABLED_BATTLES,
 } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
-import { getActiveSageLevel, getSageDailyCap } from "@/libs/sageMode";
+import {
+  getActiveSageLevel,
+  getSageDailyCap,
+  getSageModeActivationCost,
+} from "@/libs/sageMode";
 import type { ShieldTagType } from "@/validators/combat";
 import { VisualTag } from "@/validators/combat";
 import {
@@ -1831,8 +1835,11 @@ function applyActivateSageMode(
   // "Active Duration (rounds)" on the SageMode row (`activationRounds`) — duration for all sage effects.
   const activeDurationRounds = sageMode.activationRounds;
 
-  const cpCost = Math.floor((newTarget.maxChakra * sageMode.chakraCostPerc) / 100);
-  const spCost = Math.floor((newTarget.maxStamina * sageMode.staminaCostPerc) / 100);
+  const { cpCost, spCost } = getSageModeActivationCost(
+    sageMode,
+    newTarget.maxChakra,
+    newTarget.maxStamina,
+  );
   if (newTarget.curChakra < cpCost || newTarget.curStamina < spCost) {
     return {
       txt: `${newTarget.username} does not have enough chakra or stamina to enter sage mode`,
