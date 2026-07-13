@@ -14,7 +14,12 @@ import { SageModeValidator } from "@/validators/combat";
  * Hook used when creating frontend forms for editing sage modes
  */
 export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
-  const sageMode = { ...data, effects: data.effects, afterEffects: data.afterEffects };
+  const sageMode = {
+    ...data,
+    battleDescription: data.battleDescription ?? "",
+    effects: data.effects,
+    afterEffects: data.afterEffects,
+  };
 
   const form = useForm<ZodSageModeType, any, ZodSageModeType>({
     mode: "all",
@@ -84,6 +89,11 @@ export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
 
   const formData: FormEntry<keyof ZodSageModeType>[] = [
     { id: "name", type: "text" },
+    {
+      id: "battleDescription",
+      type: "text",
+      label: "Activation Message (%user templated)",
+    },
     { id: "image", type: "avatar", href: imageUrl },
     { id: "level", type: "number", label: "Roll Pool Level (1 = rollable)" },
     { id: "requiredSageMastery", type: "number", label: "Required Sage Mastery" },

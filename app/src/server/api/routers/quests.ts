@@ -1801,6 +1801,13 @@ export const updateRewards = async (info: {
 
   // Cap medical experience at 4 million (atomic increment + cap in SQL so parallel reward grants stack).
   // Skillpoints and sage mastery similarly capped in SQL.
+
+  // Roll ONE not-yet-owned candidate sage mode (if any). It is recorded into the player's
+  // history below; additionally auto-equip it only when the player currently has no sage
+  // mode. COALESCE is atomic per-row, so a concurrent grant cannot double-equip or clobber,
+  // and it cannot throw and abort the rest of this reward grant.
+  const rolledSageMode = sageModes.length > 0 ? getRandomElement(sageModes) : undefined;
+
   const updatedUserData: Record<string, unknown> = {
     questData: user.questData,
     money: sql`${userData.money} + ${rewards.reward_money ?? 0}`,
@@ -1817,6 +1824,9 @@ export const updateRewards = async (info: {
     sageMasteryExperience: sql`LEAST(${userData.sageMasteryExperience} + ${rewards.reward_sage_mastery_experience ?? 0}, ${SAGE_MASTERY_EXP_CAP})`,
     rank: getNewRank ? rewards.reward_rank : user.rank,
     villageId: getNewVillage && villageData ? villageData.id : user.villageId,
+    ...(rolledSageMode
+      ? { sageModeId: sql`COALESCE(${userData.sageModeId}, ${rolledSageMode.id})` }
+      : {}),
   };
   if (questCounterField) {
     updatedUserData.questFinishAt = new Date();
@@ -1825,9 +1835,6 @@ export const updateRewards = async (info: {
 
   // Recruitment logic
   const prestigeReward = Math.ceil(rewards.reward_prestige * 0.1);
-
-  // Roll ONE not-yet-owned candidate sage mode (if any) into history
-  const rolledSageMode = sageModes.length > 0 ? getRandomElement(sageModes) : undefined;
 
   // Update database
   await Promise.all([

@@ -1,6 +1,7 @@
 import {
   IMG_MANUAL_SAGE_MODE,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
+  SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import type { ZodAllTags } from "@/validators/combat";
@@ -48,7 +49,7 @@ export const SAGE_MODE_ACTIVATION_JUTSU_FALLBACK: Jutsu = {
   image: IMG_MANUAL_SAGE_MODE,
   jutsuWeapon: "NONE",
   statClassification: "Ninjutsu",
-  battleDescription: "%user enters sage mode!",
+  battleDescription: SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
   jutsuRank: "D",
   actionCostPerc: 80,
   staminaCost: 0,
