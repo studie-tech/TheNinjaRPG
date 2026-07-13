@@ -75,7 +75,7 @@ interface PlacementsManagerProps {
 
 const defaultFormValues = (aiId: string): OverworldPlacementInput => ({
   aiTemplateUserId: aiId,
-  interactionType: OverworldInteractionTypes[1],
+  interactionType: "HOSTILE",
   sectorType: "specific",
   locationType: "specific",
   sector: 0,
@@ -107,7 +107,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
   const interactionType = useWatch({
     control: form.control,
     name: "interactionType",
-    defaultValue: OverworldInteractionTypes[1],
+    defaultValue: "HOSTILE",
   });
   const sectorType = useWatch({
     control: form.control,
