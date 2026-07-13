@@ -3,6 +3,7 @@ import {
   getSageMasteryRank,
   getSageDailyCap,
   getActiveSageLevel,
+  getSageModeActivationCost,
   getSageModePityRolls,
 } from "@/libs/sageMode";
 import { PITY_SAGE_MODE_ROLLS } from "@/drizzle/constants";
@@ -35,6 +36,24 @@ describe("getActiveSageLevel", () => {
   it("unlocks level 2 at/above the threshold", () => {
     expect(getActiveSageLevel(49_999, { requiredSageMastery: 50_000 })).toBe(1);
     expect(getActiveSageLevel(50_000, { requiredSageMastery: 50_000 })).toBe(2);
+  });
+});
+
+describe("getSageModeActivationCost", () => {
+  it("derives flat chakra/stamina cost from max pools and percentages", () => {
+    expect(
+      getSageModeActivationCost({ chakraCostPerc: 20, staminaCostPerc: 25 }, 1000, 800),
+    ).toEqual({ cpCost: 200, spCost: 200 });
+  });
+  it("floors fractional costs", () => {
+    expect(
+      getSageModeActivationCost({ chakraCostPerc: 33, staminaCostPerc: 10 }, 100, 95),
+    ).toEqual({ cpCost: 33, spCost: 9 });
+  });
+  it("is zero when percentages are zero", () => {
+    expect(
+      getSageModeActivationCost({ chakraCostPerc: 0, staminaCostPerc: 0 }, 1000, 1000),
+    ).toEqual({ cpCost: 0, spCost: 0 });
   });
 });
 

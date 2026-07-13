@@ -66,7 +66,7 @@ import {
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
 import { calcCombatHealPercentage } from "@/libs/hospital";
-import { getSageDailyCap } from "@/libs/sageMode";
+import { getSageDailyCap, getSageModeActivationCost } from "@/libs/sageMode";
 import {
   CleanseTag,
   ClearTag,
@@ -782,9 +782,27 @@ export const handleInjectedJutsus = (
     (user.dailySageActivations ?? 0) < getSageDailyCap(user.sageMasteryExperience) &&
     allJutsus[sageActivationId]
   ) {
-    allInjectedJutsuIdsFromEffects.add(sageActivationId);
-    if (!userCurrentExtraJutsuIds.includes(sageActivationId)) {
-      toBeAddedJutsuPower[sageActivationId] = 1;
+    // Only offer Activation when the user can pay its chakra/stamina cost. The cost
+    // lives on the SageMode row (not the shared injected jutsu), so the normal
+    // action-cost pipeline can't gate it — without this check a low-pool user could
+    // select Activation, lose their action points, and get no activation. If the mode
+    // data is unavailable we fall back to offering it (the processor still refuses).
+    const equippedSageMode = battle.extraState.sageModes?.[user.sageModeId];
+    const canAffordActivation = equippedSageMode
+      ? (() => {
+          const { cpCost, spCost } = getSageModeActivationCost(
+            equippedSageMode,
+            user.maxChakra,
+            user.maxStamina,
+          );
+          return user.curChakra >= cpCost && user.curStamina >= spCost;
+        })()
+      : true;
+    if (canAffordActivation) {
+      allInjectedJutsuIdsFromEffects.add(sageActivationId);
+      if (!userCurrentExtraJutsuIds.includes(sageActivationId)) {
+        toBeAddedJutsuPower[sageActivationId] = 1;
+      }
     }
   }
 
