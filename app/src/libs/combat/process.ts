@@ -1841,7 +1841,14 @@ function applyActivateSageMode(
   newTarget.sageModeActivatedRound = battle.round;
   newTarget.sageModeExpiresRound = battle.round + activeDurationRounds;
 
-  const sorted = [...sageMode.effects].sort((a, b) =>
+  const activeLevel = getActiveSageLevel(newTarget.sageMasteryExperience, sageMode);
+  // At level 2, level2Effects apply IN ADDITION to base effects; sort together so
+  // ordering-sensitive tags (shields before damage, etc.) interleave correctly.
+  const activeEffects =
+    activeLevel >= 2
+      ? [...sageMode.effects, ...(sageMode.level2Effects ?? [])]
+      : sageMode.effects;
+  const sorted = [...activeEffects].sort((a, b) =>
     sortEffects(a as UserEffect, b as UserEffect),
   );
   for (const raw of sorted) {
@@ -1851,7 +1858,7 @@ function applyActivateSageMode(
       user: newTarget,
       actionId: effect.actionId,
       target: newTarget,
-      level: getActiveSageLevel(newTarget.sageMasteryExperience, sageMode),
+      level: activeLevel,
       round: battle.round,
       battle,
     });
@@ -1892,6 +1899,12 @@ function applyActivateSageMode(
  * apply `SageMode.afterEffects` for `afterEffectRounds` (After-Effect Duration on the row).
  */
 export function applySageModeAfterRoundTransition(battle: CompleteBattle): void {
+  // Prune exhaustion-phase auras whose rounds have run out (visuals otherwise persist).
+  battle.usersEffects = battle.usersEffects.filter(
+    (e) =>
+      !(e.type === "visual" && e.fromType === "sageModeAfter" && !isEffectActive(e)),
+  );
+
   battle.usersState.forEach((u) => {
     if (!u.sageModeActivated) return;
 
@@ -1952,5 +1965,13 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
     u.sageModeActivated = false;
     u.sageModeActivatedRound = null;
     u.sageModeExpiresRound = null;
+
+    // The active aura is a `visual` effect that bypasses normal round expiry
+    // (applySingleEffect re-pushes visuals unconditionally). Remove it now that the
+    // active phase is over; the exhaustion phase gets its own visual from afterEffects.
+    battle.usersEffects = battle.usersEffects.filter(
+      (e) =>
+        !(e.type === "visual" && e.fromType === "sageMode" && e.targetId === u.userId),
+    );
   });
 }

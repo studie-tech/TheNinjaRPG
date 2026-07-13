@@ -1498,6 +1498,10 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     enabled: fields.includes("reward_bloodlines"),
   });
 
+  const { data: sageModes } = api.sageMode.getAllNames.useQuery(undefined, {
+    enabled: fields.includes("reward_sage_modes"),
+  });
+
   const { data: skillsData } = api.skillTree.getAllNames.useQuery(undefined, {
     enabled: fields.includes("skillId"),
   });
@@ -1750,6 +1754,14 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values",
         };
+      } else if ((value as string) === "reward_sage_modes" && sageModes) {
+        return {
+          id: value,
+          values: sageModes,
+          multiple: true,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values",
+        };
       } else if ((value as string) === "reward_badges" && badgeData?.data) {
         return {
           id: value,
@@ -1944,6 +1956,10 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
 
   const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined, {
     enabled: fields.includes("reward_bloodlines"),
+  });
+
+  const { data: sageModes } = api.sageMode.getAllNames.useQuery(undefined, {
+    enabled: fields.includes("reward_sage_modes"),
   });
 
   // Form for handling the specific tag
@@ -2141,6 +2157,14 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
         return {
           id: value,
           values: bloodlines,
+          multiple: true,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values",
+        };
+      } else if (value === "reward_sage_modes" && sageModes) {
+        return {
+          id: value,
+          values: sageModes,
           multiple: true,
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values",
@@ -2353,6 +2377,7 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
   const { data: jutsuData } = api.jutsu.getAllNames.useQuery();
   const { data: badgeData } = api.badge.getAll.useQuery();
   const { data: bloodlineData } = api.bloodline.getAllNames.useQuery();
+  const { data: sageModeData } = api.sageMode.getAllNames.useQuery();
 
   // Form for handling the reward
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2429,6 +2454,14 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values" as const,
         };
+      } else if (value === "reward_sage_modes" && sageModeData) {
+        return {
+          id: value,
+          values: sageModeData,
+          multiple: true,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values" as const,
+        };
       } else if (value === "reward_badges" && badgeData?.data) {
         return {
           id: value,
@@ -2494,6 +2527,7 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   reward_items: "Reward Items [drop chance % and quantity]",
   reward_jutsus: "Reward Jutsus",
   reward_bloodlines: "Reward Bloodlines",
+  reward_sage_modes: "Reward Sage Modes",
   reward_badges: "Reward Badges",
   reward_money: "Ryo",
   reward_exp: "Experience",
@@ -2552,6 +2586,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     jutsuInjectable?: OptionType[];
     item?: OptionType[];
     bloodline?: OptionType[];
+    sageMode?: OptionType[];
     animation?: OptionType[];
     staticAsset?: OptionType[];
   };
@@ -2629,6 +2664,17 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
         selected={selected}
         onChange={(v) => onChange(v)}
         options={opts.options?.bloodline || []}
+      />
+    );
+  }
+  if (field === "reward_sage_modes") {
+    const raw = eff[field];
+    const selected = Array.isArray(raw) ? raw.filter((x) => typeof x === "string") : [];
+    return (
+      <MultiSelect
+        selected={selected}
+        onChange={(v) => onChange(v)}
+        options={opts.options?.sageMode || []}
       />
     );
   }
@@ -2797,6 +2843,7 @@ export const MassEffectEditor = <
   const { data: jutsuData } = api.jutsu.getAllNames.useQuery(undefined);
   const { data: itemData } = api.item.getAllNames.useQuery(undefined);
   const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
+  const { data: sageModes } = api.sageMode.getAllNames.useQuery(undefined);
   const { data: assetData } = api.misc.getAllGameAssetNames.useQuery(undefined);
 
   const options = useMemo(
@@ -2815,6 +2862,7 @@ export const MassEffectEditor = <
           .map((j) => ({ label: j.name, value: j.id })),
         item: (itemData || []).map((i) => ({ label: i.name, value: i.id })),
         bloodline: (bloodlines || []).map((b) => ({ label: b.name, value: b.id })),
+        sageMode: (sageModes || []).map((s) => ({ label: s.name, value: s.id })),
         animation: (assetData || [])
           .filter((a) => a.type === "ANIMATION")
           .map((a) => ({ label: a.id, value: a.id })),
@@ -2822,7 +2870,7 @@ export const MassEffectEditor = <
           .filter((a) => a.type === "STATIC")
           .map((a) => ({ label: a.id, value: a.id })),
       }) as const,
-    [aiData, jutsuData, itemData, bloodlines, assetData],
+    [aiData, jutsuData, itemData, bloodlines, sageModes, assetData],
   );
 
   type Row = {

@@ -48,6 +48,8 @@ import {
   raidDamageThreshold,
   raidParticipation,
   recruitmentRewards,
+  sageMode,
+  sageModeRolls,
   userBadge,
   userData,
   userItem,
@@ -1082,6 +1084,7 @@ export const questsRouter = createTRPCRouter({
               reward_skillpoints: 0,
               reward_jutsus: [],
               reward_bloodlines: [],
+              reward_sage_modes: [],
               reward_badges: [],
               reward_items: [],
               reward_rank: "NONE",
@@ -1628,6 +1631,7 @@ export const updateRewards = async (info: {
     bloodlines,
     badges,
     activeWars,
+    sageModes,
   ] = await Promise.all([
     // Fetch villages if needed
     rewards.reward_village_membership !== "NONE"
@@ -1710,6 +1714,25 @@ export const updateRewards = async (info: {
     hasWarRewards && user.villageId
       ? fetchActiveWars(client, user.villageId)
       : undefined,
+    // Fetch not-yet-owned candidate sage modes for reward_sage_modes (dedup at fetch)
+    (rewards.reward_sage_modes?.length ?? 0) > 0
+      ? client
+          .select({ id: sageMode.id, rank: sageMode.rank })
+          .from(sageMode)
+          .leftJoin(
+            sageModeRolls,
+            and(
+              eq(sageMode.id, sageModeRolls.sageModeId),
+              eq(sageModeRolls.userId, user.userId),
+            ),
+          )
+          .where(
+            and(
+              inArray(sageMode.id, rewards.reward_sage_modes),
+              isNull(sageModeRolls.userId),
+            ),
+          )
+      : [],
   ]);
 
   // If we are rewarding hunter items, only select based on hunter rank
@@ -1803,6 +1826,9 @@ export const updateRewards = async (info: {
   // Recruitment logic
   const prestigeReward = Math.ceil(rewards.reward_prestige * 0.1);
 
+  // Roll ONE not-yet-owned candidate sage mode (if any) into history
+  const rolledSageMode = sageModes.length > 0 ? getRandomElement(sageModes) : undefined;
+
   // Update database
   await Promise.all([
     // Update userdata
@@ -1895,6 +1921,17 @@ export const updateRewards = async (info: {
           ),
         ),
     ],
+    // Roll ONE not-yet-owned candidate into history; player equips via swapSageMode.
+    rolledSageMode
+      ? client.insert(sageModeRolls).values({
+          id: nanoid(),
+          userId: user.userId,
+          type: "QUEST",
+          sageModeId: rolledSageMode.id,
+          goal: rolledSageMode.rank,
+          used: 1,
+        })
+      : undefined,
     // Insert items with quantity
     ...[
       itemsToInsert.length > 0 &&

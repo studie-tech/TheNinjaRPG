@@ -160,6 +160,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
             reward_rank: data.reward_rank,
             reward_village_membership: data.reward_village_membership,
             reward_bloodlines: data.reward_bloodlines,
+            reward_sage_modes: data.reward_sage_modes,
             reward_war_damage: data.reward_war_damage,
             reward_war_healing: data.reward_war_healing,
           },
@@ -361,6 +362,14 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
       id: "reward_bloodlines",
       type: "db_values",
       values: bloodlines,
+    });
+  }
+
+  if (sageModes) {
+    formData.push({
+      id: "reward_sage_modes",
+      type: "db_values",
+      values: sageModes,
     });
   }
 

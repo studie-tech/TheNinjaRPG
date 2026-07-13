@@ -43,6 +43,7 @@ export const rewardFields = {
   reward_items: idsWithNumberField,
   reward_jutsus: z.array(z.string()).prefault([]),
   reward_bloodlines: z.array(z.string()).prefault([]),
+  reward_sage_modes: z.array(z.string()).prefault([]),
   reward_badges: z.array(z.string()).prefault([]),
   reward_medical_experience: z.coerce.number().prefault(0),
   reward_hunting_experience: z.coerce.number().prefault(0),
@@ -72,6 +73,7 @@ export const PostProcessedRewardSchema = z.object({
   reward_items: z.array(z.string()).prefault([]),
   reward_jutsus: z.array(z.string()).prefault([]),
   reward_bloodlines: z.array(z.string()).prefault([]),
+  reward_sage_modes: z.array(z.string()).prefault([]),
   reward_badges: z.array(z.string()).prefault([]),
 });
 
@@ -95,6 +97,7 @@ export const hasReward = (reward: ObjectiveRewardType) => {
     parsedReward.reward_items.length > 0 ||
     parsedReward.reward_jutsus.length > 0 ||
     parsedReward.reward_bloodlines.length > 0 ||
+    parsedReward.reward_sage_modes.length > 0 ||
     parsedReward.reward_badges.length > 0 ||
     parsedReward.reward_hunter_items ||
     parsedReward.reward_gathering_items ||
