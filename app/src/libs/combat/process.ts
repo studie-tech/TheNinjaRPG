@@ -1895,8 +1895,9 @@ function applyActivateSageMode(
 }
 
 /**
- * After a round advances: when sage activation buffs (`fromType: sageMode`) have all expired,
- * apply `SageMode.afterEffects` for `afterEffectRounds` (After-Effect Duration on the row).
+ * After a round advances: once the active window (`sageModeExpiresRound`, = activation round +
+ * `activationRounds`) has elapsed, apply `SageMode.afterEffects` for `afterEffectRounds`
+ * (After-Effect Duration on the row). Falls back to buff-presence when the expiry round is unset.
  */
 export function applySageModeAfterRoundTransition(battle: CompleteBattle): void {
   // Prune exhaustion-phase auras whose rounds have run out (visuals otherwise persist).
@@ -1908,11 +1909,19 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
   battle.usersState.forEach((u) => {
     if (!u.sageModeActivated) return;
 
-    const activeSageFx = battle.usersEffects.filter(
-      (e) => e.fromType === "sageMode" && e.targetId === u.userId,
-    );
-    const hasActiveSage = activeSageFx.some((e) => isEffectActive(e));
-    if (hasActiveSage) return;
+    // The active window is duration-driven: honor the full `activationRounds` window via
+    // `sageModeExpiresRound` even when no lasting buff remains (a mode whose active effects
+    // are all instant would otherwise collapse into exhaustion the next round).
+    if (u.sageModeExpiresRound != null) {
+      if (battle.round < u.sageModeExpiresRound) return;
+    } else {
+      // Fallback for battle state activated before `sageModeExpiresRound` was tracked:
+      // stay active while any lasting sage buff is still present.
+      const activeSageFx = battle.usersEffects.filter(
+        (e) => e.fromType === "sageMode" && e.targetId === u.userId,
+      );
+      if (activeSageFx.some((e) => isEffectActive(e))) return;
+    }
 
     const sageModeId = u.sageModeId;
     const sageMode: SageMode | undefined = sageModeId

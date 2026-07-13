@@ -991,6 +991,8 @@ export const SAGE_MODE_DISABLED_BATTLES: BattleType[] = ["RANKED_PVP", "RANKED_S
 /** Injectable jutsu that runs sage-mode activation (costs + effects come from `SageMode` row). */
 export const SAGE_MODE_ACTIVATION_JUTSU_ID = "cmj8sagemodeactivatejutsu000000";
 
+export const SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE = "%user enters sage mode!";
+
 // Skill tree config
 export const SKILL_TREE_RESET_FREE_NORMAL = 0;
 export const SKILL_TREE_RESET_FREE_SILVER = 1;

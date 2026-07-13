@@ -636,6 +636,9 @@ export const sageMode = mysqlTable(
     name: varchar("name", { length: 191 }).notNull(),
     image: varchar("image", { length: 191 }).notNull(),
     description: text("description").notNull(),
+    // Optional per-mode combat-log line shown when the player activates (`%user` templated).
+    // Nullable: blank/null falls back to SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE at action build.
+    battleDescription: text("battleDescription"),
     // Effects while sage mode is active
     effects: json("effects").$type<ZodAllTags[]>().default([]).notNull(),
     // Effects applied after sage mode expires (debuffs/exhaustion)

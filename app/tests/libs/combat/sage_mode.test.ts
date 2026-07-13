@@ -137,6 +137,40 @@ describe("applySageModeAfterRoundTransition", () => {
     const sageAfter = battle.usersState.find((u) => u.userId === "sage");
     expect(sageAfter?.sageModeActivated).toBe(true);
   });
+
+  it("keeps sage mode active for the full window when the active effects were all instant", () => {
+    // A mode whose active effects are all instant leaves no lasting `fromType:'sageMode'`
+    // buff, so buff presence cannot anchor the active window. Expiry must be driven by
+    // `sageModeExpiresRound`; otherwise the active phase collapses into exhaustion the
+    // very next round.
+    const sage = makeBattleUser("sage", {
+      sageModeActivated: true,
+      sageModeId: "sage-1",
+      sageModeExpiresRound: 8, // battle round is 5 -> window still open
+    });
+    const battle = makeSageBattle([sage]); // no active sageMode effects present
+
+    applySageModeAfterRoundTransition(battle);
+
+    const sageAfter = battle.usersState.find((u) => u.userId === "sage");
+    expect(sageAfter?.sageModeActivated).toBe(true);
+    expect(battle.usersEffects.some((e) => e.fromType === "sageModeAfter")).toBe(false);
+  });
+
+  it("fires after-effects once the activation window has elapsed even with no lasting buff", () => {
+    const sage = makeBattleUser("sage", {
+      sageModeActivated: true,
+      sageModeId: "sage-1",
+      sageModeExpiresRound: 5, // battle round is 5 -> window elapsed
+    });
+    const battle = makeSageBattle([sage]);
+
+    applySageModeAfterRoundTransition(battle);
+
+    const sageAfter = battle.usersState.find((u) => u.userId === "sage");
+    expect(sageAfter?.sageModeActivated).toBe(false);
+    expect(battle.usersEffects.some((e) => e.fromType === "sageModeAfter")).toBe(true);
+  });
 });
 
 describe("sageModeAfter protection", () => {

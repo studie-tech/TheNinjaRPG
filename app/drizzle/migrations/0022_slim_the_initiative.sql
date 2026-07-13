@@ -1,0 +1,1 @@
+ALTER TABLE `SageMode` ADD `battleDescription` text;

@@ -192,8 +192,11 @@ export const availableUserActions = (
           .map((uj) => {
             const action = userJutsuToAction(uj, battle);
             if (uj.jutsuId === SAGE_MODE_ACTIVATION_JUTSU_ID && user.sageModeId) {
-              action.image =
-                battle.extraState.sageModes?.[user.sageModeId]?.image ?? action.image;
+              const mode = battle.extraState.sageModes?.[user.sageModeId];
+              action.image = mode?.image ?? action.image;
+              // Per-mode activation line; blank/null falls back to the injected default.
+              action.battleDescription =
+                mode?.battleDescription || action.battleDescription;
             }
             return action;
           })

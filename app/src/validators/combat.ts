@@ -1298,6 +1298,7 @@ export const SageModeValidator = z.object({
   name: z.string().trim(),
   image: z.string(),
   description: z.string(),
+  battleDescription: z.string().nullish(),
   rank: z.enum(LetterRanks),
   level: z.coerce.number().int().min(1).max(2),
   requiredSageMastery: z.coerce.number().int().min(0),
