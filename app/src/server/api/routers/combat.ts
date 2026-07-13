@@ -246,6 +246,14 @@ export const combatRouter = createTRPCRouter({
             actionRounds,
             ctx.userId,
           );
+          // A round can advance on this poll path too (idle turn timeout), not only via
+          // performAction. Run the sage exhaustion transition here as well, or it stays
+          // stranded until the next action. In-memory (no DB round-trip) and idempotent
+          // (guarded on sageModeActivated); the persist below carries the change, and the
+          // applyEffects call in the no-activity branch ticks any queued after-effects.
+          if (progressRound) {
+            applySageModeAfterRoundTransition(userBattle);
+          }
           if (changedActor) userBattle.version = userBattle.version + 1;
 
           if (!actionRounds.includes(actionRound)) {
