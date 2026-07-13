@@ -66,6 +66,15 @@ export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
     form.setValue("afterEffects", newEffects, { shouldDirty: true });
   };
 
+  const level2Effects = useWatch({
+    control: form.control,
+    name: "level2Effects",
+  });
+
+  const setLevel2Effects = (newEffects: ZodAllTags[]) => {
+    form.setValue("level2Effects", newEffects, { shouldDirty: true });
+  };
+
   const loading = l1 || l2;
 
   const imageUrl = useWatch({
@@ -96,11 +105,13 @@ export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
     sageMode,
     effects,
     afterEffects,
+    level2Effects,
     form,
     formData,
     loading,
     setEffects,
     setAfterEffects,
+    setLevel2Effects,
     handleSageModeSubmit,
   };
 };

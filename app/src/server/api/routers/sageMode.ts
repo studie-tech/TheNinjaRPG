@@ -113,9 +113,13 @@ export const sageModeRouter = createTRPCRouter({
       if (!result) {
         throw serverError("NOT_FOUND", "Sage Mode not found");
       }
-      return result as Omit<typeof result, "effects" | "afterEffects"> & {
+      return result as Omit<
+        typeof result,
+        "effects" | "afterEffects" | "level2Effects"
+      > & {
         effects: ZodAllTags[];
         afterEffects: ZodAllTags[];
+        level2Effects: ZodAllTags[];
       };
     }),
 
@@ -323,6 +327,11 @@ export const sageModeRouter = createTRPCRouter({
             return e;
           }),
           afterEffects: input.data.afterEffects.map((e) => {
+            delete e.rounds;
+            delete e.friendlyFire;
+            return e;
+          }),
+          level2Effects: input.data.level2Effects.map((e) => {
             delete e.rounds;
             delete e.friendlyFire;
             return e;

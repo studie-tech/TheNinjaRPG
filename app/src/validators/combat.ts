@@ -1321,6 +1321,7 @@ export const SageModeValidator = z.object({
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
   /** Applied when active sage buffs end; uses the full combat effect pipeline (instant damage/heal/drain resolve immediately). */
   afterEffects: z.array(AllTags).superRefine(SuperRefineEffects),
+  level2Effects: z.array(AllTags).superRefine(SuperRefineEffects),
 });
 export type ZodSageModeType = z.infer<typeof SageModeValidator>;
 

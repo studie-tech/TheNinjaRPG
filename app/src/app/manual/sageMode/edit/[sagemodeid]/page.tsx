@@ -33,6 +33,7 @@ export default function SageModeEdit(props: {
       ...data,
       effects: [...data.effects],
       afterEffects: [...data.afterEffects],
+      level2Effects: [...data.level2Effects],
     };
     setNullsToEmptyStrings(copy as unknown as Record<string, unknown>);
     return copy;
@@ -63,10 +64,12 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
     sageMode,
     effects,
     afterEffects,
+    level2Effects,
     form,
     formData,
     setEffects,
     setAfterEffects,
+    setLevel2Effects,
     handleSageModeSubmit,
   } = useSageModeEditForm(props.sageMode, props.refetch);
 
@@ -100,6 +103,22 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
     const newEffects = [...afterEffects];
     newEffects.splice(i, 1);
     setAfterEffects(newEffects);
+  };
+
+  const addLevel2Effect = () => {
+    setLevel2Effects([
+      ...level2Effects,
+      DamageTag.parse({
+        description: "placeholder",
+        residualModifier: 0,
+      }),
+    ]);
+  };
+
+  const removeLevel2Effect = (i: number) => {
+    const newEffects = [...level2Effects];
+    newEffects.splice(i, 1);
+    setLevel2Effects(newEffects);
   };
 
   return (
@@ -218,6 +237,54 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
             availableTags={tagTypes}
             effects={afterEffects}
             setEffects={setAfterEffects}
+          />
+        </ContentBox>
+      ))}
+
+      {/* Level 2 Effects */}
+      {level2Effects.length === 0 && (
+        <ContentBox
+          title="Level 2 Effects"
+          subtitle="Extra effects that apply only at sage level 2"
+          initialBreak={true}
+          topRightContent={
+            <div className="flex flex-row">
+              <FilePlus
+                className="h-6 w-6 cursor-pointer hover:text-orange-500"
+                onClick={addLevel2Effect}
+              />
+            </div>
+          }
+        >
+          Add level 2 effects (applied additionally when the user reaches sage level 2)
+        </ContentBox>
+      )}
+      {level2Effects.map((tag, i) => (
+        <ContentBox
+          key={`level2effect-${tag.type}-${i}`}
+          title={`Level 2 Effect #${i + 1}`}
+          subtitle="Effect applied additionally at sage level 2"
+          initialBreak={true}
+          topRightContent={
+            <div className="flex flex-row">
+              <FilePlus
+                className="h-6 w-6 cursor-pointer hover:text-orange-500"
+                onClick={addLevel2Effect}
+              />
+              <FileMinus
+                className="h-6 w-6 cursor-pointer hover:text-orange-500"
+                onClick={() => removeLevel2Effect(i)}
+              />
+            </div>
+          }
+        >
+          <EffectFormWrapper
+            idx={i}
+            type="sageMode"
+            tag={tag}
+            availableTags={tagTypes}
+            effects={level2Effects}
+            setEffects={setLevel2Effects}
           />
         </ContentBox>
       ))}

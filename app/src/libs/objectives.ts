@@ -318,6 +318,9 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
   if (questReward.reward_bloodlines.length > 0) {
     rewards.push(`${questReward.reward_bloodlines.length} bloodlines`);
   }
+  if (questReward.reward_sage_modes.length > 0) {
+    rewards.push(`${questReward.reward_sage_modes.length} sage modes`);
+  }
   if (questReward.reward_money) {
     rewards.push(`${questReward.reward_money} ryo`);
   }

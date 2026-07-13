@@ -253,6 +253,9 @@ export const getReward = (
         if (objective.reward_bloodlines) {
           rawRewards.reward_bloodlines = objective.reward_bloodlines;
         }
+        if (objective.reward_sage_modes) {
+          rawRewards.reward_sage_modes = objective.reward_sage_modes;
+        }
         if (objective.reward_rank !== "NONE") {
           rawRewards.reward_rank = objective.reward_rank;
         }
@@ -467,6 +470,7 @@ export const collapseRewards = (
     reward_items: [],
     reward_jutsus: [],
     reward_bloodlines: [],
+    reward_sage_modes: [],
     reward_badges: [],
     reward_rank: "NONE",
     reward_village_membership: "NONE",
@@ -551,6 +555,7 @@ export const collapseRewards = (
     collapsed.reward_items.push(...reward.reward_items);
     collapsed.reward_jutsus.push(...reward.reward_jutsus);
     collapsed.reward_bloodlines.push(...reward.reward_bloodlines);
+    collapsed.reward_sage_modes.push(...reward.reward_sage_modes);
     collapsed.reward_badges.push(...reward.reward_badges);
 
     // Handle rank reward (take the highest rank)

@@ -640,6 +640,9 @@ export const sageMode = mysqlTable(
     effects: json("effects").$type<ZodAllTags[]>().default([]).notNull(),
     // Effects applied after sage mode expires (debuffs/exhaustion)
     afterEffects: json("afterEffects").$type<ZodAllTags[]>().default([]).notNull(),
+    // Effects that apply ADDITIONALLY at sage level 2 (empty = level 2 is just the
+    // base `effects` scaled by powerPerLevel).
+    level2Effects: json("level2Effects").$type<ZodAllTags[]>().default([]).notNull(),
     // Duration configuration
     activationRounds: tinyint("activationRounds").default(5).notNull(),
     afterEffectRounds: tinyint("afterEffectRounds").default(3).notNull(),
