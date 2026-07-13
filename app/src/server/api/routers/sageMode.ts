@@ -478,6 +478,27 @@ export const sageModeRouter = createTRPCRouter({
       if (availablePityRolls <= 0) return errorResponse("No pity rolls available");
       const randomSageMode = getRandomElement(sageModePool);
       if (!randomSageMode) return errorResponse("No sage modes in the pool?");
+      // Consume one pity credit atomically BEFORE granting the mode. The CAS on the
+      // pre-read pityRolls value serializes concurrent claims: a request racing on a
+      // stale count (e.g. claim -> remove the granted mode -> claim again before this
+      // increment lands) gets rowsAffected 0 and aborts here, so a single earned credit
+      // can never yield two grants. Reserving before the grant (not after) means the
+      // loser stops before touching userData.sageModeId at all.
+      const claimedPity = await ctx.drizzle
+        .update(sageModeRolls)
+        .set({
+          pityRolls: sql`${sageModeRolls.pityRolls} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(sageModeRolls.id, prevRoll.id),
+            eq(sageModeRolls.pityRolls, prevRoll.pityRolls),
+          ),
+        );
+      if (claimedPity.rowsAffected === 0) {
+        return errorResponse("No pity rolls available");
+      }
       await updateSageMode(
         ctx.drizzle,
         user,
@@ -485,23 +506,14 @@ export const sageModeRouter = createTRPCRouter({
         0,
         `Pity roll for ${input.rank}: ${randomSageMode.name}`,
       );
-      await Promise.all([
-        ctx.drizzle
-          .update(sageModeRolls)
-          .set({
-            pityRolls: prevRoll.pityRolls + 1,
-            updatedAt: new Date(),
-          })
-          .where(eq(sageModeRolls.id, prevRoll.id)),
-        ctx.drizzle.insert(sageModeRolls).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          type: "PITY",
-          sageModeId: randomSageMode.id,
-          goal: input.rank,
-          used: 1,
-        }),
-      ]);
+      await ctx.drizzle.insert(sageModeRolls).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        type: "PITY",
+        sageModeId: randomSageMode.id,
+        goal: input.rank,
+        used: 1,
+      });
       return {
         success: true,
         message: `You have been granted a sage mode: ${randomSageMode.name}`,
