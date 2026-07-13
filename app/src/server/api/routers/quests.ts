@@ -1978,75 +1978,45 @@ const uiStructureAccessGuard = (
 ): { success: false; message: string } | null => {
   if (quest.questType === "story") {
     if (!canAccessStructure(user, "/globalanbuhq", sectorVillage)) {
-      return errorResponse("Must be in the Global Anbu HQ to start story quests") as {
-        success: false;
-        message: string;
-      };
+      return errorResponse("Must be in the Global Anbu HQ to start story quests");
     }
   } else if (quest.questType === "hunting") {
     if (user.occupation !== "HUNTER") {
-      return errorResponse("You are not a hunter") as {
-        success: false;
-        message: string;
-      };
+      return errorResponse("You are not a hunter");
     }
   } else if (quest.questType === "gathering") {
     if (user.occupation !== "GATHERING") {
-      return errorResponse("You are not a gatherer") as {
-        success: false;
-        message: string;
-      };
+      return errorResponse("You are not a gatherer");
     }
   } else if (quest.questType === "anbu") {
     if (!canAccessStructure(user, "/anbu", sectorVillage)) {
-      return errorResponse("Must be in the Anbu page to start anbu quests") as {
-        success: false;
-        message: string;
-      };
+      return errorResponse("Must be in the Anbu page to start anbu quests");
     }
     if (!user.anbuId) {
-      return errorResponse("You are not in an anbu squad") as {
-        success: false;
-        message: string;
-      };
+      return errorResponse("You are not in an anbu squad");
     }
   } else if (quest.questType === "event") {
     if (!canAccessStructure(user, "/adminbuilding", sectorVillage)) {
-      return errorResponse("Must be in your allied village to start quest") as {
-        success: false;
-        message: string;
-      };
+      return errorResponse("Must be in your allied village to start quest");
     }
   } else if (quest.questType === "war") {
     if (!user.villageId) {
-      return errorResponse("You must be in a village to accept war missions") as {
-        success: false;
-        message: string;
-      };
+      return errorResponse("You must be in a village to accept war missions");
     }
     if (!user.isOutlaw && !canAccessStructure(user, "/missionhall", sectorVillage)) {
-      return errorResponse("Must be in your allied village to start quest") as {
-        success: false;
-        message: string;
-      };
+      return errorResponse("Must be in your allied village to start quest");
     }
     if (user.dailyWarMissions >= WAR_MISSIONS_PER_DAY) {
       return errorResponse(
         `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
-      ) as { success: false; message: string };
+      );
     }
   } else if (["mission", "crime", "medical", "pvp"].includes(quest.questType)) {
     if (["mission", "crime"].includes(quest.questType) && quest.questRank !== "A") {
-      return errorResponse(`Only A rank missions/crimes are allowed`) as {
-        success: false;
-        message: string;
-      };
+      return errorResponse(`Only A rank missions/crimes are allowed`);
     }
     if (!user.isOutlaw && !canAccessStructure(user, "/missionhall", sectorVillage)) {
-      return errorResponse("Must be in your allied village to start quest") as {
-        success: false;
-        message: string;
-      };
+      return errorResponse("Must be in your allied village to start quest");
     }
   }
   return null;
