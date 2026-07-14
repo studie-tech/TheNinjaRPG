@@ -75,7 +75,6 @@ import {
   getReward,
   getUserQuests,
   isAvailableUserQuests,
-  periodCapReached,
   periodCompletionSet,
   verifyQuestContentForSave,
 } from "@/libs/quest";
@@ -488,24 +487,6 @@ export const questsRouter = createTRPCRouter({
         results.filter((e) => isAvailableUserQuests(e, user).check),
       );
       if (!result) return errorResponse("No assignments at this level could be found");
-
-      // Random missions bypass assignQuestToUser, so enforce the per-period cap here too.
-      // `result` carries periodCompletes/periodStartAt from the widened LEFT JOIN above.
-      if (
-        periodCapReached(
-          {
-            retryDelay: result.retryDelay,
-            maxCompletes: result.maxCompletes,
-            periodCompletes: result.periodCompletes,
-            periodStartAt: result.periodStartAt,
-          },
-          new Date(),
-        )
-      ) {
-        return errorResponse(
-          `You've already completed this ${result.retryDelay} mission for this period.`,
-        );
-      }
 
       // Reuse the history row already loaded by the widened LEFT JOIN above so upsertQuestEntry
       // skips its own findFirst. A NULL join (never-attempted quest) → `null` → the idempotent
@@ -2062,24 +2043,6 @@ export const assignQuestToUser = async (args: {
   }
   if (questData.endsAt && questData.endsAt < new Date().toISOString()) {
     return errorResponse(`Quest has ended`);
-  }
-
-  // Per-calendar-period completion cap (replaces the old rolling retryDelay timer).
-  // Applies to ALL player-facing accept/retry (UI startQuest + overworld NPC, both via this fn).
-  if (
-    periodCapReached(
-      {
-        retryDelay: questData.retryDelay,
-        maxCompletes: questData.maxCompletes,
-        periodCompletes: prevAttempt?.periodCompletes,
-        periodStartAt: prevAttempt?.periodStartAt,
-      },
-      new Date(),
-    )
-  ) {
-    return errorResponse(
-      `You've reached the limit for this ${questData.retryDelay} quest. Try again next ${questData.retryDelay === "daily" ? "day" : questData.retryDelay === "weekly" ? "week" : "month"}.`,
-    );
   }
 
   // Check if user is already on this quest

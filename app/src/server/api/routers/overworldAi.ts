@@ -351,7 +351,9 @@ export const overworldAiRouter = createTRPCRouter({
               : [];
           return {
             success: true,
-            message: "dialog",
+            // Empty message suppresses showMutationToast on the client (see item.ts /
+            // combat.ts convention); the dialog modal opens off `data.dialog`, not the message.
+            message: "",
             dialog: {
               objectiveId: bound.objective.id,
               // description / sceneBackground / sceneCharacters are baseObjectiveFields,
