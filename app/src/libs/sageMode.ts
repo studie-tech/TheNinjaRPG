@@ -97,10 +97,6 @@ export const getActiveSageLevel = (
  * by the pity-claim server check and the client's claim button so they never disagree.
  */
 export const getSageModePityRolls = (roll: { pityRolls: number; used: number }) => {
-  const totalRolls = roll.used + roll.pityRolls;
-  const pityThreshold = PITY_SAGE_MODE_ROLLS;
-  if (totalRolls >= pityThreshold) {
-    return Math.floor(totalRolls / pityThreshold) - roll.pityRolls;
-  }
-  return 0;
+  const unusedRolls = roll.used - PITY_SAGE_MODE_ROLLS * roll.pityRolls;
+  return Math.floor(unusedRolls / PITY_SAGE_MODE_ROLLS);
 };

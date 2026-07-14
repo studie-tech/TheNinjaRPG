@@ -701,10 +701,19 @@ export const sageModeRolls = mysqlTable(
     pityRolls: smallint("pityRolls").default(0).notNull(),
     type: mysqlEnum("type", consts.SAGE_MODE_ROLL_TYPES).default("NATURAL").notNull(),
     goal: mysqlEnum("rank", consts.LetterRanks),
+    // Stored generated column: userId when type is NATURAL, NULL otherwise.
+    // MySQL allows multiple NULLs in UNIQUE indexes, so ITEM/PITY rows are unaffected.
+    naturalRollDedupeKey: varchar("naturalRollDedupeKey", { length: 191 }).generatedAlwaysAs(
+      sql`CASE WHEN \`type\` = 'NATURAL' THEN \`userId\` ELSE NULL END`,
+      { mode: "stored" },
+    ),
   },
   (table) => ({
     userIdIdx: index("SageModeRolls_userId_idx").on(table.userId),
     sageModeIdIdx: index("SageModeRolls_sageModeId_idx").on(table.sageModeId),
+    naturalRollPerUserKey: uniqueIndex(
+      "SageModeRolls_natural_roll_per_user_key",
+    ).on(table.naturalRollDedupeKey),
   }),
 );
 export type SageModeRolls = InferSelectModel<typeof sageModeRolls>;

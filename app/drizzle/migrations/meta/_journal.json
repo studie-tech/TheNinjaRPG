@@ -162,6 +162,13 @@
       "when": 1783975565856,
       "tag": "0022_slim_the_initiative",
       "breakpoints": false
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1784011714499,
+      "tag": "0023_clammy_living_tribunal",
+      "breakpoints": false
     }
   ]
 }
