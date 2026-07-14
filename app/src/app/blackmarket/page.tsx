@@ -170,7 +170,7 @@ const PityBloodlineRoll: React.FC<{
     api.bloodline.getAll.useQuery({ limit: 500 });
 
   // Pity roll mutation
-  const { mutate: pityRoll } = api.bloodline.pityRoll.useMutation({
+  const { mutate: pityRoll, isPending } = api.bloodline.pityRoll.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
@@ -211,6 +211,7 @@ const PityBloodlineRoll: React.FC<{
             <Button
               hoverText={`Roll for a random ${entry.goal} bloodline`}
               onClick={() => pityRoll({ rank: entry.goal })}
+              disabled={isPending}
             >
               <Dices className="h-6 w-6" />
             </Button>

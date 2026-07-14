@@ -5,6 +5,7 @@ import { userData, userItem } from "@/drizzle/schema";
 import {
   claimUserSnapshot,
   consumeUserItemAtomically,
+  insertNaturalSageRollIfSlotFree,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
 
@@ -98,5 +99,28 @@ describe("concurrency helpers", () => {
     });
     expect(result).toBe(false);
     expect(client.update).not.toHaveBeenCalled();
+  });
+
+  it("records a natural sage roll when the slot is free (rowsAffected === 1)", async () => {
+    const client = { execute: vi.fn().mockResolvedValue({ rowsAffected: 1 }) };
+
+    const result = await insertNaturalSageRollIfSlotFree({
+      client: client as never,
+      userId: "user-1",
+    });
+
+    expect(client.execute).toHaveBeenCalledTimes(1);
+    expect(result).toBe(true);
+  });
+
+  it("does not record a natural sage roll when the slot was taken (rowsAffected === 0)", async () => {
+    const client = { execute: vi.fn().mockResolvedValue({ rowsAffected: 0 }) };
+
+    const result = await insertNaturalSageRollIfSlotFree({
+      client: client as never,
+      userId: "user-1",
+    });
+
+    expect(result).toBe(false);
   });
 });
