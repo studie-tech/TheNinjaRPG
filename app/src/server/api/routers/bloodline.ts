@@ -56,6 +56,7 @@ import type { DrizzleClient } from "@/server/db";
 import {
   claimUserSnapshot,
   removeBloodlineFromPoolAtomically,
+  reservePityCredit,
 } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { getRandomElement } from "@/utils/array";
@@ -85,6 +86,8 @@ import {
 } from "@/validators/bloodline";
 import type { ZodAllTags } from "@/validators/combat";
 import { BloodlineValidator } from "@/validators/combat";
+
+const ALREADY_HAS_BLOODLINE_ERROR = "Already have a bloodline, please remove it first";
 
 export const bloodlineRouter = createTRPCRouter({
   getAllNames: publicProcedure
@@ -280,29 +283,23 @@ export const bloodlineRouter = createTRPCRouter({
       // Update bloodline (this creates the "Bloodline Changed" log entry)
       const swapCost = isFreeSwap ? 0 : COST_SWAP_BLOODLINE;
       const swapMessage = `Bloodline Swapped from ${user.bloodline?.name} to ${line.name}`;
-      const writes: Promise<unknown>[] = [
-        updateBloodline(ctx.drizzle, user, line, swapCost, swapMessage),
-      ];
+      await updateBloodline(ctx.drizzle, user, line, swapCost, swapMessage);
 
       // Log federal free swaps for monthly Silver/Gold tracking (staff benefit takes priority)
       if (hasFreeSwapAvailable && !isStaffFreeSwap) {
-        writes.push(
-          ctx.drizzle.insert(actionLog).values({
-            id: nanoid(),
-            userId: ctx.userId,
-            tableName: "bloodlineSwap",
-            changes: [
-              `Bloodline swap (free ${federalStatus} - ${BLOODLINE_SWAP_FREE_DAYS} days)`,
-            ],
-            relatedId: line.id,
-            relatedMsg: `Free swap for Silver/Gold supporter (${BLOODLINE_SWAP_FREE_DAYS} day cooldown)`,
-            relatedImage: user.avatarLight,
-            relatedValue: 0,
-          }),
-        );
+        await ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "bloodlineSwap",
+          changes: [
+            `Bloodline swap (free ${federalStatus} - ${BLOODLINE_SWAP_FREE_DAYS} days)`,
+          ],
+          relatedId: line.id,
+          relatedMsg: `Free swap for Silver/Gold supporter (${BLOODLINE_SWAP_FREE_DAYS} day cooldown)`,
+          relatedImage: user.avatarLight,
+          relatedValue: 0,
+        });
       }
-
-      await Promise.all(writes);
 
       return {
         success: true,
@@ -897,6 +894,9 @@ export const bloodlineRouter = createTRPCRouter({
         fetchBloodlines(ctx.drizzle),
         fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
       ]);
+      if (user.bloodlineId) {
+        return errorResponse(ALREADY_HAS_BLOODLINE_ERROR);
+      }
       // Derived
       const bloodlinePool = filterRollableBloodlines({
         bloodlines,
@@ -914,32 +914,37 @@ export const bloodlineRouter = createTRPCRouter({
       if (availablePityRolls <= 0) return errorResponse("No pity rolls available");
       const randomBloodline = getRandomElement(bloodlinePool);
       if (!randomBloodline) return errorResponse("No bloodlines in the pool?");
-      // Update roll & user if successfull
-      await Promise.all([
-        updateBloodline(
-          ctx.drizzle,
-          user,
-          randomBloodline,
-          0,
-          `Pity roll for ${input.rank}: ${randomBloodline.name}`,
-        ),
-        ctx.drizzle
-          .update(bloodlineRolls)
-          .set({
-            pityRolls: sql`${bloodlineRolls.pityRolls} + 1`,
-            updatedAt: new Date(),
-          })
-          .where(eq(bloodlineRolls.id, prevRoll.id)),
-        ctx.drizzle.insert(bloodlineRolls).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          type: "PITY",
-          bloodlineId: randomBloodline.id,
-          goal: input.rank,
-          used: 1,
-          pityRolls: 0,
-        }),
-      ]);
+      // Consume one pity credit atomically BEFORE granting the bloodline. The CAS on the
+      // pre-read pityRolls value serializes concurrent claims: a request racing on a
+      // stale count (e.g. claim -> remove the granted bloodline -> claim again before this
+      // increment lands) gets false and aborts here, so a single earned credit
+      // can never yield two grants. Reserving before the grant (not after) means the
+      // loser stops before touching userData.bloodlineId at all.
+      const reserved = await reservePityCredit({
+        client: ctx.drizzle,
+        table: bloodlineRolls,
+        rollId: prevRoll.id,
+        expectedPityRolls: prevRoll.pityRolls,
+      });
+      if (!reserved) {
+        return errorResponse("No pity rolls available");
+      }
+      await updateBloodline(
+        ctx.drizzle,
+        user,
+        randomBloodline,
+        0,
+        `Pity roll for ${input.rank}: ${randomBloodline.name}`,
+      );
+      await ctx.drizzle.insert(bloodlineRolls).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        type: "PITY",
+        bloodlineId: randomBloodline.id,
+        goal: input.rank,
+        used: 1,
+        pityRolls: 0,
+      });
       return {
         success: true,
         message: `You have been granted a bloodline: ${randomBloodline.name}`,
@@ -1001,24 +1006,22 @@ export const bloodlineRouter = createTRPCRouter({
         return errorResponse("Bloodline does not belong to your village");
       }
       // Update
-      await Promise.all([
-        updateBloodline(
-          ctx.drizzle,
-          user,
-          line,
-          BLOODLINE_COST[line.rank],
-          `Bloodline Purchased: ${line.name}`,
-        ),
-        ctx.drizzle.insert(bloodlineRolls).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          type: "DIRECT",
-          bloodlineId: line.id,
-          goal: line.rank,
-          used: 1,
-          pityRolls: 0,
-        }),
-      ]);
+      await updateBloodline(
+        ctx.drizzle,
+        user,
+        line,
+        BLOODLINE_COST[line.rank],
+        `Bloodline Purchased: ${line.name}`,
+      );
+      await ctx.drizzle.insert(bloodlineRolls).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        type: "DIRECT",
+        bloodlineId: line.id,
+        goal: line.rank,
+        used: 1,
+        pityRolls: 0,
+      });
       return { success: true, message: "Bloodline purchased" };
     }),
 });
@@ -1043,7 +1046,29 @@ export const updateBloodline = async (
         })
       ).map((j) => j.id)
     : [];
-  // Run queries in parallel
+  // Update user first, with a CAS on both reputation (atomic decrement, floor guard) and the
+  // caller's pre-state bloodlineId (prevents a raced/duplicate grant from re-spending reputation
+  // or clobbering a bloodline someone else already changed).
+  const updateResult = await client
+    .update(userData)
+    .set({
+      bloodlineId: bloodline?.id || null,
+      bloodlineReskinId: null,
+      reputationPoints: sql`${userData.reputationPoints} - ${repCost}`,
+    })
+    .where(
+      and(
+        eq(userData.userId, user.userId),
+        gte(userData.reputationPoints, repCost),
+        user.bloodlineId
+          ? eq(userData.bloodlineId, user.bloodlineId)
+          : isNull(userData.bloodlineId),
+      ),
+    );
+  if (!updateResult.rowsAffected) {
+    throw serverError("BAD_REQUEST", "Unable to update bloodline");
+  }
+  // Only once the grant is confirmed, run the side-effect writes
   await Promise.all([
     // Update bloodline jutsus currently being trained
     ...(bloodlineJutsus.length > 0
@@ -1063,17 +1088,6 @@ export const updateBloodline = async (
             ),
         ]
       : []),
-    // Update user to remove bloodline
-    client
-      .update(userData)
-      .set({
-        bloodlineId: bloodline?.id || null,
-        bloodlineReskinId: null,
-        reputationPoints: user.reputationPoints - repCost,
-      })
-      .where(
-        and(eq(userData.userId, user.userId), gte(userData.reputationPoints, repCost)),
-      ),
     // Create a log entry for this action
     client.insert(actionLog).values({
       id: nanoid(),

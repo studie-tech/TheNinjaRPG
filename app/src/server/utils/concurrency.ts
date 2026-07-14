@@ -10,7 +10,12 @@
  * safe client error and retry-friendly message.
  */
 import { and, eq, gte, ne, sql } from "drizzle-orm";
-import { bloodlineRolls, userData, userItem } from "@/drizzle/schema";
+import {
+  bloodlineRolls,
+  type sageModeRolls,
+  userData,
+  userItem,
+} from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { QueryCondition } from "@/utils/typeutils";
 
@@ -195,4 +200,30 @@ export const removeBloodlineFromPoolAtomically = async ({
       ),
   ]);
   return deleteResult.rowsAffected + updateResult.rowsAffected > 0;
+};
+
+type ReservePityCreditParams = {
+  client: DrizzleClient;
+  table: typeof bloodlineRolls | typeof sageModeRolls;
+  rollId: string;
+  expectedPityRolls: number;
+};
+
+/**
+ * Reserve one pity credit before granting: increments `pityRolls` only while the row still
+ * shows the count the caller read. A request racing on a stale count matches zero rows and
+ * loses, so a single earned credit can never fund two grants. Reserve BEFORE the grant so the
+ * loser aborts without touching the equipped-mode slot.
+ */
+export const reservePityCredit = async ({
+  client,
+  table,
+  rollId,
+  expectedPityRolls,
+}: ReservePityCreditParams) => {
+  const result = await client
+    .update(table)
+    .set({ pityRolls: sql`${table.pityRolls} + 1`, updatedAt: new Date() })
+    .where(and(eq(table.id, rollId), eq(table.pityRolls, expectedPityRolls)));
+  return result.rowsAffected === 1;
 };

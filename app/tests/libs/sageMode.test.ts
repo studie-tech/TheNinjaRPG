@@ -72,4 +72,10 @@ describe("getSageModePityRolls", () => {
   it("subtracts already-claimed pity rolls", () => {
     expect(getSageModePityRolls({ used: T * 2, pityRolls: 1 })).toBe(1);
   });
+  it("does not over-grant when pityRolls pushes the numerator across a threshold", () => {
+    // used = 2*PITY - 1 earns exactly ONE credit total, regardless of pityRolls claimed.
+    const used = 2 * T - 1;
+    expect(getSageModePityRolls({ used, pityRolls: 0 })).toBe(1);
+    expect(getSageModePityRolls({ used, pityRolls: 1 })).toBe(0);
+  });
 });

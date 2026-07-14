@@ -9,6 +9,7 @@ import { BloodlineStatistics } from "@/layout/BloodlineStatistics";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
+import { CurrentSageMode, RollSageMode } from "@/layout/SageMode";
 import { useRequireInVillage } from "@/utils/UserContext";
 
 export default function Science() {
@@ -24,6 +25,14 @@ export default function Science() {
     enabled: !!userData,
   });
 
+  const {
+    data: prevSageRoll,
+    isPending: isPendingSage,
+    refetch: refetchSageRoll,
+  } = api.sageMode.getNaturalRolls.useQuery(undefined, {
+    enabled: !!userData,
+  });
+
   // Heal finish time
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing Science Building" />;
@@ -31,6 +40,8 @@ export default function Science() {
   // Derived calculations
   const hasRolled = !!prevRoll;
   const bloodlineId = userData?.bloodlineId;
+  const hasRolledSage = !!prevSageRoll;
+  const sageModeId = userData?.sageModeId;
 
   return (
     <>
@@ -76,6 +87,18 @@ export default function Science() {
         <CurrentBloodline bloodlineId={bloodlineId} initialBreak />
       )}
       {!isPendingBlood && hasRolled && <PurchaseBloodline initialBreak />}
+      {!isPendingSage && !hasRolledSage && !sageModeId && (
+        <ContentBox
+          title="Sage Mode"
+          subtitle="Meditate to awaken your inner sage"
+          initialBreak
+        >
+          <RollSageMode refetch={refetchSageRoll} />
+        </ContentBox>
+      )}
+      {!isPendingSage && sageModeId && (
+        <CurrentSageMode sageModeId={sageModeId} initialBreak />
+      )}
     </>
   );
 }

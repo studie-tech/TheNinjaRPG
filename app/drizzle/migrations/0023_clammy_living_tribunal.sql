@@ -1,0 +1,2 @@
+ALTER TABLE `SageModeRolls` ADD `naturalRollDedupeKey` varchar(191) GENERATED ALWAYS AS (CASE WHEN `type` = 'NATURAL' THEN `userId` ELSE NULL END) STORED;
+ALTER TABLE `SageModeRolls` ADD CONSTRAINT `SageModeRolls_natural_roll_per_user_key` UNIQUE(`naturalRollDedupeKey`);

@@ -207,7 +207,7 @@ const PityBloodlineRoll: React.FC<{
       ),
       pityButton: (
         <div className="text-center">
-          {pityRolls > 0 ? (
+          {pityRolls > 0 && !userData.bloodlineId ? (
             <Button
               hoverText={`Roll for a random ${entry.goal} bloodline`}
               onClick={() => pityRoll({ rank: entry.goal })}

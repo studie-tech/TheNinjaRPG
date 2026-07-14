@@ -1,5 +1,5 @@
 import { randomInt } from "crypto";
-import { and, eq, gte, isNotNull, isNull, like, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, like, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -38,6 +38,8 @@ import {
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { claimUserSnapshot, reservePityCredit } from "@/server/utils/concurrency";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { getUnique } from "@/utils/grouping";
@@ -396,6 +398,20 @@ export const sageModeRouter = createTRPCRouter({
       return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
     }
 
+    const claimResult = await claimUserSnapshot({
+      client: ctx.drizzle,
+      userId: ctx.userId,
+      updatedAt: user.updatedAt,
+      where: [
+        eq(userData.status, "AWAKE"),
+        ne(userData.rank, "STUDENT"),
+        isNull(userData.sageModeId),
+      ],
+    });
+    if (!claimResult.success) {
+      return errorResponse("You have already rolled for sage mode");
+    }
+
     const doRoll = async () => {
       const rand = randomInt(0, 1_000_000) / 1_000_000;
       let sageModeRank: LetterRank | undefined;
@@ -424,23 +440,37 @@ export const sageModeRouter = createTRPCRouter({
           if (result.rowsAffected === 0) {
             return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
           }
-          await ctx.drizzle.insert(sageModeRolls).values({
-            id: nanoid(),
-            userId: ctx.userId,
-            used: 0,
-            sageModeId: randomSageMode.id,
-          });
+          try {
+            await ctx.drizzle.insert(sageModeRolls).values({
+              id: nanoid(),
+              userId: ctx.userId,
+              used: 0,
+              sageModeId: randomSageMode.id,
+            });
+          } catch (error) {
+            if (isMysqlDuplicateKeyError(error)) {
+              return errorResponse("You have already rolled for sage mode");
+            }
+            throw error;
+          }
           return {
             success: true,
             message: `After meditation, you have awakened a sage mode: ${randomSageMode.name}`,
           };
         }
       }
-      await ctx.drizzle.insert(sageModeRolls).values({
-        id: nanoid(),
-        used: 0,
-        userId: ctx.userId,
-      });
+      try {
+        await ctx.drizzle.insert(sageModeRolls).values({
+          id: nanoid(),
+          used: 0,
+          userId: ctx.userId,
+        });
+      } catch (error) {
+        if (isMysqlDuplicateKeyError(error)) {
+          return errorResponse("You have already rolled for sage mode");
+        }
+        throw error;
+      }
       return {
         success: false,
         message:
@@ -481,22 +511,16 @@ export const sageModeRouter = createTRPCRouter({
       // Consume one pity credit atomically BEFORE granting the mode. The CAS on the
       // pre-read pityRolls value serializes concurrent claims: a request racing on a
       // stale count (e.g. claim -> remove the granted mode -> claim again before this
-      // increment lands) gets rowsAffected 0 and aborts here, so a single earned credit
+      // increment lands) gets false and aborts here, so a single earned credit
       // can never yield two grants. Reserving before the grant (not after) means the
       // loser stops before touching userData.sageModeId at all.
-      const claimedPity = await ctx.drizzle
-        .update(sageModeRolls)
-        .set({
-          pityRolls: sql`${sageModeRolls.pityRolls} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(sageModeRolls.id, prevRoll.id),
-            eq(sageModeRolls.pityRolls, prevRoll.pityRolls),
-          ),
-        );
-      if (claimedPity.rowsAffected === 0) {
+      const reserved = await reservePityCredit({
+        client: ctx.drizzle,
+        table: sageModeRolls,
+        rollId: prevRoll.id,
+        expectedPityRolls: prevRoll.pityRolls,
+      });
+      if (!reserved) {
         return errorResponse("No pity rolls available");
       }
       await updateSageMode(
@@ -640,6 +664,10 @@ export const fetchNaturalSageModeRoll = async (
   return await client.query.sageModeRolls.findFirst({
     where: and(eq(sageModeRolls.userId, userId), eq(sageModeRolls.type, "NATURAL")),
     with: { sageMode: true },
+    orderBy: (table, { desc }) => [
+      desc(sql`${table.sageModeId} IS NOT NULL`),
+      desc(table.createdAt),
+    ],
   });
 };
 
