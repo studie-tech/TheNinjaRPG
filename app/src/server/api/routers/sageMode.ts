@@ -38,7 +38,11 @@ import {
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
-import { claimUserSnapshot, reservePityCredit } from "@/server/utils/concurrency";
+import {
+  claimUserSnapshot,
+  insertNaturalSageRollIfSlotFree,
+  reservePityCredit,
+} from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
@@ -240,6 +244,14 @@ export const sageModeRouter = createTRPCRouter({
         ? await fetchSageMode(ctx.drizzle, user.sageModeId)
         : null;
       const swapMessage = `Sage Mode Swapped from ${currentSageMode?.name ?? "None"} to ${mode.name}`;
+      const swapClaim = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+      });
+      if (!swapClaim.success) {
+        return errorResponse("Your sage mode is being modified — please try again");
+      }
       await updateSageMode(ctx.drizzle, user, mode, swapCost, swapMessage);
 
       if (isFreeSwap) {
@@ -460,11 +472,15 @@ export const sageModeRouter = createTRPCRouter({
         }
       }
       try {
-        await ctx.drizzle.insert(sageModeRolls).values({
-          id: nanoid(),
-          used: 0,
+        const consumed = await insertNaturalSageRollIfSlotFree({
+          client: ctx.drizzle,
           userId: ctx.userId,
         });
+        if (!consumed) {
+          // A concurrent purchase/swap granted a mode before this failed meditation recorded —
+          // preserve the one-time natural roll instead of burning it.
+          return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
+        }
       } catch (error) {
         if (isMysqlDuplicateKeyError(error)) {
           return errorResponse("You have already rolled for sage mode");
@@ -590,6 +606,14 @@ export const sageModeRouter = createTRPCRouter({
       }
       if (mode.villageId && mode.villageId !== user.villageId) {
         return errorResponse("Sage Mode does not belong to your village");
+      }
+      const purchaseClaim = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+      });
+      if (!purchaseClaim.success) {
+        return errorResponse("Your sage mode is being modified — please try again");
       }
       await updateSageMode(
         ctx.drizzle,

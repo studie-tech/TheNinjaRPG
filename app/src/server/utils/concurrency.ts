@@ -10,12 +10,8 @@
  * safe client error and retry-friendly message.
  */
 import { and, eq, gte, ne, sql } from "drizzle-orm";
-import {
-  bloodlineRolls,
-  type sageModeRolls,
-  userData,
-  userItem,
-} from "@/drizzle/schema";
+import { nanoid } from "nanoid";
+import { bloodlineRolls, sageModeRolls, userData, userItem } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { QueryCondition } from "@/utils/typeutils";
 
@@ -225,5 +221,31 @@ export const reservePityCredit = async ({
     .update(table)
     .set({ pityRolls: sql`${table.pityRolls} + 1`, updatedAt: new Date() })
     .where(and(eq(table.id, rollId), eq(table.pityRolls, expectedPityRolls)));
+  return result.rowsAffected === 1;
+};
+
+type InsertNaturalSageRollParams = {
+  client: DrizzleClient;
+  userId: string;
+};
+
+/**
+ * Record a failed natural sage-mode roll — a `type='NATURAL'` marker row that consumes the user's
+ * one-time chance — ONLY while the user still owns no sage mode. The `INSERT ... SELECT ... WHERE
+ * sageModeId IS NULL` is a single atomic statement, so a purchase/swap that grants a mode in the
+ * window before this runs blocks the insert (0 rows) and the free roll is preserved rather than
+ * burned. Raw SQL because Drizzle's `.insert().select()` builder rejects a partial column set;
+ * mirrors the `raids.ts` precedent. Returns false when the slot was taken concurrently.
+ */
+export const insertNaturalSageRollIfSlotFree = async ({
+  client,
+  userId,
+}: InsertNaturalSageRollParams) => {
+  const result = await client.execute(sql`
+    INSERT INTO ${sageModeRolls} (id, userId, used)
+    SELECT ${nanoid()}, ${userData.userId}, 0
+    FROM ${userData}
+    WHERE ${userData.userId} = ${userId} AND ${userData.sageModeId} IS NULL
+  `);
   return result.rowsAffected === 1;
 };
