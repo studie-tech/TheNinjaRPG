@@ -1126,23 +1126,30 @@ export const questsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx }) => {
-      // Fetch
-      const [{ user, trackerResults }, useritems] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          hideInformation: false,
-        }),
-        fetchUserItems(ctx.drizzle, ctx.userId),
-      ]);
+      // Fetch. boundPlacementStatus lets getNewTrackers distinguish deleted
+      // (→ auto-fail) from deactivated (→ freeze/skip) placements. It depends
+      // only on the user's bound objectives, not on useritems, so chain it off
+      // the same user promise and fold it into the parallel batch rather than
+      // paying a second sequential round-trip on this hot path.
+      const userPromise = fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        hideInformation: false,
+      });
+      const [{ user, trackerResults }, useritems, boundPlacementStatus] =
+        await Promise.all([
+          userPromise,
+          fetchUserItems(ctx.drizzle, ctx.userId),
+          userPromise.then(({ user }) =>
+            user
+              ? fetchBoundPlacementStatus(ctx.drizzle, user)
+              : { existing: new Set<string>(), active: new Set<string>() },
+          ),
+        ]);
       // Guard
       if (!user) {
         throw serverError("PRECONDITION_FAILED", "User does not exist");
       }
-
-      // Build the placement status so getNewTrackers can distinguish deleted
-      // (→ auto-fail) from deactivated (→ freeze/skip) placements.
-      const boundPlacementStatus = await fetchBoundPlacementStatus(ctx.drizzle, user);
 
       // Get updated quest information
       const updatedTrackerResults = getNewTrackers(
