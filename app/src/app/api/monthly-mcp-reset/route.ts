@@ -93,8 +93,23 @@ import {
 } from "@/libs/gamesettings";
 import { drizzleDB } from "@/server/db";
 
-export async function GET() {
+export async function GET(request: Request) {
   await cookies();
+
+  // Verify CRON_SECRET header for authentication. Vercel Cron sends this automatically
+  // (app/vercel.json schedules this route); a missing/invalid header fails closed so this
+  // wholesale, irreversible reset can't be triggered by an arbitrary caller.
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = request.headers.get("authorization");
+  if (!cronSecret) {
+    return Response.json({ error: "CRON_SECRET not configured" }, { status: 500 });
+  }
+  if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+    return Response.json(
+      { error: "Unauthorized - Invalid or missing authorization header" },
+      { status: 401 },
+    );
+  }
 
   // Environment check - only run on the MCP server at the expected domain
   const isMcpEnabled = process.env.NEXT_PUBLIC_MCP_ENABLED === "true";
