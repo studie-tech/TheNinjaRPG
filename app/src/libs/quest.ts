@@ -947,6 +947,14 @@ export const getNewTrackers = (
             return status;
           }
 
+          // If not available yet, just skip. This must run before the bound-placement
+          // check below: for a consecutiveObjectives quest, an objective the player has
+          // not reached yet must not fail (or freeze) the quest just because an admin
+          // deleted or deactivated its bound placement — the player never got there.
+          if (questTracker && !isQuestObjectiveAvailable(quest, questTracker, i)) {
+            return status;
+          }
+
           // Three-way bound-placement check — only runs when the caller supplies
           // boundPlacementStatus; omitting it preserves existing behaviour exactly.
           if (boundPlacementStatus) {
@@ -969,11 +977,6 @@ export const getNewTrackers = (
               return status;
             }
             // else: placement is active → fall through to normal matching.
-          }
-
-          // If not available yet, just skip
-          if (questTracker && !isQuestObjectiveAvailable(quest, questTracker, i)) {
-            return status;
           }
 
           // Convenience
