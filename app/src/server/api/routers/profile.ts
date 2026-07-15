@@ -1114,13 +1114,19 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const [user, target, village] = await Promise.all([
+      const [user, target, village, sageExists] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.userData.findFirst({
           where: eq(userData.userId, input.id),
           with: { jutsus: true, items: true },
         }),
         fetchVillage(ctx.drizzle, input.data?.villageId || VILLAGE_SYNDICATE_ID),
+        input.data.sageModeId
+          ? ctx.drizzle.query.sageMode.findFirst({
+              where: eq(sageMode.id, input.data.sageModeId),
+              columns: { id: true },
+            })
+          : Promise.resolve(null),
       ]);
       // Basic existence guards
       if (!village) return errorResponse("Village not found");
@@ -1166,12 +1172,8 @@ export const profileRouter = createTRPCRouter({
       if (sageModeChanged && !canEditBloodline(user.role)) {
         return errorResponse("Not allowed to change sage mode");
       }
-      if (sageModeChanged && input.data.sageModeId) {
-        const sageExists = await ctx.drizzle.query.sageMode.findFirst({
-          where: eq(sageMode.id, input.data.sageModeId),
-          columns: { id: true },
-        });
-        if (!sageExists) return errorResponse("Sage Mode not found");
+      if (sageModeChanged && input.data.sageModeId && !sageExists) {
+        return errorResponse("Sage Mode not found");
       }
 
       const villageChanged = village.id !== target.villageId;

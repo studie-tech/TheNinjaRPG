@@ -1,7 +1,7 @@
 "use client";
 
 import type { LetterRank } from "@/drizzle/constants";
-import { LetterRanks } from "@/drizzle/constants";
+import { LetterRanks, SAGE_MODE_MAX_LEVEL } from "@/drizzle/constants";
 import {
   buildFilter,
   ContentFiltering,
@@ -32,10 +32,10 @@ const makeSageModeFilteringSchema = (
         label: "Level",
         type: "single-select",
         defaultValue: "None",
-        options: [
-          { value: "1", label: "Level 1" },
-          { value: "2", label: "Level 2" },
-        ],
+        options: Array.from({ length: SAGE_MODE_MAX_LEVEL }, (_, i) => ({
+          value: String(i + 1),
+          label: `Level ${i + 1}`,
+        })),
         emptyValues: ["None"],
         includeNone: true,
       },

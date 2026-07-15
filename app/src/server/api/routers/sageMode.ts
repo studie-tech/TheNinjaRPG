@@ -60,6 +60,8 @@ import type { SageModeFilteringSchema } from "@/validators/sageMode";
 import { sageModeFilteringSchema } from "@/validators/sageMode";
 
 const ALREADY_HAS_SAGE_MODE_ERROR = "Already have sage mode, please remove first";
+const SAGE_MODE_BEING_MODIFIED_ERROR =
+  "Your sage mode is being modified — please try again";
 
 export const sageModeRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
@@ -252,7 +254,7 @@ export const sageModeRouter = createTRPCRouter({
         updatedAt: user.updatedAt,
       });
       if (!swapClaim.success) {
-        return errorResponse("Your sage mode is being modified — please try again");
+        return errorResponse(SAGE_MODE_BEING_MODIFIED_ERROR);
       }
       await updateSageMode(ctx.drizzle, user, mode, swapCost, swapMessage);
 
@@ -471,23 +473,15 @@ export const sageModeRouter = createTRPCRouter({
   removeSageMode: protectedProcedure
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
-      const [user, roll] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchNaturalSageModeRoll(ctx.drizzle, ctx.userId),
-      ]);
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!user.sageModeId) {
         throw serverError("PRECONDITION_FAILED", "You do not have a sage mode");
       }
-      if (user.sageModeId === roll?.sageModeId) {
-        await updateSageMode(ctx.drizzle, user, null, 0, "SageMode Removed");
-        return { success: true, message: "Sage Mode removed for free" };
-      } else {
-        if (user.reputationPoints < REMOVAL_COST) {
-          return errorResponse("You do not have enough reputation points");
-        }
-        await updateSageMode(ctx.drizzle, user, null, REMOVAL_COST, "SageMode Removed");
-        return { success: true, message: `Sage Mode removed for ${REMOVAL_COST} reps` };
+      if (user.reputationPoints < REMOVAL_COST) {
+        return errorResponse("You do not have enough reputation points");
       }
+      await updateSageMode(ctx.drizzle, user, null, REMOVAL_COST, "SageMode Removed");
+      return { success: true, message: `Sage Mode removed for ${REMOVAL_COST} reps` };
     }),
 
   // Purchase a sage mode for session user
@@ -520,7 +514,7 @@ export const sageModeRouter = createTRPCRouter({
         updatedAt: user.updatedAt,
       });
       if (!purchaseClaim.success) {
-        return errorResponse("Your sage mode is being modified — please try again");
+        return errorResponse(SAGE_MODE_BEING_MODIFIED_ERROR);
       }
       await updateSageMode(
         ctx.drizzle,
@@ -584,23 +578,6 @@ export const updateSageMode = async (
     relatedId: user.userId,
     relatedMsg: "SageMode Changed",
     relatedImage: user.avatarLight || user.avatar || IMG_AVATAR_DEFAULT,
-  });
-};
-
-/**
- * Fetch natural sage mode roll of a user
- */
-export const fetchNaturalSageModeRoll = async (
-  client: DrizzleClient,
-  userId: string,
-) => {
-  return await client.query.sageModeRolls.findFirst({
-    where: and(eq(sageModeRolls.userId, userId), eq(sageModeRolls.type, "NATURAL")),
-    with: { sageMode: true },
-    orderBy: (table, { desc }) => [
-      desc(sql`${table.sageModeId} IS NOT NULL`),
-      desc(table.createdAt),
-    ],
   });
 };
 

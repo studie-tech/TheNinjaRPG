@@ -1561,7 +1561,13 @@ export const itemRouter = createTRPCRouter({
           : { items: [], jutsus: [], bloodlines: [], badges: [] },
         ctx.drizzle
           .update(userData)
-          .set(updates)
+          // Grant the sage mode atomically: only write it when the column is still null, so a
+          // concurrent paid grant (purchase/swap/pity) committing between this endpoint's read
+          // and write is not clobbered by this snapshot flush.
+          .set({
+            ...updates,
+            sageModeId: sql`COALESCE(${userData.sageModeId}, ${updates.sageModeId})`,
+          })
           .where(eq(userData.userId, ctx.userId)),
         useritem.quantity === 1
           ? ctx.drizzle

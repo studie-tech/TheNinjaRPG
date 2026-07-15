@@ -22,7 +22,7 @@ import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { getSageModePityRolls } from "@/libs/sageMode";
 import { showMutationToast } from "@/libs/toast";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
+import { DAY_S, secondsFromDate } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -75,8 +75,8 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
             }}
           >
             <p>
-              Abandon your current sage mode. This is <b>free</b> if you awakened it
-              naturally; otherwise it costs <b>{REMOVAL_COST} reputation points</b>.
+              Abandon your current sage mode. This costs{" "}
+              <b>{REMOVAL_COST} reputation points</b>.
             </p>
           </Confirm2>
         </>
@@ -135,13 +135,12 @@ export const SwapSageMode: React.FC = () => {
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     )[0];
     if (!oldestFreeSwap) return null;
-    const resetDate = secondsFromDate(
+    // Anchor the reset to the oldest free swap's stored timestamp; <Countdown> ticks
+    // against this target date on its own, so no round-trip through `now` is needed.
+    return secondsFromDate(
       SAGE_MODE_SWAP_FREE_DAYS * DAY_S,
       new Date(oldestFreeSwap.createdAt),
     );
-    const now = new Date();
-    const secondsUntilReset = Math.floor((resetDate.getTime() - now.getTime()) / 1000);
-    return secondsFromNow(secondsUntilReset);
   };
 
   const freeSwapResetTime = getFreeSwapResetTime();

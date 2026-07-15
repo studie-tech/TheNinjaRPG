@@ -1,1 +1,0 @@
-ALTER TABLE `SageMode` ADD `level2Effects` json DEFAULT ('[]') NOT NULL;

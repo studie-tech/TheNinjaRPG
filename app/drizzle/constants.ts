@@ -935,13 +935,8 @@ export const BLOODLINE_SWAP_FREE_SILVER = 0;
 export const BLOODLINE_SWAP_FREE_GOLD = 1;
 
 // Sage Mode config
-export const SAGE_MODE_ROLL_TYPES = [
-  "NATURAL",
-  "ITEM",
-  "PITY",
-  "DIRECT",
-  "QUEST",
-] as const;
+export const SAGE_MODE_ROLL_TYPES = ["ITEM", "PITY", "DIRECT", "QUEST"] as const;
+export const SAGE_MODE_MAX_LEVEL = 2;
 export const SAGE_MODE_COST = {
   ["H"]: 999999,
   ["S"]: 999999,

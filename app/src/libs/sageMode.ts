@@ -4,13 +4,14 @@ import {
   PITY_SAGE_MODE_ROLLS,
   SAGE_MASTERY_DAILY_ACTIVATIONS,
   SAGE_MASTERY_REQUIRED_EXP,
+  SAGE_MODE_MAX_LEVEL,
 } from "@/drizzle/constants";
 import type { SageMode, UserData } from "@/drizzle/schema";
 import { sageMode, sageModeRolls } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 /**
- * Filter sage modes eligible for rolling (natural, item, pity).
+ * Filter sage modes eligible for rolling (item, pity).
  */
 export const filterRollableSageModes = (props: {
   sageModes: SageMode[];
@@ -75,7 +76,9 @@ export const getActiveSageLevel = (
   exp: number,
   sageMode: Pick<SageMode, "requiredSageMastery">,
 ): number =>
-  sageMode.requiredSageMastery > 0 && exp >= sageMode.requiredSageMastery ? 2 : 1;
+  sageMode.requiredSageMastery > 0 && exp >= sageMode.requiredSageMastery
+    ? SAGE_MODE_MAX_LEVEL
+    : 1;
 
 /**
  * The number of guaranteed ("pity") rolls a user has earned for a given item-roll

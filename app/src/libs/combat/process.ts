@@ -11,6 +11,7 @@ import {
   OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
   POST_DAMAGE_MODIFIER_TYPES,
   SAGE_MODE_DISABLED_BATTLES,
+  SAGE_MODE_MAX_LEVEL,
 } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
 import {
@@ -1860,7 +1861,7 @@ function applyActivateSageMode(
   // At level 2, level2Effects apply IN ADDITION to base effects; sort together so
   // ordering-sensitive tags (shields before damage, etc.) interleave correctly.
   const activeEffects =
-    activeLevel >= 2
+    activeLevel >= SAGE_MODE_MAX_LEVEL
       ? [...sageMode.effects, ...(sageMode.level2Effects ?? [])]
       : sageMode.effects;
   const sorted = [...activeEffects].sort((a, b) =>
