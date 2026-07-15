@@ -251,10 +251,10 @@ export const getReward = (
           rawRewards.reward_items.push(...objective.reward_items);
         }
         if (objective.reward_bloodlines) {
-          rawRewards.reward_bloodlines = objective.reward_bloodlines;
+          rawRewards.reward_bloodlines.push(...objective.reward_bloodlines);
         }
         if (objective.reward_sage_modes) {
-          rawRewards.reward_sage_modes = objective.reward_sage_modes;
+          rawRewards.reward_sage_modes.push(...objective.reward_sage_modes);
         }
         if (objective.reward_rank !== "NONE") {
           rawRewards.reward_rank = objective.reward_rank;
@@ -551,12 +551,13 @@ export const collapseRewards = (
       collapsed.reward_gathering_items_ids.push(...reward.reward_gathering_items_ids);
     }
 
-    // Concatenate array rewards
-    collapsed.reward_items.push(...reward.reward_items);
-    collapsed.reward_jutsus.push(...reward.reward_jutsus);
-    collapsed.reward_bloodlines.push(...reward.reward_bloodlines);
-    collapsed.reward_sage_modes.push(...reward.reward_sage_modes);
-    collapsed.reward_badges.push(...reward.reward_badges);
+    // Concatenate array rewards (nullish-guarded: legacy JSON rows from callers that
+    // skip Zod normalization may predate a field, leaving it undefined)
+    collapsed.reward_items.push(...(reward.reward_items ?? []));
+    collapsed.reward_jutsus.push(...(reward.reward_jutsus ?? []));
+    collapsed.reward_bloodlines.push(...(reward.reward_bloodlines ?? []));
+    collapsed.reward_sage_modes.push(...(reward.reward_sage_modes ?? []));
+    collapsed.reward_badges.push(...(reward.reward_badges ?? []));
 
     // Handle rank reward (take the highest rank)
     if (reward.reward_rank !== "NONE") {

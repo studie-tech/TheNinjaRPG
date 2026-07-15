@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { randomInt } from "crypto";
 import { and, eq, gte, isNotNull, isNull, like, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -41,6 +42,7 @@ import type { DrizzleClient } from "@/server/db";
 import {
   claimUserSnapshot,
   insertNaturalSageRollIfSlotFree,
+  refundPityCredit,
   reservePityCredit,
 } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
@@ -116,8 +118,13 @@ export const sageModeRouter = createTRPCRouter({
   get: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const result = await fetchSageMode(ctx.drizzle, input.id);
-      if (!result) {
+      const [result, user] = await Promise.all([
+        fetchSageMode(ctx.drizzle, input.id),
+        ctx.userId ? fetchUser(ctx.drizzle, ctx.userId) : Promise.resolve(null),
+      ]);
+      // Hidden modes are staff-only, mirroring the getAll visibility gate; keep them
+      // loadable for the staff edit page (create() marks new modes hidden).
+      if (!result || (result.hidden && !(user && canChangeContent(user.role)))) {
         throw serverError("NOT_FOUND", "Sage Mode not found");
       }
       return result as Omit<
@@ -539,13 +546,29 @@ export const sageModeRouter = createTRPCRouter({
       if (!reserved) {
         return errorResponse("No pity rolls available");
       }
-      await updateSageMode(
-        ctx.drizzle,
-        user,
-        randomSageMode,
-        0,
-        `Pity roll for ${input.rank}: ${randomSageMode.name}`,
-      );
+      // Refund the reserved credit ONLY when the grant's own CAS rejected (updateSageMode
+      // throws a TRPCError via serverError when rowsAffected is 0, i.e. nothing was granted).
+      // A raw DB error from its post-grant side-effect writes — or an ambiguous driver error
+      // during the CAS — means the mode may already be granted, so the credit was legitimately
+      // spent and must not be handed back (avoids a grant + refunded-credit double benefit).
+      try {
+        await updateSageMode(
+          ctx.drizzle,
+          user,
+          randomSageMode,
+          0,
+          `Pity roll for ${input.rank}: ${randomSageMode.name}`,
+        );
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          await refundPityCredit({
+            client: ctx.drizzle,
+            table: sageModeRolls,
+            rollId: prevRoll.id,
+          });
+        }
+        throw error;
+      }
       await ctx.drizzle.insert(sageModeRolls).values({
         id: nanoid(),
         userId: ctx.userId,
@@ -649,6 +672,8 @@ export const updateSageMode = async (
     .set({
       sageModeId: mode?.id || null,
       reputationPoints: sql`${userData.reputationPoints} - ${repCost}`,
+      // Advance the whole-user version so a concurrent claimUserSnapshot CAS detects this write.
+      updatedAt: new Date(),
     })
     .where(
       and(
