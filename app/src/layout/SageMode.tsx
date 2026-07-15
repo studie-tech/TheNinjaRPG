@@ -1,4 +1,4 @@
-import { Dices, Scissors, Sparkles } from "lucide-react";
+import { Dices, Scissors } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -8,7 +8,6 @@ import {
   PITY_SAGE_MODE_ROLLS,
   PITY_SYSTEM_ENABLED,
   REMOVAL_COST,
-  ROLL_CHANCE_PERCENTAGE,
   SAGE_MODE_SWAP_FREE_DAYS,
 } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
@@ -311,54 +310,3 @@ export const SageModePityRolls: React.FC = () => {
     </ContentBox>
   );
 };
-
-/**
- * Let the user meditate to attempt a one-time natural sage mode roll.
- */
-export const RollSageMode: React.FC<{
-  refetch: (() => Promise<unknown>) | (() => void);
-}> = ({ refetch }) => {
-  const utils = api.useUtils();
-  const { mutate: roll, isPending: isRolling } = api.sageMode.roll.useMutation({
-    onSuccess: async (data) => {
-      await refetch();
-      showMutationToast({ ...data, title: "Sage Mode Roll" });
-      if (data.success) {
-        await utils.profile.getUser.invalidate();
-      }
-    },
-  });
-  return (
-    <Confirm2
-      title="Awaken Sage Mode"
-      proceed_label={isRolling ? undefined : "Meditate"}
-      isValid={!isRolling}
-      button={
-        <Button id="roll-sage" className="w-full">
-          <Sparkles className="mr-2 h-6 w-6" />
-          Meditate to Awaken Sage
-        </Button>
-      }
-      onAccept={(e) => {
-        e.preventDefault();
-        roll();
-      }}
-    >
-      <p>Meditating channels natural energy. Odds of awakening a sage mode:</p>
-      <SageRollOdds />
-      <p className="mt-2 italic">You may attempt this only once.</p>
-    </Confirm2>
-  );
-};
-
-/**
- * Display the natural sage mode roll odds, mirroring RollBloodline's presentation.
- */
-const SageRollOdds: React.FC = () => (
-  <ul className="pt-3 pl-5">
-    <li>S-Ranked: {ROLL_CHANCE_PERCENTAGE.S * 100}%</li>
-    <li>A-Ranked: {ROLL_CHANCE_PERCENTAGE.A * 100}%</li>
-    <li>B-Ranked: {ROLL_CHANCE_PERCENTAGE.B * 100}%</li>
-    <li>C-Ranked: {ROLL_CHANCE_PERCENTAGE.C * 100}%</li>
-  </ul>
-);

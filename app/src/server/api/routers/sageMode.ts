@@ -1,6 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { randomInt } from "crypto";
-import { and, eq, gte, isNotNull, isNull, like, ne, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, like, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -11,14 +10,12 @@ import {
   publicProcedure,
   serverError,
 } from "@/api/trpc";
-import type { LetterRank } from "@/drizzle/constants";
 import {
   COST_SWAP_SAGE_MODE,
   IMG_AVATAR_DEFAULT,
   LetterRanks,
   PITY_SYSTEM_ENABLED,
   REMOVAL_COST,
-  ROLL_CHANCE,
   SAGE_MODE_COST,
   SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
   SAGE_MODE_SWAP_COOLDOWN_HOURS,
@@ -41,11 +38,9 @@ import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import {
   claimUserSnapshot,
-  insertNaturalSageRollIfSlotFree,
   refundPityCredit,
   reservePityCredit,
 } from "@/server/utils/concurrency";
-import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { getUnique } from "@/utils/grouping";
@@ -388,119 +383,8 @@ export const sageModeRouter = createTRPCRouter({
       }
     }),
 
-  // Get sage mode roll of a specific user
-  getNaturalRolls: protectedProcedure.query(async ({ ctx }) => {
-    return (await fetchNaturalSageModeRoll(ctx.drizzle, ctx.userId)) ?? null;
-  }),
-
   getItemRolls: protectedProcedure.query(async ({ ctx }) => {
     return await fetchItemSageModeRolls(ctx.drizzle, ctx.userId);
-  }),
-
-  // Roll a sage mode
-  roll: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
-    const [user, prevRoll, allSageModes] = await Promise.all([
-      fetchUser(ctx.drizzle, ctx.userId),
-      fetchNaturalSageModeRoll(ctx.drizzle, ctx.userId),
-      fetchSageModes(ctx.drizzle),
-    ]);
-    if (prevRoll) return errorResponse("You have already rolled for sage mode");
-    if (user.status !== "AWAKE") {
-      return errorResponse(`Cannot roll sage mode while ${user.status.toLowerCase()}`);
-    }
-    if (user.rank === "STUDENT") {
-      return errorResponse(
-        "Academy students cannot roll for sage mode. You must graduate first.",
-      );
-    }
-    if (user.sageModeId) {
-      return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
-    }
-
-    const claimResult = await claimUserSnapshot({
-      client: ctx.drizzle,
-      userId: ctx.userId,
-      updatedAt: user.updatedAt,
-      where: [
-        eq(userData.status, "AWAKE"),
-        ne(userData.rank, "STUDENT"),
-        isNull(userData.sageModeId),
-      ],
-    });
-    if (!claimResult.success) {
-      return errorResponse("You have already rolled for sage mode");
-    }
-
-    const doRoll = async () => {
-      const rand = randomInt(0, 1_000_000) / 1_000_000;
-      let sageModeRank: LetterRank | undefined;
-      if (rand < ROLL_CHANCE.S) {
-        sageModeRank = "S";
-      } else if (rand < ROLL_CHANCE.A) {
-        sageModeRank = "A";
-      } else if (rand < ROLL_CHANCE.B) {
-        sageModeRank = "B";
-      } else if (rand < ROLL_CHANCE.C) {
-        sageModeRank = "C";
-      }
-      if (sageModeRank) {
-        const sageModePool = filterRollableSageModes({
-          sageModes: allSageModes,
-          rank: sageModeRank,
-          user,
-          previousRolls: [],
-        });
-        const randomSageMode = getRandomElement(sageModePool);
-        if (randomSageMode) {
-          const result = await ctx.drizzle
-            .update(userData)
-            .set({ sageModeId: randomSageMode.id })
-            .where(and(eq(userData.userId, ctx.userId), isNull(userData.sageModeId)));
-          if (result.rowsAffected === 0) {
-            return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
-          }
-          try {
-            await ctx.drizzle.insert(sageModeRolls).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              used: 0,
-              sageModeId: randomSageMode.id,
-            });
-          } catch (error) {
-            if (isMysqlDuplicateKeyError(error)) {
-              return errorResponse("You have already rolled for sage mode");
-            }
-            throw error;
-          }
-          return {
-            success: true,
-            message: `After meditation, you have awakened a sage mode: ${randomSageMode.name}`,
-          };
-        }
-      }
-      try {
-        const consumed = await insertNaturalSageRollIfSlotFree({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        });
-        if (!consumed) {
-          // A concurrent purchase/swap granted a mode before this failed meditation recorded —
-          // preserve the one-time natural roll instead of burning it.
-          return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
-        }
-      } catch (error) {
-        if (isMysqlDuplicateKeyError(error)) {
-          return errorResponse("You have already rolled for sage mode");
-        }
-        throw error;
-      }
-      return {
-        success: false,
-        message:
-          "After deep meditation, you were unable to connect with natural energy",
-      };
-    };
-    return doRoll();
   }),
 
   // Pity Roll a sage mode
