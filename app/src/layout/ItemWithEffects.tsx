@@ -443,6 +443,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     <b>Level</b>: {item.level}
                   </p>
                 )}
+              {"requiredSageMastery" in item && item.requiredSageMastery > 0 && (
+                <p>
+                  <b>Lvl 2 Mastery</b>: {item.requiredSageMastery.toLocaleString()}
+                </p>
+              )}
               {"regenIncrease" in item && item.regenIncrease > 0 && (
                 <p>
                   <b>Regen</b>: +{item.regenIncrease}

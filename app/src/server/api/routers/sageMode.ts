@@ -242,9 +242,9 @@ export const sageModeRouter = createTRPCRouter({
       }
 
       const swapCost = isFreeSwap ? 0 : COST_SWAP_SAGE_MODE;
-      const currentSageMode = user.sageModeId
-        ? await fetchSageMode(ctx.drizzle, user.sageModeId)
-        : null;
+      // `user` comes from fetchUpdatedUser, which eager-loads the current sage mode relation,
+      // so the previous mode's name is already in hand — no extra round-trip needed for the log.
+      const currentSageMode = user.sageMode ?? null;
       const swapMessage = `Sage Mode Swapped from ${currentSageMode?.name ?? "None"} to ${mode.name}`;
       const swapClaim = await claimUserSnapshot({
         client: ctx.drizzle,

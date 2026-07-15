@@ -1,3 +1,4 @@
+import { and, eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { refundPityCredit, reservePityCredit } from "@/server/utils/concurrency";
 import { bloodlineRolls, sageModeRolls } from "@/drizzle/schema";
@@ -11,7 +12,7 @@ const makeClient = (rowsAffected: number) => {
 
 describe("reservePityCredit", () => {
   it("returns true when the CAS updates exactly one row", async () => {
-    const { client } = makeClient(1);
+    const { client, where } = makeClient(1);
     const won = await reservePityCredit({
       client,
       table: bloodlineRolls,
@@ -19,10 +20,17 @@ describe("reservePityCredit", () => {
       expectedPityRolls: 2,
     });
     expect(won).toBe(true);
+    // The reservation is only safe if the CAS is scoped to BOTH the roll id and the
+    // expected pity count — dropping the pityRolls equality would let a stale request
+    // fund a second grant. Assert the predicate, not just the mocked outcome.
+    expect(where).toHaveBeenCalledTimes(1);
+    expect(where).toHaveBeenCalledWith(
+      and(eq(bloodlineRolls.id, "roll1"), eq(bloodlineRolls.pityRolls, 2)),
+    );
   });
 
   it("returns false when the CAS matches zero rows (stale count / lost race)", async () => {
-    const { client } = makeClient(0);
+    const { client, where } = makeClient(0);
     const won = await reservePityCredit({
       client,
       table: bloodlineRolls,
@@ -30,6 +38,10 @@ describe("reservePityCredit", () => {
       expectedPityRolls: 2,
     });
     expect(won).toBe(false);
+    expect(where).toHaveBeenCalledTimes(1);
+    expect(where).toHaveBeenCalledWith(
+      and(eq(bloodlineRolls.id, "roll1"), eq(bloodlineRolls.pityRolls, 2)),
+    );
   });
 });
 

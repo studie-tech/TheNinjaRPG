@@ -1397,6 +1397,16 @@ export const itemRouter = createTRPCRouter({
             messages.push(`You rolled for a new bloodline, but none was found. `);
           }
         } else if (effect.type === "rollsagemode") {
+          // `updates.sageModeId` guards against a second `rollsagemode` effect on the same item
+          // clobbering a grant an earlier effect in this loop already made; `user.sageModeId`
+          // guards against overwriting a mode the player already owns (bypassing the swap/removal
+          // reputation cost enforced by purchaseSageMode/swapSageMode).
+          if (user.sageModeId || updates.sageModeId) {
+            messages.push(
+              "You already channel a sage mode; the natural energies find no room for another. ",
+            );
+            return;
+          }
           const sageModePool = filterRollableSageModes({
             sageModes: allSageModes,
             user,

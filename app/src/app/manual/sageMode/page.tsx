@@ -40,7 +40,9 @@ export default function ManualSageModes() {
     onSuccess: async (data) => {
       showMutationToast(data);
       await refetch();
-      router.push(`/manual/sageMode/edit/${data.message}`);
+      if (data.success) {
+        router.push(`/manual/sageMode/edit/${data.message}`);
+      }
     },
   });
 

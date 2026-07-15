@@ -1885,6 +1885,12 @@ function applyActivateSageMode(
     // Exception: `rounds === 0` means an instant / one-shot tag — leave unchanged.
     if (realized.rounds !== 0) {
       realized.rounds = activeDurationRounds;
+      // `applySingleEffect` recomputes castThisRound from (createdRound === battle.round), which
+      // would skip modifier tags (`!castThisRound` in tags.ts) on the activation round. Backdate
+      // one round so persistent activation modifiers apply the same round the mode is entered
+      // (mirrors the after-effect transition below). Instant tags (rounds === 0) are left with
+      // createdRound = battle.round so they still resolve as cast-this-round and fire immediately.
+      realized.createdRound = Math.max(0, battle.round - 1);
     }
     // Tick duration on every round boundary like bloodline passives (not the cast-this-round skip).
     realized.isNew = false;
