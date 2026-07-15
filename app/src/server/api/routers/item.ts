@@ -1353,7 +1353,12 @@ export const itemRouter = createTRPCRouter({
           });
           data.push(bloodlinePool);
           const randomBloodline = getRandomElement(bloodlinePool);
-          if (!randomBloodline) throw serverError("NOT_FOUND", "No bloodline found");
+          if (!randomBloodline) {
+            messages.push(
+              "You search your blood for a dormant bloodline, but none stirs. ",
+            );
+            return;
+          }
           // Success?
           const roll = Math.random() * 100;
           const success = roll < effect.power;
@@ -1400,7 +1405,12 @@ export const itemRouter = createTRPCRouter({
           });
           data.push(sageModePool);
           const randomSageMode = getRandomElement(sageModePool);
-          if (!randomSageMode) throw serverError("NOT_FOUND", "No sage mode found");
+          if (!randomSageMode) {
+            messages.push(
+              "You reach for a new sage mode, but the natural energies reveal none to you. ",
+            );
+            return;
+          }
           const roll = Math.random() * 100;
           const success = roll < effect.power;
           data.push({ roll, success });

@@ -10,20 +10,6 @@ import { sageMode, sageModeRolls } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 /**
- * Fetch item-based sage mode rolls (pity / black market tracking).
- */
-export const fetchItemSageModeRolls = async (client: DrizzleClient, userId: string) => {
-  return await client.query.sageModeRolls.findMany({
-    where: and(eq(sageModeRolls.userId, userId), eq(sageModeRolls.type, "ITEM")),
-    with: { sageMode: true },
-  });
-};
-
-export const fetchSageModes = async (client: DrizzleClient) => {
-  return await client.query.sageMode.findMany({ where: eq(sageMode.hidden, false) });
-};
-
-/**
  * Filter sage modes eligible for rolling (natural, item, pity).
  */
 export const filterRollableSageModes = (props: {
@@ -99,4 +85,18 @@ export const getActiveSageLevel = (
 export const getSageModePityRolls = (roll: { pityRolls: number; used: number }) => {
   const unusedRolls = roll.used - PITY_SAGE_MODE_ROLLS * roll.pityRolls;
   return Math.floor(unusedRolls / PITY_SAGE_MODE_ROLLS);
+};
+
+/**
+ * Fetch item-based sage mode rolls (pity / black market tracking).
+ */
+export const fetchItemSageModeRolls = async (client: DrizzleClient, userId: string) => {
+  return await client.query.sageModeRolls.findMany({
+    where: and(eq(sageModeRolls.userId, userId), eq(sageModeRolls.type, "ITEM")),
+    with: { sageMode: true },
+  });
+};
+
+export const fetchSageModes = async (client: DrizzleClient) => {
+  return await client.query.sageMode.findMany({ where: eq(sageMode.hidden, false) });
 };

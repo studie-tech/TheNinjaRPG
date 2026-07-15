@@ -224,6 +224,31 @@ export const reservePityCredit = async ({
   return result.rowsAffected === 1;
 };
 
+type RefundPityCreditParams = {
+  client: DrizzleClient;
+  table: typeof bloodlineRolls | typeof sageModeRolls;
+  rollId: string;
+};
+
+/**
+ * Return a credit reserved by `reservePityCredit` when the grant that followed it did not apply.
+ * Callers MUST invoke this only when the grant's own compare-and-swap rejected (rowsAffected 0,
+ * surfaced as a TRPCError from the grant helper) — NOT when a post-CAS side-effect write in that
+ * helper throws, since those run only after the grant has committed and refunding then would hand
+ * back a credit that already funded a grant. Each successful reservation is refunded at most once,
+ * so `pityRolls` returns to the count the caller read without underflowing.
+ */
+export const refundPityCredit = async ({
+  client,
+  table,
+  rollId,
+}: RefundPityCreditParams) => {
+  await client
+    .update(table)
+    .set({ pityRolls: sql`${table.pityRolls} - 1`, updatedAt: new Date() })
+    .where(eq(table.id, rollId));
+};
+
 type InsertNaturalSageRollParams = {
   client: DrizzleClient;
   userId: string;

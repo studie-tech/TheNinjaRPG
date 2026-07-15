@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import { TRPCError } from "@trpc/server";
 import {
   and,
   desc,
@@ -55,6 +56,7 @@ import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import {
   claimUserSnapshot,
+  refundPityCredit,
   removeBloodlineFromPoolAtomically,
   reservePityCredit,
 } from "@/server/utils/concurrency";
@@ -929,13 +931,29 @@ export const bloodlineRouter = createTRPCRouter({
       if (!reserved) {
         return errorResponse("No pity rolls available");
       }
-      await updateBloodline(
-        ctx.drizzle,
-        user,
-        randomBloodline,
-        0,
-        `Pity roll for ${input.rank}: ${randomBloodline.name}`,
-      );
+      // Refund the reserved credit ONLY when the grant's own CAS rejected (updateBloodline
+      // throws a TRPCError via serverError when rowsAffected is 0, i.e. nothing was granted).
+      // A raw DB error from its post-grant side-effect writes — or an ambiguous driver error
+      // during the CAS — means the bloodline may already be granted, so the credit was
+      // legitimately spent and must not be handed back (avoids a grant + refund double benefit).
+      try {
+        await updateBloodline(
+          ctx.drizzle,
+          user,
+          randomBloodline,
+          0,
+          `Pity roll for ${input.rank}: ${randomBloodline.name}`,
+        );
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          await refundPityCredit({
+            client: ctx.drizzle,
+            table: bloodlineRolls,
+            rollId: prevRoll.id,
+          });
+        }
+        throw error;
+      }
       await ctx.drizzle.insert(bloodlineRolls).values({
         id: nanoid(),
         userId: ctx.userId,
@@ -1055,6 +1073,8 @@ export const updateBloodline = async (
       bloodlineId: bloodline?.id || null,
       bloodlineReskinId: null,
       reputationPoints: sql`${userData.reputationPoints} - ${repCost}`,
+      // Advance the whole-user version so a concurrent claimUserSnapshot CAS detects this write.
+      updatedAt: new Date(),
     })
     .where(
       and(

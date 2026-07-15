@@ -362,6 +362,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
       id: "reward_bloodlines",
       type: "db_values",
       values: bloodlines,
+      multiple: true,
     });
   }
 
@@ -370,6 +371,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
       id: "reward_sage_modes",
       type: "db_values",
       values: sageModes,
+      multiple: true,
     });
   }
 
