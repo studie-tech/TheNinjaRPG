@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import alea from "alea";
 import type { Grid } from "honeycomb-grid";
+import { useAtomValue } from "jotai";
 import { Swords } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -95,7 +96,7 @@ import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
 import { round } from "@/utils/math";
 import { parseHtml } from "@/utils/parse";
 import { sleep } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { blockingPopupOpenAtom, useRequiredUserData } from "@/utils/UserContext";
 import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/travel";
 
 type SectorWindowEntry =
@@ -228,6 +229,8 @@ const Sector: React.FC<SectorProps> = (props) => {
     branches: { text: string; nextObjectiveId?: string }[];
   } | null>(null);
   const [arrivalNpc, setArrivalNpc] = useState<SectorUser | null>(null);
+  // A blocking global popup (e.g. daily rewards) is up or still loading — hold the arrival prompt.
+  const isBlockingPopupOpen = useAtomValue(blockingPopupOpenAtom);
 
   // References which shouldn't update
   const originRef = useRef<TerrainHex | undefined>(undefined);
@@ -1621,11 +1624,15 @@ const Sector: React.FC<SectorProps> = (props) => {
     const status = userData?.status;
     if (longitude === undefined || latitude === undefined) return;
 
-    // Suppression gates first: never stack on an in-flight interaction or an open dialog, and only
-    // prompt when the interaction can actually succeed — interactWithOverworldAi rejects every
-    // non-AWAKE status (BATTLE, HOSPITALIZED, ASLEEP, TRAVEL, QUEUED, …), so gate on `!== "AWAKE"`
-    // rather than BATTLE alone to avoid showing a modal whose CTA would immediately error.
-    if (isInteracting || status !== "AWAKE" || npcDialog) return;
+    // Suppression gates first: never stack on an in-flight interaction, an open dialog, or a
+    // blocking global popup (e.g. daily rewards, which auto-opens on login and would otherwise
+    // sit on top of this prompt), and only prompt when the interaction can actually succeed —
+    // interactWithOverworldAi rejects every non-AWAKE status (BATTLE, HOSPITALIZED, ASLEEP,
+    // TRAVEL, QUEUED, …), so gate on `!== "AWAKE"` rather than BATTLE alone to avoid showing a
+    // modal whose CTA would immediately error. The gate runs before `arrivalPromptDecision`
+    // arms `lastPromptedPlacementIdRef`, so a suppressed prompt is not consumed — once the popup
+    // closes, `isBlockingPopupOpen` flips and this effect re-runs to fire the prompt.
+    if (isInteracting || status !== "AWAKE" || npcDialog || isBlockingPopupOpen) return;
 
     const decision = arrivalPromptDecision({
       playerLongitude: longitude,
@@ -1642,6 +1649,7 @@ const Sector: React.FC<SectorProps> = (props) => {
     data?.overworldAis,
     isInteracting,
     npcDialog,
+    isBlockingPopupOpen,
   ]);
 
   // Auto-attack logic for ANBU users

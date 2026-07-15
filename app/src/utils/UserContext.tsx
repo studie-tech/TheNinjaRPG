@@ -29,6 +29,14 @@ export const combatActionIdAtom = atom<string | undefined>(undefined);
 export const userBattleAtom = atom<ReturnedBattle | undefined>(undefined);
 
 /**
+ * True while a blocking, auto-opening global popup (currently `ActivityStreakPopup`) is on
+ * screen — or while its show-decision is still loading. Consumed by the overworld arrival
+ * prompt so it never opens beneath another dialog on fresh login/reload. If a second global
+ * blocker is added, prefer per-source atoms combined via a derived OR atom over a shared boolean.
+ */
+export const blockingPopupOpenAtom = atom<boolean>(false);
+
+/**
  * Context for managing user data and state.
  */
 export const UserContext = createContext<{
