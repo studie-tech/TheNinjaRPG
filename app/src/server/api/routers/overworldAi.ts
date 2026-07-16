@@ -302,6 +302,10 @@ export const overworldAiRouter = createTRPCRouter({
                 available: tracker
                   ? isQuestObjectiveAvailable(q.quest, tracker, i)
                   : true,
+                // Carry the un-projected objective through: the bound sub-paths below read
+                // task-specific fields the projection drops, and would otherwise each re-scan
+                // every active quest's objectives to find this exact row again.
+                source: objective,
               };
             }),
           };
@@ -316,15 +320,12 @@ export const overworldAiRouter = createTRPCRouter({
         // player's questData is loaded into battle state and opponentAIs == this
         // placement's AI (derived at save).
         if (bound.objective.task === "defeat_opponents") {
-          const full = getUserQuests(activeUser)
-            .flatMap((q) => q.content.objectives)
-            .find((o) => o.id === bound.objective.id);
+          const full = bound.objective.source;
           const scaleTarget =
-            full && "opponent_scaled_to_user" in full
+            "opponent_scaled_to_user" in full
               ? Boolean(full.opponent_scaled_to_user)
               : false;
-          const scaleGains =
-            full && "scaleGains" in full ? Number(full.scaleGains ?? 1) : 1;
+          const scaleGains = "scaleGains" in full ? Number(full.scaleGains ?? 1) : 1;
           const battle = await startOverworldBattle({
             client: ctx.drizzle,
             placement,
@@ -340,11 +341,8 @@ export const overworldAiRouter = createTRPCRouter({
         // Two-step dialog: the first call returns the available branches; the user
         // picks one and re-submits with dialogContentId to advance + pay.
         if (bound.objective.task === "dialog" && !input.dialogContentId) {
-          const dialogObjective = getUserQuests(activeUser)
-            .flatMap((q) => q.content.objectives)
-            .find((o) => o.id === bound.objective.id);
+          const dialogObjective = bound.objective.source;
           const branches =
-            dialogObjective &&
             "nextObjectiveId" in dialogObjective &&
             Array.isArray(dialogObjective.nextObjectiveId)
               ? dialogObjective.nextObjectiveId
@@ -358,9 +356,9 @@ export const overworldAiRouter = createTRPCRouter({
               objectiveId: bound.objective.id,
               // description / sceneBackground / sceneCharacters are baseObjectiveFields,
               // present on every objective — default safely.
-              description: dialogObjective?.description ?? "",
-              sceneBackground: dialogObjective?.sceneBackground ?? "",
-              sceneCharacters: dialogObjective?.sceneCharacters ?? [],
+              description: dialogObjective.description ?? "",
+              sceneBackground: dialogObjective.sceneBackground ?? "",
+              sceneCharacters: dialogObjective.sceneCharacters ?? [],
               branches,
             },
           };
@@ -660,6 +658,16 @@ const fetchQuestsBindingPlacement = async (
 const fetchPlacement = async (client: DrizzleClient, placementId: string) =>
   client.query.overworldAiPlacement.findFirst({
     where: eq(overworldAiPlacement.id, placementId),
+    columns: {
+      id: true,
+      isActive: true,
+      aiTemplateUserId: true,
+      interactionType: true,
+      sector: true,
+      longitude: true,
+      latitude: true,
+      positionVersion: true,
+    },
     with: {
       questPool: true,
       aiTemplate: { columns: { userId: true, isAi: true } },

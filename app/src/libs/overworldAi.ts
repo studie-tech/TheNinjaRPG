@@ -171,6 +171,33 @@ export const arrivalPromptDecision = <
   return { prompt: npcHere, lastPromptedPlacementId: npcHere.npcPlacementId };
 };
 
+/**
+ * Companion to `arrivalPromptDecision`: an already-open arrival prompt is stale once it no longer
+ * describes reality — its NPC left the sector data, or it and the player no longer share a tile
+ * (either of them moved). Checked against the NPC's live row, not the captured prompt, so an NPC
+ * that walks away closes it too. `arrivalPromptDecision` cannot answer this: it reports `prompt:
+ * null` both when no NPC is here AND when the NPC here is already armed, so its result alone cannot
+ * distinguish "walked off" from "still standing here, already prompted".
+ */
+export const isArrivalPromptStale = (args: {
+  promptedPlacementId: string | null;
+  npcs: { npcPlacementId?: string | null; longitude: number; latitude: number }[];
+  playerLongitude: number | undefined;
+  playerLatitude: number | undefined;
+}): boolean => {
+  if (!args.promptedPlacementId) return false;
+  const live = args.npcs.find((n) => n.npcPlacementId === args.promptedPlacementId);
+  // Despawn is decided without the player's position, so an unknown position (a transient
+  // undefined `userData`) still closes a prompt whose NPC is gone, as the despawn check did
+  // before it was folded in here. An unknown position only suspends the tile comparison.
+  if (!live) return true;
+  if (args.playerLongitude === undefined || args.playerLatitude === undefined)
+    return false;
+  return (
+    live.longitude !== args.playerLongitude || live.latitude !== args.playerLatitude
+  );
+};
+
 type BoundObjective = {
   id: string;
   task: string;
@@ -201,11 +228,16 @@ export const pickWeightedQuest = (
   return null;
 };
 
-export const findActionableBoundObjective = (args: {
-  activeQuests: { questId: string; objectives: BoundObjective[] }[];
+/**
+ * Generic over the caller's objective shape so a projection that carries extra fields (e.g. the
+ * un-projected `source` objective) gets them back on the match, instead of every caller re-scanning
+ * `getUserQuests` to recover what the projection dropped.
+ */
+export const findActionableBoundObjective = <T extends BoundObjective>(args: {
+  activeQuests: { questId: string; objectives: T[] }[];
   ownedItemIds: string[];
   placementId: string;
-}): { questId: string; objective: BoundObjective } | null => {
+}): { questId: string; objective: T } | null => {
   const owned = new Set(args.ownedItemIds);
   for (const quest of args.activeQuests) {
     for (const objective of quest.objectives) {

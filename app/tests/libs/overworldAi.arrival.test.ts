@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { arrivalPromptDecision } from "@/libs/overworldAi";
+import { arrivalPromptDecision, isArrivalPromptStale } from "@/libs/overworldAi";
 
 const npc = (id: string, longitude: number, latitude: number) => ({
   npcPlacementId: id,
@@ -104,5 +104,111 @@ describe("arrivalPromptDecision", () => {
     });
     expect(res.prompt).toBeNull();
     expect(res.lastPromptedPlacementId).toBeNull();
+  });
+});
+
+describe("isArrivalPromptStale", () => {
+  it("keeps the prompt open while the player stands on its NPC", () => {
+    expect(
+      isArrivalPromptStale({
+        promptedPlacementId: "A",
+        npcs: [npc("A", 3, 4)],
+        playerLongitude: 3,
+        playerLatitude: 4,
+      }),
+    ).toBe(false);
+  });
+
+  it("goes stale when the player walks off the tile while the prompt is up", () => {
+    // The reported bug: the modal stayed open pointing at a tile the player had left, and its CTA
+    // then tripped the server's "You are not standing on the NPC's tile" guard.
+    expect(
+      isArrivalPromptStale({
+        promptedPlacementId: "A",
+        npcs: [npc("A", 3, 4)],
+        playerLongitude: 5,
+        playerLatitude: 4,
+      }),
+    ).toBe(true);
+  });
+
+  it("goes stale when the NPC moves away from a stationary player", () => {
+    expect(
+      isArrivalPromptStale({
+        promptedPlacementId: "A",
+        npcs: [npc("A", 9, 9)],
+        playerLongitude: 3,
+        playerLatitude: 4,
+      }),
+    ).toBe(true);
+  });
+
+  it("goes stale when the NPC despawns out of the sector data", () => {
+    expect(
+      isArrivalPromptStale({
+        promptedPlacementId: "A",
+        npcs: [],
+        playerLongitude: 3,
+        playerLatitude: 4,
+      }),
+    ).toBe(true);
+  });
+
+  it("still closes on despawn when the player position is unknown", () => {
+    // The despawn half must not be gated on known coordinates: the effect this replaced cleared a
+    // despawned NPC's prompt regardless of position, and a transient undefined `userData` must not
+    // strand the modal.
+    expect(
+      isArrivalPromptStale({
+        promptedPlacementId: "A",
+        npcs: [],
+        playerLongitude: undefined,
+        playerLatitude: undefined,
+      }),
+    ).toBe(true);
+  });
+
+  it("holds the prompt open when the position is unknown but its NPC is still present", () => {
+    // Unknown position suspends only the tile comparison — it must not be read as "walked off".
+    expect(
+      isArrivalPromptStale({
+        promptedPlacementId: "A",
+        npcs: [npc("A", 3, 4)],
+        playerLongitude: undefined,
+        playerLatitude: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it("is never stale with no prompt open", () => {
+    expect(
+      isArrivalPromptStale({
+        promptedPlacementId: null,
+        npcs: [],
+        playerLongitude: 3,
+        playerLatitude: 4,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not close the armed prompt the player is still standing on", () => {
+    // Guards the trap in the literal `else setArrivalNpc(null)` fix: once armed,
+    // `arrivalPromptDecision` returns `prompt: null` for the NPC underfoot, so an `else` branch
+    // would close the modal on the next re-render. The staleness check must not.
+    const armed = arrivalPromptDecision({
+      playerLongitude: 3,
+      playerLatitude: 4,
+      npcs: [npc("A", 3, 4)],
+      lastPromptedPlacementId: "A",
+    });
+    expect(armed.prompt).toBeNull();
+    expect(
+      isArrivalPromptStale({
+        promptedPlacementId: "A",
+        npcs: [npc("A", 3, 4)],
+        playerLongitude: 3,
+        playerLatitude: 4,
+      }),
+    ).toBe(false);
   });
 });
