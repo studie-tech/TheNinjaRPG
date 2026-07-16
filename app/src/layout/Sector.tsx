@@ -52,7 +52,11 @@ import WebGlError from "@/layout/WebGLError";
 import type { HexagonalFaceMesh, TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
-import { arrivalPromptDecision, pickSpriteAvatar } from "@/libs/overworldAi";
+import {
+  arrivalPromptDecision,
+  isArrivalPromptStale,
+  pickSpriteAvatar,
+} from "@/libs/overworldAi";
 import { calcLevel, getExpBracket, passesBracketFilter } from "@/libs/profile";
 import { GATHERING_CANCEL_PREFIX, isLocationObjective } from "@/libs/quest";
 import { mergeDecorationAssets } from "@/libs/sector-map/decorations";
@@ -1606,17 +1610,23 @@ const Sector: React.FC<SectorProps> = (props) => {
     isInteractingRef.current = isInteracting;
   }, [isInteracting]);
 
-  // Close an open arrival prompt if its NPC has moved/despawned out of the sector data.
+  // Close an open arrival prompt once it no longer describes reality: the NPC despawned out of the
+  // sector data, or it and the player are no longer on the same tile (either one moved). Without the
+  // position half, walking off the tile leaves the modal up and its CTA trips the server-side
+  // "You are not standing on the NPC's tile" guard for a spurious error toast.
   useEffect(() => {
+    if (!arrivalNpc) return;
     if (
-      arrivalNpc &&
-      !(data?.overworldAis ?? []).some(
-        (n) => n.npcPlacementId === arrivalNpc.npcPlacementId,
-      )
+      isArrivalPromptStale({
+        promptedPlacementId: arrivalNpc.npcPlacementId ?? null,
+        npcs: data?.overworldAis ?? [],
+        playerLongitude: userData?.longitude,
+        playerLatitude: userData?.latitude,
+      })
     ) {
       setArrivalNpc(null);
     }
-  }, [data?.overworldAis, arrivalNpc]);
+  }, [data?.overworldAis, arrivalNpc, userData?.longitude, userData?.latitude]);
 
   useEffect(() => {
     const longitude = userData?.longitude;

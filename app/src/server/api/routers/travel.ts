@@ -382,6 +382,15 @@ export const travelRouter = createTRPCRouter({
             eq(overworldAiPlacement.sector, user.sector),
             eq(overworldAiPlacement.isActive, true),
           ),
+          columns: {
+            id: true,
+            aiTemplateUserId: true,
+            interactionType: true,
+            sector: true,
+            longitude: true,
+            latitude: true,
+            positionVersion: true,
+          },
           with: {
             aiTemplate: {
               columns: {
