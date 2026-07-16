@@ -46,6 +46,18 @@ export const getSageMasteryRank = (exp: number): SAGE_MASTERY_RANK => {
 };
 
 /**
+ * Display-facing mastery rank. A ninja who has not yet attained a sage mode has no
+ * mastery at all (NONE); INITIATE and above only apply once a mode is equipped. This
+ * realizes the NONE tier that getSageMasteryRank reserves but never returns. Combat
+ * gating (getSageDailyCap) intentionally stays on the raw experience mapping — NONE and
+ * INITIATE share the same daily cap, and activation already requires an equipped mode.
+ */
+export const getSageMasteryDisplayRank = (
+  exp: number,
+  hasSageMode: boolean,
+): SAGE_MASTERY_RANK => (hasSageMode ? getSageMasteryRank(exp) : "NONE");
+
+/**
  * The number of sage mode activations allowed per day at the user's mastery rank.
  */
 export const getSageDailyCap = (exp: number): number =>

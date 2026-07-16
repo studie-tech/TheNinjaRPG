@@ -23,7 +23,7 @@ import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
 import { calcMedninRank } from "@/libs/hospital";
 import { calcLevelRequirements, showUserRank } from "@/libs/profile";
 import { getRankedRank } from "@/libs/ranked_pvp";
-import { getActiveSageLevel, getSageMasteryRank } from "@/libs/sageMode";
+import { getActiveSageLevel, getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -245,7 +245,10 @@ export default function Profile() {
             <p>
               Sage Mastery:{" "}
               {capitalizeFirstLetter(
-                getSageMasteryRank(userData.sageMasteryExperience ?? 0),
+                getSageMasteryDisplayRank(
+                  userData.sageMasteryExperience ?? 0,
+                  !!userData.sageModeId,
+                ),
               )}
             </p>
             <p>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getSageMasteryRank,
+  getSageMasteryDisplayRank,
   getSageDailyCap,
   getActiveSageLevel,
   getSageModeActivationCost,
@@ -17,6 +18,19 @@ describe("getSageMasteryRank", () => {
     expect(getSageMasteryRank(150_000)).toBe("MASTER");
     expect(getSageMasteryRank(399_999)).toBe("MASTER");
     expect(getSageMasteryRank(400_000)).toBe("LEGENDARY");
+  });
+});
+
+describe("getSageMasteryDisplayRank", () => {
+  it("is NONE until a sage mode is attained, regardless of experience", () => {
+    expect(getSageMasteryDisplayRank(0, false)).toBe("NONE");
+    expect(getSageMasteryDisplayRank(400_000, false)).toBe("NONE");
+  });
+  it("shows the earned rank once a sage mode is equipped", () => {
+    expect(getSageMasteryDisplayRank(0, true)).toBe("INITIATE");
+    expect(getSageMasteryDisplayRank(49_999, true)).toBe("INITIATE");
+    expect(getSageMasteryDisplayRank(50_000, true)).toBe("ADEPT");
+    expect(getSageMasteryDisplayRank(400_000, true)).toBe("LEGENDARY");
   });
 });
 
