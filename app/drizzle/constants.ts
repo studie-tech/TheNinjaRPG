@@ -380,6 +380,13 @@ export type UserStatus = (typeof UserStatuses)[number];
 export const FederalStatuses = ["NONE", "NORMAL", "SILVER", "GOLD"] as const;
 export type FederalStatus = (typeof FederalStatuses)[number];
 
+export const QUEUE_WAITING_SLOTS = {
+  NONE: 1,
+  NORMAL: 2,
+  SILVER: 3,
+  GOLD: 4,
+} as const satisfies Record<FederalStatus, number>;
+
 export const UserRanks = [
   "STUDENT",
   "GENIN",

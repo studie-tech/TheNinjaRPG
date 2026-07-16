@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { sendGTMEvent } from "@next/third-parties/google";
 import {
-  CheckCheck,
   DoorOpen,
   Eye,
   Fingerprint,
@@ -29,7 +28,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import type { TrainingSpeed, UserStatName } from "@/drizzle/constants";
 import {
@@ -87,15 +85,10 @@ import {
   checkJutsuVillage,
   isJutsuTrainToLearnRestricted,
   trainEfficiency,
-  trainingSpeedSeconds,
 } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
-import {
-  getDaysHoursMinutesSeconds,
-  getTimeLeftStr,
-  secondsFromDate,
-} from "@/utils/time";
+import { getDaysHoursMinutesSeconds, getTimeLeftStr } from "@/utils/time";
 import { useRequireInVillage } from "@/utils/UserContext";
 import type { CaptchaVerifySchema } from "@/validators/misc";
 import { captchaVerifySchema } from "@/validators/misc";
@@ -372,6 +365,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
 
   // tRPC useUtils
   const utils = api.useUtils();
+  const { data: trainingQueue } = api.train.getTrainingQueue.useQuery();
 
   // Query
   const { data: captcha } = api.misc.getCaptcha.useQuery(undefined, {
@@ -387,8 +381,8 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
     api.train.startTraining.useMutation({
       onSuccess: async (result) => {
         showMutationToast(result);
-        if (result.success && result.data) {
-          await updateUser(result.data);
+        if (result.success) {
+          await utils.train.getTrainingQueue.invalidate();
           sendGTMEvent({ event: "stats_training" });
           if (currentStep?.title === "Training") {
             handleNextStep();
@@ -401,6 +395,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
     api.train.stopTraining.useMutation({
       onSuccess: async (result) => {
         showMutationToast(result);
+        await utils.train.getTrainingQueue.invalidate();
         await utils.misc.getCaptcha.invalidate();
         if (result.success && result.data) {
           if (currentStep?.title === "Training") {
@@ -416,6 +411,14 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
             questData: result.data.questData,
           });
         }
+      },
+    });
+
+  const { mutate: cancelQueuedTraining, isPending: isCancellingQueued } =
+    api.train.cancelQueuedTraining.useMutation({
+      onSuccess: async (result) => {
+        showMutationToast(result);
+        await utils.train.getTrainingQueue.invalidate();
       },
     });
 
@@ -435,12 +438,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
     defaultValues: { guess: "" },
   });
 
-  // Form handlers
-  const onSubmit = captchaForm.handleSubmit((data) => {
-    stopTraining({ ...data, villageId: userData.villageId });
-  });
-
-  const isPending = isStarting || isStopping || isChaning;
+  const isPending = isStarting || isStopping || isChaning || isCancellingQueued;
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (isPending) return <Loader explanation="Processing..." />;
@@ -515,9 +513,17 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               onClick={() =>
                 overCap
                   ? showMutationToast({ success: false, message: "Already capped" })
-                  : startTraining({ stat })
+                  : startTraining({
+                      stat,
+                      guess: captchaForm.getValues("guess") || undefined,
+                    })
               }
               className="relative"
+              disabled={
+                !!trainingQueue &&
+                trainingQueue.waiting.length + (trainingQueue.active ? 1 : 0) >=
+                  trainingQueue.totalCapacity
+              }
             >
               <div
                 className={cn(
@@ -536,74 +542,78 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           );
         })}
       </div>
-      {userData.currentlyTraining && (
-        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-95">
-          <div className="m-auto flex flex-col items-center text-center text-white">
-            <p className="p-5 text-2xl">Training {userData.currentlyTraining}</p>
-            <Image
-              src={getImage(userData.currentlyTraining)}
-              alt={userData.currentlyTraining}
-              width={128}
-              height={128}
-            />
-            <div className="w-2/3">
-              {userData.trainingStartedAt && (
-                <p className="text-2xl">
-                  Time Left:{" "}
-                  <Countdown
-                    targetDate={secondsFromDate(
-                      trainingSpeedSeconds(userData.trainingSpeed),
-                      userData.trainingStartedAt,
-                    )}
-                    timeDiff={timeDiff}
-                  />
-                </p>
+      {showCaptcha && captcha && (
+        <div className="mt-4 rounded border p-3">
+          <p className="font-bold">Verification required for the next enqueue</p>
+          {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element for data URI */}
+          <img
+            alt="captcha"
+            className="mb-2"
+            src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
+          />
+          <Form {...captchaForm}>
+            <FormField
+              control={captchaForm.control}
+              name="guess"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <Input
+                      placeholder="Enter captcha before selecting a stat"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-              {!showCaptcha && (
+            />
+          </Form>
+        </div>
+      )}
+      {trainingQueue && (
+        <div className="mt-4 space-y-2 rounded border p-3">
+          <div className="flex justify-between font-bold">
+            <span>Stat queue</span>
+            <span>
+              {trainingQueue.waiting.length + (trainingQueue.active ? 1 : 0)} /{" "}
+              {trainingQueue.totalCapacity} ({trainingQueue.waitingSlots} waiting slots)
+            </span>
+          </div>
+          {trainingQueue.active && (
+            <div className="flex items-center justify-between rounded bg-muted p-2">
+              <span>
+                Active: {trainingQueue.active.stat} · +
+                {trainingQueue.active.fullStatGain.toFixed(2)}
+              </span>
+              <span className="flex items-center gap-2">
+                <Countdown
+                  targetDate={trainingQueue.active.finishesAt}
+                  timeDiff={timeDiff}
+                  onFinish={() => utils.train.getTrainingQueue.invalidate()}
+                />
                 <XCircle
                   id="tutorial-traininggrounds-stopTraining"
-                  className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
+                  className="h-6 w-6 cursor-pointer fill-red-500"
                   onClick={() => stopTraining({ villageId: userData.villageId })}
                 />
-              )}
-              {showCaptcha && !captcha && <Loader explanation="Loading captcha" />}
-              {showCaptcha && captcha && (
-                <Popover>
-                  <PopoverTrigger>
-                    <XCircle className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500" />
-                  </PopoverTrigger>
-                  <PopoverContent>
-                    <p className="font-bold text-lg">Verify Humanity</p>
-                    {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element for data URI */}
-                    <img
-                      alt="captcha"
-                      className="mb-2"
-                      src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
-                    />
-                    <Form {...captchaForm}>
-                      <form className="relative" onSubmit={onSubmit}>
-                        <FormField
-                          control={captchaForm.control}
-                          name="guess"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input placeholder="Enter captcha" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <Button className="absolute top-0 right-0" type="submit">
-                          <CheckCheck className="h-5 w-5" />
-                        </Button>
-                      </form>
-                    </Form>
-                  </PopoverContent>
-                </Popover>
-              )}
+              </span>
             </div>
-          </div>
+          )}
+          {trainingQueue.waiting.map((entry, index) => (
+            <div
+              key={entry.id}
+              className="flex items-center justify-between rounded border p-2"
+            >
+              <span>
+                {index + 1}. {entry.stat} · +{entry.fullStatGain.toFixed(2)} · starts{" "}
+                <Countdown targetDate={entry.startsAt} timeDiff={timeDiff} />
+              </span>
+              <XCircle
+                className="h-6 w-6 cursor-pointer fill-red-500"
+                onClick={() => cancelQueuedTraining({ queueId: entry.id })}
+              />
+            </div>
+          ))}
         </div>
       )}
     </ContentBox>
@@ -621,8 +631,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [jutsu, setJutsu] = useState<Jutsu | undefined>(undefined);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  const now = new Date();
-
   // tRPC useUtils
   const utils = api.useUtils();
 
@@ -661,6 +669,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     api.jutsu.getUserJutsus.useQuery(getFilter(state), {
       enabled: !!userData,
     });
+  const { data: jutsuTrainingQueue } = api.jutsu.getTrainingQueue.useQuery();
   // Lightweight unfiltered ownership set — used to check evolution ownership
   // regardless of active search filters. Only includes jutsuId + ancestorIds
   // so we don't transfer the full userJutsu rows over the wire.
@@ -674,9 +683,11 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     return {
       id: userJutsu.jutsuId,
       quantity:
-        userJutsu.finishTraining && userJutsu.finishTraining > now
-          ? userJutsu.level - 1
-          : userJutsu.level,
+        userJutsu.level +
+        (jutsuTrainingQueue?.waiting.filter(
+          (entry) => entry.jutsuId === userJutsu.jutsuId,
+        ).length ?? 0) +
+        (jutsuTrainingQueue?.active?.jutsuId === userJutsu.jutsuId ? 1 : 0),
     };
   });
 
@@ -696,6 +707,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           }
         }
         await utils.jutsu.getUserJutsus.invalidate();
+        await utils.jutsu.getTrainingQueue.invalidate();
       },
       onSettled: () => {
         document.body.style.cursor = "default";
@@ -709,6 +721,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         await utils.jutsu.getUserJutsus.invalidate();
+        await utils.jutsu.getTrainingQueue.invalidate();
       },
       onSettled: () => {
         document.body.style.cursor = "default";
@@ -716,9 +729,19 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         setJutsu(undefined);
       },
     });
+  const { mutate: cancelWaiting, isPending: isCancellingWaiting } =
+    api.jutsu.cancelQueuedTraining.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await utils.jutsu.getTrainingQueue.invalidate();
+        if (data.success && "refund" in data) {
+          await updateUser({ money: userData.money + data.refund });
+        }
+      },
+    });
 
   // Mutation loading
-  const isPending = isStartingTrain || isStoppingTrain;
+  const isPending = isStartingTrain || isStoppingTrain || isCancellingWaiting;
 
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -754,12 +777,15 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     .sort((a, b) => b.level - a.level);
 
   // Training time
-  const finishTrainingAt = userJutsus?.find(
-    (jutsu) => jutsu.finishTraining && jutsu.finishTraining > now,
-  );
+  const finishTrainingAt = jutsuTrainingQueue?.active;
 
   // Derived calculations
-  const level = userJutsuCounts?.find((entry) => entry.id === jutsu?.id)?.quantity || 0;
+  const level = jutsu
+    ? (userJutsus?.find((entry) => entry.jutsuId === jutsu.id)?.level ?? 0) +
+      (jutsuTrainingQueue?.waiting.filter((entry) => entry.jutsuId === jutsu.id)
+        .length ?? 0) +
+      (jutsuTrainingQueue?.active?.jutsuId === jutsu.id ? 1 : 0)
+    : 0;
   const trainSeconds =
     jutsu &&
     getTimeLeftStr(
@@ -771,12 +797,19 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const okBloodline = checkJutsuBloodline(jutsu, userData);
   const canAfford = userData && cost && userData.money >= cost;
   const isCapped = level >= (jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP);
-  const canTrain = okRank && okVillage && okBloodline && !isCapped && canAfford;
+  const queueIsFull =
+    !!jutsuTrainingQueue &&
+    jutsuTrainingQueue.waiting.length + (jutsuTrainingQueue.active ? 1 : 0) >=
+      jutsuTrainingQueue.totalCapacity;
+  const canTrain =
+    okRank && okVillage && okBloodline && !isCapped && canAfford && !queueIsFull;
 
   // Label for proceed button
   let proceed_label: string | undefined;
   if (!isPending && !isCapped) {
-    if (!canAfford) {
+    if (queueIsFull) {
+      proceed_label = "Jutsu training queue is full";
+    } else if (!canAfford) {
       proceed_label = `Need ${cost - userData.money} more ryo`;
     } else if (isCapped) {
       proceed_label = `Level capped`;
@@ -863,31 +896,53 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         </div>
       )}
       {isFetching && <Loader explanation="Loading jutsu" />}
-      {finishTrainingAt?.finishTraining && (
-        <div className="min-h-36">
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
-            <div className="m-auto text-center text-white">
-              <p className="p-5 text-3xl">Training</p>
-              <p className="text-2xl">
-                Time Left:{" "}
+      {jutsuTrainingQueue && (
+        <div className="mt-4 space-y-2 rounded border p-3">
+          <div className="flex justify-between font-bold">
+            <span>Jutsu queue</span>
+            <span>
+              {jutsuTrainingQueue.waiting.length + (jutsuTrainingQueue.active ? 1 : 0)}{" "}
+              / {jutsuTrainingQueue.totalCapacity} ({jutsuTrainingQueue.waitingSlots}{" "}
+              waiting slots)
+            </span>
+          </div>
+          {finishTrainingAt && (
+            <div className="flex items-center justify-between rounded bg-muted p-2">
+              <span>
+                Active: {finishTrainingAt.jutsu.name} → level{" "}
+                {finishTrainingAt.projectedLevel} ·{" "}
                 <Countdown
-                  targetDate={finishTrainingAt.finishTraining}
+                  targetDate={finishTrainingAt.finishesAt}
                   timeDiff={timeDiff}
                   onFinish={async () => {
+                    await utils.jutsu.getTrainingQueue.invalidate();
                     await utils.jutsu.getUserJutsus.invalidate();
                   }}
                 />
-              </p>
+              </span>
               {!isRefetchingUserJutsu && (
                 <XCircle
-                  className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
-                  onClick={() => {
-                    cancel();
-                  }}
+                  className="h-6 w-6 cursor-pointer fill-red-500"
+                  onClick={() => cancel({ queueId: finishTrainingAt.id })}
                 />
               )}
             </div>
-          </div>
+          )}
+          {jutsuTrainingQueue.waiting.map((entry, index) => (
+            <div
+              key={entry.id}
+              className="flex items-center justify-between rounded border p-2"
+            >
+              <span>
+                {index + 1}. {entry.jutsu.name} → level {entry.projectedLevel} ·{" "}
+                {entry.reservedRyo} ryo
+              </span>
+              <XCircle
+                className="h-6 w-6 cursor-pointer fill-red-500"
+                onClick={() => cancelWaiting({ queueId: entry.id })}
+              />
+            </div>
+          ))}
         </div>
       )}
     </ContentBox>

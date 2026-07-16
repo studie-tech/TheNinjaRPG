@@ -648,7 +648,7 @@ export const profileRouter = createTRPCRouter({
       // Add a voting link
       let hasVoted = true;
       ACTIVE_VOTING_SITES.forEach((site) => {
-        if (!user?.votes || user.votes[site] !== true) {
+        if (user?.votes?.[site] !== true) {
           hasVoted = false;
         }
       });
@@ -2351,10 +2351,21 @@ export const fetchUpdatedUser = async (props: {
   userIp?: string;
   forceRegen?: boolean;
   hideInformation?: boolean;
+  skipQueueSettlement?: boolean;
 }) => {
   // Destructure
-  const { client, userId, userIp, hideInformation = true } = props;
+  const {
+    client,
+    userId,
+    userIp,
+    hideInformation = true,
+    skipQueueSettlement = false,
+  } = props;
   let { forceRegen } = props;
+  if (!skipQueueSettlement) {
+    const { settleAllQueuesForUser } = await import("@/server/utils/queue");
+    await settleAllQueuesForUser(client, userId);
+  }
   const now = new Date();
   // Shrine battle lobbies past this age are effectively dead — attackers
   // had LOBBY_SECONDS to gather, then STALE_LOBBY_SECONDS to initiate; beyond

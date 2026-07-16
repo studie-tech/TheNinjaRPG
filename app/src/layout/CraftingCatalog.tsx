@@ -70,14 +70,14 @@ interface CraftingCatalogProps {
   craftableItems: CraftableItem[] | undefined;
   userItems: UserItemWithRelations[] | undefined;
   userData: UserWithRelations | undefined;
-  isCurrentlyCrafting: boolean;
+  queueIsFull: boolean;
 }
 
 export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   craftableItems,
   userItems,
   userData,
-  isCurrentlyCrafting,
+  queueIsFull,
 }) => {
   // Utils
   const utils = api.useUtils();
@@ -99,6 +99,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
         setSelectedItem(null);
         setCraftQuantity(1);
         await utils.item.getUserItems.invalidate();
+        await utils.occupation.getCraftingQueue.invalidate();
       }
     },
   });
@@ -178,12 +179,12 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
 
   // Check if user can craft the selected item
   const canCraft = useMemo(() => {
-    if (!selectedItem || !userItems || isCurrentlyCrafting) return false;
+    if (!selectedItem || !userItems || queueIsFull) return false;
     return selectedItem.craftingRequirements.every((req) => {
       const totalQuantity = getTotalItemQuantity(userItems, req.requirementItemId);
       return totalQuantity >= req.quantity * craftQuantity;
     });
-  }, [selectedItem, userItems, craftQuantity, isCurrentlyCrafting]);
+  }, [selectedItem, userItems, craftQuantity, queueIsFull]);
 
   // Handle craft
   const handleCraft = () => {
@@ -320,15 +321,15 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
         proceed_label={
           craftItemMutation.isPending
             ? undefined
-            : isCurrentlyCrafting
-              ? "Currently Crafting"
+            : queueIsFull
+              ? "Crafting Queue Full"
               : canCraft
                 ? "Start Crafting"
                 : "Missing Materials"
         }
         onAccept={handleCraft}
         confirmClassName={
-          canCraft && !isCurrentlyCrafting
+          canCraft && !queueIsFull
             ? "bg-blue-600 text-white hover:bg-blue-700"
             : "bg-red-600 text-white hover:bg-red-700"
         }
@@ -440,11 +441,11 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
             )}
 
             {/* Currently crafting warning */}
-            {isCurrentlyCrafting && (
+            {queueIsFull && (
               <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  You are currently crafting another item. Please wait for it to finish
-                  before starting a new craft.
+                  Your crafting queue is full. Wait for a job to finish or cancel a
+                  waiting craft.
                 </p>
               </div>
             )}
