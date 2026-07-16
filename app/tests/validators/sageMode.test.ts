@@ -12,6 +12,7 @@ const base = {
   afterEffectRounds: 3,
   chakraCostPerc: 20,
   staminaCostPerc: 20,
+  actionCostPerc: 80,
   villageId: null,
   effects: [],
   afterEffects: [],

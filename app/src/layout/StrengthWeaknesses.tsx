@@ -1,7 +1,7 @@
 "use client";
 
 import { Chart as ChartJS } from "chart.js/auto";
-import { CircleHelp, Eye, Lock, Search } from "lucide-react";
+import { CircleHelp, Eye, Lock, Search, Sparkles } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -198,21 +198,28 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
             </div>
           </div>
           <div>
-            <b>Elemental Proficiency</b>
-            <div className="grid grid-cols-2 gap-1">
-              {userElements.map((element, i) => (
-                <div key={`${element}-${i}`} className="flex flex-row pt-1">
-                  <ElementImage element={element} className="w-6" />
-                  <p className="pl-2">{element}</p>
-                </div>
-              ))}
+            <b>Mastery</b>
+            <div className="flex flex-row items-center">
+              <Sparkles className="mr-1 mb-1 h-6 w-6" />
+              Sage Mastery: {(userData.sageMasteryExperience ?? 0).toLocaleString()}
             </div>
-            {userElements.length === 0 && (
-              <>
-                <p>- 1st element at Genin</p>
-                <p>- 2nd element at Chunin</p>
-              </>
-            )}
+            <div className="pt-2">
+              <b>Elemental Proficiency</b>
+              <div className="grid grid-cols-2 gap-1">
+                {userElements.map((element, i) => (
+                  <div key={`${element}-${i}`} className="flex flex-row pt-1">
+                    <ElementImage element={element} className="w-6" />
+                    <p className="pl-2">{element}</p>
+                  </div>
+                ))}
+              </div>
+              {userElements.length === 0 && (
+                <>
+                  <p>- 1st element at Genin</p>
+                  <p>- 2nd element at Chunin</p>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

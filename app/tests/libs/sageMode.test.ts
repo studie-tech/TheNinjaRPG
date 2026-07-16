@@ -6,40 +6,43 @@ import {
   getActiveSageLevel,
   getSageModeActivationCost,
   getSageModePityRolls,
+  getSageRankIndex,
+  isSageRankAtLeast,
+  sageRanksAtOrBelow,
 } from "@/libs/sageMode";
 import { PITY_SAGE_MODE_ROLLS } from "@/drizzle/constants";
 
 describe("getSageMasteryRank", () => {
   it("maps sage mastery experience to the correct rank at each threshold", () => {
     expect(getSageMasteryRank(0)).toBe("INITIATE");
-    expect(getSageMasteryRank(49_999)).toBe("INITIATE");
-    expect(getSageMasteryRank(50_000)).toBe("ADEPT");
-    expect(getSageMasteryRank(149_999)).toBe("ADEPT");
-    expect(getSageMasteryRank(150_000)).toBe("MASTER");
-    expect(getSageMasteryRank(399_999)).toBe("MASTER");
-    expect(getSageMasteryRank(400_000)).toBe("LEGENDARY");
+    expect(getSageMasteryRank(149_999)).toBe("INITIATE");
+    expect(getSageMasteryRank(150_000)).toBe("ADEPT");
+    expect(getSageMasteryRank(249_999)).toBe("ADEPT");
+    expect(getSageMasteryRank(250_000)).toBe("MASTER");
+    expect(getSageMasteryRank(449_999)).toBe("MASTER");
+    expect(getSageMasteryRank(450_000)).toBe("LEGENDARY");
   });
 });
 
 describe("getSageMasteryDisplayRank", () => {
   it("is NONE until a sage mode is attained, regardless of experience", () => {
     expect(getSageMasteryDisplayRank(0, false)).toBe("NONE");
-    expect(getSageMasteryDisplayRank(400_000, false)).toBe("NONE");
+    expect(getSageMasteryDisplayRank(450_000, false)).toBe("NONE");
   });
   it("shows the earned rank once a sage mode is equipped", () => {
     expect(getSageMasteryDisplayRank(0, true)).toBe("INITIATE");
-    expect(getSageMasteryDisplayRank(49_999, true)).toBe("INITIATE");
-    expect(getSageMasteryDisplayRank(50_000, true)).toBe("ADEPT");
-    expect(getSageMasteryDisplayRank(400_000, true)).toBe("LEGENDARY");
+    expect(getSageMasteryDisplayRank(149_999, true)).toBe("INITIATE");
+    expect(getSageMasteryDisplayRank(150_000, true)).toBe("ADEPT");
+    expect(getSageMasteryDisplayRank(450_000, true)).toBe("LEGENDARY");
   });
 });
 
 describe("getSageDailyCap", () => {
   it("maps sage mastery experience to the daily activation cap", () => {
     expect(getSageDailyCap(0)).toBe(10);
-    expect(getSageDailyCap(50_000)).toBe(12);
-    expect(getSageDailyCap(150_000)).toBe(15);
-    expect(getSageDailyCap(400_000)).toBe(20);
+    expect(getSageDailyCap(150_000)).toBe(12);
+    expect(getSageDailyCap(250_000)).toBe(15);
+    expect(getSageDailyCap(450_000)).toBe(20);
   });
 });
 
@@ -91,5 +94,23 @@ describe("getSageModePityRolls", () => {
     const used = 2 * T - 1;
     expect(getSageModePityRolls({ used, pityRolls: 0 })).toBe(1);
     expect(getSageModePityRolls({ used, pityRolls: 1 })).toBe(0);
+  });
+});
+
+describe("sage rank ordering helpers", () => {
+  it("indexes ranks in ascending mastery order", () => {
+    expect(getSageRankIndex("NONE")).toBe(0);
+    expect(getSageRankIndex("INITIATE")).toBe(1);
+    expect(getSageRankIndex("LEGENDARY")).toBe(4);
+  });
+  it("compares 'at least' by rank order", () => {
+    expect(isSageRankAtLeast("MASTER", "ADEPT")).toBe(true);
+    expect(isSageRankAtLeast("ADEPT", "ADEPT")).toBe(true);
+    expect(isSageRankAtLeast("INITIATE", "LEGENDARY")).toBe(false);
+    expect(isSageRankAtLeast("NONE", "INITIATE")).toBe(false);
+  });
+  it("lists ranks at or below a rank", () => {
+    expect(sageRanksAtOrBelow("ADEPT")).toEqual(["NONE", "INITIATE", "ADEPT"]);
+    expect(sageRanksAtOrBelow("NONE")).toEqual(["NONE"]);
   });
 });

@@ -3,6 +3,7 @@ import type { LetterRank, SAGE_MASTERY_RANK } from "@/drizzle/constants";
 import {
   PITY_SAGE_MODE_ROLLS,
   SAGE_MASTERY_DAILY_ACTIVATIONS,
+  SAGE_MASTERY_RANKS,
   SAGE_MASTERY_REQUIRED_EXP,
   SAGE_MODE_MAX_LEVEL,
 } from "@/drizzle/constants";
@@ -44,6 +45,20 @@ export const getSageMasteryRank = (exp: number): SAGE_MASTERY_RANK => {
   if (exp >= SAGE_MASTERY_REQUIRED_EXP.ADEPT) return "ADEPT";
   return "INITIATE";
 };
+
+/** Index of a mastery rank within SAGE_MASTERY_RANKS (higher = more mastery). */
+export const getSageRankIndex = (rank: SAGE_MASTERY_RANK): number =>
+  SAGE_MASTERY_RANKS.indexOf(rank);
+
+/** True when userRank meets or exceeds requiredRank by SAGE_MASTERY_RANKS order. */
+export const isSageRankAtLeast = (
+  userRank: SAGE_MASTERY_RANK,
+  requiredRank: SAGE_MASTERY_RANK,
+): boolean => getSageRankIndex(userRank) >= getSageRankIndex(requiredRank);
+
+/** All ranks at or below userRank — used for SQL `inArray` availability filtering. */
+export const sageRanksAtOrBelow = (userRank: SAGE_MASTERY_RANK): SAGE_MASTERY_RANK[] =>
+  SAGE_MASTERY_RANKS.slice(0, getSageRankIndex(userRank) + 1);
 
 /**
  * Display-facing mastery rank. A ninja who has not yet attained a sage mode has no

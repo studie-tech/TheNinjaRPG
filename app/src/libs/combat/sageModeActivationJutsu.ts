@@ -1,6 +1,7 @@
 import {
   IMG_MANUAL_SAGE_MODE,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
+  SAGE_MODE_DEFAULT_ACTION_COST_PERC,
   SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
@@ -9,7 +10,8 @@ import type { ZodAllTags } from "@/validators/combat";
 /**
  * Fallback definition backing the in-combat Activation action. No DB row is seeded for
  * this jutsu; it is injected into battle state from this constant during initiateBattle,
- * and its image is overridden per equipped sage mode at action-build time.
+ * and its image, AP cost and battle description are overridden from the equipped sage
+ * mode at action-build time. The values here apply only when that mode is unavailable.
  */
 const effects: ZodAllTags[] = [
   {
@@ -51,7 +53,7 @@ export const SAGE_MODE_ACTIVATION_JUTSU_FALLBACK: Jutsu = {
   statClassification: "Ninjutsu",
   battleDescription: SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
   jutsuRank: "D",
-  actionCostPerc: 80,
+  actionCostPerc: SAGE_MODE_DEFAULT_ACTION_COST_PERC,
   staminaCost: 0,
   chakraCost: 0,
   staminaCostReducePerLvl: 0,

@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { Resolver } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { LetterRanks } from "@/drizzle/constants";
+import { LetterRanks, SAGE_MASTERY_REQUIRED_EXP } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
@@ -87,6 +87,16 @@ export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
     name: "image",
   });
 
+  // Tier-2 unlock is stored as a mastery-exp threshold (int); show it as rank labels.
+  // Reset (empty) coerces to 0 = "no Tier 2". INITIATE (threshold 0) is intentionally
+  // omitted — a 0 threshold means no Tier-2 gate, same as None.
+  const sageLevel2Options = [
+    { id: "0", name: "None (no Tier 2)" },
+    { id: String(SAGE_MASTERY_REQUIRED_EXP.ADEPT), name: "Adept" },
+    { id: String(SAGE_MASTERY_REQUIRED_EXP.MASTER), name: "Master" },
+    { id: String(SAGE_MASTERY_REQUIRED_EXP.LEGENDARY), name: "Legendary" },
+  ];
+
   const formData: FormEntry<keyof ZodSageModeType>[] = [
     { id: "name", type: "text" },
     {
@@ -96,7 +106,13 @@ export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
     },
     { id: "image", type: "avatar", href: imageUrl },
     { id: "level", type: "number", label: "Roll Pool Level (1 = rollable)" },
-    { id: "requiredSageMastery", type: "number", label: "Required Sage Mastery" },
+    {
+      id: "requiredSageMastery",
+      type: "db_values",
+      values: sageLevel2Options,
+      resetButton: true,
+      label: "Tier 2 Unlock (mastery rank)",
+    },
     { id: "activationRounds", type: "number", label: "Active Duration (rounds)" },
     {
       id: "afterEffectRounds",
@@ -105,6 +121,7 @@ export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
     },
     { id: "chakraCostPerc", type: "number", label: "Chakra Cost %" },
     { id: "staminaCostPerc", type: "number", label: "Stamina Cost %" },
+    { id: "actionCostPerc", type: "number", label: "AP Cost [%]" },
     { id: "hidden", type: "boolean" },
     { id: "villageId", type: "db_values", values: villages, resetButton: true },
     { id: "rank", type: "str_array", values: LetterRanks },

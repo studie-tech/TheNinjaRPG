@@ -9,6 +9,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { GameAssetType } from "@/drizzle/constants";
+import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
 import type { Bloodline, Item, ItemRarity, Jutsu } from "@/drizzle/schema";
 import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
@@ -153,7 +154,9 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
       <div className={cn(base, grid, bgColor, props.className)}>
         {filtered?.map((item, i) => {
           let bgColor = "";
-          if (item.type === "jutsu") {
+          if (item.id === SAGE_MODE_ACTIVATION_JUTSU_ID) {
+            bgColor = "bg-orange-200";
+          } else if (item.type === "jutsu") {
             bgColor = "bg-blue-100";
           } else if (item.type === "item") {
             if ("itemType" in item) {

@@ -11,6 +11,7 @@ import {
   QuestTypes,
   QuestTypesWithMaxAttempts,
   RetryQuestDelays,
+  SAGE_MASTERY_RANKS,
   STARTER_VILLAGES,
   UserRanks,
 } from "@/drizzle/constants";
@@ -286,6 +287,14 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
       label: "Required Sage Mode",
     });
   }
+
+  formData.push({
+    id: "requiredSageRank",
+    type: "str_array",
+    values: SAGE_MASTERY_RANKS.filter((r) => r !== "NONE"),
+    resetButton: true,
+    label: "Required Sage Rank (min mastery — INITIATE = any sage user)",
+  });
 
   formData.push({ id: "description", type: "richinput", doubleWidth: true });
   formData.push({ id: "successDescription", type: "richinput", doubleWidth: true });

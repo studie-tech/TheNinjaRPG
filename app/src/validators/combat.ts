@@ -1318,6 +1318,7 @@ export const SageModeValidator = z.object({
   afterEffectRounds: z.coerce.number().int().min(0).max(20),
   chakraCostPerc: z.coerce.number().int().min(0).max(100),
   staminaCostPerc: z.coerce.number().int().min(0).max(100),
+  actionCostPerc: z.coerce.number().int().min(10).max(100),
   villageId: z.string().nullable(),
   hidden: z.coerce.boolean().optional(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),

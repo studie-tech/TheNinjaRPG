@@ -967,11 +967,11 @@ export type SAGE_MASTERY_RANK = (typeof SAGE_MASTERY_RANKS)[number];
 export const SAGE_MASTERY_REQUIRED_EXP: Record<SAGE_MASTERY_RANK, number> = {
   NONE: 0,
   INITIATE: 0,
-  ADEPT: 50000,
-  MASTER: 150000,
-  LEGENDARY: 400000,
+  ADEPT: 150000,
+  MASTER: 250000,
+  LEGENDARY: 450000,
 };
-export const SAGE_MASTERY_EXP_CAP = 1_000_000; // 1 million sage mastery experience cap
+export const SAGE_MASTERY_EXP_CAP = 450_000; // matches the LEGENDARY threshold / stat maximum
 
 export const SAGE_MASTERY_DAILY_ACTIVATIONS: Record<SAGE_MASTERY_RANK, number> = {
   NONE: 10,
@@ -988,6 +988,9 @@ export const SAGE_MODE_DISABLED_BATTLES: BattleType[] = ["RANKED_PVP", "RANKED_S
 export const SAGE_MODE_ACTIVATION_JUTSU_ID = "cmj8sagemodeactivatejutsu000000";
 
 export const SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE = "%user enters sage mode!";
+
+/** AP cost % of the Activation action when a mode defines no value of its own. */
+export const SAGE_MODE_DEFAULT_ACTION_COST_PERC = 80;
 
 // Skill tree config
 export const SKILL_TREE_RESET_FREE_NORMAL = 0;

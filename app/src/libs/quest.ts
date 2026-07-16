@@ -18,6 +18,7 @@ import {
   MEDNIN_RANKS,
   type QuestType,
   QuestTypesWithMaxAttempts,
+  type SAGE_MASTERY_RANK,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
   SENSEI_MAX_STUDENT_LEVEL,
@@ -33,6 +34,7 @@ import {
   isQuestComplete,
   isQuestObjectiveAvailable,
 } from "@/libs/objectives";
+import { getSageMasteryDisplayRank, isSageRankAtLeast } from "@/libs/sageMode";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUnique } from "@/utils/grouping";
 import { canChangeContent, canPlayHiddenQuests } from "@/utils/permissions";
@@ -1400,6 +1402,7 @@ export const isAvailableUserQuests = (
     requiredVillage: string | null;
     requiredBloodlineId?: string | null;
     requiredSageModeId?: string | null;
+    requiredSageRank?: SAGE_MASTERY_RANK | null;
     prerequisiteQuestId?: string | null;
     previousAttempts?: number | null;
     previousCompletes?: number | null;
@@ -1451,6 +1454,12 @@ export const isAvailableUserQuests = (
   const sageModeCheck =
     !questAndUserQuestInfo.requiredSageModeId ||
     questAndUserQuestInfo.requiredSageModeId === user.sageModeId;
+  const sageRankCheck =
+    !questAndUserQuestInfo.requiredSageRank ||
+    isSageRankAtLeast(
+      getSageMasteryDisplayRank(user.sageMasteryExperience, !!user.sageModeId),
+      questAndUserQuestInfo.requiredSageRank,
+    );
 
   // Medical rank check for quests that require it
   const medicalRankCheck = !reqMedRankIdx || userMedRankIdx >= reqMedRankIdx;
@@ -1497,6 +1506,7 @@ export const isAvailableUserQuests = (
     villageCheck &&
     bloodlineCheck &&
     sageModeCheck &&
+    sageRankCheck &&
     prerequisiteCheck &&
     medicalRankCheck &&
     huntingRankCheck &&
@@ -1512,6 +1522,7 @@ export const isAvailableUserQuests = (
   if (!villageCheck) message += "Quest is not available in your village\n";
   if (!bloodlineCheck) message += "Quest requires a specific bloodline\n";
   if (!sageModeCheck) message += "Quest requires a specific sage mode\n";
+  if (!sageRankCheck) message += "Quest requires a higher sage mastery rank\n";
   if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";
   if (!medicalRankCheck)
     message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;

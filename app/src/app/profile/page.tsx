@@ -23,7 +23,7 @@ import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
 import { calcMedninRank } from "@/libs/hospital";
 import { calcLevelRequirements, showUserRank } from "@/libs/profile";
 import { getRankedRank } from "@/libs/ranked_pvp";
-import { getActiveSageLevel, getSageMasteryDisplayRank } from "@/libs/sageMode";
+import { getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -58,12 +58,7 @@ export default function Profile() {
     notifications?.find((n) => n.href.includes("/profile/recruit"))
       ?.notificationCount || 0;
 
-  // Sage mode: active combat level (computed from mastery exp + equipped mode's
-  // requiredSageMastery threshold), and progress toward level 2 while still level 1.
   const equippedSageMode = userData.sageMode;
-  const activeSageLevel = equippedSageMode
-    ? getActiveSageLevel(userData.sageMasteryExperience ?? 0, equippedSageMode)
-    : null;
 
   return (
     <>
@@ -173,7 +168,6 @@ export default function Profile() {
               </TooltipProvider>
             )}
             <p>Medical Exp: {userData.medicalExperience?.toLocaleString()}</p>
-            <p>Sage Mastery Exp: {userData.sageMasteryExperience?.toLocaleString()}</p>
           </div>
           <div>
             <b>Reputation</b>
@@ -217,22 +211,16 @@ export default function Profile() {
             <p>
               Sage Mode:{" "}
               {equippedSageMode ? (
-                <>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <span className="cursor-pointer font-bold hover:text-orange-500">
-                        {equippedSageMode.name}
-                      </span>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[500px] max-w-[90vw]">
-                      <ItemWithEffects item={equippedSageMode} />
-                    </PopoverContent>
-                  </Popover>{" "}
-                  Level {activeSageLevel}
-                  {activeSageLevel === 1 &&
-                    equippedSageMode.requiredSageMastery > 0 &&
-                    ` (${userData.sageMasteryExperience?.toLocaleString()} / ${equippedSageMode.requiredSageMastery.toLocaleString()})`}
-                </>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <span className="cursor-pointer font-bold hover:text-orange-500">
+                      {equippedSageMode.name}
+                    </span>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[500px] max-w-[90vw]">
+                    <ItemWithEffects item={equippedSageMode} />
+                  </PopoverContent>
+                </Popover>
               ) : (
                 "None"
               )}
@@ -243,7 +231,7 @@ export default function Profile() {
             </p>
             <p>Medical: {capitalizeFirstLetter(calcMedninRank(userData))}</p>
             <p>
-              Sage Mastery:{" "}
+              Sage:{" "}
               {capitalizeFirstLetter(
                 getSageMasteryDisplayRank(
                   userData.sageMasteryExperience ?? 0,

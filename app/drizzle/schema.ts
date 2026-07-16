@@ -652,6 +652,9 @@ export const sageMode = mysqlTable(
     // Activation costs
     chakraCostPerc: tinyint("chakraCostPerc").default(20).notNull(),
     staminaCostPerc: tinyint("staminaCostPerc").default(20).notNull(),
+    actionCostPerc: tinyint("actionCostPerc")
+      .default(consts.SAGE_MODE_DEFAULT_ACTION_COST_PERC)
+      .notNull(),
     // Two-level system (level 2 unlocks automatically at higher mastery)
     level: tinyint("level").default(1).notNull(),
     requiredSageMastery: int("requiredSageMastery").default(0).notNull(),
@@ -3321,6 +3324,7 @@ export const quest = mysqlTable(
     requiredVillage: varchar("requiredVillage", { length: 191 }),
     requiredBloodlineId: varchar("requiredBloodlineId", { length: 191 }),
     requiredSageModeId: varchar("requiredSageModeId", { length: 191 }),
+    requiredSageRank: mysqlEnum("requiredSageRank", consts.SAGE_MASTERY_RANKS),
     maxLevel: int("maxLevel").default(100).notNull(),
     maxAttempts: int("maxAttempts").default(1).notNull(),
     maxCompletes: int("maxCompletes").default(1).notNull(),

@@ -74,6 +74,7 @@ import {
   isAvailableUserQuests,
   verifyQuestObjectiveFlow,
 } from "@/libs/quest";
+import { getSageMasteryDisplayRank, sageRanksAtOrBelow } from "@/libs/sageMode";
 import { callDiscordContent } from "@/libs/socials";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
 import { extendWarParticipantSql } from "@/libs/war";
@@ -416,6 +417,18 @@ export const questsRouter = createTRPCRouter({
                     isNull(quest.requiredSageModeId),
                     eq(quest.requiredSageModeId, user.sageModeId ?? ""),
                   ),
+                  or(
+                    isNull(quest.requiredSageRank),
+                    inArray(
+                      quest.requiredSageRank,
+                      sageRanksAtOrBelow(
+                        getSageMasteryDisplayRank(
+                          user.sageMasteryExperience,
+                          !!user.sageModeId,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               )
           : ctx.drizzle
@@ -457,6 +470,18 @@ export const questsRouter = createTRPCRouter({
                   or(
                     isNull(quest.requiredSageModeId),
                     eq(quest.requiredSageModeId, user.sageModeId ?? ""),
+                  ),
+                  or(
+                    isNull(quest.requiredSageRank),
+                    inArray(
+                      quest.requiredSageRank,
+                      sageRanksAtOrBelow(
+                        getSageMasteryDisplayRank(
+                          user.sageMasteryExperience,
+                          !!user.sageModeId,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -2117,6 +2142,15 @@ export const fetchUncompletedQuests = async (
         or(
           isNull(quest.requiredSageModeId),
           eq(quest.requiredSageModeId, user.sageModeId ?? ""),
+        ),
+        or(
+          isNull(quest.requiredSageRank),
+          inArray(
+            quest.requiredSageRank,
+            sageRanksAtOrBelow(
+              getSageMasteryDisplayRank(user.sageMasteryExperience, !!user.sageModeId),
+            ),
+          ),
         ),
       ),
     )
