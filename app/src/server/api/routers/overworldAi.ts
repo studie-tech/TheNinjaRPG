@@ -401,16 +401,9 @@ export const overworldAiRouter = createTRPCRouter({
             activeUser.userQuests?.find(
               (q) => q.questId === bound.questId && !isMockQuestHistoryRow(q),
             ) ?? null,
-          // Free the active-NPC-mission slot in the SAME userData UPDATE updateRewards already
-          // runs on this claim path, instead of a trailing sequential clearActiveNpcQuest. Only
-          // on terminal completion (`resolved`), and the IF preserves clearActiveNpcQuest's
-          // questId-scoping — the slot is nulled only if it is still held for THIS quest, so a
-          // concurrent interaction at a different NPC can't clear a slot another NPC owns.
-          postClaimUserDataPatch: resolved
-            ? {
-                activeNpcQuestId: sql`IF(${userData.activeNpcQuestId} = ${bound.questId}, NULL, ${userData.activeNpcQuestId})`,
-              }
-            : undefined,
+          // The active-NPC-mission slot is freed centrally by commitQuestObjectiveRewards on
+          // terminal completion (questId-scoped IF, folded into updateRewards' userData write),
+          // so this path needs no explicit clear.
         });
 
         // `already_completed` means the completion actually landed server-side on an earlier

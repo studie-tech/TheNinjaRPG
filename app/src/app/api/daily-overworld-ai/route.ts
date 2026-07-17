@@ -1,4 +1,4 @@
-import { eq, ne, or, sql } from "drizzle-orm";
+import { and, eq, ne, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { overworldAiPlacement } from "@/drizzle/schema";
 import {
@@ -33,32 +33,34 @@ export const GET = async (request: Request) => {
   if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
   try {
-    // Fetch placements with any positional randomness — a random sector OR a random tile
-    // within a fixed sector (sectorType=specific, locationType=random). Only fully-fixed
+    // Fetch active placements with any positional randomness — a random sector OR a random
+    // tile within a fixed sector (sectorType=specific, locationType=random). Only fully-fixed
     // placements (specific/specific) stay put; resolveOverworldPosition keeps the fixed axes.
+    // isActive is pushed into the query (index-backed) so inactive rows are never transferred.
     const placements = await drizzleDB.query.overworldAiPlacement.findMany({
-      where: or(
-        ne(overworldAiPlacement.sectorType, "specific"),
-        ne(overworldAiPlacement.locationType, "specific"),
+      where: and(
+        eq(overworldAiPlacement.isActive, true),
+        or(
+          ne(overworldAiPlacement.sectorType, "specific"),
+          ne(overworldAiPlacement.locationType, "specific"),
+        ),
       ),
     });
 
-    // Re-randomize positions for all active non-fixed placements in parallel
+    // Re-randomize positions for all fetched placements in parallel
     await Promise.all(
-      placements
-        .filter((p) => p.isActive)
-        .map((p) => {
-          const pos = resolveOverworldPosition(p);
-          return drizzleDB
-            .update(overworldAiPlacement)
-            .set({
-              sector: pos.sector,
-              longitude: pos.longitude,
-              latitude: pos.latitude,
-              positionVersion: sql`${overworldAiPlacement.positionVersion} + 1`,
-            })
-            .where(eq(overworldAiPlacement.id, p.id));
-        }),
+      placements.map((p) => {
+        const pos = resolveOverworldPosition(p);
+        return drizzleDB
+          .update(overworldAiPlacement)
+          .set({
+            sector: pos.sector,
+            longitude: pos.longitude,
+            latitude: pos.latitude,
+            positionVersion: sql`${overworldAiPlacement.positionVersion} + 1`,
+          })
+          .where(eq(overworldAiPlacement.id, p.id));
+      }),
     );
 
     return Response.json("OK");

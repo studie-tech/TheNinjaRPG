@@ -2494,6 +2494,26 @@ export const commitQuestObjectiveRewards = async (info: {
       )) ||
     undefined;
 
+  // On terminal completion, atomically free the single "active NPC mission" slot when it still
+  // points to THIS quest, folded into updateRewards' own userData UPDATE (no extra round-trip).
+  // Centralized here so every completion path closes the stale-slot window at the true point the
+  // quest finalizes: `checkRewards` (which finalizes overworld `defeat_opponents` quests won in
+  // combat — combat only advances the tracker, never the completion) as well as the overworld
+  // friendly objective path. The IF preserves questId-scoping, so completing a non-NPC quest — or
+  // a concurrent interaction at a different NPC — never clears a slot it does not own. Without
+  // this, a `defeat_opponents` slot stayed stale until a later interaction self-healed it, which
+  // a value-only self-heal could race into an ABA double-grant of a repeatable quest.
+  const slotClearPatch =
+    resolved && userQuest
+      ? {
+          activeNpcQuestId: sql`IF(${userData.activeNpcQuestId} = ${userQuest.questId}, NULL, ${userData.activeNpcQuestId})`,
+        }
+      : undefined;
+  const mergedUserDataPatch =
+    slotClearPatch || info.postClaimUserDataPatch
+      ? { ...slotClearPatch, ...info.postClaimUserDataPatch }
+      : undefined;
+
   // Update database
   const [{ items, jutsus, bloodlines, badges }] = await Promise.all([
     // Update rewards
@@ -2506,7 +2526,7 @@ export const commitQuestObjectiveRewards = async (info: {
       // Opt in to the herbs_gathered tracker: this is the gathering-claim path and `user`
       // here is the fully-hydrated row (with quest relations).
       questUser: user,
-      postClaimUserDataPatch: info.postClaimUserDataPatch,
+      postClaimUserDataPatch: mergedUserDataPatch,
     }),
     // Credit the sensei their per-mission ryo bonus
     ...(senseiId
