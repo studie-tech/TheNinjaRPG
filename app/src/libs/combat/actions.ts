@@ -173,6 +173,10 @@ export const availableUserActions = (
               );
               if (hasSummonTag) return false;
             }
+            // Filter out weapon-required jutsu when disarmed
+            if (isDisarmed && jutsu.jutsuWeapon !== "NONE") {
+              return false;
+            }
             // Filter out movement jutsu when immobilized
             if (isImmobilized) {
               const hasMoveTag = jutsu.effects.some(

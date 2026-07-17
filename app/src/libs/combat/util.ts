@@ -852,6 +852,28 @@ export const findBarrier = (
 };
 
 /**
+ * Whether the user currently has an active effect of the given type.
+ * Active = targeting the user, not cast this round, and still has rounds remaining.
+ */
+export const hasActiveEffectOfType = (
+  userId: string | undefined,
+  userEffects: UserEffect[] | undefined,
+  type: ZodAllTags["type"],
+): boolean => {
+  return (
+    userEffects?.some(
+      (e) =>
+        e.type === type &&
+        e.targetId === userId &&
+        !e.castThisRound &&
+        "rounds" in e &&
+        e.rounds &&
+        e.rounds > 0,
+    ) ?? false
+  );
+};
+
+/**
  * Checks if a user is stealthed based on their effects.
  *
  * @param userId - The ID of the user to check.
@@ -861,47 +883,17 @@ export const findBarrier = (
 export const isUserStealthed = (
   userId: string | undefined,
   userEffects: UserEffect[] | undefined,
-) => {
-  return userEffects?.some(
-    (e) =>
-      e.type === "stealth" &&
-      e.targetId === userId &&
-      !e.castThisRound &&
-      "rounds" in e &&
-      e.rounds &&
-      e.rounds > 0,
-  );
-};
+) => hasActiveEffectOfType(userId, userEffects, "stealth");
 
 export const isUserSummonPrevented = (
   userId: string | undefined,
   userEffects: UserEffect[] | undefined,
-) => {
-  return userEffects?.some(
-    (e) =>
-      e.type === "summonprevent" &&
-      e.targetId === userId &&
-      !e.castThisRound &&
-      "rounds" in e &&
-      e.rounds &&
-      e.rounds > 0,
-  );
-};
+) => hasActiveEffectOfType(userId, userEffects, "summonprevent");
 
 export const isUserDisarmed = (
   userId: string | undefined,
   userEffects: UserEffect[] | undefined,
-) => {
-  return userEffects?.some(
-    (e) =>
-      e.type === "disarm" &&
-      e.targetId === userId &&
-      !e.castThisRound &&
-      "rounds" in e &&
-      e.rounds &&
-      e.rounds > 0,
-  );
-};
+) => hasActiveEffectOfType(userId, userEffects, "disarm");
 
 export const getUserElementalSeal = (
   userId: string | undefined,
@@ -927,17 +919,7 @@ export const getUserElementalSeal = (
 export const isUserImmobilized = (
   userId: string | undefined,
   userEffects: UserEffect[] | undefined,
-) => {
-  return userEffects?.some(
-    (e) =>
-      e.type === "moveprevent" &&
-      e.targetId === userId &&
-      !e.castThisRound &&
-      "rounds" in e &&
-      e.rounds &&
-      e.rounds > 0,
-  );
-};
+) => hasActiveEffectOfType(userId, userEffects, "moveprevent");
 
 /** Get a copy of the barriers between two tiles on the grid, as well as the total absorbtion along that path */
 export const getBarriersBetween = (
