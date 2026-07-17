@@ -1370,8 +1370,9 @@ export const WAR_MAX_DURATION_DAYS = 14; // Maximum war duration before auto-res
 
 // Skill point leveling constants
 export const SKILL_POINT_MIN_LEVEL = 31; // Minimum level to start gaining skill points from leveling
-export const SKILL_POINT_MAX_LEVEL = 50; // Maximum level to gain skill points from leveling
 export const MAX_SKILL_POINTS_FROM_LEVELING = 20; // Maximum skill points that can be gained from leveling
+export const SKILL_POINT_MAX_LEVEL =
+  SKILL_POINT_MIN_LEVEL + MAX_SKILL_POINTS_FROM_LEVELING - 1; // Maximum level to gain skill points from leveling
 
 export const WAR_SECTORWAR_AI_SHRINE_REDUCE = 10; // KIlling AI shrine hp decrease
 export const WAR_SECTORWAR_AI_SHRINE_RECOVER = 3; // Shrine hp recover per day
