@@ -888,6 +888,21 @@ export const isUserSummonPrevented = (
   );
 };
 
+export const isUserDisarmed = (
+  userId: string | undefined,
+  userEffects: UserEffect[] | undefined,
+) => {
+  return userEffects?.some(
+    (e) =>
+      e.type === "disarm" &&
+      e.targetId === userId &&
+      !e.castThisRound &&
+      "rounds" in e &&
+      e.rounds &&
+      e.rounds > 0,
+  );
+};
+
 export const getUserElementalSeal = (
   userId: string | undefined,
   userEffects: UserEffect[] | undefined,
@@ -998,6 +1013,7 @@ export const calcApplyRatio = (
     "stunprevent",
     "stealth",
     "summonprevent",
+    "disarm",
     "weakness",
     "shield",
   ];
@@ -1114,6 +1130,7 @@ export const sortEffects = (
     "sealprevent",
     "stunprevent",
     "summonprevent",
+    "disarm",
     "weakness",
     // Pre-modifiers
     "elementalseal",

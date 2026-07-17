@@ -142,6 +142,7 @@ export const OBJECTIVE_TAG_TYPES = [
   "decreasemaxpools",
   "decreasepoolcost",
   "decreasestat",
+  "disarm",
   "drain",
   "elementalseal",
   "finalstand",

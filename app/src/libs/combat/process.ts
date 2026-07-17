@@ -44,6 +44,7 @@ import {
   decreaseMaxPools,
   decreasepoolcost,
   decreaseStats,
+  disarm,
   drain,
   elementalseal,
   finalStand,
@@ -1155,6 +1156,8 @@ export const applySingleEffect = (
           info = movePrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "summonprevent") {
           info = summonPrevent(effect, usersEffects, curTarget);
+        } else if (effect.type === "disarm") {
+          info = disarm(effect, usersEffects, curTarget);
         } else if (effect.type === "weakness") {
           info = weakness(effect, curTarget);
         } else if (effect.type === "shield") {

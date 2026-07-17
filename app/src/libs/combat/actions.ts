@@ -56,6 +56,7 @@ import {
   getUserElementalSeal,
   hasNoAvailableActions,
   isEffectActive,
+  isUserDisarmed,
   isUserImmobilized,
   isUserStealthed,
   isUserSummonPrevented,
@@ -94,6 +95,7 @@ export const availableUserActions = (
   const isStealth = isUserStealthed(userId, battle?.usersEffects);
   const isStudent = user?.rank === "STUDENT";
   const isSummonPrevented = isUserSummonPrevented(userId, battle?.usersEffects);
+  const isDisarmed = isUserDisarmed(userId, battle?.usersEffects);
   const isImmobilized = isUserImmobilized(userId, battle?.usersEffects);
   const elementalSeal = getUserElementalSeal(userId, battle?.usersEffects);
   const basicActions = getActiveBasicActions(battle, user);
@@ -213,6 +215,8 @@ export const availableUserActions = (
             if (NonActionItemTypes.includes(item.itemType)) return false;
             if (ui.equipped === "NONE") return false;
             if (item.itemType === "WEAPON") {
+              // Hide weapons when disarmed
+              if (isDisarmed) return false;
               const current = Math.min(ui.durability, item.maxDurability);
               return current > DURABILITY_USABILITY_THR;
             }
