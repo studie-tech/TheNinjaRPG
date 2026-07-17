@@ -505,8 +505,9 @@ export const DisarmTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
   type: z.literal("disarm").prefault("disarm"),
-  description: msg("Prevents using weapons and hides them"),
+  description: msg("Prevents using WEAPON items in battle and hides them"),
 });
+export type DisarmTagType = z.infer<typeof DisarmTag>;
 
 export const DrainTag = z.object({
   ...BaseAttributes,
