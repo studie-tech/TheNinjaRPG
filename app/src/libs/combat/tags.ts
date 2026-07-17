@@ -3112,6 +3112,29 @@ export const summonPrevent = (
   }
 };
 
+/** Prevent target from using weapons */
+export const disarm = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+): ActionEffect | undefined => {
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "disarm");
+  if (immunityBlocked) return immunityBlocked;
+  const { power } = getPower(effect);
+  const mainCheck = Math.random() < power / 100;
+  if (mainCheck) {
+    // Set the effect to be active and hide weapons
+    effect.power = 100;
+    return getInfo(target, effect, "cannot use weapons");
+  } else if (effect.isNew) {
+    effect.rounds = 0;
+    return {
+      txt: `${target.username} could not be disarmed`,
+      color: "blue",
+    };
+  }
+};
+
 /** Prevent target from being stunned */
 export const weakness = (effect: UserEffect, target: BattleUserState) => {
   const { power } = getPower(effect);

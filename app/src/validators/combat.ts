@@ -130,6 +130,7 @@ export const PreventTagTypes = [
   "clearprevent",
   "cleanseprevent",
   "debuffprevent",
+  "disarm",
   "fleeprevent",
   "healprevent",
   "moveprevent",
@@ -500,6 +501,13 @@ export const VampTag = z.object({
 });
 export type VampTagType = z.infer<typeof VampTag>;
 
+export const DisarmTag = z.object({
+  ...BaseAttributes,
+  ...PowerAttributes,
+  type: z.literal("disarm").prefault("disarm"),
+  description: msg("Prevents using weapons and hides them"),
+});
+
 export const DrainTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
@@ -829,6 +837,7 @@ export const AllTags = z.union([
   DecreasePoolCostTag.prefault({}),
   DecreaseMaxPoolsTag.prefault({}),
   DecreaseStatTag.prefault({}),
+  DisarmTag.prefault({}),
   DrainTag.prefault({}),
   ElementalSealTag.prefault({}),
   FinalStandTag.prefault({}),
@@ -954,6 +963,7 @@ export const isNegativeUserEffect = (tag: ZodAllTags) => {
       "decreaseheal",
       "decreasestat",
       "decreasemaxpools",
+      "disarm",
       "drain",
       "elementalseal",
       "flee",
