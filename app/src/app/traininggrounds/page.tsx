@@ -505,30 +505,39 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
             <Fingerprint className={iconClassName} />
           );
 
+          const queueIsFull =
+            !!trainingQueue &&
+            trainingQueue.waiting.length + (trainingQueue.active ? 1 : 0) >=
+              trainingQueue.totalCapacity;
+
           return (
             <button
               type="button"
               id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
               key={`${stat}-${i}`}
-              onClick={() =>
-                overCap
-                  ? showMutationToast({ success: false, message: "Already capped" })
-                  : startTraining({
-                      stat,
-                      guess: captchaForm.getValues("guess") || undefined,
-                    })
-              }
+              onClick={() => {
+                if (overCap) {
+                  showMutationToast({ success: false, message: "Already capped" });
+                  return;
+                }
+                if (queueIsFull) {
+                  showMutationToast({
+                    success: false,
+                    message: "Stat training queue is full",
+                  });
+                  return;
+                }
+                startTraining({
+                  stat,
+                  guess: captchaForm.getValues("guess") || undefined,
+                });
+              }}
               className="relative"
-              disabled={
-                !!trainingQueue &&
-                trainingQueue.waiting.length + (trainingQueue.active ? 1 : 0) >=
-                  trainingQueue.totalCapacity
-              }
             >
               <div
                 className={cn(
                   trainItemClassName,
-                  overCap ? "opacity-50 grayscale" : "",
+                  overCap || queueIsFull ? "opacity-50 grayscale" : "",
                 )}
               >
                 <Image src={getImage(stat)} alt={label} width={256} height={256} />
@@ -865,6 +874,14 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
               setIsOpen={setIsOpen}
               isValid={false}
               onAccept={() => {
+                if (queueIsFull) {
+                  showMutationToast({
+                    success: false,
+                    message: "Jutsu training queue is full",
+                  });
+                  setIsOpen(false);
+                  return;
+                }
                 if (canTrain && !isPending) {
                   train({ jutsuId: jutsu.id });
                 } else {

@@ -339,26 +339,27 @@ export const occupationRouter = createTRPCRouter({
             ),
           );
         if (lock.rowsAffected !== 1) return "STATE_CHANGED" as const;
-        const [currentUser, currentQueue, materialRows] = await Promise.all([
-          tx.query.userData.findFirst({ where: eq(userData.userId, ctx.userId) }),
-          tx.query.userCraftingQueue.findMany({
-            where: and(
-              eq(userCraftingQueue.userId, ctx.userId),
-              isNull(userCraftingQueue.completedAt),
-              isNull(userCraftingQueue.cancelledAt),
+        // Sequential: PlanetScale/Vitess rejects concurrent queries on one transaction.
+        const currentUser = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        });
+        const currentQueue = await tx.query.userCraftingQueue.findMany({
+          where: and(
+            eq(userCraftingQueue.userId, ctx.userId),
+            isNull(userCraftingQueue.completedAt),
+            isNull(userCraftingQueue.cancelledAt),
+          ),
+          orderBy: asc(userCraftingQueue.startsAt),
+        });
+        const materialRows = await tx.query.userItem.findMany({
+          where: and(
+            eq(userItem.userId, ctx.userId),
+            inArray(
+              userItem.id,
+              allConsumptions.map((consumption) => consumption.userItemId),
             ),
-            orderBy: asc(userCraftingQueue.startsAt),
-          }),
-          tx.query.userItem.findMany({
-            where: and(
-              eq(userItem.userId, ctx.userId),
-              inArray(
-                userItem.id,
-                allConsumptions.map((consumption) => consumption.userItemId),
-              ),
-            ),
-          }),
-        ]);
+          ),
+        });
         if (!currentUser) return "STATE_CHANGED" as const;
         if (currentQueue.length >= getQueueTotalCapacity(currentUser)) {
           return "FULL" as const;

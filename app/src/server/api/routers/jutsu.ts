@@ -1184,23 +1184,24 @@ export const jutsuRouter = createTRPCRouter({
           .set({ updatedAt: sql`${userData.updatedAt}` })
           .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
         if (lock.rowsAffected !== 1) return { status: "STATE_CHANGED" as const };
-        const [currentUser, currentJutsu, currentQueue] = await Promise.all([
-          tx.query.userData.findFirst({ where: eq(userData.userId, ctx.userId) }),
-          tx.query.userJutsu.findFirst({
-            where: and(
-              eq(userJutsu.userId, ctx.userId),
-              eq(userJutsu.jutsuId, input.jutsuId),
-            ),
-          }),
-          tx.query.userJutsuTrainingQueue.findMany({
-            where: and(
-              eq(userJutsuTrainingQueue.userId, ctx.userId),
-              isNull(userJutsuTrainingQueue.completedAt),
-              isNull(userJutsuTrainingQueue.cancelledAt),
-            ),
-            orderBy: asc(userJutsuTrainingQueue.startsAt),
-          }),
-        ]);
+        // Sequential: PlanetScale/Vitess rejects concurrent queries on one transaction.
+        const currentUser = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        });
+        const currentJutsu = await tx.query.userJutsu.findFirst({
+          where: and(
+            eq(userJutsu.userId, ctx.userId),
+            eq(userJutsu.jutsuId, input.jutsuId),
+          ),
+        });
+        const currentQueue = await tx.query.userJutsuTrainingQueue.findMany({
+          where: and(
+            eq(userJutsuTrainingQueue.userId, ctx.userId),
+            isNull(userJutsuTrainingQueue.completedAt),
+            isNull(userJutsuTrainingQueue.cancelledAt),
+          ),
+          orderBy: asc(userJutsuTrainingQueue.startsAt),
+        });
         if (!currentUser) return { status: "STATE_CHANGED" as const };
         if (currentQueue.length >= getQueueTotalCapacity(currentUser)) {
           return { status: "FULL" as const };
@@ -1292,24 +1293,25 @@ export const jutsuRouter = createTRPCRouter({
             ),
           );
         if (claim.rowsAffected !== 1) return false;
-        const [remainingForJutsu, committed, info] = await Promise.all([
-          tx.query.userJutsuTrainingQueue.findMany({
-            where: and(
-              eq(userJutsuTrainingQueue.userId, ctx.userId),
-              eq(userJutsuTrainingQueue.jutsuId, active.jutsuId),
-              isNull(userJutsuTrainingQueue.completedAt),
-              isNull(userJutsuTrainingQueue.cancelledAt),
-            ),
-            orderBy: asc(userJutsuTrainingQueue.startsAt),
-          }),
-          tx.query.userJutsu.findFirst({
-            where: and(
-              eq(userJutsu.userId, ctx.userId),
-              eq(userJutsu.jutsuId, active.jutsuId),
-            ),
-          }),
-          tx.query.jutsu.findFirst({ where: eq(jutsu.id, active.jutsuId) }),
-        ]);
+        // Sequential: PlanetScale/Vitess rejects concurrent queries on one transaction.
+        const remainingForJutsu = await tx.query.userJutsuTrainingQueue.findMany({
+          where: and(
+            eq(userJutsuTrainingQueue.userId, ctx.userId),
+            eq(userJutsuTrainingQueue.jutsuId, active.jutsuId),
+            isNull(userJutsuTrainingQueue.completedAt),
+            isNull(userJutsuTrainingQueue.cancelledAt),
+          ),
+          orderBy: asc(userJutsuTrainingQueue.startsAt),
+        });
+        const committed = await tx.query.userJutsu.findFirst({
+          where: and(
+            eq(userJutsu.userId, ctx.userId),
+            eq(userJutsu.jutsuId, active.jutsuId),
+          ),
+        });
+        const info = await tx.query.jutsu.findFirst({
+          where: eq(jutsu.id, active.jutsuId),
+        });
         if (!info) throw new Error("Queued jutsu no longer exists");
         let projected = committed?.level ?? 0;
         let repricingRefund = 0;
@@ -1382,23 +1384,24 @@ export const jutsuRouter = createTRPCRouter({
             ),
           );
         if (claim.rowsAffected !== 1) return null;
-        const [remaining, committed, info] = await Promise.all([
-          tx.query.userJutsuTrainingQueue.findMany({
-            where: and(
-              eq(userJutsuTrainingQueue.userId, ctx.userId),
-              isNull(userJutsuTrainingQueue.completedAt),
-              isNull(userJutsuTrainingQueue.cancelledAt),
-            ),
-            orderBy: asc(userJutsuTrainingQueue.startsAt),
-          }),
-          tx.query.userJutsu.findFirst({
-            where: and(
-              eq(userJutsu.userId, ctx.userId),
-              eq(userJutsu.jutsuId, target.jutsuId),
-            ),
-          }),
-          tx.query.jutsu.findFirst({ where: eq(jutsu.id, target.jutsuId) }),
-        ]);
+        // Sequential: PlanetScale/Vitess rejects concurrent queries on one transaction.
+        const remaining = await tx.query.userJutsuTrainingQueue.findMany({
+          where: and(
+            eq(userJutsuTrainingQueue.userId, ctx.userId),
+            isNull(userJutsuTrainingQueue.completedAt),
+            isNull(userJutsuTrainingQueue.cancelledAt),
+          ),
+          orderBy: asc(userJutsuTrainingQueue.startsAt),
+        });
+        const committed = await tx.query.userJutsu.findFirst({
+          where: and(
+            eq(userJutsu.userId, ctx.userId),
+            eq(userJutsu.jutsuId, target.jutsuId),
+          ),
+        });
+        const info = await tx.query.jutsu.findFirst({
+          where: eq(jutsu.id, target.jutsuId),
+        });
         if (!info) throw new Error("Queued jutsu no longer exists");
         let projected = committed?.level ?? 0;
         let repricingRefund = 0;

@@ -188,6 +188,13 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
 
   // Handle craft
   const handleCraft = () => {
+    if (queueIsFull) {
+      showMutationToast({
+        success: false,
+        message: "Crafting queue is full",
+      });
+      return;
+    }
     if (selectedItem && canCraft) {
       craftItemMutation.mutate({ itemId: selectedItem.id, quantity: craftQuantity });
     }

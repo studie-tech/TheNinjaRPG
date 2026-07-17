@@ -169,17 +169,18 @@ export const trainRouter = createTRPCRouter({
           .set({ updatedAt: sql`${userData.updatedAt}` })
           .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
         if (lock.rowsAffected !== 1) return "STATE_CHANGED" as const;
-        const [currentUser, currentQueue] = await Promise.all([
-          tx.query.userData.findFirst({ where: eq(userData.userId, ctx.userId) }),
-          tx.query.userStatTrainingQueue.findMany({
-            where: and(
-              eq(userStatTrainingQueue.userId, ctx.userId),
-              isNull(userStatTrainingQueue.completedAt),
-              isNull(userStatTrainingQueue.cancelledAt),
-            ),
-            orderBy: asc(userStatTrainingQueue.startsAt),
-          }),
-        ]);
+        // Sequential: PlanetScale/Vitess rejects concurrent queries on one transaction.
+        const currentUser = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        });
+        const currentQueue = await tx.query.userStatTrainingQueue.findMany({
+          where: and(
+            eq(userStatTrainingQueue.userId, ctx.userId),
+            isNull(userStatTrainingQueue.completedAt),
+            isNull(userStatTrainingQueue.cancelledAt),
+          ),
+          orderBy: asc(userStatTrainingQueue.startsAt),
+        });
         if (!currentUser) return "STATE_CHANGED" as const;
         if (currentQueue.length >= getQueueTotalCapacity(currentUser)) {
           return "FULL" as const;
@@ -260,13 +261,9 @@ export const trainRouter = createTRPCRouter({
         const ratio = elapsedSeconds / active.durationSeconds;
         const statGain = active.fullStatGain * ratio;
         const experienceGain = active.fullExperienceGain * ratio;
-        const { user: currentUser } = await fetchUpdatedUser({
-          client: tx as DrizzleClient,
-          userId: ctx.userId,
-          skipQueueSettlement: true,
-        });
-        if (!currentUser) throw new Error("User not found while stopping training");
-        const { trackers } = getNewTrackers(currentUser, [
+        // Use user from prepareStatQueue — fetchUpdatedUser must not run on tx
+        // (Vitess rejects concurrent queries within a transaction).
+        const { trackers } = getNewTrackers(user, [
           { task: "stats_trained", increment: statGain },
           { task: "minutes_training", increment: elapsedSeconds / 60 },
         ]);
@@ -278,7 +275,7 @@ export const trainRouter = createTRPCRouter({
               [active.stat]: sql`${statColumn} + ${statGain}`,
               experience: sql`${userData.experience} + ${experienceGain}`,
               dailyTrainings: sql`${userData.dailyTrainings} + 1`,
-              questData: filterQuestTrackersForDbPersist(trackers, currentUser),
+              questData: filterQuestTrackersForDbPersist(trackers, user),
             })
             .where(eq(userData.userId, ctx.userId));
           await tx.insert(trainingLog).values({

@@ -134,6 +134,18 @@ export const settleStatTrainingQueue = async (
   });
   let completed = 0;
   for (const entry of due) {
+    // Fetch outside the transaction — Vitess rejects Promise.all on a shared tx.
+    const { user } = await fetchUpdatedUser({
+      client,
+      userId,
+      skipQueueSettlement: true,
+    });
+    if (!user)
+      throw new Error(`Could not settle stat queue for missing user ${userId}`);
+    const { trackers } = getNewTrackers(user, [
+      { task: "stats_trained", increment: entry.fullStatGain },
+      { task: "minutes_training", increment: entry.durationSeconds / 60 },
+    ]);
     const didComplete = await client.transaction(async (tx) => {
       await tx
         .update(userData)
@@ -151,17 +163,6 @@ export const settleStatTrainingQueue = async (
         );
       if (claim.rowsAffected !== 1) return false;
 
-      const { user } = await fetchUpdatedUser({
-        client: tx as DrizzleClient,
-        userId,
-        skipQueueSettlement: true,
-      });
-      if (!user)
-        throw new Error(`Could not settle stat queue for missing user ${userId}`);
-      const { trackers } = getNewTrackers(user, [
-        { task: "stats_trained", increment: entry.fullStatGain },
-        { task: "minutes_training", increment: entry.durationSeconds / 60 },
-      ]);
       const statColumn = userData[entry.stat];
       await tx
         .update(userData)
@@ -215,7 +216,7 @@ export const settleJutsuTrainingQueue = async (
             isNull(userJutsuTrainingQueue.cancelledAt),
           ),
         );
-      if (claim.rowsAffected !== 1) return false;
+      if (claim.rowsAffected !== 1) return false as const;
 
       const existing = await tx.query.userJutsu.findFirst({
         where: and(eq(userJutsu.userId, userId), eq(userJutsu.jutsuId, entry.jutsuId)),
@@ -225,32 +226,35 @@ export const settleJutsuTrainingQueue = async (
           .update(userJutsu)
           .set({ level: sql`${userJutsu.level} + 1`, updatedAt: now })
           .where(eq(userJutsu.id, existing.id));
-      } else {
-        await tx.insert(userJutsu).values({
-          id: nanoid(),
-          userId,
-          jutsuId: entry.jutsuId,
-          level: 1,
-          equipped: false,
-        });
-        const { user } = await fetchUpdatedUser({
-          client: tx as DrizzleClient,
-          userId,
-          skipQueueSettlement: true,
-        });
-        if (!user)
-          throw new Error(`Could not settle jutsu queue for missing user ${userId}`);
-        const { trackers } = getNewTrackers(user, [
-          { task: "jutsus_mastered", increment: 1 },
-          { task: "train_specific_jutsu", increment: 1, contentId: entry.jutsuId },
-        ]);
-        await tx
-          .update(userData)
-          .set({ questData: filterQuestTrackersForDbPersist(trackers, user) })
-          .where(eq(userData.userId, userId));
+        return "leveled" as const;
       }
-      return true;
+      await tx.insert(userJutsu).values({
+        id: nanoid(),
+        userId,
+        jutsuId: entry.jutsuId,
+        level: 1,
+        equipped: false,
+      });
+      return "mastered" as const;
     });
+    if (didComplete === "mastered") {
+      // Quest trackers outside tx — Vitess rejects fetchUpdatedUser's Promise.all on tx.
+      const { user } = await fetchUpdatedUser({
+        client,
+        userId,
+        skipQueueSettlement: true,
+      });
+      if (!user)
+        throw new Error(`Could not settle jutsu queue for missing user ${userId}`);
+      const { trackers } = getNewTrackers(user, [
+        { task: "jutsus_mastered", increment: 1 },
+        { task: "train_specific_jutsu", increment: 1, contentId: entry.jutsuId },
+      ]);
+      await client
+        .update(userData)
+        .set({ questData: filterQuestTrackersForDbPersist(trackers, user) })
+        .where(eq(userData.userId, userId));
+    }
     if (didComplete) completed += 1;
   }
   return completed;
@@ -270,6 +274,23 @@ export const settleCraftingQueue = async (
   });
   let completed = 0;
   for (const entry of due) {
+    // Fetch outside the transaction — Vitess rejects Promise.all on a shared tx.
+    const { user } = await fetchUpdatedUser({
+      client,
+      userId,
+      skipQueueSettlement: true,
+    });
+    if (!user)
+      throw new Error(`Could not settle crafting queue for missing user ${userId}`);
+    const { trackers } = getNewTrackers(user, [
+      { task: "crafting_experience_gained", increment: entry.craftingExperience },
+      { task: "items_crafted", increment: entry.quantity },
+      {
+        task: "craft_specific_item",
+        increment: entry.quantity,
+        contentId: entry.itemId,
+      },
+    ]);
     const didComplete = await client.transaction(async (tx) => {
       await tx
         .update(userData)
@@ -317,22 +338,6 @@ export const settleCraftingQueue = async (
       }
       if (outputs.length > 0) await tx.insert(userItem).values(outputs);
 
-      const { user } = await fetchUpdatedUser({
-        client: tx as DrizzleClient,
-        userId,
-        skipQueueSettlement: true,
-      });
-      if (!user)
-        throw new Error(`Could not settle crafting queue for missing user ${userId}`);
-      const { trackers } = getNewTrackers(user, [
-        { task: "crafting_experience_gained", increment: entry.craftingExperience },
-        { task: "items_crafted", increment: entry.quantity },
-        {
-          task: "craft_specific_item",
-          increment: entry.quantity,
-          contentId: entry.itemId,
-        },
-      ]);
       await tx
         .update(userData)
         .set({
