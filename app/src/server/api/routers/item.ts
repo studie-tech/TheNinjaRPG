@@ -1399,8 +1399,7 @@ export const itemRouter = createTRPCRouter({
         } else if (effect.type === "rollsagemode") {
           // `updates.sageModeId` guards against a second `rollsagemode` effect on the same item
           // clobbering a grant an earlier effect in this loop already made; `user.sageModeId`
-          // guards against overwriting a mode the player already owns (bypassing the swap/removal
-          // reputation cost enforced by purchaseSageMode/swapSageMode).
+          // guards against overwriting a mode the player already owns.
           if (user.sageModeId || updates.sageModeId) {
             messages.push(
               "You already channel a sage mode; the natural energies find no room for another. ",
@@ -1411,7 +1410,6 @@ export const itemRouter = createTRPCRouter({
             sageModes: allSageModes,
             user,
             previousRolls: previousSageRolls,
-            rank: effect.rank,
           });
           data.push(sageModePool);
           const randomSageMode = getRandomElement(sageModePool);
@@ -1424,31 +1422,15 @@ export const itemRouter = createTRPCRouter({
           const roll = Math.random() * 100;
           const success = roll < effect.power;
           data.push({ roll, success });
-          const previousRoll = previousSageRolls.find((r) =>
-            success
-              ? r.sageModeId === randomSageMode.id
-              : r.goal === effect.rank && !r.sageModeId,
-          );
-          if (previousRoll) {
-            promises.push(
-              ctx.drizzle
-                .update(sageModeRolls)
-                .set({ used: sql`${sageModeRolls.used} + 1`, updatedAt: new Date() })
-                .where(eq(sageModeRolls.id, previousRoll.id)),
-            );
-          } else {
+          if (success) {
             promises.push(
               ctx.drizzle.insert(sageModeRolls).values({
                 id: nanoid(),
                 userId: ctx.userId,
                 type: "ITEM",
-                sageModeId: success ? randomSageMode.id : null,
-                goal: effect.rank,
-                used: 1,
+                sageModeId: randomSageMode.id,
               }),
             );
-          }
-          if (success) {
             updates.sageModeId = randomSageMode.id;
             messages.push(`You rolled a new sage mode: ${randomSageMode.name}. `);
           } else {

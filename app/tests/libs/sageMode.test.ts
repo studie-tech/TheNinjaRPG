@@ -5,12 +5,12 @@ import {
   getSageDailyCap,
   getActiveSageLevel,
   getSageModeActivationCost,
-  getSageModePityRolls,
   getSageRankIndex,
   isSageRankAtLeast,
   sageRanksAtOrBelow,
+  filterRollableSageModes,
 } from "@/libs/sageMode";
-import { PITY_SAGE_MODE_ROLLS } from "@/drizzle/constants";
+import type { SageMode, UserData } from "@/drizzle/schema";
 
 describe("getSageMasteryRank", () => {
   it("maps sage mastery experience to the correct rank at each threshold", () => {
@@ -74,29 +74,6 @@ describe("getSageModeActivationCost", () => {
   });
 });
 
-describe("getSageModePityRolls", () => {
-  const T = PITY_SAGE_MODE_ROLLS;
-  it("returns 0 below the threshold", () => {
-    expect(getSageModePityRolls({ used: 0, pityRolls: 0 })).toBe(0);
-    expect(getSageModePityRolls({ used: T - 1, pityRolls: 0 })).toBe(0);
-  });
-  it("grants one pity roll at the threshold", () => {
-    expect(getSageModePityRolls({ used: T, pityRolls: 0 })).toBe(1);
-  });
-  it("grants multiple pity rolls at multiples of the threshold", () => {
-    expect(getSageModePityRolls({ used: T * 2, pityRolls: 0 })).toBe(2);
-  });
-  it("subtracts already-claimed pity rolls", () => {
-    expect(getSageModePityRolls({ used: T * 2, pityRolls: 1 })).toBe(1);
-  });
-  it("does not over-grant when pityRolls pushes the numerator across a threshold", () => {
-    // used = 2*PITY - 1 earns exactly ONE credit total, regardless of pityRolls claimed.
-    const used = 2 * T - 1;
-    expect(getSageModePityRolls({ used, pityRolls: 0 })).toBe(1);
-    expect(getSageModePityRolls({ used, pityRolls: 1 })).toBe(0);
-  });
-});
-
 describe("sage rank ordering helpers", () => {
   it("indexes ranks in ascending mastery order", () => {
     expect(getSageRankIndex("NONE")).toBe(0);
@@ -112,5 +89,66 @@ describe("sage rank ordering helpers", () => {
   it("lists ranks at or below a rank", () => {
     expect(sageRanksAtOrBelow("ADEPT")).toEqual(["NONE", "INITIATE", "ADEPT"]);
     expect(sageRanksAtOrBelow("NONE")).toEqual(["NONE"]);
+  });
+});
+
+describe("filterRollableSageModes (rank-less)", () => {
+  const mode = (over: Partial<SageMode>): SageMode =>
+    ({
+      id: "m1",
+      name: "Mode",
+      image: "i.webp",
+      description: "d",
+      battleDescription: null,
+      effects: [],
+      afterEffects: [],
+      level2Effects: [],
+      activationRounds: 5,
+      afterEffectRounds: 3,
+      chakraCostPerc: 20,
+      staminaCostPerc: 20,
+      actionCostPerc: 80,
+      level: 1,
+      requiredSageMastery: 0,
+      hidden: false,
+      villageId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...over,
+    }) as SageMode;
+
+  const user = { villageId: "v1" } as UserData;
+
+  it("returns level-1, non-hidden, village-matching, not-yet-rolled modes", () => {
+    const pool = filterRollableSageModes({
+      sageModes: [mode({ id: "a" })],
+      user,
+      previousRolls: [],
+    });
+    expect(pool.map((m) => m.id)).toEqual(["a"]);
+  });
+
+  it("excludes hidden, non-level-1, wrong-village, and previously-rolled modes", () => {
+    const pool = filterRollableSageModes({
+      sageModes: [
+        mode({ id: "hidden", hidden: true }),
+        mode({ id: "lvl2", level: 2 }),
+        mode({ id: "otherVillage", villageId: "v2" }),
+        mode({ id: "rolled" }),
+        mode({ id: "keep" }),
+      ],
+      user,
+      previousRolls: [{ sageModeId: "rolled" }],
+    });
+    expect(pool.map((m) => m.id)).toEqual(["keep"]);
+  });
+
+  it("keeps village-less (global) modes regardless of user village", () => {
+    const pool = filterRollableSageModes({
+      sageModes: [mode({ id: "global", villageId: null })],
+      user,
+      previousRolls: [],
+    });
+    expect(pool.map((m) => m.id)).toEqual(["global"]);
   });
 });

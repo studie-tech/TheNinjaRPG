@@ -71,8 +71,8 @@ export default function ManualSageModes() {
           copied, or mirrored by opponents.
         </p>
         <p className="pt-4">
-          Sage Mode comes in two levels. Level 1 can be acquired through rolling or
-          purchase. Level 2 is automatically unlocked when you reach sufficient Sage
+          Sage Mode comes in two levels. Level 1 can be acquired through item rolls and
+          quests. Level 2 is automatically unlocked when you reach sufficient Sage
           Mastery experience.
         </p>
       </ContentBox>

@@ -656,7 +656,6 @@ export const RollRandomBloodline = z.object({
 
 export const RollRandomSageMode = z.object({
   ...BaseAttributes,
-  rank: z.enum(LetterRanks).prefault("D"),
   description: msg("Receive a random sage mode"),
   power: z.coerce.number().min(0).max(100).prefault(1),
   type: z.literal("rollsagemode").prefault("rollsagemode"),
@@ -1311,7 +1310,6 @@ export const SageModeValidator = z.object({
   image: z.string(),
   description: z.string(),
   battleDescription: z.string().nullish(),
-  rank: z.enum(LetterRanks),
   level: z.coerce.number().int().min(1).max(SAGE_MODE_MAX_LEVEL),
   requiredSageMastery: z.coerce.number().int().min(0),
   activationRounds: z.coerce.number().int().min(1).max(20),

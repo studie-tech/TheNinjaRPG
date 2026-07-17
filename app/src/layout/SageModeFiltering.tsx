@@ -1,7 +1,6 @@
 "use client";
 
-import type { LetterRank } from "@/drizzle/constants";
-import { LetterRanks, SAGE_MODE_MAX_LEVEL } from "@/drizzle/constants";
+import { SAGE_MODE_MAX_LEVEL } from "@/drizzle/constants";
 import {
   buildFilter,
   ContentFiltering,
@@ -11,22 +10,10 @@ import {
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
-const makeSageModeFilteringSchema = (
-  limitRanks: LetterRank[],
-  defaultRank: LetterRank | "None" = "None",
-) =>
+const makeSageModeFilteringSchema = () =>
   defineFilteringSchema({
     fields: [
       { id: "name", label: "Name", type: "text", defaultValue: "" },
-      {
-        id: "rank",
-        label: "Required Rank",
-        type: "single-select",
-        defaultValue: defaultRank,
-        options: limitRanks.map((r) => ({ value: r, label: r })),
-        emptyValues: ["None"],
-        includeNone: true,
-      },
       {
         id: "level",
         label: "Level",
@@ -70,13 +57,11 @@ const makeSageModeFilteringSchema = (
 
 interface SageModeFilteringProps {
   state: SageModeFilteringState;
-  limitRanks?: LetterRank[];
 }
 
 const SageModeFiltering: React.FC<SageModeFilteringProps> = (props) => {
   const { data: userData } = useUserData();
-  const limitRanks = props.limitRanks ? props.limitRanks : [...LetterRanks];
-  const schema = makeSageModeFilteringSchema([...limitRanks]);
+  const schema = makeSageModeFilteringSchema();
   const context = { canEdit: Boolean(userData && canChangeContent(userData.role)) };
 
   return (
@@ -91,11 +76,8 @@ const SageModeFiltering: React.FC<SageModeFilteringProps> = (props) => {
 
 export default SageModeFiltering;
 
-export const getFilter = (
-  state: SageModeFilteringState,
-  limitRanks: LetterRank[] = [...LetterRanks],
-) => {
-  const filter = buildFilter(state.cf, makeSageModeFilteringSchema([...limitRanks]));
+export const getFilter = (state: SageModeFilteringState) => {
+  const filter = buildFilter(state.cf, makeSageModeFilteringSchema());
   // Convert level from string to number if present
   if (filter.level && typeof filter.level === "string") {
     filter.level = parseInt(filter.level, 10);
@@ -103,14 +85,13 @@ export const getFilter = (
   return filter;
 };
 
-export const useFiltering = (defaultRank: LetterRank | "None" = "None") => {
-  const schema = makeSageModeFilteringSchema([...LetterRanks], defaultRank);
+export const useFiltering = () => {
+  const schema = makeSageModeFilteringSchema();
   const cf = useContentFiltering(schema);
   return {
     ...cf.values,
     cf,
     setName: cf.setters.name,
-    setRank: cf.setters.rank,
     setLevel: cf.setters.level,
     setVillage: cf.setters.village,
     setHidden: cf.setters.hidden,

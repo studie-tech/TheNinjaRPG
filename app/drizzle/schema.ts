@@ -659,7 +659,6 @@ export const sageMode = mysqlTable(
     level: tinyint("level").default(1).notNull(),
     requiredSageMastery: int("requiredSageMastery").default(0).notNull(),
     // General settings
-    rank: mysqlEnum("rank", consts.LetterRanks).notNull(),
     hidden: boolean("hidden").default(false).notNull(),
     villageId: varchar("villageId", { length: 191 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
@@ -672,7 +671,6 @@ export const sageMode = mysqlTable(
   (table) => ({
     nameKey: uniqueIndex("SageMode_name_key").on(table.name),
     levelIdx: index("SageMode_level_idx").on(table.level),
-    rankIdx: index("SageMode_rank_idx").on(table.rank),
     villageIdx: index("SageMode_villageId_idx").on(table.villageId),
     hiddenIdx: index("SageMode_hidden_idx").on(table.hidden),
   }),
@@ -700,10 +698,7 @@ export const sageModeRolls = mysqlTable(
       .notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     sageModeId: varchar("sageModeId", { length: 191 }),
-    used: smallint("used").default(0).notNull(),
-    pityRolls: smallint("pityRolls").default(0).notNull(),
     type: mysqlEnum("type", consts.SAGE_MODE_ROLL_TYPES).notNull(),
-    goal: mysqlEnum("rank", consts.LetterRanks),
   },
   (table) => ({
     userIdIdx: index("SageModeRolls_userId_idx").on(table.userId),

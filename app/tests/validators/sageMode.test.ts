@@ -5,7 +5,6 @@ const base = {
   name: "Toad Sage Mode",
   image: "img.webp",
   description: "flavor",
-  rank: "D" as const,
   level: 1,
   requiredSageMastery: 0,
   activationRounds: 5,

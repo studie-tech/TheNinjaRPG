@@ -229,10 +229,6 @@ export const canSwapBloodline = (role: UserRole) => {
   return !!role; // Allow all roles to swap bloodline
 };
 
-export const canSwapSageMode = (role: UserRole) => {
-  return !!role; // Allow all roles to swap sage mode
-};
-
 export const canSeeSecretData = (role: UserRole) => {
   return [
     "CONTENT",

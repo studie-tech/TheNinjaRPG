@@ -1,5 +1,4 @@
-import { TRPCError } from "@trpc/server";
-import { and, eq, gte, isNotNull, isNull, like, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, like, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -11,57 +10,22 @@ import {
   serverError,
 } from "@/api/trpc";
 import {
-  COST_SWAP_SAGE_MODE,
   IMG_AVATAR_DEFAULT,
-  LetterRanks,
-  PITY_SYSTEM_ENABLED,
   REMOVAL_COST,
-  SAGE_MODE_COST,
   SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
-  SAGE_MODE_SWAP_COOLDOWN_HOURS,
-  SAGE_MODE_SWAP_FREE_AMOUNT,
-  SAGE_MODE_SWAP_FREE_DAYS,
-  SAGE_MODE_SWAP_FREE_GOLD,
-  SAGE_MODE_SWAP_FREE_NORMAL,
-  SAGE_MODE_SWAP_FREE_SILVER,
 } from "@/drizzle/constants";
 import type { SageMode, UserData } from "@/drizzle/schema";
-import { actionLog, sageMode, sageModeRolls, userData } from "@/drizzle/schema";
-import {
-  fetchItemSageModeRolls,
-  fetchSageModes,
-  filterRollableSageModes,
-  getSageModePityRolls,
-} from "@/libs/sageMode";
+import { actionLog, sageMode, userData } from "@/drizzle/schema";
 import { callDiscordContent } from "@/libs/socials";
-import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import { fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
-import {
-  claimUserSnapshot,
-  refundPityCredit,
-  reservePityCredit,
-} from "@/server/utils/concurrency";
-import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
-import { getUnique } from "@/utils/grouping";
-import { getUserFederalStatus } from "@/utils/paypal";
 import { canChangeContent, canEditBloodline } from "@/utils/permissions";
-import {
-  DAY_S,
-  getDaysHoursMinutesSeconds,
-  getTimeLeftStr,
-  secondsFromDate,
-  secondsPassed,
-} from "@/utils/time";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import type { ZodAllTags } from "@/validators/combat";
 import { SageModeValidator } from "@/validators/combat";
 import type { SageModeFilteringSchema } from "@/validators/sageMode";
 import { sageModeFilteringSchema } from "@/validators/sageMode";
-
-const ALREADY_HAS_SAGE_MODE_ERROR = "Already have sage mode, please remove first";
-const SAGE_MODE_BEING_MODIFIED_ERROR =
-  "Your sage mode is being modified — please try again";
 
 export const sageModeRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
@@ -149,7 +113,6 @@ export const sageModeRouter = createTRPCRouter({
         battleDescription: SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
         effects: [],
         afterEffects: [],
-        rank: "D",
         level: 1,
         hidden: true,
       });
@@ -158,124 +121,6 @@ export const sageModeRouter = createTRPCRouter({
       return { success: false, message: `Not allowed to create sage mode` };
     }
   }),
-
-  // Get all sage modes a user has ever had
-  getUserHistoricSageModes: protectedProcedure.query(async ({ ctx }) => {
-    return await fetchUserHistoricSageModes(ctx.drizzle, ctx.userId);
-  }),
-
-  // Get sage mode swap info
-  getSwapInfo: protectedProcedure.query(async ({ ctx }) => {
-    const [{ user }, recentSwaps] = await Promise.all([
-      fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      }),
-      fetchMonthlySageModeSwaps(ctx.drizzle, ctx.userId),
-    ]);
-    if (!user)
-      return {
-        isFree: false,
-        freeSwapsUsed: 0,
-        freeSwapsRemaining: 0,
-        recentSwaps: [],
-      };
-    const federalStatus = getUserFederalStatus(user);
-    const freeSwaps = getFreeSageModeSwaps(federalStatus);
-    const freeSwapsUsed = recentSwaps.length;
-    const rawRemaining = freeSwaps - freeSwapsUsed;
-    const freeSwapsRemaining = Math.max(0, rawRemaining);
-    const isFree = freeSwapsRemaining > 0;
-    return { isFree, freeSwapsUsed, freeSwapsRemaining, recentSwaps };
-  }),
-
-  // Swap sage mode of session user
-  swapSageMode: protectedProcedure
-    .input(z.object({ sageModeId: z.string() }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      const [updatedUser, mode, historicSageModes, lastTransfer, monthlySwaps] =
-        await Promise.all([
-          fetchUpdatedUser({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-          }),
-          fetchSageMode(ctx.drizzle, input.sageModeId),
-          fetchUserHistoricSageModes(ctx.drizzle, ctx.userId),
-          ctx.drizzle.query.actionLog.findFirst({
-            where: and(
-              eq(actionLog.userId, ctx.userId),
-              eq(actionLog.tableName, "user"),
-              eq(actionLog.relatedMsg, "SageMode Changed"),
-            ),
-            orderBy: (table, { desc }) => [desc(table.createdAt)],
-          }),
-          fetchMonthlySageModeSwaps(ctx.drizzle, ctx.userId),
-        ]);
-      const user = updatedUser.user;
-      if (!user) return errorResponse("User does not exist");
-      if (!mode) return errorResponse("Sage Mode does not exist");
-      if (user.sageModeId === mode.id) {
-        return errorResponse("You already have this sage mode");
-      }
-
-      const federalStatus = getUserFederalStatus(user);
-      const freeSwaps = getFreeSageModeSwaps(federalStatus);
-      const freeSwapsUsed = monthlySwaps.length;
-      const hasFreeSwapAvailable = freeSwapsUsed < freeSwaps;
-      const isFreeSwap = hasFreeSwapAvailable;
-
-      if (!isFreeSwap && COST_SWAP_SAGE_MODE > user.reputationPoints) {
-        return errorResponse("Not enough reputation points");
-      }
-      if (!historicSageModes.find((b) => b.id === mode.id)) {
-        return errorResponse("Sage Mode is not in your history");
-      }
-      if (lastTransfer) {
-        const canTransferAgainDate = secondsFromDate(
-          SAGE_MODE_SWAP_COOLDOWN_HOURS * 60 * 60,
-          lastTransfer.createdAt,
-        );
-        if (canTransferAgainDate > new Date()) {
-          const msLeft = -secondsPassed(canTransferAgainDate) * 1000;
-          const timeLeft = getTimeLeftStr(...getDaysHoursMinutesSeconds(msLeft));
-          return errorResponse(`You can swap again in ${timeLeft}`);
-        }
-      }
-
-      const swapCost = isFreeSwap ? 0 : COST_SWAP_SAGE_MODE;
-      // `user` comes from fetchUpdatedUser, which eager-loads the current sage mode relation,
-      // so the previous mode's name is already in hand — no extra round-trip needed for the log.
-      const currentSageMode = user.sageMode ?? null;
-      const swapMessage = `Sage Mode Swapped from ${currentSageMode?.name ?? "None"} to ${mode.name}`;
-      const swapClaim = await claimUserSnapshot({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        updatedAt: user.updatedAt,
-      });
-      if (!swapClaim.success) {
-        return errorResponse(SAGE_MODE_BEING_MODIFIED_ERROR);
-      }
-      await updateSageMode(ctx.drizzle, user, mode, swapCost, swapMessage);
-
-      if (isFreeSwap) {
-        await ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "sageModeSwap",
-          changes: [`Sage Mode swap (free Gold - ${SAGE_MODE_SWAP_FREE_DAYS} days)`],
-          relatedId: mode.id,
-          relatedMsg: `Free swap for Gold supporter (${SAGE_MODE_SWAP_FREE_DAYS} day cooldown)`,
-          relatedImage: user.avatarLight,
-          relatedValue: 0,
-        });
-      }
-
-      return {
-        success: true,
-        message: `Sage Mode swapped${isFreeSwap ? " (Free for Gold supporter)" : ""}`,
-      };
-    }),
 
   // Delete a sage mode
   delete: protectedProcedure
@@ -385,90 +230,6 @@ export const sageModeRouter = createTRPCRouter({
       }
     }),
 
-  getItemRolls: protectedProcedure.query(async ({ ctx }) => {
-    return await fetchItemSageModeRolls(ctx.drizzle, ctx.userId);
-  }),
-
-  // Pity Roll a sage mode
-  pityRoll: protectedProcedure
-    .input(z.object({ rank: z.enum(LetterRanks).optional().nullish() }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      const [user, sageModes, previousRolls] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchSageModes(ctx.drizzle),
-        fetchItemSageModeRolls(ctx.drizzle, ctx.userId),
-      ]);
-      if (user.sageModeId) {
-        return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
-      }
-      const sageModePool = filterRollableSageModes({
-        sageModes,
-        user,
-        previousRolls,
-        rank: input.rank,
-      });
-      if (!PITY_SYSTEM_ENABLED) return errorResponse("Pity system is disabled");
-      const prevRoll = previousRolls.find(
-        (r) => r.goal === input.rank && !r.sageModeId,
-      );
-      if (!prevRoll) return errorResponse("No previous roll found");
-      const availablePityRolls = getSageModePityRolls(prevRoll);
-      if (availablePityRolls <= 0) return errorResponse("No pity rolls available");
-      const randomSageMode = getRandomElement(sageModePool);
-      if (!randomSageMode) return errorResponse("No sage modes in the pool?");
-      // Consume one pity credit atomically BEFORE granting the mode. The CAS on the
-      // pre-read pityRolls value serializes concurrent claims: a request racing on a
-      // stale count (e.g. claim -> remove the granted mode -> claim again before this
-      // increment lands) gets false and aborts here, so a single earned credit
-      // can never yield two grants. Reserving before the grant (not after) means the
-      // loser stops before touching userData.sageModeId at all.
-      const reserved = await reservePityCredit({
-        client: ctx.drizzle,
-        table: sageModeRolls,
-        rollId: prevRoll.id,
-        expectedPityRolls: prevRoll.pityRolls,
-      });
-      if (!reserved) {
-        return errorResponse("No pity rolls available");
-      }
-      // Refund the reserved credit ONLY when the grant's own CAS rejected (updateSageMode
-      // throws a TRPCError via serverError when rowsAffected is 0, i.e. nothing was granted).
-      // A raw DB error from its post-grant side-effect writes — or an ambiguous driver error
-      // during the CAS — means the mode may already be granted, so the credit was legitimately
-      // spent and must not be handed back (avoids a grant + refunded-credit double benefit).
-      try {
-        await updateSageMode(
-          ctx.drizzle,
-          user,
-          randomSageMode,
-          0,
-          `Pity roll for ${input.rank}: ${randomSageMode.name}`,
-        );
-      } catch (error) {
-        if (error instanceof TRPCError) {
-          await refundPityCredit({
-            client: ctx.drizzle,
-            table: sageModeRolls,
-            rollId: prevRoll.id,
-          });
-        }
-        throw error;
-      }
-      await ctx.drizzle.insert(sageModeRolls).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        type: "PITY",
-        sageModeId: randomSageMode.id,
-        goal: input.rank,
-        used: 1,
-      });
-      return {
-        success: true,
-        message: `You have been granted a sage mode: ${randomSageMode.name}`,
-      };
-    }),
-
   // Remove a sage mode from session user
   removeSageMode: protectedProcedure
     .output(baseServerResponse)
@@ -482,56 +243,6 @@ export const sageModeRouter = createTRPCRouter({
       }
       await updateSageMode(ctx.drizzle, user, null, REMOVAL_COST, "SageMode Removed");
       return { success: true, message: `Sage Mode removed for ${REMOVAL_COST} reps` };
-    }),
-
-  // Purchase a sage mode for session user
-  purchaseSageMode: protectedProcedure
-    .input(z.object({ sageModeId: z.string() }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      const [user, mode] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchSageMode(ctx.drizzle, input.sageModeId),
-      ]);
-      if (!mode) return errorResponse("Sage Mode does not exist");
-      // fetchSageMode is unfiltered, so mirror the roll-pool gating here: hidden and
-      // non-level-1 catalog rows must not be acquirable by ID via a direct purchase.
-      if (mode.hidden || mode.level !== 1) {
-        return errorResponse("Sage Mode is not available for purchase");
-      }
-      if (user.sageModeId) {
-        return errorResponse(ALREADY_HAS_SAGE_MODE_ERROR);
-      }
-      if (SAGE_MODE_COST[mode.rank] > user.reputationPoints) {
-        return errorResponse("You do not have enough reputation points");
-      }
-      if (mode.villageId && mode.villageId !== user.villageId) {
-        return errorResponse("Sage Mode does not belong to your village");
-      }
-      const purchaseClaim = await claimUserSnapshot({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        updatedAt: user.updatedAt,
-      });
-      if (!purchaseClaim.success) {
-        return errorResponse(SAGE_MODE_BEING_MODIFIED_ERROR);
-      }
-      await updateSageMode(
-        ctx.drizzle,
-        user,
-        mode,
-        SAGE_MODE_COST[mode.rank],
-        `Sage Mode Purchased: ${mode.name}`,
-      );
-      await ctx.drizzle.insert(sageModeRolls).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        type: "DIRECT",
-        sageModeId: mode.id,
-        goal: mode.rank,
-        used: 1,
-      });
-      return { success: true, message: "Sage Mode purchased" };
     }),
 });
 
@@ -581,74 +292,10 @@ export const updateSageMode = async (
   });
 };
 
-/**
- * Fetch user's historic sage modes
- */
-export const fetchUserHistoricSageModes = async (
-  client: DrizzleClient,
-  userId: string,
-) => {
-  const userRolls = await client.query.sageModeRolls.findMany({
-    where: and(eq(sageModeRolls.userId, userId), isNotNull(sageModeRolls.sageModeId)),
-    with: { sageMode: { with: { village: true } } },
-  });
-  const userSageModes = getUnique(userRolls, "sageModeId")
-    .filter((roll) => roll.sageMode)
-    .map((roll) => roll.sageMode!);
-  return userSageModes;
-};
-
-/**
- * Fetch monthly sage mode swaps
- */
-export const fetchMonthlySageModeSwaps = async (
-  client: DrizzleClient,
-  userId: string,
-) => {
-  const results = await client.query.actionLog.findMany({
-    where: and(
-      eq(actionLog.userId, userId),
-      eq(actionLog.tableName, "sageModeSwap"),
-      gte(
-        actionLog.createdAt,
-        secondsFromDate(-SAGE_MODE_SWAP_FREE_DAYS * DAY_S, new Date()),
-      ),
-    ),
-    columns: { id: true, createdAt: true },
-  });
-  return results;
-};
-
 export const fetchSageMode = async (client: DrizzleClient, sageModeId: string) => {
   return await client.query.sageMode.findFirst({
     where: eq(sageMode.id, sageModeId),
   });
-};
-
-/** Re-export for callers that imported from the router module */
-export {
-  fetchItemSageModeRolls,
-  fetchSageModes,
-  filterRollableSageModes,
-  getSageModePityRolls,
-};
-
-/**
- * Get free sage mode swaps based on federal status
- */
-export const getFreeSageModeSwaps = (
-  federalStatus: "NONE" | "NORMAL" | "SILVER" | "GOLD",
-) => {
-  switch (federalStatus) {
-    case "GOLD":
-      return SAGE_MODE_SWAP_FREE_GOLD;
-    case "SILVER":
-      return SAGE_MODE_SWAP_FREE_SILVER;
-    case "NORMAL":
-      return SAGE_MODE_SWAP_FREE_NORMAL;
-    default:
-      return SAGE_MODE_SWAP_FREE_AMOUNT;
-  }
 };
 
 /**
@@ -664,7 +311,6 @@ export const sageModeDatabaseFilter = (
   return [
     ...(input?.name ? [like(sageMode.name, `%${input.name}%`)] : []),
     ...(input?.village ? [eq(sageMode.villageId, input.village)] : []),
-    ...(input?.rank ? [eq(sageMode.rank, input.rank)] : [isNotNull(sageMode.rank)]),
     ...(input?.level ? [eq(sageMode.level, input.level)] : []),
     ...(allowHiddenFilter
       ? input?.hidden !== undefined

@@ -1740,9 +1740,9 @@ export const updateRewards = async (info: {
       ? fetchActiveWars(client, user.villageId)
       : undefined,
     // Fetch not-yet-owned candidate sage modes for reward_sage_modes (dedup at fetch)
-    (rewards.reward_sage_modes?.length ?? 0) > 0
+    (rewards.reward_sage_modes?.length ?? 0) > 0 && !user.sageModeId
       ? client
-          .select({ id: sageMode.id, rank: sageMode.rank })
+          .select({ id: sageMode.id })
           .from(sageMode)
           .leftJoin(
             sageModeRolls,
@@ -1953,15 +1953,14 @@ export const updateRewards = async (info: {
           ),
         ),
     ],
-    // Roll ONE not-yet-owned candidate into history; player equips via swapSageMode.
+    // Record the not-yet-owned candidate into history (dedup for future quest grants);
+    // it auto-equips below only when the player currently has no sage mode.
     rolledSageMode
       ? client.insert(sageModeRolls).values({
           id: nanoid(),
           userId: user.userId,
           type: "QUEST",
           sageModeId: rolledSageMode.id,
-          goal: rolledSageMode.rank,
-          used: 1,
         })
       : undefined,
     // Insert items with quantity

@@ -1,7 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import type { LetterRank, SAGE_MASTERY_RANK } from "@/drizzle/constants";
+import type { SAGE_MASTERY_RANK } from "@/drizzle/constants";
 import {
-  PITY_SAGE_MODE_ROLLS,
   SAGE_MASTERY_DAILY_ACTIVATIONS,
   SAGE_MASTERY_RANKS,
   SAGE_MASTERY_REQUIRED_EXP,
@@ -12,20 +11,18 @@ import { sageMode, sageModeRolls } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 /**
- * Filter sage modes eligible for rolling (item, pity).
+ * Filter sage modes eligible for rolling from items.
  */
 export const filterRollableSageModes = (props: {
   sageModes: SageMode[];
   user: UserData;
   previousRolls: { sageModeId: string | null }[];
-  rank?: LetterRank | null;
 }) => {
-  const { sageModes, user, previousRolls, rank } = props;
+  const { sageModes, user, previousRolls } = props;
   const previousSageModeIds = new Set(
     previousRolls.map((r) => r.sageModeId).filter((id): id is string => id !== null),
   );
   return sageModes.filter((sm) => {
-    if (rank && sm.rank !== rank) return false;
     if (sm.hidden) return false;
     if (sm.villageId && sm.villageId !== user.villageId) return false;
     if (previousSageModeIds.has(sm.id)) return false;
@@ -108,17 +105,7 @@ export const getActiveSageLevel = (
     : 1;
 
 /**
- * The number of guaranteed ("pity") rolls a user has earned for a given item-roll
- * accumulator: one per PITY_SAGE_MODE_ROLLS rolls, minus any already claimed. Shared
- * by the pity-claim server check and the client's claim button so they never disagree.
- */
-export const getSageModePityRolls = (roll: { pityRolls: number; used: number }) => {
-  const unusedRolls = roll.used - PITY_SAGE_MODE_ROLLS * roll.pityRolls;
-  return Math.floor(unusedRolls / PITY_SAGE_MODE_ROLLS);
-};
-
-/**
- * Fetch item-based sage mode rolls (pity / black market tracking).
+ * Fetch item-based sage mode rolls (used to dedup previously-rolled modes from the pool).
  */
 export const fetchItemSageModeRolls = async (client: DrizzleClient, userId: string) => {
   return await client.query.sageModeRolls.findMany({

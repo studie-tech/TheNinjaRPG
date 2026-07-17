@@ -935,24 +935,8 @@ export const BLOODLINE_SWAP_FREE_SILVER = 0;
 export const BLOODLINE_SWAP_FREE_GOLD = 1;
 
 // Sage Mode config
-export const SAGE_MODE_ROLL_TYPES = ["ITEM", "PITY", "DIRECT", "QUEST"] as const;
+export const SAGE_MODE_ROLL_TYPES = ["ITEM", "QUEST"] as const;
 export const SAGE_MODE_MAX_LEVEL = 2;
-export const SAGE_MODE_COST = {
-  ["H"]: 999999,
-  ["S"]: 999999,
-  ["A"]: 200,
-  ["B"]: 190,
-  ["C"]: 180,
-  ["D"]: 170,
-} as const;
-export const COST_SWAP_SAGE_MODE = 50;
-export const SAGE_MODE_SWAP_COOLDOWN_HOURS = 48;
-export const SAGE_MODE_SWAP_FREE_DAYS = 30;
-export const SAGE_MODE_SWAP_FREE_AMOUNT = 0;
-export const SAGE_MODE_SWAP_FREE_NORMAL = 0;
-export const SAGE_MODE_SWAP_FREE_SILVER = 0;
-export const SAGE_MODE_SWAP_FREE_GOLD = 1;
-export const PITY_SAGE_MODE_ROLLS = 200;
 
 // Sage Mastery ranks
 export const SAGE_MASTERY_RANKS = [

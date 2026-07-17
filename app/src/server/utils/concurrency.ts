@@ -10,12 +10,7 @@
  * safe client error and retry-friendly message.
  */
 import { and, eq, gte, ne, sql } from "drizzle-orm";
-import {
-  bloodlineRolls,
-  type sageModeRolls,
-  userData,
-  userItem,
-} from "@/drizzle/schema";
+import { bloodlineRolls, userData, userItem } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { QueryCondition } from "@/utils/typeutils";
 
@@ -204,7 +199,7 @@ export const removeBloodlineFromPoolAtomically = async ({
 
 type ReservePityCreditParams = {
   client: DrizzleClient;
-  table: typeof bloodlineRolls | typeof sageModeRolls;
+  table: typeof bloodlineRolls;
   rollId: string;
   expectedPityRolls: number;
 };
@@ -230,7 +225,7 @@ export const reservePityCredit = async ({
 
 type RefundPityCreditParams = {
   client: DrizzleClient;
-  table: typeof bloodlineRolls | typeof sageModeRolls;
+  table: typeof bloodlineRolls;
   rollId: string;
 };
 

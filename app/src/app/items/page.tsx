@@ -615,7 +615,6 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         await utils.profile.getUser.invalidate();
         await utils.item.getUserItemsWithVariants.invalidate();
         await utils.bloodline.getItemRolls.invalidate();
-        await utils.sageMode.getItemRolls.invalidate();
       }
     },
     onSettled,

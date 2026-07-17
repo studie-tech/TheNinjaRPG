@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { refundPityCredit, reservePityCredit } from "@/server/utils/concurrency";
-import { bloodlineRolls, sageModeRolls } from "@/drizzle/schema";
+import { bloodlineRolls } from "@/drizzle/schema";
 
 const makeClient = (rowsAffected: number) => {
   const where = vi.fn().mockResolvedValue({ rowsAffected });
@@ -48,9 +48,9 @@ describe("reservePityCredit", () => {
 describe("refundPityCredit", () => {
   it("issues a single decrement scoped to the roll id on the given table", async () => {
     const { client, update, set, where } = makeClient(1);
-    await refundPityCredit({ client, table: sageModeRolls, rollId: "roll1" });
+    await refundPityCredit({ client, table: bloodlineRolls, rollId: "roll1" });
     // Unconditional decrement (no expectedPityRolls guard): one update, one set, one where.
-    expect(update).toHaveBeenCalledWith(sageModeRolls);
+    expect(update).toHaveBeenCalledWith(bloodlineRolls);
     expect(set).toHaveBeenCalledTimes(1);
     expect(where).toHaveBeenCalledTimes(1);
   });

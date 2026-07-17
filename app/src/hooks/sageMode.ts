@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { Resolver } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { LetterRanks, SAGE_MASTERY_REQUIRED_EXP } from "@/drizzle/constants";
+import { SAGE_MASTERY_REQUIRED_EXP } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
@@ -124,7 +124,6 @@ export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
     { id: "actionCostPerc", type: "number", label: "AP Cost [%]" },
     { id: "hidden", type: "boolean" },
     { id: "villageId", type: "db_values", values: villages, resetButton: true },
-    { id: "rank", type: "str_array", values: LetterRanks },
     { id: "description", type: "richinput", doubleWidth: true },
   ];
 
