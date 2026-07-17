@@ -43,7 +43,7 @@ import WebGlError from "@/layout/WebGLError";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
-import { getExpBracket, passesBracketFilter } from "@/libs/profile";
+import { calcLevel, getExpBracket, passesBracketFilter } from "@/libs/profile";
 import { GATHERING_CANCEL_PREFIX, isLocationObjective } from "@/libs/quest";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { getBackgroundColor } from "@/libs/threejs/biome";
@@ -1310,6 +1310,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
           const showRob = !isPvpRestrictedRank && sameHex && userData.isOutlaw;
           const userBracket =
             user.experience == null ? null : getExpBracket(user.experience, user.rank);
+          const userLevel = user.experience == null ? null : calcLevel(user.experience);
 
           // Show user
           return (
@@ -1394,7 +1395,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
               </div>
               <p>{user.username}</p>
               <p className="text-xs">
-                Bracket{" "}
+                Lvl. {userLevel ?? "?"} · Bracket{" "}
                 {userBracket == null ? "?" : `${userBracket}/${XP_BRACKETS.length}`} [
                 {user.longitude}, {user.latitude}]
               </p>
