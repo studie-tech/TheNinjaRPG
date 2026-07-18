@@ -36,6 +36,7 @@ import {
   COPY_MAX_TAGS,
   COPY_PRIORITY_RANK,
   COPYABLE_EFFECT_TYPES,
+  MIRROR_EXCLUDED_EFFECT_TYPES,
   MIRROR_MAX_TAGS,
   MIRROR_PRIORITY_RANK,
   TRANSFER_EXCLUDED_SOURCE_TYPES,
@@ -243,12 +244,15 @@ export const copy = (
       // Persistent, per-caster ceiling: count only the user's OWN active copies.
       // `creatorId` scoping is required — an opponent's mirror also lands on `user`
       // with a fromEffectId and must not consume the copy budget.
+      // The COPYABLE_EFFECT_TYPES guard scopes the budget to effects `copy` can
+      // actually produce, so a self-mirror (negative type) can't consume a copy slot.
       // Clones always carry numeric rounds (the tag gate requires effect.rounds); undefined-rounds effects are never clones.
       const activeCopied = usersEffects.filter(
         (e) =>
           e.targetId === user.userId &&
           e.creatorId === user.userId &&
           e.fromEffectId &&
+          COPYABLE_EFFECT_TYPES.includes(e.type) &&
           e.rounds &&
           e.rounds > 0,
       );
@@ -333,18 +337,6 @@ export const mirror = (
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
-      // Negative types that are never mirrored (wound is intentionally NOT here).
-      const excludedEffectTypes = [
-        "damage",
-        "pierce",
-        "clear",
-        "buffprevent",
-        "cleanseprevent",
-        "moveprevent",
-        "healprevent",
-        "timecompression",
-      ];
-
       // Persistent, per-caster ceiling: only this caster's active mirrors on the target.
       const activeMirrored = usersEffects.filter(
         (e) =>
@@ -368,7 +360,7 @@ export const mirror = (
           e.targetId === user.userId &&
           isNegativeUserEffect(e) &&
           !TRANSFER_EXCLUDED_SOURCE_TYPES.includes(e.fromType || "") &&
-          !excludedEffectTypes.includes(e.type) &&
+          !MIRROR_EXCLUDED_EFFECT_TYPES.includes(e.type) &&
           !heldTypes.has(e.type) &&
           (e.rounds === undefined || e.rounds > 0),
       );

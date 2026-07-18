@@ -2908,7 +2908,18 @@ export const selectTransferEffects = (
   const strongestByType = new Map<string, UserEffect>();
   for (const effect of candidates) {
     const current = strongestByType.get(effect.type);
-    if (!current || getPower(effect).power > getPower(current).power) {
+    if (!current) {
+      strongestByType.set(effect.type, effect);
+      continue;
+    }
+    // Higher power wins; on an exact tie keep the lower id so the surviving
+    // source metadata (fromEffectId provenance) is deterministic, not input-ordered.
+    const power = getPower(effect).power;
+    const currentPower = getPower(current).power;
+    if (
+      power > currentPower ||
+      (power === currentPower && effect.id.localeCompare(current.id) < 0)
+    ) {
       strongestByType.set(effect.type, effect);
     }
   }
