@@ -57,10 +57,10 @@ CREATE TABLE `SectorMap` (
 
 ALTER TABLE `UserData` MODIFY COLUMN `longitude` smallint unsigned NOT NULL DEFAULT 10;
 ALTER TABLE `UserData` MODIFY COLUMN `latitude` smallint unsigned NOT NULL DEFAULT 7;
-ALTER TABLE `VillageStructure` MODIFY COLUMN `longitude` smallint unsigned NOT NULL DEFAULT 10;
-ALTER TABLE `VillageStructure` MODIFY COLUMN `latitude` smallint unsigned NOT NULL DEFAULT 10;
+ALTER TABLE `VillageStructure` MODIFY COLUMN `longitude` smallint NOT NULL DEFAULT 10;
+ALTER TABLE `VillageStructure` MODIFY COLUMN `latitude` smallint NOT NULL DEFAULT 10;
 CREATE INDEX `MapAsset_category_idx` ON `MapAsset` (`category`);
-CREATE INDEX `SectorMap_sector_status_idx` ON `SectorMap` (`sector`,`status`);
+CREATE INDEX `SectorMap_sector_status_idx` ON `SectorMap` (`sector`,`status`);--> statement-breakpoint
 -- Village biome relocation: move each village to a sector whose globe biome
 -- matches its theme (art/colors), on the 1944-sector cube-sphere world.
 --

@@ -3164,8 +3164,10 @@ export const villageStructure = mysqlTable(
     route: varchar("route", { length: 191 }).default("").notNull(),
     image: varchar("image", { length: 191 }).notNull(),
     villageId: varchar("villageId", { length: 191 }).notNull(),
-    longitude: smallint("longitude", { unsigned: true }).default(10).notNull(),
-    latitude: smallint("latitude", { unsigned: true }).default(10).notNull(),
+    // Signed: -1/-1 is the long-standing "not on the map" sentinel used by
+    // non-physical structures (Walls, Protectors) in every environment
+    longitude: smallint("longitude").default(10).notNull(),
+    latitude: smallint("latitude").default(10).notNull(),
     hasPage: tinyint("hasPage").default(0).notNull(),
     curSp: int("curSp").default(100).notNull(),
     maxSp: int("maxSp").default(100).notNull(),

@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "52306179-5bc0-46ca-b6c4-58cfd4d0ef55",
+  "id": "cc622ad6-0935-44cc-a306-3cec3579258d",
   "prevId": "49218220-0571-4716-87f6-dcccd02592b8",
   "tables": {
     "AbEvent": {
@@ -14365,7 +14365,7 @@
         },
         "longitude": {
           "name": "longitude",
-          "type": "smallint unsigned",
+          "type": "smallint",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
@@ -14373,7 +14373,7 @@
         },
         "latitude": {
           "name": "latitude",
-          "type": "smallint unsigned",
+          "type": "smallint",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
