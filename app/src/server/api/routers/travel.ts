@@ -337,6 +337,7 @@ export const travelRouter = createTRPCRouter({
           },
           where: and(
             eq(userData.sector, user.sector),
+            eq(userData.isAi, false),
             inArray(userData.status, ["AWAKE", "BATTLE"]),
             or(eq(userData.isBanned, false), eq(userData.userId, ctx.userId)),
             or(
