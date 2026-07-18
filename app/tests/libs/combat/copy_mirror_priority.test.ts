@@ -119,6 +119,21 @@ describe("selectTransferEffects", () => {
     expect(result[0]?.power).toBe(40);
   });
 
+  it("dedupes equal-power same-type effects by lower id, independent of input order", () => {
+    // Same type + equal power but distinct identity. The dedup survivor must be the
+    // lower id in BOTH orders, so which source's clone is transferred is deterministic.
+    // (The final sort's id tie-break only orders survivors — it cannot pick which of
+    // two equal-power same-type effects the dedup keeps.)
+    const lowId = cand("shield", 30, { id: "shield-aaa" });
+    const highId = cand("shield", 30, { id: "shield-bbb" });
+    const forward = selectTransferEffects([lowId, highId], testRank, 4);
+    const reversed = selectTransferEffects([highId, lowId], testRank, 4);
+    expect(forward).toHaveLength(1);
+    expect(reversed).toHaveLength(1);
+    expect(forward[0]?.id).toBe("shield-aaa");
+    expect(reversed[0]?.id).toBe("shield-aaa");
+  });
+
   it("orders by rank then power and applies the cap", () => {
     const result = selectTransferEffects(
       [

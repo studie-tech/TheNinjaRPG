@@ -228,6 +228,24 @@ export const TRANSFER_EXCLUDED_SOURCE_TYPES: string[] = [
   "skill",
 ];
 
+/**
+ * Negative effect TYPES the `mirror` tag never reflects onto the target (raw damage,
+ * hard control, and non-transferable mechanics). This is the effect-type axis
+ * (`e.type`) — distinct from `TRANSFER_EXCLUDED_SOURCE_TYPES`, which excludes by
+ * source origin (`e.fromType`); the two lists are not interchangeable.
+ * `wound` is intentionally NOT here — it is mirror-eligible.
+ */
+export const MIRROR_EXCLUDED_EFFECT_TYPES: string[] = [
+  "damage",
+  "pierce",
+  "clear",
+  "buffprevent",
+  "cleanseprevent",
+  "moveprevent",
+  "healprevent",
+  "timecompression",
+];
+
 /** Build a `type -> rank` lookup (lower rank = higher priority) from tier arrays. */
 const buildTagPriorityRank = (
   tiers: readonly (readonly string[])[],
