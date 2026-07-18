@@ -2886,3 +2886,39 @@ export const getBattleClaimIds = (info: {
     : [...userIds, ...targetIds];
   return [...new Set(claimed)].filter((id) => !aiIds.has(id));
 };
+
+/**
+ * From copy/mirror transfer candidates, pick the effects a single cast applies.
+ * Two ordered concerns (do NOT collapse into one pass):
+ *   1. dedupe by `type`, keeping the highest-power effect per type (unique-per-type);
+ *   2. rank survivors by (priority rank asc, power desc, id asc) and take the top `cap`.
+ * Step 1 must run before step 2, or one type could consume two capped slots.
+ *
+ * Magnitude is `getPower(e).power` (the canonical value; percentage results are
+ * clamped to 100). Comparing static vs percentage magnitudes within a tier is a
+ * coarse heuristic, consistent with the rest of the engine (no cross-calculation
+ * normalization exists anywhere) — accepted limitation.
+ */
+export const selectTransferEffects = (
+  candidates: UserEffect[],
+  rankOf: (type: string) => number,
+  cap: number,
+): UserEffect[] => {
+  if (cap <= 0) return [];
+  const strongestByType = new Map<string, UserEffect>();
+  for (const effect of candidates) {
+    const current = strongestByType.get(effect.type);
+    if (!current || getPower(effect).power > getPower(current).power) {
+      strongestByType.set(effect.type, effect);
+    }
+  }
+  return [...strongestByType.values()]
+    .sort((a, b) => {
+      const byRank = rankOf(a.type) - rankOf(b.type);
+      if (byRank !== 0) return byRank;
+      const byPower = getPower(b).power - getPower(a).power;
+      if (byPower !== 0) return byPower;
+      return a.id.localeCompare(b.id);
+    })
+    .slice(0, cap);
+};
