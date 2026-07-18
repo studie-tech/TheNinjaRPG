@@ -1295,6 +1295,16 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
         (current.vampHeal ?? 0) +
         val.vampRatio * (val.preShieldDamage ?? val.damage ?? 0);
     }
+    if (val.consumeRatio) {
+      // Consume shields off the FULL pre-shield hit (same basis as vamp), unaffected by heal mods.
+      current.consumeShield =
+        (current.consumeShield ?? 0) +
+        val.consumeRatio * (val.preShieldDamage ?? val.damage ?? 0);
+      current.consumeRounds = Math.max(
+        current.consumeRounds ?? 0,
+        val.consumeRounds ?? 0,
+      );
+    }
     if (val.preShieldDamage) {
       current.preShieldDamage = current.preShieldDamage
         ? current.preShieldDamage + val.preShieldDamage
@@ -1343,6 +1353,11 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
     if (val.vampRatio) {
       val.vampHeal =
         (val.vampHeal ?? 0) + val.vampRatio * (val.preShieldDamage ?? val.damage ?? 0);
+    }
+    if (val.consumeRatio) {
+      val.consumeShield =
+        (val.consumeShield ?? 0) +
+        val.consumeRatio * (val.preShieldDamage ?? val.damage ?? 0);
     }
     acc.push(val);
   }

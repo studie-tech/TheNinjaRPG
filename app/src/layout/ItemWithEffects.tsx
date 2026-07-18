@@ -834,9 +834,16 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                       </div>
                       <div className="grid grid-cols-2">
                         {"rounds" in parsedEffect &&
-                          parsedEffect.rounds !== undefined && (
+                          parsedEffect.rounds !== undefined &&
+                          !("shieldRounds" in parsedEffect) && (
                             <span>
                               <b>Rounds: </b> {parsedEffect.rounds}
+                            </span>
+                          )}
+                        {"shieldRounds" in parsedEffect &&
+                          parsedEffect.shieldRounds !== undefined && (
+                            <span>
+                              <b>Shield Rounds: </b> {parsedEffect.shieldRounds}
                             </span>
                           )}
                         {"calculation" in parsedEffect && (

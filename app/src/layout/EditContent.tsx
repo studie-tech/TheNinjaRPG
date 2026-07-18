@@ -1616,6 +1616,10 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   if (props.type === "bloodline") {
     ignore.push(...["rounds", "friendlyFire"]);
   }
+  // Consume is instant; shield duration lives on shieldRounds (rounds is locked to 0).
+  if (tag.type === "consume") {
+    ignore.push("rounds");
+  }
   // Add direction to ignore list if not increasestat, decreasestat, or redirection
   if (!["increasestat", "decreasestat", "redirection"].includes(tag.type)) {
     ignore.push("direction");
@@ -1819,7 +1823,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           String(value) === "reward_reputation";
         return {
           id: value,
-          label: value,
+          label: FORM_LABEL_MAP[value] ?? value,
           type: "number",
           readonly: isReputationField && !hasReputationPermission,
         };
@@ -1843,6 +1847,19 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         return { id: value, label: value, type: "text" };
       }
     });
+
+  // Consume: hide locked rounds and surface shieldRounds where Rounds normally sits.
+  if (tag.type === "consume") {
+    const shieldIdx = formData.findIndex((e) => String(e.id) === "shieldRounds");
+    if (shieldIdx >= 0) {
+      const [shieldEntry] = formData.splice(shieldIdx, 1);
+      if (shieldEntry) {
+        const powerIdx = formData.findIndex((e) => String(e.id) === "power");
+        const insertAt = powerIdx >= 0 ? powerIdx : formData.length;
+        formData.splice(insertAt, 0, shieldEntry);
+      }
+    }
+  }
 
   // Add tag type as first entry
   if (!props.hideTagType) {
@@ -2533,6 +2550,7 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   completeQuestIds: "Quests to Complete",
   tagType: "Combat Tag Type",
   singleBattle: "Track best single-battle only (else cumulative)",
+  shieldRounds: "Shield Rounds",
 };
 
 /**

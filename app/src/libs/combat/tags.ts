@@ -1924,19 +1924,28 @@ export const vamp = (
   // Store vampRatio on each outgoing damage consequence so the application phase
   // can compute the heal from the full pre-shield damage total (post-boost, pre-shield;
   // matches lifesteal, which also heals off the full hit a shield would otherwise reduce).
-  if (effect.isNew && effect.castThisRound) {
-    consequences.forEach((c) => {
-      if (
-        c.userId === effect.creatorId &&
-        c.targetId !== effect.creatorId &&
-        typeof c.damage === "number" &&
-        c.damage > 0
-      ) {
-        c.vampRatio = (c.vampRatio ?? 0) + power / 100;
-      }
-    });
-  }
+  forEachOutgoingDamage(effect, consequences, (c) => {
+    c.vampRatio = (c.vampRatio ?? 0) + power / 100;
+  });
   return getInfo(target, effect, `will vamp ${qualifier} damage as health`);
+};
+
+/**
+ * Convert a percentage of damage dealt into a temporary shield on the caster.
+ * Uses the same pre-shield damage basis as vamp, but is not affected by heal modifiers.
+ * Intentionally returns no cast-round announcement; process.ts logs when the shield is created.
+ */
+export const consume = (
+  effect: UserEffect,
+  consequences: Map<string, Consequence>,
+): ActionEffect | undefined => {
+  const { power } = getPower(effect);
+  const shieldRounds = "shieldRounds" in effect ? effect.shieldRounds : 3;
+  forEachOutgoingDamage(effect, consequences, (c) => {
+    c.consumeRatio = Math.min(1, (c.consumeRatio ?? 0) + power / 100);
+    c.consumeRounds = Math.max(c.consumeRounds ?? 0, shieldRounds);
+  });
+  return undefined;
 };
 
 /** Drain target's Chakra and Stamina over time */
@@ -3281,6 +3290,28 @@ export const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) =>
     }
   });
   return baseRatio ? 1 : 0;
+};
+
+/**
+ * Apply a callback to each outgoing damage consequence created this cast round.
+ * Shared by vamp, consume, and other damage-conversion tags.
+ */
+const forEachOutgoingDamage = (
+  effect: UserEffect,
+  consequences: Map<string, Consequence>,
+  fn: (c: Consequence) => void,
+) => {
+  if (!effect.isNew || !effect.castThisRound) return;
+  consequences.forEach((c) => {
+    if (
+      c.userId === effect.creatorId &&
+      c.targetId !== effect.creatorId &&
+      typeof c.damage === "number" &&
+      c.damage > 0
+    ) {
+      fn(c);
+    }
+  });
 };
 
 /**

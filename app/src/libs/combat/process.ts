@@ -12,7 +12,7 @@ import {
   POST_DAMAGE_MODIFIER_TYPES,
 } from "@/drizzle/constants";
 import type { ShieldTagType } from "@/validators/combat";
-import { VisualTag } from "@/validators/combat";
+import { ShieldTag, VisualTag } from "@/validators/combat";
 import {
   BARRIER_DAMAGE_TAG_TYPES,
   DAMAGE_LEECH_CAP_RATIO,
@@ -33,6 +33,7 @@ import {
   clear,
   clearPrevent,
   clone,
+  consume,
   copy,
   damageBarrier,
   damageUser,
@@ -197,6 +198,58 @@ const getVisualOrSound = (
     castThisRound: true,
     longitude,
     latitude,
+  };
+};
+
+/**
+ * Build the temporary shield effect granted by the consume tag.
+ *
+ * Parsing through ShieldTag keeps the shield contract in a single place: any field
+ * later added to ShieldTag (with a default) flows through here automatically instead
+ * of silently missing this call site. shieldHp is clamped to the schema's max health
+ * so a very large consumed hit can never throw during parsing mid-combat.
+ *
+ * isNew is intentionally false: shield()'s cast-round branch rolls a
+ * `Math.random() < power / 100` primary check to decide whether the shield lands, but
+ * here `power` is the raw shield HP (not a 0-100 probability). Marking the effect as
+ * not-new skips that roll so the consume shield is applied deterministically.
+ */
+const CONSUME_SHIELD_MAX_HP = 100000;
+const createConsumeShieldEffect = (
+  user: BattleUserState,
+  shieldHp: number,
+  rounds: number,
+  round: number,
+  targetId: string,
+): UserEffect => {
+  const cappedHp = Math.min(shieldHp, CONSUME_SHIELD_MAX_HP);
+  return {
+    ...ShieldTag.parse({
+      type: "shield",
+      description: "Temporary shield from consume",
+      rounds,
+      power: cappedHp,
+      powerPerLevel: 0,
+      direction: "offence",
+      calculation: "static",
+      health: cappedHp,
+      target: "SELF",
+    }),
+    id: nanoid(),
+    creatorId: user.userId,
+    targetId: user.userId,
+    level: 0,
+    // Regular shields are realized via realizeTag() as isNew, so shield() rolls its
+    // cast-round activation. Here power is already the raw HP, so keep isNew false to
+    // skip that roll and apply the shield deterministically.
+    isNew: false,
+    castThisRound: true,
+    createdRound: round,
+    longitude: user.longitude,
+    latitude: user.latitude,
+    barrierAbsorb: 0,
+    actionId: `consume-${user.userId}-${targetId}`,
+    targetType: "user",
   };
 };
 
@@ -693,6 +746,25 @@ export const applyEffects = (
               });
             }
           }
+          // Consume: convert a % of pre-shield damage into a temporary shield on the attacker.
+          // Not affected by heal modifiers and does not share the vamp/lifesteal leech budget.
+          const consumeShield = Math.floor(c.consumeShield ?? 0);
+          const consumeRounds = c.consumeRounds ?? 0;
+          if (consumeShield > 0 && consumeRounds > 0 && user.curHealth > 0) {
+            newUsersEffects.push(
+              createConsumeShieldEffect(
+                user,
+                consumeShield,
+                consumeRounds,
+                battle.round,
+                c.targetId,
+              ),
+            );
+            actionEffects.push({
+              txt: `${user.username} consumes ${consumeShield} damage as a shield for ${consumeRounds} rounds`,
+              color: "blue",
+            });
+          }
           // Reduce armor durability by 1 when hit (skip for battles that don't lose durability)
           if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
             const t = newUsersState.find((u) => u.userId === target.userId);
@@ -1128,6 +1200,8 @@ export const applySingleEffect = (
           info = lifesteal(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "vamp") {
           info = vamp(effect, usersEffects, consequences, curTarget);
+        } else if (effect.type === "consume") {
+          info = consume(effect, consequences);
         } else if (effect.type === "fleeprevent") {
           info = fleePrevent(effect, usersEffects, curTarget);
         } else if (effect.type === "healprevent") {

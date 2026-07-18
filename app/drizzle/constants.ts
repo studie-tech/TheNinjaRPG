@@ -161,6 +161,7 @@ export const SHARED_COOLDOWN_TAGS = [
   "cleanseprevent",
   "clear",
   "clearprevent",
+  "consume",
   "debuffprevent",
   "drain",
   "increasepoolcost",
@@ -168,7 +169,6 @@ export const SHARED_COOLDOWN_TAGS = [
   "pierce",
   "poison",
   "seal",
-  "shield",
   "stun",
   "summon",
   "vamp",
@@ -1243,6 +1243,7 @@ export const POST_DAMAGE_MODIFIER_TYPES: string[] = [
   "lifesteal",
   "absorb",
   "vamp",
+  "consume",
 ];
 
 // Black market config
