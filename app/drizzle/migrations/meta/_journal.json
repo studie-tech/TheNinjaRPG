@@ -138,36 +138,8 @@
     {
       "idx": 19,
       "version": "5",
-      "when": 1783813037255,
-      "tag": "0019_cynical_tony_stark",
-      "breakpoints": false
-    },
-    {
-      "idx": 20,
-      "version": "5",
-      "when": 1783828204599,
-      "tag": "0020_thick_dakota_north",
-      "breakpoints": false
-    },
-    {
-      "idx": 21,
-      "version": "5",
-      "when": 1783926356145,
-      "tag": "0021_greedy_xavin",
-      "breakpoints": false
-    },
-    {
-      "idx": 22,
-      "version": "5",
-      "when": 1783975565856,
-      "tag": "0022_slim_the_initiative",
-      "breakpoints": false
-    },
-    {
-      "idx": 23,
-      "version": "5",
-      "when": 1784011714499,
-      "tag": "0023_clammy_living_tribunal",
+      "when": 1784365621925,
+      "tag": "0019_striped_runaways",
       "breakpoints": false
     }
   ]

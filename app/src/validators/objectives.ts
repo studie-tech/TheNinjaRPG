@@ -127,6 +127,7 @@ export type RaidTask = (typeof RaidTasks)[number];
 // is added).
 export const OBJECTIVE_TAG_TYPES = [
   "absorb",
+  "activatesagemode",
   "afterburn",
   "buffprevent",
   "cleanse",
