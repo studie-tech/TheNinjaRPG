@@ -60,6 +60,7 @@ import {
   getEffectiveMaxPool,
   getVillage,
 } from "@/libs/combat/util";
+import { builtinTerrainDepression } from "@/libs/sector-map/terrains";
 import { getTileInfo } from "@/libs/threejs/biome";
 import {
   calculateHexUVCoordinates,
@@ -283,10 +284,10 @@ export const drawCombatBackground = (
       // Corners of the tile
       const corners = tile.corners;
 
-      // Calculate offset for ocean tiles (they are displaced down for depth effect)
+      // Calculate offset for water tiles (they are displaced down for depth effect)
       const { length, offsetLength, offsetLayer } = calculateTileOffset(
         corners,
-        asset,
+        builtinTerrainDepression(asset),
         lightLayout,
       );
 

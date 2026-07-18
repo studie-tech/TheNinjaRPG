@@ -321,7 +321,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       "tutorial-Global",
     ],
     description:
-      "For our mission, we need to travel to another sector, so let's go to the global map. Here you can see the entire world of Seichi. We are currently in the starting village of Horizon. To proceed, double tap on sector marked by the quest marker 📜 on the global map.",
+      "For our mission, we need to travel to another sector, so let's go to the global map. Here you can see the entire world of Seichi. We are currently in the starting village of Horizon. To proceed, double tap on the sector marked by the quest marker \u{1F4DC} on the global map.",
     page: "/travel",
     relatedValue: 293,
   },

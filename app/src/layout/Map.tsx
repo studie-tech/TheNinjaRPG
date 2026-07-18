@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   BufferAttribute,
   BufferGeometry,
+  DoubleSide,
   Group,
   LinearFilter,
   LineBasicMaterial,
@@ -13,6 +14,9 @@ import {
   PerspectiveCamera,
   Sprite,
   SpriteMaterial,
+  SRGBColorSpace,
+  type Texture,
+  TextureLoader,
   Vector2,
   Vector3,
 } from "three";
@@ -20,6 +24,7 @@ import { api } from "@/app/_trpc/client";
 import {
   IMG_BADGE_MOVE_TO_LOCATION,
   IMG_MAP_QUEST_ICON,
+  IMG_MAP_TILESET_ATLAS,
   IMG_MAP_WAR_ICON,
   MAP_RESERVED_SECTORS,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
@@ -28,13 +33,7 @@ import type { Village } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import WebGlError from "@/layout/WebGLError";
 import type { HexagonalFaceMesh } from "@/libs/hexgrid";
-import {
-  dessertColors,
-  groundColors,
-  iceColors,
-  oceanColors,
-} from "@/libs/threejs/biome";
-import { createUserAvatarSprite } from "@/libs/threejs/globe";
+import { buildGlobeTileGeometry, createUserAvatarSprite } from "@/libs/threejs/globe";
 import { TrackballControls } from "@/libs/threejs/TrackBallControls";
 import type { GlobalMapData, GlobalPoint, GlobalTile } from "@/libs/threejs/types";
 import {
@@ -112,10 +111,34 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   const isTravelStep = currentStep?.title === "Travel";
 
   // Render the map
+  const [atlasTexture, setAtlasTexture] = useState<Texture | null>(null);
   useEffect(() => {
-    // Reference to the mount
+    let cancelled = false;
+    void new TextureLoader()
+      .loadAsync(IMG_MAP_TILESET_ATLAS)
+      .then((texture) => {
+        if (cancelled) return;
+        texture.colorSpace = SRGBColorSpace;
+        texture.generateMipmaps = false;
+        texture.minFilter = LinearFilter;
+        setAtlasTexture(texture);
+      })
+      .catch((error) => {
+        // The globe cannot render without its coastline atlas (served from the
+        // CDN); surface the WebGL error UI instead of a silently blank map.
+        if (cancelled) return;
+        console.error("Failed to load the globe tileset atlas", error);
+        setWebglError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    // Reference to the mount; the scene builds once the tile atlas is ready
     const sceneRef = mountRef.current;
-    if (sceneRef) {
+    if (sceneRef && atlasTexture) {
       // Performance stats
       // const stats = new Stats();
       // document.body.appendChild(stats.dom);
@@ -134,12 +157,17 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       const near = 0.5;
       const far = 1000;
 
-      // Setup scene, renderer and raycaster
+      // Setup scene, renderer and raycaster. Unlike the other views, the globe
+      // NEEDS render-list sorting: with sortObjects false three.js draws in
+      // scene-graph order and ignores renderOrder entirely, and since
+      // group_highlights is traversed before group_tiles the translucent sector
+      // grid painted OVER every marker. Sorting makes the marker/label/pin
+      // renderOrder tiers effective (~500 objects, negligible sort cost).
       const { scene, renderer, raycaster, handleResize } = setupScene({
         mountRef: mountRef,
         width: WIDTH,
         height: HEIGHT,
-        sortObjects: false,
+        sortObjects: true,
         color: 0x000000,
         colorAlpha: 0,
         width2height: 1,
@@ -153,6 +181,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
 
       // Create scene
       sceneRef.appendChild(renderer.domElement);
+      // Canvas element (renderer is non-null past the guard above) - used to
+      // toggle the pointer cursor while hovering sectors on the globe
+      const hoverCanvas = renderer.domElement;
 
       // Track WebGL context loss to prevent shader errors on iOS mobile browsers
       // Clear texture caches when context is lost to free memory
@@ -177,9 +208,72 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       // Random number gen
       const prng = alea(42);
 
-      // Groups to hold items
+      // Groups to hold items. three.js sorts by a group's renderOrder before any
+      // per-object order or depth, so putting highlights in a later group makes
+      // every marker (avatars, quest/war pins, labels) draw after the tiles AND
+      // the translucent sector grid. Without it the draw order falls back to a
+      // distance sort, which is unreliable here because the whole grid is one
+      // object centred on the globe origin. depthTest still hides far-side
+      // markers - this only decides who paints last, not what is occluded.
       const group_tiles = new Group();
       const group_highlights = new Group();
+      group_highlights.renderOrder = 1;
+
+      // Reusable bright outline that marks the hovered sector. The tile keeps
+      // its own terrain colour - we only outline it and switch the cursor to a
+      // pointer, signalling that a click there starts global travel.
+      const hoverOutlineGeometry = new BufferGeometry();
+      hoverOutlineGeometry.setAttribute(
+        "position",
+        new BufferAttribute(new Float32Array(8 * 3), 3),
+      );
+      const hoverOutline = new LineSegments(
+        hoverOutlineGeometry,
+        new LineBasicMaterial({
+          color: 0xffd24a,
+          transparent: true,
+          opacity: 0.95,
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
+      hoverOutline.visible = false;
+      hoverOutline.renderOrder = 2;
+      group_highlights.add(hoverOutline);
+      const HOVER_LIFT = 1.006; // just above the tile faces and the sector grid
+      /**
+       * Reposition the single reusable hover outline onto the given sector's
+       * quad corners (divided by 3 to match the globe's render scale and
+       * lifted by HOVER_LIFT above the tile faces and sector grid to avoid
+       * z-fighting). Hidden for null or non-quad tiles.
+       */
+      const setHoverOutline = (sector: number | null) => {
+        const tile = sector !== null ? hexasphere?.tiles[sector] : null;
+        if (!tile || tile.b.length !== 4) {
+          hoverOutline.visible = false;
+          return;
+        }
+        const position = hoverOutlineGeometry.getAttribute("position")
+          .array as Float32Array;
+        const corner = tile.b.map((p) => ({
+          x: (Number(p.x) / 3) * HOVER_LIFT,
+          y: (Number(p.y) / 3) * HOVER_LIFT,
+          z: (Number(p.z) / 3) * HOVER_LIFT,
+        }));
+        let i = 0;
+        for (let k = 0; k < 4; k++) {
+          const a = corner[k]!;
+          const b = corner[(k + 1) % 4]!;
+          position[i++] = a.x;
+          position[i++] = a.y;
+          position[i++] = a.z;
+          position[i++] = b.x;
+          position[i++] = b.y;
+          position[i++] = b.z;
+        }
+        hoverOutlineGeometry.getAttribute("position").needsUpdate = true;
+        hoverOutline.visible = true;
+      };
 
       // Add on double click/tap tile handler
       let onDblClick: (() => void) | null = null;
@@ -245,37 +339,22 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         renderer.domElement.addEventListener("touchend", onTouchEnd, { passive: true });
       }
 
-      // Spheres from here: https://www.robscanlon.com/hexasphere/
-      // Create the map first
+      // Flat textured globe: every tile is a sea-level quad textured through the
+      // Kenney coastline atlas. Alongside the tiles we collect each tile's quad
+      // boundary into a single light wireframe so the sectors (zones) read
+      // clearly. The atlas texture is pre-loaded before this scene builds.
+      const edgePositions: number[] = [];
+      const EDGE_LIFT = 1.0015; // sit the outline just above the tile faces
       for (let i = 0; i < hexasphere.tiles.length; i++) {
         const t = hexasphere.tiles[i];
-        if (t) {
+        const built = t && buildGlobeTileGeometry(hexasphere, t, prng());
+        if (t && built) {
           const geometry = new BufferGeometry();
-          const points =
-            t.b.length > 5
-              ? [0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 5]
-              : [0, 1, 2, 0, 2, 3, 0, 3, 4];
-          const vertices = new Float32Array(
-            points
-              .map((p) => t.b[p])
-              .flatMap((p) => (p ? [p.x / 3, p.y / 3, p.z / 3] : [])),
-          );
-          geometry.setAttribute("position", new BufferAttribute(vertices, 3));
-          const consistentRandom = prng();
-          let color = null;
+          geometry.setAttribute("position", new BufferAttribute(built.positions, 3));
+          geometry.setAttribute("uv", new BufferAttribute(built.uvs, 2));
 
-          // If no ownership or not showing ownership, use biome colors
-          if (t.t === 0) {
-            color = oceanColors[Math.floor(consistentRandom * oceanColors.length)];
-          } else if (t.t === 1) {
-            color = groundColors[Math.floor(consistentRandom * groundColors.length)];
-          } else if (t.t === 2) {
-            color = dessertColors[Math.floor(consistentRandom * dessertColors.length)];
-          } else {
-            color = iceColors[Math.floor(consistentRandom * iceColors.length)];
-          }
-
-          // If showing ownership and we have the data, color by owner
+          // Ownership view tints the tile texture by owning village
+          let color: string | number = 0xffffff;
           if (showOwnership && ownershipData?.sectors && ownershipData?.colors) {
             const ownership = ownershipData.sectors.find((s) => s.sector === i);
             const villageColor = ownershipData.colors.find(
@@ -288,14 +367,57 @@ const GlobalMap: React.FC<MapProps> = (props) => {
               color = villageColor.hexColor;
             }
           }
-          const material = new MeshBasicMaterial({ color });
+          const material = new MeshBasicMaterial({
+            color,
+            map: atlasTexture,
+            side: DoubleSide,
+          });
 
-          const mesh = new Mesh(geometry, material?.clone());
+          const mesh = new Mesh(geometry, material);
           mesh.matrixAutoUpdate = false;
           mesh.userData.id = i;
           mesh.name = `${i}`;
           group_tiles.add(mesh);
+
+          // Quad boundary (corners NW,NE,SE,SW), lifted just above the surface,
+          // for the sector-separation wireframe
+          const corner = t.b.map((p) => ({
+            x: (Number(p.x) / 3) * EDGE_LIFT,
+            y: (Number(p.y) / 3) * EDGE_LIFT,
+            z: (Number(p.z) / 3) * EDGE_LIFT,
+          }));
+          for (let k = 0; k < 4; k++) {
+            const a = corner[k]!;
+            const b = corner[(k + 1) % 4]!;
+            edgePositions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+          }
         }
+      }
+
+      // Light sector-separation grid overlaid on the globe. Occluded by the
+      // opaque tiles on the far side (depthTest), so only front edges show.
+      if (edgePositions.length > 0) {
+        const edgeGeometry = new BufferGeometry();
+        edgeGeometry.setAttribute(
+          "position",
+          new BufferAttribute(new Float32Array(edgePositions), 3),
+        );
+        const edgeLines = new LineSegments(
+          edgeGeometry,
+          new LineBasicMaterial({
+            color: 0xf2f6fb,
+            transparent: true,
+            opacity: 0.4,
+            depthWrite: false,
+          }),
+        );
+        edgeLines.matrixAutoUpdate = false;
+        edgeLines.userData.type = "sector-edges";
+        // The grid shares group_tiles for draw order but must never be a
+        // raycast target, or it would shadow the tile under the cursor (it has
+        // no sector id), breaking hover highlighting and click-to-travel.
+        edgeLines.raycast = () => {};
+        group_tiles.add(edgeLines);
       }
 
       // Add highlighted users (bounty targets) to the map
@@ -307,7 +429,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
               userData: user,
               sector,
               borderColor: "red",
-              distance: 0.0,
+              // Float just above the surface so depthTest hides far-side markers
+              // without z-fighting the tile it sits on
+              distance: 0.5,
               showLine: false,
             });
             group_highlights.add(userAvatarGroup);
@@ -370,8 +494,18 @@ const GlobalMap: React.FC<MapProps> = (props) => {
               texture.generateMipmaps = false;
               texture.minFilter = LinearFilter;
               texture.needsUpdate = true;
-              const bar_material = new SpriteMaterial({ map: texture });
+              const bar_material = new SpriteMaterial({
+                map: texture,
+                // Canvas-drawn label on a transparent background: without this it
+                // renders in the opaque pass (boxed background, and the sector
+                // grid draws over it)
+                transparent: true,
+                depthWrite: false,
+              });
               const labelSprite = new Sprite(bar_material);
+              // Explicit order so labels always draw after the sector grid (see
+              // createUserAvatarSprite for why group order alone is not enough)
+              labelSprite.renderOrder = 2;
               labelSprite.scale.set(canvas.width / 40, canvas.height / 40, 1);
               labelSprite.position.set(sector.x / 2.5, sector.y / 2.5, sector.z / 2.5);
               group_highlights.add(labelSprite);
@@ -390,6 +524,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         sector: number;
         color: typeof questTweenColor;
         type: "quest" | "war" | "focus";
+        // Resolved lazily on the first frame and cached, so the render loop does
+        // not re-scan group_tiles' ~486 children by name every frame. undefined =
+        // not yet resolved, null = resolved but no matching mesh (do not retry).
+        mesh?: HexagonalFaceMesh | null;
       }[] = [];
 
       // Add war-torn battleground sector to highlight
@@ -492,10 +630,17 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           texture.minFilter = LinearFilter;
           const iconMaterial = new SpriteMaterial({
             map: texture,
+            // The icon art is alpha-cut; without this the sprite renders in the
+            // OPAQUE pass, which draws before the translucent sector grid and so
+            // lets the grid lines paint over the marker
+            transparent: true,
             depthWrite: false,
-            depthTest: false,
+            // Occlude quest/war pins that are on the globe's far side
+            depthTest: true,
           });
           const iconSprite = new Sprite(iconMaterial);
+          // Explicit order so quest/war pins always draw after the sector grid
+          iconSprite.renderOrder = 2;
           iconSprite.scale.set(1, 1, 1);
           iconSprite.position.set(sector.x / 2.5, sector.y / 2.5, sector.z / 2.5);
           group_highlights.add(iconSprite);
@@ -531,14 +676,29 @@ const GlobalMap: React.FC<MapProps> = (props) => {
 
       // Render the image
       let animationId = 0;
+      // Gate the ~486-mesh hover raycast: only re-run it when the pointer or the
+      // camera pose actually changed since the last raycast (the globe auto-
+      // rotates, so the camera moving is itself a reason to re-test). Skips the
+      // full raycast on truly idle frames.
+      let lastRaycastCamX = Number.NaN;
+      let lastRaycastCamY = Number.NaN;
+      let lastRaycastCamZ = Number.NaN;
+      let lastRaycastMouseX = Number.NaN;
+      let lastRaycastMouseY = Number.NaN;
       function render() {
         // Update all TWEEN animations (color pulsing, etc.)
         TWEEN.update();
 
-        // Apply highlight colors to sectors
+        // Apply highlight colors to sectors (mesh resolved once, then cached)
         if (sectorsToHighlight.length > 0) {
           sectorsToHighlight.forEach((highlight) => {
-            const mesh = group_tiles.getObjectByName(`${highlight.sector}`);
+            if (highlight.mesh === undefined) {
+              highlight.mesh =
+                (group_tiles.getObjectByName(
+                  `${highlight.sector}`,
+                ) as HexagonalFaceMesh | null) ?? null;
+            }
+            const mesh = highlight.mesh;
             if (mesh) {
               const color =
                 highlight.type === "war"
@@ -546,44 +706,43 @@ const GlobalMap: React.FC<MapProps> = (props) => {
                   : highlight.type === "focus"
                     ? focusTweenColor
                     : questTweenColor;
-              (mesh as HexagonalFaceMesh).material.color.setRGB(
-                color.r,
-                color.g,
-                color.b,
-              );
+              mesh.material.color.setRGB(color.r, color.g, color.b);
             }
           });
         }
         // Intersections with mouse: https://threejs.org/docs/index.html#api/en/core/Raycaster
-        if (props.intersection) {
+        const cameraOrPointerMoved =
+          camera.position.x !== lastRaycastCamX ||
+          camera.position.y !== lastRaycastCamY ||
+          camera.position.z !== lastRaycastCamZ ||
+          mouse.x !== lastRaycastMouseX ||
+          mouse.y !== lastRaycastMouseY;
+        if (props.intersection && cameraOrPointerMoved) {
+          lastRaycastCamX = camera.position.x;
+          lastRaycastCamY = camera.position.y;
+          lastRaycastCamZ = camera.position.z;
+          lastRaycastMouseX = mouse.x;
+          lastRaycastMouseY = mouse.y;
           raycaster.setFromCamera(mouse, camera);
           const intersects = raycaster.intersectObjects(group_tiles.children);
           if (intersects.length > 0) {
             // if the closest object intersected is not the currently stored intersection object
             if (intersects[0] && intersects[0].object !== intersected) {
-              // restore previous intersection object (if it exists) to its original color
-              if (intersected) {
-                intersected.material.color.setHex(intersected.currentHex);
-              }
-              // store reference to closest object as current intersection object
               intersected = intersects[0].object as HexagonalFaceMesh;
-              // store color of closest object (for later restoration)
-              intersected.currentHex = intersected.material.color.getHex();
-              // set a new color for closest object
-              intersected.material.color.setHex(0x00ffd8);
-              // Call outside stuff
               const sector = intersected.userData.id;
-              if (props.onTileHover) {
-                const tile = hexasphere?.tiles[sector];
-                if (tile) props.onTileHover(sector, tile);
-              }
+              // Outline the hovered sector (its terrain colour is untouched) and
+              // show a pointer, signalling a click starts global travel
+              setHoverOutline(sector);
+              hoverCanvas.style.cursor = "pointer";
+              const tile = hexasphere?.tiles[sector];
+              if (props.onTileHover && tile) props.onTileHover(sector, tile);
               setHoverSector(sector);
             }
-          } else {
-            if (intersected) {
-              intersected.material.color.setHex(intersected.currentHex);
-            }
+          } else if (intersected) {
+            // Pointer moved off the globe: clear the outline and the pointer
             intersected = undefined;
+            setHoverOutline(null);
+            hoverCanvas.style.cursor = "default";
           }
         }
 
@@ -664,10 +823,13 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     props.focusSector,
     showOwnership,
     ownershipData,
+    atlasTexture,
   ]);
 
   return (
-    <>
+    // The overlay labels anchor to this wrapper (the map itself), so they sit
+    // on the globe no matter what page embeds the component
+    <div className="relative">
       <div ref={mountRef} id={"tutorial-global-map"}></div>
       {webglError && <WebGlError />}
       <div className="absolute top-0 left-0 m-5">
@@ -696,7 +858,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           )}
         </ul>
       </div>
-    </>
+    </div>
   );
 };
 

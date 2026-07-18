@@ -7,9 +7,17 @@ import { Swords } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { Group, OrthographicCamera, Vector2 } from "three";
+import {
+  Group,
+  type Material,
+  type MeshBasicMaterial,
+  OrthographicCamera,
+  type Sprite,
+  Vector2,
+} from "three";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -23,8 +31,6 @@ import {
   IMG_SECTOR_ROB,
   MEDNIN_MIN_RANK,
   RANKS_RESTRICTED_FROM_PVP,
-  SECTOR_HEIGHT,
-  SECTOR_WIDTH,
   STRUCTURE_ADJACENTS,
   WAR_SHRINE_IMAGE,
   XP_BRACKETS,
@@ -40,27 +46,33 @@ import Modal2 from "@/layout/Modal2";
 import RaidBrowser from "@/layout/RaidBrowser";
 import SliderField from "@/layout/SliderField";
 import WebGlError from "@/layout/WebGLError";
-import type { TerrainHex } from "@/libs/hexgrid";
+import type { HexagonalFaceMesh, TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
 import { calcLevel, getExpBracket, passesBracketFilter } from "@/libs/profile";
 import { GATHERING_CANCEL_PREFIX, isLocationObjective } from "@/libs/quest";
+import { mergeDecorationAssets } from "@/libs/sector-map/decorations";
+import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
+import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import { OrbitControls } from "@/libs/threejs/OrbitControls";
 import {
+  buildWindowNav,
   createGenericStructure,
   drawQuest,
   drawSector,
   drawUsers,
   drawVillage,
-  intersectTiles,
   intersectUsers,
+  intersectWindowTiles,
+  type WindowNav,
 } from "@/libs/threejs/sector";
 import { updateWaveAnimation, updateWindAnimation } from "@/libs/threejs/shaders";
 import type { GlobalTile, SectorPoint, SectorUser } from "@/libs/threejs/types";
 import {
   cleanUp,
+  disposeGroupPreservingShared,
   isRendererContextValid,
   profiler,
   safeRemoveRendererElement,
@@ -79,9 +91,49 @@ import { sleep } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/travel";
 
+type SectorWindowEntry =
+  RouterOutputs["worldMap"]["getSectorWindow"]["sectors"][number];
+
+/**
+ * The assembled window the travel page passes in: the 3x3 sector entries
+ * (assembled client-side from per-sector data so crossings need no refetch)
+ * plus the session-cached asset/terrain libraries from mapAsset.getAll and
+ * mapTerrain.getAll.
+ */
+export interface SectorWindowData {
+  mapAssets: RouterOutputs["mapAsset"]["getAll"];
+  mapTerrains: RouterOutputs["mapTerrain"]["getAll"];
+  sectors: SectorWindowEntry[];
+}
+
+/** Everything rendered for one sector of the 3x3 window */
+interface SectorRenderEntry {
+  wrapper: Group;
+  grid: Grid<TerrainHex>;
+  interaction: Group;
+  assets: Group;
+  animatedMaterials: MeshBasicMaterial[];
+  /** Identity of the rendered content; a mismatch re-renders the sector */
+  renderKey: string;
+}
+
+/** Content identity of a window entry: map version plus dynamic structures */
+const renderKeyOf = (entry: SectorWindowEntry) => {
+  const structuresKey = entry.structures
+    .map((s) => `${s.id}:${s.level}:${s.image}`)
+    .join(",");
+  return [
+    entry.map.metadata.importedAt,
+    entry.map.metadata.sourceHash ?? "",
+    entry.villageType ?? "",
+    structuresKey,
+  ].join("|");
+};
+
 interface SectorProps {
   sector: number;
   tile: GlobalTile;
+  sectorWindow: SectorWindowData;
   target: SectorPoint | null;
   showSorrounding: boolean;
   showActive: boolean;
@@ -91,9 +143,45 @@ interface SectorProps {
   setPosition: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
 }
 
+/** Nearest walkable tile along the given border edge, closest to `preferred` */
+const findNearestWalkableEdgeTile = (
+  map: NormalizedSectorMap,
+  edge: "north" | "east" | "south" | "west",
+  preferred: SectorPoint,
+): SectorPoint | null => {
+  const candidates = map.tiles.filter((tile) => {
+    if (tile.blocked || tile.walkCost <= 0) return false;
+    if (edge === "north") return tile.y === 0;
+    if (edge === "south") return tile.y === map.height - 1;
+    if (edge === "west") return tile.x === 0;
+    return tile.x === map.width - 1;
+  });
+  let best: SectorPoint | null = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  candidates.forEach((tile) => {
+    const dist = Math.abs(tile.x - preferred.x) + Math.abs(tile.y - preferred.y);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { x: tile.x, y: tile.y };
+    }
+  });
+  return best;
+};
+
+/**
+ * Renders the player's current sector plus its 8 neighbors (the sectorWindow
+ * prop) as one continuous, seamlessly scrollable world. Moves and border
+ * crossings animate client-side and reconcile with the server afterwards;
+ * window changes patch the live scene in place instead of rebuilding it.
+ */
 const Sector: React.FC<SectorProps> = (props) => {
   // Incoming props
-  const { sector, target, showActive, autoAttackMode } = props;
+  const { sector, sectorWindow, target, showActive, autoAttackMode } = props;
+  // The window always contains the current sector: crossings move into a
+  // sector that was part of the previous window
+  const centerEntry = sectorWindow.sectors.find((entry) => entry.sector === sector);
+  if (!centerEntry) throw new Error(`Sector ${sector} missing from window`);
+  const sectorMap = centerEntry.map;
   const { setTarget, setPosition } = props;
 
   // Light layout preference state
@@ -132,10 +220,105 @@ const Sector: React.FC<SectorProps> = (props) => {
   const showAllyAttackRef = useRef<boolean>(allyAttack);
   const userRef = useRef<UserWithRelations>(undefined);
   const lastAutoAttackTimeRef = useRef<number | null>(null);
+  // Mirror the attack-pending flag into a ref so the render loop's click guard
+  // can read it without the flag being a scene-build effect dependency (which
+  // would tear down and rebuild the whole 3x3 world on every attack).
+  const isAttackingRef = useRef<boolean>(false);
+  // The hover-path raycast scans ~6000 window interaction meshes; only re-run it
+  // when the pointer moved or the player's origin changed, reusing the previous
+  // highlights on idle frames.
+  const pathDirtyRef = useRef<boolean>(true);
+  const lastPathKeyRef = useRef<string>("");
+  // The hover raycast also depends on the camera pose and the window nav; track
+  // both so a zoom/pan or a freshly-loaded neighbor re-runs it even if the
+  // pointer and origin held still.
+  const lastCamKeyRef = useRef<string>("");
+  const lastNavRef = useRef<unknown>(null);
+  const pendingCrossRef = useRef<"north" | "east" | "south" | "west" | null>(null);
+  const worldRegistryRef = useRef<{
+    wrappers: Map<number, Group>;
+    grids: Map<number, Grid<TerrainHex>>;
+    entries: Map<number, SectorRenderEntry>;
+    groupUsers: Group | null;
+    groupQuest: Group | null;
+    worldRoot: Group | null;
+    buildWidth: number;
+    spanX: number;
+    spanY: number;
+    setBackground: ((map: NormalizedSectorMap) => void) | null;
+  }>({
+    wrappers: new Map(),
+    grids: new Map(),
+    entries: new Map(),
+    groupUsers: null,
+    groupQuest: null,
+    worldRoot: null,
+    buildWidth: 0,
+    spanX: 0,
+    spanY: 0,
+    setBackground: null,
+  });
+  // Render-loop collections; window updates swap sectors in and out of these
+  // without rebuilding the scene
+  const interactionGroupsRef = useRef<Group[]>([]);
+  const assetsGroupsRef = useRef<Group[]>([]);
+  const animatedMaterialsRef = useRef<
+    ReturnType<typeof drawSector>["animatedMaterials"]
+  >([]);
+  // Flat, deduped list of the window's wind-shader sprite materials, collected
+  // once per window patch so the per-frame loop updates the handful of unique
+  // materials instead of re-traversing every decoration sprite across 9 sectors
+  const windMaterialsRef = useRef<Material[]>([]);
+  // One logical grid over the whole 3x3 window, so paths and hover highlights
+  // cross sector borders as if the world were a single map
+  const windowNavRef = useRef<WindowNav | null>(null);
+  const rebuildSceneRef = useRef<(() => void) | null>(null);
+  // Set true to make the next window update do a full rebuild instead of an
+  // incremental patch (used after a rotated-seam crossing, which must re-draw
+  // the new center sector upright rather than re-anchor the misoriented one).
+  const forceFullRebuildRef = useRef(false);
+  const windowUpdateTokenRef = useRef(0);
+  const centerOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  // The character's live tile during walk animations; authoritative for
+  // scene rebuilds that land mid-walk (userData only updates on completion)
+  const animatedPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const pendingWorldTargetRef = useRef<{ sector: number; x: number; y: number } | null>(
+    null,
+  );
+  // Client-authoritative sector id: updated imperatively the moment a
+  // crossing commits (the prop lags a render behind), synced on prop change
+  const walkAnimatingRef = useRef(false);
+  const activeSceneTeardownRef = useRef<(() => void) | null>(null);
+  const sectorRef = useRef(sector);
+  useEffect(() => {
+    sectorRef.current = sector;
+  }, [sector]);
   const cameraRef = useRef<OrthographicCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const cameraTargetPositionRef = useRef<{ x: number; y: number } | null>(null);
+  // Latest window data for imperative journey/scene code: click handlers and
+  // crossings outlive the render that created them
+  const sectorWindowRef = useRef(sectorWindow);
+  // The terrain + decoration registries are window-level (identical for all 9
+  // sectors), so merge the built-ins with the window's DB libraries ONCE per
+  // window change rather than rebuilding a fresh Map inside every per-sector
+  // draw. Mirrored to refs for the imperative build/nav functions below.
+  const mergedTerrains = useMemo(
+    () => mergeTerrainSpecs(sectorWindow.mapTerrains ?? []),
+    [sectorWindow.mapTerrains],
+  );
+  const mergedDecorations = useMemo(
+    () => mergeDecorationAssets(sectorWindow.mapAssets ?? []),
+    [sectorWindow.mapAssets],
+  );
+  const mergedTerrainsRef = useRef(mergedTerrains);
+  mergedTerrainsRef.current = mergedTerrains;
+  const mergedDecorationsRef = useRef(mergedDecorations);
+  mergedDecorationsRef.current = mergedDecorations;
   const mouse = new Vector2();
+  // False while the pointer is off the map, so the render loop clears the
+  // hover path instead of leaving it frozen at the last tile
+  const pointerOnMapRef = useRef(false);
 
   // tRPC utility
   const utils = api.useUtils();
@@ -144,12 +327,32 @@ const Sector: React.FC<SectorProps> = (props) => {
   const { data: userData, pusher, timeDiff, updateUser } = useRequiredUserData();
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },
-    { enabled: sector !== undefined },
+    { enabled: sector !== undefined, placeholderData: (previous) => previous },
   );
   const villageData = data?.village;
   const fetchedUsers = data?.users;
+  const usersReady = fetchedUsers !== undefined;
   const warData = data?.warData;
-  const structures = villageData?.structures || [];
+  // Ensure a shrine exists for the sector without mutating the cached tRPC
+  // structures array (pushing into it corrupts the query cache and could leave a
+  // shrine at stale coordinates when anchors change).
+  const structures = useMemo(() => {
+    const base = villageData?.structures ?? [];
+    if (base.some((s) => s.route === "/shrine")) return base;
+    const shrineAnchor = sectorMap.anchors.find(
+      (anchor) => anchor.key === "shrine.default",
+    );
+    return [
+      ...base,
+      createGenericStructure({
+        name: "Sector Shrine",
+        route: "/shrine",
+        image: WAR_SHRINE_IMAGE,
+        longitude: shrineAnchor?.x ?? 10,
+        latitude: shrineAnchor?.y ?? 5,
+      }),
+    ];
+  }, [villageData?.structures, sectorMap.anchors]);
 
   // Query for raids in this sector (only when user is in this sector)
   const { data: sectorRaidsData } = api.raids.getAvailableRaids.useQuery(
@@ -158,18 +361,6 @@ const Sector: React.FC<SectorProps> = (props) => {
   );
   const activeRaid = sectorRaidsData?.raids?.[0] ?? null;
 
-  // If we're in an active sector war, then we add a shrine to the center of the sector
-  if (!structures.find((s) => s.route === "/shrine")) {
-    const shrine = createGenericStructure({
-      name: "Sector Shrine",
-      route: "/shrine",
-      image: WAR_SHRINE_IMAGE,
-      longitude: 10,
-      latitude: 5,
-    });
-    structures.push(shrine);
-  }
-
   // Router for forwarding
   const router = useRouter();
 
@@ -177,7 +368,9 @@ const Sector: React.FC<SectorProps> = (props) => {
   const isInSector = userData?.sector === props.sector;
 
   // Background color for the map
-  const { color } = getBackgroundColor(props.tile);
+  const { color } = getBackgroundColor(
+    sectorMap.tiles.find((tile) => !tile.blocked)?.battleBiome ?? props.tile,
+  );
 
   // If new objective is available, then show a modal
   const modalUserQuest = userData?.userQuests?.find(
@@ -191,7 +384,17 @@ const Sector: React.FC<SectorProps> = (props) => {
       const bounding_box = mountRef.current.getBoundingClientRect();
       mouse.x = (event.offsetX / bounding_box.width) * 2 - 1;
       mouse.y = -((event.offsetY / bounding_box.height) * 2 - 1);
+      pointerOnMapRef.current = true;
+      pathDirtyRef.current = true;
     }
+  };
+
+  // When the pointer leaves the map (e.g. flicked off the edge) no more
+  // mousemove events fire, which would otherwise freeze the hover path where
+  // it was. Flag it so the render loop clears every highlight next frame.
+  const onDocumentMouseLeave = () => {
+    pointerOnMapRef.current = false;
+    pathDirtyRef.current = true;
   };
 
   // Movement based on ASDQWE keys
@@ -263,6 +466,12 @@ const Sector: React.FC<SectorProps> = (props) => {
     instantMove = false,
     skipStateUpdate = false,
   ) => {
+    // The own marker is animated exclusively by the walk loop (per-step
+    // instant updates); pathfinding it here would walk it across the map
+    // whenever a stale snapshot or sync effect supplies old coordinates
+    if (data.userId && data.userId === userRef.current?.userId) {
+      instantMove = true;
+    }
     if (data.userId) {
       if (usersRef.current) {
         // Filter out stealthed users (defense in depth - server should already filter these)
@@ -331,9 +540,10 @@ const Sector: React.FC<SectorProps> = (props) => {
           // New user enters — do not invent experience; unknown XP fails closed in bracket filters
           usersRef.current.push({ ...data, allianceStatus });
         }
-        // Remove users who are no longer in the sector
+        // Remove users who are no longer in the sector; compare against the
+        // live sector ref, which crossings advance before the prop catches up
         usersRef.current
-          .map((user, idx) => (user.sector !== props.sector ? idx : null))
+          .map((user, idx) => (user.sector !== sectorRef.current ? idx : null))
           .filter((idx): idx is number => idx !== null)
           .reverse()
           .map((idx) => usersRef.current?.splice(idx, 1));
@@ -345,120 +555,958 @@ const Sector: React.FC<SectorProps> = (props) => {
     }
   };
 
+  /** Client-side quest triggers after arriving at a position */
+  const runQuestTriggers = (
+    data: {
+      sector: number;
+      longitude: number;
+      latitude: number;
+    },
+    forceCheck = false,
+  ) => {
+    if (!userData) return;
+    let shouldCheckQuest = false;
+    userData?.userQuests?.forEach((userquest) => {
+      const tracker = userData.questData?.find((q) => q.id === userquest.questId);
+      userquest.quest.content.objectives.forEach((objective, i) => {
+        const isOnLocation = isLocationObjective(
+          {
+            sector: data.sector,
+            longitude: data.longitude,
+            latitude: data.latitude,
+          },
+          objective,
+        );
+        if (
+          (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
+          (isOnLocation ||
+            ("attackers" in objective &&
+              objective.attackers &&
+              objective.attackers.length > 0))
+        ) {
+          shouldCheckQuest = true;
+        }
+        const goal = tracker?.goals.find((g) => g.id === objective.id);
+        if (
+          (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
+          objective.task === "collect_item" &&
+          "collect_time_minutes" in objective &&
+          objective.collect_time_minutes &&
+          goal?.timestamp &&
+          !goal.done &&
+          !isOnLocation
+        ) {
+          shouldCheckQuest = true;
+        }
+        if (objective.task === "dialog" && isOnLocation) {
+          setLogbookModalOpen(true);
+          setLogbookModalQuestId(userquest.questId);
+        }
+      });
+    });
+    if (shouldCheckQuest || forceCheck) checkQuest();
+  };
+
+  /** Animate the marker tile-by-tile along a path, keeping the camera on it */
+  const animateWalk = async (
+    path: NonNullable<ReturnType<PathCalculator["getShortestPath"]>>,
+    location: string,
+  ) => {
+    if (!userData) return;
+    walkAnimatingRef.current = true;
+    for (const tile of path) {
+      originRef.current = tile;
+      animatedPositionRef.current = { x: tile.col, y: tile.row };
+      void updateUsersList(
+        {
+          ...userData,
+          sector: sectorRef.current,
+          longitude: tile.col,
+          latitude: tile.row,
+          location,
+        } as UserData,
+        true,
+        true, // Skip state update during animation
+      );
+      cameraTargetPositionRef.current = {
+        x: tile.center.x - centerOffsetRef.current.x,
+        y: tile.center.y - centerOffsetRef.current.y,
+      };
+      await sleep(50);
+    }
+    walkAnimatingRef.current = false;
+  };
+
+  /** Window offset (dx,dy) of a sector currently in the 3x3 window */
+  const offsetOfSector = (sector: number): { dx: number; dy: number } | null => {
+    const entry = sectorWindowRef.current.sectors.find(
+      (candidate) => candidate.sector === sector,
+    );
+    return entry ? { dx: entry.dx, dy: entry.dy } : null;
+  };
+
+  /**
+   * Re-anchor the character into an already-rendered window sector (no server
+   * round trip): re-parent the marker layers, re-point the grid/pathfinder,
+   * follow the camera, background and hover-highlight into it.
+   */
+  const reAnchorToSector = (sector: number, col: number, row: number): boolean => {
+    const registry = worldRegistryRef.current;
+    const wrapper = registry.wrappers.get(sector);
+    const grid = registry.grids.get(sector);
+    if (!wrapper || !grid || !registry.groupUsers || !registry.groupQuest) return false;
+    sectorRef.current = sector;
+    wrapper.add(registry.groupUsers);
+    wrapper.add(registry.groupQuest);
+    gridRef.current = grid;
+    pathFinderRef.current = new PathCalculator(grid);
+    originRef.current = grid.getHex({ col, row });
+    animatedPositionRef.current = { x: col, y: row };
+    centerOffsetRef.current = { x: wrapper.position.x, y: wrapper.position.y };
+    clearAllHighlights();
+    const map = sectorWindowRef.current.sectors.find(
+      (candidate) => candidate.sector === sector,
+    )?.map;
+    if (map) registry.setBackground?.(map);
+    return true;
+  };
+
+  /**
+   * Animate the marker along a path expressed in unified window coordinates,
+   * re-anchoring into each sector as the path crosses a border - so a
+   * cross-border walk plays as one continuous motion with no pause.
+   */
+  const animateWindowPath = async (
+    unifiedPath: NonNullable<ReturnType<PathCalculator["getShortestPath"]>>,
+    location: string,
+  ) => {
+    const nav = windowNavRef.current;
+    if (!userData || !nav) return;
+    walkAnimatingRef.current = true;
+    for (const unifiedTile of unifiedPath) {
+      const local = nav.fromUnified(unifiedTile);
+      const entry = sectorWindowRef.current.sectors.find(
+        (candidate) => candidate.dx === local.dx && candidate.dy === local.dy,
+      );
+      if (!entry) break;
+      if (entry.sector !== sectorRef.current) {
+        if (!reAnchorToSector(entry.sector, local.col, local.row)) break;
+      }
+      const hex = gridRef.current?.getHex({ col: local.col, row: local.row });
+      if (!hex) continue;
+      originRef.current = hex;
+      animatedPositionRef.current = { x: local.col, y: local.row };
+      void updateUsersList(
+        {
+          ...userData,
+          sector: entry.sector,
+          longitude: local.col,
+          latitude: local.row,
+          location,
+        } as UserData,
+        true,
+        true,
+      );
+      cameraTargetPositionRef.current = {
+        x: hex.center.x - centerOffsetRef.current.x,
+        y: hex.center.y - centerOffsetRef.current.y,
+      };
+      await sleep(50);
+    }
+    walkAnimatingRef.current = false;
+  };
+
+  /**
+   * Animate one leg of a journey and pipeline what follows it: a border
+   * crossing (carrying the landing tile when the click was in the adjacent
+   * sector) is requested while the steps animate, so its round trip is
+   * hidden behind the walk and the border costs no extra pause.
+   */
+  const runJourneySegment = async (data: {
+    sector: number;
+    longitude: number;
+    latitude: number;
+    location: string;
+  }): Promise<void> => {
+    if (!userData || !pathFinderRef.current || !originRef.current) return;
+    const target = findHex(gridRef.current, {
+      x: data.longitude,
+      y: data.latitude,
+    });
+    if (!target) return;
+    const path = pathFinderRef.current.getShortestPath(originRef.current, target);
+    if (!path) return;
+    // The crossing round trip is fired while the steps animate. When the
+    // clicked tile lies in the sector across this border, the character keeps
+    // walking straight across it CLIENT-SIDE the instant it reaches the edge,
+    // and the server response is reconciled in the background - so the border
+    // never stalls the animation.
+    let crossingPromise: ReturnType<typeof moveStepAsync> | null = null;
+    let crossDest: { sector: number; x: number; y: number } | null = null;
+    const cross = pendingCrossRef.current;
+    if (cross) {
+      const atCrossEdge =
+        (cross === "north" && data.latitude === 0) ||
+        (cross === "south" && data.latitude === sectorMap.height - 1) ||
+        (cross === "west" && data.longitude === 0) ||
+        (cross === "east" && data.longitude === sectorMap.width - 1);
+      if (atCrossEdge) {
+        pendingCrossRef.current = null;
+        const dest = peekPendingCrossDestination(cross);
+        const pending = pendingWorldTargetRef.current;
+        if (dest && pending)
+          crossDest = { sector: pending.sector, x: dest.x, y: dest.y };
+        crossingPromise = moveStepAsync(
+          buildCrossingPayload(cross, { x: data.longitude, y: data.latitude }, dest),
+        );
+      }
+    }
+    // Show movement 1 step at a time with a small sleep between moves
+    await animateWalk(path, data.location);
+    setMoves((prev) => prev + 1);
+    if (crossingPromise) {
+      await handleCrossing(
+        crossingPromise,
+        crossDest,
+        { x: data.longitude, y: data.latitude },
+        data.location,
+      );
+      return;
+    }
+    // Update all state only once at the end to avoid excessive re-renders
+    setPosition({ x: data.longitude, y: data.latitude });
+    await updateUser({
+      location: data.location,
+      updatedAt: new Date(),
+      longitude: data.longitude,
+      latitude: data.latitude,
+    });
+    // Update surrounding users state at the end
+    setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+    runQuestTriggers(data);
+  };
+
+  // Crossing steps that are pre-fired during walk animations resolve
+  // through this handler-less mutation; their responses are applied via
+  // applyCrossing exactly when the local animation reaches the border
+  const { mutateAsync: moveStepAsync } = api.travel.moveInSector.useMutation();
+
+  /**
+   * Assemble the travel.moveInSector input for a single step from `from` to
+   * `dest` within `sectorId`, including the avatar/identity fields the server
+   * broadcasts to other clients. The avatar falls back to IMG_AVATAR_DEFAULT
+   * so users without a custom avatar can still move.
+   */
+  const buildStepPayload = (
+    from: SectorPoint,
+    dest: SectorPoint,
+    sectorId: number,
+  ) => ({
+    curLongitude: from.x,
+    curLatitude: from.y,
+    longitude: dest.x,
+    latitude: dest.y,
+    sector: sectorId,
+    avatar: userData?.avatar || IMG_AVATAR_DEFAULT,
+    avatarLight: userData?.avatarLight || userData?.avatar || IMG_AVATAR_DEFAULT,
+    villageId: userData?.villageId ?? null,
+    battleId: userData?.battleId ?? null,
+    username: userData?.username ?? "",
+    level: userData?.level ?? 0,
+  });
+
+  /**
+   * Build a moveInSector payload that targets a tile ONE step beyond the
+   * border (an out-of-range coordinate like y=-1 or x=map.width), which the
+   * server resolves as a sector crossing rather than an in-sector move. An
+   * optional `dest` rides along as destLongitude/destLatitude so the crossing
+   * lands directly on the clicked tile in the adjacent sector.
+   */
+  const buildCrossingPayload = (
+    direction: "north" | "east" | "south" | "west",
+    from: SectorPoint,
+    dest?: SectorPoint | null,
+  ) => {
+    const beyond =
+      direction === "north"
+        ? { x: from.x, y: -1 }
+        : direction === "south"
+          ? { x: from.x, y: sectorMap.height }
+          : direction === "west"
+            ? { x: -1, y: from.y }
+            : { x: sectorMap.width, y: from.y };
+    return {
+      ...buildStepPayload(from, beyond, sectorRef.current),
+      ...(dest ? { destLongitude: dest.x, destLatitude: dest.y } : {}),
+    };
+  };
+
+  /**
+   * When the clicked world target lies in the sector directly across the
+   * given border, it can ride along as the crossing's landing tile so no
+   * separate resume move is needed. The pending ref stays set until the
+   * crossing lands (applyCrossing routing clears it), keeping the journey
+   * marked active for the deferred scene rebuild.
+   */
+  const peekPendingCrossDestination = (
+    direction: "north" | "east" | "south" | "west",
+  ): SectorPoint | null => {
+    const pending = pendingWorldTargetRef.current;
+    if (!pending) return null;
+    const window = sectorWindowRef.current;
+    const current = window.sectors.find(
+      (candidate) => candidate.sector === sectorRef.current,
+    );
+    if (!current) return null;
+    const ddx = direction === "east" ? 1 : direction === "west" ? -1 : 0;
+    const ddy = direction === "south" ? 1 : direction === "north" ? -1 : 0;
+    const adjacent = window.sectors.find(
+      (candidate) =>
+        candidate.dx === current.dx + ddx && candidate.dy === current.dy + ddy,
+    );
+    if (!adjacent || adjacent.sector !== pending.sector) return null;
+    return { x: pending.x, y: pending.y };
+  };
+
+  /**
+   * Re-anchor the character into the (already rendered) destination sector
+   * at the border entry tile, then animate the server-committed remainder of
+   * the walk to the landing tile - all client-side, no further round trips.
+   */
+  const applyCrossing = async (data: {
+    sector: number;
+    longitude: number;
+    latitude: number;
+    location: string;
+    entryLongitude?: number | null;
+    entryLatitude?: number | null;
+  }) => {
+    if (!userData) return;
+    pendingCrossRef.current = null;
+    sectorRef.current = data.sector;
+    const entry = {
+      x: data.entryLongitude ?? data.longitude,
+      y: data.entryLatitude ?? data.latitude,
+    };
+    const registry = worldRegistryRef.current;
+    // Across a rotated cube-edge seam the destination is drawn unrotated in the
+    // current window, so re-anchoring the walk there would misplace it. Anchor
+    // originRef in the destination's grid right away (movement stays live - the
+    // marker is never stuck), place it at the committed landing, then force ONE
+    // full rebuild that re-draws the new sector upright and centered.
+    if (
+      (sectorWindowRef.current.sectors.find((s) => s.sector === data.sector)
+        ?.rotation ?? 0) !== 0
+    ) {
+      const seamGrid = registry.grids.get(data.sector);
+      const seamWrapper = registry.wrappers.get(data.sector);
+      if (seamGrid && seamWrapper && registry.groupUsers && registry.groupQuest) {
+        seamWrapper.add(registry.groupUsers);
+        seamWrapper.add(registry.groupQuest);
+        gridRef.current = seamGrid;
+        pathFinderRef.current = new PathCalculator(seamGrid);
+        originRef.current = seamGrid.getHex({
+          col: data.longitude,
+          row: data.latitude,
+        });
+        centerOffsetRef.current = {
+          x: seamWrapper.position.x,
+          y: seamWrapper.position.y,
+        };
+      }
+      animatedPositionRef.current = { x: data.longitude, y: data.latitude };
+      pendingWorldTargetRef.current = null;
+      clearAllHighlights();
+      void updateUsersList(
+        {
+          ...userData,
+          sector: data.sector,
+          longitude: data.longitude,
+          latitude: data.latitude,
+          location: data.location,
+        } as UserData,
+        true,
+        true,
+      );
+      setPosition({ x: data.longitude, y: data.latitude });
+      setTarget(null);
+      forceFullRebuildRef.current = true;
+      await updateUser({
+        sector: data.sector,
+        longitude: data.longitude,
+        latitude: data.latitude,
+        location: data.location,
+        updatedAt: new Date(),
+      });
+      runQuestTriggers(data, true);
+      return;
+    }
+    const wrapper = registry.wrappers.get(data.sector);
+    const grid = registry.grids.get(data.sector);
+    const anchored = !!(wrapper && grid && registry.groupUsers && registry.groupQuest);
+    if (wrapper && grid && registry.groupUsers && registry.groupQuest) {
+      // The destination sector is already rendered: move the character
+      // layers into its frame and keep walking - no scene rebuild
+      wrapper.add(registry.groupUsers);
+      wrapper.add(registry.groupQuest);
+      gridRef.current = grid;
+      pathFinderRef.current = new PathCalculator(grid);
+      originRef.current = grid.getHex({ col: entry.x, row: entry.y });
+      animatedPositionRef.current = { x: entry.x, y: entry.y };
+      centerOffsetRef.current = { x: wrapper.position.x, y: wrapper.position.y };
+      // The hover path follows the character into the new sector; any tiles
+      // lit in the old window (across all sectors) are cleared so a stale
+      // window offset can't leave an orphaned highlight behind
+      clearAllHighlights();
+      const entryMap = sectorWindowRef.current.sectors.find(
+        (candidate) => candidate.sector === data.sector,
+      )?.map;
+      if (entryMap) registry.setBackground?.(entryMap);
+      // Place the marker at the entry tile instantly: the userData sync
+      // effect would otherwise ANIMATE it from the old edge coordinates,
+      // which sit at the far side of the new sector's frame
+      void updateUsersList(
+        {
+          ...userData,
+          sector: data.sector,
+          longitude: entry.x,
+          latitude: entry.y,
+          location: data.location,
+        } as UserData,
+        true,
+        true,
+      );
+      if (originRef.current) {
+        cameraTargetPositionRef.current = {
+          x: originRef.current.center.x - centerOffsetRef.current.x,
+          y: originRef.current.center.y - centerOffsetRef.current.y,
+        };
+      }
+    } else {
+      // Destination not in the rendered window (rapid multi-cross):
+      // fall back to a rebuild once the new window arrives
+      originRef.current = undefined;
+      cameraTargetPositionRef.current = null;
+    }
+    setPosition({ x: data.longitude, y: data.latitude });
+    // Route onward or re-point the target NOW: any await below yields to
+    // the movement effect, which must never see the pre-crossing target
+    // coordinates against the new sector's grid
+    const pendingTarget = pendingWorldTargetRef.current;
+    if (pendingTarget) {
+      // Continue toward the clicked tile; offsets are recomputed relative
+      // to the sector just landed in, so diagonal targets take their
+      // second hop instead of stopping here
+      const landedEntry = sectorWindowRef.current.sectors.find(
+        (candidate) => candidate.sector === data.sector,
+      );
+      const targetEntry = sectorWindowRef.current.sectors.find(
+        (candidate) => candidate.sector === pendingTarget.sector,
+      );
+      const landedMap = landedEntry?.map;
+      if (landedEntry && targetEntry && landedMap) {
+        routeTowardWorldTarget(
+          pendingTarget,
+          { col: data.longitude, row: data.latitude },
+          landedMap,
+          targetEntry.dx - landedEntry.dx,
+          targetEntry.dy - landedEntry.dy,
+        );
+      } else {
+        pendingWorldTargetRef.current = null;
+        setTarget(null);
+      }
+    } else {
+      setTarget({ x: data.longitude, y: data.latitude });
+    }
+    await updateUser({
+      sector: data.sector,
+      longitude: data.longitude,
+      latitude: data.latitude,
+      location: data.location,
+      updatedAt: new Date(),
+    });
+    // Walk the committed remainder from the entry tile to the landing tile
+    const hasRemainder = data.longitude !== entry.x || data.latitude !== entry.y;
+    if (anchored && hasRemainder && originRef.current) {
+      const finalHex = findHex(gridRef.current, {
+        x: data.longitude,
+        y: data.latitude,
+      });
+      const path = finalHex
+        ? pathFinderRef.current?.getShortestPath(originRef.current, finalHex)
+        : undefined;
+      if (path) {
+        await animateWalk(path, data.location);
+      } else if (finalHex) {
+        // The server committed the landing tile; without a client path,
+        // reconcile instantly rather than desync
+        originRef.current = finalHex;
+        animatedPositionRef.current = { x: data.longitude, y: data.latitude };
+        void updateUsersList(
+          {
+            ...userData,
+            sector: data.sector,
+            longitude: data.longitude,
+            latitude: data.latitude,
+            location: data.location,
+          } as UserData,
+          true,
+          true,
+        );
+        cameraTargetPositionRef.current = {
+          x: finalHex.center.x - centerOffsetRef.current.x,
+          y: finalHex.center.y - centerOffsetRef.current.y,
+        };
+      }
+      setMoves((prev) => prev + 1);
+      setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+    }
+    runQuestTriggers(data, true);
+  };
+
+  /**
+   * Resolve a border crossing. When the clicked tile is in the adjacent
+   * sector, the character walks straight across CLIENT-SIDE (via the unified
+   * window path) without waiting for the server, and the crossing mutation is
+   * reconciled once it returns. Otherwise (multi-hop, or no client path) it
+   * falls back to the server-driven re-anchor.
+   */
+  const handleCrossing = async (
+    crossingPromise: ReturnType<typeof moveStepAsync>,
+    crossDest: { sector: number; x: number; y: number } | null,
+    edge: SectorPoint,
+    location: string,
+  ) => {
+    const nav = windowNavRef.current;
+    // The unified window grid assumes aligned neighbors, so the optimistic
+    // client-side walk is only valid across aligned borders. Rotated cube-edge
+    // seams fall through to the server-driven crossing, which resolves the
+    // rotated entry cell correctly (via resolveSectorCrossing) and re-anchors.
+    const destEntry = crossDest
+      ? sectorWindowRef.current.sectors.find((s) => s.sector === crossDest.sector)
+      : undefined;
+    const rotatedSeam = (destEntry?.rotation ?? 0) !== 0;
+    if (crossDest && nav && !rotatedSeam) {
+      const destOffset = offsetOfSector(crossDest.sector);
+      const startU = nav.toUnified(0, 0, edge.x, edge.y);
+      const goalU = destOffset
+        ? nav.toUnified(destOffset.dx, destOffset.dy, crossDest.x, crossDest.y)
+        : undefined;
+      const navPath =
+        startU && goalU ? nav.pathFinder.getShortestPath(startU, goalU) : undefined;
+      if (navPath && navPath.length > 1) {
+        pendingWorldTargetRef.current = null;
+        // Walk across the border immediately (first tile is the edge we are
+        // already standing on, so skip it)
+        await animateWindowPath(navPath.slice(1), location);
+        await reconcileCrossing(await crossingPromise);
+        return;
+      }
+    }
+    // Server-driven fallback: wait for the crossing, then re-anchor
+    const crossingRes = await crossingPromise;
+    if (crossingRes.success && crossingRes.data) {
+      await applyCrossing(crossingRes.data);
+      return;
+    }
+    pendingWorldTargetRef.current = null;
+    setTarget(null);
+    if (!crossingRes.success) showMutationToast(crossingRes);
+  };
+
+  /** Commit the server's crossing result after an optimistic client walk */
+  const reconcileCrossing = async (res: Awaited<ReturnType<typeof moveStepAsync>>) => {
+    if (res.success && res.data) {
+      const d = res.data;
+      // If the server landed somewhere other than where we optimistically
+      // walked, snap the marker to the authoritative position
+      const drifted =
+        d.sector !== sectorRef.current ||
+        d.longitude !== animatedPositionRef.current?.x ||
+        d.latitude !== animatedPositionRef.current?.y;
+      if (drifted && userData) {
+        if (d.sector !== sectorRef.current) {
+          reAnchorToSector(d.sector, d.longitude, d.latitude);
+        } else {
+          originRef.current =
+            gridRef.current?.getHex({ col: d.longitude, row: d.latitude }) ??
+            originRef.current;
+          animatedPositionRef.current = { x: d.longitude, y: d.latitude };
+        }
+        void updateUsersList(
+          {
+            ...userData,
+            sector: d.sector,
+            longitude: d.longitude,
+            latitude: d.latitude,
+            location: d.location,
+          } as UserData,
+          true,
+          true,
+        );
+        if (originRef.current) {
+          cameraTargetPositionRef.current = {
+            x: originRef.current.center.x - centerOffsetRef.current.x,
+            y: originRef.current.center.y - centerOffsetRef.current.y,
+          };
+        }
+      }
+      // The journey is complete; clear the target so the movement effect
+      // does not re-issue a stale edge move against the new sector's grid
+      setTarget(null);
+      setPosition({ x: d.longitude, y: d.latitude });
+      await updateUser({
+        sector: d.sector,
+        longitude: d.longitude,
+        latitude: d.latitude,
+        location: d.location,
+        updatedAt: new Date(),
+      });
+      setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+      // runQuestTriggers with forceCheck already issues checkQuest(), so calling
+      // it here too fired the location-quest mutation twice per crossing (and,
+      // through its invalidation, refetched the user's items twice)
+      runQuestTriggers(d, true);
+    } else {
+      // Attacked (success without data) or rejected: re-sync from the server
+      setTarget(null);
+      showMutationToast(res);
+      await utils.profile.getUser.invalidate();
+    }
+  };
+
+  /** Draw one sector of the window and register it in the rendered world */
+  const buildSectorIntoWorld = (
+    entry: SectorWindowEntry,
+    position: { x: number; y: number } | null,
+  ) => {
+    const registry = worldRegistryRef.current;
+    if (!registry.worldRoot) return null;
+    // Always render from the window entry's own data (never the center
+    // query's), so a sector looks identical from every window position
+    const entryStructures = [...entry.structures];
+    if (!entryStructures.find((st) => st.route === "/shrine")) {
+      const shrineAnchor = entry.map.anchors.find(
+        (anchor) => anchor.key === "shrine.default",
+      );
+      entryStructures.push(
+        createGenericStructure({
+          name: "Sector Shrine",
+          route: "/shrine",
+          image: WAR_SHRINE_IMAGE,
+          longitude: shrineAnchor?.x ?? 10,
+          latitude: shrineAnchor?.y ?? 5,
+        }),
+      );
+    }
+    const groups = drawSector(
+      registry.buildWidth,
+      alea(entry.sector + 1),
+      entry.globalTileType,
+      lightLayout,
+      entryStructures,
+      entry.map,
+      // Built-ins overlaid with the creator asset + terrain libraries that
+      // ride on the window query, merged once per window (see mergedTerrainsRef)
+      mergedDecorationsRef.current,
+      mergedTerrainsRef.current,
+    );
+    drawVillage(
+      groups.group_assets,
+      entryStructures,
+      groups.honeycombGrid,
+      entry.map,
+      entry.villageType,
+    );
+    groups.group_assets.children.sort((a, b) => b.position.y - a.position.y);
+    groups.group_interaction.children.forEach((mesh) => {
+      mesh.userData.sector = entry.sector;
+    });
+    // Whole-sector pixel spans, sampled from the sector's own grid
+    const h00 = groups.honeycombGrid.getHex({ col: 0, row: 0 });
+    const h10 = groups.honeycombGrid.getHex({ col: 1, row: 0 });
+    const h01 = groups.honeycombGrid.getHex({ col: 0, row: 1 });
+    if (h00 && h10 && h01) {
+      registry.spanX = entry.map.width * (h10.x - h00.x);
+      registry.spanY = entry.map.height * (h01.y - h00.y);
+    }
+    const wrapper = new Group();
+    const target = position ?? {
+      x: entry.dx * registry.spanX,
+      y: entry.dy * registry.spanY,
+    };
+    wrapper.position.set(target.x, target.y, 0);
+    wrapper.add(groups.group_dirt);
+    wrapper.add(groups.group_tiles);
+    wrapper.add(groups.group_edges);
+    wrapper.add(groups.group_interaction);
+    wrapper.add(groups.group_assets);
+    registry.worldRoot.add(wrapper);
+    registry.wrappers.set(entry.sector, wrapper);
+    registry.grids.set(entry.sector, groups.honeycombGrid);
+    registry.entries.set(entry.sector, {
+      wrapper,
+      grid: groups.honeycombGrid,
+      interaction: groups.group_interaction,
+      assets: groups.group_assets,
+      animatedMaterials: groups.animatedMaterials,
+      renderKey: renderKeyOf(entry),
+    });
+    return groups;
+  };
+
+  /**
+   * Dispose one sector's rendered content. Geometries and per-sector
+   * materials are freed; materials tagged shared (biome palettes, cached
+   * sprite materials) stay alive for the other sectors.
+   */
+  const disposeSectorRender = (sectorId: number) => {
+    const registry = worldRegistryRef.current;
+    const render = registry.entries.get(sectorId);
+    if (!render) return;
+    // The character layers must survive their wrapper: hand them to the
+    // world root until the sector is rendered again
+    if (registry.groupUsers && render.wrapper.children.includes(registry.groupUsers)) {
+      registry.worldRoot?.add(registry.groupUsers);
+    }
+    if (registry.groupQuest && render.wrapper.children.includes(registry.groupQuest)) {
+      registry.worldRoot?.add(registry.groupQuest);
+    }
+    registry.worldRoot?.remove(render.wrapper);
+    disposeGroupPreservingShared(render.wrapper);
+    registry.entries.delete(sectorId);
+    registry.wrappers.delete(sectorId);
+    registry.grids.delete(sectorId);
+  };
+
+  /** Rebuild the render-loop collections from the registry */
+  const refreshRenderCollections = () => {
+    const registry = worldRegistryRef.current;
+    const entries = [...registry.entries.values()];
+    interactionGroupsRef.current = entries.map((render) => render.interaction);
+    assetsGroupsRef.current = entries.map((render) => render.assets);
+    animatedMaterialsRef.current = entries.flatMap(
+      (render) => render.animatedMaterials,
+    );
+    // Collect the window's unique wind-shader materials ONCE here (per window
+    // patch) so the frame loop iterates a short flat list rather than recursively
+    // walking every decoration sprite of all 9 sectors 60x/sec.
+    const windMaterials = new Set<Material>();
+    for (const assets of assetsGroupsRef.current) {
+      assets.traverse((object) => {
+        const material = (object as Sprite).material as Material | undefined;
+        if ((object as Sprite).isSprite && material?.userData?.shader?.uniforms?.time) {
+          windMaterials.add(material);
+        }
+      });
+    }
+    windMaterialsRef.current = [...windMaterials];
+  };
+
+  /** Rebuild the unified window pathfinder from the current window's maps */
+  const rebuildWindowNav = () => {
+    windowNavRef.current = buildWindowNav(
+      sectorWindowRef.current.sectors.map((entry) => ({
+        dx: entry.dx,
+        dy: entry.dy,
+        map: entry.map,
+        rotation: entry.rotation ?? 0,
+      })),
+      // Adjacency only depends on grid coordinates, so the hex size is
+      // arbitrary here (rendering uses the per-sector grids)
+      10,
+      mergedTerrainsRef.current,
+    );
+  };
+
+  /** The interaction group for a window sector at the given offset, if drawn */
+  const interactionForOffset = (dx: number, dy: number): Group | null => {
+    const entry = sectorWindowRef.current.sectors.find(
+      (candidate) => candidate.dx === dx && candidate.dy === dy,
+    );
+    if (!entry) return null;
+    return worldRegistryRef.current.entries.get(entry.sector)?.interaction ?? null;
+  };
+
+  /** Turn off every lit hover-path tile across all rendered sectors */
+  const clearAllHighlights = () => {
+    for (const render of worldRegistryRef.current.entries.values()) {
+      render.interaction.children.forEach((child) => {
+        const mesh = child as HexagonalFaceMesh;
+        if (mesh.userData?.highlight) {
+          mesh.userData.highlight = false;
+          mesh.material.visible = false;
+        }
+      });
+    }
+  };
+
+  /**
+   * Patch the rendered world to match the latest window: sectors that
+   * entered are drawn in place (one per task, so frames stay smooth),
+   * sectors that left are disposed, and everything else is untouched -
+   * crossings and window refetches never rebuild the scene.
+   */
+  const applyWindowToScene = async () => {
+    const registry = worldRegistryRef.current;
+    const window = sectorWindowRef.current;
+    if (!registry.worldRoot || registry.entries.size === 0) return;
+    // A rotated-seam crossing asked for a clean full rebuild (re-draw the new
+    // center upright); the incremental patch below can't re-orient a sector.
+    if (forceFullRebuildRef.current) {
+      forceFullRebuildRef.current = false;
+      rebuildSceneRef.current?.();
+      return;
+    }
+    const token = ++windowUpdateTokenRef.current;
+    const windowCenter = window.sectors.find(
+      (candidate) => candidate.dx === 0 && candidate.dy === 0,
+    );
+    if (!windowCenter) return;
+    const centerRender = registry.entries.get(windowCenter.sector);
+    // Global travel (or a frame drifted too far to stay precise): the new
+    // center was never rendered next to the old one - full re-anchor
+    const maxDrift = 60;
+    if (
+      !centerRender ||
+      Math.abs(centerRender.wrapper.position.x) > Math.abs(registry.spanX) * maxDrift ||
+      Math.abs(centerRender.wrapper.position.y) > Math.abs(registry.spanY) * maxDrift
+    ) {
+      rebuildSceneRef.current?.();
+      return;
+    }
+    const anchor = {
+      x: centerRender.wrapper.position.x,
+      y: centerRender.wrapper.position.y,
+    };
+    // Drop sectors that left the window or whose content changed
+    const wanted = new Map(window.sectors.map((entry) => [entry.sector, entry]));
+    let droppedCurrent = false;
+    for (const [sectorId, render] of [...registry.entries]) {
+      const entry = wanted.get(sectorId);
+      if (entry && renderKeyOf(entry) === render.renderKey) continue;
+      disposeSectorRender(sectorId);
+      if (sectorId === sectorRef.current) droppedCurrent = true;
+    }
+    // Draw sectors that entered the window
+    for (const entry of window.sectors) {
+      if (token !== windowUpdateTokenRef.current) return;
+      if (registry.entries.has(entry.sector)) continue;
+      buildSectorIntoWorld(entry, {
+        x: anchor.x + (entry.dx - windowCenter.dx) * registry.spanX,
+        y: anchor.y + (entry.dy - windowCenter.dy) * registry.spanY,
+      });
+      refreshRenderCollections();
+      await sleep(0);
+    }
+    if (token !== windowUpdateTokenRef.current) return;
+    // Re-attach the character layers and grid if their sector re-rendered
+    if (droppedCurrent) {
+      const currentRender = registry.entries.get(sectorRef.current);
+      if (currentRender) {
+        if (registry.groupUsers) currentRender.wrapper.add(registry.groupUsers);
+        if (registry.groupQuest) currentRender.wrapper.add(registry.groupQuest);
+        gridRef.current = currentRender.grid;
+        pathFinderRef.current = new PathCalculator(currentRender.grid);
+        const livePosition = animatedPositionRef.current ?? {
+          x: userRef.current?.longitude ?? 0,
+          y: userRef.current?.latitude ?? 0,
+        };
+        originRef.current = currentRender.grid.getHex({
+          col: livePosition.x,
+          row: livePosition.y,
+        });
+        centerOffsetRef.current = {
+          x: currentRender.wrapper.position.x,
+          y: currentRender.wrapper.position.y,
+        };
+      }
+    }
+    refreshRenderCollections();
+    rebuildWindowNav();
+    registry.setBackground?.(windowCenter.map);
+  };
+
   const { mutate: move, isPending: isMoving } = api.travel.moveInSector.useMutation({
     onSuccess: async (res) => {
       // Stop moving if failed
       if (res.success === false) {
+        pendingCrossRef.current = null;
         setTarget(null);
       }
       // If success without data, then we got attacked
       if (res.success && !res.data) {
+        pendingCrossRef.current = null;
         setTarget(null);
         showMutationToast(res);
         await utils.profile.getUser.invalidate();
       }
       // If success with data, then we moved
       const data = res.data;
-      if (
-        userData &&
-        res.success &&
-        data &&
-        pathFinderRef.current &&
-        originRef.current
-      ) {
-        // Get the path the user moved
-        const target = findHex(gridRef.current, {
-          x: data.longitude,
-          y: data.latitude,
-        });
-        if (!target) return;
-        const path = pathFinderRef.current.getShortestPath(originRef.current, target);
-        if (!path) return;
-        // Show movement 1 step at a time with a small sleep between moves
-        for (const tile of path) {
-          originRef.current = tile;
-          void updateUsersList(
-            {
-              ...userData,
-              longitude: tile.col,
-              latitude: tile.row,
-              location: data.location,
-            } as UserData,
-            true,
-            true, // Skip state update during animation
-          );
-
-          // Update camera target position if zoomed in
-          if (cameraRef.current && cameraRef.current.zoom > 1.5) {
-            const { x, y } = tile.center;
-            cameraTargetPositionRef.current = { x, y };
-          }
-
-          await sleep(50);
-        }
-        // Update all state only once at the end to avoid excessive re-renders
-        setPosition({ x: data.longitude, y: data.latitude });
-        setMoves((prev) => prev + 1);
-        await updateUser({
-          location: data.location,
-          updatedAt: new Date(),
-          longitude: data.longitude,
-          latitude: data.latitude,
-        });
-        // Update surrounding users state at the end
-        setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+      // Border crossings re-anchor the world on the new sector; the scene
+      // rebuilds from prefetched neighbor data with the camera on the user
+      if (userData && res.success && data && data.sector !== sectorRef.current) {
+        await applyCrossing(data);
+        return;
       }
-      // Check Quests
-      if (userData && data) {
-        let shouldCheckQuest = false;
-        userData?.userQuests?.forEach((userquest) => {
-          const tracker = userData.questData?.find((q) => q.id === userquest.questId);
-          userquest.quest.content.objectives.forEach((objective, i) => {
-            // Check if we should check objective on backend
-            const isOnLocation = isLocationObjective(
-              {
-                sector: data.sector,
-                longitude: data.longitude,
-                latitude: data.latitude,
-              },
-              objective,
-            );
-            if (
-              // If we have don't have a tracker, or the objective is available, then check quest
-              (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
-              // If an objective is a location objective, then check quest
-              (isOnLocation ||
-                // If we have attackers, check for these
-                ("attackers" in objective &&
-                  objective.attackers &&
-                  objective.attackers.length > 0))
-            ) {
-              shouldCheckQuest = true;
-            }
-            // If user has a pending collect timer but moved away, cancel it on the server
-            const goal = tracker?.goals.find((g) => g.id === objective.id);
-            if (
-              (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
-              objective.task === "collect_item" &&
-              "collect_time_minutes" in objective &&
-              objective.collect_time_minutes &&
-              goal?.timestamp &&
-              !goal.done &&
-              !isOnLocation
-            ) {
-              shouldCheckQuest = true;
-            }
-            // For dialog objectives, check if we should show a modal
-            if (objective.task === "dialog" && isOnLocation) {
-              setLogbookModalOpen(true);
-              setLogbookModalQuestId(userquest.questId);
-            }
-          });
-        });
-        if (shouldCheckQuest) checkQuest();
+      if (userData && res.success && data) {
+        await runJourneySegment(data);
       }
     },
   });
+
+  /** Step one tile beyond the border: the server resolves this as a crossing */
+  const moveAcrossBorder = (
+    direction: "north" | "east" | "south" | "west",
+    from: SectorPoint,
+  ) => {
+    if (!userData) return;
+    const dest = peekPendingCrossDestination(direction);
+    move(buildCrossingPayload(direction, from, dest));
+  };
+
+  /**
+   * Route toward a tile in another sector: walk to the matching border and
+   * step across; called again after each crossing until the target sector is
+   * reached (relDx/relDy are the target's window offsets relative to where
+   * the character currently is).
+   */
+  const routeTowardWorldTarget = (
+    worldTarget: { sector: number; x: number; y: number },
+    origin: { col: number; row: number },
+    currentMap: NormalizedSectorMap,
+    relDx: number,
+    relDy: number,
+  ) => {
+    if (relDx === 0 && relDy === 0) {
+      pendingCrossRef.current = null;
+      pendingWorldTargetRef.current = null;
+      setTarget({ x: worldTarget.x, y: worldTarget.y });
+      return;
+    }
+    const primary =
+      relDx > 0 ? "east" : relDx < 0 ? "west" : relDy > 0 ? "south" : "north";
+    const along = primary === "north" || primary === "south" ? origin.col : origin.row;
+    const rawEdge =
+      primary === "north"
+        ? { x: along, y: 0 }
+        : primary === "south"
+          ? { x: along, y: currentMap.height - 1 }
+          : primary === "west"
+            ? { x: 0, y: along }
+            : { x: currentMap.width - 1, y: along };
+    const edge = findNearestWalkableEdgeTile(currentMap, primary, rawEdge);
+    if (!edge) return;
+    pendingWorldTargetRef.current = worldTarget;
+    if (origin.col === edge.x && origin.row === edge.y) {
+      pendingCrossRef.current = null;
+      moveAcrossBorder(primary, { x: origin.col, y: origin.row });
+    } else {
+      pendingCrossRef.current = primary;
+      setTarget(edge);
+    }
+  };
 
   const { mutate: rob, isPending: isRobbing } = api.travel.robPlayer.useMutation({
     onSuccess: async (result) => {
@@ -500,11 +1548,30 @@ const Sector: React.FC<SectorProps> = (props) => {
   }, [allyAttack]);
 
   // Listening to webcket events
+  // Dispose the live scene when the component unmounts
+  useEffect(() => {
+    return () => {
+      windowUpdateTokenRef.current++;
+      activeSceneTeardownRef.current?.();
+      activeSceneTeardownRef.current = null;
+    };
+  }, []);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resubscribe only when the sector changes
   useEffect(() => {
     if (pusher) {
       const channel = pusher.subscribe(props.sector.toString());
       channel.bind("event", (data: UserData) => {
-        if (data.userId && data.userId !== userData?.userId) {
+        if (data.userId && data.userId !== userRef.current?.userId) {
+          // A broadcast with another sector means the user left this one
+          if (data.sector !== props.sector) {
+            const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
+            if (idx !== -1) {
+              usersRef.current.splice(idx, 1);
+              setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+            }
+            return;
+          }
           void updateUsersList(data);
         }
       });
@@ -512,11 +1579,15 @@ const Sector: React.FC<SectorProps> = (props) => {
         pusher.unsubscribe(props.sector.toString());
       };
     }
-  }, []);
+  }, [pusher, props.sector]);
 
   useEffect(() => {
     showUsersRef.current = showActive;
   }, [showActive]);
+
+  useEffect(() => {
+    isAttackingRef.current = isAttacking;
+  }, [isAttacking]);
 
   // Auto-attack logic for ANBU users
   useEffect(() => {
@@ -599,8 +1670,8 @@ const Sector: React.FC<SectorProps> = (props) => {
             userId: closestEnemy.userId,
             longitude: closestEnemy.longitude,
             latitude: closestEnemy.latitude,
-            sector: sector,
-            asset: originRef.current?.asset,
+            sector: sectorRef.current,
+            asset: originRef.current?.battleBiome,
           });
         } else {
           setTarget({ x: closestEnemy.longitude, y: closestEnemy.latitude });
@@ -624,13 +1695,12 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   // This is where the actual movement happens
   useEffect(() => {
-    if (
-      target &&
-      originRef.current &&
-      pathFinderRef.current &&
-      userData &&
-      userData.avatar
-    ) {
+    // A journey animation is authoritative while it runs: its own pipeline
+    // issues every needed move, so the effect must not double-request
+    if (walkAnimatingRef.current) return;
+    // The move payload falls back to IMG_AVATAR_DEFAULT, so a missing custom
+    // avatar must not block movement (default-avatar users could not move).
+    if (target && originRef.current && pathFinderRef.current && userData) {
       // Check user status
       if (userData.status !== "AWAKE") {
         setTarget(null);
@@ -649,19 +1719,13 @@ const Sector: React.FC<SectorProps> = (props) => {
       // Get shortest path
       if (!isMoving) {
         document.body.style.cursor = "wait";
-        move({
-          curLongitude: originRef.current.col,
-          curLatitude: originRef.current.row,
-          longitude: targetHex.col,
-          latitude: targetHex.row,
-          sector: sector,
-          avatar: userData.avatar || IMG_AVATAR_DEFAULT,
-          avatarLight: userData.avatarLight || userData.avatar || IMG_AVATAR_DEFAULT,
-          villageId: userData.villageId,
-          battleId: userData.battleId,
-          username: userData.username,
-          level: userData.level,
-        });
+        move(
+          buildStepPayload(
+            { x: originRef.current.col, y: originRef.current.row },
+            { x: targetHex.col, y: targetHex.row },
+            sectorRef.current,
+          ),
+        );
       }
     }
   }, [target, userData, moves, sector, isMoving, move]);
@@ -684,8 +1748,18 @@ const Sector: React.FC<SectorProps> = (props) => {
             };
           })
           .filter((u) => u?.userId) || [];
+      // Keep the live client-side position for the own marker: a stale
+      // in-flight snapshot must not move it
       setSorrounding(enrichedData);
-      usersRef.current = enrichedData;
+      usersRef.current = enrichedData.map((user) =>
+        user.userId === userData.userId && animatedPositionRef.current
+          ? {
+              ...user,
+              longitude: animatedPositionRef.current.x,
+              latitude: animatedPositionRef.current.y,
+            }
+          : user,
+      );
     }
   }, [fetchedUsers]);
 
@@ -713,24 +1787,62 @@ const Sector: React.FC<SectorProps> = (props) => {
     }
   }, [userData, villageData]);
 
+  // Window changes patch the rendered world in place: crossings and
+  // refetches draw only the sectors that entered the window and dispose the
+  // ones that left - no scene rebuild, no visual change to shared sectors
+  // biome-ignore lint/correctness/useExhaustiveDependencies: imperative scene patching keyed on window data only
+  useEffect(() => {
+    sectorWindowRef.current = sectorWindow;
+    void applyWindowToScene();
+  }, [sectorWindow]);
+
   useEffect(() => {
     const sceneRef = mountRef.current;
-    if (sceneRef && userRef.current && fetchedUsers !== undefined) {
+    if (!(sceneRef && userRef.current && fetchedUsers !== undefined)) return;
+    let disposed = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const journeyActive = () =>
+      walkAnimatingRef.current ||
+      pendingCrossRef.current !== null ||
+      pendingWorldTargetRef.current !== null;
+    /**
+     * Build the full 3x3-window Three.js scene from scratch (re-invocable via
+     * rebuildSceneRef); teardown happens here rather than in the effect cleanup
+     * so scene swaps are gap-free, and the prior camera pose/zoom is restored
+     * shifted by the re-anchor offset so background rebuilds are pixel-identical.
+     */
+    const buildScene = () => {
+      // The previous scene keeps rendering until this replacement is ready;
+      // tearing it down here makes the swap back-to-back with no gap.
+      // In-flight window patches belong to the old frame - invalidate them
+      windowUpdateTokenRef.current++;
+      activeSceneTeardownRef.current?.();
+      activeSceneTeardownRef.current = null;
       // Used for map size calculations
       const width2height =
-        ((SECTOR_HEIGHT + 2) * HEX_ASPECT_RATIO) /
-        (SECTOR_WIDTH - HEX_STACKING_DISPLACEMENT * (SECTOR_WIDTH - 1));
+        ((sectorMap.height + 2) * HEX_ASPECT_RATIO) /
+        (sectorMap.width - HEX_STACKING_DISPLACEMENT * (sectorMap.width - 1));
 
       // Map size
       const WIDTH = sceneRef.getBoundingClientRect().width;
       const HEIGHT = WIDTH * width2height;
 
+      // Re-anchor continuity: capture the previous camera pose and world
+      // offset so a background rebuild is pixel-identical (the world shifts
+      // by the old center offset; the camera must shift with it)
+      const prevOffset = { ...centerOffsetRef.current };
+      const prevTarget = controlsRef.current
+        ? {
+            x: controlsRef.current.target.x,
+            y: controlsRef.current.target.y,
+          }
+        : null;
+      const prevZoom = cameraRef.current?.zoom ?? null;
+
       // Listeners
       sceneRef.addEventListener("mousemove", onDocumentMouseMove, false);
+      sceneRef.addEventListener("mouseleave", onDocumentMouseLeave, false);
       document.addEventListener("keydown", onDocumentKeyDown, false);
-
-      // Seeded noise generator for map gen
-      const prng = alea(props.sector + 1);
 
       // Setup scene, renderer and raycaster
       const { scene, renderer, raycaster, handleResize } = setupScene({
@@ -771,52 +1883,83 @@ const Sector: React.FC<SectorProps> = (props) => {
 
       // Setup camara
       const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
-      camera.zoom = storedZoom;
+      camera.zoom = prevZoom ?? storedZoom;
       camera.updateProjectionMatrix();
       cameraRef.current = camera;
 
-      // Draw the map
-      const {
-        group_dirt,
-        group_tiles,
-        group_edges,
-        group_assets,
-        group_interaction,
-        animatedMaterials,
-        honeycombGrid,
-      } = drawSector(WIDTH, prng, villageData, props.tile, lightLayout, structures);
-      gridRef.current = honeycombGrid;
-
-      // Draw any village in this sector
-      drawVillage(group_assets, villageData, structures, gridRef.current, lightLayout);
-
-      // Reverse the order of objects in the group_assets
-      group_assets.children.sort((a, b) => b.position.y - a.position.y);
+      // Draw every sector of the 3x3 window with the full pipeline, each
+      // wrapped in a group offset by whole-sector spans so the world reads
+      // as one continuous map. Later window changes patch this world
+      // incrementally (applyWindowToScene); a full rebuild only happens on
+      // mount, attack-mode toggles or a re-anchor after global travel.
+      const registry = worldRegistryRef.current;
+      const buildWindow = sectorWindowRef.current;
+      registry.wrappers.clear();
+      registry.grids.clear();
+      registry.entries.clear();
+      const worldRoot = new Group();
+      registry.worldRoot = worldRoot;
+      registry.buildWidth = WIDTH;
+      registry.setBackground = (map) => {
+        const biome = map.tiles.find((tile) => !tile.blocked)?.battleBiome ?? "ground";
+        renderer.setClearColor(getBackgroundColor(biome).color, 0.5);
+      };
+      const centerMapNow = buildWindow.sectors.find(
+        (entry) => entry.sector === sectorRef.current,
+      )?.map;
+      if (centerMapNow) registry.setBackground(centerMapNow);
+      buildWindow.sectors.forEach((entry) => {
+        buildSectorIntoWorld(entry, null);
+      });
+      const centerRender =
+        registry.entries.get(sectorRef.current) ??
+        registry.entries.get(
+          buildWindow.sectors.find((entry) => entry.dx === 0 && entry.dy === 0)
+            ?.sector ?? -1,
+        );
+      if (!centerRender) return;
+      gridRef.current = centerRender.grid;
 
       // Store current highlights and create a path calculator object
       pathFinderRef.current = new PathCalculator(gridRef.current);
+      refreshRenderCollections();
+      rebuildWindowNav();
 
       // Intersections & highlights from interactions
       let highlights = new Set<string>();
       let currentTooltips = new Set<string>();
 
-      // js groups for organization
+      // js groups for organization; they live in the character's sector frame
       const group_users = new Group();
       const group_quest = new Group();
+      centerRender.wrapper.add(group_users);
+      centerRender.wrapper.add(group_quest);
+      registry.groupUsers = group_users;
+      registry.groupQuest = group_quest;
+      centerOffsetRef.current = {
+        x: centerRender.wrapper.position.x,
+        y: centerRender.wrapper.position.y,
+      };
 
-      // Set the origin
-      if (!originRef.current) {
-        originRef.current = gridRef?.current?.getHex({
-          col: userRef.current.longitude,
-          row: userRef.current.latitude,
-        });
-      }
+      // (Re-)set the origin against this build's grid instance, preferring
+      // the live animated position over the (walk-completion) user state
+      const liveUser = userRef.current;
+      originRef.current = gridRef?.current?.getHex({
+        col: animatedPositionRef.current?.x ?? liveUser?.longitude ?? 0,
+        row: animatedPositionRef.current?.y ?? liveUser?.latitude ?? 0,
+      });
 
       // Enable controls
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableRotate = false;
+      // The camera is code-driven across the 3x3 world window; the legacy
+      // origin-centered pan clamp would pin it in place
+      controls.clampPan = false;
+      // The camera stays focused on the user; zooming out is capped at about
+      // half a neighboring sector in every direction
+      controls.enablePan = false;
       controls.zoomSpeed = 1.0;
-      controls.minZoom = 1;
+      controls.minZoom = 0.8;
       controls.maxZoom = 3;
       controlsRef.current = controls;
 
@@ -830,21 +1973,37 @@ const Sector: React.FC<SectorProps> = (props) => {
       };
       controls.addEventListener("change", onZoomChange);
 
-      // Set initial position of controls & camera
-      if (isInSector && originRef.current) {
+      // Set initial position of controls & camera. Rebuilds preserve the
+      // exact previous camera pose shifted by the re-anchor offset, so
+      // background window swaps are invisible even mid-walk; only the first
+      // mount centers on the character (tile.center is the world-space
+      // center of the hex in this scene's coordinate frame).
+      if (prevTarget) {
+        const newOffset = centerOffsetRef.current;
+        controls.target.set(
+          prevTarget.x - prevOffset.x + newOffset.x,
+          prevTarget.y - prevOffset.y + newOffset.y,
+          0,
+        );
+        camera.position.copy(controls.target);
+        if (cameraTargetPositionRef.current) {
+          cameraTargetPositionRef.current = {
+            x: cameraTargetPositionRef.current.x + prevOffset.x - newOffset.x,
+            y: cameraTargetPositionRef.current.y + prevOffset.y - newOffset.y,
+          };
+        }
+      } else if (isInSector && originRef.current) {
         const { x, y } = originRef.current.center;
-        controls.target.set(-WIDTH / 2 - x, -HEIGHT / 2 - y, 0);
+        controls.target.set(
+          -WIDTH / 2 - x + centerOffsetRef.current.x,
+          -HEIGHT / 2 - y + centerOffsetRef.current.y,
+          0,
+        );
         camera.position.copy(controls.target);
       }
 
-      // Add the group to the scene
-      scene.add(group_dirt);
-      scene.add(group_tiles);
-      scene.add(group_edges);
-      scene.add(group_assets);
-      scene.add(group_users);
-      scene.add(group_quest);
-      scene.add(group_interaction);
+      // Add the world to the scene
+      scene.add(worldRoot);
 
       // Capture clicks to update move direction
       const onClick = (e: MouseEvent) => {
@@ -852,7 +2011,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         setRaycasterFromMouse(raycaster, sceneRef, e, camera);
         // PERFORMANCE: Only raycast against interaction and users/quest groups
         const intersects = raycaster.intersectObjects([
-          group_interaction,
+          ...interactionGroupsRef.current,
           group_users,
           group_quest,
         ]);
@@ -861,7 +2020,34 @@ const Sector: React.FC<SectorProps> = (props) => {
           .every((i) => {
             if (i.object.userData.type === "tile") {
               const target = i.object.userData.tile as TerrainHex;
-              setTarget({ x: target.col, y: target.row });
+              const clickedSector = i.object.userData.sector as number;
+              if (target.blocked) return false;
+              if (clickedSector === sectorRef.current) {
+                pendingCrossRef.current = null;
+                pendingWorldTargetRef.current = null;
+                setTarget({ x: target.col, y: target.row });
+                return false;
+              }
+              // A tile in a neighboring sector: walk to the border, step
+              // across, and keep going (multi-hop for diagonal targets).
+              // Offsets come from the live window, relative to the sector
+              // the character currently stands in
+              const liveWindow = sectorWindowRef.current;
+              const currentEntry = liveWindow.sectors.find(
+                (candidate) => candidate.sector === sectorRef.current,
+              );
+              const targetEntry = liveWindow.sectors.find(
+                (candidate) => candidate.sector === clickedSector,
+              );
+              const origin = originRef.current;
+              if (!currentEntry || !targetEntry || !origin) return false;
+              routeTowardWorldTarget(
+                { sector: clickedSector, x: target.col, y: target.row },
+                { col: origin.col, row: origin.row },
+                currentEntry.map,
+                targetEntry.dx - currentEntry.dx,
+                targetEntry.dy - currentEntry.dy,
+              );
               return false;
             } else if (showUsersRef.current && i.object.userData.type === "attack") {
               const target = usersRef.current?.find(
@@ -871,7 +2057,7 @@ const Sector: React.FC<SectorProps> = (props) => {
                 if (
                   target.longitude === originRef.current?.col &&
                   target.latitude === originRef.current?.row &&
-                  !isAttacking
+                  !isAttackingRef.current
                 ) {
                   document.body.style.cursor = "wait";
                   setTargetUser(target);
@@ -879,8 +2065,8 @@ const Sector: React.FC<SectorProps> = (props) => {
                     userId: target.userId,
                     longitude: target.longitude,
                     latitude: target.latitude,
-                    sector: sector,
-                    asset: originRef.current?.asset,
+                    sector: sectorRef.current,
+                    asset: originRef.current?.battleBiome,
                   });
                 } else {
                   setTarget({ x: target.longitude, y: target.latitude });
@@ -930,16 +2116,40 @@ const Sector: React.FC<SectorProps> = (props) => {
       let cachedWidth = WIDTH;
       let cachedHeight = HEIGHT;
 
-      const onResizeInternal = () => {
-        handleResize();
-        if (mountRef.current) {
-          const rect = mountRef.current.getBoundingClientRect();
-          cachedWidth = rect.width;
-          cachedHeight = rect.width * width2height;
+      // The mount div can be measured before the page layout settles (fonts
+      // and sidebar images shift it), which would bake a wrong width into
+      // the renderer, camera frustum and click mapping. A ResizeObserver
+      // keeps all three in sync with the real width and re-centers the
+      // camera on the user.
+      const applySize = (width: number) => {
+        const height = width * width2height;
+        cachedWidth = width;
+        cachedHeight = height;
+        renderer?.setSize(width, height);
+        camera.right = width;
+        camera.top = height;
+        camera.updateProjectionMatrix();
+        if (originRef.current) {
+          const { x, y } = originRef.current.center;
+          controls.target.set(-width / 2 - x, -height / 2 - y, 0);
+          camera.position.copy(controls.target);
         }
       };
-      window.addEventListener("resize", onResizeInternal);
+      const resizeObserver = new ResizeObserver((entries) => {
+        const width = entries[0]?.contentRect.width;
+        if (width && Math.abs(width - cachedWidth) > 1) {
+          applySize(width);
+        }
+      });
+      resizeObserver.observe(sceneRef);
 
+      /**
+       * Per-frame animation loop: draws users/quests, updates camera follow,
+       * controls and shader animations, then renders. The expensive hover-path
+       * raycast across the window's ~6000 tile meshes is only recomputed when
+       * an input changed (pointer, origin, camera pose or window nav - tracked
+       * via pathDirtyRef); idle frames skip it entirely.
+       */
       function render() {
         // Performance monitor
         profiler.beginFrame();
@@ -984,15 +2194,48 @@ const Sector: React.FC<SectorProps> = (props) => {
           endQuest();
         }
 
-        // Detect intersections with tiles for movement
-        if (pathFinderRef.current && originRef.current) {
+        // Highlight the hover path across the whole 3x3 window (offsetOfSector
+        // is the component-scope helper defined above)
+        const originOffset = offsetOfSector(sectorRef.current);
+        // Recompute the hover path only when an input to the raycast changed: the
+        // pointer (mousemove/leave flags), the player's origin, the camera pose
+        // (zoom/pan remaps the fixed cursor to a different tile), or the window
+        // nav (a neighbor sector finished loading). Otherwise the ~6000-mesh
+        // raycast is repeated for an identical result every frame while idle.
+        const pathKey = `${sectorRef.current}:${originRef.current?.col},${originRef.current?.row}`;
+        const camKey = `${camera.zoom.toFixed(2)}:${Math.round(camera.position.x)},${Math.round(camera.position.y)}`;
+        if (
+          pathKey !== lastPathKeyRef.current ||
+          camKey !== lastCamKeyRef.current ||
+          windowNavRef.current !== lastNavRef.current
+        ) {
+          lastPathKeyRef.current = pathKey;
+          lastCamKeyRef.current = camKey;
+          lastNavRef.current = windowNavRef.current;
+          pathDirtyRef.current = true;
+        }
+        if (
+          originRef.current &&
+          windowNavRef.current &&
+          originOffset &&
+          pathDirtyRef.current
+        ) {
+          pathDirtyRef.current = false;
           const endIntersectTiles = profiler.mark("animate_intersect_tiles");
-          highlights = intersectTiles({
-            group_tiles: group_interaction, // PERFORMANCE: Raycast against interaction meshes
+          highlights = intersectWindowTiles({
             raycaster,
-            pathFinder: pathFinderRef.current,
-            origin: originRef.current,
+            interactionGroups: interactionGroupsRef.current,
+            nav: windowNavRef.current,
+            origin: {
+              dx: originOffset.dx,
+              dy: originOffset.dy,
+              col: originRef.current.col,
+              row: originRef.current.row,
+            },
+            offsetOfSector,
+            groupOfOffset: interactionForOffset,
             currentHighlights: highlights,
+            active: pointerOnMapRef.current,
           });
           endIntersectTiles();
         }
@@ -1006,6 +2249,7 @@ const Sector: React.FC<SectorProps> = (props) => {
             targetPosition: cameraTargetPositionRef.current,
             width: cachedWidth,
             height: cachedHeight,
+            minZoom: 0,
           });
           endCamera();
         }
@@ -1015,12 +2259,13 @@ const Sector: React.FC<SectorProps> = (props) => {
         controls.update();
         endControls();
 
-        // Update wind animation for sprites
+        // Update wind + wave animation from the flat material lists collected at
+        // window-build time (no per-frame scene-graph traversal or allocation)
         if (!lightLayout) {
           const endShaders = profiler.mark("animate_shaders");
-          // PERFORMANCE: Update only relevant materials
-          updateWindAnimation(group_assets, performance.now() / 1000);
-          updateWaveAnimation(animatedMaterials, performance.now() / 1000);
+          const shaderTime = performance.now() / 1000;
+          updateWindAnimation(windMaterialsRef.current, shaderTime);
+          updateWaveAnimation(animatedMaterialsRef.current, shaderTime);
           endShaders();
         }
 
@@ -1047,17 +2292,25 @@ const Sector: React.FC<SectorProps> = (props) => {
       // Every time we refresh this component, fire off a move counter to make sure other useEffects are updated
       setMoves((prev) => prev + 1);
 
+      // Resume a cross-sector walk once the world is centered on its sector
+      if (pendingWorldTargetRef.current?.sector === sectorRef.current) {
+        const worldTarget = pendingWorldTargetRef.current;
+        pendingWorldTargetRef.current = null;
+        setTarget({ x: worldTarget.x, y: worldTarget.y });
+      }
+
       // Remove the mouseover listener
-      return () => {
+      activeSceneTeardownRef.current = () => {
         performanceMonitor.cancelFrame(animationId);
         if (zoomTimeout) clearTimeout(zoomTimeout);
 
         // Remove event listeners safely
         try {
           window.removeEventListener("resize", handleResize);
-          window.removeEventListener("resize", onResizeInternal);
+          resizeObserver.disconnect();
           document.removeEventListener("keydown", onDocumentKeyDown, false);
           sceneRef.removeEventListener("mousemove", onDocumentMouseMove);
+          sceneRef.removeEventListener("mouseleave", onDocumentMouseLeave);
           controls.removeEventListener("change", onZoomChange);
           rendererElement.removeEventListener("click", onClick, true);
           contextHandlers.cleanup();
@@ -1075,8 +2328,32 @@ const Sector: React.FC<SectorProps> = (props) => {
         // that may be in use by other Sector instances. Texture caches are shared across
         // all scenes for performance. Individual texture cleanup happens in cleanUp().
       };
-    }
-  }, [props.sector, isAttacking, fetchedUsers]);
+    };
+
+    // Full rebuilds wait for an idle moment so they never stall a walk
+    // animation; the first mount builds right away
+    const tryBuild = () => {
+      if (disposed) return;
+      if (journeyActive() && controlsRef.current) {
+        retryTimer = setTimeout(tryBuild, 250);
+        return;
+      }
+      buildScene();
+    };
+    rebuildSceneRef.current = tryBuild;
+    tryBuild();
+    return () => {
+      // The built scene is NOT torn down here: it keeps rendering until the
+      // next build replaces it (or the component unmounts)
+      disposed = true;
+      rebuildSceneRef.current = null;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+    // Window data flows through applyWindowToScene; a full rebuild is only
+    // needed when the renderer itself must change. isAttacking is read via
+    // isAttackingRef in the click guard so it does not rebuild the world.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
+  }, [usersReady]);
 
   return (
     <>
@@ -1154,8 +2431,8 @@ const Sector: React.FC<SectorProps> = (props) => {
                 userId: target.userId,
                 longitude: target.longitude,
                 latitude: target.latitude,
-                sector: sector,
-                asset: originRef.current?.asset,
+                sector: sectorRef.current,
+                asset: originRef.current?.battleBiome,
               });
             }
           }}
@@ -1166,7 +2443,7 @@ const Sector: React.FC<SectorProps> = (props) => {
                 userId: target.userId,
                 longitude: target.longitude,
                 latitude: target.latitude,
-                sector: sector,
+                sector: sectorRef.current,
               });
             }
           }}

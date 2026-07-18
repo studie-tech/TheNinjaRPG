@@ -19,9 +19,9 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -95,6 +95,13 @@ import {
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
 const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
 
+/** A stored per-sector window entry (position within a window comes from the layout) */
+type StoredSectorEntry =
+  RouterOutputs["worldMap"]["getSectorEntries"]["entries"][number];
+/** One sector's dx/dy/rotation placement within a specific window */
+type WindowLayoutEntry =
+  RouterOutputs["worldMap"]["getSectorWindow"]["windowLayouts"][number]["entries"][number];
+
 export default function Travel() {
   // What is shown on this page
   const [showActive, setShowActive] = useLocalStorage<boolean>(
@@ -150,6 +157,153 @@ export default function Travel() {
     { sector: userData?.sector ?? -1 },
     { enabled: !!userData && userData.sector !== undefined },
   );
+  // The decoration + terrain libraries change rarely; fetch them once and keep
+  // them for the whole session instead of shipping copies with every window
+  const { data: mapAssets } = api.mapAsset.getAll.useQuery(undefined, {
+    enabled: !!userData,
+    staleTime: Infinity,
+  });
+  const { data: mapTerrains } = api.mapTerrain.getAll.useQuery(undefined, {
+    enabled: !!userData,
+    staleTime: Infinity,
+  });
+
+  // Per-sector store: each sector map (~90KB) is downloaded at most once per
+  // session; windows are assembled locally from it so a border crossing needs
+  // no blocking request. null marks a sector known to have no published map.
+  const sectorStoreRef = useRef(new Map<number, StoredSectorEntry | null>());
+  // Window layouts (dx/dy/rotation topology) keyed by window-center sector
+  const windowLayoutsRef = useRef(new Map<number, WindowLayoutEntry[]>());
+  // storeTick re-runs assembly after ingests; visibleEpoch only bumps when data
+  // for the currently visible window may have changed (bootstrap refetch), so
+  // ring warm-ups do not needlessly re-patch the rendered scene
+  const [storeTick, setStoreTick] = useState(0);
+  const visibleEpochRef = useRef(0);
+  const assembledEpochRef = useRef(-1);
+  const [assembled, setAssembled] = useState<{
+    center: number;
+    sectors: RouterOutputs["worldMap"]["getSectorWindow"]["sectors"];
+  } | null>(null);
+  // Sector needing a full bootstrap window fetch (initial load, global travel)
+  const [bootSector, setBootSector] = useState<number | null>(null);
+  const { data: bootWindow } = api.worldMap.getSectorWindow.useQuery(
+    { sector: bootSector ?? 0 },
+    { enabled: bootSector !== null },
+  );
+
+  // Ingest a bootstrap window: layouts + all its entries into the store
+  useEffect(() => {
+    if (!bootWindow) return;
+    for (const layout of bootWindow.windowLayouts) {
+      windowLayoutsRef.current.set(layout.center, layout.entries);
+    }
+    for (const entry of bootWindow.sectors) {
+      const { dx: _dx, dy: _dy, rotation: _rotation, ...data } = entry;
+      sectorStoreRef.current.set(entry.sector, data);
+    }
+    // Layout sectors absent from the response have no published map
+    const centerLayout = bootWindow.windowLayouts.find(
+      (layout) => layout.center === bootWindow.center,
+    );
+    centerLayout?.entries.forEach((entry) => {
+      if (!sectorStoreRef.current.has(entry.sector)) {
+        sectorStoreRef.current.set(entry.sector, null);
+      }
+    });
+    visibleEpochRef.current += 1;
+    setStoreTick((tick) => tick + 1);
+  }, [bootWindow]);
+
+  // Assemble the visible window from the store; fall back to a bootstrap fetch
+  // when the store cannot serve the sector yet
+  useEffect(() => {
+    const sector = userData?.sector;
+    if (sector === undefined) return;
+    const store = sectorStoreRef.current;
+    const layout = windowLayoutsRef.current.get(sector);
+    const ready =
+      !!layout && layout.every((e) => store.has(e.sector)) && !!store.get(sector);
+    if (!layout || !ready) {
+      setBootSector(sector);
+      return;
+    }
+    // Skip when nothing visible changed (ring ingests only add outer sectors)
+    if (
+      assembled?.center === sector &&
+      assembledEpochRef.current === visibleEpochRef.current
+    ) {
+      return;
+    }
+    assembledEpochRef.current = visibleEpochRef.current;
+    setAssembled({
+      center: sector,
+      sectors: layout.flatMap((e) => {
+        const data = store.get(e.sector);
+        return data ? [{ ...data, dx: e.dx, dy: e.dy, rotation: e.rotation }] : [];
+      }),
+    });
+  }, [userData?.sector, storeTick, assembled?.center]);
+
+  // Warm the surrounding ring: ONE request for exactly the sectors of the
+  // adjacent windows the store does not yet hold, so the next border crossing
+  // assembles instantly. Skipped entirely when everything is already warm.
+  const ringCenterRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!assembled) return;
+    const center = assembled.center;
+    if (ringCenterRef.current === center) return;
+    ringCenterRef.current = center;
+    const layouts = windowLayoutsRef.current;
+    const store = sectorStoreRef.current;
+    const cardinals = (layouts.get(center) ?? [])
+      .filter((e) => Math.abs(e.dx) + Math.abs(e.dy) === 1)
+      .map((e) => e.sector);
+    const union = new Set(
+      [center, ...cardinals].flatMap((c) =>
+        (layouts.get(c) ?? []).map((e) => e.sector),
+      ),
+    );
+    // Prune sectors no longer in or adjacent to the visible window, so the
+    // store (~90KB per map) and the `known` list below stay bounded
+    for (const key of [...store.keys()]) {
+      if (!union.has(key)) store.delete(key);
+    }
+    const missingLayout = cardinals.some((c) => !layouts.has(c));
+    const missingSector = [...union].some((s) => !store.has(s));
+    if (!missingLayout && !missingSector) return;
+    void utils.worldMap.getSectorEntries
+      .fetch({ center, known: [...store.keys()] })
+      .then((ring) => {
+        for (const layout of ring.windowLayouts) {
+          windowLayoutsRef.current.set(layout.center, layout.entries);
+        }
+        for (const entry of ring.entries) {
+          if (!sectorStoreRef.current.has(entry.sector)) {
+            sectorStoreRef.current.set(entry.sector, entry);
+          }
+        }
+        for (const sector of ring.missingSectors) {
+          if (!sectorStoreRef.current.has(sector)) {
+            sectorStoreRef.current.set(sector, null);
+          }
+        }
+        setStoreTick((tick) => tick + 1);
+      })
+      .catch(() => {
+        // Allow the warm-up to retry on the next assembly instead of leaving
+        // the ring cold until the player crosses into another sector
+        ringCenterRef.current = null;
+      });
+  }, [assembled, utils]);
+
+  // The window object handed to the Sector scene (entries + session libraries)
+  const sectorWindow = useMemo(() => {
+    if (!assembled || !mapAssets || !mapTerrains) return undefined;
+    return { mapAssets, mapTerrains, sectors: assembled.sectors };
+  }, [assembled, mapAssets, mapTerrains]);
+  const currentSectorMap = sectorWindow?.sectors.find(
+    (entry) => entry.sector === userData?.sector,
+  )?.map;
   // Memoize villages to prevent re-creating array reference on every render
   // This is important because useLiveCountdown triggers re-renders every second
   const villages = useMemo(() => {
@@ -176,7 +330,8 @@ export default function Travel() {
 
   // Sector tab link
   const currentSector = userData?.sector;
-  const sectorLink = currentSector
+  const hasCurrentSector = currentSector !== undefined && currentSector !== null;
+  const sectorLink = hasCurrentSector
     ? currentPosition
       ? `You (${currentPosition.x}, ${currentPosition.y})`
       : `Sector ${currentSector}`
@@ -396,17 +551,25 @@ export default function Travel() {
           return;
         }
       }
-      // Start global move
-      startGlobalMove({ sector });
+      // Start global move. Pass the current sector so the server can load its
+      // map in parallel with the user fetch (it re-validates against the DB).
+      if (userData?.sector === undefined) return;
+      startGlobalMove({ sector, curSector: userData.sector });
     },
-    [currentStep, userData?.tutorialOn, startGlobalMove],
+    [currentStep, userData?.tutorialOn, userData?.sector, startGlobalMove],
   );
 
   // Convenience variables
-  const onEdge = isAtEdge(currentPosition);
+  const currentSectorDimensions = currentSectorMap
+    ? { width: currentSectorMap.width, height: currentSectorMap.height }
+    : undefined;
+  const onEdge = currentSectorDimensions
+    ? isAtEdge(currentPosition, currentSectorDimensions)
+    : false;
   const isGlobal = activeTab === globalLink;
   const showGlobal = villages && globe && isGlobal;
-  const showSector = villages && currentSector && currentTile && !isGlobal;
+  const showSector =
+    villages && hasCurrentSector && currentTile && currentSectorMap && !isGlobal;
 
   useEffect(() => {
     // Check if user reached the target position on the current map
@@ -420,7 +583,7 @@ export default function Travel() {
     if (
       atTarget &&
       onEdge &&
-      targetSector &&
+      targetSector !== null &&
       targetSector !== currentSector &&
       !isStartingTravel
     ) {
@@ -497,10 +660,13 @@ export default function Travel() {
     return (
       userData &&
       currentTile &&
-      currentSector && (
+      hasCurrentSector &&
+      sectorWindow &&
+      currentSectorMap && (
         <Sector
           tile={currentTile}
           sector={currentSector}
+          sectorWindow={sectorWindow}
           target={targetPosition}
           showSorrounding={showSorrounding}
           showActive={showActive}
@@ -514,6 +680,9 @@ export default function Travel() {
   }, [
     currentTile,
     currentSector,
+    currentSectorMap,
+    sectorWindow,
+    hasCurrentSector,
     targetPosition,
     showSorrounding,
     showActive,
@@ -535,8 +704,12 @@ export default function Travel() {
   const canCreateHideout =
     isOutlaw && !sectorVillage && clanLeader && !hadHideout && loadedVillages;
   const joinVillageBtn = userData.isOutlaw && canJoin && sectorVillage?.joinable;
+  // Compare against the stable Global label rather than sectorLink: the sector
+  // tab's label mutates from "Sector N" to "You (x, y)" once the scene reports
+  // the player position, so a string match against it goes stale and the
+  // subtitle silently fell back to the world name while on the sector view.
   const subtitle =
-    currentSector && userData && activeTab === sectorLink
+    hasCurrentSector && userData && !isGlobal
       ? `Sector ${currentSector} ${sectorData?.sectorData?.village ? `(${sectorData.sectorData.village.name})` : ""}`
       : "The world of Seichi";
   const consumableItems = userItems?.filter(
@@ -781,7 +954,7 @@ export default function Travel() {
                   if (canAffordHideout) {
                     purchaseHideout({
                       clanId: userData.clanId || "",
-                      sector: currentSector || 0,
+                      sector: currentSector ?? 0,
                     });
                   }
                 }}
@@ -806,7 +979,7 @@ export default function Travel() {
         {mapError && <MapError />}
         {showSector && SectorComponent}
         {!villages && <Loader explanation="Loading data" />}
-        {showModal && globe && userData && targetSector && (
+        {showModal && globe && userData && targetSector !== null && (
           <Modal2
             id="tutorial-global-travel"
             title="World Travel"
@@ -815,9 +988,11 @@ export default function Travel() {
             proceed_label={!isStartingTravel ? "Travel" : undefined}
             isValid={false}
             onAccept={() => {
-              if (!onEdge && currentPosition) {
+              if (!onEdge && currentPosition && currentSectorDimensions) {
                 setShowModal(false);
-                setTargetPosition(findNearestEdge(currentPosition));
+                setTargetPosition(
+                  findNearestEdge(currentPosition, currentSectorDimensions),
+                );
                 setActiveTab(sectorLink);
               } else {
                 handleGlobalMove(targetSector);

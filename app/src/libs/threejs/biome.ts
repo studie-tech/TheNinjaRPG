@@ -8,32 +8,26 @@ import {
   Texture,
   Vector3,
 } from "three";
-import type { CombatBiome, HEXTILE_TYPE } from "@/drizzle/constants";
-import {
-  ASSETS_LAYER,
-  COMBAT_BIOMES,
-  IMG_BG_ICE,
-  IMG_BG_OCEAN,
-  IMG_BG_SNOW,
-} from "@/drizzle/constants";
+import type { CombatBiome } from "@/drizzle/constants";
+import { ASSETS_LAYER, COMBAT_BIOMES } from "@/drizzle/constants";
+import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
+import type { TerrainSpec } from "@/libs/sector-map/terrains";
+import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import { applyWindShader } from "@/libs/threejs/shaders";
 import type { GlobalTile } from "@/libs/threejs/types";
 import { createSpriteMaterial, loadTexture } from "@/libs/threejs/util";
 import { getBiomeFromGlobalTile } from "@/libs/travel";
 import type { TerrainHex } from "../hexgrid";
 
-/**
- * Map materials & colors
- */
-export const groundColors = [0x48bd48, 0x37aa37, 0x239623] as const;
+/** Single source of truth for scenery sprite art: the decoration registry */
+const decorationFilepath = (key: string) => {
+  const asset = DECORATION_ASSETS_BY_KEY.get(key);
+  if (!asset) throw new Error(`Unknown decoration asset ${key}`);
+  return asset.filepath;
+};
 
-export const oceanColors = [0x184695, 0x1c54b5, 0x2767d7] as const;
-
-export const dessertColors = [0xf9e79f, 0xfad7a0, 0xf5cba7] as const;
-
-export const iceColors = [0x9febf7, 0x89cde0, 0x98dfe8] as const;
-
-export const snowColors = [0xffffff, 0xeeeeee, 0xfefefe] as const;
+/** Parse a "#rrggbb" registry color into a three.js color int */
+const hexToInt = (hex: string) => Number.parseInt(hex.replace("#", ""), 16);
 
 /**
  * Helper function to create textured materials from colors and texture URL
@@ -43,15 +37,23 @@ export const snowColors = [0xffffff, 0xeeeeee, 0xfefefe] as const;
 const createTexturedMaterials = (colors: readonly number[], textureUrl: string) => {
   // Fallback to simple materials on server-side where window is not available
   if (typeof window === "undefined") {
-    return colors.map((color) => new MeshBasicMaterial({ color }));
+    return colors.map((color) => markShared(new MeshBasicMaterial({ color })));
   }
 
   return colors.map((color) => {
     const texture = loadTexture(textureUrl);
     texture.wrapS = texture.wrapT = RepeatWrapping;
     texture.repeat.set(1, 1);
-    return new MeshBasicMaterial({ color: color, map: texture, combine: AddOperation });
+    return markShared(
+      new MeshBasicMaterial({ color: color, map: texture, combine: AddOperation }),
+    );
   });
+};
+
+/** Module-level palette materials are shared; per-sector disposal skips them */
+const markShared = <T extends MeshBasicMaterial | SpriteMaterial>(material: T): T => {
+  material.userData.shared = true;
+  return material;
 };
 
 /**
@@ -62,7 +64,7 @@ const createTexturedMaterials = (colors: readonly number[], textureUrl: string) 
 const createNoisedMaterials = (colors: readonly number[]) => {
   // Fallback to simple materials on server-side where document is not available
   if (typeof document === "undefined") {
-    return colors.map((color) => new MeshBasicMaterial({ color }));
+    return colors.map((color) => markShared(new MeshBasicMaterial({ color })));
   }
 
   return colors.map((color) => {
@@ -72,7 +74,7 @@ const createNoisedMaterials = (colors: readonly number[]) => {
     canvas.width = canvas.height = size;
     const ctx = canvas.getContext("2d");
     if (!ctx) {
-      return new MeshBasicMaterial({ color });
+      return markShared(new MeshBasicMaterial({ color }));
     }
     // Fill with solid color
     ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
@@ -99,7 +101,9 @@ const createNoisedMaterials = (colors: readonly number[]) => {
     texture.wrapS = texture.wrapT = RepeatWrapping;
     texture.repeat.set(1, 1);
 
-    return new MeshBasicMaterial({ color, map: texture, combine: AddOperation });
+    return markShared(
+      new MeshBasicMaterial({ color, map: texture, combine: AddOperation }),
+    );
   });
 };
 
@@ -107,33 +111,106 @@ const createNoisedMaterials = (colors: readonly number[]) => {
  * Helper function to create light (color-only) materials
  */
 const createLightMaterials = (colors: readonly number[]) => {
-  return colors.map((color) => new MeshBasicMaterial({ color }));
+  return colors.map((color) => markShared(new MeshBasicMaterial({ color })));
 };
 
-export const groundMats = createNoisedMaterials(groundColors);
-export const groundMatsLight = createLightMaterials(groundColors);
+/** Full and light (color-only) material variants for one terrain look */
+export interface TerrainMaterialSet {
+  variants: MeshBasicMaterial[];
+  lightVariants: MeshBasicMaterial[];
+}
 
-export const oceanMats = createTexturedMaterials(oceanColors, IMG_BG_OCEAN);
-export const oceanMatsLight = createLightMaterials(oceanColors);
+const terrainMaterialCache = new Map<string, TerrainMaterialSet>();
+// Identity fast-path: within a window the same TerrainSpec object is resolved
+// once per tile (~676x per sector), so cache by object identity to skip
+// rebuilding the string cache key (a spread + join allocation) on every tile.
+// A registry rebuild yields fresh spec objects, so this never serves stale art.
+const terrainMaterialBySpec = new WeakMap<TerrainSpec, TerrainMaterialSet>();
 
-export const dessertMats = createNoisedMaterials(dessertColors);
-export const dessertMatsLight = createLightMaterials(dessertColors);
+/**
+ * Builds terrain materials on demand from a TerrainSpec (the content-managed
+ * terrain library). Cached by look (key + colors + textureUrl) so every sector
+ * in the 3x3 window shares one material set per terrain — keeping geometry
+ * merging effective — while an admin color/texture edit naturally yields a
+ * fresh set. Textured variants when spec.textureUrl is set, noised canvas
+ * variants otherwise; all materials are marked userData.shared so per-sector
+ * disposal skips them.
+ */
+export const getTerrainMaterials = (spec: TerrainSpec): TerrainMaterialSet => {
+  const identityHit = terrainMaterialBySpec.get(spec);
+  if (identityHit) return identityHit;
+  const cacheKey = [spec.key, ...spec.colors, spec.textureUrl ?? ""].join("|");
+  const cached = terrainMaterialCache.get(cacheKey);
+  if (cached) {
+    terrainMaterialBySpec.set(spec, cached);
+    return cached;
+  }
+  const colors = spec.colors.map(hexToInt);
+  const set: TerrainMaterialSet = {
+    variants: spec.textureUrl
+      ? createTexturedMaterials(colors, spec.textureUrl)
+      : createNoisedMaterials(colors),
+    lightVariants: createLightMaterials(colors),
+  };
+  terrainMaterialCache.set(cacheKey, set);
+  terrainMaterialBySpec.set(spec, set);
+  return set;
+};
 
-export const iceMats = createTexturedMaterials(iceColors, IMG_BG_ICE);
-export const iceMatsLight = createLightMaterials(iceColors);
+/** Built-in terrain materials for the combat/tower-defense arena backgrounds */
+const builtinMaterials = (key: string, lightLayout: boolean) => {
+  const spec = BUILTIN_TERRAINS_BY_KEY.get(key);
+  if (!spec) throw new Error(`Unknown built-in terrain ${key}`);
+  const set = getTerrainMaterials(spec);
+  return lightLayout ? set.lightVariants : set.variants;
+};
 
-export const snowMats = createTexturedMaterials(snowColors, IMG_BG_SNOW);
-export const snowMatsLight = createLightMaterials(snowColors);
+/** Built-in spec colors as ints, for background-color lookups */
+const builtinColors = (key: string) => {
+  const spec = BUILTIN_TERRAINS_BY_KEY.get(key);
+  if (!spec) throw new Error(`Unknown built-in terrain ${key}`);
+  return spec.colors.map(hexToInt) as [number, number, number];
+};
+
+export const roadColors = [0xa98e62, 0x9d8156, 0x8f744c] as const;
+export const roadMats = createNoisedMaterials(roadColors);
+export const roadMatsLight = createLightMaterials(roadColors);
+
+export const shoreColors = [0xf2e2a4, 0xe6d190, 0xd8bf7d] as const;
+export const shoreMats = createNoisedMaterials(shoreColors);
+export const shoreMatsLight = createLightMaterials(shoreColors);
 
 interface TileInfo {
   material: MeshBasicMaterial;
   dirt: MeshBasicMaterial;
   sprites: Sprite[];
-  asset: HEXTILE_TYPE;
+  asset: string;
 }
 
-export const getDirtMaterial = (_tileType: HEXTILE_TYPE) => {
+/** Flat dirt-colored fill rendered beneath the hex tiles */
+export const getDirtMaterial = () => {
   return new MeshBasicMaterial({ color: 0x696969, side: DoubleSide });
+};
+
+/**
+ * Material for one authored sector tile: the terrain's own shades only (light
+ * or mid picked by noise; the dark shade marks blocked land so thickets and
+ * rocks read as impassable). Water stays in its regular shades when blocked -
+ * a lake is water, not a rock.
+ */
+export const getAuthoredTileMaterial = (
+  hex: TerrainHex,
+  spec: TerrainSpec,
+  blocked: boolean,
+  lightLayout = false,
+) => {
+  const set = getTerrainMaterials(spec);
+  const mats = lightLayout ? set.lightVariants : set.variants;
+  const variant = blocked && !spec.isWater ? 2 : hex.level < 0.5 ? 0 : 1;
+  return {
+    material: mats[variant] ?? mats[0],
+    asset: spec.key,
+  } as TileInfo;
 };
 
 export const getTileInfo = (
@@ -144,15 +221,15 @@ export const getTileInfo = (
 ) => {
   const material = getMaterial(hex, tile, lightLayout);
   material.sprites = getMapSprites(prng, material.asset, hex);
-  material.dirt = getDirtMaterial(material.asset);
+  material.dirt = getDirtMaterial();
   return material;
 };
 
-export const getMapSprites = (
-  prng: () => number,
-  asset: HEXTILE_TYPE,
-  hex: TerrainHex,
-) => {
+/**
+ * Seeded decoration sprites for one hex on the procedural render path (combat
+ * arenas): sprite art derives from the asset set and the tile's cost band.
+ */
+export const getMapSprites = (prng: () => number, asset: string, hex: TerrainHex) => {
   const sprites: Sprite[] = [];
   // Fetch tile sprite
   let cost = hex.cost;
@@ -217,7 +294,12 @@ export const getMapSprites = (
 // Performance optimization: Cache materials for wind-affected assets to allow sharing
 const windMaterialCache = new Map<string, MeshBasicMaterial | SpriteMaterial>();
 
-const loadSectorAsset = (
+/**
+ * Sprite for a decoration image. Wind-affected decorations use the cached
+ * wind-shader material (shared across sectors, so disposal must skip it);
+ * `rand` drives the deterministic rotation variant when randomRotation is set.
+ */
+export const loadSectorAsset = (
   filepath: string,
   rand: number,
   windAffected?: boolean | null,
@@ -240,10 +322,12 @@ const loadSectorAsset = (
     } else {
       // Create a fresh material for this variant
       // We don't use the standard createSpriteMaterial here because we're modifying it
-      material = new SpriteMaterial({
-        map: texture,
-        alphaTest: 0.5,
-      });
+      material = markShared(
+        new SpriteMaterial({
+          map: texture,
+          alphaTest: 0.5,
+        }),
+      );
       applyWindShader(material, variantOffset);
       windMaterialCache.set(cacheKey, material);
     }
@@ -276,12 +360,14 @@ const getMaterial = (
   tile: GlobalTile | CombatBiome,
   lightLayout = false,
 ) => {
-  // Some cleanup for which assets to return based on state
-  const oceanMatsToUse = lightLayout ? oceanMatsLight : oceanMats;
-  const groundMatsToUse = lightLayout ? groundMatsLight : groundMats;
-  const dessertMatsToUse = lightLayout ? dessertMatsLight : dessertMats;
-  const iceMatsToUse = lightLayout ? iceMatsLight : iceMats;
-  const snowMatsToUse = lightLayout ? snowMatsLight : snowMats;
+  // Arena backgrounds always render from the built-in terrain looks (battle
+  // backgrounds are a closed enum; creator terrains map onto them via their
+  // battleBiome field)
+  const oceanMatsToUse = builtinMaterials("ocean", lightLayout);
+  const groundMatsToUse = builtinMaterials("ground", lightLayout);
+  const dessertMatsToUse = builtinMaterials("dessert", lightLayout);
+  const iceMatsToUse = builtinMaterials("ice", lightLayout);
+  const snowMatsToUse = builtinMaterials("snow", lightLayout);
   const biome: CombatBiome =
     typeof tile === "object"
       ? getBiomeFromGlobalTile(tile)
@@ -375,16 +461,16 @@ export const getBackgroundColor = (tile: GlobalTile | CombatBiome) => {
         : "default";
   switch (biome) {
     case "ocean":
-      return { color: oceanColors[0] };
+      return { color: builtinColors("ocean")[0] };
     case "dessert":
-      return { color: dessertColors[2] };
+      return { color: builtinColors("dessert")[2] };
     case "ice":
     case "snow":
-      return { color: iceColors[2] };
+      return { color: builtinColors("ice")[2] };
     case "ground":
-      return { color: groundColors[1] };
+      return { color: builtinColors("ground")[1] };
   }
-  return { color: groundColors[1] };
+  return { color: builtinColors("ground")[1] };
 };
 
 export type AssetType = {
@@ -402,8 +488,7 @@ export type AssetType = {
 export const GROUND_ASSETS_PROPS: AssetType[] = [
   // Small assets
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJa55Vc5YYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk",
+    filepath: decorationFilepath("grass.tuft"),
     chance: 0.5,
     scale: 1,
     scaleVariation: 0.2,
@@ -412,8 +497,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlvcZlIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
+    filepath: decorationFilepath("grass.sprout"),
     chance: 0.3,
     scale: 1,
     scaleVariation: 0.2,
@@ -422,8 +506,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcpFFdRSnxBpQqGNDcTHbLmYz8uXAl3oa54ti",
+    filepath: decorationFilepath("grass.flower"),
     chance: 0.1,
     scale: 0.7,
     scaleVariation: 0.2,
@@ -432,8 +515,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxfrF3oWZsq9k0Von5rUfP6OgQ2TyptCKHS4u",
+    filepath: decorationFilepath("grass.pebble"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -443,8 +525,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
   },
   // Green Trees
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJndYwvrmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+    filepath: decorationFilepath("tree.green.round"),
     chance: 0.7,
     scale: 2,
     scaleVariation: 0.7,
@@ -452,8 +533,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
     windAffected: true,
   },
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvFn4sIEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
+    filepath: decorationFilepath("tree.green.tall"),
     chance: 0.7,
     scale: 2,
     scaleVariation: 0.7,
@@ -461,8 +541,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
     windAffected: true,
   },
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHl8NCiQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    filepath: decorationFilepath("tree.green.wide"),
     chance: 0.5,
     scale: 2,
     scaleVariation: 0.7,
@@ -475,8 +554,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
 export const DESSERT_ASSET_PROPS: AssetType[] = [
   // Cactus
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJe0aIBjyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
+    filepath: decorationFilepath("cactus.saguaro"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -484,8 +562,7 @@ export const DESSERT_ASSET_PROPS: AssetType[] = [
     windAffected: true,
   },
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7vgcu3XKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
+    filepath: decorationFilepath("cactus.barrel"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -493,8 +570,7 @@ export const DESSERT_ASSET_PROPS: AssetType[] = [
     windAffected: true,
   },
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvmatJJEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
+    filepath: decorationFilepath("cactus.cluster"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -503,8 +579,7 @@ export const DESSERT_ASSET_PROPS: AssetType[] = [
   },
   // Stones
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQlUKaJVjhzBPya1rwfCIqOTU0cV5xgsMeo3u",
+    filepath: decorationFilepath("rock.sand"),
     chance: 0.2,
     scale: 1,
     scaleVariation: 0.2,
@@ -512,8 +587,7 @@ export const DESSERT_ASSET_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzLLsgkemvaQu94EYJs8HpxVzofny6iPtbgCZ",
+    filepath: decorationFilepath("rock.grey"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -521,8 +595,7 @@ export const DESSERT_ASSET_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJylERmDukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
+    filepath: decorationFilepath("rock.slate"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -534,8 +607,7 @@ export const DESSERT_ASSET_PROPS: AssetType[] = [
 // Dessert assets settings default
 export const ICE_ASSET_PROPS: AssetType[] = [
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzJ76QEemvaQu94EYJs8HpxVzofny6iPtbgCZ",
+    filepath: decorationFilepath("ice.floe"),
     chance: 0.1,
     scale: 0.9,
     scaleVariation: 0.2,
@@ -549,8 +621,7 @@ export const ICE_ASSET_PROPS: AssetType[] = [
 export const SNOW_ASSET_PROPS: AssetType[] = [
   // Stones
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzLLsgkemvaQu94EYJs8HpxVzofny6iPtbgCZ",
+    filepath: decorationFilepath("rock.grey"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -558,8 +629,7 @@ export const SNOW_ASSET_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJylERmDukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
+    filepath: decorationFilepath("rock.slate"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -568,8 +638,7 @@ export const SNOW_ASSET_PROPS: AssetType[] = [
   },
   // Green Trees
   {
-    filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrtEwSR2huJPmdY8zI2ptZXAoEj1c6BMKvrQO",
+    filepath: decorationFilepath("tree.snow.pine"),
     chance: 0.4,
     scale: 2,
     scaleVariation: 0.7,
@@ -580,45 +649,3 @@ export const SNOW_ASSET_PROPS: AssetType[] = [
 
 // Ocean assets settings default
 export const OCEAN_ASSET_PROPS: AssetType[] = [];
-
-/**
- * Generates wall placements forming a rectangular perimeter around the village
- * with a one-tile padding from the grid edges.
- *
- * @param sectorWidth - Width of the sector
- * @param sectorHeight - Height of the sector
- * @returns Array of {x, y} coordinates for wall placements
- */
-export const generateWallPlacements = (sectorWidth: number, sectorHeight: number) => {
-  const wallPlacements: Array<{ x: number; y: number }> = [];
-  const padding = 1;
-
-  // Define the boundaries with padding
-  const minCol = padding;
-  const maxCol = sectorWidth - padding - 1;
-  const minRow = padding;
-  const maxRow = sectorHeight - padding - 1;
-
-  // Trace the rectangular perimeter
-  // Top edge (left to right, excluding last corner)
-  for (let col = minCol; col < maxCol; col++) {
-    wallPlacements.push({ x: col, y: minRow });
-  }
-
-  // Right edge (top to bottom, excluding last corner)
-  for (let row = minRow; row < maxRow; row++) {
-    wallPlacements.push({ x: maxCol, y: row });
-  }
-
-  // Bottom edge (right to left, excluding last corner)
-  for (let col = maxCol; col > minCol; col--) {
-    wallPlacements.push({ x: col, y: maxRow });
-  }
-
-  // Left edge (bottom to top, closing the loop)
-  for (let row = maxRow; row >= minRow; row--) {
-    wallPlacements.push({ x: minCol, y: row });
-  }
-
-  return wallPlacements;
-};

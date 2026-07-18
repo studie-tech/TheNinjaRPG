@@ -61,7 +61,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
   const promptForm = useForm<PromptFormSchema>({
     resolver: zodResolver(promptFormSchema),
     defaultValues: {
-      systemPrompt: getPrePrompts(),
+      systemPrompt: getPrePrompts(type),
       userPrompt: prompt,
       editPrompt: "",
     },
@@ -90,7 +90,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
       createImg({
         preprompt: data.systemPrompt,
         prompt: data.userPrompt,
-        removeBg: ["item", "ai"].includes(props.type ?? ""),
+        removeBg: REMOVE_BG_TYPES.includes(props.type ?? ""),
         relationId: id,
         size: size,
         maxDim: maxDim,
@@ -111,7 +111,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
         preprompt: data.systemPrompt,
         prompt: data.editPrompt,
         previousImg: displayUrl,
-        removeBg: ["item", "ai"].includes(props.type ?? ""),
+        removeBg: REMOVE_BG_TYPES.includes(props.type ?? ""),
         relationId: id,
         size: size,
         maxDim: maxDim,
@@ -303,7 +303,39 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
 
 export default ContentImageSelector;
 
-export const getPrePrompts = () => {
+/** Content types whose generated images get their background removed */
+const REMOVE_BG_TYPES = ["item", "ai", "mapAsset"];
+
+/**
+ * Default system prompt for the given content type. Map assets get a dedicated
+ * prompt matching the existing world-map decoration sprites (small, cozy
+ * pixel-art props on a transparent background) instead of the cinematic
+ * character-art prompt used elsewhere.
+ */
+export const getPrePrompts = (type?: ContentType) => {
+  if (type === "mapAsset") {
+    return `
+# 🔧 Role Description
+You are a sprite generation assistant for **TheNinja-RPG world map**. You produce a SINGLE small decoration sprite (tree, rock, bush, tower, statue, building, etc.) that will be placed on an overhead hex world map alongside the game's existing prop sprites.
+
+---
+
+## 🎨 Art Style Core (match the existing map props exactly)
+- **Format:** Cute retro pixel art, low detail, reads clearly at ~64x64 px
+- **View:** Elevated three-quarter view (seen from above and slightly to the side), upright object
+- **Color:** Muted, natural palette (soft greens, browns, greys); gentle 2-3 tone shading per surface
+- **Shadow:** At most a small, soft cast shadow directly at the object's base
+- **Avoid:** Glow, neon, rim lighting, dramatic cinematic lighting, gradients, photorealism, painterly brushwork
+
+---
+
+## 📦 Composition Rules
+- Exactly ONE object, centered, filling most of the frame
+- Isolated on a plain uniform white background (it will be removed automatically)
+- NO ground plane, terrain patch, grass base, scene or landscape around the object
+- NO text, borders, frames, watermarks or UI elements
+`;
+  }
   return `
 # 🔧 Role Description
 You are a pixel art generation assistant named **TNR Pixel Art**, built for producing high-resolution (256×256 to 512×512) pixel artwork with retro 32-bit aesthetics. You specialize in cinematic pixel sprites and scenes themed around Naruto-style ninja fantasy, complete with chakra-based jutsu, dynamic action, and elemental effects.

@@ -1,15 +1,16 @@
 import { expect, test } from "vitest";
+import { MAP_SECTOR_ID_MAX } from "@/drizzle/constants";
 import { sectorIdSchema } from "@/validators/travel";
 
-test("sectorIdSchema rejects sector 492 (out of bounds)", () => {
-  const result = sectorIdSchema.safeParse(492);
+test("sectorIdSchema rejects out-of-bounds sector", () => {
+  const result = sectorIdSchema.safeParse(MAP_SECTOR_ID_MAX + 1);
   expect(result.success).toBe(false);
 });
 
-test("sectorIdSchema accepts sector 491 (last valid index)", () => {
-  const result = sectorIdSchema.safeParse(491);
+test("sectorIdSchema accepts the last valid sector index", () => {
+  const result = sectorIdSchema.safeParse(MAP_SECTOR_ID_MAX);
   expect(result.success).toBe(true);
-  expect(result.data).toBe(491);
+  expect(result.data).toBe(MAP_SECTOR_ID_MAX);
 });
 
 test("sectorIdSchema accepts sector 0 (first valid index)", () => {

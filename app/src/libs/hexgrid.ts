@@ -17,19 +17,32 @@ import {
   spiral,
 } from "honeycomb-grid";
 import type * as THREE from "three";
-import type { HEXTILE_TYPE } from "@/drizzle/constants";
+import type { CombatBiome } from "@/drizzle/constants";
+import type { TerrainSpec } from "@/libs/sector-map/terrains";
+import type { NormalizedSectorTile, SectorMapZone } from "@/libs/sector-map/types";
 import type { CombatAction } from "./combat/types";
 
 /**
  * Custom hex used by honeycomb.js
  */
 export class TerrainHex extends Hex {
-  asset?: HEXTILE_TYPE;
+  /** Terrain key of the tile (open registry key, e.g. "ground", "swamp") */
+  asset?: string;
+  /** Combat arena background for battles started on this tile */
+  battleBiome?: CombatBiome;
   name?: string;
   hasStructure?: boolean;
+  blocked?: boolean;
+  zone?: SectorMapZone;
   level!: number;
   assetStrength!: number;
   cost!: number;
+  /** Resolved terrain spec, stashed during the sector build's first grid pass
+   *  so the geometry pass doesn't re-resolve it per tile */
+  spec?: TerrainSpec;
+  /** The authored map tile backing this hex (if any), stashed alongside `spec`
+   *  so the geometry pass skips a second per-tile authoredTiles lookup */
+  authored?: NormalizedSectorTile;
 }
 
 /**
@@ -150,7 +163,15 @@ export class PathCalculator {
     this.grid = grid;
   }
 
+  /**
+   * A* shortest path between two hexes. Returns undefined (unreachable) if
+   * origin or target is blocked; blocked tiles are also excluded from
+   * neighbour expansion. Results are memoized per origin/target key, so the
+   * cache assumes tile blocked/cost state does not change within this
+   * calculator's lifetime.
+   */
   getShortestPath = (origin: TerrainHex, target: TerrainHex) => {
+    if (origin.blocked || target.blocked) return undefined;
     const key = `${origin.col},${origin.row},${target.col},${target.row}`;
     if (this.cache.has(key)) {
       return this.cache.get(key);
@@ -160,7 +181,10 @@ export class PathCalculator {
       goal: target,
       estimateFromNodeToGoal: (tile) => this.grid.distance(tile, origin),
       neighborsAdjacentToNode: (center) =>
-        this.grid.traverse(ring({ radius: 1, center })).toArray(),
+        this.grid
+          .traverse(ring({ radius: 1, center }))
+          .toArray()
+          .filter((tile) => !tile.blocked),
       actualCostToMove: (_, from, to) => {
         return to.cost + from.cost;
       },

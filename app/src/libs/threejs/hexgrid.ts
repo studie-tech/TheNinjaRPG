@@ -113,26 +113,27 @@ export const calculateHexUVCoordinates = (
 };
 
 /**
- * Calculates the offset values for tiles based on asset type
- * Ocean tiles are displaced downward for depth effect
+ * Calculates the offset values for a tile from its terrain's depression (the
+ * fraction of the tile edge the face is sunk below ground level - water 0.5,
+ * ice sheets 0.25, solid ground 0), producing the depth effect.
  */
 export const calculateTileOffset = (
   corners: Array<{ x: number; y: number }>,
-  asset: string,
+  depression: number,
   lightLayout?: boolean,
 ) => {
   const length = Math.abs((corners?.[5]?.x || 0) - (corners?.[0]?.x || 0)) / 3;
   let offsetLength = 0;
   let offsetLayer = 0;
 
-  if (!lightLayout) {
-    if (asset === "ocean") {
-      offsetLength = -length / 2;
-      offsetLayer = -1;
-    } else if (asset === "ice") {
-      offsetLength = -length / 4;
-      offsetLayer = -0.5;
-    }
+  if (!lightLayout && depression > 0) {
+    offsetLength = -length * depression;
+    // Keep depressed faces strictly in FRONT of the dirt "ground below"
+    // (DIRT_LAYER is one unit behind TILES_LAYER). At -1 the face sat exactly
+    // on the dirt plane, so across sector wrappers a neighbour's edge dirt
+    // could draw over adjacent water - a tan band at every water-water border.
+    // This is a draw-order/z tweak only; the visual recess is offsetLength.
+    offsetLayer = -0.5;
   }
 
   return {

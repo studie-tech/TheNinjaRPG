@@ -19,6 +19,11 @@ import {
 import { actionLog, clan, userData, village, war } from "@/drizzle/schema";
 import { calcLevel } from "@/libs/profile";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
+import {
+  findNearestWalkableCoordinate,
+  isReachableCoordinate,
+  isWalkableCoordinate,
+} from "@/libs/sector-map/validation";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
 import {
@@ -31,10 +36,16 @@ import { initiateBattle } from "@/routers/combat";
 import { fetchUser } from "@/routers/profile";
 import { breakStealth } from "@/routers/stealth";
 import { fetchSector, fetchSectorVillage } from "@/routers/village";
+import {
+  fetchPublishedSectorMap,
+  getSectorNeighborIds,
+  resolveSectorCrossing,
+} from "@/server/utils/sectorMap";
 import { findRelationship } from "@/utils/alliance";
 import { groupBy } from "@/utils/grouping";
 import { secondsFromNow } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
+import { sectorIdSchema } from "@/validators/travel";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -57,6 +68,9 @@ export const travelRouter = createTRPCRouter({
     .use(hasUserMiddleware)
     .input(
       z.object({
+        // Coordinate bounds via zod (no sector-map read needed): the co-location
+        // guards below require both robber and victim to stand on this exact tile,
+        // and a player can only ever be on a walkable, in-bounds tile.
         longitude: z
           .int()
           .min(0)
@@ -65,7 +79,7 @@ export const travelRouter = createTRPCRouter({
           .int()
           .min(0)
           .max(SECTOR_HEIGHT - 1),
-        sector: z.int(),
+        sector: sectorIdSchema,
         userId: z.string(),
       }),
     )
@@ -274,7 +288,7 @@ export const travelRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Get users and data within current sector" },
     })
-    .input(z.object({ sector: z.int() })) // Note: this is not actively used, but is there for reloading the sector data
+    .input(z.object({ sector: sectorIdSchema })) // Note: this is not actively used, but is there for reloading the sector data
     .query(async ({ ctx }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
 
@@ -387,7 +401,7 @@ export const travelRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Get village and alliance info for sector" },
     })
-    .input(z.object({ sector: z.int(), isOutlaw: z.boolean().prefault(false) }))
+    .input(z.object({ sector: sectorIdSchema, isOutlaw: z.boolean().prefault(false) }))
     .query(async ({ input, ctx }) => {
       return await fetchSectorVillage(ctx.drizzle, input.sector, input.isOutlaw);
     }),
@@ -396,7 +410,10 @@ export const travelRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Start global travel to another sector" },
     })
-    .input(z.object({ sector: z.int() }))
+    // curSector is the client's view of where the player currently stands; it
+    // lets us fetch that sector's map in parallel with the user instead of
+    // waiting to learn user.sector. The guard below rejects a stale/wrong hint.
+    .input(z.object({ sector: sectorIdSchema, curSector: sectorIdSchema }))
     .output(
       baseServerResponse.extend({
         data: z
@@ -413,8 +430,25 @@ export const travelRouter = createTRPCRouter({
       if (!targetTile) {
         return { success: false, message: "Target sector does not exist" };
       }
-      let user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (!isAtEdge({ x: user.longitude, y: user.latitude })) {
+      // Fetch the user and their claimed current sector's map in parallel
+      let [user, currentSectorMap] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchPublishedSectorMap(ctx.drizzle, input.curSector).catch(() => null),
+      ]);
+      // Validate the hint: the map we loaded must be the sector the player is
+      // actually in, otherwise the isAtEdge check below would use the wrong map
+      if (user.sector !== input.curSector) {
+        return errorResponse("Your location changed; please reload and try again");
+      }
+      if (!currentSectorMap) {
+        return errorResponse("This sector has no published map yet");
+      }
+      if (
+        !isAtEdge(
+          { x: user.longitude, y: user.latitude },
+          { width: currentSectorMap.width, height: currentSectorMap.height },
+        )
+      ) {
         return { success: false, message: "You are not at the edge of a sector" };
       }
       if (user.status !== "AWAKE") {
@@ -503,22 +537,26 @@ export const travelRouter = createTRPCRouter({
       });
       return converted;
     }),
-  // Move user to new local location
+  /**
+   * Move the user tile-by-tile within their sector, or one step across a
+   * border into the adjacent sector (resolving cube-seam rotation via
+   * resolveSectorCrossing). Snaps an unwalkable current tile to the nearest
+   * walkable one, optionally carries destLongitude/destLatitude so a
+   * cross-border walk commits in a single round trip, guards the position
+   * update with a CAS WHERE clause, and broadcasts the move to both the
+   * origin and target sectors.
+   */
   moveInSector: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Move user within current sector" } })
     .input(
       z.object({
         curLongitude: z.int(),
         curLatitude: z.int(),
-        longitude: z
-          .int()
-          .min(0)
-          .max(SECTOR_WIDTH - 1),
-        latitude: z
-          .int()
-          .min(0)
-          .max(SECTOR_HEIGHT - 1),
-        sector: z.int(),
+        longitude: z.int().min(-1),
+        latitude: z.int().min(-1),
+        destLongitude: z.int().min(0).nullish(),
+        destLatitude: z.int().min(0).nullish(),
+        sector: sectorIdSchema,
         villageId: z.string().nullish(),
         battleId: z.string().nullish(),
         level: z.int(),
@@ -542,6 +580,8 @@ export const travelRouter = createTRPCRouter({
               sector: z.number(),
               battleId: z.string().nullish(),
               villageId: z.string().nullish(),
+              entryLongitude: z.number().optional(),
+              entryLatitude: z.number().optional(),
             })
             .optional(),
         }).shape,
@@ -550,15 +590,106 @@ export const travelRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       // Convenience
       const { longitude, latitude, sector, villageId } = input;
-      const { curLongitude, curLatitude } = input;
       const userId = ctx.userId;
       const userVillage = villageId ?? "syndicate";
-      const isVillage = calcIsInVillage({ x: longitude, y: latitude });
-      const location = isVillage ? "Village" : "";
-      const travelLength = maxDistance(
-        { longitude: curLongitude, latitude: curLatitude },
+      // Return a graceful response instead of a raw 500 if the sector has no
+      // published map (mutations must return baseServerResponse per CLAUDE.md).
+      const sectorMap = await fetchPublishedSectorMap(ctx.drizzle, sector).catch(
+        () => null,
+      );
+      if (!sectorMap) return errorResponse("This sector has no published map yet");
+      // If a republish blocked the tile the player is standing on, snap them to
+      // the nearest walkable tile instead of locking them in place forever.
+      const rawCurrent = { x: input.curLongitude, y: input.curLatitude };
+      const current = isWalkableCoordinate(sectorMap, rawCurrent)
+        ? rawCurrent
+        : findNearestWalkableCoordinate(sectorMap, rawCurrent);
+      if (!current) {
+        return errorResponse("Your current location is not reachable");
+      }
+      const curLongitude = current.x;
+      const curLatitude = current.y;
+      // A target exactly one step beyond a border is a crossing into the
+      // adjacent sector; the user must stand on the matching edge. Any other
+      // sector transition must use global travel.
+      const crossing = resolveAdjacentCrossing(
+        sectorMap,
+        { x: curLongitude, y: curLatitude },
         { x: longitude, y: latitude },
       );
+      let targetSector = sector;
+      let targetMap = sectorMap;
+      let destination = { x: longitude, y: latitude };
+      let entryTile: { x: number; y: number } | null = null;
+      if (crossing) {
+        if (!crossing.valid) return errorResponse(crossing.error);
+        targetSector = getSectorNeighborIds(sector)[crossing.direction];
+        if (targetSector < 0) {
+          return errorResponse("The polar wastes block your path");
+        }
+        const neighbourMap = await fetchPublishedSectorMap(
+          ctx.drizzle,
+          targetSector,
+        ).catch(() => null);
+        if (!neighbourMap) {
+          return errorResponse("The neighbouring sector has no published map yet");
+        }
+        targetMap = neighbourMap;
+        // The cube-sphere rotates orientation across some face seams, so both
+        // the entry edge and the along-edge direction can change. The shared
+        // crossing math resolves the exact entry cell from the tile's baked
+        // `ne` data (aligned within a face, 90/270 rotated across the seams).
+        const resolved = resolveSectorCrossing(
+          sector,
+          crossing.direction,
+          curLongitude,
+          curLatitude,
+          sectorMap.width,
+          sectorMap.height,
+          targetMap.width,
+          targetMap.height,
+        );
+        const entry = { x: resolved.entryX, y: resolved.entryY };
+        entryTile = findNearestWalkableCoordinate(targetMap, entry) ?? entry;
+        destination = entryTile;
+        // A crossing may carry the journey's landing tile inside the new
+        // sector, so one round trip commits the whole cross-border walk; the
+        // client animates entry -> destination locally. An unreachable
+        // request simply lands at the entry tile, matching what a separate
+        // resume move would have produced.
+        if (input.destLongitude != null && input.destLatitude != null) {
+          const requested = { x: input.destLongitude, y: input.destLatitude };
+          if (
+            isWalkableCoordinate(targetMap, requested) &&
+            isReachableCoordinate(targetMap, entryTile, requested)
+          ) {
+            destination = requested;
+          }
+        }
+      } else {
+        if (!isWalkableCoordinate(sectorMap, { x: longitude, y: latitude })) {
+          return errorResponse("Target location is not reachable");
+        }
+        if (
+          !isReachableCoordinate(
+            sectorMap,
+            { x: curLongitude, y: curLatitude },
+            { x: longitude, y: latitude },
+          )
+        ) {
+          return errorResponse("No reachable path to target location");
+        }
+      }
+      const isVillage = calcIsInVillage(destination, targetMap);
+      const location = isVillage ? "Village" : "";
+      const travelLength =
+        crossing && entryTile
+          ? 1 +
+            maxDistance({ longitude: entryTile.x, latitude: entryTile.y }, destination)
+          : maxDistance(
+              { longitude: curLongitude, latitude: curLatitude },
+              destination,
+            );
       // Optimistic update & query simultaneously
       const [user, result, sectorVillage] = await Promise.all([
         ctx.drizzle.query.userData.findFirst({
@@ -567,14 +698,22 @@ export const travelRouter = createTRPCRouter({
         }),
         ctx.drizzle
           .update(userData)
-          .set({ longitude, latitude, location })
+          .set({
+            sector: targetSector,
+            longitude: destination.x,
+            latitude: destination.y,
+            location,
+          })
           .where(
             and(
               eq(userData.userId, userId),
               eq(userData.status, "AWAKE"),
               eq(userData.sector, sector),
-              eq(userData.longitude, curLongitude),
-              eq(userData.latitude, curLatitude),
+              // Guard on the player's ACTUAL stored position (the raw input),
+              // not the snapped walkable coordinate — otherwise a snapped move
+              // never matches the row and the player is soft-locked.
+              eq(userData.longitude, input.curLongitude),
+              eq(userData.latitude, input.curLatitude),
               villageId
                 ? eq(userData.villageId, villageId)
                 : isNull(userData.villageId),
@@ -587,7 +726,7 @@ export const travelRouter = createTRPCRouter({
                 relationshipA: true,
                 relationshipB: true,
               },
-              where: eq(village.sector, sector),
+              where: eq(village.sector, targetSector),
             })
           : undefined,
       ]);
@@ -618,9 +757,9 @@ export const travelRouter = createTRPCRouter({
               // Attack village protector
               const battle = await initiateBattle(
                 {
-                  longitude: longitude,
-                  latitude: latitude,
-                  sector: sector,
+                  longitude: destination.x,
+                  latitude: destination.y,
+                  sector: targetSector,
                   userIds: [ctx.userId],
                   targetIds: ["MJMzOE67Cx2YP3NX8SAbh"],
                   client: ctx.drizzle,
@@ -636,15 +775,32 @@ export const travelRouter = createTRPCRouter({
           }
         }
         // Final output
-        const output = { ...input, location, userId: userId, status: "AWAKE" as const };
+        const output = {
+          ...input,
+          sector: targetSector,
+          longitude: destination.x,
+          latitude: destination.y,
+          location,
+          userId: userId,
+          status: "AWAKE" as const,
+          ...(entryTile
+            ? { entryLongitude: entryTile.x, entryLatitude: entryTile.y }
+            : {}),
+        };
 
-        // Only broadcast if user is NOT stealthed (to hide from other players)
+        // Only broadcast if user is NOT stealthed (to hide from other players);
+        // on a crossing the origin sector is told too so the user disappears.
+        // experience/rank ride along so scouting can display the calc'd level.
         if (user && !isUserCurrentlyStealthed(user)) {
-          void updateUserOnMap(pusher, input.sector, {
+          const broadcast = {
             ...output,
             experience: user.experience,
             rank: user.rank,
-          });
+          };
+          void updateUserOnMap(pusher, targetSector, broadcast);
+          if (targetSector !== sector) {
+            void updateUserOnMap(pusher, sector, broadcast);
+          }
         }
         return { success: true, message: "OK", data: output };
       } else {
@@ -684,6 +840,45 @@ export const travelRouter = createTRPCRouter({
       }
     }),
 });
+
+/**
+ * Resolve whether a move targets the adjacent sector: the destination lies
+ * exactly one step beyond one border of the map. Returns null for ordinary
+ * in-sector moves; { valid: false } when a crossing is malformed (diagonal,
+ * more than one step out, or the user is not on the matching edge).
+ */
+const resolveAdjacentCrossing = (
+  map: { width: number; height: number },
+  current: { x: number; y: number },
+  target: { x: number; y: number },
+):
+  | { valid: true; direction: "north" | "east" | "south" | "west" }
+  | { valid: false; error: string }
+  | null => {
+  const outWest = target.x === -1;
+  const outEast = target.x === map.width;
+  const outNorth = target.y === -1;
+  const outSouth = target.y === map.height;
+  const outCount = [outWest, outEast, outNorth, outSouth].filter(Boolean).length;
+  const inX = target.x >= 0 && target.x < map.width;
+  const inY = target.y >= 0 && target.y < map.height;
+  if (outCount === 0 && inX && inY) return null;
+  if (outCount !== 1 || (!inX && !inY)) {
+    return { valid: false, error: "Only adjacent sectors can be reached by walking" };
+  }
+  if (outNorth || outSouth) {
+    const atEdge = outNorth ? current.y === 0 : current.y === map.height - 1;
+    if (!atEdge || target.x !== current.x) {
+      return { valid: false, error: "You must be at the matching edge to cross over" };
+    }
+    return { valid: true, direction: outNorth ? "north" : "south" };
+  }
+  const atEdge = outWest ? current.x === 0 : current.x === map.width - 1;
+  if (!atEdge || target.y !== current.y) {
+    return { valid: false, error: "You must be at the matching edge to cross over" };
+  }
+  return { valid: true, direction: outWest ? "west" : "east" };
+};
 
 type RouterOutput = inferRouterOutputs<typeof travelRouter>;
 export type SectorVillage = RouterOutput["getSectorData"]["village"];

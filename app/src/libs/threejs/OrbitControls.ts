@@ -91,6 +91,9 @@ export class OrbitControls extends EventDispatcher<OrbitControlsEventMap> {
   /** Minimum & maximum panning extents (in local camera space) */
   public readonly minPan: Vector3;
   public readonly maxPan: Vector3;
+  /** Clamp the target near the origin (legacy single-sector view); disable
+   * when the camera is code-driven across a larger world */
+  public clampPan = true;
 
   /** How far you can dolly in / out (perspective) */
   public minDistance = 0;
@@ -402,11 +405,13 @@ export class OrbitControls extends EventDispatcher<OrbitControlsEventMap> {
         this.target.add(this.panOffset);
       }
       // Clamp within user bounds (scaled by zoom so it feels natural)
-      const zoomFactor = this.object.zoom - 1;
-      this.target.clamp(
-        this.minPan.clone().multiplyScalar(zoomFactor),
-        this.maxPan.clone().multiplyScalar(zoomFactor),
-      );
+      if (this.clampPan) {
+        const zoomFactor = this.object.zoom - 1;
+        this.target.clamp(
+          this.minPan.clone().multiplyScalar(zoomFactor),
+          this.maxPan.clone().multiplyScalar(zoomFactor),
+        );
+      }
 
       // Compute new camera pose --------------------------------------------
       offset.setFromSpherical(this.spherical);

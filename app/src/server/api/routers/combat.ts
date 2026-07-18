@@ -34,9 +34,9 @@ import {
   AutoBattleTypes,
   BATTLE_ARENA_DAILY_LIMIT,
   BattleTypes,
+  COMBAT_BIOMES,
   type CombatBiome,
   DURABILITY_USABILITY_THR,
-  HEXTILE_BIOMES,
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
   ID_ANIMATION_SMOKE,
@@ -196,6 +196,7 @@ import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
 import type { StatSchemaType } from "@/validators/combat";
 import { BarrierTag, performActionSchema, statSchema } from "@/validators/combat";
+import { sectorIdSchema } from "@/validators/travel";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 
 // Debug flag when testing battle
@@ -855,6 +856,9 @@ export const combatRouter = createTRPCRouter({
     .use(hasUserMiddleware)
     .input(
       z.object({
+        // Coordinate bounds are enforced here (zod), so no sector-map read is
+        // needed to validate reachability: the target is another player, who can
+        // only ever stand on a walkable, in-bounds tile.
         longitude: z
           .int()
           .min(0)
@@ -863,9 +867,9 @@ export const combatRouter = createTRPCRouter({
           .int()
           .min(0)
           .max(SECTOR_HEIGHT - 1),
-        sector: z.int(),
+        sector: sectorIdSchema,
         userId: z.string(),
-        asset: z.enum(HEXTILE_BIOMES).optional(),
+        asset: z.enum(COMBAT_BIOMES).optional(),
       }),
     )
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
@@ -1274,7 +1278,7 @@ export const combatRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Start battle at war shrine" } })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
-    .input(z.object({ sector: z.int() }))
+    .input(z.object({ sector: sectorIdSchema }))
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information (use fetchActiveWars to get village relations with sectors)

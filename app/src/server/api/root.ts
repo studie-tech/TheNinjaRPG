@@ -24,6 +24,8 @@ import { jutsuRouter } from "./routers/jutsu";
 import { kageRouter } from "./routers/kage";
 import { linkPromotionRouter } from "./routers/linkpromotion";
 import { logsRouter } from "./routers/logs";
+import { mapAssetRouter } from "./routers/mapAsset";
+import { mapTerrainRouter } from "./routers/mapTerrain";
 import { marriageRouter } from "./routers/marriage";
 import { miscRouter } from "./routers/misc";
 import { occupationRouter } from "./routers/occupation";
@@ -50,6 +52,7 @@ import { trainRouter } from "./routers/train";
 import { travelRouter } from "./routers/travel";
 import { villageRouter } from "./routers/village";
 import { warRouter } from "./routers/war";
+import { worldMapRouter } from "./routers/worldMap";
 import { createTRPCRouter } from "./trpc";
 
 /**
@@ -80,6 +83,8 @@ export const appRouter = createTRPCRouter({
   jutsu: jutsuRouter,
   kage: kageRouter,
   logs: logsRouter,
+  mapAsset: mapAssetRouter,
+  mapTerrain: mapTerrainRouter,
   misc: miscRouter,
   generativeAi: generativeAiRouter,
   paypal: paypalRouter,
@@ -110,6 +115,7 @@ export const appRouter = createTRPCRouter({
   towerDefense: towerDefenseRouter,
   stealth: stealthRouter,
   raids: raidsRouter,
+  worldMap: worldMapRouter,
 });
 
 // export type definition of API

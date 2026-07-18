@@ -40,7 +40,7 @@ export default function ManualMain() {
   const baseEntries = [
     // recruitment added conditionally below
     { name: "combat", img: IMG_MANUAL_COMBAT },
-    { name: "travel", img: IMG_MANUAL_TRAVEL },
+    { name: "world", img: IMG_MANUAL_TRAVEL },
     { name: "bloodline", img: IMG_MANUAL_BLOODLINE },
     { name: "jutsu", img: IMG_MANUAL_JUTSU },
     { name: "skillTree", img: IMG_MANUAL_SKILLTREE },
