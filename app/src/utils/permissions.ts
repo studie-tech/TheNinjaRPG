@@ -411,8 +411,8 @@ export const canDeleteConceptArt = (role: UserRole) => {
   ].includes(role);
 };
 
-/** Returns a restriction message if the user cannot create concept art, otherwise null. */
-export const getConceptArtCreateRestriction = (
+/** Returns a restriction message if the user is banned or silenced, otherwise null. */
+export const getBanOrSilenceRestriction = (
   user: Pick<UserData, "isBanned" | "isSilenced">,
 ): string | null => {
   if (user.isBanned) return "You are banned";
@@ -424,10 +424,31 @@ export const getConceptArtCreateRestriction = (
 export const getMessagingRestriction = (
   user: Pick<UserData, "isBanned" | "isSilenced" | "level">,
 ): string | null => {
-  if (user.isBanned) return "You are banned";
-  if (user.isSilenced) return "You are silenced";
+  const banOrSilence = getBanOrSilenceRestriction(user);
+  if (banOrSilence) return banOrSilence;
   if ((user.level ?? 0) < MESSAGING_MIN_LEVEL) return messagingLevelMessage;
   return null;
+};
+
+/**
+ * Banned/silenced users may only reply to support tickets they created.
+ * Staff applications and other people's tickets are not allowed.
+ * Returns false unless the user is banned or silenced — callers must not
+ * treat this as a general compose permission for unrestricted users.
+ */
+export const RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE =
+  "You can only reply to support tickets you created while banned or silenced";
+
+export const RESTRICTED_STAFF_CONVERSATION_MESSAGE =
+  "You cannot participate in this conversation while banned or silenced";
+
+export const canReplyToStaffConversationWhileRestricted = (
+  user: Pick<UserData, "userId" | "isBanned" | "isSilenced">,
+  supportTicketCreatedByUserId: string | null | undefined,
+): boolean => {
+  if (!user.isBanned && !user.isSilenced) return false;
+  if (!supportTicketCreatedByUserId) return false;
+  return supportTicketCreatedByUserId === user.userId;
 };
 
 export const canEscalateBan = (user: UserData, report: UserReport) => {

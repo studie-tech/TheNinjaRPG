@@ -23,6 +23,7 @@ import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
+import { getBanOrSilenceRestriction } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import type { CreateApplicationSchema } from "@/validators/applications";
 import { createApplicationSchema } from "@/validators/applications";
@@ -31,6 +32,7 @@ export default function Staff() {
   // User Data
   const { data: me } = useUserData();
   const isStaff = me?.role && me.role !== "USER";
+  const applicationRestriction = me ? getBanOrSilenceRestriction(me) : null;
 
   // Users Query
   const { data } = api.profile.getPublicUsers.useQuery(
@@ -79,7 +81,7 @@ export default function Staff() {
                 </Button>
               </Link>
             )}
-            {!pending && (
+            {!pending && !applicationRestriction && (
               <Confirm2
                 title="Apply for Staff"
                 proceed_label="Submit Application"

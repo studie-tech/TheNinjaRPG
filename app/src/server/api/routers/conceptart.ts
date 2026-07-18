@@ -16,10 +16,7 @@ import {
   uploadCompletedVideo,
 } from "@/libs/replicate";
 import { fetchUser } from "@/routers/profile";
-import {
-  canDeleteConceptArt,
-  getConceptArtCreateRestriction,
-} from "@/utils/permissions";
+import { canDeleteConceptArt, getBanOrSilenceRestriction } from "@/utils/permissions";
 import {
   conceptArtFilterSchema,
   conceptArtPromptSchema,
@@ -106,7 +103,7 @@ export const conceptartRouter = createTRPCRouter({
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
-      const createRestriction = getConceptArtCreateRestriction(user);
+      const createRestriction = getBanOrSilenceRestriction(user);
       if (createRestriction) return errorResponse(createRestriction);
       if (user.reputationPoints < COST_CONCEPT_IMAGE) {
         return errorResponse("Not enough reputation points");
@@ -160,7 +157,7 @@ export const conceptartRouter = createTRPCRouter({
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
-      const createRestriction = getConceptArtCreateRestriction(user);
+      const createRestriction = getBanOrSilenceRestriction(user);
       if (createRestriction) return errorResponse(createRestriction);
       if (user.reputationPoints < COST_CONCEPT_VIDEO) {
         return errorResponse(

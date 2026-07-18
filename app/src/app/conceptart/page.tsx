@@ -58,7 +58,7 @@ import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
-import { getConceptArtCreateRestriction } from "@/utils/permissions";
+import { getBanOrSilenceRestriction } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import { UploadDropzone } from "@/utils/uploadthing";
 import {
@@ -165,7 +165,7 @@ export default function ConceptArt() {
 
   const isPending = isImagePending || isVideoPending;
   const conceptArtCreateRestriction = userData
-    ? getConceptArtCreateRestriction(userData)
+    ? getBanOrSilenceRestriction(userData)
     : null;
 
   // Filters

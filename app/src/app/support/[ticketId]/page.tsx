@@ -447,6 +447,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
         convo_id={ticket.conversationId}
         title="Conversation"
         subtitle="Talk with staff"
+        supportTicketCreatedByUserId={ticket.createdByUserId}
         onCommentPosted={() => {
           updateTicket.mutate({
             ticketId: params.ticketId,
