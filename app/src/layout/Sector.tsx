@@ -1689,6 +1689,9 @@ const Sector: React.FC<SectorProps> = (props) => {
       // Find nearby enemies to attack
       const nearbyEnemies = usersRef.current.filter((user) => {
         if (!user.userId || user.userId === userData.userId) return false;
+        // Overworld NPCs share this list for map rendering/interaction, but are fought
+        // through the overworld interact flow, not PvP attackUser — never auto-attack them.
+        if (user.isNpc) return false;
         if (user.status !== "AWAKE") return false;
 
         // Don't attack banned users
@@ -2868,6 +2871,9 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
 
   // Filter users
   const users = props.users
+    // Overworld NPCs ride along in this list to render on the map; they are not
+    // scoutable players (their userId is the AI template's), so exclude them here.
+    .filter((user) => !user.isNpc)
     .filter((user) => user.userId !== userData.userId)
     .filter((user) => user.status === "AWAKE")
     .filter((user) => passesBracketFilter(user, watchedBracket));
