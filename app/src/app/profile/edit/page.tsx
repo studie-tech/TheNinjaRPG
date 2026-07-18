@@ -393,7 +393,11 @@ export default function EditProfile() {
           title="Sage Mode"
           selectedTitle={activeElement}
           unselectedSubtitle="View or remove your sage mode"
-          selectedSubtitle="Your awakened sage mode."
+          selectedSubtitle={
+            userData.sageModeId
+              ? "Your awakened sage mode."
+              : "You have not awakened a sage mode yet."
+          }
           icon={Sparkles}
           onClick={setActiveElement}
         >

@@ -213,9 +213,12 @@ export default function Profile() {
               {equippedSageMode ? (
                 <Popover>
                   <PopoverTrigger asChild>
-                    <span className="cursor-pointer font-bold hover:text-orange-500">
+                    <button
+                      type="button"
+                      className="cursor-pointer font-bold hover:text-orange-500"
+                    >
                       {equippedSageMode.name}
-                    </span>
+                    </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[500px] max-w-[90vw]">
                     <ItemWithEffects item={equippedSageMode} />
