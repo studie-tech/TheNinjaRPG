@@ -1971,13 +1971,16 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
         realized.latitude = u.latitude;
         realized.fromType = "sageModeAfter";
         realized.targetId = u.userId;
-        // `applySingleEffect` sets castThisRound from (createdRound === battle.round). Same
-        // round would skip modifier tags (`!castThisRound` in tags.ts). Use previous round so
-        // exhaustion applies the same round it is applied.
-        realized.createdRound = Math.max(0, battle.round - 1);
         // Duration from Sage Mode "After-Effect Duration (rounds)" — not per-tag rounds.
+        // The round pipeline recomputes castThisRound from (createdRound === battle.round).
+        // Backdate persistent tags one round so they resolve as residual modifiers and apply
+        // the same round exhaustion begins (a same-round tag would skip `!castThisRound`
+        // modifier tags in tags.ts). Instant tags (rounds === 0) keep createdRound =
+        // battle.round so they stay cast-this-round and fire immediately (mirrors the
+        // activation path above).
         if (realized.rounds !== 0) {
           realized.rounds = afterRounds;
+          realized.createdRound = Math.max(0, battle.round - 1);
         }
         realized.isNew = false;
         realized.castThisRound = false;
