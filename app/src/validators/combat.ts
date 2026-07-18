@@ -503,6 +503,23 @@ export const VampTag = z.object({
 });
 export type VampTagType = z.infer<typeof VampTag>;
 
+export const ConsumeTag = z.object({
+  ...BaseAttributes,
+  ...PowerAttributes,
+  type: z.literal("consume").prefault("consume"),
+  description: msg(
+    "Convert a percentage of damage dealt by this jutsu into a temporary shield on yourself. Not affected by heal modifiers.",
+  ),
+  calculation: z.enum(["percentage"]).prefault("percentage"),
+  // The tag itself is instant (never lingers); shieldRounds is the duration of the
+  // shield it generates. Keeping rounds locked to 0 avoids a manual reset while the
+  // dedicated shieldRounds field carries the shield duration.
+  rounds: z.coerce.number().int().min(0).max(0).prefault(0),
+  shieldRounds: z.coerce.number().int().min(1).max(100).prefault(3),
+  target: z.enum(BaseTagTargets).optional().prefault("SELF"),
+});
+export type ConsumeTagType = z.infer<typeof ConsumeTag>;
+
 export const DisarmTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
@@ -830,6 +847,7 @@ export const AllTags = z.union([
   ClearPreventTag.prefault({}),
   ClearTag.prefault({}),
   CloneTag.prefault({}),
+  ConsumeTag.prefault({}),
   CopyTag.prefault({}),
   DamageTag.prefault({}),
   DebuffPreventTag.prefault({}),
@@ -917,6 +935,7 @@ export const isPositiveUserEffect = (tag: ZodAllTags) => {
     [
       "absorb",
       // "clearprevent",
+      "consume",
       "debuffprevent",
       "decreasedamagetaken",
       "decreasepoolcost",
@@ -1177,6 +1196,16 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
         addIssue(
           ctx,
           "VampTag must be used together with a damage or pierce effect on the same action",
+        );
+      }
+    } else if (e.type === "consume") {
+      const hasDamageOrPierce = effects.some(
+        (x) => x.type === "damage" || x.type === "pierce",
+      );
+      if (!hasDamageOrPierce) {
+        addIssue(
+          ctx,
+          "ConsumeTag must be used together with a damage or pierce effect on the same action",
         );
       }
     } else if (e.type === "rollbloodline" && e.powerPerLevel > 0) {

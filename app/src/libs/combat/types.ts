@@ -514,6 +514,12 @@ export type Consequence = {
   lifesteal_hp?: number;
   vampRatio?: number;
   vampHeal?: number;
+  /** Ratio of pre-shield damage converted into a temporary shield on the attacker */
+  consumeRatio?: number;
+  /** Resolved shield HP from consumeRatio * preShieldDamage */
+  consumeShield?: number;
+  /** How many rounds the consume-generated shield should last */
+  consumeRounds?: number;
   absorb_hp?: number;
   absorb_sp?: number;
   absorb_cp?: number;
