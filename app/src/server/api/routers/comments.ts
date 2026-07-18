@@ -13,6 +13,7 @@ import {
   conversationComment,
   forumPost,
   forumThread,
+  supportTicket,
   user2conversation,
   userBlackList,
   userData,
@@ -42,10 +43,13 @@ import {
   canDeleteComment,
   canModerateRoles,
   canPostReportComment,
+  canReplyToStaffConversationWhileRestricted,
   canSeeReport,
   canSeeSecretData,
   canViewConversation,
   getMessagingRestriction,
+  RESTRICTED_STAFF_CONVERSATION_MESSAGE,
+  RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import sanitize, { stripBlockquotes } from "@/utils/sanitize";
@@ -682,8 +686,29 @@ export const commentsRouter = createTRPCRouter({
       // Guard
       if (!convo) return errorResponse("Conversation not found");
       const messagingRestriction = getMessagingRestriction(user);
-      if (messagingRestriction && !convo.isStaffAvailable) {
-        return errorResponse(messagingRestriction);
+      if (messagingRestriction) {
+        // Only banned/silenced users may post in staff conversations (own help tickets).
+        // Other restrictions (e.g. level gate) are never bypassed.
+        const isBannedOrSilenced = user.isBanned || user.isSilenced;
+        if (!isBannedOrSilenced || !convo.isStaffAvailable) {
+          return errorResponse(messagingRestriction);
+        }
+        const linkedSupportTicket = await ctx.drizzle.query.supportTicket.findFirst({
+          where: eq(supportTicket.conversationId, convo.id),
+          columns: { createdByUserId: true },
+        });
+        if (
+          !canReplyToStaffConversationWhileRestricted(
+            user,
+            linkedSupportTicket?.createdByUserId,
+          )
+        ) {
+          return errorResponse(
+            linkedSupportTicket
+              ? RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE
+              : RESTRICTED_STAFF_CONVERSATION_MESSAGE,
+          );
+        }
       }
       if (!canViewConversation(convo, ctx.userId, user.role)) {
         return errorResponse("You are not allowed to view this conversation");

@@ -18,6 +18,7 @@ import {
   canDeleteStaffApplication,
   canViewAllApplications,
   getApprovalGroup,
+  getBanOrSilenceRestriction,
 } from "@/utils/permissions";
 import {
   createApplicationSchema,
@@ -40,6 +41,8 @@ export const applicationsRouter = createTRPCRouter({
         }),
       ]);
       // Guards
+      const applicationRestriction = getBanOrSilenceRestriction(user);
+      if (applicationRestriction) return errorResponse(applicationRestriction);
       if (!StaffApplicationTargetRoles.includes(input.targetRole)) {
         return errorResponse("Invalid target role");
       }

@@ -23,7 +23,13 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { getNewReactions, processMentions } from "@/utils/chat";
 import { parseHtml } from "@/utils/parse";
-import { canPostAsAi, getMessagingRestriction } from "@/utils/permissions";
+import {
+  canPostAsAi,
+  canReplyToStaffConversationWhileRestricted,
+  getMessagingRestriction,
+  RESTRICTED_STAFF_CONVERSATION_MESSAGE,
+  RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
+} from "@/utils/permissions";
 import { stripBlockquotes } from "@/utils/sanitize";
 import { secondsFromNow } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -44,6 +50,8 @@ interface ConversationProps {
   topRightContent?: React.ReactNode;
   onCommentPosted?: () => void;
   onBack?: () => void;
+  /** When set, banned/silenced users may only compose if they created this ticket */
+  supportTicketCreatedByUserId?: string;
 }
 
 export const ConversationSkeleton: React.FC<ConversationProps> = (props) => {
@@ -114,8 +122,25 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   });
   const allComments = comments?.pages.flatMap((page) => page.data);
   const conversation = comments?.pages[0]?.convo;
+  const canComposeDespiteRestriction =
+    !!userData &&
+    !!conversation?.isStaffAvailable &&
+    canReplyToStaffConversationWhileRestricted(
+      userData,
+      props.supportTicketCreatedByUserId,
+    );
   const canComposeMessage =
-    !!userData && (conversation?.isStaffAvailable || !composeRestriction);
+    !!userData && (!composeRestriction || canComposeDespiteRestriction);
+  // Single source of truth for toast + inline copy when compose is blocked.
+  const composeRestrictionMessage = !composeRestriction
+    ? null
+    : conversation?.isStaffAvailable &&
+        (userData?.isBanned || userData?.isSilenced) &&
+        !canComposeDespiteRestriction
+      ? props.supportTicketCreatedByUserId
+        ? RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE
+        : RESTRICTED_STAFF_CONVERSATION_MESSAGE
+      : composeRestriction;
   type ReturnedComment = ArrayElement<typeof allComments>;
 
   // Search functionality
@@ -588,10 +613,10 @@ const Conversation: React.FC<ConversationProps> = (props) => {
    * Submit comment
    */
   const handleSubmitComment = handleSubmit((data) => {
-    if (composeRestriction && !conversation?.isStaffAvailable) {
+    if (composeRestriction && !canComposeDespiteRestriction) {
       showMutationToast({
         success: false,
-        message: composeRestriction,
+        message: composeRestrictionMessage,
       });
       return;
     }
@@ -656,7 +681,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
             !canComposeMessage &&
             composeRestriction && (
               <p className="mb-2 text-center text-muted-foreground text-sm">
-                {composeRestriction}
+                {composeRestrictionMessage}
               </p>
             )}
           {conversation && !conversation.isLocked && canComposeMessage && (
