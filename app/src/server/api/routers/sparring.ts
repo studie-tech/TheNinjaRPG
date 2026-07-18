@@ -208,10 +208,12 @@ export const fetchRequests = async (
   types: UserRequestType[],
   secondsBack?: number,
   id?: string,
+  relatedId?: string,
 ) => {
   return await client.query.userRequest.findMany({
     where: and(
       ...(id ? [or(eq(userRequest.senderId, id), eq(userRequest.receiverId, id))] : []),
+      ...(relatedId ? [eq(userRequest.relatedId, relatedId)] : []),
       ...(secondsBack ? [gt(userRequest.createdAt, secondsFromNow(-secondsBack))] : []),
       inArray(userRequest.type, types),
     ),

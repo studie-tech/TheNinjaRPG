@@ -23,6 +23,8 @@ interface UserRequestSystemProps {
   onAccept: (props: { id: string }) => void;
   onReject: (props: { id: string }) => void;
   onCancel: (props: { id: string }) => void;
+  /** When true, show accept/reject for pending requests not sent by this user (e.g. kage moderating) */
+  canModerateRequests?: boolean;
 }
 
 const UserRequestSystem: React.FC<UserRequestSystemProps> = (props) => {
@@ -43,9 +45,13 @@ const UserRequestSystem: React.FC<UserRequestSystemProps> = (props) => {
     { key: "actions", header: "Actions", type: "jsx" },
   ];
 
-  // Table for challenges received
+  // Table for challenges received (or moderated)
   const challengesReceived = props.requests
-    ?.filter((c) => c.receiverId === props.userId)
+    ?.filter((c) =>
+      props.canModerateRequests
+        ? c.senderId !== props.userId
+        : c.receiverId === props.userId,
+    )
     .map((c) => ({
       info: <ChallengeInfo request={c} />,
       sender: <ChallengeUserInfo user={c.sender} />,

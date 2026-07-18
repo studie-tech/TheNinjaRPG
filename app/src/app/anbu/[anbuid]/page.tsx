@@ -72,6 +72,7 @@ import type { AnbuRouter } from "@/routers/anbu";
 import type { UserWithRelations } from "@/routers/profile";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import { parseHtml } from "@/utils/parse";
+import { canEditClans } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { UploadButton } from "@/utils/uploadthing";
@@ -106,6 +107,7 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
   const isElder = userData.rank === "ELDER";
   const isLeader = userData.userId === squad.leaderId;
   const inSquad = userData.anbuId === squadId;
+  const canStaffEdit = canEditClans(userData.role);
 
   return (
     <>
@@ -115,6 +117,7 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
         isElder={isElder}
         isLeader={isLeader}
         inSquad={inSquad}
+        canStaffEdit={canStaffEdit}
         userId={userData.userId}
         squadId={squadId}
         squad={squad}
@@ -141,9 +144,13 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
       <AnbuRequests
         squadId={squadId}
         isLeader={isLeader}
+        isKage={isKage}
+        isElder={isElder}
         userId={userData.userId}
         userRank={userData.rank}
         userAnbu={userData.anbuId}
+        sameVillage={userData.villageId === squad.villageId}
+        canStaffEdit={canStaffEdit}
       />
       {/* ANBU QUESTS - Only show if user is in the squad */}
       {inSquad && (
@@ -163,6 +170,7 @@ interface AnbuMembersProps {
   isElder: boolean;
   isLeader: boolean;
   inSquad: boolean;
+  canStaffEdit: boolean;
   userId: string;
   squadId: string;
   squad: NonNullable<AnbuRouter["get"]>;
@@ -171,8 +179,17 @@ interface AnbuMembersProps {
 
 const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   // Destructure
-  const { userId, squad, squadId, isKage, isElder, isLeader, inSquad, userData } =
-    props;
+  const {
+    userId,
+    squad,
+    squadId,
+    isKage,
+    isElder,
+    isLeader,
+    inSquad,
+    canStaffEdit,
+    userData,
+  } = props;
 
   // Get router
   const router = useRouter();
@@ -261,7 +278,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
             Confirm that you want to kick this member from the squad.
           </Confirm2>
         )}
-        {(isKage || isElder) && (
+        {(isKage || isElder || canStaffEdit) && (
           <Confirm2
             title="Promote Member"
             proceed_label="Submit"
@@ -288,7 +305,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
     { key: "rank", header: "Rank", type: "capitalized" },
     { key: "pvpActivity", header: "PVP Activity", type: "string" },
   ];
-  if (isLeader || isKage || isElder) {
+  if (isLeader || isKage || isElder || canStaffEdit) {
     columns.push({ key: "kickBtn", header: "Action", type: "jsx" });
   }
 
@@ -724,23 +741,40 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
 interface AnbuRequestsProps {
   squadId: string;
   isLeader: boolean;
+  isKage: boolean;
+  isElder: boolean;
   userId: string;
   userRank: UserRank;
   userAnbu: string | null;
+  sameVillage: boolean;
+  canStaffEdit: boolean;
 }
 
 const AnbuRequests: React.FC<AnbuRequestsProps> = (props) => {
   // Destructure
-  const { squadId, isLeader, userId, userRank, userAnbu } = props;
+  const {
+    squadId,
+    isLeader,
+    isKage,
+    isElder,
+    userId,
+    userRank,
+    userAnbu,
+    sameVillage,
+    canStaffEdit,
+  } = props;
 
   // Get utils
   const utils = api.useUtils();
 
   // Query
-  const { data: requests } = api.anbu.getRequests.useQuery(undefined, {
-    enabled: !!squadId,
-    staleTime: 5000,
-  });
+  const { data: requests } = api.anbu.getRequests.useQuery(
+    { squadId },
+    {
+      enabled: !!squadId,
+      staleTime: 5000,
+    },
+  );
 
   // How to deal with success responses
   const onSuccess = async (data: BaseServerResponse) => {
@@ -768,9 +802,17 @@ const AnbuRequests: React.FC<AnbuRequestsProps> = (props) => {
   if (!requests) return <Loader explanation="Loading requests" />;
 
   // Derived
+  const canManageRequests = isLeader || isKage || canStaffEdit;
+  // Kage/elder cannot join (blocked server-side); leaders are always in a squad.
+  // Cross-village viewers (e.g. staff) also cannot join, since the server rejects
+  // join requests for a squad in a different village.
+  const canJoinSquad = !isKage && !isElder && sameVillage;
   const hasPending = requests?.some((req) => req.status === "PENDING");
-  const showRequestSystem = (isLeader && requests.length > 0) || !userAnbu;
-  const shownRequests = requests.filter((r) => !isLeader || r.status === "PENDING");
+  const showRequestSystem =
+    (canManageRequests && requests.length > 0) || (!userAnbu && canJoinSquad);
+  const shownRequests = requests.filter(
+    (r) => !canManageRequests || r.status === "PENDING",
+  );
   const sufficientRank = hasRequiredRank(userRank, ANBU_MEMBER_RANK_REQUIREMENT);
 
   // Do not show?
@@ -785,7 +827,7 @@ const AnbuRequests: React.FC<AnbuRequestsProps> = (props) => {
       padding={false}
     >
       {/* FOR THOSE WHO CAN SEND REQUESTS */}
-      {sufficientRank && !userAnbu && !hasPending && (
+      {sufficientRank && !userAnbu && !hasPending && canJoinSquad && (
         <div className="p-2">
           <p>Send a request to join this squad</p>
           <Button id="send" className="mt-2 w-full" onClick={() => create({ squadId })}>
@@ -804,6 +846,7 @@ const AnbuRequests: React.FC<AnbuRequestsProps> = (props) => {
           onReject={reject}
           onCancel={cancel}
           isLoading={isCreating || isAccepting || isRejecting || isCancelling}
+          canModerateRequests={canManageRequests}
         />
       )}
     </ContentBox>
