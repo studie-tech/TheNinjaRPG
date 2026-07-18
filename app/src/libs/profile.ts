@@ -70,6 +70,16 @@ export const getExpBracket = (experience: number, rank?: UserRank): number => {
 };
 
 /**
+ * Whether an attacker may initiate PvP against a target based on XP brackets alone.
+ * Allowed: same bracket, higher brackets, or exactly one bracket below.
+ * Academy/Genin rank locks are enforced separately via RANKS_RESTRICTED_FROM_PVP.
+ */
+export const canAttackBracket = (
+  attackerBracket: number,
+  targetBracket: number,
+): boolean => targetBracket >= attackerBracket - 1;
+
+/**
  * Whether a user passes a scout/map bracket filter.
  * Matches the exact selected bracket when filterBracket >= 0;
  * use filterBracket < 0 to disable filtering entirely.

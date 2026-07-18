@@ -101,7 +101,7 @@ import StatusBar from "@/layout/StatusBar";
 import { publicUserText } from "@/layout/seoTexts";
 import Table from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import { getExpBracket, showUserRank } from "@/libs/profile";
+import { canAttackBracket, getExpBracket, showUserRank } from "@/libs/profile";
 import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
 import { groupBy } from "@/utils/grouping";
@@ -2298,11 +2298,11 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
     );
   }
 
-  if (attackerBracket <= targetBracket) {
+  if (canAttackBracket(attackerBracket, targetBracket)) {
     return (
       <p className="font-medium text-green-600 text-sm">
-        ✓ Bracket-eligible (they are in your bracket or higher — server-side checks
-        still apply)
+        ✓ Bracket-eligible (they are in your bracket, one below, or higher — server-side
+        checks still apply)
       </p>
     );
   }
