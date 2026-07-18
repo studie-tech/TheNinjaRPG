@@ -153,6 +153,7 @@ import {
   calcLevel,
   calcLevelRequirements,
   calcSP,
+  canAttackBracket,
   capUserStats,
   getExpBracket,
   manuallyAssignUserStats,
@@ -1833,7 +1834,7 @@ export const initiateBattle = async (
       }
     }
 
-    // XP Bracket restrictions — same-bracket-only PvP with immunity lift and war-participant exemptions
+    // XP Bracket restrictions — same bracket, higher, or one below; immunity lift and war exemptions
     if (battleType === "COMBAT" && userIds.includes(user.userId)) {
       // War-Torn sector is a free-for-all — skip all village and bracket restrictions
       const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
@@ -1864,11 +1865,13 @@ export const initiateBattle = async (
         // Guard 3: Bracket restrictions
         const attackerBracket = getExpBracket(user.experience, user.rank);
 
-        // Collect every lower-bracket target — protection is one-directional:
-        // higher-bracket attackers cannot target lower-bracket players (without exemption),
-        // but lower-bracket players may freely attack higher-bracket players.
+        // Collect targets more than one bracket below — protection is one-directional:
+        // attackers may hit same bracket, higher, or one below (without exemption).
+        // Lower-bracket players may freely attack higher-bracket players.
+        // Academy/Genin remain blocked by the rank restrictions above.
         const crossBracketTargets = nonAiTargets.filter(
-          (t) => getExpBracket(t.experience, t.rank) < attackerBracket,
+          (t) =>
+            !canAttackBracket(attackerBracket, getExpBracket(t.experience, t.rank)),
         );
 
         if (crossBracketTargets.length > 0) {

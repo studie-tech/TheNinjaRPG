@@ -368,9 +368,9 @@ const MenuBoxProfile: React.FC = () => {
                 </TooltipTrigger>
                 <TooltipContent>
                   PvP bracket based on experience (Academy & Genin are bracket 0). You
-                  can freely attack players in your bracket or higher. Players below
-                  your bracket are protected unless their immunity is lifted or both
-                  sides are active war participants.
+                  can freely attack players in your bracket, one bracket below, or
+                  higher. Players more than one bracket below are protected unless their
+                  immunity is lifted or both sides are active war participants.
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

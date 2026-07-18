@@ -1,6 +1,6 @@
 // sum.test.js
 import { expect, test } from "vitest";
-import { calcLevelRequirements, calcLevel, getExpBracket, passesBracketFilter } from "@/libs/profile";
+import { calcLevelRequirements, calcLevel, getExpBracket, canAttackBracket, passesBracketFilter } from "@/libs/profile";
 
 test("Confirm that level<->experience calculations are consistent", () => {
   for (const level of [
@@ -40,6 +40,17 @@ test("getExpBracket returns 0 for Academy students and Genin", () => {
   expect(getExpBracket(99_999_999, "GENIN")).toBe(0);
   expect(getExpBracket(500_001, "CHUNIN")).toBe(2);
   expect(getExpBracket(3_000_001, "JONIN")).toBe(7);
+});
+
+test("canAttackBracket allows same, higher, or one below", () => {
+  expect(canAttackBracket(3, 3)).toBe(true);
+  expect(canAttackBracket(3, 4)).toBe(true);
+  expect(canAttackBracket(3, 7)).toBe(true);
+  expect(canAttackBracket(3, 2)).toBe(true);
+  expect(canAttackBracket(3, 1)).toBe(false);
+  expect(canAttackBracket(3, 0)).toBe(false);
+  expect(canAttackBracket(1, 0)).toBe(true);
+  expect(canAttackBracket(2, 1)).toBe(true);
 });
 
 test("passesBracketFilter matches exact bracket only", () => {
