@@ -14,6 +14,7 @@ import {
   getPoolsAffected,
   getPreventTypeName,
   isEffectActive,
+  selectTransferEffects,
 } from "@/libs/combat/util";
 import { calcHP, scaleUserStats } from "@/libs/profile";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
@@ -31,6 +32,14 @@ import {
   isPositiveUserEffect,
 } from "@/validators/combat";
 import type { DmgConfig, GenName, GenNames, StatNames } from "./constants";
+import {
+  COPY_MAX_TAGS,
+  COPY_PRIORITY_RANK,
+  COPYABLE_EFFECT_TYPES,
+  MIRROR_MAX_TAGS,
+  MIRROR_PRIORITY_RANK,
+  TRANSFER_EXCLUDED_SOURCE_TYPES,
+} from "./constants";
 import type {
   ActionEffect,
   BattleEffect,
@@ -215,7 +224,7 @@ export const buffPrevent = (
   }
 };
 
-/** Copy positive effects from opponent to self */
+/** Copy positive effects from opponent to self (priority-ranked, capped, unique per type) */
 export const copy = (
   effect: UserEffect,
   usersEffects: UserEffect[],
@@ -231,71 +240,71 @@ export const copy = (
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
-      const excludedFromTypes = [
-        "bloodline",
-        "armor",
-        "accessory",
-        "keystone",
-        "item",
-        "village",
-        "skill",
-      ];
-      const allowedEffectTypes = [
-        "increasedamagegiven",
-        "increasestat",
-        "decreasedamagetaken",
-        "reflect",
-        "shield",
-      ];
+      // Persistent, per-caster ceiling: count only the user's OWN active copies.
+      // `creatorId` scoping is required — an opponent's mirror also lands on `user`
+      // with a fromEffectId and must not consume the copy budget.
+      // Clones always carry numeric rounds (the tag gate requires effect.rounds); undefined-rounds effects are never clones.
+      const activeCopied = usersEffects.filter(
+        (e) =>
+          e.targetId === user.userId &&
+          e.creatorId === user.userId &&
+          e.fromEffectId &&
+          e.rounds &&
+          e.rounds > 0,
+      );
+      const heldTypes = new Set(activeCopied.map((e) => e.type));
+      const remaining = COPY_MAX_TAGS - activeCopied.length;
+      if (remaining <= 0) {
+        return {
+          txt: `${user.username} is already holding the maximum copied effects.`,
+          color: "blue",
+        };
+      }
 
-      const positiveEffects = usersEffects.filter(
+      const candidates = usersEffects.filter(
         (e) =>
           e.targetId === target.userId &&
           isPositiveUserEffect(e) &&
-          !excludedFromTypes.includes(e.fromType || "") &&
-          allowedEffectTypes.includes(e.type) &&
-          (e.rounds === undefined || e.rounds > 0), // Don't copy effects that have fully expired
+          !TRANSFER_EXCLUDED_SOURCE_TYPES.includes(e.fromType || "") &&
+          COPYABLE_EFFECT_TYPES.includes(e.type) &&
+          !heldTypes.has(e.type) &&
+          (e.rounds === undefined || e.rounds > 0),
       );
 
-      if (positiveEffects.length === 0) {
+      const selected = selectTransferEffects(
+        candidates,
+        (type) => COPY_PRIORITY_RANK.get(type) ?? Number.MAX_SAFE_INTEGER,
+        remaining,
+      );
+
+      if (selected.length === 0) {
         return {
           txt: `${user.username} tries to copy positive effects from ${target.username} but finds no copyable effects.`,
           color: "blue",
         };
       }
 
-      let copiedCount = 0;
       const copiedEffects: string[] = [];
+      selected.forEach((posEffect) => {
+        const copiedEffect = structuredClone(posEffect);
+        copiedEffect.id = nanoid();
+        copiedEffect.fromEffectId = posEffect.id;
+        copiedEffect.targetId = user.userId;
+        copiedEffect.creatorId = user.userId;
+        copiedEffect.rounds = effect.rounds;
+        copiedEffect.isNew = true;
+        copiedEffect.castThisRound = true;
+        copiedEffect.createdRound = effect.createdRound;
+        usersEffects.push(copiedEffect);
 
-      positiveEffects.forEach((posEffect) => {
-        const prevCopy = usersEffects.find(
-          (e) => e.fromEffectId === posEffect.id && e.rounds && e.rounds > 0,
-        );
-        if (!prevCopy) {
-          const copiedEffect = structuredClone(posEffect);
-          copiedEffect.id = nanoid();
-          copiedEffect.fromEffectId = posEffect.id;
-          copiedEffect.targetId = user.userId;
-          copiedEffect.creatorId = user.userId;
-          copiedEffect.rounds = effect.rounds;
-          // Reset timing properties to make the copied effect behave as newly cast
-          copiedEffect.isNew = true;
-          copiedEffect.castThisRound = true;
-          copiedEffect.createdRound = effect.createdRound;
-          usersEffects.push(copiedEffect);
-          copiedCount++;
-
-          // Create description of the copied effect
-          const effectPower =
-            posEffect.power + posEffect.level * posEffect.powerPerLevel;
-          const effectDesc = `${posEffect.type} (${effectPower}${posEffect.calculation === "percentage" ? "%" : ""})`;
-          copiedEffects.push(effectDesc);
-        }
+        const effectPower = posEffect.power + posEffect.level * posEffect.powerPerLevel;
+        const effectDesc = `${posEffect.type} (${effectPower}${posEffect.calculation === "percentage" ? "%" : ""})`;
+        copiedEffects.push(effectDesc);
       });
 
       const effectsList = copiedEffects.join(", ");
       return {
-        txt: `${user.username} copies ${copiedCount} positive effects from ${target.username}: ${effectsList}`,
+        txt: `${user.username} copies ${selected.length} positive effects from ${target.username}: ${effectsList}`,
         color: "blue",
       };
     } else {
@@ -307,7 +316,7 @@ export const copy = (
   }
 };
 
-/** Copy negative effects from self to target */
+/** Mirror negative effects from self to target (priority-ranked, capped, unique per type) */
 export const mirror = (
   effect: UserEffect,
   usersEffects: UserEffect[],
@@ -324,15 +333,7 @@ export const mirror = (
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
-      const excludedFromTypes = [
-        "bloodline",
-        "armor",
-        "accessory",
-        "keystone",
-        "item",
-        "village",
-        "skill",
-      ];
+      // Negative types that are never mirrored (wound is intentionally NOT here).
       const excludedEffectTypes = [
         "damage",
         "pierce",
@@ -341,67 +342,80 @@ export const mirror = (
         "cleanseprevent",
         "moveprevent",
         "healprevent",
-        "wound",
         "timecompression",
       ];
 
-      const negativeEffects = usersEffects.filter(
+      // Persistent, per-caster ceiling: only this caster's active mirrors on the target.
+      const activeMirrored = usersEffects.filter(
+        (e) =>
+          e.targetId === target.userId &&
+          e.creatorId === user.userId &&
+          e.fromEffectId &&
+          e.rounds &&
+          e.rounds > 0,
+      );
+      const heldTypes = new Set(activeMirrored.map((e) => e.type));
+      const remaining = MIRROR_MAX_TAGS - activeMirrored.length;
+      if (remaining <= 0) {
+        return {
+          txt: `${target.username} is already holding the maximum mirrored effects.`,
+          color: "blue",
+        };
+      }
+
+      const candidates = usersEffects.filter(
         (e) =>
           e.targetId === user.userId &&
           isNegativeUserEffect(e) &&
-          !excludedFromTypes.includes(e.fromType || "") &&
+          !TRANSFER_EXCLUDED_SOURCE_TYPES.includes(e.fromType || "") &&
           !excludedEffectTypes.includes(e.type) &&
-          (e.rounds === undefined || e.rounds > 0), // Don't mirror effects that have fully expired
+          !heldTypes.has(e.type) &&
+          (e.rounds === undefined || e.rounds > 0),
       );
 
-      if (negativeEffects.length === 0) {
+      const selected = selectTransferEffects(
+        candidates,
+        (type) => MIRROR_PRIORITY_RANK.get(type) ?? Number.MAX_SAFE_INTEGER,
+        remaining,
+      );
+
+      if (selected.length === 0) {
         return {
           txt: `${user.username} tries to mirror negative effects onto ${target.username} but finds no negative effects to reflect.`,
           color: "blue",
         };
       }
 
-      let mirroredCount = 0;
       const mirroredEffects: string[] = [];
-
-      negativeEffects.forEach((negEffect) => {
-        const prevMirror = usersEffects.find(
-          (e) => e.fromEffectId === negEffect.id && e.rounds && e.rounds > 0,
-        );
-        if (!prevMirror) {
-          const mirroredEffect = structuredClone(negEffect);
-          mirroredEffect.id = nanoid();
-          mirroredEffect.fromEffectId = negEffect.id;
-          mirroredEffect.targetId = target.userId;
-          mirroredEffect.creatorId = user.userId;
-          mirroredEffect.rounds = effect.rounds;
-          // Reset timing properties to make the mirrored effect behave as newly cast
-          mirroredEffect.isNew = true;
-          mirroredEffect.castThisRound = true;
-          mirroredEffect.createdRound = effect.createdRound;
-          // Cut drain effects in half when mirrored
-          if (negEffect.type === "drain") {
-            mirroredEffect.power = Math.floor(
-              mirroredEffect.power / (effect.rounds || 1),
-            );
-            mirroredEffect.powerPerLevel = Math.floor(
-              mirroredEffect.powerPerLevel / (effect.rounds || 1),
-            );
-          }
-          usersEffects.push(mirroredEffect);
-          mirroredCount++;
-
-          // Create description of the mirrored effect
-          const effectPower =
-            negEffect.power + negEffect.level * negEffect.powerPerLevel;
-          const effectDesc = `${negEffect.type} (${effectPower}${negEffect.calculation === "percentage" ? "%" : ""})`;
-          mirroredEffects.push(effectDesc);
+      selected.forEach((negEffect) => {
+        const mirroredEffect = structuredClone(negEffect);
+        mirroredEffect.id = nanoid();
+        mirroredEffect.fromEffectId = negEffect.id;
+        mirroredEffect.targetId = target.userId;
+        mirroredEffect.creatorId = user.userId;
+        mirroredEffect.rounds = effect.rounds;
+        mirroredEffect.isNew = true;
+        mirroredEffect.castThisRound = true;
+        mirroredEffect.createdRound = effect.createdRound;
+        // Divide drain power by the mirror duration so the total drain transferred stays bounded
+        if (negEffect.type === "drain") {
+          mirroredEffect.power = Math.floor(
+            mirroredEffect.power / (effect.rounds || 1),
+          );
+          mirroredEffect.powerPerLevel = Math.floor(
+            mirroredEffect.powerPerLevel / (effect.rounds || 1),
+          );
         }
+        usersEffects.push(mirroredEffect);
+
+        const effectPower = negEffect.power + negEffect.level * negEffect.powerPerLevel;
+        const effectDesc = `${negEffect.type} (${effectPower}${negEffect.calculation === "percentage" ? "%" : ""})`;
+        mirroredEffects.push(effectDesc);
       });
 
       const effectsList = mirroredEffects.join(", ");
       return {
-        txt: `${user.username} mirrors ${mirroredCount} negative effects onto ${target.username}: ${effectsList}`,
+        txt: `${user.username} mirrors ${selected.length} negative effects onto ${target.username}: ${effectsList}`,
         color: "blue",
       };
     } else {
