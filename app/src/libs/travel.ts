@@ -2,22 +2,43 @@ import type { CombatBiome } from "@/drizzle/constants";
 import {
   MAP_GLOBAL_TRAVEL_TIME_CAP_SECS,
   MAP_WAKE_ISLAND_SECTOR,
-  SECTOR_HEIGHT,
-  SECTOR_WIDTH,
 } from "@/drizzle/constants";
+import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import { getSectorTile } from "@/libs/sector-map/validation";
 import type { GlobalMapData, GlobalTile, SectorPoint } from "@/libs/threejs/types";
+
+export interface SectorDimensions {
+  width: number;
+  height: number;
+}
 
 /**
  * Check if a given position is at the edge of a sector
  */
-export const isAtEdge = (position: SectorPoint | null) => {
+export const isAtEdge = (
+  position: SectorPoint | null,
+  dimensions: SectorDimensions,
+) => {
   return (
     position &&
     (position.x === 0 ||
-      position.x === SECTOR_WIDTH - 1 ||
+      position.x === dimensions.width - 1 ||
       position.y === 0 ||
-      position.y === SECTOR_HEIGHT - 1)
+      position.y === dimensions.height - 1)
   );
+};
+
+/**
+ * Gets the biome for a globe tile terrain type (0=ocean, 1=land, 2=desert, 3=ice)
+ */
+export const getBiomeFromTileType = (tileType: number): CombatBiome => {
+  return tileType === 0
+    ? "ocean"
+    : tileType === 1
+      ? "ground"
+      : tileType === 2
+        ? "dessert"
+        : "ice";
 };
 
 /**
@@ -26,21 +47,18 @@ export const isAtEdge = (position: SectorPoint | null) => {
  * @returns The biome of the tile
  */
 export const getBiomeFromGlobalTile = (tile: GlobalTile): CombatBiome => {
-  return tile.t === 0
-    ? "ocean"
-    : tile.t === 1
-      ? "ground"
-      : tile.t === 2
-        ? "dessert"
-        : "ice";
+  return getBiomeFromTileType(tile.t);
 };
 
 /**
  * Based on current position, find the nearest edge
  */
-export const findNearestEdge = (position: SectorPoint) => {
-  const x = position.x < SECTOR_WIDTH / 2 ? 0 : SECTOR_WIDTH - 1;
-  const y = position.y < SECTOR_HEIGHT / 2 ? 0 : SECTOR_HEIGHT - 1;
+export const findNearestEdge = (
+  position: SectorPoint,
+  dimensions: SectorDimensions,
+) => {
+  const x = position.x < dimensions.width / 2 ? 0 : dimensions.width - 1;
+  const y = position.y < dimensions.height / 2 ? 0 : dimensions.height - 1;
   return { x: x, y: y };
 };
 
@@ -62,21 +80,18 @@ export const calcGlobalTravelTime = (
   return MAP_GLOBAL_TRAVEL_TIME_CAP_SECS;
 };
 
-// Calculate if we are in village or not.
-// Not the nicest, but eventually we are merging towards
-export const calcIsInVillage = (_position: SectorPoint) => {
-  // if ([0, 19].includes(position.x)) return false;
-  // if ([0, 14].includes(position.y)) return false;
-  // if (position.y === 13) {
-  //   if ([1, 2, 3, 17, 18].includes(position.x)) return false;
-  // }
-  // if (position.y === 1) {
-  //   if ([1, 2, 3, 4, 16, 17, 18].includes(position.x)) return false;
-  // }
-  // if (position.y === 2) {
-  //   if ([1, 2, 18].includes(position.x)) return false;
-  // }
-  // if (position.x === 1 && position.y === 12) return false;
+/**
+ * Whether a position sits in a village zone. When a sector map is provided
+ * the tile zone decides; callers without map access treat the whole sector
+ * as village (endpoints like train/home that predate zone-based checks).
+ */
+export const calcIsInVillage = (
+  position: SectorPoint,
+  sectorMap?: Pick<NormalizedSectorMap, "tiles">,
+) => {
+  if (sectorMap) {
+    return getSectorTile(sectorMap, position)?.zone === "village";
+  }
   return true;
 };
 

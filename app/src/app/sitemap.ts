@@ -34,7 +34,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.5,
     },
     {
-      url: "https://www.theninja-rpg.com/manual/travel",
+      url: "https://www.theninja-rpg.com/manual/world",
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 0.5,

@@ -131,6 +131,12 @@ export const sentryMiddleware = t.middleware(
   }),
 );
 
+/**
+ * Sliding-window rate limit keyed per procedure path + identity (userId, or IP
+ * for anonymous callers); violations by logged-in users incur a 1% money/bank
+ * penalty. If the Redis limiter is unreachable, development fails open (local
+ * shim may not be running) while production fails closed.
+ */
 export const ratelimitMiddleware = t.middleware(
   async ({ ctx: context, path, next }) => {
     if (!context.userId && !context.userIp) {
@@ -140,7 +146,18 @@ export const ratelimitMiddleware = t.middleware(
       });
     }
     const identifier = `${path}-${context.userId ?? context.userIp}`;
-    const { success } = await ratelimit.limit(identifier);
+    let success = true;
+    try {
+      success = (await ratelimit.limit(identifier)).success;
+    } catch (error) {
+      // In development the limiter's Redis is a local shim that may simply not
+      // be running (e.g. Docker is down); failing open beats bricking every
+      // rate-limited endpoint. Production keeps failing closed.
+      if (process.env.NODE_ENV !== "development") throw error;
+      console.warn(
+        `Rate limiter unreachable in dev, allowing ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     if (!success) {
       if (context.userId) {
         const result = await context.drizzle

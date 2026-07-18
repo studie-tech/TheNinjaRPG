@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DMG_REDUCTION_CAP,
   OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,
@@ -151,6 +151,10 @@ describe("buildDamagePacketModifierLists", () => {
 });
 
 describe("buildDamageModifierEligibilityById", () => {
+  // Restore in afterEach so a failing assertion mid-test cannot leak the
+  // Math.random spy into later test files.
+  afterEach(() => vi.restoreAllMocks());
+
   it("excludes expired damage modifiers before packet lists can apply them", () => {
     const expiredDr = makeModifierEffect({
       id: "expired-dr",
@@ -291,8 +295,6 @@ describe("buildDamageModifierEligibilityById", () => {
       (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100);
     expect(withInc).toBeCloseTo(afterOoc * 1.2, 2);
     expect(prevented).toBeCloseTo(afterOoc, 2);
-
-    vi.restoreAllMocks();
   });
 });
 

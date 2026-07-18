@@ -79,6 +79,8 @@ export const ContentTypes = [
   "item",
   "jutsu",
   "jutsu_reskin",
+  "mapAsset",
+  "mapTerrain",
   "quest",
   "user",
   "skillTree",
@@ -91,10 +93,18 @@ export const MAP_RESERVED_SECTORS = [
   73, 72, 75, 78, 275, 279, 201, 183, 272, 264, 270, 308, 289, 259, 260, 253, 304, 307,
   283, 284, 340, 334, 330, 331, 332, 337, 342, 336, 341, 335, 113, 109, 443,
 ];
-export const MAP_TOTAL_SECTORS = 443;
+export const MAP_SECTOR_ID_MIN = 0;
+// Cube-sphere: 6 faces x FACE_SIZE^2 tiles (FACE_SIZE=18 -> 6*324 = 1944).
+export const MAP_SECTOR_ID_MAX = 1943;
+export const MAP_TOTAL_SECTORS = MAP_SECTOR_ID_MAX + 1;
 export const MAP_WAKE_ISLAND_SECTOR = 222;
 export const MAP_WAR_TORN_BATTLEGROUND_SECTOR = 335;
 export const MAP_GLOBAL_TRAVEL_TIME_CAP_SECS = 10;
+export const SECTOR_MAP_MAX_DIMENSION = 64;
+export const SECTOR_MAP_VERSION = 1;
+
+export const SectorMapStatuses = ["DRAFT", "PUBLISHED", "ARCHIVED"] as const;
+export type SectorMapStatus = (typeof SectorMapStatuses)[number];
 
 // XP Bracket system — maps experience to protection tiers for PvP eligibility.
 // Bracket 0 is reserved for Academy students & Genin (RANKS_RESTRICTED_FROM_PVP).
@@ -170,6 +180,7 @@ export const LOG_TYPES = [
   "poll",
   "user",
   "userjutsu",
+  "villageStructure",
   "war",
 ] as const;
 export type LogType = (typeof LOG_TYPES)[number];
@@ -547,16 +558,14 @@ export const COMBAT_BIOMES = [
 ] as const;
 export type CombatBiome = (typeof COMBAT_BIOMES)[number];
 
-export const HEXTILE_BIOMES = ["ocean", "ground", "dessert", "ice", "snow"] as const;
-export type HEXTILE_TYPE = (typeof HEXTILE_BIOMES)[number];
-
 // HEX grid settings
 export const HEX_STACKING_DISPLACEMENT = 0.25; // To compensate for how hexagons stack, this is how much (in percent of width) we lose from a stacking op
 export const HEX_ASPECT_RATIO = 0.5; // To give perspective, make hex height smaller than width
 export const NO_DURABILITY_LOSS_COMBATS: BattleType[] = ["SPARRING"];
 
-// Sector settings
-export const SECTOR_WIDTH = 20;
+// Sector settings. Square (26x26) so sector maps tile across the cube-sphere's
+// 90/270-degree face seams - a rotated square is still the same shape.
+export const SECTOR_WIDTH = 26;
 export const SECTOR_HEIGHT = 26;
 
 // Alliance hall settings default
@@ -2060,7 +2069,16 @@ export const IMG_SECTOR_VS_ICON =
 export const IMG_SECTOR_WALL_STONE_TOWER =
   "https://uploadthing.b-cdn.net/f/aab037bb-7ac7-48f7-9994-548d87eb55f1-lga892.webp";
 export const IMG_MAP_HEXASPHERE =
-  "https://tnr-storage-cdn.b-cdn.net/eb805d73-5216-4d5c-b3e9-c39cc2340922-ixejn7.json";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRpfHi20udmODoNtpa0FMcwI4k2Eq7nJhyvjl";
+// SHA-256 of the expected hexasphere.json bytes. scripts/ensure-map-data.ts
+// verifies the CDN download against this before writing it into the build, so a
+// compromised CDN/account cannot bake arbitrary globe topology into the server.
+// Regenerating the globe (scripts/generate-globe.ts + upload-map-asset.ts) must
+// update this to the new file's `shasum -a 256 src/data/hexasphere.json`.
+export const IMG_MAP_HEXASPHERE_SHA256 =
+  "ec203f7c1fe33fa7fc3474dff500ade6850b6517ac8de552371d75e05465e4de";
+export const IMG_MAP_TILESET_ATLAS =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMavndmtsO4cexqW2RDgkE3zZbNXSFGitmnar";
 export const IMG_MAP_WAR_ICON =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgipq89cU9cpECTimBdjaqbNn7vQsxGR1wLk4";
 export const IMG_MAP_QUEST_ICON =

@@ -12,6 +12,10 @@ export interface GlobalTile {
   b: NonEmptyArray<GlobalPoint>; // boundary
   c: GlobalPoint; // centerPoint
   t: number; // 0=ocean, 1=land, 2=desert
+  n?: number[]; // quad neighbors [north, east, south, west] sector ids
+  ne?: number[]; // entry edge on each neighbor [N,E,S,W]: which edge (0..3) the
+  // crossing enters through. Within a cube face this is (k+2)%4 (aligned grid);
+  // across the 12 cube-edge seams it encodes the 90/270 rotation.
 }
 
 export interface SectorPoint {

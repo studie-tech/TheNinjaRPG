@@ -48,6 +48,7 @@ import type {
   TowerDefenseState,
   CharacterAssetConfig,
 } from "@/validators/towerDefense";
+import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 
 export const vector = customType<{
   data: ArrayBuffer;
@@ -2136,8 +2137,8 @@ export const userData = mysqlTable(
     avatarLight: varchar("avatarLight", { length: 191 }),
     avatar3d: varchar("avatar3d", { length: 191 }),
     sector: smallint("sector", { unsigned: true }).default(0).notNull(),
-    longitude: tinyint("longitude").default(10).notNull(),
-    latitude: tinyint("latitude").default(7).notNull(),
+    longitude: smallint("longitude", { unsigned: true }).default(10).notNull(),
+    latitude: smallint("latitude", { unsigned: true }).default(7).notNull(),
     location: varchar("location", { length: 191 }).default(""),
     joinedVillageAt: datetime("joinedVillageAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3) - INTERVAL 7 DAY)`)
@@ -2930,6 +2931,126 @@ export const sector = mysqlTable(
 );
 export type SectorType = InferSelectModel<typeof sector>;
 
+export const sectorMap = mysqlTable(
+  "SectorMap",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    sector: smallint("sector", { unsigned: true }).notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    width: smallint("width", { unsigned: true }).notNull(),
+    height: smallint("height", { unsigned: true }).notNull(),
+    status: mysqlEnum("status", consts.SectorMapStatuses).notNull(),
+    version: int("version", { unsigned: true }).default(1).notNull(),
+    sourceHash: varchar("sourceHash", { length: 191 }),
+    rawTiledJson: json("rawTiledJson").$type<unknown>(),
+    normalizedJson: json("normalizedJson").$type<NormalizedSectorMap>().notNull(),
+    publishedAt: datetime("publishedAt", { mode: "date", fsp: 3 }),
+    publishedByUserId: varchar("publishedByUserId", { length: 191 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      sectorVersionKey: uniqueIndex("SectorMap_sector_version_key").on(
+        table.sector,
+        table.version,
+      ),
+      sectorStatusIdx: index("SectorMap_sector_status_idx").on(
+        table.sector,
+        table.status,
+      ),
+    };
+  },
+);
+export type SectorMapType = InferSelectModel<typeof sectorMap>;
+
+export const sectorMapRelations = relations(sectorMap, ({ one }) => ({
+  publishedBy: one(userData, {
+    fields: [sectorMap.publishedByUserId],
+    references: [userData.userId],
+  }),
+}));
+
+export const mapAsset = mysqlTable(
+  "MapAsset",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    key: varchar("key", { length: 191 }).notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    category: varchar("category", { length: 191 }).default("").notNull(),
+    imageUrl: varchar("imageUrl", { length: 512 }).notNull(),
+    windAffected: boolean("windAffected").default(false).notNull(),
+    small: boolean("small").default(false).notNull(),
+    randomRotation: boolean("randomRotation").default(false).notNull(),
+    // Default rendered sprite height in hex-height units for objects without an
+    // explicit size; a per-object size authored in Tiled always wins
+    renderScale: double("renderScale").default(1).notNull(),
+    licenseDetails: text("licenseDetails").default("TNR").notNull(),
+    createdByUserId: varchar("createdByUserId", { length: 191 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      keyKey: uniqueIndex("MapAsset_key_key").on(table.key),
+      categoryIdx: index("MapAsset_category_idx").on(table.category),
+    };
+  },
+);
+export type MapAsset = InferSelectModel<typeof mapAsset>;
+
+export const mapTerrain = mysqlTable(
+  "MapTerrain",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    key: varchar("key", { length: 191 }).notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    // Three-shade palette driving the in-game tile materials (light band,
+    // mid band, dark band)
+    colors: json("colors").$type<[string, string, string]>().notNull(),
+    // Optional texture blended over the palette (e.g. ocean waves, ice sheen)
+    textureUrl: varchar("textureUrl", { length: 512 }),
+    // Solid color representing this terrain in the Tiled editor palette
+    swatchColor: varchar("swatchColor", { length: 16 }).notNull(),
+    // Which combat arena background battles on this terrain use
+    battleBiome: mysqlEnum("battleBiome", consts.COMBAT_BIOMES)
+      .default("ground")
+      .notNull(),
+    // Water terrain: recessed + animated waves + swim travel cost, and the
+    // Tiled palette offers it as an impassable lake as well
+    isWater: boolean("isWater").default(false).notNull(),
+    // How deep the tile face is sunk below ground level, as a fraction of the
+    // tile edge (ocean 0.5, ice sheet 0.25, solid ground 0)
+    depression: float("depression").default(0).notNull(),
+    defaultWalkCost: int("defaultWalkCost").default(1).notNull(),
+    // The five built-in biomes are protected: the globe generator and combat
+    // fall back to them, so their keys cannot change and they cannot be deleted
+    protected: boolean("protected").default(false).notNull(),
+    licenseDetails: text("licenseDetails").default("TNR").notNull(),
+    createdByUserId: varchar("createdByUserId", { length: 191 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      keyKey: uniqueIndex("MapTerrain_key_key").on(table.key),
+    };
+  },
+);
+export type MapTerrain = InferSelectModel<typeof mapTerrain>;
+
 export const sectorRelations = relations(sector, ({ one, many }) => ({
   village: one(village, {
     fields: [sector.villageId],
@@ -3043,8 +3164,8 @@ export const villageStructure = mysqlTable(
     route: varchar("route", { length: 191 }).default("").notNull(),
     image: varchar("image", { length: 191 }).notNull(),
     villageId: varchar("villageId", { length: 191 }).notNull(),
-    longitude: tinyint("longitude").default(10).notNull(),
-    latitude: tinyint("latitude").default(10).notNull(),
+    longitude: smallint("longitude", { unsigned: true }).default(10).notNull(),
+    latitude: smallint("latitude", { unsigned: true }).default(10).notNull(),
     hasPage: tinyint("hasPage").default(0).notNull(),
     curSp: int("curSp").default(100).notNull(),
     maxSp: int("maxSp").default(100).notNull(),

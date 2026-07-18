@@ -1,7 +1,11 @@
 import { z } from "zod";
-import { XP_BRACKETS } from "@/drizzle/constants";
+import { MAP_SECTOR_ID_MAX, MAP_SECTOR_ID_MIN, XP_BRACKETS } from "@/drizzle/constants";
 
-export const sectorIdSchema = z.coerce.number().int().min(0).max(491);
+export const sectorIdSchema = z.coerce
+  .number()
+  .int()
+  .min(MAP_SECTOR_ID_MIN)
+  .max(MAP_SECTOR_ID_MAX);
 
 export const quickTravelSchema = z.object({ sector: sectorIdSchema });
 export type QuickTravelSchemaInput = z.input<typeof quickTravelSchema>;

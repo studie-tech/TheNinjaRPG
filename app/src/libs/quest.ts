@@ -13,7 +13,8 @@ import {
   IMG_MISSION_PVP,
   IMG_MISSION_S,
   type LetterRank,
-  MAP_TOTAL_SECTORS,
+  MAP_SECTOR_ID_MAX,
+  MAP_SECTOR_ID_MIN,
   type MEDNIN_RANK,
   MEDNIN_RANKS,
   type QuestType,
@@ -35,6 +36,7 @@ import {
 } from "@/libs/objectives";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUnique } from "@/utils/grouping";
+import { randomInt } from "@/utils/math";
 import { canChangeContent, canPlayHiddenQuests } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { secondsPassed } from "@/utils/time";
@@ -721,10 +723,10 @@ export const getNewTrackers = (
             if (objective.sectorType === "specific") {
               status.sector = objective.sector;
             } else if (objective.sectorType === "random") {
-              status.sector = Math.ceil(Math.random() * (MAP_TOTAL_SECTORS - 1));
+              status.sector = randomInt(MAP_SECTOR_ID_MIN, MAP_SECTOR_ID_MAX);
             } else if (objective.sectorType === "from_list") {
               if (objective.sectorList.length === 0) {
-                status.sector = Math.ceil(Math.random() * (MAP_TOTAL_SECTORS - 1));
+                status.sector = randomInt(MAP_SECTOR_ID_MIN, MAP_SECTOR_ID_MAX);
               } else {
                 const idx = Math.floor(Math.random() * objective.sectorList.length);
                 status.sector = Number(objective.sectorList?.[idx]);
@@ -767,7 +769,7 @@ export const getNewTrackers = (
 
               // Fallback to random sector if no war found
               if (status.sector === undefined) {
-                status.sector = Math.ceil(Math.random() * (MAP_TOTAL_SECTORS - 1));
+                status.sector = randomInt(MAP_SECTOR_ID_MIN, MAP_SECTOR_ID_MAX);
               }
             }
             if (status.sector !== undefined) {

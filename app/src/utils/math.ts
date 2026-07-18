@@ -16,6 +16,13 @@ export const round = (value: number, decimals = 2) => {
 };
 
 /**
+ * Clamp a value into the inclusive [min, max] range.
+ */
+export const clamp = (value: number, min: number, max: number) => {
+  return Math.min(Math.max(value, min), max);
+};
+
+/**
  * Calculates percentage clamped between 0 and 100.
  * @param current - The current value.
  * @param max - The maximum value (divisor). Defaults to 1 if 0 to avoid division by zero.

@@ -10,6 +10,21 @@ export type JsonData =
   | { [x: string]: JsonData }
   | Array<JsonData>;
 
+/**
+ * JSON.parse that never throws: returns the parsed value or the parse-error
+ * message, so callers can surface it (e.g. inline form validation).
+ */
+export const parseJsonSafe = (value: string): { data: unknown; error: string } => {
+  try {
+    return { data: JSON.parse(value) as unknown, error: "" };
+  } catch (error) {
+    return {
+      data: undefined,
+      error: error instanceof Error ? error.message : "Invalid JSON",
+    };
+  }
+};
+
 // Convert key null values to empty strings
 export const setValueOnObj = <T, K extends keyof T>(object: T, key: K, value: T[K]) => {
   object[key] = value;

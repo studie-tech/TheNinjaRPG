@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import {
   MAP_RESERVED_SECTORS,
+  MAP_SECTOR_ID_MAX,
   VILLAGE_SYNDICATE_ID,
   WAR_ALLY_OFFER_MIN,
   WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
@@ -538,7 +539,7 @@ export const WarMap: React.FC<{
                       <FormControl>
                         <Input
                           className="w-full"
-                          placeholder="Sector ID (0-492)"
+                          placeholder={`Sector ID (0-${MAP_SECTOR_ID_MAX})`}
                           type="number"
                           {...field}
                           value={field.value as number | undefined}

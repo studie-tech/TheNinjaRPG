@@ -3,6 +3,8 @@ import type {
   BufferGeometry,
   Group,
   Material,
+  Mesh,
+  Object3D,
   OrthographicCamera,
   PerspectiveCamera,
   Vector3,
@@ -102,6 +104,8 @@ export const createSpriteMaterial = (
     alphaTest: 0.5,
   });
   Object.assign(material, options);
+  // Cached materials are shared across sectors; per-sector disposal skips them
+  material.userData.shared = true;
 
   materialCache.set(cacheKey, material);
   return material;
@@ -578,6 +582,29 @@ export const cleanUp = (scene: Scene, renderer: WebGLRenderer) => {
 };
 
 /**
+ * Dispose a group's geometries and materials while preserving shared
+ * resources: sprites share one module-level quad geometry (never dispose it),
+ * and materials tagged with userData.shared (see createSpriteMaterial and the
+ * biome material caches) are reused across scenes.
+ */
+export const disposeGroupPreservingShared = (root: Object3D) => {
+  root.traverse((child) => {
+    const mesh = child as Mesh;
+    if (mesh.geometry && !(mesh as unknown as Sprite).isSprite) {
+      mesh.geometry.dispose();
+    }
+    const materials = Array.isArray(mesh.material)
+      ? mesh.material
+      : mesh.material
+        ? [mesh.material]
+        : [];
+    materials.forEach((material) => {
+      if (!material.userData?.shared) material.dispose();
+    });
+  });
+};
+
+/**
  * Scene setup
  */
 export const setupScene = (info: {
@@ -630,7 +657,7 @@ export const setupScene = (info: {
  */
 export const setRaycasterFromMouse = (
   raycaster: Raycaster,
-  sceneRef: HTMLDivElement,
+  sceneRef: HTMLElement,
   event: MouseEvent,
   camera: OrthographicCamera | PerspectiveCamera,
 ) => {

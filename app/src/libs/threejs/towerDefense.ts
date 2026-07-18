@@ -29,6 +29,7 @@ import {
   TILES_LAYER,
   USER_LAYER,
 } from "@/drizzle/constants";
+import { builtinTerrainDepression } from "@/libs/sector-map/terrains";
 import { getTileInfo } from "@/libs/threejs/biome";
 import {
   type AnimationState,
@@ -352,10 +353,10 @@ export const drawTowerDefenseBackground = (info: {
     // Corners of the tile
     const corners = tile.corners;
 
-    // Calculate offset for special tiles (ocean, etc.)
+    // Calculate offset for special tiles (water, etc.)
     const { length, offsetLength, offsetLayer } = calculateTileOffset(
       corners,
-      asset,
+      builtinTerrainDepression(asset),
       lightLayout,
     );
 
@@ -460,7 +461,11 @@ export const drawTowerDefenseBackground = (info: {
     y: corner.y - referenceTile.y,
   }));
   const { offsetLength: oceanOffsetLength, offsetLayer: oceanOffsetLayer } =
-    calculateTileOffset(referenceTile.corners, "ocean", lightLayout);
+    calculateTileOffset(
+      referenceTile.corners,
+      builtinTerrainDepression("ocean"),
+      lightLayout,
+    );
 
   const firstTileGeometry = createTileGeometry({
     corners: referenceLocalCorners,

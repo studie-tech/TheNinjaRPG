@@ -2,7 +2,9 @@ import { Grid, Orientation, rectangle } from "honeycomb-grid";
 import { nanoid } from "nanoid";
 import { createNoise2D } from "simplex-noise";
 import {
-  type BufferGeometry,
+  BufferAttribute,
+  BufferGeometry,
+  DoubleSide,
   EdgesGeometry,
   Group,
   Line,
@@ -33,8 +35,6 @@ import {
   IMG_SECTOR_WALL_STONE_TOWER,
   MEDNIN_MIN_RANK,
   RANKS_RESTRICTED_FROM_PVP,
-  SECTOR_HEIGHT,
-  SECTOR_WIDTH,
   STATUS_LAYER,
   STRUCTURE_ADJACENTS,
   TILES_LAYER,
@@ -43,7 +43,25 @@ import {
 import type { VillageStructure } from "@/drizzle/schema";
 import { passesBracketFilter } from "@/libs/profile";
 import { getActiveObjectives } from "@/libs/quest";
-import { generateWallPlacements, getTileInfo } from "@/libs/threejs/biome";
+import {
+  type DecorationAsset,
+  resolveDecorationAsset,
+} from "@/libs/sector-map/decorations";
+import { resolveTerrainSpec, type TerrainSpec } from "@/libs/sector-map/terrains";
+import type {
+  NormalizedSectorMap,
+  NormalizedSectorTile,
+} from "@/libs/sector-map/types";
+import { getNeighborCoordinates } from "@/libs/sector-map/validation";
+import {
+  getAuthoredTileMaterial,
+  getDirtMaterial,
+  loadSectorAsset,
+  roadMats,
+  roadMatsLight,
+  shoreMats,
+  shoreMatsLight,
+} from "@/libs/threejs/biome";
 import {
   calculateHexUVCoordinates,
   calculateTileOffset,
@@ -55,19 +73,210 @@ import {
   mergeBufferGeometries,
 } from "@/libs/threejs/hexgrid";
 import { applyBlurShader, applyWaveShader } from "@/libs/threejs/shaders";
-import type { GlobalTile, SectorUser } from "@/libs/threejs/types";
+import type { SectorUser } from "@/libs/threejs/types";
 import { createTexture, loadTexture, profiler } from "@/libs/threejs/util";
 import { hasRequiredRank } from "@/libs/train";
+import { getBiomeFromTileType } from "@/libs/travel";
 import type { UserWithRelations } from "@/routers/profile";
-import type { SectorVillage } from "@/routers/travel";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { groupBy } from "@/utils/grouping";
 import type { ComplexObjectiveFields } from "@/validators/objectives";
-import type { HexagonalFaceMesh, PathCalculator, TerrainHex } from "../hexgrid";
-import { defineHex, findHex } from "../hexgrid";
+import type { TerrainHex } from "../hexgrid";
+import { defineHex, findHex, PathCalculator } from "../hexgrid";
 
 // Cache for meshes to avoid getObjectByName every frame
 const meshCache = new Map<string, Group>();
+
+/** Canonical "x,y" key for authored-map tile lookups within one sector */
+const getSectorMapTileKey = (x: number, y: number) => `${x},${y}`;
+
+export interface WindowNavEntry {
+  dx: number;
+  dy: number;
+  map: NormalizedSectorMap;
+  /** Quarter-turn rotation of this neighbor relative to the center (cube seams) */
+  rotation?: number;
+}
+
+/**
+ * A single logical hex grid spanning the whole 3x3 sector window, so paths,
+ * hover highlights and continuous walks cross sector borders as if the world
+ * were one map. Walkability/cost are composed from the 9 authored maps; the
+ * center sector sits at unified offset (W, H). This grid is used for
+ * PATHFINDING and adjacency only - rendering still uses the per-sector grids,
+ * so the returned tiles are mapped back to (dx, dy, local col/row).
+ */
+export interface WindowNav {
+  pathFinder: PathCalculator;
+  toUnified: (
+    dx: number,
+    dy: number,
+    col: number,
+    row: number,
+  ) => TerrainHex | undefined;
+  fromUnified: (tile: TerrainHex) => {
+    dx: number;
+    dy: number;
+    col: number;
+    row: number;
+  };
+}
+
+/**
+ * Composes up to 9 authored sector maps into one unified 3W x 3H hex grid for
+ * cross-border pathfinding (rendering stays per-sector); the center sector
+ * occupies unified offset (W, H). Rotated cube-edge-seam neighbors and missing
+ * (polar) neighbors are marked impassable (blocked, cost 9999) so paths stop
+ * cleanly at those borders, and water tiles carry a +5 cost weighting so
+ * routes prefer dry land. Returns null when no center map is provided.
+ */
+export const buildWindowNav = (
+  entries: WindowNavEntry[],
+  hexsize: number,
+  terrainRegistry: Map<string, TerrainSpec>,
+): WindowNav | null => {
+  const first = entries[0]?.map;
+  if (!first) return null;
+  const W = first.width;
+  const H = first.height;
+  // Per-window-offset tile lookups for O(1) walkability composition
+  const tilesByOffset = new Map<string, Map<string, NormalizedSectorTile>>();
+  // Neighbors reached across a rotated cube-edge seam can't be represented in
+  // this axis-aligned unified grid, so they are treated as impassable: paths
+  // and hover highlights stop cleanly at the border instead of wrapping the
+  // long way around, and crossings into them use the server-driven re-center.
+  const rotatedOffsets = new Set<string>();
+  for (const entry of entries) {
+    const lookup = new Map<string, NormalizedSectorTile>();
+    for (const tile of entry.map.tiles) {
+      lookup.set(getSectorMapTileKey(tile.x, tile.y), tile);
+    }
+    tilesByOffset.set(`${entry.dx},${entry.dy}`, lookup);
+    if ((entry.rotation ?? 0) !== 0) rotatedOffsets.add(`${entry.dx},${entry.dy}`);
+  }
+  const Tile = defineHex({
+    dimensions: { width: hexsize, height: hexsize * HEX_ASPECT_RATIO },
+    origin: { x: -hexsize * 0.5, y: -hexsize * 0.5 },
+    orientation: Orientation.FLAT,
+  });
+  const grid = new Grid(Tile, rectangle({ width: 3 * W, height: 3 * H }))
+    .filter((tile) => {
+      try {
+        return tile.width !== 0;
+      } catch (_e) {
+        return false;
+      }
+    })
+    .map((tile) => {
+      const dx = Math.floor(tile.col / W) - 1;
+      const dy = Math.floor(tile.row / H) - 1;
+      const localCol = tile.col - (dx + 1) * W;
+      const localRow = tile.row - (dy + 1) * H;
+      const offsetKey = `${dx},${dy}`;
+      if (rotatedOffsets.has(offsetKey)) {
+        // Rotated-seam neighbor: impassable in the unified grid (see above)
+        tile.blocked = true;
+        tile.cost = 9999;
+        return tile;
+      }
+      const lookup = tilesByOffset.get(offsetKey);
+      const mapTile = lookup?.get(getSectorMapTileKey(localCol, localRow));
+      if (!mapTile) {
+        // Sector missing from the window (polar edge) is an impassable wall
+        tile.blocked = true;
+        tile.cost = 9999;
+        return tile;
+      }
+      tile.blocked = mapTile.blocked || mapTile.walkCost <= 0;
+      // Water carries a heavier path weighting so routes prefer dry land
+      const spec = resolveTerrainSpec(mapTile.terrain, terrainRegistry);
+      tile.cost = mapTile.walkCost + (spec.isWater ? 5 : 1);
+      return tile;
+    });
+  return {
+    pathFinder: new PathCalculator(grid),
+    toUnified: (dx, dy, col, row) =>
+      grid.getHex({ col: (dx + 1) * W + col, row: (dy + 1) * H + row }),
+    fromUnified: (tile) => {
+      const dx = Math.floor(tile.col / W) - 1;
+      const dy = Math.floor(tile.row / H) - 1;
+      return { dx, dy, col: tile.col - (dx + 1) * W, row: tile.row - (dy + 1) * H };
+    },
+  };
+};
+
+/**
+ * Renders the authored map objects onto the sector's asset group. Decoration
+ * objects become wind/rotation-capable sprites resolved through the decoration
+ * registry, seeded deterministically from their tile coordinates so re-renders
+ * look identical; they are skipped in lightLayout and on structure tiles.
+ * Structure/landmark objects render as plain sprites at 2.4x tile height,
+ * other object types at 1.2x. Objects without an assetKey or with off-grid
+ * coordinates are ignored.
+ */
+const drawSectorMapObjects = (
+  group: Group,
+  grid: Grid<TerrainHex>,
+  sectorMap: NormalizedSectorMap,
+  lightLayout: boolean,
+  decorationAssets: Map<string, DecorationAsset>,
+) => {
+  sectorMap.objects
+    .filter((object) => object.assetKey)
+    .forEach((object) => {
+      const pos = grid.getHex({ col: object.x, row: object.y });
+      if (!pos || !object.assetKey) return;
+
+      // Authored scenery: every tree and rock is a map object the content
+      // team can edit in Tiled; structures suppress overlapping scenery
+      if (object.type === "decoration") {
+        if (lightLayout || pos.hasStructure) return;
+        const asset = resolveDecorationAsset(object, decorationAssets);
+        if (!asset) return;
+        const { height: h, width: w, x, y } = pos;
+        // The object's own size wins (authored/resized in Tiled, in hex-height
+        // units); the asset library's renderScale is only the default for
+        // objects without an explicit size
+        const scale = object.scale ?? asset.renderScale ?? 1;
+        const seed = ((object.x * 31 + object.y * 17) % 100) / 100;
+        const sprite = loadSectorAsset(
+          asset.filepath,
+          seed,
+          asset.windAffected,
+          asset.randomRotation,
+        );
+        sprite.scale.set(scale * h, scale * h, 1);
+        sprite.position.set(
+          x + w * (object.offsetX ?? 0),
+          // offsetY is authored in Tiled screen space (positive = down), and the
+          // grid's y axis also grows downward, so it adds directly
+          y + h * (scale / 2 - 0.5 + 0.1 * scale) + h * (object.offsetY ?? 0),
+          ASSETS_LAYER,
+        );
+        sprite.userData.small = asset.small === true;
+        sprite.userData.type = object.type;
+        sprite.userData.objectId = object.id;
+        group.add(sprite);
+        return;
+      }
+
+      const { height: h, x, y } = pos;
+      const texture = loadTexture(object.assetKey, 200);
+      const material = new SpriteMaterial({
+        map: texture,
+        depthWrite: false,
+        depthTest: false,
+      });
+      const sprite = new Sprite(material);
+      const scale =
+        object.type === "structure" || object.type === "landmark" ? 2.4 : 1.2;
+      sprite.scale.set(h * scale, h * scale, 1);
+      sprite.position.set(x, y + h / 8, ASSETS_LAYER);
+      sprite.userData.type = object.type;
+      sprite.userData.objectId = object.id;
+      group.add(sprite);
+    });
+};
 
 export const drawQuest = (info: {
   group_quest: Group;
@@ -166,33 +375,136 @@ export const drawQuest = (info: {
   endMark();
 };
 
+// Sector-boundary line: the same slate tone as the tile grid but drawn as a
+// real filled ribbon (WebGL ignores LineBasicMaterial.linewidth), so it reads
+// clearly thicker and marks every transition between sectors.
+const SECTOR_BOUNDARY_COLOR = 0x4a4a4a;
+/** Ribbon half-width as a fraction of the hex size (~1x the tile grid line) */
+const SECTOR_BOUNDARY_THICKNESS = 0.011;
+
+// Hover-path highlight: the per-tile interaction meshes double as the
+// highlight overlay. They stay not-rendered (material.visible = false, so no
+// draw cost) until a tile joins the hovered path, when they light up - making
+// it clear you can click anywhere on the map to walk there.
+const TILE_HIGHLIGHT_COLOR = 0xffc23e;
+const TILE_HIGHLIGHT_OPACITY = 0.4;
+
+/**
+ * Build a thick outline around the sector's rectangular hex block. An edge is
+ * on the perimeter when exactly one tile owns it (interior edges are shared by
+ * two tiles), so this traces the true zig-zag boundary. Each perimeter edge
+ * becomes a quad ribbon; ends are extended by the half-width so consecutive
+ * segments overlap at the corners instead of leaving gaps.
+ */
+const buildSectorBoundary = (grid: Grid<TerrainHex>, hexsize: number) => {
+  const round = (value: number) => Math.round(value * 100) / 100;
+  const edges = new Map<
+    string,
+    { a: { x: number; y: number }; b: { x: number; y: number }; count: number }
+  >();
+  grid.forEach((tile) => {
+    const corners = tile.corners;
+    for (let i = 0; i < corners.length; i++) {
+      const a = corners[i];
+      const b = corners[(i + 1) % corners.length];
+      if (!a || !b) continue;
+      const ka = `${round(a.x)},${round(a.y)}`;
+      const kb = `${round(b.x)},${round(b.y)}`;
+      const key = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+      const existing = edges.get(key);
+      if (existing) existing.count++;
+      else edges.set(key, { a, b, count: 1 });
+    }
+  });
+
+  const half = hexsize * SECTOR_BOUNDARY_THICKNESS;
+  const z = TILES_LAYER + 1;
+  const positions: number[] = [];
+  edges.forEach(({ a, b, count }) => {
+    if (count !== 1) return; // interior edge shared by two tiles
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    const length = Math.hypot(dx, dy) || 1;
+    dx /= length;
+    dy /= length;
+    const nx = -dy * half;
+    const ny = dx * half;
+    const ax = a.x - dx * half;
+    const ay = a.y - dy * half;
+    const bx = b.x + dx * half;
+    const by = b.y + dy * half;
+    positions.push(
+      ax + nx,
+      ay + ny,
+      z,
+      ax - nx,
+      ay - ny,
+      z,
+      bx - nx,
+      by - ny,
+      z,
+      ax + nx,
+      ay + ny,
+      z,
+      bx - nx,
+      by - ny,
+      z,
+      bx + nx,
+      by + ny,
+      z,
+    );
+  });
+  if (positions.length === 0) return null;
+
+  const geometry = new BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new BufferAttribute(new Float32Array(positions), 3),
+  );
+  // Opaque so it renders in the opaque pass, before the decoration/structure
+  // group - the boundary then sits at the tile level, under every object,
+  // rather than on top of them (a transparent mesh would draw after all the
+  // opaque scenery). It is drawn just above the tile faces (z here) so it
+  // reads clearly over the terrain while trees and buildings still occlude it.
+  const material = new MeshBasicMaterial({
+    color: SECTOR_BOUNDARY_COLOR,
+    side: DoubleSide,
+  });
+  const mesh = new Mesh(geometry, material);
+  mesh.matrixAutoUpdate = false;
+  mesh.userData.type = "sector_boundary";
+  return mesh;
+};
+
 /**
  * Creates heaxognal grid & draw it using js. Return groups of objects drawn
  */
 export const drawSector = (
   width: number,
   prng: () => number,
-  villageData: SectorVillage | null,
-  globalTile: GlobalTile,
+  globalTileType: number,
   lightLayout = false,
-  structures?: VillageStructure[],
+  structures: VillageStructure[] | undefined,
+  sectorMap: NormalizedSectorMap,
+  decorationAssets: Map<string, DecorationAsset>,
+  terrainRegistry: Map<string, TerrainSpec>,
 ) => {
   const endMark = profiler.mark("drawSector");
+  const { width: sectorWidth, height: sectorHeight } = sectorMap;
+  const authoredTiles = new Map(
+    sectorMap.tiles.map((tile) => [getSectorMapTileKey(tile.x, tile.y), tile]),
+  );
   // Calculate hex size
-  const hexsize =
-    width / (SECTOR_WIDTH - HEX_STACKING_DISPLACEMENT * (SECTOR_WIDTH - 1));
+  const hexsize = width / (sectorWidth - HEX_STACKING_DISPLACEMENT * (sectorWidth - 1));
 
-  // Used for procedural map generation
+  // Noise drives color variation within terrain bands
   const noiseGen = createNoise2D(prng);
-  const assetsGen = createNoise2D(prng);
 
-  // Generate wall placements dynamically based on sector dimensions (skip in light layout)
-  const wallPlacements = lightLayout
-    ? []
-    : generateWallPlacements(SECTOR_WIDTH, SECTOR_HEIGHT);
-
-  // Use provided structures or fall back to villageData structures
-  const allStructures = structures ?? villageData?.structures ?? [];
+  const allStructures = structures ?? [];
+  // The sector's own biome on the globe: drives the fallback material for
+  // un-authored tiles and the flattened ground level under structures, so a
+  // sector renders identically no matter which window it is viewed from
+  const baseBiome = getBiomeFromTileType(globalTileType);
 
   // Create the grid first
   const Tile = defineHex({
@@ -200,7 +512,18 @@ export const drawSector = (
     origin: { x: -hexsize * 0.5, y: -hexsize * 0.5 },
     orientation: Orientation.FLAT,
   });
-  const grid = new Grid(Tile, rectangle({ width: SECTOR_WIDTH, height: SECTOR_HEIGHT }))
+  // Precompute the tiles occupied by (or adjacent to) a structure once, so the
+  // per-tile check below is an O(1) Set lookup rather than scanning every
+  // structure x 12 adjacents for all 676 tiles (a village sector redraw is
+  // otherwise O(tiles x structures x 12)).
+  const structureTileKeys = new Set<string>();
+  for (const s of allStructures) {
+    structureTileKeys.add(getSectorMapTileKey(s.longitude, s.latitude));
+    for (const { dCol, dRow } of STRUCTURE_ADJACENTS) {
+      structureTileKeys.add(getSectorMapTileKey(s.longitude + dCol, s.latitude + dRow));
+    }
+  }
+  const grid = new Grid(Tile, rectangle({ width: sectorWidth, height: sectorHeight }))
     .filter((tile) => {
       try {
         return tile.width !== 0;
@@ -209,35 +532,37 @@ export const drawSector = (
       }
     })
     .map((tile) => {
-      // Minimum level required if there is a structure on the tile
-      const minStructureLevel = globalTile.t === 0 ? 0.9 : 0.5;
-      // Set the default level to the noise
-      const nx = tile.col / SECTOR_WIDTH - 0.5;
-      const ny = tile.row / SECTOR_HEIGHT - 0.5;
+      const tileKey = getSectorMapTileKey(tile.col, tile.row);
+      const authoredTile = authoredTiles.get(tileKey);
+      // Noise drives which of the terrain's shades a tile gets
+      const nx = tile.col / sectorWidth - 0.5;
+      const ny = tile.row / sectorHeight - 0.5;
       tile.level = noiseGen(nx, ny) / 2 + 0.5;
-      tile.assetStrength = assetsGen(nx, ny) / 2 + 0.5;
-      tile.cost = 1;
+      tile.assetStrength = 0;
+      // Effective path cost: authored walk cost plus the terrain weighting
+      // (water routes are heavily de-prioritized)
+      const spec = resolveTerrainSpec(
+        authoredTile?.terrain ?? baseBiome,
+        terrainRegistry,
+      );
+      // Stash the resolved spec + authored tile so the geometry pass below reads
+      // them off the hex instead of re-doing the lookup + resolve for all 676 tiles
+      tile.spec = spec;
+      tile.authored = authoredTile;
+      tile.cost = (authoredTile ? authoredTile.walkCost : 1) + (spec.isWater ? 5 : 1);
+      tile.blocked = authoredTile?.blocked || authoredTile?.walkCost === 0;
+      tile.zone = authoredTile?.zone;
+      // Combat arena for battles on this tile: the authored per-tile override
+      // wins, else the terrain's configured arena
+      tile.battleBiome = authoredTile?.battleBiome ?? spec.battleBiome;
 
-      // If level is below the minimum structure level, check for structures
-      // Check village structures first (includes shrines and other added structures)
-      const hasStructure = allStructures.some((s) => {
-        if (s.longitude === tile.col && s.latitude === tile.row) return true;
-        return STRUCTURE_ADJACENTS.some(
-          ({ dCol, dRow }) =>
-            s.longitude === tile.col + dCol && s.latitude === tile.row + dRow,
-        );
-      });
-      if (hasStructure) {
-        tile.level = minStructureLevel;
+      // Structure tiles stay flat and walkable (includes shrines and other
+      // added structures)
+      if (structureTileKeys.has(tileKey)) {
+        // Mid shade so the ground under buildings reads flat and uniform
+        tile.level = 0.5;
         tile.hasStructure = true;
-        return tile;
-      }
-      // Check walls
-      const hasWall = wallPlacements.find((w) => w.x === tile.col && w.y === tile.row);
-      if (hasWall) {
-        tile.level = minStructureLevel;
-        tile.hasStructure = true;
-        return tile;
+        tile.blocked = false;
       }
       return tile;
     });
@@ -260,8 +585,12 @@ export const drawSector = (
     groundPoints,
   );
 
-  // Line material to use for edges
-  const lineMaterial = new LineBasicMaterial({ color: 0x555555 });
+  // Subtle grid so the painterly tiles read as terrain, not a board game
+  const lineMaterial = new LineBasicMaterial({
+    color: 0x555555,
+    transparent: true,
+    opacity: 0.25,
+  });
 
   // Arrays to collect geometries for merging (major performance optimization)
   const groundGeometries: BufferGeometry[] = [];
@@ -271,9 +600,10 @@ export const drawSector = (
   // Track shared materials to reduce draw calls
   const materialGroups = new Map<MeshBasicMaterial, BufferGeometry[]>();
 
-  // Map for ocean materials with different wave offsets (to allow batching while maintaining variety)
-  const oceanMaterialPool: MeshBasicMaterial[] = [];
-  const numOceanVariants = 8;
+  // Per-source-material wave pools (allow batching while desynchronizing
+  // waves; separate water terrains keep separate pools)
+  const waveMaterialPools = new Map<MeshBasicMaterial, MeshBasicMaterial[]>();
+  const numWaveVariants = 8;
 
   // Track animated materials for efficient uniform updates
   const animatedMaterials = new Set<MeshBasicMaterial>();
@@ -281,27 +611,43 @@ export const drawSector = (
   // Draw the tiles
   grid.forEach((tile) => {
     if (tile) {
-      const { material, sprites, asset } = getTileInfo(
-        prng,
-        tile,
-        globalTile,
-        lightLayout,
-      );
+      // Reuse the spec + authored tile stashed on the hex by the first pass
+      // above, and the blocked flag it already computed onto the tile
+      const authoredTile = tile.authored;
+      const spec = tile.spec ?? resolveTerrainSpec(baseBiome, terrainRegistry);
+      const blocked = tile.blocked ?? false;
+      const tileInfo = getAuthoredTileMaterial(tile, spec, blocked, lightLayout);
+      let { material } = tileInfo;
+      const asset = tileInfo.asset;
       tile.asset = asset;
 
-      if (sprites && sprites.length > 0 && !tile.hasStructure && !lightLayout) {
-        sprites.forEach((sprite) => {
-          group_assets.add(sprite);
-        });
+      // Authored roads render as dirt paths without decorations
+      const isRoad = authoredTile?.zone === "road" && !spec.isWater;
+      if (isRoad) {
+        const roadPalette = lightLayout ? roadMatsLight : roadMats;
+        const variant = tile.level < 0.4 ? 0 : tile.level < 0.6 ? 1 : 2;
+        material = roadPalette[variant] ?? material;
+      }
+
+      // Shorelines (sand with decorations disabled) get a mottled beach
+      // palette with more contrast than the flat desert tones
+      const isShore =
+        authoredTile?.terrain === "dessert" && authoredTile.decoration === false;
+      if (isShore) {
+        const shorePalette = lightLayout ? shoreMatsLight : shoreMats;
+        const variant = tile.level < 0.4 ? 0 : tile.level < 0.7 ? 1 : 2;
+        material = shorePalette[variant] ?? material;
       }
 
       // Corners of the tile and the below ground
       const corners = tile.corners;
 
-      // Calculate offset for ocean tiles (they are displaced down for depth effect)
+      // Depressed tile faces (water, ice sheets) get a depth-effect recess;
+      // roads always sit flat
+      const depression = isRoad ? 0 : spec.depression;
       const { length, offsetLength, offsetLayer } = calculateTileOffset(
         corners,
-        asset,
+        depression,
         lightLayout,
       );
 
@@ -322,18 +668,26 @@ export const drawSector = (
       if (material) {
         let materialToUse = material;
 
-        // Special handling for ocean tiles to desynchronize waves while still allowing batching
-        if (asset === "ocean" && !lightLayout) {
-          const variantIndex = Math.floor(prng() * numOceanVariants);
-          if (!oceanMaterialPool[variantIndex]) {
+        // Water animates: swap in a wave-shader clone of the tile material
+        // (pooled per source material so batching still applies)
+        if (spec.isWater && !isRoad && !lightLayout) {
+          let pool = waveMaterialPools.get(material);
+          if (!pool) {
+            pool = [];
+            waveMaterialPools.set(material, pool);
+          }
+          const variantIndex = Math.floor(prng() * numWaveVariants);
+          if (!pool[variantIndex]) {
             const variantMaterial = material.clone();
-            const randomOffset = (variantIndex / numOceanVariants) * Math.PI * 2;
+            // The clone belongs to this sector alone; it must not inherit
+            // the shared tag from the pooled base material
+            variantMaterial.userData.shared = false;
+            const randomOffset = (variantIndex / numWaveVariants) * Math.PI * 2;
             applyWaveShader(variantMaterial, randomOffset);
-            oceanMaterialPool[variantIndex] = variantMaterial;
+            pool[variantIndex] = variantMaterial;
             animatedMaterials.add(variantMaterial);
           }
-          materialToUse = oceanMaterialPool[variantIndex] ?? oceanMaterialPool[0];
-          if (!materialToUse) return;
+          materialToUse = pool[variantIndex] ?? material;
         }
 
         const group = materialGroups.get(materialToUse) || [];
@@ -345,8 +699,9 @@ export const drawSector = (
       const edgeGeometry = new EdgesGeometry(geometry);
       tileEdgeGeometries.push(edgeGeometry);
 
-      // Interaction mesh (invisible, for raycasting)
-      // PERFORMANCE: This mesh is never rendered, only used for mouse detection
+      // Interaction mesh: raycast target for mouse detection AND the hover
+      // path highlight. It is not drawn (material.visible = false) until a
+      // tile joins the hovered path, so idle cost is just raycasting.
       const interactionGeometry = createTileGeometry({
         corners,
         points,
@@ -355,20 +710,22 @@ export const drawSector = (
         offsetLayer,
         layer: TILES_LAYER,
       });
-      const interactionMaterial = new MeshBasicMaterial({ visible: false });
+      const interactionMaterial = new MeshBasicMaterial({
+        color: TILE_HIGHLIGHT_COLOR,
+        transparent: true,
+        opacity: TILE_HIGHLIGHT_OPACITY,
+        // Depth-test so opaque scenery (which writes depth) occludes the
+        // highlight - the lit path sits on the ground, under trees and rocks,
+        // instead of painting over them
+        depthTest: true,
+        depthWrite: false,
+        visible: false,
+      });
       const interactionMesh = new Mesh(interactionGeometry, interactionMaterial);
       interactionMesh.name = `${tile.row},${tile.col}`;
       interactionMesh.userData.type = "tile";
       interactionMesh.userData.tile = tile;
       interactionMesh.userData.highlight = false;
-      // Store original color for highlighting
-      const { material: originalMaterial } = getTileInfo(
-        prng,
-        tile,
-        globalTile,
-        lightLayout,
-      );
-      interactionMesh.userData.hex = originalMaterial?.color.getHex() || 0x000000;
       interactionMesh.matrixAutoUpdate = false;
       group_interaction.add(interactionMesh);
 
@@ -412,15 +769,10 @@ export const drawSector = (
   // Merge all ground geometries into a single mesh (huge performance gain)
   if (!lightLayout && groundGeometries.length > 0) {
     const mergedGroundGeometry = mergeBufferGeometries(groundGeometries);
-    // Use the first tile's dirt material
-    const firstTile = grid.toArray()[0];
-    if (firstTile) {
-      const { dirt } = getTileInfo(prng, firstTile, globalTile, lightLayout);
-      const mergedGroundMesh = new Mesh(mergedGroundGeometry, dirt);
-      mergedGroundMesh.userData.type = "ground_merged";
-      mergedGroundMesh.matrixAutoUpdate = false;
-      group_dirt.add(mergedGroundMesh);
-    }
+    const mergedGroundMesh = new Mesh(mergedGroundGeometry, getDirtMaterial());
+    mergedGroundMesh.userData.type = "ground_merged";
+    mergedGroundMesh.matrixAutoUpdate = false;
+    group_dirt.add(mergedGroundMesh);
 
     // Merge all ground edge geometries into a single line mesh
     if (groundEdgeGeometries.length > 0) {
@@ -431,6 +783,8 @@ export const drawSector = (
     }
   }
 
+  drawSectorMapObjects(group_assets, grid, sectorMap, lightLayout, decorationAssets);
+
   // Merge all tile edge geometries into a single mesh (performance optimization)
   if (tileEdgeGeometries.length > 0) {
     const mergedTileEdgeGeometry = mergeBufferGeometries(tileEdgeGeometries);
@@ -438,6 +792,10 @@ export const drawSector = (
     mergedTileEdgeMesh.matrixAutoUpdate = false;
     group_edges.add(mergedTileEdgeMesh);
   }
+
+  // Thicker outline marking this sector's borders with its neighbors
+  const boundaryMesh = buildSectorBoundary(grid, hexsize);
+  if (boundaryMesh) group_edges.add(boundaryMesh);
 
   profiler.reportCount("sector_tiles", grid.size);
   profiler.reportCount("sector_draw_calls_tiles", materialGroups.size);
@@ -696,49 +1054,42 @@ export const createMultipleUserSprite = (
  */
 export const drawVillage = (
   group: Group,
-  village: SectorVillage,
   structures: VillageStructure[],
   grid: Grid<TerrainHex>,
-  lightLayout = false,
+  sectorMap: NormalizedSectorMap,
+  villageType: string | null,
 ) => {
-  // Village wall (skip in light layout)
-  if (!lightLayout && (village?.type === "VILLAGE" || village?.type === "TOWN")) {
-    // Generate wall placements dynamically based on sector dimensions
-    const wallPlacements = generateWallPlacements(SECTOR_WIDTH, SECTOR_HEIGHT);
-    const wall_tower_texture = loadTexture(IMG_SECTOR_WALL_STONE_TOWER);
-    const wall_tower_material = new SpriteMaterial({ map: wall_tower_texture });
-    let prevPos: TerrainHex | null = null;
-    for (const wall of wallPlacements) {
-      const pos = grid.getHex({ col: wall.x, row: wall.y });
-      if (pos) {
-        const { height: h, x, y } = pos;
-        const sprite = new Sprite(wall_tower_material);
-        sprite.scale.set(h * 0.9, h * 1.3, 1);
-        sprite.position.set(x, y + h / 3, ASSETS_LAYER);
-        group.add(sprite);
-        if (prevPos) {
-          const x2 = (prevPos.x * 3 + pos.x) / 4;
-          const y2 = (prevPos.y * 3 + pos.y) / 4;
-          const sprite2 = new Sprite(wall_tower_material);
-          sprite2.scale.set(h * 0.5, h * 0.8, 1);
-          sprite2.position.set(x2, y2 + h / 4, ASSETS_LAYER);
-          group.add(sprite2);
-          const x3 = (prevPos.x + pos.x * 3) / 4;
-          const y3 = (prevPos.y + pos.y * 3) / 4;
-          const sprite3 = new Sprite(wall_tower_material);
-          sprite3.scale.set(h * 0.5, h * 0.8, 1);
-          sprite3.position.set(x3, y3 + h / 4, ASSETS_LAYER);
-          group.add(sprite3);
-          const x4 = (prevPos.x * 2 + pos.x * 2) / 4;
-          const y4 = (prevPos.y * 2 + pos.y * 2) / 4;
-          const sprite4 = new Sprite(wall_tower_material);
-          sprite4.scale.set(h * 1, h * 1.6, 1);
-          sprite4.position.set(x4, y4 + h / 4, ASSETS_LAYER);
-          group.add(sprite4);
-        }
-        prevPos = pos;
-      }
-    }
+  // Village wall: towers along the village-zone boundary; roads crossing
+  // the boundary are left open and read as gates
+  if (villageType === "VILLAGE" || villageType === "TOWN") {
+    const tilesByKey = new Map(
+      sectorMap.tiles.map((tile) => [getSectorMapTileKey(tile.x, tile.y), tile]),
+    );
+    const wallTexture = loadTexture(IMG_SECTOR_WALL_STONE_TOWER);
+    const wallMaterial = new SpriteMaterial({ map: wallTexture });
+    sectorMap.tiles.forEach((tile) => {
+      if (tile.zone !== "village") return;
+      const isBoundary = getNeighborCoordinates(tile).some((coordinate) => {
+        const neighbor = tilesByKey.get(
+          getSectorMapTileKey(coordinate.x, coordinate.y),
+        );
+        return (
+          !neighbor ||
+          (neighbor.zone !== "village" &&
+            neighbor.zone !== "road" &&
+            neighbor.zone !== "structure" &&
+            neighbor.zone !== "shrine")
+        );
+      });
+      if (!isBoundary) return;
+      const pos = grid.getHex({ col: tile.x, row: tile.y });
+      if (!pos) return;
+      const { height: h, x, y } = pos;
+      const sprite = new Sprite(wallMaterial);
+      sprite.scale.set(h * 0.8, h * 1.2, 1);
+      sprite.position.set(x, y + h / 3, ASSETS_LAYER);
+      group.add(sprite);
+    });
   }
   // Village structures
   for (const structure of structures.filter((s) => s.hasPage !== 0)) {
@@ -770,6 +1121,10 @@ export const drawVillage = (
       const sprite = new Sprite(material);
       sprite.scale.set(h * 3.0, h * 3.0, 1);
       sprite.position.set(x, y + h / 10, ASSETS_LAYER);
+      // Identify the building on raycasts (e.g. the editor's drag-to-relocate)
+      sprite.userData.type = "structure";
+      sprite.userData.structureId = structure.id;
+      sprite.userData.structureName = structure.name;
       group.add(sprite);
     }
   }
@@ -1009,53 +1364,102 @@ export const intersectUsers = (info: {
 // Track the last intersected tile to avoid redundant pathfinding
 let lastIntersectedTileName: string | null = null;
 
-export const intersectTiles = (info: {
-  group_tiles: Group;
+/** Interaction-layer tile mesh: type/tile/highlight are set by drawSector,
+ * sector is stamped afterwards by the window renderer (Sector.tsx) */
+type TileMesh = Mesh<BufferGeometry, MeshBasicMaterial> & {
+  userData: { type?: string; sector?: number; tile?: TerrainHex; highlight?: boolean };
+};
+
+/**
+ * Hover highlight across the whole 3x3 window: raycasts every sector's
+ * interaction meshes, then lights up the A* path from the character to the
+ * hovered tile, following it across sector borders via the unified window
+ * pathfinder. Highlight keys are `dx,dy,row,col` so tiles in different
+ * sectors' interaction groups are tracked together. Returns the new
+ * highlight-key set; clears all highlights when `active` is false or the
+ * hovered tile is blocked/unmapped.
+ */
+export const intersectWindowTiles = (info: {
   raycaster: Raycaster;
-  pathFinder: PathCalculator;
-  origin: TerrainHex;
+  interactionGroups: Group[];
+  nav: WindowNav;
+  origin: { dx: number; dy: number; col: number; row: number };
+  offsetOfSector: (sector: number) => { dx: number; dy: number } | null;
+  groupOfOffset: (dx: number, dy: number) => Group | null;
   currentHighlights: Set<string>;
+  /** False when the pointer is off the map - clear everything and stop */
+  active: boolean;
 }) => {
   const endMark = profiler.mark("intersectTiles");
-  const { group_tiles, raycaster, origin, pathFinder, currentHighlights } = info;
-  const intersects = raycaster.intersectObjects(group_tiles.children);
+  const { raycaster, interactionGroups, nav, origin, active } = info;
+  const { offsetOfSector, groupOfOffset, currentHighlights } = info;
   const newHighlights = new Set<string>();
 
-  if (intersects.length > 0 && intersects[0]) {
-    const intersected = intersects[0].object as HexagonalFaceMesh;
-    const target = intersected.userData.tile;
+  /** The interaction mesh for a tile addressed by window offset + row/col */
+  const meshAt = (dx: number, dy: number, row: number, col: number) =>
+    groupOfOffset(dx, dy)?.getObjectByName(`${row},${col}`) as TileMesh | undefined;
+  /** Toggle a tile's highlight material visibility and bookkeeping flag */
+  const setLit = (mesh: TileMesh | undefined, lit: boolean) => {
+    if (!mesh) return;
+    mesh.userData.highlight = lit;
+    mesh.material.visible = lit;
+  };
+  /** Un-light a previously highlighted tile from its "dx,dy,row,col" key */
+  const clearHighlight = (key: string) => {
+    const [dx, dy, row, col] = key.split(",").map(Number);
+    if (dx === undefined || dy === undefined || row === undefined || col === undefined)
+      return;
+    setLit(meshAt(dx, dy, row, col), false);
+  };
 
-    // PERFORMANCE OPTIMIZATION: Only recalculate path if target changed
-    if (intersected.name === lastIntersectedTileName) {
+  // Pointer off the map: clear every lit tile and stop (no raycast overhead)
+  if (!active) {
+    lastIntersectedTileName = null;
+    currentHighlights.forEach(clearHighlight);
+    endMark();
+    return newHighlights;
+  }
+
+  const intersects = raycaster.intersectObjects(interactionGroups);
+  const hit = intersects.find((i) => (i.object as TileMesh).userData?.type === "tile")
+    ?.object as TileMesh | undefined;
+
+  if (hit?.userData.tile) {
+    const target = hit.userData.tile;
+    const offset = offsetOfSector(hit.userData.sector ?? -1);
+    if (target.blocked || !offset) {
+      lastIntersectedTileName = null;
+      currentHighlights.forEach(clearHighlight);
+      endMark();
+      return newHighlights;
+    }
+    const key = `${offset.dx},${offset.dy},${target.row},${target.col}`;
+
+    // PERFORMANCE OPTIMIZATION: Only recalculate path if the tile changed
+    if (key === lastIntersectedTileName) {
       endMark();
       return currentHighlights;
     }
-    lastIntersectedTileName = intersected.name;
+    lastIntersectedTileName = key;
 
-    // Fetch the shortest path on the map using A*
-    const shortestPath = origin && pathFinder.getShortestPath(origin, target);
-    // Highlight the path
-    void shortestPath?.forEach((tile) => {
-      const mesh = group_tiles.getObjectByName(
-        `${tile.row},${tile.col}`,
-      ) as HexagonalFaceMesh;
-      if (mesh.userData.highlight === false) {
-        mesh.userData.highlight = true;
-        mesh.material.color.offsetHSL(0, 0, 0.1);
-      }
-      newHighlights.add(mesh.name);
+    const start = nav.toUnified(origin.dx, origin.dy, origin.col, origin.row);
+    const goal = nav.toUnified(offset.dx, offset.dy, target.col, target.row);
+    const path =
+      start && goal ? nav.pathFinder.getShortestPath(start, goal) : undefined;
+    void path?.forEach((unifiedTile) => {
+      const local = nav.fromUnified(unifiedTile);
+      const mesh = meshAt(local.dx, local.dy, local.row, local.col);
+      if (!mesh) return;
+      setLit(mesh, true);
+      newHighlights.add(`${local.dx},${local.dy},${local.row},${local.col}`);
     });
   } else {
     lastIntersectedTileName = null;
   }
 
-  // Remove highlights from tiles that are no longer in the path
-  currentHighlights.forEach((name) => {
-    if (!newHighlights.has(name)) {
-      const mesh = group_tiles.getObjectByName(name) as HexagonalFaceMesh;
-      mesh.userData.highlight = false;
-      mesh.material.color.setHex(mesh.userData.hex);
-    }
+  // Turn off tiles that are no longer part of the hovered path
+  currentHighlights.forEach((key) => {
+    if (!newHighlights.has(key)) clearHighlight(key);
   });
   endMark();
   return newHighlights;

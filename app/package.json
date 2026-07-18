@@ -22,6 +22,7 @@
     "migrate": "drizzle-kit migrate",
     "typecheck": "tsc --noEmit",
     "typecheck:native": "tsgo --noEmit",
+    "postinstall": "bun run scripts/ensure-map-data.ts",
     "prepare": "cd .. && husky"
   },
   "lint-staged": {
@@ -109,7 +110,6 @@
     "drizzle-zod": "^0.8.3",
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
-    "fetch-retry": "^6.0.0",
     "gifuct-js": "^2.1.2",
     "honeycomb-grid": "4.1.5",
     "html2canvas": "1.4.1",
