@@ -54,6 +54,7 @@ import {
   QuestBattleTypes,
   RANKS_RESTRICTED_FROM_PVP,
   REGEN_SECONDS,
+  SAGE_MODE_ACTIVATION_JUTSU_ID,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
   VILLAGE_SYNDICATE_ID,
@@ -78,6 +79,7 @@ import {
   questHistory,
   raidParticipation,
   rankedPvpQueue,
+  sageMode,
   sector,
   tournamentMatch,
   userData,
@@ -115,10 +117,12 @@ import {
 } from "@/libs/combat/database";
 import {
   applyEffects,
+  applySageModeAfterRoundTransition,
   checkFriendlyFire,
   consolidatePreBattleDamageModifiers,
   emptyPreBattleGearModifiers,
 } from "@/libs/combat/process";
+import { SAGE_MODE_ACTIVATION_JUTSU_FALLBACK } from "@/libs/combat/sageModeActivationJutsu";
 import { realizeTag } from "@/libs/combat/tags";
 import type {
   ActionEffect,
@@ -253,6 +257,14 @@ export const combatRouter = createTRPCRouter({
             actionRounds,
             ctx.userId,
           );
+          // A round can advance on this poll path too (idle turn timeout), not only via
+          // performAction. Run the sage exhaustion transition here as well, or it stays
+          // stranded until the next action. In-memory (no DB round-trip) and idempotent
+          // (guarded on sageModeActivated); the persist below carries the change, and the
+          // applyEffects call in the no-activity branch ticks any queued after-effects.
+          if (progressRound) {
+            applySageModeAfterRoundTransition(userBattle);
+          }
           if (changedActor) userBattle.version = userBattle.version + 1;
 
           if (!actionRounds.includes(actionRound)) {
@@ -577,7 +589,14 @@ export const combatRouter = createTRPCRouter({
         // INNER LOOP: Keep updating battle state until all actions have been performed
         while (true) {
           // Update the battle to the correct activeUserId & round. Default to current user
-          const { actor, actionRound } = alignBattle(newBattle, actionRounds, suid);
+          const {
+            actor,
+            actionRound,
+            progressRound: progressedRoundBeforeAction,
+          } = alignBattle(newBattle, actionRounds, suid);
+          if (progressedRoundBeforeAction) {
+            applySageModeAfterRoundTransition(newBattle);
+          }
           if (debug) {
             console.log(
               `============ 1. Actor: ${actor.username} - ${actor.userId} ============`,
@@ -667,6 +686,9 @@ export const combatRouter = createTRPCRouter({
             actionRounds,
             suid,
           );
+          if (progressRound) {
+            applySageModeAfterRoundTransition(newBattle);
+          }
           if (actionPerformed && progressRound) {
             const dot = description.endsWith(".");
             description += `${dot ? "" : ". "} It is now ${newActor.username}'s turn.`;
@@ -1105,6 +1127,9 @@ export const combatRouter = createTRPCRouter({
       const bloodline = user.bloodlineId
         ? userBattle.extraState.bloodlines?.[user.bloodlineId]
         : null;
+      const sageMode = user.sageModeId
+        ? userBattle.extraState.sageModes?.[user.sageModeId]
+        : null;
       const questData = userBattle.extraState.questData?.[user.controllerId];
       const aiProfile =
         user.aiProfileId && user.aiProfileId !== "Default"
@@ -1115,6 +1140,7 @@ export const combatRouter = createTRPCRouter({
       const rawUserForProcessing = {
         ...user,
         bloodline: bloodline ?? null,
+        sageMode: sageMode ?? null,
         jutsuLoadout: jId ?? user.jutsuLoadout,
         itemLoadout: iId ?? user.itemLoadout,
         jutsus: hydratedJutsus,
@@ -1162,9 +1188,11 @@ export const combatRouter = createTRPCRouter({
       userBattle.extraState.items = userBattle.extraState.items || {};
       userBattle.extraState.preBattleGearModifiers =
         userBattle.extraState.preBattleGearModifiers || {};
+      userBattle.extraState.sageModes = userBattle.extraState.sageModes || {};
       Object.assign(userBattle.extraState.jutsus, extraState.jutsus);
       Object.assign(userBattle.extraState.jutsuReskins, extraState.jutsuReskins);
       Object.assign(userBattle.extraState.items, extraState.items);
+      Object.assign(userBattle.extraState.sageModes, extraState.sageModes);
       const updatedBattleUserId = usersState[0]?.userId;
       if (updatedBattleUserId) {
         userBattle.extraState.preBattleGearModifiers[updatedBattleUserId] =
@@ -1560,6 +1588,7 @@ export const initiateBattle = async (
     client.query.userData.findMany({
       with: {
         bloodline: true,
+        sageMode: true,
         village: { with: { structures: true, sectors: { columns: { sector: true } } } },
         loadout: { columns: { jutsuIds: true } },
         clan: true,
@@ -1756,6 +1785,26 @@ export const initiateBattle = async (
   });
   // Place attackers first
   users.sort((a) => (userIds.includes(a.userId) ? -1 : 1));
+
+  // Ensure SageMode row is present when sageModeId is set (relation can be null if stale)
+  const missingSageIds = [
+    ...new Set(
+      users
+        .filter((u) => u.sageModeId && !u.sageMode)
+        .map((u) => u.sageModeId as string),
+    ),
+  ];
+  if (missingSageIds.length > 0) {
+    const sageRows = await client.query.sageMode.findMany({
+      where: inArray(sageMode.id, missingSageIds),
+    });
+    const byId = Object.fromEntries(sageRows.map((m) => [m.id, m]));
+    for (const u of users) {
+      if (!u.sageModeId || u.sageMode) continue;
+      const row = byId[u.sageModeId];
+      if (row) u.sageMode = row;
+    }
+  }
 
   // Check if the villageData is in a pvp enabled zone
   const sectorData = villages.find((v) => v.sector === sector);
@@ -2243,6 +2292,9 @@ export const initiateBattle = async (
         jutsus: {
           ...extraState.jutsus,
           ...Object.fromEntries(injectableJutsus.map((j) => [j.id, j])),
+          [SAGE_MODE_ACTIVATION_JUTSU_ID]:
+            injectableJutsus.find((j) => j.id === SAGE_MODE_ACTIVATION_JUTSU_ID) ??
+            SAGE_MODE_ACTIVATION_JUTSU_FALLBACK,
         },
         dmgConfig: dmgConfig,
         settings: settings,
@@ -2520,6 +2572,10 @@ export const processUsersForBattle = async (
       damageDealt: 0,
       initiative: 0,
       basicActions: [],
+      sageModeActivated: false,
+      sageModeActivatedRound: null,
+      sageModeExpiresRound: null,
+      sageModeUsedThisBattle: false,
       // Add default AI profile if not set
       aiProfile: inputUser.aiProfile ?? info.defaultProfile,
       // Compatibility fields for ReturnedUserState (populated later during conversion)
@@ -3049,6 +3105,7 @@ export const processUsersForBattle = async (
     const summons = await client.query.userData.findMany({
       with: {
         bloodline: true,
+        sageMode: true,
         village: true,
         items: {
           with: {
@@ -3145,6 +3202,7 @@ export const processUsersForBattle = async (
     jutsuReskins: {},
     items: {},
     bloodlines: {},
+    sageModes: {},
     villages: {},
     anbuSquads: {},
     keystoneItems: {},
@@ -3217,6 +3275,11 @@ export const processUsersForBattle = async (
       !extraState.bloodlines[user.bloodlineId]
     ) {
       extraState.bloodlines[user.bloodlineId] = user.bloodline;
+    }
+
+    // Add sage mode definition (user carries sageModeId + sageMasteryExperience on state)
+    if (user.sageMode && user.sageModeId && !extraState.sageModes[user.sageModeId]) {
+      extraState.sageModes[user.sageModeId] = user.sageMode;
     }
 
     // Add keystone item
@@ -3313,6 +3376,7 @@ export const processUsersForBattle = async (
       anbuSquad: _anbuSquad,
       clan: _clan,
       bloodline: _bloodline,
+      sageMode: _sageMode,
       userSkills: _userSkills,
       relations: _relations,
       wars: _wars,
@@ -3358,6 +3422,7 @@ export const processUsersForBattle = async (
     Object.assign(extraState.jutsuReskins, summonExtraState.jutsuReskins);
     Object.assign(extraState.items, summonExtraState.items);
     Object.assign(extraState.bloodlines, summonExtraState.bloodlines);
+    Object.assign(extraState.sageModes, summonExtraState.sageModes);
     Object.assign(extraState.villages, summonExtraState.villages);
     Object.assign(extraState.anbuSquads, summonExtraState.anbuSquads);
     Object.assign(extraState.keystoneItems, summonExtraState.keystoneItems);

@@ -24,6 +24,8 @@ import {
   NO_DURABILITY_LOSS_COMBATS,
   NonActionItemTypes,
   QuestBattleTypes,
+  SAGE_MODE_ACTIVATION_JUTSU_ID,
+  SAGE_MODE_DISABLED_BATTLES,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { BARRIER_DAMAGE_TAG_TYPES, COMBAT_SECONDS } from "@/libs/combat/constants";
@@ -65,6 +67,7 @@ import {
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
 import { calcCombatHealPercentage } from "@/libs/hospital";
+import { getSageDailyCap, getSageModeActivationCost } from "@/libs/sageMode";
 import {
   CleanseTag,
   ClearTag,
@@ -199,7 +202,20 @@ export const availableUserActions = (
               !elementalSeal.elements.some((e: ElementName) => jutsuElements.has(e))
             );
           })
-          .map((uj) => userJutsuToAction(uj, battle))
+          .map((uj) => {
+            const action = userJutsuToAction(uj, battle);
+            if (uj.jutsuId === SAGE_MODE_ACTIVATION_JUTSU_ID && user.sageModeId) {
+              const mode = battle.extraState.sageModes?.[user.sageModeId];
+              action.image = mode?.image ?? action.image;
+              // Nullish, not ||: a low per-mode cost is legitimate, and an undefined
+              // actionCostPerc would make the action free rather than fall back.
+              action.actionCostPerc = mode?.actionCostPerc ?? action.actionCostPerc;
+              // Per-mode activation line; blank/null falls back to the injected default.
+              action.battleDescription =
+                mode?.battleDescription || action.battleDescription;
+            }
+            return action;
+          })
       : []),
     ...(user?.items && !isStealth && battle
       ? user.items
@@ -229,6 +245,25 @@ export const availableUserActions = (
           .map((ui) => userItemToAction(ui, user, battle))
       : []),
   ];
+  // Surface the sage-mode Activation inline with the basic actions. It stays a
+  // jutsu-typed action (combat lookup/processing depends on that); only its list
+  // position moves — out of the jutsu tail, to the end of the basic-action region.
+  const sageActivationIdx = availableActions.findIndex(
+    (a) => a.id === SAGE_MODE_ACTIVATION_JUTSU_ID,
+  );
+  if (sageActivationIdx > -1) {
+    const [sageActivation] = availableActions.splice(sageActivationIdx, 1);
+    if (sageActivation) {
+      // Insert right after the last basic action (i.e. before the first non-basic entry)
+      // so it stays with the basics even when the user has no other jutsu/item.
+      const firstNonBasicIdx = availableActions.findIndex((a) => a.type !== "basic");
+      availableActions.splice(
+        firstNonBasicIdx === -1 ? availableActions.length : firstNonBasicIdx,
+        0,
+        sageActivation,
+      );
+    }
+  }
   // If we only have move & end turn action, also add basic attack
   // If only 'move' and 'endTurn' actions are available, also add 'basicAttack'
   if (
@@ -775,6 +810,40 @@ export const handleInjectedJutsus = (
       allInjectedJutsuIdsFromEffects.add(j.id);
       if (!userCurrentExtraJutsuIds.includes(j.id)) {
         toBeAddedJutsuPower[j.id] = e.power ?? 1;
+      }
+    }
+  }
+
+  const sageActivationId = SAGE_MODE_ACTIVATION_JUTSU_ID;
+  if (
+    user.sageModeId &&
+    !SAGE_MODE_DISABLED_BATTLES.includes(battle.battleType) &&
+    user.sageModeUsedThisBattle !== true &&
+    (user.dailySageActivations ?? 0) < getSageDailyCap(user.sageMasteryExperience) &&
+    allJutsus[sageActivationId]
+  ) {
+    // Only offer Activation when the user can pay its chakra/stamina cost. Those pool
+    // costs live on the SageMode row and are charged by the processor, so the normal
+    // action-cost pipeline can't gate them — without this check a low-pool user could
+    // select Activation, lose their action points, and get no activation. The mode's
+    // AP cost needs no check here; it rides on the action and the pipeline gates it.
+    // If the mode data is unavailable we fall back to offering it (the processor
+    // still refuses).
+    const equippedSageMode = battle.extraState.sageModes?.[user.sageModeId];
+    const canAffordActivation = equippedSageMode
+      ? (() => {
+          const { cpCost, spCost } = getSageModeActivationCost(
+            equippedSageMode,
+            user.maxChakra,
+            user.maxStamina,
+          );
+          return user.curChakra >= cpCost && user.curStamina >= spCost;
+        })()
+      : true;
+    if (canAffordActivation) {
+      allInjectedJutsuIdsFromEffects.add(sageActivationId);
+      if (!userCurrentExtraJutsuIds.includes(sageActivationId)) {
+        toBeAddedJutsuPower[sageActivationId] = 1;
       }
     }
   }

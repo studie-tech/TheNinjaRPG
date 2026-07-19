@@ -23,6 +23,7 @@ import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
 import { calcMedninRank } from "@/libs/hospital";
 import { calcLevelRequirements, showUserRank } from "@/libs/profile";
 import { getRankedRank } from "@/libs/ranked_pvp";
+import { getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -56,6 +57,8 @@ export default function Profile() {
   const newInRecruit =
     notifications?.find((n) => n.href.includes("/profile/recruit"))
       ?.notificationCount || 0;
+
+  const equippedSageMode = userData.sageMode;
 
   return (
     <>
@@ -202,11 +205,40 @@ export default function Profile() {
                 "None"
               )}
             </p>
+            <p>
+              Sage Mode:{" "}
+              {equippedSageMode ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="cursor-pointer font-bold hover:text-orange-500"
+                    >
+                      {equippedSageMode.name}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[500px] max-w-[90vw]">
+                    <ItemWithEffects item={equippedSageMode} />
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                "None"
+              )}
+            </p>
             <p>ANBU: {userData.anbuSquad?.name || "None"}</p>
             <p>
               {userData.isOutlaw ? "Faction" : "Clan"}: {userData.clan?.name || "None"}
             </p>
             <p>Medical: {capitalizeFirstLetter(calcMedninRank(userData))}</p>
+            <p>
+              Sage:{" "}
+              {capitalizeFirstLetter(
+                getSageMasteryDisplayRank(
+                  userData.sageMasteryExperience ?? 0,
+                  !!userData.sageModeId,
+                ),
+              )}
+            </p>
             <p>
               Married:{" "}
               {marriages !== undefined && marriages.length > 0

@@ -21,6 +21,7 @@ import {
   type QuestType,
   QuestTypesWithMaxAttempts,
   type RetryQuestDelay,
+  type SAGE_MASTERY_RANK,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
   SENSEI_MAX_STUDENT_LEVEL,
@@ -41,6 +42,7 @@ import {
   earlierBoundObjectivesComplete,
   isSupportedOverworldBindingTask,
 } from "@/libs/overworldAi";
+import { getSageMasteryDisplayRank, isSageRankAtLeast } from "@/libs/sageMode";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUnique } from "@/utils/grouping";
 import { randomInt } from "@/utils/math";
@@ -345,6 +347,10 @@ export const getReward = (
           rawRewards.reward_gathering_experience +=
             objective.reward_gathering_experience;
         }
+        if (objective.reward_sage_mastery_experience) {
+          rawRewards.reward_sage_mastery_experience +=
+            objective.reward_sage_mastery_experience;
+        }
         if (objective.reward_war_damage) {
           rawRewards.reward_war_damage += objective.reward_war_damage;
         }
@@ -361,7 +367,10 @@ export const getReward = (
           rawRewards.reward_items.push(...objective.reward_items);
         }
         if (objective.reward_bloodlines) {
-          rawRewards.reward_bloodlines = objective.reward_bloodlines;
+          rawRewards.reward_bloodlines.push(...objective.reward_bloodlines);
+        }
+        if (objective.reward_sage_modes) {
+          rawRewards.reward_sage_modes.push(...objective.reward_sage_modes);
         }
         if (objective.reward_rank !== "NONE") {
           rawRewards.reward_rank = objective.reward_rank;
@@ -401,6 +410,9 @@ export const getReward = (
     );
     rawRewards.reward_gathering_experience = Math.floor(
       rawRewards.reward_gathering_experience * factor,
+    );
+    rawRewards.reward_sage_mastery_experience = Math.floor(
+      rawRewards.reward_sage_mastery_experience * factor,
     );
     rawRewards.reward_seichi_silver = Math.floor(
       rawRewards.reward_seichi_silver * factor,
@@ -573,9 +585,11 @@ export const collapseRewards = (
     reward_hunting_experience: 0,
     reward_crafting_experience: 0,
     reward_gathering_experience: 0,
+    reward_sage_mastery_experience: 0,
     reward_items: [],
     reward_jutsus: [],
     reward_bloodlines: [],
+    reward_sage_modes: [],
     reward_badges: [],
     reward_rank: "NONE",
     reward_village_membership: "NONE",
@@ -628,6 +642,9 @@ export const collapseRewards = (
     if (reward.reward_gathering_experience) {
       collapsed.reward_gathering_experience += reward.reward_gathering_experience;
     }
+    if (reward.reward_sage_mastery_experience) {
+      collapsed.reward_sage_mastery_experience += reward.reward_sage_mastery_experience;
+    }
     if (reward.reward_war_damage) {
       collapsed.reward_war_damage += reward.reward_war_damage;
     }
@@ -653,11 +670,13 @@ export const collapseRewards = (
       collapsed.reward_gathering_items_ids.push(...reward.reward_gathering_items_ids);
     }
 
-    // Concatenate array rewards
-    collapsed.reward_items.push(...reward.reward_items);
-    collapsed.reward_jutsus.push(...reward.reward_jutsus);
-    collapsed.reward_bloodlines.push(...reward.reward_bloodlines);
-    collapsed.reward_badges.push(...reward.reward_badges);
+    // Concatenate array rewards (nullish-guarded: legacy JSON rows from callers that
+    // skip Zod normalization may predate a field, leaving it undefined)
+    collapsed.reward_items.push(...(reward.reward_items ?? []));
+    collapsed.reward_jutsus.push(...(reward.reward_jutsus ?? []));
+    collapsed.reward_bloodlines.push(...(reward.reward_bloodlines ?? []));
+    collapsed.reward_sage_modes.push(...(reward.reward_sage_modes ?? []));
+    collapsed.reward_badges.push(...(reward.reward_badges ?? []));
 
     // Handle rank reward (take the highest rank)
     if (reward.reward_rank !== "NONE") {
@@ -1599,6 +1618,8 @@ export const isAvailableUserQuests = (
     endsAt?: string | null;
     requiredVillage: string | null;
     requiredBloodlineId?: string | null;
+    requiredSageModeId?: string | null;
+    requiredSageRank?: SAGE_MASTERY_RANK | null;
     prerequisiteQuestId?: string | null;
     previousAttempts?: number | null;
     previousCompletes?: number | null;
@@ -1652,6 +1673,15 @@ export const isAvailableUserQuests = (
   const bloodlineCheck =
     !questAndUserQuestInfo.requiredBloodlineId ||
     questAndUserQuestInfo.requiredBloodlineId === user.bloodlineId;
+  const sageModeCheck =
+    !questAndUserQuestInfo.requiredSageModeId ||
+    questAndUserQuestInfo.requiredSageModeId === user.sageModeId;
+  const sageRankCheck =
+    !questAndUserQuestInfo.requiredSageRank ||
+    isSageRankAtLeast(
+      getSageMasteryDisplayRank(user.sageMasteryExperience, !!user.sageModeId),
+      questAndUserQuestInfo.requiredSageRank,
+    );
 
   // Medical rank check for quests that require it
   const medicalRankCheck = !reqMedRankIdx || userMedRankIdx >= reqMedRankIdx;
@@ -1710,6 +1740,8 @@ export const isAvailableUserQuests = (
     periodCapCheck &&
     villageCheck &&
     bloodlineCheck &&
+    sageModeCheck &&
+    sageRankCheck &&
     prerequisiteCheck &&
     medicalRankCheck &&
     huntingRankCheck &&
@@ -1726,6 +1758,8 @@ export const isAvailableUserQuests = (
   if (!periodCapCheck) message += "Quest limit for this period reached\n";
   if (!villageCheck) message += "Quest is not available in your village\n";
   if (!bloodlineCheck) message += "Quest requires a specific bloodline\n";
+  if (!sageModeCheck) message += "Quest requires a specific sage mode\n";
+  if (!sageRankCheck) message += "Quest requires a higher sage mastery rank\n";
   if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";
   if (!medicalRankCheck)
     message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;

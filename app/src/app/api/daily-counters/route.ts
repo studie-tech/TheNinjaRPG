@@ -37,6 +37,7 @@ export async function GET() {
       dailyWarMissions: 0,
       dailyTrainings: 0,
       dailyOverworldQuestRolls: 0,
+      dailySageActivations: 0,
       aiCalls: 0,
     });
 

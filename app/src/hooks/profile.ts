@@ -60,6 +60,10 @@ export const useUserEditForm = (
   const { data: lines, isPending: l3 } = api.bloodline.getAllNames.useQuery(undefined, {
     enabled: canEditBloodline,
   });
+  const { data: sageModes, isPending: l7 } = api.sageMode.getAllNamesForEdit.useQuery(
+    undefined,
+    { enabled: canEditBloodline },
+  );
   const selectedBloodlineId = useWatch({ control: form.control, name: "bloodlineId" });
   const { data: lineReskins } = api.bloodline.getReskinsForBloodline.useQuery(
     { bloodlineId: selectedBloodlineId || "" },
@@ -135,6 +139,14 @@ export const useUserEditForm = (
       label: "Bloodline Reskin",
       resetButton: true,
     });
+  if (canEditBloodline)
+    formData.push({
+      id: "sageModeId",
+      type: "db_values",
+      values: [{ id: "", name: "None", image: "" }].concat(sageModes ?? []),
+      label: "Sage Mode",
+      resetButton: true,
+    });
   if (canEditVillage)
     formData.push({
       id: "villageId",
@@ -171,7 +183,7 @@ export const useUserEditForm = (
     l4 ||
     (canEditJutsus ? l1 : false) ||
     (canEditItems ? l2 : false) ||
-    (canEditBloodline ? l3 : false) ||
+    (canEditBloodline ? l3 || l7 : false) ||
     (canEditVillage ? l5 : false) ||
     (canEditJutsus ? l6 : false);
 

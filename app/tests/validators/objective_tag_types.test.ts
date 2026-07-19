@@ -13,6 +13,7 @@ import { OBJECTIVE_TAG_TYPES } from "@/validators/objectives";
 const EXCLUDED_TAG_TYPES = new Set([
   // Non-combat tags
   "rollbloodline",
+  "rollsagemode",
   "noncombatconsumereward",
   "repair",
   "marriageslotincrease",

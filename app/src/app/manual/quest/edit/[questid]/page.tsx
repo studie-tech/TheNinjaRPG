@@ -209,6 +209,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
                         "reward_jutsus",
                         "reward_badges",
                         "reward_bloodlines",
+                        "reward_sage_modes",
                         "reward_rank",
                         "reward_village_membership",
                         "attackers",

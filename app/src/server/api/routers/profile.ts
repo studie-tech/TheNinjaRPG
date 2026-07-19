@@ -46,6 +46,7 @@ import type {
   Clan,
   Item,
   Quest,
+  SageMode,
   UserData,
   UserItem,
   UserJutsu,
@@ -70,6 +71,7 @@ import {
   quest,
   questHistory,
   recruitmentRewards,
+  sageMode,
   staffApplication,
   staffApplicationApproval,
   supportTicket,
@@ -1102,13 +1104,19 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const [user, target, village] = await Promise.all([
+      const [user, target, village, sageExists] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.userData.findFirst({
           where: eq(userData.userId, input.id),
           with: { jutsus: true, items: true },
         }),
         fetchVillage(ctx.drizzle, input.data?.villageId || VILLAGE_SYNDICATE_ID),
+        input.data.sageModeId
+          ? ctx.drizzle.query.sageMode.findFirst({
+              where: eq(sageMode.id, input.data.sageModeId),
+              columns: { id: true },
+            })
+          : Promise.resolve(null),
       ]);
       // Basic existence guards
       if (!village) return errorResponse("Village not found");
@@ -1148,6 +1156,14 @@ export const profileRouter = createTRPCRouter({
         input.data.bloodlineReskinId !== target.bloodlineReskinId;
       if (bloodlineReskinChanged && !canEditBloodline(user.role)) {
         return errorResponse("Not allowed to change bloodline reskin");
+      }
+
+      const sageModeChanged = input.data.sageModeId !== target.sageModeId;
+      if (sageModeChanged && !canEditBloodline(user.role)) {
+        return errorResponse("Not allowed to change sage mode");
+      }
+      if (sageModeChanged && input.data.sageModeId && !sageExists) {
+        return errorResponse("Sage Mode not found");
       }
 
       const villageChanged = village.id !== target.villageId;
@@ -1266,6 +1282,7 @@ export const profileRouter = createTRPCRouter({
             ...(bloodlineReskinChanged
               ? { bloodlineReskinId: input.data.bloodlineReskinId ?? null }
               : {}),
+            ...(sageModeChanged ? { sageModeId: input.data.sageModeId } : {}),
             ...(staffAccountChanged ? { staffAccount: input.data.staffAccount } : {}),
             ...(rankedLpChanged ? { rankedLp: input.data.rankedLp } : {}),
             ...(roleChanged ? { role: input.data.role } : {}),
@@ -1677,6 +1694,7 @@ export const profileRouter = createTRPCRouter({
             avatar: true,
             avatarLight: true,
             bloodlineId: true,
+            sageModeId: true,
             curChakra: true,
             curHealth: true,
             curStamina: true,
@@ -1715,6 +1733,7 @@ export const profileRouter = createTRPCRouter({
           with: {
             village: true,
             bloodline: true,
+            sageMode: true,
             nindo: true,
             clan: true,
             jutsus: { with: { jutsu: { columns: { id: true, name: true } } } },
@@ -2346,6 +2365,7 @@ export const fetchUpdatedUser = async (props: {
       where: eq(userData.userId, userId),
       with: {
         bloodline: true,
+        sageMode: true,
         activeReskin: true,
         clan: true,
         village: {
@@ -2964,6 +2984,7 @@ export const fetchAttributes = async (client: DrizzleClient, userId: string) => 
 export type UserWithRelations =
   | (UserData & {
       bloodline?: Bloodline | null;
+      sageMode?: SageMode | null;
       activeReskin?: BloodlineReskin | null;
       anbuSquad?: { name: string } | null;
       clan?: Clan | null;

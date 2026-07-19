@@ -10,6 +10,7 @@ import type {
   ItemRarity,
   Jutsu,
   Quest,
+  SageMode,
 } from "@/drizzle/schema";
 import Confirm2 from "@/layout/Confirm2";
 import ContentImage from "@/layout/ContentImage";
@@ -48,6 +49,7 @@ export type GenericObject = {
 export interface ItemWithEffectsProps {
   item:
     | Bloodline
+    | SageMode
     | (Item & { imbuements?: Item[]; curDurability?: number })
     | Jutsu
     | Quest
@@ -67,7 +69,8 @@ export interface ItemWithEffectsProps {
     | "quest"
     | "badge"
     | "asset"
-    | "skillTree";
+    | "skillTree"
+    | "sageMode";
   showStatistic?: "bloodline" | "item" | "jutsu" | "ai";
   showCopy?: "quest" | "ai" | "item";
   show3d?: boolean;
@@ -442,9 +445,17 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 </p>
               )}
 
-              {"level" in item && item.level !== undefined && item.level > 0 && (
+              {"level" in item &&
+                item.level !== undefined &&
+                item.level > 0 &&
+                !("requiredSageMastery" in item) && (
+                  <p>
+                    <b>Level</b>: {item.level}
+                  </p>
+                )}
+              {"requiredSageMastery" in item && item.requiredSageMastery > 0 && (
                 <p>
-                  <b>Level</b>: {item.level}
+                  <b>Lvl 2 Mastery</b>: {item.requiredSageMastery.toLocaleString()}
                 </p>
               )}
               {"regenIncrease" in item && item.regenIncrease > 0 && (

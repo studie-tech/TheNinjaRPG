@@ -40,6 +40,8 @@ export const nonCombatConsume = (item: Item, userData: UserData): boolean => {
   for (const effect of item.effects) {
     if (effect.type === "rollbloodline") {
       return true;
+    } else if (effect.type === "rollsagemode" && !userData.sageModeId) {
+      return true;
     } else if (effect.type === "removebloodline" && userData.bloodlineId) {
       return true;
     } else if (effect.type === "heal") {

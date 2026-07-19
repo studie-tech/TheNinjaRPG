@@ -680,6 +680,7 @@ export const useCheckRewards = () => {
             rewards.reward_jutsus.length > 0 ||
             rewards.reward_badges.length > 0 ||
             rewards.reward_bloodlines.length > 0 ||
+            rewards.reward_sage_modes.length > 0 ||
             rewards.reward_items.length > 0;
           // Show toast
           const message = resolved
