@@ -51,6 +51,7 @@ import {
   MEDNIN_RANKS,
   QuestTypes,
   RetryQuestDelays,
+  SAGE_MASTERY_RANKS,
 } from "@/drizzle/constants";
 import { DateTimeRegExp } from "@/utils/regex";
 import { idsWithNumberField } from "@/validators/base";
@@ -126,6 +127,7 @@ export type RaidTask = (typeof RaidTasks)[number];
 // is added).
 export const OBJECTIVE_TAG_TYPES = [
   "absorb",
+  "activatesagemode",
   "afterburn",
   "buffprevent",
   "cleanse",
@@ -658,6 +660,11 @@ export const QuestValidatorRawSchema = z.object({
   maxCompletes: z.coerce.number().min(0).max(100).prefault(1),
   requiredVillage: z.string().min(0).max(30).optional().nullish(),
   requiredBloodlineId: z.string().min(0).max(191).optional().nullish(),
+  requiredSageModeId: z.string().min(0).max(191).optional().nullish(),
+  requiredSageRank: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.enum(SAGE_MASTERY_RANKS).nullish(),
+  ),
   prerequisiteQuestId: z.string().min(0).max(191).optional().nullish(),
   tierLevel: z.coerce.number().min(0).max(100).nullable(),
   questType: z.enum(QuestTypes),

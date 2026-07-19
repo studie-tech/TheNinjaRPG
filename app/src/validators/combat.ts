@@ -18,6 +18,8 @@ import {
   MAX_ITEM_STACK_SIZE,
   MAX_STATS_CAP,
   PoolTypes,
+  SAGE_MASTERY_EXP_CAP,
+  SAGE_MODE_MAX_LEVEL,
   SHIELD_MAX_HEALTH,
   SkillTreeEntryTypes,
   SkillTreeTargets,
@@ -680,6 +682,21 @@ export const RollRandomBloodline = z.object({
   calculation: z.enum(["percentage"]).prefault("percentage"),
 });
 
+export const RollRandomSageMode = z.object({
+  ...BaseAttributes,
+  description: msg("Receive a random sage mode"),
+  power: z.coerce.number().min(0).max(100).prefault(1),
+  type: z.literal("rollsagemode").prefault("rollsagemode"),
+  calculation: z.enum(["percentage"]).prefault("percentage"),
+});
+
+/** Applies `SageMode` activation costs and `effects` from battle `extraState` for the actor. */
+export const ActivateSageModeTag = z.object({
+  ...BaseAttributes,
+  type: z.literal("activatesagemode").prefault("activatesagemode"),
+  description: msg("Enter sage mode using your equipped sage mode definition"),
+});
+
 export const NonCombatConsumeRewardTag = z.object({
   ...BaseAttributes,
   ...rewardFields,
@@ -847,6 +864,7 @@ export type UnlockItemVariantTagType = z.infer<typeof UnlockItemVariantTag>;
 /******************** */
 export const AllTags = z.union([
   AbsorbTag.prefault({}),
+  ActivateSageModeTag.prefault({}),
   AfterburnTag.prefault({}),
   BarrierTag.prefault({}),
   BuffPreventTag.prefault({}),
@@ -904,6 +922,7 @@ export const AllTags = z.union([
   RobPreventTag.prefault({}),
   RobTag.prefault({}),
   RollRandomBloodline.prefault({}),
+  RollRandomSageMode.prefault({}),
   SealPreventTag.prefault({}),
   SealTag.prefault({}),
   ShieldTag.prefault({}),
@@ -1095,6 +1114,7 @@ const SuperRefineBase = (data: ContentBaseValidatorType, ctx: z.RefinementCtx) =
  */
 const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
   const hasBloodlineRoll = data.effects.find((e) => e.type === "rollbloodline");
+  const hasSageModeRoll = data.effects.find((e) => e.type === "rollsagemode");
   const hasRemoveBloodline = data.effects.find((e) => e.type === "removebloodline");
   const hasNonCombatConsumeReward = data.effects.find(
     (e) => e.type === "noncombatconsumereward",
@@ -1126,15 +1146,15 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
       addIssue(ctx, "Non-combat consume reward must have single method");
     }
   }
-  if (hasBloodlineRoll || hasRemoveBloodline) {
+  if (hasBloodlineRoll || hasRemoveBloodline || hasSageModeRoll) {
     if (data.itemType !== "CONSUMABLE") {
-      addIssue(ctx, "Items with bloodline roll must be consumable.");
+      addIssue(ctx, "Items with bloodline/sage roll must be consumable.");
     }
     if (data.target !== "SELF") {
-      addIssue(ctx, "Items with bloodline roll must target self");
+      addIssue(ctx, "Items with bloodline/sage roll must target self");
     }
     if (data.method !== "SINGLE") {
-      addIssue(ctx, "Items with bloodline roll must have single method");
+      addIssue(ctx, "Items with bloodline/sage roll must have single method");
     }
   }
   if (hasUnlockItemVariant) {
@@ -1167,12 +1187,13 @@ const SuperRefineJutsu = (
   ctx: z.RefinementCtx,
 ) => {
   const hasBloodlineRoll = data.effects.find((e) => e.type === "rollbloodline");
+  const hasSageModeRoll = data.effects.find((e) => e.type === "rollsagemode");
   const hasRemoveBloodline = data.effects.find((e) => e.type === "removebloodline");
   const hasNonCombatConsumeReward = data.effects.find(
     (e) => e.type === "noncombatconsumereward",
   );
-  if (hasBloodlineRoll || hasRemoveBloodline) {
-    addIssue(ctx, "Cannot have bloodline add/remove effects on jutsu");
+  if (hasBloodlineRoll || hasSageModeRoll || hasRemoveBloodline) {
+    addIssue(ctx, "Cannot have bloodline/sage add/remove effects on jutsu");
   }
   if (hasNonCombatConsumeReward) {
     addIssue(ctx, "Cannot have non-combat consume reward on jutsu");
@@ -1208,6 +1229,10 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
       }
     } else if (e.type === "rollbloodline" && e.powerPerLevel > 0) {
       addIssue(ctx, "powerPerLevel must be 0 for rollbloodline effect");
+    } else if (e.type === "rollsagemode" && e.powerPerLevel > 0) {
+      addIssue(ctx, "powerPerLevel must be 0 for rollsagemode effect");
+    } else if (e.type === "activatesagemode" && e.powerPerLevel > 0) {
+      addIssue(ctx, "powerPerLevel must be 0 for activatesagemode effect");
     } else if (e.type === "removebloodline" && e.powerPerLevel > 0) {
       addIssue(ctx, "powerPerLevel must be 0 for removebloodline effect");
     } else if (e.type === "noncombatconsumereward" && e.powerPerLevel > 0) {
@@ -1316,6 +1341,30 @@ export const BloodlineValidator = z.object({
 });
 export type ZodBloodlineType = z.output<typeof BloodlineValidator>;
 export type ZodBloodlineInput = z.input<typeof BloodlineValidator>;
+
+/**
+ * SageMode Type. Used for validating a sage mode object is set up properly
+ */
+export const SageModeValidator = z.object({
+  name: z.string().trim(),
+  image: z.string(),
+  description: z.string(),
+  battleDescription: z.string().nullish(),
+  level: z.coerce.number().int().min(1).max(SAGE_MODE_MAX_LEVEL),
+  requiredSageMastery: z.coerce.number().int().min(0).max(SAGE_MASTERY_EXP_CAP),
+  activationRounds: z.coerce.number().int().min(1).max(20),
+  afterEffectRounds: z.coerce.number().int().min(0).max(20),
+  chakraCostPerc: z.coerce.number().int().min(0).max(100),
+  staminaCostPerc: z.coerce.number().int().min(0).max(100),
+  actionCostPerc: z.coerce.number().int().min(10).max(100),
+  villageId: z.string().nullable(),
+  hidden: z.coerce.boolean().optional(),
+  effects: z.array(AllTags).superRefine(SuperRefineEffects),
+  /** Applied when active sage buffs end; uses the full combat effect pipeline (instant damage/heal/drain resolve immediately). */
+  afterEffects: z.array(AllTags).superRefine(SuperRefineEffects),
+  level2Effects: z.array(AllTags).superRefine(SuperRefineEffects),
+});
+export type ZodSageModeType = z.infer<typeof SageModeValidator>;
 
 /**
  * SkillTree Type. Used for validating a skill tree object is set up properly

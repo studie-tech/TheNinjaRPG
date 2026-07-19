@@ -52,6 +52,7 @@ import {
   itemVariant,
   quest,
   questHistory,
+  sageModeRolls,
   userData,
   userItem,
   userItemImbuement,
@@ -82,6 +83,11 @@ import {
   objectiveContentIds,
   postProcessRewards,
 } from "@/libs/quest";
+import {
+  fetchItemSageModeRolls,
+  fetchSageModes,
+  filterRollableSageModes,
+} from "@/libs/sageMode";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
@@ -1269,18 +1275,27 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ userItemId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [updatedUser, useritem, allBloodlines, previousRolls, userSkills] =
-        await Promise.all([
-          fetchUpdatedUser({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            forceRegen: true,
-          }),
-          fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
-          fetchBloodlines(ctx.drizzle),
-          fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
-          fetchUserSkills(ctx.drizzle, ctx.userId),
-        ]);
+      const [
+        updatedUser,
+        useritem,
+        allBloodlines,
+        previousRolls,
+        previousSageRolls,
+        allSageModes,
+        userSkills,
+      ] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          forceRegen: true,
+        }),
+        fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
+        fetchBloodlines(ctx.drizzle),
+        fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
+        fetchItemSageModeRolls(ctx.drizzle, ctx.userId),
+        fetchSageModes(ctx.drizzle),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
+      ]);
       const { user } = updatedUser;
 
       // Guard
@@ -1310,6 +1325,7 @@ export const itemRouter = createTRPCRouter({
       const messages: string[] = [];
       const updates = {
         bloodlineId: user.bloodlineId,
+        sageModeId: user.sageModeId,
         curHealth: user.curHealth,
         curStamina: user.curStamina,
         curChakra: user.curChakra,
@@ -1336,6 +1352,9 @@ export const itemRouter = createTRPCRouter({
 
       // Calculations
       const promises: Promise<any>[] = [];
+      // Only set when THIS request rolls a new sage mode; used as the COALESCE fallback at the
+      // flush below so the snapshot write never resurrects a mode a concurrent removal cleared.
+      let grantedSageModeId: string | null = null;
       useritem.item.effects.forEach((effect) => {
         if (effect.type === "rollbloodline") {
           const bloodlinePool = filterRollableBloodlines({
@@ -1346,7 +1365,12 @@ export const itemRouter = createTRPCRouter({
           });
           data.push(bloodlinePool);
           const randomBloodline = getRandomElement(bloodlinePool);
-          if (!randomBloodline) throw serverError("NOT_FOUND", "No bloodline found");
+          if (!randomBloodline) {
+            messages.push(
+              "You search your blood for a dormant bloodline, but none stirs. ",
+            );
+            return;
+          }
           // Success?
           const roll = Math.random() * 100;
           const success = roll < effect.power;
@@ -1383,6 +1407,47 @@ export const itemRouter = createTRPCRouter({
             messages.push(`You rolled a new bloodline: ${randomBloodline.name}. `);
           } else {
             messages.push(`You rolled for a new bloodline, but none was found. `);
+          }
+        } else if (effect.type === "rollsagemode") {
+          // `updates.sageModeId` guards against a second `rollsagemode` effect on the same item
+          // clobbering a grant an earlier effect in this loop already made; `user.sageModeId`
+          // guards against overwriting a mode the player already owns.
+          if (user.sageModeId || updates.sageModeId) {
+            messages.push(
+              "You already channel a sage mode; the natural energies find no room for another. ",
+            );
+            return;
+          }
+          const sageModePool = filterRollableSageModes({
+            sageModes: allSageModes,
+            user,
+            previousRolls: previousSageRolls,
+          });
+          data.push(sageModePool);
+          const randomSageMode = getRandomElement(sageModePool);
+          if (!randomSageMode) {
+            messages.push(
+              "You reach for a new sage mode, but the natural energies reveal none to you. ",
+            );
+            return;
+          }
+          const roll = Math.random() * 100;
+          const success = roll < effect.power;
+          data.push({ roll, success });
+          if (success) {
+            promises.push(
+              ctx.drizzle.insert(sageModeRolls).values({
+                id: nanoid(),
+                userId: ctx.userId,
+                type: "ITEM",
+                sageModeId: randomSageMode.id,
+              }),
+            );
+            updates.sageModeId = randomSageMode.id;
+            grantedSageModeId = randomSageMode.id;
+            messages.push(`You rolled a new sage mode: ${randomSageMode.name}. `);
+          } else {
+            messages.push(`You rolled for a new sage mode, but none was found. `);
           }
         } else if (effect.type === "noncombatconsumereward") {
           rewards.push(ObjectiveReward.parse(effect));
@@ -1491,7 +1556,15 @@ export const itemRouter = createTRPCRouter({
           : { items: [], jutsus: [], bloodlines: [], badges: [] },
         ctx.drizzle
           .update(userData)
-          .set(updates)
+          // Grant the sage mode atomically. The COALESCE keeps the DB's current value when it is
+          // non-null so a concurrent grant (e.g. a quest reward) committing between this endpoint's
+          // read and write is not clobbered; the fallback is `grantedSageModeId` (null unless THIS
+          // request rolled a mode), so a no-grant flush leaves the column untouched and never
+          // resurrects a mode a concurrent removal cleared to null.
+          .set({
+            ...updates,
+            sageModeId: sql`COALESCE(${userData.sageModeId}, ${grantedSageModeId})`,
+          })
           .where(eq(userData.userId, ctx.userId)),
         useritem.quantity === 1
           ? ctx.drizzle

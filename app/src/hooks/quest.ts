@@ -11,6 +11,7 @@ import {
   QuestTypes,
   QuestTypesWithMaxAttempts,
   RetryQuestDelays,
+  SAGE_MASTERY_RANKS,
   STARTER_VILLAGES,
   UserRanks,
 } from "@/drizzle/constants";
@@ -82,6 +83,8 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   });
   const { data: bloodlines, isPending: l9 } =
     api.bloodline.getAllNames.useQuery(undefined);
+  const { data: sageModes, isPending: l10 } =
+    api.sageMode.getAllNames.useQuery(undefined);
 
   // Mutation for updating item
   const { mutate: updateQuest } = api.quests.update.useMutation({
@@ -143,6 +146,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
             reward_hunting_experience: data.reward_hunting_experience,
             reward_crafting_experience: data.reward_crafting_experience,
             reward_gathering_experience: data.reward_gathering_experience,
+            reward_sage_mastery_experience: data.reward_sage_mastery_experience,
             reward_tokens: data.reward_tokens,
             reward_prestige: data.reward_prestige,
             reward_reputation: data.reward_reputation,
@@ -157,6 +161,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
             reward_rank: data.reward_rank,
             reward_village_membership: data.reward_village_membership,
             reward_bloodlines: data.reward_bloodlines,
+            reward_sage_modes: data.reward_sage_modes,
             reward_war_damage: data.reward_war_damage,
             reward_war_healing: data.reward_war_healing,
           },
@@ -194,7 +199,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   };
 
   // Are we loading data
-  const loading = l1 || l2 || l3 || l4 || l5 || l6 || l7 || l8 || l9;
+  const loading = l1 || l2 || l3 || l4 || l5 || l6 || l7 || l8 || l9 || l10;
 
   // Watch for changes
   const imageUrl = useWatch({
@@ -278,6 +283,25 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     });
   }
 
+  // Add sage modes if they exist
+  if (sageModes) {
+    formData.push({
+      id: "requiredSageModeId",
+      type: "db_values",
+      values: sageModes,
+      resetButton: true,
+      label: "Required Sage Mode",
+    });
+  }
+
+  formData.push({
+    id: "requiredSageRank",
+    type: "str_array",
+    values: SAGE_MASTERY_RANKS.filter((r) => r !== "NONE"),
+    resetButton: true,
+    label: "Required Sage Rank (min mastery — INITIATE = any sage user)",
+  });
+
   formData.push({ id: "description", type: "richinput", doubleWidth: true });
   formData.push({ id: "successDescription", type: "richinput", doubleWidth: true });
 
@@ -338,6 +362,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
   formData.push({ id: "reward_hunting_experience", type: "number" });
   formData.push({ id: "reward_crafting_experience", type: "number" });
   formData.push({ id: "reward_gathering_experience", type: "number" });
+  formData.push({ id: "reward_sage_mastery_experience", type: "number" });
   formData.push({ id: "reward_war_damage", type: "number" });
   formData.push({ id: "reward_war_healing", type: "number" });
   formData.push({ id: "reward_rank", type: "str_array", values: UserRanks });
@@ -352,6 +377,16 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
       id: "reward_bloodlines",
       type: "db_values",
       values: bloodlines,
+      multiple: true,
+    });
+  }
+
+  if (sageModes) {
+    formData.push({
+      id: "reward_sage_modes",
+      type: "db_values",
+      values: sageModes,
+      multiple: true,
     });
   }
 

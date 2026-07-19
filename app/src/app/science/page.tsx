@@ -9,6 +9,7 @@ import { BloodlineStatistics } from "@/layout/BloodlineStatistics";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
+import { CurrentSageMode } from "@/layout/SageMode";
 import { useRequireInVillage } from "@/utils/UserContext";
 
 export default function Science() {
@@ -31,6 +32,7 @@ export default function Science() {
   // Derived calculations
   const hasRolled = !!prevRoll;
   const bloodlineId = userData?.bloodlineId;
+  const sageModeId = userData?.sageModeId;
 
   return (
     <>
@@ -76,6 +78,7 @@ export default function Science() {
         <CurrentBloodline bloodlineId={bloodlineId} initialBreak />
       )}
       {!isPendingBlood && hasRolled && <PurchaseBloodline initialBreak />}
+      {sageModeId && <CurrentSageMode sageModeId={sageModeId} initialBreak />}
     </>
   );
 }

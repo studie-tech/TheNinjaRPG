@@ -86,6 +86,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
 import NindoChange from "@/layout/NindoChange";
+import { CurrentSageMode } from "@/layout/SageMode";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
 import UserRequestSystem from "@/layout/UserRequestSystem";
@@ -388,6 +389,24 @@ export default function EditProfile() {
             <SwapBloodline />
           </Accordion>
         )}
+        <Accordion
+          title="Sage Mode"
+          selectedTitle={activeElement}
+          unselectedSubtitle="View or remove your sage mode"
+          selectedSubtitle={
+            userData.sageModeId
+              ? "Your awakened sage mode."
+              : "You have not awakened a sage mode yet."
+          }
+          icon={Sparkles}
+          onClick={setActiveElement}
+        >
+          {userData.sageModeId ? (
+            <CurrentSageMode sageModeId={userData.sageModeId} />
+          ) : (
+            <p className="p-3 italic">You have not awakened a sage mode yet.</p>
+          )}
+        </Accordion>
         {canSwapVillage(userData.role) && (
           <Accordion
             title="Swap Village"

@@ -49,6 +49,7 @@ import {
   rankedPvpQueue,
   rankedUserRewards,
   ryoTrade,
+  sageModeRolls,
   supportTicket,
   supportTicketActivity,
   tournament,
@@ -92,8 +93,23 @@ import {
 } from "@/libs/gamesettings";
 import { drizzleDB } from "@/server/db";
 
-export async function GET() {
+export async function GET(request: Request) {
   await cookies();
+
+  // Verify CRON_SECRET header for authentication. Vercel Cron sends this automatically
+  // (app/vercel.json schedules this route); a missing/invalid header fails closed so this
+  // wholesale, irreversible reset can't be triggered by an arbitrary caller.
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = request.headers.get("authorization");
+  if (!cronSecret) {
+    return Response.json({ error: "CRON_SECRET not configured" }, { status: 500 });
+  }
+  if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+    return Response.json(
+      { error: "Unauthorized - Invalid or missing authorization header" },
+      { status: 401 },
+    );
+  }
 
   // Environment check - only run on the MCP server at the expected domain
   const isMcpEnabled = process.env.NEXT_PUBLIC_MCP_ENABLED === "true";
@@ -172,6 +188,7 @@ const runMcpReset = async () => {
     drizzleDB.delete(userSkill),
     drizzleDB.delete(userAttribute),
     drizzleDB.delete(bloodlineRolls),
+    drizzleDB.delete(sageModeRolls),
     drizzleDB.delete(jutsuLoadout),
     drizzleDB.delete(itemLoadout),
     drizzleDB.delete(rankedLoadout),
@@ -274,6 +291,8 @@ const runMcpReset = async () => {
     rank: "STUDENT",
     bloodlineId: null,
     bloodlineReskinId: null,
+    sageModeId: null,
+    sageMasteryExperience: 0,
     villageId: null,
     clanId: null,
     anbuId: null,
@@ -324,6 +343,7 @@ const runMcpReset = async () => {
     dailyMedicalMissions: 0,
     dailyPvpMissions: 0,
     dailyTrainings: 0,
+    dailySageActivations: 0,
     pvpActivity: 0,
     pvpFights: 0,
     pveFights: 0,

@@ -714,6 +714,23 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               )}
             </p>
             <p>
+              Sage Mode:{" "}
+              {profile.sageMode ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <span className="cursor-pointer font-bold hover:text-orange-500">
+                      {profile.sageMode.name}
+                    </span>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[500px] max-w-[90vw]">
+                    <ItemWithEffects item={profile.sageMode} />
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                "None"
+              )}
+            </p>
+            <p>
               Sensei:{" "}
               {profile.rank === "GENIN" && profile.senseiId && profile.sensei ? (
                 <Link

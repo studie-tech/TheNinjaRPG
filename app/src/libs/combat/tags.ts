@@ -1218,6 +1218,8 @@ const persistentEffectSourceTypes = new Set<UserEffect["fromType"]>([
   "skill",
   "ranked",
   "village",
+  "sageMode",
+  "sageModeAfter",
 ]);
 
 export const clear = (

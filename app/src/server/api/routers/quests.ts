@@ -25,6 +25,7 @@ import {
   PVP_MISSIONS_PER_DAY,
   QUESTS_CONCURRENT_LIMIT,
   QuestTypes,
+  SAGE_MASTERY_EXP_CAP,
   SENSEI_STUDENT_RYO_PER_MISSION,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
   TUTORIAL_STARTER_QUEST_ID,
@@ -49,6 +50,8 @@ import {
   raidDamageThreshold,
   raidParticipation,
   recruitmentRewards,
+  sageMode,
+  sageModeRolls,
   userBadge,
   userData,
   userItem,
@@ -80,6 +83,7 @@ import {
   isAvailableUserQuests,
   verifyQuestContentForSave,
 } from "@/libs/quest";
+import { getSageMasteryDisplayRank, sageRanksAtOrBelow } from "@/libs/sageMode";
 import { callDiscordContent } from "@/libs/socials";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
 import { extendWarParticipantSql } from "@/libs/war";
@@ -154,6 +158,7 @@ export const questsRouter = createTRPCRouter({
           ...(input?.rank ? [eq(quest.questRank, input.rank)] : []),
           ...(input?.village ? [eq(quest.requiredVillage, input.village)] : []),
           ...(input?.bloodline ? [eq(quest.requiredBloodlineId, input.bloodline)] : []),
+          ...(input?.sageMode ? [eq(quest.requiredSageModeId, input.sageMode)] : []),
           ...(input?.userLevel
             ? [
                 gte(quest.maxLevel, input.userLevel),
@@ -415,6 +420,22 @@ export const questsRouter = createTRPCRouter({
               or(
                 isNull(quest.requiredBloodlineId),
                 eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
+              ),
+              or(
+                isNull(quest.requiredSageModeId),
+                eq(quest.requiredSageModeId, user.sageModeId ?? ""),
+              ),
+              or(
+                isNull(quest.requiredSageRank),
+                inArray(
+                  quest.requiredSageRank,
+                  sageRanksAtOrBelow(
+                    getSageMasteryDisplayRank(
+                      user.sageMasteryExperience,
+                      !!user.sageModeId,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -839,6 +860,7 @@ export const questsRouter = createTRPCRouter({
               reward_hunting_experience: 0,
               reward_crafting_experience: 0,
               reward_gathering_experience: 0,
+              reward_sage_mastery_experience: 0,
               reward_seichi_silver: 0,
               reward_money: 0,
               reward_clanpoints: 0,
@@ -850,6 +872,7 @@ export const questsRouter = createTRPCRouter({
               reward_skillpoints: 0,
               reward_jutsus: [],
               reward_bloodlines: [],
+              reward_sage_modes: [],
               reward_badges: [],
               reward_items: [],
               reward_rank: "NONE",
@@ -1334,6 +1357,7 @@ export const updateRewards = async (info: {
     bloodlines,
     badges,
     activeWars,
+    sageModes,
   ] = await Promise.all([
     // Fetch villages if needed
     rewards.reward_village_membership !== "NONE"
@@ -1416,6 +1440,25 @@ export const updateRewards = async (info: {
     hasWarRewards && user.villageId
       ? fetchActiveWars(client, user.villageId)
       : undefined,
+    // Fetch not-yet-owned candidate sage modes for reward_sage_modes (dedup at fetch)
+    (rewards.reward_sage_modes?.length ?? 0) > 0 && !user.sageModeId
+      ? client
+          .select({ id: sageMode.id })
+          .from(sageMode)
+          .leftJoin(
+            sageModeRolls,
+            and(
+              eq(sageMode.id, sageModeRolls.sageModeId),
+              eq(sageModeRolls.userId, user.userId),
+            ),
+          )
+          .where(
+            and(
+              inArray(sageMode.id, rewards.reward_sage_modes),
+              isNull(sageModeRolls.userId),
+            ),
+          )
+      : [],
   ]);
 
   // If we are rewarding hunter items, only select based on hunter rank
@@ -1483,7 +1526,14 @@ export const updateRewards = async (info: {
   const getNewVillage = rewards.reward_village_membership !== "NONE";
 
   // Cap medical experience at 4 million (atomic increment + cap in SQL so parallel reward grants stack).
-  // Skillpoints similarly capped in SQL.
+  // Skillpoints and sage mastery similarly capped in SQL.
+
+  // Roll ONE not-yet-owned candidate sage mode (if any). It is recorded into the player's
+  // history below; additionally auto-equip it only when the player currently has no sage
+  // mode. COALESCE is atomic per-row, so a concurrent grant cannot double-equip or clobber,
+  // and it cannot throw and abort the rest of this reward grant.
+  const rolledSageMode = sageModes.length > 0 ? getRandomElement(sageModes) : undefined;
+
   const updatedUserData: Record<string, unknown> = {
     questData: user.questData,
     money: sql`${userData.money} + ${rewards.reward_money ?? 0}`,
@@ -1497,8 +1547,12 @@ export const updateRewards = async (info: {
     huntingExperience: sql`${userData.huntingExperience} + ${rewards.reward_hunting_experience ?? 0}`,
     craftingExperience: sql`${userData.craftingExperience} + ${rewards.reward_crafting_experience ?? 0}`,
     gatheringExperience: sql`${userData.gatheringExperience} + ${rewards.reward_gathering_experience ?? 0}`,
+    sageMasteryExperience: sql`LEAST(${userData.sageMasteryExperience} + ${rewards.reward_sage_mastery_experience ?? 0}, ${SAGE_MASTERY_EXP_CAP})`,
     rank: getNewRank ? rewards.reward_rank : user.rank,
     villageId: getNewVillage && villageData ? villageData.id : user.villageId,
+    ...(rolledSageMode
+      ? { sageModeId: sql`COALESCE(${userData.sageModeId}, ${rolledSageMode.id})` }
+      : {}),
   };
   if (questCounterField) {
     updatedUserData.questFinishAt = new Date();
@@ -1605,6 +1659,16 @@ export const updateRewards = async (info: {
           ),
         ),
     ],
+    // Record the not-yet-owned candidate into history (dedup for future quest grants);
+    // it auto-equips below only when the player currently has no sage mode.
+    rolledSageMode
+      ? client.insert(sageModeRolls).values({
+          id: nanoid(),
+          userId: user.userId,
+          type: "QUEST",
+          sageModeId: rolledSageMode.id,
+        })
+      : undefined,
     // Insert items with quantity
     ...[
       itemsToInsert.length > 0 &&
@@ -1780,6 +1844,19 @@ export const fetchUncompletedQuests = async (
         or(
           isNull(quest.requiredBloodlineId),
           eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
+        ),
+        or(
+          isNull(quest.requiredSageModeId),
+          eq(quest.requiredSageModeId, user.sageModeId ?? ""),
+        ),
+        or(
+          isNull(quest.requiredSageRank),
+          inArray(
+            quest.requiredSageRank,
+            sageRanksAtOrBelow(
+              getSageMasteryDisplayRank(user.sageMasteryExperience, !!user.sageModeId),
+            ),
+          ),
         ),
       ),
     )

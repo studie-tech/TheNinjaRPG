@@ -85,6 +85,7 @@ export const ContentTypes = [
   "mapAsset",
   "mapTerrain",
   "quest",
+  "sageMode",
   "user",
   "skillTree",
   "towerDefenseCharacter",
@@ -970,6 +971,48 @@ export const BLOODLINE_SWAP_FREE_AMOUNT = 0;
 export const BLOODLINE_SWAP_FREE_NORMAL = 0;
 export const BLOODLINE_SWAP_FREE_SILVER = 0;
 export const BLOODLINE_SWAP_FREE_GOLD = 1;
+
+// Sage Mode config
+export const SAGE_MODE_ROLL_TYPES = ["ITEM", "QUEST"] as const;
+export const SAGE_MODE_MAX_LEVEL = 2;
+
+// Sage Mastery ranks
+export const SAGE_MASTERY_RANKS = [
+  "NONE",
+  "INITIATE",
+  "ADEPT",
+  "MASTER",
+  "LEGENDARY",
+] as const;
+export type SAGE_MASTERY_RANK = (typeof SAGE_MASTERY_RANKS)[number];
+
+export const SAGE_MASTERY_REQUIRED_EXP: Record<SAGE_MASTERY_RANK, number> = {
+  NONE: 0,
+  INITIATE: 0,
+  ADEPT: 150000,
+  MASTER: 250000,
+  LEGENDARY: 450000,
+};
+export const SAGE_MASTERY_EXP_CAP = 450_000; // matches the LEGENDARY threshold / stat maximum
+
+export const SAGE_MASTERY_DAILY_ACTIVATIONS: Record<SAGE_MASTERY_RANK, number> = {
+  NONE: 10,
+  INITIATE: 10,
+  ADEPT: 12,
+  MASTER: 15,
+  LEGENDARY: 20,
+};
+
+// Battle types where sage mode is NOT allowed
+export const SAGE_MODE_DISABLED_BATTLES: BattleType[] = ["RANKED_PVP", "RANKED_SPARRING"];
+
+/** Injectable jutsu that runs sage-mode activation (costs + effects come from `SageMode` row). */
+export const SAGE_MODE_ACTIVATION_JUTSU_ID = "cmj8sagemodeactivatejutsu000000";
+
+export const SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE = "%user enters sage mode!";
+
+/** AP cost % of the Activation action when a mode defines no value of its own. */
+export const SAGE_MODE_DEFAULT_ACTION_COST_PERC = 80;
 
 // Skill tree config
 export const SKILL_TREE_RESET_FREE_NORMAL = 0;
@@ -2042,6 +2085,8 @@ export const IMG_MANUAL_TRAVEL =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu1h1uHCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 export const IMG_MANUAL_BLOODLINE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaCMo8gYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk.webp";
+export const IMG_MANUAL_SAGE_MODE =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJunUUX2bCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8";
 export const IMG_MANUAL_JUTSU =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMI7fE4tsO4cexqW2RDgkE3zZbNXSFGitmnar.webp";
 export const IMG_MANUAL_JUTSU_RESKINS =
@@ -2790,6 +2835,8 @@ export const TRANSFER_EXCLUDED_SOURCE_TYPES: ReadonlySet<string> = new Set([
   "village",
   "skill",
   "ranked",
+  "sageMode",
+  "sageModeAfter",
 ]);
 
 /**
