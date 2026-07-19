@@ -51,8 +51,8 @@ export const sageModeRouter = createTRPCRouter({
   getAll: publicProcedure
     .input(
       sageModeFilteringSchema.extend({
-        cursor: z.number().nullish(),
-        limit: z.number().min(1).max(500),
+        cursor: z.number().int().nonnegative().nullish(),
+        limit: z.number().int().min(1).max(500),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -315,7 +315,7 @@ export const sageModeDatabaseFilter = (
     ...(allowHiddenFilter
       ? input?.hidden !== undefined
         ? [eq(sageMode.hidden, input.hidden)]
-        : [eq(sageMode.hidden, false)]
+        : [] // "All Visibility" (default tri-state) — staff see both hidden and visible
       : [eq(sageMode.hidden, false)]),
   ];
 };
