@@ -6,7 +6,7 @@ import {
   MIRROR_MAX_TAGS,
   MIRROR_PRIORITY_RANK,
   TRANSFER_EXCLUDED_SOURCE_TYPES,
-} from "@/libs/combat/constants";
+} from "@/drizzle/constants";
 
 describe("copy/mirror priority constants", () => {
   it("caps are both 4", () => {
@@ -374,8 +374,8 @@ describe("mirror tag: ceiling + priority + wound", () => {
     expect(mirrored.map((e) => e.type)).toContain("wound");
   });
 
-  it("halves drain power when mirrored", () => {
-    // Halving divisor is the MIRROR TAG's rounds (mirrorTag() => rounds 3), NOT the
+  it("scales mirrored drain power down by the mirror tag's duration", () => {
+    // The divisor is the MIRROR TAG's rounds (mirrorTag() => rounds 3), NOT the
     // source drain's rounds. So the source's own rounds value is irrelevant here.
     const effects: UserEffect[] = [selfDebuff("drain", 40)];
     mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
