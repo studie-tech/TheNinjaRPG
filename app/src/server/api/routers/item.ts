@@ -1416,15 +1416,17 @@ export const itemRouter = createTRPCRouter({
       mcp: {
         enabled: true,
         description:
-          "Merge all mergeable item stacks in carried inventory (excludes home storage)",
+          "Merge all mergeable item stacks in carried inventory (storedAtHome=false) or home storage (storedAtHome=true)",
       },
     })
+    .input(z.object({ storedAtHome: z.boolean().optional() }).optional())
     .output(baseServerResponse)
-    .mutation(async ({ ctx }) => {
+    .mutation(async ({ ctx, input }) => {
+      const storedAtHome = input?.storedAtHome ?? false;
       const userItemsAll = await ctx.drizzle.query.userItem.findMany({
         where: and(
           eq(userItem.userId, ctx.userId),
-          eq(userItem.storedAtHome, false),
+          eq(userItem.storedAtHome, storedAtHome),
           eq(userItem.isInAuction, false),
           or(
             isNull(userItem.craftingFinishedAt),
@@ -3475,12 +3477,13 @@ async function executeMergeStacksForItemBucket(
  * Merge stacks for one item type (`mergeStacks`, `mergeAllStacks`).
  *
  * **Carried inventory:** Without `preloaded`, the query uses `storedAtHome === false` only.
- * Home storage is not merged here; players move items to carried first.
+ * Use `mergeAllStacks({ storedAtHome: true })` with preloaded home rows to merge storage.
  *
  * **Buckets:** Each `(storedAtHome, equipped)` group merges separately so equipped and
  * backpack rows are never consolidated into one row.
  *
- * **mergeAllStacks** passes `preloaded` rows already limited to carried, non-auction stacks.
+ * **mergeAllStacks** passes `preloaded` rows already limited to the requested scope
+ * (carried or home), non-auction stacks.
  */
 async function executeMergeStacksForItem(
   drizzle: DrizzleClient,
