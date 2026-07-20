@@ -24,95 +24,95 @@ export const DECORATION_ASSETS: DecorationAsset[] = [
   {
     key: "grass.tuft",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJa55Vc5YYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJa55Vc5YYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk.webp",
     windAffected: true,
     small: true,
   },
   {
     key: "grass.sprout",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlvcZlIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlvcZlIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU.webp",
     windAffected: true,
     small: true,
   },
   {
     key: "grass.flower",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcpFFdRSnxBpQqGNDcTHbLmYz8uXAl3oa54ti",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcpFFdRSnxBpQqGNDcTHbLmYz8uXAl3oa54ti.webp",
     windAffected: true,
     small: true,
   },
   {
     key: "grass.pebble",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxfrF3oWZsq9k0Von5rUfP6OgQ2TyptCKHS4u",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxfrF3oWZsq9k0Von5rUfP6OgQ2TyptCKHS4u.webp",
     small: true,
   },
   {
     key: "tree.green.round",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJndYwvrmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJndYwvrmojJ0EqeDCvBrNmZaXVdY97gSpOWiA.webp",
     windAffected: true,
   },
   {
     key: "tree.green.tall",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvFn4sIEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvFn4sIEmSnXwslYEpV1yOeNL8gMtqhjPdf36.webp",
     windAffected: true,
   },
   {
     key: "tree.green.wide",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHl8NCiQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHl8NCiQvYURJhgs76VZtf9wxpMa13Cq0iOnr.webp",
     windAffected: true,
   },
   {
     key: "cactus.saguaro",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJe0aIBjyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJe0aIBjyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp",
     windAffected: true,
   },
   {
     key: "cactus.barrel",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7vgcu3XKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7vgcu3XKPBOUWGyFuM4DlL1v5HNTZhkte0z6.webp",
     windAffected: true,
   },
   {
     key: "cactus.cluster",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvmatJJEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvmatJJEmSnXwslYEpV1yOeNL8gMtqhjPdf36.webp",
     windAffected: true,
   },
   {
     key: "rock.sand",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQlUKaJVjhzBPya1rwfCIqOTU0cV5xgsMeo3u",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQlUKaJVjhzBPya1rwfCIqOTU0cV5xgsMeo3u.webp",
     small: true,
   },
   {
     key: "rock.grey",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzLLsgkemvaQu94EYJs8HpxVzofny6iPtbgCZ",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzLLsgkemvaQu94EYJs8HpxVzofny6iPtbgCZ.webp",
     small: true,
   },
   {
     key: "rock.slate",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJylERmDukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJylERmDukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.webp",
     small: true,
   },
   {
     key: "ice.floe",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzJ76QEemvaQu94EYJs8HpxVzofny6iPtbgCZ",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzJ76QEemvaQu94EYJs8HpxVzofny6iPtbgCZ.webp",
     small: true,
     randomRotation: true,
   },
   {
     key: "tree.snow.pine",
     filepath:
-      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrtEwSR2huJPmdY8zI2ptZXAoEj1c6BMKvrQO",
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrtEwSR2huJPmdY8zI2ptZXAoEj1c6BMKvrQO.webp",
     windAffected: true,
   },
 ];

@@ -805,11 +805,11 @@ export type SentimentType = (typeof Sentiment)[number];
 
 // Starter quest used for recruitment analytics
 export const IMG_URL_ASSISTANT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrCz0dVhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx" as const;
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrCz0dVhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx.webp" as const;
 export const IMG_URL_ASSISTANT_2 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIG7HmDxfOewksxBoS1HQCihpL7c42Ky9uUFv" as const;
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIG7HmDxfOewksxBoS1HQCihpL7c42Ky9uUFv.webp" as const;
 export const IMG_URL_HANDPOINTER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIvN7gkJxfOewksxBoS1HQCihpL7c42Ky9uUF" as const;
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIvN7gkJxfOewksxBoS1HQCihpL7c42Ky9uUF.webp" as const;
 export const TUTORIAL_JUTSU_ID = "clh4d6pxd0006tb0h4y1yudi5";
 export const TUTORIAL_ITEM_ID = "VOditPJ3X2id0yC-F5Kz3";
 export const TUTORIAL_STARTER_QUEST_ID = "eYDVpL63vPhK3lywMexdv";
@@ -1378,7 +1378,7 @@ export const WAR_RECAPTURE_THRESHOLD = 0.25; // Threshold for recapture (25% of 
 export const SHRINE_STATUSES = ["ACTIVE", "CAPTURED"] as const; // Status tracking for shrine capture/recovery cycles
 export type ShrineStatus = (typeof SHRINE_STATUSES)[number];
 export const WAR_SHRINE_IMAGE =
-  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxtEfghWZsq9k0Von5rUfP6OgQ2TyptCKHS4u";
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxtEfghWZsq9k0Von5rUfP6OgQ2TyptCKHS4u.webp";
 /**
  * Sector-map shrine sprite per sector biome, so the shrine's baked ground
  * patch matches the terrain it stands on (water sectors use the desert
@@ -1386,12 +1386,12 @@ export const WAR_SHRINE_IMAGE =
  */
 export const WAR_SHRINE_IMAGE_BY_BIOME: Record<CombatBiome, string> = {
   ocean:
-    "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJe7TE7RyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
+    "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJe7TE7RyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp",
   ground: WAR_SHRINE_IMAGE,
   dessert:
-    "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJe7TE7RyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
-  ice: "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJco2C06SnxBpQqGNDcTHbLmYz8uXAl3oa54ti",
-  snow: "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJco2C06SnxBpQqGNDcTHbLmYz8uXAl3oa54ti",
+    "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJe7TE7RyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp",
+  ice: "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJco2C06SnxBpQqGNDcTHbLmYz8uXAl3oa54ti.webp",
+  snow: "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJco2C06SnxBpQqGNDcTHbLmYz8uXAl3oa54ti.webp",
   arena: WAR_SHRINE_IMAGE,
   default: WAR_SHRINE_IMAGE,
 };
@@ -1755,151 +1755,151 @@ export const DRACO_ENCODER_URL =
 
 // Biome backgrounds
 export const IMG_BG_OCEAN =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIo4wHixfOewksxBoS1HQCihpL7c42Ky9uUFv";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIo4wHixfOewksxBoS1HQCihpL7c42Ky9uUFv.webp";
 export const IMG_BG_GROUND =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEJszlXPLfKL5D7TAFe29bymSaPCIQ846MdzG";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEJszlXPLfKL5D7TAFe29bymSaPCIQ846MdzG.webp";
 export const IMG_BG_DESSERT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQHU9dvmojJ0EqeDCvBrNmZaXVdY97gSpOWi";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQHU9dvmojJ0EqeDCvBrNmZaXVdY97gSpOWi.webp";
 export const IMG_BG_ICE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRXmgug0udmODoNtpa0FMcwI4k2Eq7nJhyvjl";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRXmgug0udmODoNtpa0FMcwI4k2Eq7nJhyvjl.webp";
 export const IMG_BG_SNOW =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVWyAP1F2veAXohUuE59nTQHRJIYjtiG18aF4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVWyAP1F2veAXohUuE59nTQHRJIYjtiG18aF4.webp";
 export const IMG_BG_DIRT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJob2ojkZ9MPZpHJ7VliuEWDfATdxhv62SXnm4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJob2ojkZ9MPZpHJ7VliuEWDfATdxhv62SXnm4.webp";
 
 // Images
 export const IMG_PLAY_STORE_BANNER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyI5pULukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyI5pULukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.png";
 export const IMG_APP_STORE_BANNER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZOcwIVUaYQrBIUTu69nkMxWmS4ah0O7LVCp8";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZOcwIVUaYQrBIUTu69nkMxWmS4ah0O7LVCp8.png";
 export const IMG_DEFAULT_PROFILE_PICTURE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ19UqON6bo95WClq4K0wxZUmJcvThgdVenO3P";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ19UqON6bo95WClq4K0wxZUmJcvThgdVenO3P.webp";
 export const IMG_OCCUPATION_GATHERING =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJePgzrqyV3OvUJQExAi0bGoIZDF74LqSnHRdp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJePgzrqyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp";
 export const IMG_OCCUPATION_HUNTER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2xooNenMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2xooNenMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8.webp";
 export const IMG_OCCUPATION_CRAFTING =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7YhkcAXKPBOUWGyFuM4DlL1v5HNTZhkte0z6";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7YhkcAXKPBOUWGyFuM4DlL1v5HNTZhkte0z6.webp";
 
 // Marketing constants
 export const TOTAL_PLAYERS_MILESTONE = 1000000;
 
 export const IMG_FRONTPAGE_SCREENSHOT_COMBAT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJliyD90rWYxAsuC7ofQn9pM45OD0ERqkdBXJU";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJliyD90rWYxAsuC7ofQn9pM45OD0ERqkdBXJU.webp";
 export const IMG_FRONTPAGE_SCREENSHOT_JUTSUS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyD4wioukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyD4wioukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.webp";
 export const IMG_FRONTPAGE_SCREENSHOT_GLOBAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeCMiuXvyV3OvUJQExAi0bGoIZDF74LqSnHRd";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeCMiuXvyV3OvUJQExAi0bGoIZDF74LqSnHRd.webp";
 export const IMG_FRONTPAGE_SCREENSHOT_SECTOR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYfcD9oOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYfcD9oOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d.webp";
 export const IMG_FRONTPAGE_SCREENSHOT_VILLAGE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuU9cvZemvaQu94EYJs8HpxVzofny6iPtbgC";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuU9cvZemvaQu94EYJs8HpxVzofny6iPtbgC.webp";
 
 export const IMG_FRONTPAGE_SCREENSHOT_COMBAT_HR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhuLmX5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhuLmX5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM.webp";
 export const IMG_FRONTPAGE_SCREENSHOT_JUTSUS_HR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAaVOt2SoZUC4muiGcQNzjfEndY5y1w20B8hT";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAaVOt2SoZUC4muiGcQNzjfEndY5y1w20B8hT.webp";
 export const IMG_FRONTPAGE_SCREENSHOT_GLOBAL_HR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvSzUp4EmSnXwslYEpV1yOeNL8gMtqhjPdf36";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvSzUp4EmSnXwslYEpV1yOeNL8gMtqhjPdf36.webp";
 export const IMG_FRONTPAGE_SCREENSHOT_SECTOR_HR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXMBBarqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXMBBarqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv.webp";
 export const IMG_FRONTPAGE_SCREENSHOT_VILLAGE_HR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRmBtUg0udmODoNtpa0FMcwI4k2Eq7nJhyvjl";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRmBtUg0udmODoNtpa0FMcwI4k2Eq7nJhyvjl.webp";
 
 export const IMG_REGISTRATIN_STEP1 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeKNAEEyV3OvUJQExAi0bGoIZDF74LqSnHRdp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeKNAEEyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp";
 export const IMG_REGISTRATIN_STEP2 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTOMd6Y5IU29dZYJPoOKSh5vmlqatMub3EigH";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTOMd6Y5IU29dZYJPoOKSh5vmlqatMub3EigH.webp";
 export const IMG_REGISTRATIN_STEP3 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZlINOXaYQrBIUTu69nkMxWmS4ah0O7LVCp8b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZlINOXaYQrBIUTu69nkMxWmS4ah0O7LVCp8b.webp";
 export const IMG_REGISTRATIN_STEP4 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqppFvGcdkOZgJQ8mGRcdx3SsWvPelyYFTt5V";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqppFvGcdkOZgJQ8mGRcdx3SsWvPelyYFTt5V.webp";
 export const IMG_REGISTRATIN_STEP5 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ56sDpz797jl4ubX8xrRqTZasyMp2WA5eLGUP";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ56sDpz797jl4ubX8xrRqTZasyMp2WA5eLGUP.webp";
 export const IMG_REGISTRATIN_STEP6 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwm1XDCT2j854CWbaITZyegfXimvd7s16cO0h";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwm1XDCT2j854CWbaITZyegfXimvd7s16cO0h.webp";
 export const IMG_REGISTRATIN_STEP7 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQU7pvzjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQU7pvzjhzBPya1rwfCIqOTU0cV5xgsMeo3u2.webp";
 export const IMG_REGISTRATIN_STEP8 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8B9jC0rkkp45TvAnoIBa0rtCf1lbyXYjVKQ2";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8B9jC0rkkp45TvAnoIBa0rtCf1lbyXYjVKQ2.webp";
 export const IMG_REGISTRATIN_STEP9 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnjHXr3mojJ0EqeDCvBrNmZaXVdY97gSpOWiA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnjHXr3mojJ0EqeDCvBrNmZaXVdY97gSpOWiA.webp";
 
 export const IMG_SCENE_SCROLL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRceTKeq0udmODoNtpa0FMcwI4k2Eq7nJhyvj";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRceTKeq0udmODoNtpa0FMcwI4k2Eq7nJhyvj.webp";
 export const IMG_SCENE_BACKGROUND =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1HAqWl6bo95WClq4K0wxZUmJcvThgdVenO3P";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1HAqWl6bo95WClq4K0wxZUmJcvThgdVenO3P.webp";
 export const IMG_SCENE_CHARACTER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF08NAw3G2iOewJtjGzvNcmEX3TBnoSfMDZPH";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF08NAw3G2iOewJtjGzvNcmEX3TBnoSfMDZPH.webp";
 
 export const IMG_BADGE_RESET_QUEST =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeCQbfYiyV3OvUJQExAi0bGoIZDF74LqSnHRd";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeCQbfYiyV3OvUJQExAi0bGoIZDF74LqSnHRd.webp";
 export const IMG_BADGE_FAIL_QUEST =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuFEUH7CyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuFEUH7CyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 export const IMG_BADGE_WIN_QUEST =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnk99IbmojJ0EqeDCvBrNmZaXVdY97gSpOWiA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnk99IbmojJ0EqeDCvBrNmZaXVdY97gSpOWiA.webp";
 export const IMG_BADGE_NEW_QUEST =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJneJSZsmojJ0EqeDCvBrNmZaXVdY97gSpOWiA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJneJSZsmojJ0EqeDCvBrNmZaXVdY97gSpOWiA.webp";
 export const IMG_BADGE_START_BATTLE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqZXK1HdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqZXK1HdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn.webp";
 export const IMG_BADGE_DIALOG =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpIn7vsbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpIn7vsbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D.webp";
 export const IMG_BADGE_RANDOM_ENCOUNTER_WINS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqyp2N4dkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqyp2N4dkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn.webp";
 export const IMG_BADGE_PVPKILLS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyPU0OdukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyPU0OdukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.webp";
 export const IMG_BADGE_ARENAKILLS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZXqeTaYQrBIUTu69nkMxWmS4ah0O7LVCp8bz";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZXqeTaYQrBIUTu69nkMxWmS4ah0O7LVCp8bz.webp";
 export const IMG_BADGE_MINUTES_PASSED =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmrv4YU26OYrIJuNP1pvSyz29edFtKbngjRc";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmrv4YU26OYrIJuNP1pvSyz29edFtKbngjRc.webp";
 export const IMG_BADGE_ERRANDS_TOTAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFkFklPG2iOewJtjGzvNcmEX3TBnoSfMDZPH4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFkFklPG2iOewJtjGzvNcmEX3TBnoSfMDZPH4.webp";
 export const IMG_BADGE_D_MISSION_TOTAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuD6udtCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuD6udtCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 export const IMG_BADGE_C_MISSION_TOTAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJGudreBRfoVrha0LP4mAS5KM7wtiZbUNXJxdC";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJGudreBRfoVrha0LP4mAS5KM7wtiZbUNXJxdC.webp";
 export const IMG_BADGE_B_MISSION_TOTAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2Uv1s5ukVH2MI5Lo4ehEfAXvZdcmtWqPg7r";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2Uv1s5ukVH2MI5Lo4ehEfAXvZdcmtWqPg7r.webp";
 export const IMG_BADGE_A_MISSION_TOTAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEJpK3acLfKL5D7TAFe29bymSaPCIQ846MdzG";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEJpK3acLfKL5D7TAFe29bymSaPCIQ846MdzG.webp";
 export const IMG_BADGE_D_CRIME_TOTAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDyHMWFlzEwoh0WXMnscL279N8ayVQUCbRzS3";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDyHMWFlzEwoh0WXMnscL279N8ayVQUCbRzS3.webp";
 export const IMG_BADGE_C_CRIME_TOTAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnJ43OQmojJ0EqeDCvBrNmZaXVdY97gSpOWiA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnJ43OQmojJ0EqeDCvBrNmZaXVdY97gSpOWiA.webp";
 export const IMG_BADGE_B_CRIME_TOTAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHS8H1zQvYURJhgs76VZtf9wxpMa13Cq0iOnr";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHS8H1zQvYURJhgs76VZtf9wxpMa13Cq0iOnr.webp";
 export const IMG_BADGE_A_CRIME_TOTAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQ6PtAxjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQ6PtAxjhzBPya1rwfCIqOTU0cV5xgsMeo3u2.webp";
 export const IMG_BADGE_MINUTES_TRAINING =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZSRGyZAtYUndMi56GkX19q0A4PzyeIloBrE";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZSRGyZAtYUndMi56GkX19q0A4PzyeIloBrE.webp";
 export const IMG_BADGE_JUTSUS_MASTERED =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDyHTMUuzEwoh0WXMnscL279N8ayVQUCbRzS3";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDyHTMUuzEwoh0WXMnscL279N8ayVQUCbRzS3.webp";
 export const IMG_BADGE_STATS_TRAINED =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVNQSNpF2veAXohUuE59nTQHRJIYjtiG18aF4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVNQSNpF2veAXohUuE59nTQHRJIYjtiG18aF4.webp";
 export const IMG_BADGE_DAYS_IN_VILLAGE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HU2el8nMXlcRpYmJ5do0zKw4Qx6PVEtBa9b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HU2el8nMXlcRpYmJ5do0zKw4Qx6PVEtBa9b.webp";
 export const IMG_BADGE_REPUTATION_POINTS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxyYNkgWZsq9k0Von5rUfP6OgQ2TyptCKHS4u";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxyYNkgWZsq9k0Von5rUfP6OgQ2TyptCKHS4u.webp";
 export const IMG_BADGE_USER_LEVEL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJo6lBgeZ9MPZpHJ7VliuEWDfATdxhv62SXnm4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJo6lBgeZ9MPZpHJ7VliuEWDfATdxhv62SXnm4.webp";
 export const IMG_BADGE_MOVE_TO_LOCATION =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5qXZuJi797jl4ubX8xrRqTZasyMp2WA5eLGU";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5qXZuJi797jl4ubX8xrRqTZasyMp2WA5eLGU.webp";
 export const IMG_BADGE_COLLECT_ITEM =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtxtluhUYJDfpFXWm3nrcPluEtIZqyLkaSV1j";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtxtluhUYJDfpFXWm3nrcPluEtIZqyLkaSV1j.webp";
 export const IMG_BADGE_DEFEAT_OPPONENTS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYwI8YKOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYwI8YKOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d.webp";
 export const IMG_BADGE_EXCLUSIVE_RAID =
-  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJw7O7n2PT2j854CWbaITZyegfXimvd7s16cO0";
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJw7O7n2PT2j854CWbaITZyegfXimvd7s16cO0.webp";
 export const IMG_BADGE_OPEN_RAID =
-  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdEQfdeP62PI3ciLaYzgVX8FopBADxSrGmvQl";
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdEQfdeP62PI3ciLaYzgVX8FopBADxSrGmvQl.webp";
 export const IMG_BADGE_MEDICAL_EXPERIENCE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzr5NPBemvaQu94EYJs8HpxVzofny6iPtbgCZ";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzr5NPBemvaQu94EYJs8HpxVzofny6iPtbgCZ.webp";
 export const IMG_BADGE_GATHERING_EXPERIENCE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMgUHxAtsO4cexqW2RDgkE3zZbNXSFGitmnar";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMgUHxAtsO4cexqW2RDgkE3zZbNXSFGitmnar.webp";
 export const IMG_BADGE_HUNTING_EXPERIENCE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJg0V017cU9cpECTimBdjaqbNn7vQsxGR1wLk4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJg0V017cU9cpECTimBdjaqbNn7vQsxGR1wLk4.webp";
 export const IMG_BADGE_CRAFTING_EXPERIENCE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIY2lVjxfOewksxBoS1HQCihpL7c42Ky9uUFv";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIY2lVjxfOewksxBoS1HQCihpL7c42Ky9uUFv.webp";
 export const IMG_BADGE_ITEMS_CRAFTED = IMG_BADGE_CRAFTING_EXPERIENCE;
 export const IMG_BADGE_CREATURES_HUNTED = IMG_BADGE_HUNTING_EXPERIENCE;
 export const IMG_BADGE_HERBS_GATHERED = IMG_BADGE_GATHERING_EXPERIENCE;
@@ -1913,120 +1913,120 @@ export const IMG_BADGE_TAG_USAGE_WIN = IMG_BADGE_START_BATTLE;
 export const IMG_BADGE_DAMAGE_DEALT = IMG_BADGE_DEFEAT_OPPONENTS;
 
 export const IMG_BG_COLISEUM =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJo5wb6hZ9MPZpHJ7VliuEWDfATdxhv62SXnm4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJo5wb6hZ9MPZpHJ7VliuEWDfATdxhv62SXnm4.webp";
 export const IMG_BG_ARENA_CHRISMAS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQr5mXyjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQr5mXyjhzBPya1rwfCIqOTU0cV5xgsMeo3u2.webp";
 export const IMG_BG_ARENA_KONOKI =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDyj0BtAzEwoh0WXMnscL279N8ayVQUCbRzS3";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDyj0BtAzEwoh0WXMnscL279N8ayVQUCbRzS3.webp";
 export const IMG_BG_ARENA_SILENCE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSZtKvF3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSZtKvF3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH.webp";
 
 export const IMG_VILLAGE_FACTION =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyODt1NukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyODt1NukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.webp";
 
 export const IMG_RARITY_RARE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvSyOMsEmSnXwslYEpV1yOeNL8gMtqhjPdf36";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvSyOMsEmSnXwslYEpV1yOeNL8gMtqhjPdf36.webp";
 export const IMG_RARITY_LEGENDARY =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoooBQZ9MPZpHJ7VliuEWDfATdxhv62SXnm4B";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoooBQZ9MPZpHJ7VliuEWDfATdxhv62SXnm4B.webp";
 export const IMG_RARITY_EPIC =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeCIgGvhyV3OvUJQExAi0bGoIZDF74LqSnHRd";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeCIgGvhyV3OvUJQExAi0bGoIZDF74LqSnHRd.webp";
 export const IMG_RARITY_COMMON =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQP8otBjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQP8otBjhzBPya1rwfCIqOTU0cV5xgsMeo3u2.webp";
 
 export const IMG_PROFILE_LEVELUPGUY =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaeS5LnYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaeS5LnYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk.webp";
 export const IMG_RAMEN_WELCOME =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmd2fWKHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmd2fWKHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap.webp";
 export const IMG_RAMEN_SMALL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJj7ESnm4XzPI8f1v96qBot0Q3wsUp2nxu7SMb";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJj7ESnm4XzPI8f1v96qBot0Q3wsUp2nxu7SMb.webp";
 export const IMG_RAMEN_MEDIUM =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyoMsmMukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyoMsmMukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.webp";
 export const IMG_RAMEN_LARGE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHKlC2sQvYURJhgs76VZtf9wxpMa13Cq0iOnr";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHKlC2sQvYURJhgs76VZtf9wxpMa13Cq0iOnr.webp";
 export const IMG_REPSHOP_BRONZE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCg005h26OYrIJuNP1pvSyz29edFtKbngjRcA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCg005h26OYrIJuNP1pvSyz29edFtKbngjRcA.webp";
 export const IMG_REPSHOP_SILVER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSk2raeh3jWrEB7TyZlmpoAxMK5Qi16kNPVJu";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSk2raeh3jWrEB7TyZlmpoAxMK5Qi16kNPVJu.webp";
 export const IMG_REPSHOP_GOLD =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJebK38NyV3OvUJQExAi0bGoIZDF74LqSnHRdp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJebK38NyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp";
 export const IMG_EQUIP_SILHOUETTE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ6e2pEi7DfT5pyNCaUruzhPtAJqb8Kj9mc1nl";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ6e2pEi7DfT5pyNCaUruzhPtAJqb8Kj9mc1nl.webp";
 export const IMG_HOME_TRAIN =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ25o9TnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8C";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ25o9TnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8C.webp";
 export const IMG_HOME_EAT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZ8Rz1xAtYUndMi56GkX19q0A4PzyeIloBrE";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZ8Rz1xAtYUndMi56GkX19q0A4PzyeIloBrE.webp";
 export const IMG_HOME_SLEEP =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu8FpvZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu8FpvZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 export const IMG_HOME_AWAKE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1BKctL6bo95WClq4K0wxZUmJcvThgdVenO3P";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1BKctL6bo95WClq4K0wxZUmJcvThgdVenO3P.webp";
 export const IMG_MANUAL_ACTIVITY_STREAK =
-  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTPVewE5IU29dZYJPoOKSh5vmlqatMub3EigH";
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTPVewE5IU29dZYJPoOKSh5vmlqatMub3EigH.webp";
 export const IMG_MANUAL_TOWER_UPGRADES =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HMAwecnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HMAwecnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b.webp";
 export const IMG_MANUAL_TOWER_ENEMIES =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwA3KPoT2j854CWbaITZyegfXimvd7s16cO0h";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwA3KPoT2j854CWbaITZyegfXimvd7s16cO0h.webp";
 export const IMG_MANUAL_TOWER_LEADERBOARD =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJGdSeVPRfoVrha0LP4mAS5KM7wtiZbUNXJxdC";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJGdSeVPRfoVrha0LP4mAS5KM7wtiZbUNXJxdC.webp";
 export const IMG_MANUAL_RANKED =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAa3ucxOoZUC4muiGcQNzjfEndY5y1w20B8hT";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAa3ucxOoZUC4muiGcQNzjfEndY5y1w20B8hT.jpg";
 export const IMG_MANUAL_AWARDS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJD2QXqVzEwoh0WXMnscL279N8ayVQUCbRzS3p";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJD2QXqVzEwoh0WXMnscL279N8ayVQUCbRzS3p.webp";
 export const IMG_MANUAL_COMBAT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJUvE8xxILCIhwPniJ69VxpvAbTDWkOyGzS8rM";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJUvE8xxILCIhwPniJ69VxpvAbTDWkOyGzS8rM.webp";
 export const IMG_MANUAL_TRAVEL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu1h1uHCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu1h1uHCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 export const IMG_MANUAL_BLOODLINE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaCMo8gYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaCMo8gYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk.webp";
 export const IMG_MANUAL_JUTSU =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMI7fE4tsO4cexqW2RDgkE3zZbNXSFGitmnar";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMI7fE4tsO4cexqW2RDgkE3zZbNXSFGitmnar.webp";
 export const IMG_MANUAL_JUTSU_RESKINS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEOTlPgLfKL5D7TAFe29bymSaPCIQ846MdzGg";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEOTlPgLfKL5D7TAFe29bymSaPCIQ846MdzGg.webp";
 export const IMG_MANUAL_SKILLTREE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQB2gVJjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQB2gVJjhzBPya1rwfCIqOTU0cV5xgsMeo3u2.webp";
 export const IMG_MANUAL_BALANCE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJunxMxUaCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJunxMxUaCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8.webp";
 export const IMG_MANUAL_BACKUP =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJctH7DQSnxBpQqGNDcTHbLmYz8uXAl3oa54ti";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJctH7DQSnxBpQqGNDcTHbLmYz8uXAl3oa54ti.webp";
 export const IMG_MANUAL_ITEM =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJb59vlYAtYUndMi56GkX19q0A4PzyeIloBrEa";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJb59vlYAtYUndMi56GkX19q0A4PzyeIloBrEa.webp";
 export const IMG_MANUAL_CRAFTING_RECIPES =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrZmM8nhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrZmM8nhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx.webp";
 export const IMG_MANUAL_AI =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuTQifZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuTQifZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 export const IMG_MANUAL_STAFF =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3CT6Io8pYHJX5rdkUTfOKtvu2eGIELmSWqBx";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3CT6Io8pYHJX5rdkUTfOKtvu2eGIELmSWqBx.webp";
 export const IMG_MANUAL_QUEST =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmWVaWXHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmWVaWXHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap.webp";
 export const IMG_MANUAL_LOGS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwvy6QoT2j854CWbaITZyegfXimvd7s16cO0h";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwvy6QoT2j854CWbaITZyegfXimvd7s16cO0h.webp";
 export const IMG_MANUAL_DAM_CALCS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQF6qYYjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQF6qYYjhzBPya1rwfCIqOTU0cV5xgsMeo3u2.webp";
 export const IMG_MANUAL_BADGE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOUM5LPVHevxIThUauQkGJEBY3D2cPqy8f5sp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOUM5LPVHevxIThUauQkGJEBY3D2cPqy8f5sp.webp";
 export const IMG_MANUAL_ASSET =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaGvHErYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaGvHErYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk.webp";
 export const IMG_MANUAL_OPINION =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0dX0Z3grYldRWJcD6vE10SjNsXHeA9pVMfQi";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0dX0Z3grYldRWJcD6vE10SjNsXHeA9pVMfQi.webp";
 export const IMG_MANUAL_RECRUITMENT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTB8H7n5IU29dZYJPoOKSh5vmlqatMub3EigH";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTB8H7n5IU29dZYJPoOKSh5vmlqatMub3EigH.webp";
 export const IMG_MANUAL_POLLS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRc1v3JK0udmODoNtpa0FMcwI4k2Eq7nJhyvj";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRc1v3JK0udmODoNtpa0FMcwI4k2Eq7nJhyvj.webp";
 export const IMG_LAYOUT_USERBANNER_MIDDLE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ6sgzOzDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ6sgzOzDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH.webp";
 export const IMG_LAYOUT_SIDESCROLL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAElfIGoZUC4muiGcQNzjfEndY5y1w20B8hTW";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAElfIGoZUC4muiGcQNzjfEndY5y1w20B8hTW.webp";
 export const IMG_LAYOUT_MOBILE_TOP =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHTt3S9QvYURJhgs76VZtf9wxpMa13Cq0iOnr";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHTt3S9QvYURJhgs76VZtf9wxpMa13Cq0iOnr.webp";
 export const IMG_LAYOUT_SIDETOPBANNER_CONTENT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOG9gcTWVHevxIThUauQkGJEBY3D2cPqy8f5s";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOG9gcTWVHevxIThUauQkGJEBY3D2cPqy8f5s.webp";
 export const IMG_LAYOUT_SIDETOPBANNER_BOTTOM =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ19AHU06bo95WClq4K0wxZUmJcvThgdVenO3P";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ19AHU06bo95WClq4K0wxZUmJcvThgdVenO3P.webp";
 export const IMG_LAYOUT_SCROLLBOTTOM_DECOR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCVjF0e26OYrIJuNP1pvSyz29edFtKbngjRcA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCVjF0e26OYrIJuNP1pvSyz29edFtKbngjRcA.webp";
 export const IMG_LAYOUT_USERSBANNER_TOP =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDV31MCzEwoh0WXMnscL279N8ayVQUCbRzS3p";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDV31MCzEwoh0WXMnscL279N8ayVQUCbRzS3p.webp";
 export const IMG_LAYOUT_USERSBANNER_BOTTOM =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhWwvubMfUBdnwAX5LTajlNc4mrgzi0RJtqpM";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhWwvubMfUBdnwAX5LTajlNc4mrgzi0RJtqpM.webp";
 export const IMG_AVATAR_DEFAULT =
   "https://uploadthing.b-cdn.net/f/630cf6e7-c152-4dea-a3ff-821de76d7f5a_default.webp";
 export const IMG_WALLPAPER_WINTER =
@@ -2040,28 +2040,28 @@ export const IMG_WALLPAPER_FALL =
 export const IMG_WALLPAPER_HALLOWEEN =
   "https://tnr-storage-cdn.b-cdn.net/wallpaper-halloween.webp";
 export const IMG_LAYOUT_BUTTONDECOR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYectQDOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYectQDOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d.webp";
 export const IMG_LAYOUT_NAVBAR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1znttRb6bo95WClq4K0wxZUmJcvThgdVenO3";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1znttRb6bo95WClq4K0wxZUmJcvThgdVenO3.webp";
 export const IMG_LAYOUT_NAVBAR_HALLOWEEN =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbYxvuGAtYUndMi56GkX19q0A4PzyeIloBrEa";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbYxvuGAtYUndMi56GkX19q0A4PzyeIloBrEa.webp";
 export const IMG_LAYOUT_HANDSIGN =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0hKI3IgrYldRWJcD6vE10SjNsXHeA9pVMfQi";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0hKI3IgrYldRWJcD6vE10SjNsXHeA9pVMfQi.webp";
 export const IMG_LAYOUT_HANDSIGN_HALLOWEEN =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcGYTUXSnxBpQqGNDcTHbLmYz8uXAl3oa54ti";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcGYTUXSnxBpQqGNDcTHbLmYz8uXAl3oa54ti.webp";
 export const IMG_LAYOUT_WELCOME_IMG =
   "https://tnr-storage-cdn.b-cdn.net/welcomeimage_compressed.webp";
 export const IMG_PIXEL_HERO_POSTER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJW2NIKTvszvj71yaSYC0MDOmbko5q9JAGuLHf";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJW2NIKTvszvj71yaSYC0MDOmbko5q9JAGuLHf.jpg";
 export const IMG_PIXEL_HERO_POSTER_OPTIMIZED =
   `${IMG_PIXEL_HERO_POSTER}?width=1280&height=720`;
-// "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqbkFzRdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn";
+// "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqbkFzRdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn.webp";
 // export const IMG_LOGO_FULL =
-//   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8b0eqBkkp45TvAnoIBa0rtCf1lbyXYjVKQ2q";
+//   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8b0eqBkkp45TvAnoIBa0rtCf1lbyXYjVKQ2q.webp";
 export const IMG_LOGO_FULL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHeJzt0QvYURJhgs76VZtf9wxpMa13Cq0iOnr";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHeJzt0QvYURJhgs76VZtf9wxpMa13Cq0iOnr.webp";
 export const IMG_LOGO_SHORT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCClYWI26OYrIJuNP1pvSyz29edFtKbngjRcA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCClYWI26OYrIJuNP1pvSyz29edFtKbngjRcA.webp";
 export const IMG_LOADER =
   "https://uploadthing.b-cdn.net/f/4a3100e5-97c6-4e5a-96e2-1c3520838179-gwm3dh.svg";
 export const IMG_SECTOR_INFO =
@@ -2069,7 +2069,7 @@ export const IMG_SECTOR_INFO =
 export const IMG_SECTOR_ATTACK =
   "https://uploadthing.b-cdn.net/f/d6587d1a-c11b-49e3-8e86-74bfb02a80a1-n9ug1k.png";
 export const IMG_SECTOR_ROB =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvNL3jBEmSnXwslYEpV1yOeNL8gMtqhjPdf36";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvNL3jBEmSnXwslYEpV1yOeNL8gMtqhjPdf36.webp";
 export const IMG_SECTOR_USER_MARKER =
   "https://uploadthing.b-cdn.net/f/cc347416-8bf6-40cf-9184-b4af64e6feae-n771t1.webp";
 export const IMG_SECTOR_USER_SPRITE_MASK =
@@ -2094,11 +2094,11 @@ export const IMG_MAP_HEXASPHERE =
 export const IMG_MAP_HEXASPHERE_SHA256 =
   "ec203f7c1fe33fa7fc3474dff500ade6850b6517ac8de552371d75e05465e4de";
 export const IMG_MAP_TILESET_ATLAS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMavndmtsO4cexqW2RDgkE3zZbNXSFGitmnar";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMavndmtsO4cexqW2RDgkE3zZbNXSFGitmnar.png";
 export const IMG_MAP_WAR_ICON =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgipq89cU9cpECTimBdjaqbNn7vQsxGR1wLk4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgipq89cU9cpECTimBdjaqbNn7vQsxGR1wLk4.webp";
 export const IMG_MAP_QUEST_ICON =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsb4NN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsb4NN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl.webp";
 export const IMG_TRAIN_INTELLIGENCE =
   "https://uploadthing.b-cdn.net/f/815a53ea-23d2-4767-9219-a36ed3d4c619-d73vsv.png";
 export const IMG_TRAIN_WILLPOWER =
@@ -2125,156 +2125,156 @@ export const IMG_TRAIN_NIN_DEF =
   "https://uploadthing.b-cdn.net/f/308d9bee-5105-4534-b11c-59592db90181-yx7su0.png";
 
 export const IMG_ELEMENT_YINYANG =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIlW2BrxfOewksxBoS1HQCihpL7c42Ky9uUFv";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIlW2BrxfOewksxBoS1HQCihpL7c42Ky9uUFv.webp";
 export const IMG_ELEMENT_SHADOW =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvSWrdXEmSnXwslYEpV1yOeNL8gMtqhjPdf36";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvSWrdXEmSnXwslYEpV1yOeNL8gMtqhjPdf36.webp";
 export const IMG_ELEMENT_NONE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeC2dFWVyV3OvUJQExAi0bGoIZDF74LqSnHRd";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeC2dFWVyV3OvUJQExAi0bGoIZDF74LqSnHRd.webp";
 export const IMG_ELEMENT_EXPLOSION =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCH1oeV26OYrIJuNP1pvSyz29edFtKbngjRcA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCH1oeV26OYrIJuNP1pvSyz29edFtKbngjRcA.webp";
 export const IMG_ELEMENT_WIND =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HrMNjAnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2HrMNjAnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b.webp";
 export const IMG_ELEMENT_WATER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoYFqRUhZ9MPZpHJ7VliuEWDfATdxhv62SXnm";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoYFqRUhZ9MPZpHJ7VliuEWDfATdxhv62SXnm.webp";
 export const IMG_ELEMENT_LAVA =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaK2IZBYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaK2IZBYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk.webp";
 export const IMG_ELEMENT_ICE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCqHOvc26OYrIJuNP1pvSyz29edFtKbngjRcA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCqHOvc26OYrIJuNP1pvSyz29edFtKbngjRcA.webp";
 export const IMG_ELEMENT_WOOD =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZYZaSPAtYUndMi56GkX19q0A4PzyeIloBrE";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZYZaSPAtYUndMi56GkX19q0A4PzyeIloBrE.webp";
 export const IMG_ELEMENT_STORM =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzu4spmSemvaQu94EYJs8HpxVzofny6iPtbgC";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzu4spmSemvaQu94EYJs8HpxVzofny6iPtbgC.webp";
 export const IMG_ELEMENT_CRYSTAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaKoVVmYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaKoVVmYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk.webp";
 export const IMG_ELEMENT_MAGNET =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuNr6tnCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuNr6tnCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 export const IMG_ELEMENT_FIRE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAX1vCjoZUC4muiGcQNzjfEndY5y1w20B8hTW";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAX1vCjoZUC4muiGcQNzjfEndY5y1w20B8hTW.webp";
 export const IMG_ELEMENT_LIGHT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeVtMZpyV3OvUJQExAi0bGoIZDF74LqSnHRdp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeVtMZpyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp";
 export const IMG_ELEMENT_EARTH =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgi7liFcU9cpECTimBdjaqbNn7vQsxGR1wLk4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgi7liFcU9cpECTimBdjaqbNn7vQsxGR1wLk4.webp";
 export const IMG_ELEMENT_SCORCH =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmW9wm326OYrIJuNP1pvSyz29edFtKbngjRc";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmW9wm326OYrIJuNP1pvSyz29edFtKbngjRc.webp";
 export const IMG_ELEMENT_DUST =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJchNmlmSnxBpQqGNDcTHbLmYz8uXAl3oa54ti";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJchNmlmSnxBpQqGNDcTHbLmYz8uXAl3oa54ti.webp";
 export const IMG_ELEMENT_SAND =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzu4nv37emvaQu94EYJs8HpxVzofny6iPtbgC";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzu4nv37emvaQu94EYJs8HpxVzofny6iPtbgC.webp";
 export const IMG_ELEMENT_LIGHTNING =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4DIVIclYIif5CL8BKvMsOh2ZnmS7yHt0jTD3";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4DIVIclYIif5CL8BKvMsOh2ZnmS7yHt0jTD3.webp";
 export const IMG_ELEMENT_BOIL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5qAGAlo797jl4ubX8xrRqTZasyMp2WA5eLGU";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5qAGAlo797jl4ubX8xrRqTZasyMp2WA5eLGU.png";
 export const IMG_ELEMENT_METAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu0t3mRCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJu0t3mRCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 
 export const IMG_BASIC_HEAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnlXNSKmojJ0EqeDCvBrNmZaXVdY97gSpOWiA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnlXNSKmojJ0EqeDCvBrNmZaXVdY97gSpOWiA.webp";
 export const IMG_BASIC_MEDITATE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgt4hLTcU9cpECTimBdjaqbNn7vQsxGR1wLk4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgt4hLTcU9cpECTimBdjaqbNn7vQsxGR1wLk4.webp";
 export const IMG_BASIC_ATTACK =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdMXlCrP62PI3ciLaYzgVX8FopBADxSrGmvQl";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdMXlCrP62PI3ciLaYzgVX8FopBADxSrGmvQl.webp";
 export const IMG_BASIC_OFFENSIVE_STANCE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnBZu0YmojJ0EqeDCvBrNmZaXVdY97gSpOWiA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnBZu0YmojJ0EqeDCvBrNmZaXVdY97gSpOWiA.webp";
 export const IMG_BASIC_DEFENSIVE_STANCE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFr82ddG2iOewJtjGzvNcmEX3TBnoSfMDZPH4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFr82ddG2iOewJtjGzvNcmEX3TBnoSfMDZPH4.webp";
 export const IMG_BASIC_FLEE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRohRDR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRohRDR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl.webp";
 export const IMG_BASIC_STEALTH =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDtLSxhzEwoh0WXMnscL279N8ayVQUCbRzS3p";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDtLSxhzEwoh0WXMnscL279N8ayVQUCbRzS3p.webp";
 export const IMG_BASIC_WAIT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8ByNJwOkkp45TvAnoIBa0rtCf1lbyXYjVKQ2";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8ByNJwOkkp45TvAnoIBa0rtCf1lbyXYjVKQ2.webp";
 export const IMG_BASIC_MOVE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQxuGeXmojJ0EqeDCvBrNmZaXVdY97gSpOWi";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQxuGeXmojJ0EqeDCvBrNmZaXVdY97gSpOWi.webp";
 export const IMG_BASIC_REPLACEMENT_TECHNIQUE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZtjLXMaYQrBIUTu69nkMxWmS4ah0O7LVCp8b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZtjLXMaYQrBIUTu69nkMxWmS4ah0O7LVCp8b.png";
 export const IMG_BASIC_CLEANSE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5oYOji797jl4ubX8xrRqTZasyMp2WA5eLGUP";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5oYOji797jl4ubX8xrRqTZasyMp2WA5eLGUP.webp";
 export const IMG_BASIC_CLEAR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTWnPJE5IU29dZYJPoOKSh5vmlqatMub3EigH";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTWnPJE5IU29dZYJPoOKSh5vmlqatMub3EigH.webp";
 
 export const IMG_ICON_DISCORD =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCZvaND26OYrIJuNP1pvSyz29edFtKbngjRcA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCZvaND26OYrIJuNP1pvSyz29edFtKbngjRcA.png";
 export const IMG_ICON_FACEBOOK =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1zjiDxX6bo95WClq4K0wxZUmJcvThgdVenO3";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1zjiDxX6bo95WClq4K0wxZUmJcvThgdVenO3.png";
 export const IMG_ICON_GITHUB =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJydaEQfukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJydaEQfukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.png";
 export const IMG_ICON_GOOGLE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCV0Mc426OYrIJuNP1pvSyz29edFtKbngjRcA";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCV0Mc426OYrIJuNP1pvSyz29edFtKbngjRcA.png";
 export const IMG_ICON_INSTAGRAM =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJWLbTriPvszvj71yaSYC0MDOmbko5q9JAGuLH";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJWLbTriPvszvj71yaSYC0MDOmbko5q9JAGuLH.png";
 export const IMG_ICON_REDDIT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPYJEg8pKeUGyX2kj6u45AOQiSa1zYH0mqZoc";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPYJEg8pKeUGyX2kj6u45AOQiSa1zYH0mqZoc.png";
 export const IMG_ICON_TIKTOK =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoYcyUDSZ9MPZpHJ7VliuEWDfATdxhv62SXnm";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoYcyUDSZ9MPZpHJ7VliuEWDfATdxhv62SXnm.png";
 export const IMG_ICON_TWITTER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMi2fCxtsO4cexqW2RDgkE3zZbNXSFGitmnar";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMi2fCxtsO4cexqW2RDgkE3zZbNXSFGitmnar.png";
 export const IMG_ICON_YOUTUBE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy7pL6jukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy7pL6jukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.png";
 export const IMG_ICON_FORUM =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTwT9cY5IU29dZYJPoOKSh5vmlqatMub3EigH";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTwT9cY5IU29dZYJPoOKSh5vmlqatMub3EigH.png";
 export const IMG_ICON_MOVE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJepKSYSyV3OvUJQExAi0bGoIZDF74LqSnHRdp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJepKSYSyV3OvUJQExAi0bGoIZDF74LqSnHRdp.png";
 export const IMG_ICON_HEAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrtRSYfhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrtRSYfhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx.webp";
 
 export const IMG_MISSION_S =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJz3Ph17emvaQu94EYJs8HpxVzofny6iPtbgCZ";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJz3Ph17emvaQu94EYJs8HpxVzofny6iPtbgCZ.webp";
 export const IMG_MISSION_A =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0ORGP9grYldRWJcD6vE10SjNsXHeA9pVMfQi";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0ORGP9grYldRWJcD6vE10SjNsXHeA9pVMfQi.webp";
 export const IMG_MISSION_B =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoVn7VTZ9MPZpHJ7VliuEWDfATdxhv62SXnm4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoVn7VTZ9MPZpHJ7VliuEWDfATdxhv62SXnm4.webp";
 export const IMG_MISSION_C =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoe3eJHZ9MPZpHJ7VliuEWDfATdxhv62SXnm4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoe3eJHZ9MPZpHJ7VliuEWDfATdxhv62SXnm4.webp";
 export const IMG_MISSION_D =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7r7fFcXKPBOUWGyFuM4DlL1v5HNTZhkte0z6";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7r7fFcXKPBOUWGyFuM4DlL1v5HNTZhkte0z6.webp";
 export const IMG_MISSION_E =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPAguocQpKeUGyX2kj6u45AOQiSa1zYH0mqZo";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPAguocQpKeUGyX2kj6u45AOQiSa1zYH0mqZo.webp";
 export const IMG_MISSION_M =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyweIVKukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyweIVKukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.webp";
 export const IMG_MISSION_PVP =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzCBxBXemvaQu94EYJs8HpxVzofny6iPtbgCZ";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzCBxBXemvaQu94EYJs8HpxVzofny6iPtbgCZ.webp";
 export const IMG_MISSION_WAR = "/War_mission.webp";
 
 export const IMG_BUILDING_MISSIONHALL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2TCTWInMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2TCTWInMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8.webp";
 export const IMG_BUILDING_SCIENCEBUILDING =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwQxr3PT2j854CWbaITZyegfXimvd7s16cO0h";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwQxr3PT2j854CWbaITZyegfXimvd7s16cO0h.webp";
 export const IMG_BUILDING_NEWS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYKooj7OMAlNnPZ41ev6fCGcFK3hmjX9I8W7d";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYKooj7OMAlNnPZ41ev6fCGcFK3hmjX9I8W7d.webp";
 export const IMG_BUILDING_SOUVENIER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHmrEYkQvYURJhgs76VZtf9wxpMa13Cq0iOnr";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHmrEYkQvYURJhgs76VZtf9wxpMa13Cq0iOnr.webp";
 export const IMG_BUILDING_HOSPITAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3n9SmD8pYHJX5rdkUTfOKtvu2eGIELmSWqBx";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3n9SmD8pYHJX5rdkUTfOKtvu2eGIELmSWqBx.webp";
 export const IMG_BUILDING_GLOBALANBU =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIfwMDCxfOewksxBoS1HQCihpL7c42Ky9uUFv";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIfwMDCxfOewksxBoS1HQCihpL7c42Ky9uUFv.webp";
 export const IMG_BUILDING_ACADEMY =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5kYqQv797jl4ubX8xrRqTZasyMp2WA5eLGUP";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5kYqQv797jl4ubX8xrRqTZasyMp2WA5eLGUP.webp";
 export const IMG_BUILDING_BANK =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEHFjuQLfKL5D7TAFe29bymSaPCIQ846MdzGg";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEHFjuQLfKL5D7TAFe29bymSaPCIQ846MdzGg.webp";
 export const IMG_BUILDING_ARCHIVE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXk8AUJqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXk8AUJqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv.webp";
 export const IMG_BUILDING_ADMINBUILDING =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMyfWBKtsO4cexqW2RDgkE3zZbNXSFGitmnar";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMyfWBKtsO4cexqW2RDgkE3zZbNXSFGitmnar.webp";
 
 export const IMG_ACTIONTIMER_BG =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZNkUoDaYQrBIUTu69nkMxWmS4ah0O7LVCp8b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZNkUoDaYQrBIUTu69nkMxWmS4ah0O7LVCp8b.webp";
 export const IMG_ACTIONTIMER_YELLOW =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXnRHYeqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXnRHYeqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv.webp";
 export const IMG_ACTIONTIMER_RED =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyrbex4ukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyrbex4ukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.webp";
 export const IMG_ACTIONTIMER_BLUE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqA6PRRdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqA6PRRdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn.webp";
 export const IMG_ACTIONTIMER_GREEN =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwSFJxPT2j854CWbaITZyegfXimvd7s16cO0h";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwSFJxPT2j854CWbaITZyegfXimvd7s16cO0h.webp";
 export const IMG_ACTIONTIMER_OVERLAY =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHVKSE4QvYURJhgs76VZtf9wxpMa13Cq0iOnr";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHVKSE4QvYURJhgs76VZtf9wxpMa13Cq0iOnr.webp";
 
 export const IMG_INITIATIVE_D20 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE7476GLfKL5D7TAFe29bymSaPCIQ846MdzGg";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE7476GLfKL5D7TAFe29bymSaPCIQ846MdzGg.webp";
 export const IMG_BATTLEFIELD_TOMBSTONE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVVIq2fF2veAXohUuE59nTQHRJIYjtiG18aF4";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVVIq2fF2veAXohUuE59nTQHRJIYjtiG18aF4.webp";
 export const IMG_BATTLEFIELD_STAR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuGvcEjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuGvcEjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 
 export const MUSIC_SHADOW_OF_THE_BLADE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQCH0mJjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
@@ -2335,7 +2335,7 @@ export type HomeTypeDetails = (typeof HomeTypeDetails)[keyof typeof HomeTypeDeta
 
 // Auction system constants
 export const IMG_AUCTION_HOUSE =
-  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmcDNSqHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap" as const;
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmcDNSqHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap.webp" as const;
 
 export const AUCTION_LISTING_STATES = [
   "ACTIVE",
