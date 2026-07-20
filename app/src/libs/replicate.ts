@@ -21,6 +21,7 @@ import { UTApi, UTFile } from "uploadthing/server";
 import type { IMG_ORIENTATION } from "@/drizzle/constants";
 import type { UserData, UserRank } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
+import { servedUfsUrl } from "@/libs/uploadthing";
 import type { DrizzleClient } from "@/server/db";
 import type { GenerateAudioInput } from "@/validators/audio";
 import { fetchAttributes } from "../server/api/routers/profile";
@@ -153,12 +154,12 @@ export const uploadToUT = async (url: string) => {
   if (!url.startsWith("http")) {
     const fileBuffer = await fs.promises.readFile(url);
     const uploadedFile = await utapi.uploadFiles(
-      new UTFile([fileBuffer as BlobPart], name),
+      new UTFile([fileBuffer as BlobPart], name, { customId: name }),
     );
-    return uploadedFile.data?.ufsUrl ?? null;
+    return uploadedFile.data ? servedUfsUrl(uploadedFile.data) : null;
   } else {
-    const uploadedFile = await utapi.uploadFilesFromUrl({ url, name });
-    return uploadedFile.data?.ufsUrl ?? null;
+    const uploadedFile = await utapi.uploadFilesFromUrl({ url, name, customId: name });
+    return uploadedFile.data ? servedUfsUrl(uploadedFile.data) : null;
   }
 };
 
@@ -226,7 +227,11 @@ export const fastTxt2imgReplicate = async (config: {
   const replicateUrl = output.url();
   const utapi = new UTApi();
   const name = `preview-${nanoid()}.webp`;
-  const uploadedFile = await utapi.uploadFilesFromUrl({ url: replicateUrl, name });
+  const uploadedFile = await utapi.uploadFilesFromUrl({
+    url: replicateUrl,
+    name,
+    customId: name,
+  });
   return uploadedFile;
 };
 
@@ -299,7 +304,9 @@ export const txt2imgGPT = async (config: Txt2ImgConfig) => {
   });
 
   // Return the URLs of the images
-  return uploadedFiles.map((file) => file.data?.ufsUrl).filter(Boolean) as string[];
+  return uploadedFiles
+    .map((file) => (file.data ? servedUfsUrl(file.data) : null))
+    .filter(Boolean) as string[];
 };
 
 /**
@@ -382,7 +389,7 @@ export const txt2imgNanoBanana = async (config: Txt2ImgConfig) => {
 
   const resizedBlob = new Blob([resultBuffer as BlobPart]);
   const uploaded = await uploadFileFromReplicate("content", resizedBlob, "webp");
-  const url = uploaded.data?.ufsUrl ?? null;
+  const url = uploaded.data ? servedUfsUrl(uploaded.data) : null;
   return url ? [url] : [];
 };
 
@@ -453,16 +460,13 @@ export const uploadImageFromOpenAI = async (config: {
         .resize({ width, height, fit: "inside" })
         .webp({ quality: 70 })
         .toBuffer();
-      return new File([resultBuffer as BlobPart], `${prefix}-${idx}-${i}.webp`);
+      const fileName = `${prefix}-${idx}-${i}.webp`;
+      return new UTFile([resultBuffer as BlobPart], fileName, { customId: fileName });
     }),
   );
   const uploadedFiles = await utapi.uploadFiles(resizedImages);
   return uploadedFiles;
 };
-
-interface FileEsque extends Blob {
-  name: string;
-}
 
 /**
  * Create a thumbnail for the image
@@ -473,11 +477,13 @@ export const createThumbnail = async (url?: string | null) => {
     const res = await fetch(url);
     const blob = await res.arrayBuffer();
     const resultBuffer = await sharp(blob).resize(64, 64).toBuffer();
-    const thumbnail = new Blob([resultBuffer as BlobPart]) as FileEsque;
-    thumbnail.name = "thumbnail.png";
+    const thumbName = `thumbnail-${nanoid()}.png`;
+    const thumbnail = new UTFile([resultBuffer as BlobPart], thumbName, {
+      customId: thumbName,
+    });
     const utapi = new UTApi();
     const response = await utapi.uploadFiles(thumbnail);
-    const imageUrl = response.data?.ufsUrl;
+    const imageUrl = response.data ? servedUfsUrl(response.data) : null;
     return imageUrl ?? url;
   } catch (_error) {
     return url;
@@ -497,7 +503,8 @@ export const uploadFileFromReplicate = async (
   extension = "webp",
 ) => {
   const utapi = new UTApi();
-  const utFiles = new File([blob], `${prefix}-${nanoid()}.${extension}`);
+  const fileName = `${prefix}-${nanoid()}.${extension}`;
+  const utFiles = new UTFile([blob], fileName, { customId: fileName });
   const uploadedFile = await utapi.uploadFiles(utFiles);
   return uploadedFile;
 };
@@ -535,8 +542,8 @@ export const generateAndUploadAudio = async (config: GenerateAudioInput) => {
   const { url } = await generateSoundEffectReplicate(config);
   const utapi = new UTApi();
   const name = `audio-${nanoid()}.mp3`;
-  const uploadedFile = await utapi.uploadFilesFromUrl({ url, name });
-  return uploadedFile.data?.ufsUrl ?? null;
+  const uploadedFile = await utapi.uploadFilesFromUrl({ url, name, customId: name });
+  return uploadedFile.data ? servedUfsUrl(uploadedFile.data) : null;
 };
 
 /**
@@ -676,7 +683,11 @@ export const uploadCompletedVideo = async (outputUrl: string) => {
   const utapi = new UTApi();
   const name = `video-${nanoid()}.mp4`;
   console.log("Uploading video to UploadThing", outputUrl, name);
-  const uploadedFile = await utapi.uploadFilesFromUrl({ url: outputUrl, name });
+  const uploadedFile = await utapi.uploadFilesFromUrl({
+    url: outputUrl,
+    name,
+    customId: name,
+  });
   console.log("Uploaded video to UploadThing", uploadedFile.data?.ufsUrl);
-  return uploadedFile.data?.ufsUrl ?? null;
+  return uploadedFile.data ? servedUfsUrl(uploadedFile.data) : null;
 };

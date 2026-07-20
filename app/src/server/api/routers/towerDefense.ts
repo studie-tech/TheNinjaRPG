@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { InferSelectModel } from "drizzle-orm";
 import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { UTApi } from "uploadthing/server";
+import { UTApi, UTFile } from "uploadthing/server";
 import { z } from "zod";
 import {
   TD_GRID_EXPAND_EVERY_N_WAVES,
@@ -34,6 +34,7 @@ import {
   directionToSpriteDirection,
   generateRunSeed,
 } from "@/libs/towerDefense/game";
+import { servedUfsUrl } from "@/libs/uploadthing";
 import {
   generateSessionNonce,
   type SessionParams,
@@ -799,7 +800,7 @@ export const towerDefenseRouter = createTRPCRouter({
 
         const utapi = new UTApi();
         const uploadedUrls: Map<string, string> = new Map();
-        const filesToUpload: { path: string; file: File }[] = [];
+        const filesToUpload: { path: string; file: UTFile }[] = [];
 
         // Collect all image files to upload
         for (const path of Object.keys(zip.files)) {
@@ -819,8 +820,10 @@ export const towerDefenseRouter = createTRPCRouter({
                   : "image/png";
             // Convert Uint8Array to Buffer for proper BlobPart compatibility
             const buffer = Buffer.from(content);
-            const file = new File([buffer], path.replace(/\//g, "_"), {
+            const fileName = path.replace(/\//g, "_");
+            const file = new UTFile([buffer], fileName, {
               type: mimeType,
+              customId: `${nanoid()}.${ext}`,
             });
             filesToUpload.push({ path, file });
           }
@@ -836,7 +839,7 @@ export const towerDefenseRouter = createTRPCRouter({
             const result = uploadResults[j];
             const batchItem = batch[j];
             if (result?.data?.ufsUrl && batchItem) {
-              uploadedUrls.set(batchItem.path, result.data.ufsUrl);
+              uploadedUrls.set(batchItem.path, servedUfsUrl(result.data));
             }
           }
         }

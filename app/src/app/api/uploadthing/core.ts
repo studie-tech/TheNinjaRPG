@@ -3,12 +3,13 @@ import { and, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { FileRouter } from "uploadthing/next";
 import { createUploadthing } from "uploadthing/next";
-import { UploadThingError, UTApi } from "uploadthing/server";
+import { UploadThingError, UTApi, UTFiles } from "uploadthing/server";
 import { z } from "zod";
 import type { FederalStatuses } from "@/drizzle/constants";
 import { historicalAvatar, userData, userUpload } from "@/drizzle/schema";
 import { classifyNsfwImage } from "@/libs/moderator";
 import { createThumbnail } from "@/libs/replicate";
+import { extensionCustomId, servedUfsUrl } from "@/libs/uploadthing";
 import { insertHistoricalSoundEffect } from "@/server/api/routers/audio";
 import { drizzleDB } from "@/server/db";
 import { getUserFederalStatus } from "@/utils/paypal";
@@ -25,7 +26,18 @@ const f = createUploadthing({
 });
 
 type ImageUploadResult = { fileUrl: string; error?: string };
-type UploadedImage = { key: string; ufsUrl: string };
+type UploadedImage = { key: string; ufsUrl: string; customId?: string | null };
+
+/**
+ * Give every incoming file a customId that carries its extension, so the
+ * served URL path has one and the Bunny CDN optimizer can engage on it.
+ */
+const withExtensionIds = (files: readonly { name: string; type?: string }[]) => ({
+  [UTFiles]: files.map((file) => ({
+    ...file,
+    customId: extensionCustomId(file.name, file.type),
+  })),
+});
 
 const moderateUploadedImage = async (
   file: UploadedImage,
@@ -44,7 +56,7 @@ const moderateUploadedImage = async (
       error: "Unable to validate uploaded image. Please try another image.",
     };
   }
-  return { fileUrl: file.ufsUrl };
+  return { fileUrl: servedUfsUrl(file) };
 };
 
 /**
@@ -75,30 +87,45 @@ const adminMiddleware = async () => {
 
 export const ourFileRouter = {
   imageUploader: f({ image: { maxFileSize: "512KB" } })
-    .middleware(async () => await avatarMiddleware())
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware()),
+      ...withExtensionIds(files),
+    }))
     .onUploadComplete(async ({ file }) => moderateUploadedImage(file)),
   conceptArtFrameUploader: f({ image: { maxFileSize: "256KB" } })
-    .middleware(async () => await avatarMiddleware())
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware()),
+      ...withExtensionIds(files),
+    }))
     .onUploadComplete(async ({ file }) => moderateUploadedImage(file)),
   modelUploader: f({ "model/gltf-binary": { maxFileSize: "256KB" } })
-    .middleware(async () => await avatarMiddleware())
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware()),
+      ...withExtensionIds(files),
+    }))
     .onUploadComplete(({ file }) => {
-      return { fileUrl: file.ufsUrl };
+      return { fileUrl: servedUfsUrl(file) };
     }),
   tavernUploader: f({ image: { maxFileSize: "64KB" } })
-    .middleware(async () => await avatarMiddleware())
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware()),
+      ...withExtensionIds(files),
+    }))
     .onUploadComplete(async ({ metadata, file }) => {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
       await drizzleDB.insert(userUpload).values({
         id: nanoid(),
         userId: metadata.userId,
-        imageUrl: file.ufsUrl,
+        imageUrl: servedUfsUrl(file),
       });
       return moderation;
     }),
   anbuUploader: f({ image: { maxFileSize: "512KB" } })
-    .middleware(async () => await avatarMiddleware())
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware()),
+      ...withExtensionIds(files),
+    }))
     .onUploadComplete(async ({ file }) => {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
@@ -106,7 +133,10 @@ export const ourFileRouter = {
       return moderation;
     }),
   clanUploader: f({ image: { maxFileSize: "512KB" } })
-    .middleware(async () => await avatarMiddleware())
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware()),
+      ...withExtensionIds(files),
+    }))
     .onUploadComplete(async ({ file }) => {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
@@ -114,7 +144,10 @@ export const ourFileRouter = {
       return moderation;
     }),
   tournamentUploader: f({ image: { maxFileSize: "512KB" } })
-    .middleware(async () => await avatarMiddleware())
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware()),
+      ...withExtensionIds(files),
+    }))
     .onUploadComplete(async ({ file }) => {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
@@ -122,7 +155,10 @@ export const ourFileRouter = {
       return moderation;
     }),
   avatarNormalUploader: f({ image: { maxFileSize: "512KB" } })
-    .middleware(async () => await avatarMiddleware("NORMAL"))
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware("NORMAL")),
+      ...withExtensionIds(files),
+    }))
     .onUploadComplete(async ({ metadata, file }) => {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
@@ -130,7 +166,10 @@ export const ourFileRouter = {
       return moderation;
     }),
   avatarSilverUploader: f({ image: { maxFileSize: "1MB" } })
-    .middleware(async () => await avatarMiddleware("SILVER"))
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware("SILVER")),
+      ...withExtensionIds(files),
+    }))
     .onUploadComplete(async ({ metadata, file }) => {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
@@ -138,7 +177,10 @@ export const ourFileRouter = {
       return moderation;
     }),
   avatarGoldUploader: f({ image: { maxFileSize: "2MB" } })
-    .middleware(async () => await avatarMiddleware("GOLD"))
+    .middleware(async ({ files }) => ({
+      ...(await avatarMiddleware("GOLD")),
+      ...withExtensionIds(files),
+    }))
     .onUploadComplete(async ({ metadata, file }) => {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
@@ -146,56 +188,71 @@ export const ourFileRouter = {
       return moderation;
     }),
   backgroundImageUploader: f({ image: { maxFileSize: "8MB" } })
-    .middleware(adminMiddleware) // Use the adminMiddleware here
+    .middleware(async ({ files }) => ({
+      ...(await adminMiddleware()),
+      ...withExtensionIds(files),
+    })) // Use the adminMiddleware here
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log(`Background image uploaded by ${metadata.userId}: ${file.ufsUrl}`);
+      console.log(
+        `Background image uploaded by ${metadata.userId}: ${servedUfsUrl(file)}`,
+      );
     }),
   // SFX audio (small files)
   audioSfxUploader: f({ audio: { maxFileSize: "64KB" } })
     .input(z.object({ relationId: z.string() }))
-    .middleware(async ({ input }) => {
+    .middleware(async ({ input, files }) => {
       const { userId } = await adminMiddleware();
-      return { userId, relationId: input.relationId };
+      return { userId, relationId: input.relationId, ...withExtensionIds(files) };
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      await insertHistoricalSoundEffect(drizzleDB, metadata.userId, file.ufsUrl, {
-        relationId: metadata.relationId,
-        secondsTotal: 1,
-        prompt: "",
-        negativePrompt: "",
-      });
-      return { fileUrl: file.ufsUrl, userId: metadata.userId };
+      await insertHistoricalSoundEffect(
+        drizzleDB,
+        metadata.userId,
+        servedUfsUrl(file),
+        {
+          relationId: metadata.relationId,
+          secondsTotal: 1,
+          prompt: "",
+          negativePrompt: "",
+        },
+      );
+      return { fileUrl: servedUfsUrl(file), userId: metadata.userId };
     }),
   // MUSIC audio (larger files)
   audioMusicUploader: f({ audio: { maxFileSize: "4MB" } })
     .input(z.object({ relationId: z.string() }))
-    .middleware(async ({ input }) => {
+    .middleware(async ({ input, files }) => {
       const { userId } = await adminMiddleware();
-      return { userId, relationId: input.relationId };
+      return { userId, relationId: input.relationId, ...withExtensionIds(files) };
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      await insertHistoricalSoundEffect(drizzleDB, metadata.userId, file.ufsUrl, {
-        relationId: metadata.relationId,
-        secondsTotal: 1,
-        prompt: "",
-        negativePrompt: "",
-      });
-      return { fileUrl: file.ufsUrl, userId: metadata.userId };
+      await insertHistoricalSoundEffect(
+        drizzleDB,
+        metadata.userId,
+        servedUfsUrl(file),
+        {
+          relationId: metadata.relationId,
+          secondsTotal: 1,
+          prompt: "",
+          negativePrompt: "",
+        },
+      );
+      return { fileUrl: servedUfsUrl(file), userId: metadata.userId };
     }),
   // Tower Defense character animation zip uploader
   towerDefenseCharacterZip: f({
     "application/zip": { maxFileSize: "32MB" },
   })
     .input(z.object({ characterId: z.string() }))
-    .middleware(async ({ input }) => {
+    .middleware(async ({ input, files }) => {
       const { userId } = await adminMiddleware();
-      return { userId, characterId: input.characterId };
+      return { userId, characterId: input.characterId, ...withExtensionIds(files) };
     })
     .onUploadComplete(async ({ metadata, file }) => {
       // The actual processing will be done by a tRPC endpoint
       // This just handles the upload and returns the URL
       return {
-        fileUrl: file.ufsUrl,
+        fileUrl: servedUfsUrl(file),
         userId: metadata.userId,
         characterId: metadata.characterId,
       };
@@ -204,9 +261,12 @@ export const ourFileRouter = {
   towerDefenseFrameUploader: f({
     image: { maxFileSize: "256KB", maxFileCount: 100 },
   })
-    .middleware(adminMiddleware)
+    .middleware(async ({ files }) => ({
+      ...(await adminMiddleware()),
+      ...withExtensionIds(files),
+    }))
     .onUploadComplete(({ file }) => {
-      return { fileUrl: file.ufsUrl };
+      return { fileUrl: servedUfsUrl(file) };
     }),
 } satisfies FileRouter;
 
@@ -255,15 +315,16 @@ const avatarMiddleware = async (fedRequirement?: (typeof FederalStatuses)[number
  * @param userId
  */
 const uploadHistoricalAvatar = async (
-  file: { ufsUrl: string },
+  file: { ufsUrl: string; customId?: string | null },
   userId: string,
   updateUser?: boolean,
 ) => {
-  const thumbnailUrl = await createThumbnail(file.ufsUrl);
+  const fileUrl = servedUfsUrl(file);
+  const thumbnailUrl = await createThumbnail(fileUrl);
   const promises = [
     drizzleDB.insert(historicalAvatar).values({
       replicateId: null,
-      avatar: file.ufsUrl,
+      avatar: fileUrl,
       avatarLight: thumbnailUrl,
       status: "succeeded",
       userId: userId,
@@ -273,7 +334,7 @@ const uploadHistoricalAvatar = async (
       ? [
           drizzleDB
             .update(userData)
-            .set({ avatar: file.ufsUrl, avatarLight: thumbnailUrl })
+            .set({ avatar: fileUrl, avatarLight: thumbnailUrl })
             .where(eq(userData.userId, userId)),
         ]
       : []),
