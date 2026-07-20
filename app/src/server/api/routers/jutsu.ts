@@ -24,6 +24,7 @@ import {
   JUTSU_MAX_EVENT_EQUIPPED,
   JUTSU_MAX_PIERCE_EQUIPPED,
   JUTSU_MAX_RESIDUAL_EQUIPPED,
+  JUTSU_MAX_SHIELD_EQUIPPED,
   JUTSU_MAX_STUN_EQUIPPED,
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_TRANSFER_COST,
@@ -585,6 +586,7 @@ export const jutsuRouter = createTRPCRouter({
         evolutionCapFlags.isPierce ||
         evolutionCapFlags.isBarrier ||
         evolutionCapFlags.isStun ||
+        evolutionCapFlags.isShield ||
         evolutionCapFlags.isResidual;
       // Single compare-and-swap update that applies every userJutsu-row change at once:
       // - jutsuId/level/experience/finishTraining — the evolution itself
@@ -1048,6 +1050,9 @@ export const jutsuRouter = createTRPCRouter({
       const stunJutsus = equippedJutsus.filter(
         (uj) => getJutsuCapFlags(uj.jutsu).isStun,
       );
+      const shieldJutsus = equippedJutsus.filter(
+        (uj) => getJutsuCapFlags(uj.jutsu).isShield,
+      );
 
       if (!info) return errorResponse("Jutsu not found");
       if (!canTrainJutsu(info, user) && !info.parentJutsuId)
@@ -1126,6 +1131,7 @@ export const jutsuRouter = createTRPCRouter({
           isEvent: jutsuIsEvent,
           isBarrier: jutsuHasBarrier,
           isStun: jutsuHasStun,
+          isShield: jutsuHasShield,
         } = getJutsuCapFlags(info);
 
         const canAutoEquip =
@@ -1135,7 +1141,8 @@ export const jutsuRouter = createTRPCRouter({
           (!jutsuHasPierce || pierceJutsus.length < JUTSU_MAX_PIERCE_EQUIPPED) &&
           (!jutsuIsEvent || eventJutsus.length < JUTSU_MAX_EVENT_EQUIPPED) &&
           (!jutsuHasBarrier || barrierJutsus.length < JUTSU_MAX_BARRIER_EQUIPPED) &&
-          (!jutsuHasStun || stunJutsus.length < JUTSU_MAX_STUN_EQUIPPED);
+          (!jutsuHasStun || stunJutsus.length < JUTSU_MAX_STUN_EQUIPPED) &&
+          (!jutsuHasShield || shieldJutsus.length < JUTSU_MAX_SHIELD_EQUIPPED);
 
         // Use onDuplicateKeyUpdate to handle race conditions
         await ctx.drizzle
@@ -1261,6 +1268,10 @@ export const jutsuRouter = createTRPCRouter({
         (j) => getJutsuCapFlags(j.jutsu).isStun,
       ).length;
       const curJutsuIsStun = curJutsuFlags?.isStun;
+      const shieldEquipped = equippedJutsus.filter(
+        (j) => getJutsuCapFlags(j.jutsu).isShield,
+      ).length;
+      const curJutsuIsShield = curJutsuFlags?.isShield;
       const newEquippedState = !isEquipped;
       const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
       const isLoaded = userjutsuObj && loadout?.jutsuIds.includes(userjutsuObj.jutsuId);
@@ -1318,6 +1329,15 @@ export const jutsuRouter = createTRPCRouter({
       if (!isEquipped && curJutsuIsStun && stunEquipped >= JUTSU_MAX_STUN_EQUIPPED) {
         return errorResponse(
           `You cannot equip more than ${JUTSU_MAX_STUN_EQUIPPED} stun jutsu`,
+        );
+      }
+      if (
+        !isEquipped &&
+        curJutsuIsShield &&
+        shieldEquipped >= JUTSU_MAX_SHIELD_EQUIPPED
+      ) {
+        return errorResponse(
+          `You cannot equip more than ${JUTSU_MAX_SHIELD_EQUIPPED} shield jutsu`,
         );
       }
 

@@ -693,7 +693,8 @@ export const JUTSU_MAX_RESIDUAL_EQUIPPED = 4;
 export const JUTSU_MAX_PIERCE_EQUIPPED = 9999;
 export const JUTSU_MAX_EVENT_EQUIPPED = 2;
 export const JUTSU_MAX_BARRIER_EQUIPPED = 1;
-export const JUTSU_MAX_STUN_EQUIPPED = 1;
+export const JUTSU_MAX_STUN_EQUIPPED = 2;
+export const JUTSU_MAX_SHIELD_EQUIPPED = 2;
 
 // Content difficulty ratings
 export const BloodlineDifficultyRatings = ["Easy", "Medium", "Hard", "Expert"] as const;
@@ -1728,6 +1729,7 @@ export const RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS = 1;
 export const RANKED_LOADOUT_MAX_SUMMON_JUTSUS = 0;
 export const RANKED_LOADOUT_MAX_BARRIER_JUTSUS = 1;
 export const RANKED_LOADOUT_MAX_STUN_JUTSUS = 1;
+export const RANKED_LOADOUT_MAX_SHIELD_JUTSUS = 2;
 
 // Game assets
 export const ID_ANIMATION_SMOKE = "gkYHdSzsHu";

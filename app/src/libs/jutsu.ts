@@ -4,6 +4,7 @@ import {
   JUTSU_MAX_EVENT_EQUIPPED,
   JUTSU_MAX_PIERCE_EQUIPPED,
   JUTSU_MAX_RESIDUAL_EQUIPPED,
+  JUTSU_MAX_SHIELD_EQUIPPED,
   JUTSU_MAX_STUN_EQUIPPED,
   JUTSU_TRANSFER_FREE_AMOUNT,
   JUTSU_TRANSFER_FREE_GOLD,
@@ -44,11 +45,12 @@ export interface JutsuCapFlags {
   isEvent: boolean;
   isBarrier: boolean;
   isStun: boolean;
+  isShield: boolean;
 }
 
 /**
  * Which capped equip categories a jutsu counts against (residual / pierce /
- * event / barrier / stun). Centralised so the loadout, toggle-equip and
+ * event / barrier / stun / shield). Centralised so the loadout, toggle-equip and
  * auto-equip paths share one definition and a new capped category only needs
  * editing in one place.
  */
@@ -60,6 +62,7 @@ export const getJutsuCapFlags = (
   isEvent: jutsu.jutsuType === "EVENT",
   isBarrier: jutsu.effects.some((e) => e.type === "barrier"),
   isStun: jutsu.effects.some((e) => e.type === "stun"),
+  isShield: jutsu.effects.some((e) => e.type === "shield"),
 });
 
 /**
@@ -87,6 +90,7 @@ export const computeJutsuLoadoutAssignments = (args: {
   let event = 0;
   let barrier = 0;
   let stun = 0;
+  let shield = 0;
   let residual = 0;
 
   // A jutsu is equipped or not (no quantity), and the equip CASE matches by
@@ -110,7 +114,7 @@ export const computeJutsuLoadoutAssignments = (args: {
       invalidJutsus.push(`${jutsu.name}: missing requirements`);
       continue;
     }
-    const { isResidual, isPierce, isEvent, isBarrier, isStun } =
+    const { isResidual, isPierce, isEvent, isBarrier, isStun, isShield } =
       getJutsuCapFlags(jutsu);
     if (total >= maxEquip) {
       invalidJutsus.push(`${jutsu.name}: equip limit reached`);
@@ -136,6 +140,10 @@ export const computeJutsuLoadoutAssignments = (args: {
       invalidJutsus.push(`${jutsu.name}: stun jutsu limit reached`);
       continue;
     }
+    if (isShield && shield >= JUTSU_MAX_SHIELD_EQUIPPED) {
+      invalidJutsus.push(`${jutsu.name}: shield jutsu limit reached`);
+      continue;
+    }
     equipIds.push(jutsuId);
     total += 1;
     if (isResidual) residual += 1;
@@ -143,6 +151,7 @@ export const computeJutsuLoadoutAssignments = (args: {
     if (isEvent) event += 1;
     if (isBarrier) barrier += 1;
     if (isStun) stun += 1;
+    if (isShield) shield += 1;
   }
 
   return { equipIds, invalidJutsus };
