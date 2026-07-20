@@ -2776,18 +2776,10 @@ export const MIRROR_EXCLUDED_EFFECT_TYPES: string[] = [
 /** Build a `type -> rank` lookup (lower rank = higher priority) from tier arrays. */
 const buildTagPriorityRank = (
   tiers: readonly (readonly string[])[],
-): ReadonlyMap<string, number> => {
-  const rank = new Map<string, number>();
-  for (let index = 0; index < tiers.length; index++) {
-    const tier = tiers[index];
-    if (tier) {
-      for (const type of tier) {
-        rank.set(type, index);
-      }
-    }
-  }
-  return rank;
-};
+): ReadonlyMap<string, number> =>
+  new Map(
+    tiers.flatMap((tier, index) => tier.map((type) => [type, index] as const)),
+  );
 
 export const COPY_PRIORITY_RANK = buildTagPriorityRank(COPY_PRIORITY_TIERS);
 export const MIRROR_PRIORITY_RANK = buildTagPriorityRank(MIRROR_PRIORITY_TIERS);
