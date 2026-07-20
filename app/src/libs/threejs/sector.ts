@@ -1050,6 +1050,99 @@ export const createMultipleUserSprite = (
 };
 
 /**
+ * Floating name label for a village structure, rendered to a canvas so the
+ * whole label is a single sprite; starts hidden and is toggled by
+ * intersectStructures.
+ */
+export const createStructureLabel = (structure: VillageStructure, h: number) => {
+  const canvasWidth = 512;
+  const canvasHeight = 84;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  const context = canvas.getContext("2d");
+  if (context) {
+    // Building name, shrunk to fit the canvas width
+    let fontSize = 64;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    do {
+      context.font = `bold ${fontSize}px Serif`;
+      fontSize -= 2;
+    } while (
+      fontSize > 24 &&
+      context.measureText(structure.name).width > canvasWidth - 16
+    );
+    context.lineJoin = "round";
+    context.strokeStyle = "black";
+    context.lineWidth = 9;
+    context.strokeText(structure.name, canvasWidth / 2, canvasHeight / 2);
+    context.fillStyle = "white";
+    context.fillText(structure.name, canvasWidth / 2, canvasHeight / 2);
+  }
+  const texture = createTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = LinearFilter;
+  texture.needsUpdate = true;
+  const material = new SpriteMaterial({
+    map: texture,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const sprite = new Sprite(material);
+  sprite.scale.set(h * 3.0, h * 3.0 * (canvasHeight / canvasWidth), 1);
+  // Anchor at the bottom edge so zoom compensation grows the label upwards,
+  // away from the building, instead of over it
+  sprite.center.set(0.5, 0);
+  sprite.renderOrder = 10;
+  sprite.name = `structure-label-${structure.id}`;
+  sprite.userData.type = "structureLabel";
+  sprite.userData.baseWidth = h * 3.0;
+  sprite.userData.baseHeight = h * 3.0 * (canvasHeight / canvasWidth);
+  sprite.visible = false;
+  return sprite;
+};
+
+/** Camera zoom at which structure labels render at their authored world size */
+const STRUCTURE_LABEL_REFERENCE_ZOOM = 2;
+
+/**
+ * Toggle building labels each frame: all visible when showAll is set,
+ * otherwise only the label of the structure sprite under the pointer.
+ * Visible labels are counter-scaled by the camera zoom so they keep a
+ * constant, readable on-screen size at every zoom level.
+ */
+export const intersectStructures = (info: {
+  structureSprites: Sprite[];
+  raycaster: Raycaster;
+  showAll: boolean;
+  pointerOnMap: boolean;
+  cameraZoom: number;
+}) => {
+  const { structureSprites, raycaster, showAll, pointerOnMap, cameraZoom } = info;
+  let hovered: Sprite | null = null;
+  if (!showAll && pointerOnMap && structureSprites.length > 0) {
+    const intersects = raycaster.intersectObjects(structureSprites, false);
+    hovered = (intersects[0]?.object as Sprite) ?? null;
+  }
+  const zoomComp = Math.min(
+    3,
+    Math.max(0.6, STRUCTURE_LABEL_REFERENCE_ZOOM / Math.max(0.1, cameraZoom)),
+  );
+  structureSprites.forEach((sprite) => {
+    const label = sprite.userData.labelSprite as Sprite | undefined;
+    if (!label) return;
+    label.visible = showAll || sprite === hovered;
+    if (label.visible) {
+      const width = (label.userData.baseWidth as number) * zoomComp;
+      if (Math.abs(label.scale.x - width) > 0.001) {
+        label.scale.set(width, (label.userData.baseHeight as number) * zoomComp, 1);
+      }
+    }
+  });
+};
+
+/**
  * Draw village on map
  */
 export const drawVillage = (
@@ -1126,6 +1219,13 @@ export const drawVillage = (
       sprite.userData.structureId = structure.id;
       sprite.userData.structureName = structure.name;
       group.add(sprite);
+      // Floating name label, revealed on hover or via the travel page's
+      // label toggle (see intersectStructures). Bottom-anchored just above
+      // the building sprite's top edge.
+      const label = createStructureLabel(structure, h);
+      label.position.set(x, y + h / 10 + h * 1.55, STATUS_LAYER);
+      sprite.userData.labelSprite = label;
+      group.add(label);
     }
   }
 };

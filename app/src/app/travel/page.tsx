@@ -2,6 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  Captions,
+  CaptionsOff,
   Cookie,
   Eye,
   EyeOff,
@@ -110,6 +112,10 @@ export default function Travel() {
   );
   const [showOwnership, setShowOwnership] = useLocalStorage<boolean>(
     "showOwnership",
+    false,
+  );
+  const [showBuildingLabels, setShowBuildingLabels] = useLocalStorage<boolean>(
+    "showBuildingLabels",
     false,
   );
   const [autoAttackMode, setAutoAttackMode] = useLocalStorage<boolean>(
@@ -670,6 +676,7 @@ export default function Travel() {
           target={targetPosition}
           showSorrounding={showSorrounding}
           showActive={showActive}
+          showStructureLabels={showBuildingLabels}
           autoAttackMode={autoAttackMode}
           setShowSorrounding={setShowSorrounding}
           setTarget={setTargetPosition}
@@ -686,6 +693,7 @@ export default function Travel() {
     targetPosition,
     showSorrounding,
     showActive,
+    showBuildingLabels,
     autoAttackMode,
     villages,
   ]);
@@ -803,6 +811,25 @@ export default function Travel() {
                     onClick={() => setShowActive(true)}
                   />
                 )}
+                {/* Building labels toggle */}
+                <TooltipProvider delayDuration={50}>
+                  <Tooltip>
+                    <TooltipTrigger
+                      onClick={() => setShowBuildingLabels(!showBuildingLabels)}
+                    >
+                      {showBuildingLabels ? (
+                        <Captions className="mr-2 h-7 w-7 text-orange-500" />
+                      ) : (
+                        <CaptionsOff className="mr-2 h-7 w-7 hover:text-orange-500" />
+                      )}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {showBuildingLabels
+                        ? "Hide building names"
+                        : "Show building names"}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <UserRoundSearch
                   className={`mr-2 h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
                   onClick={() => setShowSorrounding((prev) => !prev)}
