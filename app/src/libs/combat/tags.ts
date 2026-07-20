@@ -232,6 +232,12 @@ export const copy = (
   user: BattleUserState,
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  // Self-targeting is a degenerate no-op (copying your own buffs onto yourself).
+  // It also keeps the copy/mirror budgets isolated: when caster === target the two
+  // tags' clones share the same identity and would cross-count against each other's
+  // ceiling, so skip it at the source.
+  if (user.userId === target.userId) return undefined;
+
   // Check if copy is prevented
   const { pass } = preventCheck(usersEffects, "buffprevent", user, effect);
   if (!pass) return preventResponse(effect, user, "cannot copy effects");
@@ -327,6 +333,12 @@ export const mirror = (
   user: BattleUserState,
   target: BattleUserState,
 ): ActionEffect | undefined => {
+  // Self-targeting is a degenerate no-op (reflecting your own debuffs onto yourself).
+  // It also keeps the copy/mirror budgets isolated: when caster === target the two
+  // tags' clones share the same identity and would cross-count against each other's
+  // ceiling, so skip it at the source.
+  if (user.userId === target.userId) return undefined;
+
   // Check if mirror is prevented
   const { pass } = preventCheck(usersEffects, "debuffprevent", target, effect);
   if (!pass)
