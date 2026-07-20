@@ -54,11 +54,17 @@ import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
 import {
   arrivalPromptDecision,
+  findActionableBoundObjective,
   isArrivalPromptStale,
   pickSpriteAvatar,
+  resolveArrivalPromptCta,
 } from "@/libs/overworldAi";
 import { calcLevel, getExpBracket, passesBracketFilter } from "@/libs/profile";
-import { GATHERING_CANCEL_PREFIX, isLocationObjective } from "@/libs/quest";
+import {
+  GATHERING_CANCEL_PREFIX,
+  getBoundObjectiveCandidates,
+  isLocationObjective,
+} from "@/libs/quest";
 import { mergeDecorationAssets } from "@/libs/sector-map/decorations";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
@@ -403,7 +409,6 @@ const Sector: React.FC<SectorProps> = (props) => {
     { assetIds: dialogSceneAssetIds },
     { enabled: dialogSceneAssetIds.length > 0 },
   );
-
 
   // Router for forwarding
   const router = useRouter();
@@ -1556,6 +1561,27 @@ const Sector: React.FC<SectorProps> = (props) => {
     });
   };
 
+  // Shared NPC-tile interaction for the sprite click handler: locate the placement's NPC and, when
+  // the player is standing on its tile, interact — otherwise route toward it. Returns true when the
+  // sprite carries a bound placement (the click is consumed either way), false when it does not, so
+  // the attack branch can fall through to the normal player-attack path. Reads through refs because
+  // the click handler lives in a long-lived scene closure that would otherwise capture stale state.
+  const handleNpcTileInteraction = (placementId: string | undefined): boolean => {
+    if (!placementId) return false;
+    const npc = usersRef.current?.find((u) => u.npcPlacementId === placementId);
+    if (npc) {
+      if (
+        npc.longitude === originRef.current?.col &&
+        npc.latitude === originRef.current?.row
+      ) {
+        interactWithNpc(npc);
+      } else {
+        setTarget({ x: npc.longitude, y: npc.latitude });
+      }
+    }
+    return true;
+  };
+
   useEffect(() => {
     minBracketDrawRef.current = storedBracket;
   }, [storedBracket]);
@@ -2141,37 +2167,16 @@ const Sector: React.FC<SectorProps> = (props) => {
               );
               return false;
             } else if (showUsersRef.current && i.object.userData.type === "talk") {
-              const placementId = i.object.userData.npcPlacementId as string;
-              const talkTarget = usersRef.current?.find(
-                (u) => u.npcPlacementId === placementId,
+              handleNpcTileInteraction(
+                i.object.userData.npcPlacementId as string | undefined,
               );
-              if (
-                talkTarget &&
-                talkTarget.longitude === originRef.current?.col &&
-                talkTarget.latitude === originRef.current?.row
-              ) {
-                interactWithNpc(talkTarget);
-              } else if (talkTarget) {
-                setTarget({ x: talkTarget.longitude, y: talkTarget.latitude });
-              }
               return false;
             } else if (showUsersRef.current && i.object.userData.type === "attack") {
-              const npcPlacementId = i.object.userData.npcPlacementId as
-                | string
-                | undefined;
-              if (npcPlacementId) {
-                const npc = usersRef.current?.find(
-                  (u) => u.npcPlacementId === npcPlacementId,
-                );
-                if (
-                  npc &&
-                  npc.longitude === originRef.current?.col &&
-                  npc.latitude === originRef.current?.row
-                ) {
-                  interactWithNpc(npc);
-                } else if (npc) {
-                  setTarget({ x: npc.longitude, y: npc.latitude });
-                }
+              if (
+                handleNpcTileInteraction(
+                  i.object.userData.npcPlacementId as string | undefined,
+                )
+              ) {
                 return false;
               }
               const target = usersRef.current?.find(
@@ -2496,6 +2501,27 @@ const Sector: React.FC<SectorProps> = (props) => {
     // biome-ignore lint/correctness/useExhaustiveDependencies: see above
   }, [usersReady]);
 
+  // Arrival-modal CTA. `interactWithOverworldAi` dispatches on an actionable bound objective
+  // (dialog / defeat / deliver) before falling back to a mission grant, so the prompt names the
+  // real action rather than always promising a mission. Reuses the same server-side projection +
+  // matcher; the one thing the client can't see is item possession (userData.items holds only
+  // equipped items), so deliveries are predicted by reachability alone via `ignoreItemOwnership`.
+  const arrivalBound =
+    arrivalNpc &&
+    arrivalNpc.npcInteractionType !== "HOSTILE" &&
+    arrivalNpc.npcPlacementId &&
+    userData
+      ? findActionableBoundObjective({
+          activeQuests: getBoundObjectiveCandidates(userData),
+          ownedItemIds: [],
+          placementId: arrivalNpc.npcPlacementId,
+          ignoreItemOwnership: true,
+        })
+      : null;
+  const arrivalCta = arrivalNpc
+    ? resolveArrivalPromptCta(arrivalNpc, arrivalBound?.objective.task ?? null)
+    : null;
+
   return (
     <>
       <div id="tutorial-travel-sector" ref={mountRef}></div>
@@ -2693,11 +2719,7 @@ const Sector: React.FC<SectorProps> = (props) => {
               alt={arrivalNpc.username}
               className="h-28 w-28 rounded-md object-contain"
             />
-            <p className="text-center text-sm">
-              {arrivalNpc.npcInteractionType === "HOSTILE"
-                ? `Attack ${arrivalNpc.username}?`
-                : `Request a mission from ${arrivalNpc.username}?`}
-            </p>
+            <p className="text-center text-sm">{arrivalCta?.question}</p>
             <div className="flex w-full gap-2">
               <button
                 type="button"
@@ -2712,16 +2734,14 @@ const Sector: React.FC<SectorProps> = (props) => {
                   setArrivalNpc(null);
                 }}
               >
-                {arrivalNpc.npcInteractionType === "HOSTILE"
-                  ? "Attack"
-                  : "Request mission"}
+                {arrivalCta?.action}
               </button>
               <button
                 type="button"
                 className="flex-1 rounded-md bg-gray-500 px-4 py-2 text-sm text-white transition-colors hover:bg-gray-600"
                 onClick={() => setArrivalNpc(null)}
               >
-                {arrivalNpc.npcInteractionType === "HOSTILE" ? "Leave" : "Not now"}
+                {arrivalCta?.dismiss}
               </button>
             </div>
           </div>

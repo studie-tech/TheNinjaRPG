@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { findActionableBoundObjective } from "@/libs/overworldAi";
+import {
+  earlierBoundObjectivesComplete,
+  findActionableBoundObjective,
+} from "@/libs/overworldAi";
 
 const quests = [
   {
@@ -25,6 +28,18 @@ describe("findActionableBoundObjective", () => {
 
   it("matches a deliver objective when the item is held", () => {
     const r = findActionableBoundObjective({ activeQuests: quests, ownedItemIds: ["i1"], placementId: "p2" });
+    expect(r?.objective.id).toBe("o2");
+  });
+
+  it("matches a deliver objective regardless of items when ignoreItemOwnership is set", () => {
+    // Client CTA prediction: it holds only equipped items so it can't confirm possession, and
+    // predicts "Deliver" from reachability alone (server re-checks the real inventory on click).
+    const r = findActionableBoundObjective({
+      activeQuests: quests,
+      ownedItemIds: [],
+      placementId: "p2",
+      ignoreItemOwnership: true,
+    });
     expect(r?.objective.id).toBe("o2");
   });
 
@@ -84,5 +99,52 @@ describe("findActionableBoundObjective — consecutive-objective ordering", () =
       placementId: "p1",
     });
     expect(r?.objective.id).toBe("o1");
+  });
+});
+
+describe("earlierBoundObjectivesComplete — bound-objective ordering gate", () => {
+  // The gate powers reachability for NON-consecutive quests: a quest that binds multiple objectives
+  // to different overworld placements must still be completed in objective order at the tiles.
+  it("is true for the first objective (no earlier bound objectives)", () => {
+    const objectives = [
+      { overworldPlacementId: "p1", done: false },
+      { overworldPlacementId: "p2", done: false },
+    ];
+    expect(earlierBoundObjectivesComplete(objectives, 0)).toBe(true);
+  });
+
+  it("blocks a later bound objective while an earlier bound objective is not done", () => {
+    // Out-of-sequence case: report back (p2) must not fire while the defeat objective (p1) is undone.
+    const objectives = [
+      { overworldPlacementId: "p1", done: false },
+      { overworldPlacementId: "p2", done: false },
+    ];
+    expect(earlierBoundObjectivesComplete(objectives, 1)).toBe(false);
+  });
+
+  it("allows a later bound objective once the earlier bound objective is done", () => {
+    const objectives = [
+      { overworldPlacementId: "p1", done: true },
+      { overworldPlacementId: "p2", done: false },
+    ];
+    expect(earlierBoundObjectivesComplete(objectives, 1)).toBe(true);
+  });
+
+  it("ignores earlier objectives that are not placement-bound", () => {
+    // An earlier non-overworld objective (e.g. a counter task) never gates the overworld tile.
+    const objectives = [
+      { overworldPlacementId: null, done: false },
+      { overworldPlacementId: "p2", done: false },
+    ];
+    expect(earlierBoundObjectivesComplete(objectives, 1)).toBe(true);
+  });
+
+  it("requires every earlier bound objective, not just the immediately preceding one", () => {
+    const objectives = [
+      { overworldPlacementId: "p1", done: false },
+      { overworldPlacementId: null, done: true },
+      { overworldPlacementId: "p3", done: false },
+    ];
+    expect(earlierBoundObjectivesComplete(objectives, 2)).toBe(false);
   });
 });

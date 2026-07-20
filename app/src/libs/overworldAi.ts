@@ -205,9 +205,11 @@ type BoundObjective = {
   done?: boolean;
   deliverItemIds?: string[];
   /**
-   * For `consecutiveObjectives` quests, the caller sets this to `false` for objectives that are
-   * not yet reachable in the tracker's `selectedNextObjectiveId` chain. Absent/`true` = actionable
-   * (non-consecutive quests, and fresh quests with no tracker, never set it to `false`).
+   * `false` = bound to this placement but not yet reachable, so not actionable. Callers set it for
+   * two reasons: the `consecutiveObjectives` tracker chain (an objective not yet reached via
+   * `selectedNextObjectiveId`) and — for non-consecutive quests — the bound-objective ordering gate
+   * (an earlier placement-bound objective on the same quest is still incomplete). Absent/`true` =
+   * actionable; fresh quests with no tracker are treated as available.
    */
   available?: boolean;
 };
@@ -232,11 +234,18 @@ export const pickWeightedQuest = (
  * Generic over the caller's objective shape so a projection that carries extra fields (e.g. the
  * un-projected `source` objective) gets them back on the match, instead of every caller re-scanning
  * `getUserQuests` to recover what the projection dropped.
+ *
+ * `ignoreItemOwnership` skips the `deliver_item` possession check. The server passes the player's
+ * full inventory to decide real actionability; the client (which holds only equipped items, so it
+ * cannot confirm possession) sets this to *predict* the interaction for CTA copy — treating a
+ * reachable delivery as actionable so the prompt reads "Deliver" instead of the generic mission
+ * text. The server re-checks possession authoritatively on click.
  */
 export const findActionableBoundObjective = <T extends BoundObjective>(args: {
   activeQuests: { questId: string; objectives: T[] }[];
   ownedItemIds: string[];
   placementId: string;
+  ignoreItemOwnership?: boolean;
 }): { questId: string; objective: T } | null => {
   const owned = new Set(args.ownedItemIds);
   for (const quest of args.activeQuests) {
@@ -249,6 +258,7 @@ export const findActionableBoundObjective = <T extends BoundObjective>(args: {
       // sequence — getNewTrackers refuses to credit it, so they'd fight (and risk HP) for nothing.
       if (objective.available === false) continue;
       if (
+        !args.ignoreItemOwnership &&
         objective.task === "deliver_item" &&
         !(objective.deliverItemIds ?? []).every((id) => owned.has(id))
       ) {
@@ -258,6 +268,78 @@ export const findActionableBoundObjective = <T extends BoundObjective>(args: {
     }
   }
   return null;
+};
+
+/**
+ * Objective-order reachability for placement-bound objectives: objective `index` is actionable only
+ * once every EARLIER placement-bound objective on the same quest is done. Non-bound objectives never
+ * gate. This helper does not read `consecutiveObjectives`; callers apply it only to non-consecutive
+ * quests (consecutive quests already order via the tracker chain). Without it a non-consecutive quest
+ * that binds several objectives to different NPCs would let a later objective's dialog / battle /
+ * delivery fire before an earlier bound objective completed — getNewTrackers refuses to credit it,
+ * so the player would act (and risk HP) for nothing.
+ */
+export const earlierBoundObjectivesComplete = (
+  objectives: { overworldPlacementId?: string | null; done?: boolean | null }[],
+  index: number,
+): boolean => {
+  for (let j = 0; j < index; j++) {
+    const prev = objectives[j];
+    if (prev?.overworldPlacementId && !prev.done) return false;
+  }
+  return true;
+};
+
+export interface ArrivalPromptCta {
+  question: string;
+  action: string;
+  dismiss: string;
+}
+
+/**
+ * CTA copy for the overworld arrival modal. The server's `interactWithOverworldAi` dispatches on
+ * the NPC's actionable bound objective before falling back to a mission grant, so the prompt must
+ * match what the click will actually do: fight a defeat target, talk through a dialog objective,
+ * hand over a delivery, or (no bound objective) request a mission. `boundTask` is the task of the
+ * actionable bound objective for this NPC's placement (from {@link findActionableBoundObjective}),
+ * or null when none applies. HOSTILE NPCs always attack.
+ */
+export const resolveArrivalPromptCta = (
+  npc: {
+    username: string;
+    npcInteractionType?: OverworldInteractionType | null;
+  },
+  boundTask: string | null | undefined,
+): ArrivalPromptCta => {
+  if (npc.npcInteractionType === "HOSTILE") {
+    return { question: `Attack ${npc.username}?`, action: "Attack", dismiss: "Leave" };
+  }
+  switch (boundTask) {
+    case "defeat_opponents":
+      return {
+        question: `Fight ${npc.username}?`,
+        action: "Fight",
+        dismiss: "Not now",
+      };
+    case "dialog":
+      return {
+        question: `Speak with ${npc.username}?`,
+        action: "Talk",
+        dismiss: "Not now",
+      };
+    case "deliver_item":
+      return {
+        question: `Deliver to ${npc.username}?`,
+        action: "Deliver",
+        dismiss: "Not now",
+      };
+    default:
+      return {
+        question: `Request a mission from ${npc.username}?`,
+        action: "Request mission",
+        dismiss: "Not now",
+      };
+  }
 };
 
 /**
