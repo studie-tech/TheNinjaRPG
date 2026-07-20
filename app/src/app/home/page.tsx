@@ -32,8 +32,10 @@ import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
+import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
 import Modal2 from "@/layout/Modal2";
 import {
+  byItemName,
   calcMaxHouseMaterials,
   showsItemLevelBadge,
   userItemActionBadges,
@@ -109,25 +111,31 @@ export default function HomePage() {
   );
   // Filter normal items (non-materials)
   const storedItems =
-    filteredItems?.filter(
-      (useritem) => useritem.storedAtHome && useritem.item.itemType !== "MATERIAL",
-    ) ?? [];
+    filteredItems
+      ?.filter(
+        (useritem) => useritem.storedAtHome && useritem.item.itemType !== "MATERIAL",
+      )
+      .sort(byItemName) ?? [];
   const nonStoredItems =
     filteredItems
       ?.filter((useritem) => !useritem.storedAtHome)
       .filter((useritem) => useritem.equipped === "NONE")
-      .filter((useritem) => useritem.item.itemType !== "MATERIAL") ?? [];
+      .filter((useritem) => useritem.item.itemType !== "MATERIAL")
+      .sort(byItemName) ?? [];
 
   // Filter materials separately
   const storedMaterials =
-    filteredItems?.filter(
-      (useritem) => useritem.storedAtHome && useritem.item.itemType === "MATERIAL",
-    ) ?? [];
+    filteredItems
+      ?.filter(
+        (useritem) => useritem.storedAtHome && useritem.item.itemType === "MATERIAL",
+      )
+      .sort(byItemName) ?? [];
   const nonStoredMaterials =
     filteredItems
       ?.filter((useritem) => !useritem.storedAtHome)
       .filter((useritem) => useritem.equipped === "NONE")
-      .filter((useritem) => useritem.item.itemType === "MATERIAL") ?? [];
+      .filter((useritem) => useritem.item.itemType === "MATERIAL")
+      .sort(byItemName) ?? [];
 
   const canStoreMoreItems = storedItems.length < homeStorage;
   const canStoreMoreMaterials =
@@ -377,6 +385,17 @@ export default function HomePage() {
             title="Item Storage"
             subtitle={`Items in home (${totalStoredItems}/${homeStorage} slots used) | Materials in home (${storedMaterials.length}/${userData && homeData ? calcMaxHouseMaterials(userData, homeData.storage) : 0} slots used)`}
             initialBreak={true}
+            topRightContent={
+              homeData?.homeType !== "NONE" ? (
+                <MergeAllStacksButton
+                  storedAtHome={true}
+                  onMerged={() => {
+                    setSelectedItem(undefined);
+                    setIsModalOpen(false);
+                  }}
+                />
+              ) : undefined
+            }
           >
             {isHomeLoading || isItemsLoading ? (
               <Loader explanation="Loading item storage data" />

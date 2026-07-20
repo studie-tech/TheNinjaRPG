@@ -229,6 +229,16 @@ export const isImbuing = (
 ): boolean =>
   ui.imbuements.some((im) => im.craftingFinishedAt && im.craftingFinishedAt > now);
 
+/**
+ * Locale-aware comparator for displayed item names.
+ * Prefers top-level `name` (e.g. after applyActiveVariant flatten) so variant
+ * overrides match what ActionSelector renders; falls back to nested `item.name`.
+ */
+export const byItemName = (
+  a: { name?: string; item?: { name: string } },
+  b: { name?: string; item?: { name: string } },
+) => (a.name ?? a.item?.name ?? "").localeCompare(b.name ?? b.item?.name ?? "");
+
 export interface EquipConstraintInfo {
   itemId: string;
   bloodlineId: string | null;
