@@ -72,7 +72,7 @@ import {
   getHexPoints,
   mergeBufferGeometries,
 } from "@/libs/threejs/hexgrid";
-import { applyBlurShader, applyWaveShader } from "@/libs/threejs/shaders";
+import { applyWaveShader } from "@/libs/threejs/shaders";
 import type { SectorUser } from "@/libs/threejs/types";
 import { createTexture, loadTexture, profiler } from "@/libs/threejs/util";
 import { hasRequiredRank } from "@/libs/train";
@@ -1194,21 +1194,8 @@ export const drawVillage = (
     if (pos) {
       // Add a structure group
       const { height: h, x, y } = pos;
-      //  Structure shadow in the top of the structure, with edges from the original structure
-      const shadow_texture2 = loadTexture(structure.image, 200);
-      const shadow_material2 = new SpriteMaterial({
-        map: shadow_texture2,
-        color: 0x000000,
-        opacity: 0.3,
-        depthWrite: false,
-        depthTest: false,
-      });
-      applyBlurShader(shadow_material2, 0.01);
-      const shadow_sprite2 = new Sprite(shadow_material2);
-      shadow_sprite2.scale.set(h * 3.3, h * 3.3, 1);
-      shadow_sprite2.position.set(x - 0.2 * h, y + h / 10 + 0.2 * h, ASSETS_LAYER);
-      group.add(shadow_sprite2);
-      // Structure
+      // Structure sprite; cast shadows are baked into the structure art
+      // (sun upper-right, shadow lower-left, matching decoration sprites)
       const texture = loadTexture(structure.image, 200);
       const material = new SpriteMaterial({
         map: texture,
