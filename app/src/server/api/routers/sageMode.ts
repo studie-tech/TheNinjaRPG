@@ -38,14 +38,17 @@ export const sageModeRouter = createTRPCRouter({
 
   /** All sage modes (including hidden) for staff editing user data — same permission as bloodline edit. */
   getAllNamesForEdit: protectedProcedure.query(async ({ ctx }) => {
-    const user = await fetchUser(ctx.drizzle, ctx.userId);
+    const [user, results] = await Promise.all([
+      fetchUser(ctx.drizzle, ctx.userId),
+      ctx.drizzle.query.sageMode.findMany({
+        columns: { id: true, name: true, image: true },
+        orderBy: (table, { asc }) => [asc(table.name)],
+      }),
+    ]);
     if (!user || !canEditBloodline(user.role)) {
       throw serverError("FORBIDDEN", "Not allowed to list sage modes for editing");
     }
-    return await ctx.drizzle.query.sageMode.findMany({
-      columns: { id: true, name: true, image: true },
-      orderBy: (table, { asc }) => [asc(table.name)],
-    });
+    return results;
   }),
 
   getAll: publicProcedure
