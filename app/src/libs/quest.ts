@@ -36,6 +36,7 @@ import {
   isQuestComplete,
   isQuestObjectiveAvailable,
 } from "@/libs/objectives";
+import { earlierBoundObjectivesComplete } from "@/libs/overworldAi";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUnique } from "@/utils/grouping";
 import { randomInt } from "@/utils/math";
@@ -64,6 +65,49 @@ export const getUserQuests = (user: NonNullable<UserWithRelations>) => {
       .map((uq) => ({ ...uq, ...uq.quest })) ?? [];
   return userQuests;
 };
+
+/**
+ * Project a user's active quests into the `{ questId, objectives }` shape consumed by
+ * {@link findActionableBoundObjective}. Shared by the server overworld-interaction path
+ * (`interactWithOverworldAi`) and the client arrival-prompt CTA so both resolve the same bound
+ * sub-path (`defeat_opponents` / `dialog` / `deliver_item`) for a placement.
+ *
+ * `available` gates reachability so a bound objective can't fire out of sequence, combining two
+ * independent conditions:
+ *  1. Consecutive-chain reachability (`isQuestObjectiveAvailable`) — a no-op `true` for
+ *     non-consecutive quests and for the fresh-quest first interaction (no tracker yet).
+ *  2. Objective-order reachability (`earlierBoundObjectivesComplete`), applied only to
+ *     non-consecutive quests (consecutive quests already order via the tracker chain): every
+ *     EARLIER placement-bound objective on the quest must be done first.
+ */
+export const getBoundObjectiveCandidates = (user: NonNullable<UserWithRelations>) =>
+  getUserQuests(user).map((q) => {
+    const tracker = (user.questData ?? []).find((t) => t.id === q.id);
+    const objectives = q.content.objectives;
+    // Placement + done per objective, precomputed so the ordering gate is a plain array scan.
+    const meta = objectives.map((objective) => ({
+      overworldPlacementId: objective.overworldPlacementId,
+      done: !!tracker?.goals.find((g) => g.id === objective.id)?.done,
+    }));
+    return {
+      questId: q.id,
+      objectives: objectives.map((objective, i) => ({
+        id: objective.id,
+        task: objective.task,
+        overworldPlacementId: objective.overworldPlacementId,
+        done: meta[i]?.done ?? false,
+        deliverItemIds:
+          "deliverItemIds" in objective ? objective.deliverItemIds : undefined,
+        available: tracker
+          ? isQuestObjectiveAvailable(q.quest, tracker, i) &&
+            (q.quest.consecutiveObjectives || earlierBoundObjectivesComplete(meta, i))
+          : true,
+        // Carry the un-projected objective through: the bound sub-paths read task-specific fields
+        // the projection drops, and would otherwise re-scan every quest's objectives to find it.
+        source: objective,
+      })),
+    };
+  });
 
 /**
  * A `QuestHistory`-shaped row is an in-memory-only mock from {@link mockAchievementHistoryEntries}
@@ -1889,6 +1933,14 @@ export const verifyQuestObjectiveFlow = (
  * chain/reachability flow is validated only for consecutive quests, since a
  * non-consecutive quest legitimately has multiple independent objectives that
  * {@link verifyQuestObjectiveFlow} would otherwise reject.
+ *
+ * Guardrail for overworld-bound objectives: a placement-bound objective completes the moment the
+ * player stands on its NPC, so a non-consecutive quest binding two objectives to different NPCs can
+ * be completed out of narrative order (the runtime overworld gate blocks the interaction, but the
+ * intended ordering still can't be expressed). Ordering intent lives in the `nextObjectiveId` chain,
+ * which only consecutive quests carry, so reject the save and let the author make the quest
+ * consecutive rather than silently coercing the flag onto a chain-less quest (which
+ * {@link verifyQuestObjectiveFlow} would then reject anyway).
  */
 export const verifyQuestContentForSave = (
   objectives: AllObjectivesType[],
@@ -1897,6 +1949,14 @@ export const verifyQuestContentForSave = (
   const dialogCheck = verifyDialogBranches(objectives);
   if (!dialogCheck.check) return dialogCheck;
   if (consecutiveObjectives) return verifyQuestObjectiveFlow(objectives);
+  const boundObjectiveCount = objectives.filter((o) => !!o.overworldPlacementId).length;
+  if (boundObjectiveCount >= 2) {
+    return {
+      check: false,
+      message:
+        "A quest with more than one overworld NPC-bound objective must use consecutive objectives so they complete in a defined order.",
+    };
+  }
   return { check: true, message: "" };
 };
 

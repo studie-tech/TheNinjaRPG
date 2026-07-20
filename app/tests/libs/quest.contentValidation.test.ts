@@ -75,3 +75,49 @@ describe("verifyQuestContentForSave", () => {
     expect(verifyQuestContentForSave(parallelNonDialog, true).check).toBe(false);
   });
 });
+
+describe("verifyQuestContentForSave — overworld multi-bound guard", () => {
+  // A placement-bound objective completes when the player stands on its NPC, so two objectives bound
+  // to different NPCs on a non-consecutive quest can be completed out of order — the author must make
+  // the quest consecutive so the ordering is expressed in the chain.
+  const twoBoundDifferent = objs([
+    { id: "a", task: "collect_item", overworldPlacementId: "p1" },
+    { id: "b", task: "collect_item", overworldPlacementId: "p2" },
+  ]);
+  const twoBoundSame = objs([
+    { id: "a", task: "collect_item", overworldPlacementId: "p1" },
+    { id: "b", task: "collect_item", overworldPlacementId: "p1" },
+  ]);
+  const oneBound = objs([
+    { id: "a", task: "collect_item", overworldPlacementId: "p1" },
+    { id: "b", task: "collect_item" },
+  ]);
+  const twoBoundConsecutive = objs([
+    { id: "a", task: "collect_item", overworldPlacementId: "p1", nextObjectiveId: "b" },
+    { id: "b", task: "collect_item", overworldPlacementId: "p2" },
+  ]);
+  const emptyPlacement = objs([
+    { id: "a", task: "collect_item", overworldPlacementId: "" },
+    { id: "b", task: "collect_item", overworldPlacementId: "p1" },
+  ]);
+
+  it("rejects two objectives bound to different placements when non-consecutive", () => {
+    expect(verifyQuestContentForSave(twoBoundDifferent, false).check).toBe(false);
+  });
+
+  it("rejects two objectives bound to the same placement when non-consecutive", () => {
+    expect(verifyQuestContentForSave(twoBoundSame, false).check).toBe(false);
+  });
+
+  it("allows a single bound objective on a non-consecutive quest", () => {
+    expect(verifyQuestContentForSave(oneBound, false).check).toBe(true);
+  });
+
+  it("allows multiple bound objectives on a consecutive quest (order is in the chain)", () => {
+    expect(verifyQuestContentForSave(twoBoundConsecutive, true).check).toBe(true);
+  });
+
+  it("does not count an empty-string placement as bound", () => {
+    expect(verifyQuestContentForSave(emptyPlacement, false).check).toBe(true);
+  });
+});

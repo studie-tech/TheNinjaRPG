@@ -3535,7 +3535,7 @@ export const questHistory = mysqlTable(
     completed: tinyint("completed").default(0).notNull(),
     previousCompletes: int("previousCompletes").default(0).notNull(),
     previousAttempts: int("previousAttempts").default(0).notNull(),
-    // #1348: completions counted within the current retryDelay calendar period.
+    // Completions counted within the current retryDelay calendar period.
     periodCompletes: int("periodCompletes").default(0).notNull(),
     periodStartAt: datetime("periodStartAt", { mode: "date", fsp: 3 }),
   },

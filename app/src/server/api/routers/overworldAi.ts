@@ -10,7 +10,6 @@ import {
   userData,
   userQuestAttempt,
 } from "@/drizzle/schema";
-import { isQuestObjectiveAvailable } from "@/libs/objectives";
 import {
   findActionableBoundObjective,
   hasFriendlyBindingToPlacement,
@@ -20,8 +19,8 @@ import {
 } from "@/libs/overworldAi";
 import {
   attemptCapReached,
+  getBoundObjectiveCandidates,
   getReward,
-  getUserQuests,
   isAvailableUserQuests,
   isMockQuestHistoryRow,
 } from "@/libs/quest";
@@ -282,34 +281,7 @@ export const overworldAiRouter = createTRPCRouter({
 
       // 1) Bound-objective sub-path (defeat_opponents | dialog | deliver_item).
       const bound = findActionableBoundObjective({
-        activeQuests: getUserQuests(activeUser).map((q) => {
-          const tracker = (activeUser.questData ?? []).find((t) => t.id === q.id);
-          return {
-            questId: q.id,
-            objectives: q.content.objectives.map((objective, i) => {
-              const goal = tracker?.goals.find((g) => g.id === objective.id);
-              return {
-                id: objective.id,
-                task: objective.task,
-                overworldPlacementId: objective.overworldPlacementId,
-                done: goal?.done,
-                deliverItemIds:
-                  "deliverItemIds" in objective ? objective.deliverItemIds : undefined,
-                // Reachability in the consecutive-objective chain. Mirror the getNewTrackers
-                // gate: with no tracker yet (fresh quest) treat as available, matching the
-                // first-interaction behavior; isQuestObjectiveAvailable short-circuits to true
-                // for non-consecutive quests so nothing changes for them.
-                available: tracker
-                  ? isQuestObjectiveAvailable(q.quest, tracker, i)
-                  : true,
-                // Carry the un-projected objective through: the bound sub-paths below read
-                // task-specific fields the projection drops, and would otherwise each re-scan
-                // every active quest's objectives to find this exact row again.
-                source: objective,
-              };
-            }),
-          };
-        }),
+        activeQuests: getBoundObjectiveCandidates(activeUser),
         ownedItemIds,
         placementId: placement.id,
       });
