@@ -455,7 +455,7 @@ export const getDefaultBasicActions = (
       level: user?.level,
       effects: [
         IncreaseDamageGivenTag.parse({
-          power: 5,
+          power: 15,
           powerPerLevel: 0,
           calculation: "percentage",
           statTypes: [...jutsuStatTypes],
@@ -483,7 +483,7 @@ export const getDefaultBasicActions = (
       level: user?.level,
       effects: [
         DecreaseDamageTakenTag.parse({
-          power: 5,
+          power: 15,
           powerPerLevel: 0,
           calculation: "percentage",
           statTypes: [...jutsuStatTypes],
@@ -541,7 +541,7 @@ export const getDefaultBasicActions = (
       level: user?.level,
       effects: [
         HealTag.parse({
-          power: healPower,
+          power: 30,
           powerPerLevel: 0.0,
           calculation: "static",
           rounds: 0,

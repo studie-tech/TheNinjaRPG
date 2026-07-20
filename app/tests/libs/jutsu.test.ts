@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   JUTSU_MAX_BARRIER_EQUIPPED,
   JUTSU_MAX_EVENT_EQUIPPED,
+  JUTSU_MAX_SHIELD_EQUIPPED,
 } from "@/drizzle/constants";
 import type { UserJutsuWithRelations } from "@/drizzle/schema";
 
@@ -171,5 +172,19 @@ describe("computeJutsuLoadoutAssignments", () => {
     });
     expect(out.equipIds).toHaveLength(JUTSU_MAX_BARRIER_EQUIPPED);
     expect(out.invalidJutsus[0]).toMatch(/barrier/);
+  });
+
+  it("enforces the shield-jutsu cap", () => {
+    const count = JUTSU_MAX_SHIELD_EQUIPPED + 1;
+    const userjutsus = Array.from({ length: count }, (_, i) =>
+      uj({ jutsuId: `s${i}`, name: `Shield ${i}`, effectTypes: ["shield"] }),
+    );
+    const out = computeJutsuLoadoutAssignments({
+      jutsuIds: userjutsus.map((j) => j.jutsuId),
+      userjutsus,
+      user: USER,
+    });
+    expect(out.equipIds).toHaveLength(JUTSU_MAX_SHIELD_EQUIPPED);
+    expect(out.invalidJutsus[0]).toMatch(/shield/);
   });
 });

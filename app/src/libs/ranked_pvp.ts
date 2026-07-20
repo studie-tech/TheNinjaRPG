@@ -11,6 +11,7 @@ import {
   RANKED_LOADOUT_MAX_POISON_ITEMS,
   RANKED_LOADOUT_MAX_POISON_JUTSUS,
   RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
+  RANKED_LOADOUT_MAX_SHIELD_JUTSUS,
   RANKED_LOADOUT_MAX_STUN_JUTSUS,
   RANKED_LOADOUT_MAX_SUMMON_JUTSUS,
   RANKED_LOADOUT_MAX_WEAPONS,
@@ -200,6 +201,15 @@ export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
   if (stunJutsus.length > RANKED_LOADOUT_MAX_STUN_JUTSUS) {
     check = false;
     message = `You can only equip up to ${RANKED_LOADOUT_MAX_STUN_JUTSUS} stun jutsu in ranked PvP`;
+  }
+
+  // Check shield jutsu limit
+  const shieldJutsus = jutsus.filter((jutsu) =>
+    jutsu.effects.some((e) => e.type === "shield"),
+  );
+  if (shieldJutsus.length > RANKED_LOADOUT_MAX_SHIELD_JUTSUS) {
+    check = false;
+    message = `You can only equip up to ${RANKED_LOADOUT_MAX_SHIELD_JUTSUS} shield jutsu in ranked PvP`;
   }
 
   // Check event jutsu limit
