@@ -815,6 +815,12 @@ export default function Travel() {
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
                     <TooltipTrigger
+                      aria-label={
+                        showBuildingLabels
+                          ? "Hide building names"
+                          : "Show building names"
+                      }
+                      aria-pressed={showBuildingLabels}
                       onClick={() => setShowBuildingLabels(!showBuildingLabels)}
                     >
                       {showBuildingLabels ? (

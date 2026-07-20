@@ -1066,13 +1066,14 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
     let fontSize = 64;
     context.textAlign = "center";
     context.textBaseline = "middle";
-    do {
-      context.font = `bold ${fontSize}px Serif`;
-      fontSize -= 2;
-    } while (
+    context.font = `bold ${fontSize}px Serif`;
+    while (
       fontSize > 24 &&
       context.measureText(structure.name).width > canvasWidth - 16
-    );
+    ) {
+      fontSize -= 2;
+      context.font = `bold ${fontSize}px Serif`;
+    }
     context.lineJoin = "round";
     context.strokeStyle = "black";
     context.lineWidth = 9;
@@ -1089,6 +1090,9 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
     depthWrite: false,
     depthTest: false,
   });
+  // Signal to disposeGroupPreservingShared that this texture is not shared
+  // and must be disposed together with the material to avoid leaking GPU memory
+  material.userData.ownsMap = true;
   const sprite = new Sprite(material);
   sprite.scale.set(h * 3.0, h * 3.0 * (canvasHeight / canvasWidth), 1);
   // Anchor at the bottom edge so zoom compensation grows the label upwards,

@@ -599,7 +599,14 @@ export const disposeGroupPreservingShared = (root: Object3D) => {
         ? [mesh.material]
         : [];
     materials.forEach((material) => {
-      if (!material.userData?.shared) material.dispose();
+      if (material.userData?.shared) return;
+      // Textures owned by the sprite (e.g. per-instance canvas labels) must be
+      // disposed alongside the material; Material.dispose() does not cascade.
+      if (material.userData?.ownsMap) {
+        const map = (material as SpriteMaterial).map;
+        map?.dispose();
+      }
+      material.dispose();
     });
   });
 };
