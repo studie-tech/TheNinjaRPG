@@ -47,7 +47,11 @@ import {
   type DecorationAsset,
   resolveDecorationAsset,
 } from "@/libs/sector-map/decorations";
-import { resolveTerrainSpec, type TerrainSpec } from "@/libs/sector-map/terrains";
+import {
+  resolveTerrainSpec,
+  STRUCTURE_GROUND_TERRAIN,
+  type TerrainSpec,
+} from "@/libs/sector-map/terrains";
 import type {
   NormalizedSectorMap,
   NormalizedSectorTile,
@@ -559,6 +563,17 @@ export const drawSector = (
       // Structure tiles stay flat and walkable (includes shrines and other
       // added structures)
       if (structureTileKeys.has(tileKey)) {
+        // Structures always sit on their sector biome's land terrain,
+        // overriding the authored tile: the sprites' baked ground patches
+        // (snow/grass/sand) must blend with what is beneath them, and a
+        // shrine anchored on water gets a sand island instead of floating
+        const groundSpec = resolveTerrainSpec(
+          STRUCTURE_GROUND_TERRAIN[baseBiome],
+          terrainRegistry,
+        );
+        tile.spec = groundSpec;
+        tile.battleBiome = authoredTile?.battleBiome ?? groundSpec.battleBiome;
+        tile.cost = 2;
         // Mid shade so the ground under buildings reads flat and uniform
         tile.level = 0.5;
         tile.hasStructure = true;

@@ -32,7 +32,7 @@ import {
   MEDNIN_MIN_RANK,
   RANKS_RESTRICTED_FROM_PVP,
   STRUCTURE_ADJACENTS,
-  WAR_SHRINE_IMAGE,
+  WAR_SHRINE_IMAGE_BY_BIOME,
   XP_BRACKETS,
 } from "@/drizzle/constants";
 import type { UserData, VillageStructure } from "@/drizzle/schema";
@@ -84,6 +84,7 @@ import {
 } from "@/libs/threejs/util";
 import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
+import { getBiomeFromTileType } from "@/libs/travel";
 import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
@@ -360,12 +361,12 @@ const Sector: React.FC<SectorProps> = (props) => {
       createGenericStructure({
         name: "Sector Shrine",
         route: "/shrine",
-        image: WAR_SHRINE_IMAGE,
+        image: WAR_SHRINE_IMAGE_BY_BIOME[getBiomeFromTileType(props.tile.t)],
         longitude: shrineAnchor?.x ?? 10,
         latitude: shrineAnchor?.y ?? 5,
       }),
     ];
-  }, [villageData?.structures, sectorMap.anchors]);
+  }, [villageData?.structures, sectorMap.anchors, props.tile.t]);
 
   // Query for raids in this sector (only when user is in this sector)
   const { data: sectorRaidsData } = api.raids.getAvailableRaids.useQuery(
@@ -1207,7 +1208,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         createGenericStructure({
           name: "Sector Shrine",
           route: "/shrine",
-          image: WAR_SHRINE_IMAGE,
+          image: WAR_SHRINE_IMAGE_BY_BIOME[getBiomeFromTileType(entry.globalTileType)],
           longitude: shrineAnchor?.x ?? 10,
           latitude: shrineAnchor?.y ?? 5,
         }),

@@ -98,6 +98,22 @@ export const BUILTIN_TERRAINS_BY_KEY = new Map(
 export const FALLBACK_TERRAIN_KEY = "ground";
 
 /**
+ * The land terrain drawn under structures per sector biome, overriding the
+ * authored tile. Structure sprites carry baked ground patches (snow, grass,
+ * sand) that must blend with the tiles beneath; water biomes get a sand
+ * island so shrines anchored in the ocean don't float on waves.
+ */
+export const STRUCTURE_GROUND_TERRAIN: Record<CombatBiome, string> = {
+  ocean: "dessert",
+  ground: "ground",
+  dessert: "dessert",
+  ice: "snow",
+  snow: "snow",
+  arena: "ground",
+  default: "ground",
+};
+
+/**
  * Built-ins overlaid with the database terrain library: DB rows win on key
  * collision (so edits to the built-in looks take effect), creator-added kinds
  * extend the map.

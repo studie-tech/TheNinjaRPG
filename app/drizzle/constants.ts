@@ -1378,7 +1378,23 @@ export const WAR_RECAPTURE_THRESHOLD = 0.25; // Threshold for recapture (25% of 
 export const SHRINE_STATUSES = ["ACTIVE", "CAPTURED"] as const; // Status tracking for shrine capture/recovery cycles
 export type ShrineStatus = (typeof SHRINE_STATUSES)[number];
 export const WAR_SHRINE_IMAGE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgLihSncU9cpECTimBdjaqbNn7vQsxGR1wLk4";
+  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxtEfghWZsq9k0Von5rUfP6OgQ2TyptCKHS4u";
+/**
+ * Sector-map shrine sprite per sector biome, so the shrine's baked ground
+ * patch matches the terrain it stands on (water sectors use the desert
+ * variant - the tiles beneath become a sand island).
+ */
+export const WAR_SHRINE_IMAGE_BY_BIOME: Record<CombatBiome, string> = {
+  ocean:
+    "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJe7TE7RyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
+  ground: WAR_SHRINE_IMAGE,
+  dessert:
+    "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJe7TE7RyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
+  ice: "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJco2C06SnxBpQqGNDcTHbLmYz8uXAl3oa54ti",
+  snow: "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJco2C06SnxBpQqGNDcTHbLmYz8uXAl3oa54ti",
+  arena: WAR_SHRINE_IMAGE,
+  default: WAR_SHRINE_IMAGE,
+};
 export const WAR_RAMEN_IMAGE =
   "https://uploadthing.b-cdn.net/f/6407eedd-9382-41e9-b27d-eb02afe87ce9-srb0e7.webp";
 export const WAR_STATES = [
