@@ -64,6 +64,7 @@ import {
   drawSector,
   drawUsers,
   drawVillage,
+  intersectStructures,
   intersectUsers,
   intersectWindowTiles,
   type WindowNav,
@@ -137,6 +138,7 @@ interface SectorProps {
   target: SectorPoint | null;
   showSorrounding: boolean;
   showActive: boolean;
+  showStructureLabels: boolean;
   autoAttackMode: boolean;
   setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
   setTarget: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
@@ -176,7 +178,14 @@ const findNearestWalkableEdgeTile = (
  */
 const Sector: React.FC<SectorProps> = (props) => {
   // Incoming props
-  const { sector, sectorWindow, target, showActive, autoAttackMode } = props;
+  const {
+    sector,
+    sectorWindow,
+    target,
+    showActive,
+    showStructureLabels,
+    autoAttackMode,
+  } = props;
   // The window always contains the current sector: crossings move into a
   // sector that was part of the previous window
   const centerEntry = sectorWindow.sectors.find((entry) => entry.sector === sector);
@@ -216,6 +225,7 @@ const Sector: React.FC<SectorProps> = (props) => {
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const usersRef = useRef<SectorUser[]>([]);
   const showUsersRef = useRef<boolean>(showActive);
+  const showStructureLabelsRef = useRef<boolean>(showStructureLabels);
   const minBracketDrawRef = useRef<number>(storedBracket);
   const showAllyAttackRef = useRef<boolean>(allyAttack);
   const userRef = useRef<UserWithRelations>(undefined);
@@ -262,6 +272,9 @@ const Sector: React.FC<SectorProps> = (props) => {
   // without rebuilding the scene
   const interactionGroupsRef = useRef<Group[]>([]);
   const assetsGroupsRef = useRef<Group[]>([]);
+  // The window's building sprites, so the per-frame label hover raycast only
+  // tests a handful of structures instead of every decoration sprite
+  const structureSpritesRef = useRef<Sprite[]>([]);
   const animatedMaterialsRef = useRef<
     ReturnType<typeof drawSector>["animatedMaterials"]
   >([]);
@@ -1286,6 +1299,11 @@ const Sector: React.FC<SectorProps> = (props) => {
     const entries = [...registry.entries.values()];
     interactionGroupsRef.current = entries.map((render) => render.interaction);
     assetsGroupsRef.current = entries.map((render) => render.assets);
+    structureSpritesRef.current = entries.flatMap((render) =>
+      render.assets.children.filter(
+        (child): child is Sprite => child.userData.type === "structure",
+      ),
+    );
     animatedMaterialsRef.current = entries.flatMap(
       (render) => render.animatedMaterials,
     );
@@ -1584,6 +1602,10 @@ const Sector: React.FC<SectorProps> = (props) => {
   useEffect(() => {
     showUsersRef.current = showActive;
   }, [showActive]);
+
+  useEffect(() => {
+    showStructureLabelsRef.current = showStructureLabels;
+  }, [showStructureLabels]);
 
   useEffect(() => {
     isAttackingRef.current = isAttacking;
@@ -2193,6 +2215,18 @@ const Sector: React.FC<SectorProps> = (props) => {
           drawQuest({ group_quest, user: userRef.current, grid: gridRef.current });
           endQuest();
         }
+
+        // Building name labels: hovered building only, or every building
+        // while the travel page's label toggle is on
+        const endStructures = profiler.mark("animate_intersect_structures");
+        intersectStructures({
+          structureSprites: structureSpritesRef.current,
+          raycaster,
+          showAll: showStructureLabelsRef.current,
+          pointerOnMap: pointerOnMapRef.current,
+          cameraZoom: camera.zoom,
+        });
+        endStructures();
 
         // Highlight the hover path across the whole 3x3 window (offsetOfSector
         // is the component-scope helper defined above)
