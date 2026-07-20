@@ -295,6 +295,18 @@ describe("copy tag: ceiling + priority", () => {
     copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
     expect(effects.length).toBe(before); // no new lifesteal copied
   });
+
+  it("is a no-op when the caster targets itself (self-copy)", () => {
+    const effects: UserEffect[] = [
+      // A copyable buff sitting on SELF; a self-cast must not clone it.
+      oppBuff("increasedamagegiven", 40, { targetId: SELF, creatorId: SELF }),
+    ];
+    const before = effects.length;
+    const res = copy(copyTag(), effects, asUser(SELF, "Self"), asUser(SELF, "Self"));
+    expect(res).toBeUndefined();
+    expect(effects.filter((e) => e.fromEffectId)).toHaveLength(0);
+    expect(effects.length).toBe(before);
+  });
 });
 
 // A negative effect ON self (mirror source). username-less users reused from copy tests.
@@ -381,5 +393,14 @@ describe("mirror tag: ceiling + priority + wound", () => {
     mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
     const mirrored = effects.find((e) => e.targetId === OPP && e.creatorId === SELF && e.type === "drain");
     expect(mirrored?.power).toBe(Math.floor(40 / 3)); // floor(40 / mirror-tag-rounds=3) = 13
+  });
+
+  it("is a no-op when the caster targets itself (self-mirror)", () => {
+    const effects: UserEffect[] = [selfDebuff("increasedamagetaken", 50)];
+    const before = effects.length;
+    const res = mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(SELF, "Self"));
+    expect(res).toBeUndefined();
+    expect(effects.filter((e) => e.fromEffectId)).toHaveLength(0);
+    expect(effects.length).toBe(before);
   });
 });
