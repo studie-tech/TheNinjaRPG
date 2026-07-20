@@ -1120,6 +1120,7 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
     (e) => e.type === "noncombatconsumereward",
   );
   const hasUnlockItemVariant = data.effects.find((e) => e.type === "unlockitemvariant");
+  const hasSageModeActivation = data.effects.find((e) => e.type === "activatesagemode");
 
   // Cost validation - exactly one cost type must be set
   const costTypes = [
@@ -1157,6 +1158,12 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
       addIssue(ctx, "Items with bloodline/sage roll must have single method");
     }
   }
+  if (hasSageModeActivation) {
+    addIssue(
+      ctx,
+      "Cannot have sage mode activation effect on items; it is injected automatically in battle",
+    );
+  }
   if (hasUnlockItemVariant) {
     if (data.itemType !== "CONSUMABLE") {
       addIssue(ctx, "Items with unlockitemvariant must be consumable.");
@@ -1189,11 +1196,18 @@ const SuperRefineJutsu = (
   const hasBloodlineRoll = data.effects.find((e) => e.type === "rollbloodline");
   const hasSageModeRoll = data.effects.find((e) => e.type === "rollsagemode");
   const hasRemoveBloodline = data.effects.find((e) => e.type === "removebloodline");
+  const hasSageModeActivation = data.effects.find((e) => e.type === "activatesagemode");
   const hasNonCombatConsumeReward = data.effects.find(
     (e) => e.type === "noncombatconsumereward",
   );
   if (hasBloodlineRoll || hasSageModeRoll || hasRemoveBloodline) {
     addIssue(ctx, "Cannot have bloodline/sage add/remove effects on jutsu");
+  }
+  if (hasSageModeActivation) {
+    addIssue(
+      ctx,
+      "Cannot have sage mode activation effect on jutsu; it is injected automatically in battle",
+    );
   }
   if (hasNonCombatConsumeReward) {
     addIssue(ctx, "Cannot have non-combat consume reward on jutsu");
