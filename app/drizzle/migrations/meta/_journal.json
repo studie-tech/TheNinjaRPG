@@ -141,6 +141,13 @@
       "when": 1784395621841,
       "tag": "0019_even_vision",
       "breakpoints": false
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1784555409552,
+      "tag": "0020_broad_princess_powerful",
+      "breakpoints": false
     }
   ]
 }
