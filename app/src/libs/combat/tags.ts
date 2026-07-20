@@ -7,6 +7,15 @@ import type {
   PoolType,
   StatType,
 } from "@/drizzle/constants";
+import {
+  COPY_MAX_TAGS,
+  COPY_PRIORITY_RANK,
+  COPYABLE_EFFECT_TYPES,
+  MIRROR_EXCLUDED_EFFECT_TYPES,
+  MIRROR_MAX_TAGS,
+  MIRROR_PRIORITY_RANK,
+  TRANSFER_EXCLUDED_SOURCE_TYPES,
+} from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
 import type { CombatAction } from "@/libs/combat/types";
 import {
@@ -32,15 +41,6 @@ import {
   isPositiveUserEffect,
 } from "@/validators/combat";
 import type { DmgConfig, GenName, GenNames, StatNames } from "./constants";
-import {
-  COPY_MAX_TAGS,
-  COPY_PRIORITY_RANK,
-  COPYABLE_EFFECT_TYPES,
-  MIRROR_EXCLUDED_EFFECT_TYPES,
-  MIRROR_MAX_TAGS,
-  MIRROR_PRIORITY_RANK,
-  TRANSFER_EXCLUDED_SOURCE_TYPES,
-} from "./constants";
 import type {
   ActionEffect,
   BattleEffect,
