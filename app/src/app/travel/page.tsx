@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   HIDEOUT_COST,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   STEALTH_SENSORY_CAP,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   VILLAGE_LEAVE_REQUIRED_RANK,
@@ -312,6 +313,14 @@ export default function Travel() {
     return villageData.filter((v) => ["VILLAGE", "SAFEZONE"].includes(v.type));
   }, [villageData, userData?.isOutlaw]);
 
+  // Quick-travel destinations: main villages/safezones (+ outlaw hubs for outlaws)
+  const travelDestinations = useMemo(() => {
+    if (!villages) return [];
+    return villages
+      .filter((v) => ["VILLAGE", "SAFEZONE", "OUTLAW"].includes(v.type))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [villages]);
+
   // Fetch tracked bounties for map display
   const { data: trackedBounties } = api.bounty.getTrackedBounties.useQuery(undefined, {
     enabled: !!userData,
@@ -560,6 +569,16 @@ export default function Travel() {
       startGlobalMove({ sector });
     },
     [currentStep, userData?.tutorialOn, startGlobalMove],
+  );
+
+  // Open the world-travel confirm modal for a destination sector
+  const initiateTravelToSector = useCallback(
+    (sector: number) => {
+      if (sector === userData?.sector || isStartingTravel) return;
+      setTargetSector(sector);
+      setShowModal(true);
+    },
+    [userData?.sector, isStartingTravel],
   );
 
   const isGlobal = activeTab === globalLink;
@@ -845,18 +864,67 @@ export default function Travel() {
                   <PopoverTrigger>
                     <Search className={`mr-2 h-7 w-7 hover:text-orange-500`} />
                   </PopoverTrigger>
-                  <PopoverContent>
+                  <PopoverContent className="w-72">
                     <p className="py-2 font-semibold">Quick Travel</p>
                     <p className="pb-2 text-muted-foreground text-sm">
-                      Enter a sector ID to travel there directly.
+                      Travel to a village, or enter a sector ID.
                     </p>
+                    <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pb-3">
+                      {travelDestinations.map((village) => {
+                        // Hyorin's stored color is near-white and invisible on the
+                        // popover background; show it as a light blue instead.
+                        const dotColor =
+                          village.name === "Hyorin" ? "#93c5fd" : village.hexColor;
+                        return (
+                          <Button
+                            key={village.id}
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="justify-start"
+                            style={{ borderColor: dotColor }}
+                            disabled={
+                              village.sector === userData?.sector || isStartingTravel
+                            }
+                            onClick={() => initiateTravelToSector(village.sector)}
+                          >
+                            <span
+                              className="mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                              style={{ backgroundColor: dotColor }}
+                            />
+                            {village.mapName || village.name}
+                            <span className="ml-auto text-muted-foreground text-xs">
+                              {village.sector}
+                            </span>
+                          </Button>
+                        );
+                      })}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="justify-start border-red-600"
+                        disabled={
+                          MAP_WAR_TORN_BATTLEGROUND_SECTOR === userData?.sector ||
+                          isStartingTravel
+                        }
+                        onClick={() =>
+                          initiateTravelToSector(MAP_WAR_TORN_BATTLEGROUND_SECTOR)
+                        }
+                      >
+                        <Swords className="mr-2 h-3.5 w-3.5 shrink-0 text-red-500" />
+                        War-Torn Battleground
+                        <span className="ml-auto text-muted-foreground text-xs">
+                          {MAP_WAR_TORN_BATTLEGROUND_SECTOR}
+                        </span>
+                      </Button>
+                    </div>
                     <Form {...quickTravelForm}>
                       <form
                         onSubmit={quickTravelForm.handleSubmit((data) => {
-                          setTargetSector(data.sector);
-                          setShowModal(true);
+                          initiateTravelToSector(data.sector);
                         })}
-                        className="flex flex-col gap-2"
+                        className="flex flex-col gap-2 border-t pt-3"
                       >
                         <FormField
                           control={quickTravelForm.control}
@@ -866,7 +934,7 @@ export default function Travel() {
                               <FormControl>
                                 <Input
                                   className="w-full"
-                                  placeholder="Sector ID (0-491)"
+                                  placeholder="Sector ID"
                                   type="number"
                                   {...field}
                                   value={field.value as number}
