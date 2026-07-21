@@ -2,11 +2,14 @@ import { describe, it, expect } from "vitest";
 import globe from "@/data/hexasphere.json";
 import {
   edgeCell,
+  edgeLength,
   edgeParam,
   paramFlips,
   mapParam,
   seamRotation,
   resolveEdgeCrossing,
+  resolveSectorMapEdgeCrossing,
+  sectorMapEdgeForGlobeEdge,
   EDGE_NORTH,
   EDGE_EAST,
   EDGE_SOUTH,
@@ -56,6 +59,57 @@ describe("crossing edge primitives", () => {
   it("reports zero rotation for aligned neighbours", () => {
     expect(seamRotation(EDGE_NORTH, EDGE_SOUTH)).toBe(0);
     expect(seamRotation(EDGE_EAST, EDGE_WEST)).toBe(0);
+  });
+
+  it("adapts all rendered edges across differently sized maps", () => {
+    expect(
+      resolveSectorMapEdgeCrossing(
+        EDGE_NORTH,
+        1,
+        5,
+        4,
+        6,
+        EDGE_SOUTH,
+        8,
+        10,
+      ),
+    ).toEqual({ entryEdge: EDGE_NORTH, entryX: 2, entryY: 0 });
+    expect(
+      resolveSectorMapEdgeCrossing(
+        EDGE_SOUTH,
+        2,
+        0,
+        4,
+        6,
+        EDGE_NORTH,
+        8,
+        10,
+      ),
+    ).toEqual({ entryEdge: EDGE_SOUTH, entryX: 5, entryY: 9 });
+    expect(
+      resolveSectorMapEdgeCrossing(
+        EDGE_EAST,
+        3,
+        1,
+        4,
+        6,
+        EDGE_WEST,
+        8,
+        10,
+      ),
+    ).toEqual({ entryEdge: EDGE_WEST, entryX: 0, entryY: 2 });
+    expect(
+      resolveSectorMapEdgeCrossing(
+        EDGE_WEST,
+        0,
+        4,
+        4,
+        6,
+        EDGE_EAST,
+        8,
+        10,
+      ),
+    ).toEqual({ entryEdge: EDGE_EAST, entryX: 7, entryY: 7 });
   });
 });
 
@@ -180,7 +234,7 @@ describe("game crossing wrapper (travel.moveInSector path)", () => {
   // actually calls - resolveSectorCrossing and the named-direction accessors -
   // wires directions, edges, and the baked n/ne data together correctly. A
   // scrambled DIRECTION_TO_EDGE or swapped accessor field would fail here.
-  it("resolves every directional crossing to the baked neighbour and back", () => {
+  it("maps every rendered edge to the correct globe neighbour and back", () => {
     let checked = 0;
     for (let s = 0; s < tiles.length; s++) {
       const neighbors = getSectorNeighborIds(s);
@@ -190,17 +244,44 @@ describe("game crossing wrapper (travel.moveInSector path)", () => {
         expect(neighbors[direction]).toBe(tiles[s]!.n![d]);
         expect(entryEdges[direction]).toBe(tiles[s]!.ne![d]);
 
-        // Crossing out of a sample of edge cells lands in the baked neighbour...
-        for (const p of [0, 9, W - 1]) {
-          const exit = edgeCell(d as EdgeIndex, p, W, H);
+        const globeExitEdge = d as EdgeIndex;
+        const mapExitEdge = sectorMapEdgeForGlobeEdge(globeExitEdge);
+        const globeEntryEdge = tiles[s]!.ne![d]! as EdgeIndex;
+        const mapEntryEdge = sectorMapEdgeForGlobeEdge(globeEntryEdge);
+
+        // Every cell on the rendered edge lands in the baked globe neighbour.
+        // This is exhaustive because a corner-only/sample test can miss a
+        // reversed along-edge parameter on rotated seams.
+        for (let p = 0; p < edgeLength(mapExitEdge, W, H); p++) {
+          const exit = edgeCell(mapExitEdge, p, W, H);
           const res = resolveSectorCrossing(s, direction, exit.x, exit.y, W, H, W, H);
           expect(res.toSector).toBe(tiles[s]!.n![d]);
-          expect(res.entryEdge).toBe(tiles[s]!.ne![d]);
+          expect(res.entryEdge).toBe(mapEntryEdge);
+
+          // Independent rendered<->globe parameter conversion. The vertical
+          // reflection reverses parameters only on E/W edges.
+          const globeExitParam =
+            globeExitEdge === EDGE_EAST || globeExitEdge === EDGE_WEST
+              ? W - 1 - p
+              : p;
+          const globeEntryParam = mapParam(
+            globeExitParam,
+            W,
+            W,
+            paramFlips(globeExitEdge, globeEntryEdge),
+          );
+          const expectedMapEntryParam =
+            globeEntryEdge === EDGE_EAST || globeEntryEdge === EDGE_WEST
+              ? W - 1 - globeEntryParam
+              : globeEntryParam;
+          expect(edgeParam(mapEntryEdge, res.entryX, res.entryY)).toBe(
+            expectedMapEntryParam,
+          );
 
           // ...and crossing back through the wrapper returns to the start cell
           const back = resolveSectorCrossing(
             res.toSector,
-            SectorNeighborDirections[res.entryEdge]!,
+            SectorNeighborDirections[globeEntryEdge]!,
             res.entryX,
             res.entryY,
             W,
@@ -215,6 +296,53 @@ describe("game crossing wrapper (travel.moveInSector path)", () => {
         }
       });
     }
-    expect(checked).toBe(tiles.length * 4 * 3);
+    expect(checked).toBe(tiles.length * 4 * W);
+  }, 20_000);
+
+  it("golden: Shirohana's rendered south edge leads south, not north/east", () => {
+    const shirohana = 1631;
+    const south = resolveSectorCrossing(
+      shirohana,
+      "south",
+      13,
+      0,
+      W,
+      H,
+      W,
+      H,
+    );
+    expect(south).toEqual({
+      toSector: 1649,
+      entryEdge: EDGE_SOUTH,
+      entryX: 13,
+      entryY: H - 1,
+    });
+    expect(getSectorNeighborIds(shirohana).east).toBe(1632);
+  });
+
+  it("the dedicated rendered-edge primitive agrees with the game wrapper", () => {
+    for (let sector = 0; sector < tiles.length; sector++) {
+      const neighbors = getSectorNeighborIds(sector);
+      const entryEdges = getSectorEntryEdges(sector);
+      SectorNeighborDirections.forEach((direction, d) => {
+        const globeExitEdge = d as EdgeIndex;
+        const mapExitEdge = sectorMapEdgeForGlobeEdge(globeExitEdge);
+        const exit = edgeCell(mapExitEdge, 7, W, H);
+        const primitive = resolveSectorMapEdgeCrossing(
+          globeExitEdge,
+          exit.x,
+          exit.y,
+          W,
+          H,
+          entryEdges[direction],
+          W,
+          H,
+        );
+        expect(resolveSectorCrossing(sector, direction, exit.x, exit.y, W, H, W, H)).toEqual({
+          toSector: neighbors[direction],
+          ...primitive,
+        });
+      });
+    }
   });
 });

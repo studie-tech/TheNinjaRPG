@@ -154,8 +154,8 @@ const findNearestWalkableEdgeTile = (
 ): SectorPoint | null => {
   const candidates = map.tiles.filter((tile) => {
     if (tile.blocked || tile.walkCost <= 0) return false;
-    if (edge === "north") return tile.y === 0;
-    if (edge === "south") return tile.y === map.height - 1;
+    if (edge === "north") return tile.y === map.height - 1;
+    if (edge === "south") return tile.y === 0;
     if (edge === "west") return tile.x === 0;
     return tile.x === map.width - 1;
   });
@@ -760,8 +760,8 @@ const Sector: React.FC<SectorProps> = (props) => {
     const cross = pendingCrossRef.current;
     if (cross) {
       const atCrossEdge =
-        (cross === "north" && data.latitude === 0) ||
-        (cross === "south" && data.latitude === sectorMap.height - 1) ||
+        (cross === "north" && data.latitude === sectorMap.height - 1) ||
+        (cross === "south" && data.latitude === 0) ||
         (cross === "west" && data.longitude === 0) ||
         (cross === "east" && data.longitude === sectorMap.width - 1);
       if (atCrossEdge) {
@@ -843,9 +843,9 @@ const Sector: React.FC<SectorProps> = (props) => {
   ) => {
     const beyond =
       direction === "north"
-        ? { x: from.x, y: -1 }
+        ? { x: from.x, y: sectorMap.height }
         : direction === "south"
-          ? { x: from.x, y: sectorMap.height }
+          ? { x: from.x, y: -1 }
           : direction === "west"
             ? { x: -1, y: from.y }
             : { x: sectorMap.width, y: from.y };
@@ -873,7 +873,7 @@ const Sector: React.FC<SectorProps> = (props) => {
     );
     if (!current) return null;
     const ddx = direction === "east" ? 1 : direction === "west" ? -1 : 0;
-    const ddy = direction === "south" ? 1 : direction === "north" ? -1 : 0;
+    const ddy = direction === "north" ? 1 : direction === "south" ? -1 : 0;
     const adjacent = window.sectors.find(
       (candidate) =>
         candidate.dx === current.dx + ddx && candidate.dy === current.dy + ddy,
@@ -1505,13 +1505,13 @@ const Sector: React.FC<SectorProps> = (props) => {
       return;
     }
     const primary =
-      relDx > 0 ? "east" : relDx < 0 ? "west" : relDy > 0 ? "south" : "north";
+      relDx > 0 ? "east" : relDx < 0 ? "west" : relDy > 0 ? "north" : "south";
     const along = primary === "north" || primary === "south" ? origin.col : origin.row;
     const rawEdge =
       primary === "north"
-        ? { x: along, y: 0 }
+        ? { x: along, y: currentMap.height - 1 }
         : primary === "south"
-          ? { x: along, y: currentMap.height - 1 }
+          ? { x: along, y: 0 }
           : primary === "west"
             ? { x: 0, y: along }
             : { x: currentMap.width - 1, y: along };

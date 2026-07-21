@@ -4,7 +4,10 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
 } from "@/drizzle/constants";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
-import { getSectorTile } from "@/libs/sector-map/validation";
+import {
+  findNearestWalkableCoordinate,
+  getSectorTile,
+} from "@/libs/sector-map/validation";
 import type { GlobalMapData, GlobalTile, SectorPoint } from "@/libs/threejs/types";
 
 export interface SectorDimensions {
@@ -60,6 +63,19 @@ export const findNearestEdge = (
   const x = position.x < dimensions.width / 2 ? 0 : dimensions.width - 1;
   const y = position.y < dimensions.height / 2 ? 0 : dimensions.height - 1;
   return { x: x, y: y };
+};
+
+/** Center-tile landing point for global travel, adjusted only when blocked. */
+export const findGlobalTravelDestination = (
+  sectorMap: Pick<NormalizedSectorMap, "width" | "height" | "tiles" | "anchors">,
+) => {
+  const center = {
+    x: Math.floor(sectorMap.width / 2),
+    y: Math.floor(sectorMap.height / 2),
+  };
+  // Global travel should stay near the center rather than falling back to the
+  // map's default spawn anchor, which can intentionally sit near an edge.
+  return findNearestWalkableCoordinate(sectorMap, center, null);
 };
 
 // Calculate distance between two points on the hexasphere

@@ -1,12 +1,16 @@
 /**
  * Pure geometry for crossing a sector border on the cube-sphere world.
  *
- * Sectors are square grids with coordinates (x = longitude, y = latitude),
- * x in [0, width), y in [0, height). Edges are indexed the same way as a tile's
- * neighbour array `n` and entry-edge array `ne`:
+ * The low-level primitives in this file use the baked globe's canonical edge
+ * frame. Edges are indexed the same way as a tile's neighbour array `n` and
+ * entry-edge array `ne`:
  *
  *   0 = North (y = 0)      2 = South (y = height - 1)
  *   1 = East  (x = W - 1)  3 = West  (x = 0)
+ *
+ * Authored/rendered sector maps use the opposite vertical axis (larger y is
+ * visually north). `resolveSectorMapEdgeCrossing` is the adapter for all game
+ * movement and must be used instead of the raw globe-space primitive there.
  *
  * Within a cube face, neighbours are aligned: crossing north lands on the
  * neighbour's south edge at the SAME column (the parameter is preserved). Across
@@ -30,6 +34,16 @@ export const EDGE_NORTH = 0;
 export const EDGE_EAST = 1;
 export const EDGE_SOUTH = 2;
 export const EDGE_WEST = 3;
+
+/**
+ * Authored sector maps render with y increasing upward, while the baked globe
+ * edge convention follows the JSON corner order with north at edge 0. Thus the
+ * rendered north/south edges are vertically reflected relative to the globe;
+ * east/west are unchanged. This mapping is deliberately explicit so window
+ * placement, client routing, and server crossings share one convention.
+ */
+export const sectorMapEdgeForGlobeEdge = (edge: EdgeIndex): EdgeIndex =>
+  edge === EDGE_NORTH ? EDGE_SOUTH : edge === EDGE_SOUTH ? EDGE_NORTH : edge;
 
 /** +1 if the along-edge parameter follows clockwise corner order, else -1 */
 const EDGE_DIR: readonly number[] = [1, 1, -1, -1];
@@ -126,4 +140,43 @@ export const resolveEdgeCrossing = (
   const pB = mapParam(pA, lenA, lenB, flip);
   const cell = edgeCell(entryEdge, pB, toWidth, toHeight);
   return { entryEdge, entryX: cell.x, entryY: cell.y };
+};
+
+/**
+ * Resolve a baked globe-edge crossing into rendered sector-map coordinates.
+ * The vertical reflection reverses the along-edge parameter on east/west map
+ * edges, so parameters are converted to globe orientation before applying the
+ * seam handedness and converted back on the destination.
+ */
+export const resolveSectorMapEdgeCrossing = (
+  globeExitEdge: EdgeIndex,
+  exitX: number,
+  exitY: number,
+  fromWidth: number,
+  fromHeight: number,
+  globeEntryEdge: EdgeIndex,
+  toWidth: number,
+  toHeight: number,
+): CrossingResult => {
+  const mapExitEdge = sectorMapEdgeForGlobeEdge(globeExitEdge);
+  const mapEntryEdge = sectorMapEdgeForGlobeEdge(globeEntryEdge);
+  const lenA = edgeLength(mapExitEdge, fromWidth, fromHeight);
+  const lenB = edgeLength(mapEntryEdge, toWidth, toHeight);
+  const mapExitParam = edgeParam(mapExitEdge, exitX, exitY);
+  const globeExitParam =
+    globeExitEdge === EDGE_EAST || globeExitEdge === EDGE_WEST
+      ? lenA - 1 - mapExitParam
+      : mapExitParam;
+  const globeEntryParam = mapParam(
+    globeExitParam,
+    lenA,
+    lenB,
+    paramFlips(globeExitEdge, globeEntryEdge),
+  );
+  const mapEntryParam =
+    globeEntryEdge === EDGE_EAST || globeEntryEdge === EDGE_WEST
+      ? lenB - 1 - globeEntryParam
+      : globeEntryParam;
+  const cell = edgeCell(mapEntryEdge, mapEntryParam, toWidth, toHeight);
+  return { entryEdge: mapEntryEdge, entryX: cell.x, entryY: cell.y };
 };

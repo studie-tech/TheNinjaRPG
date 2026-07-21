@@ -175,9 +175,10 @@ describe("buildWindowNav", () => {
     }
   });
 
-  it("crosses from the center into the south neighbor (row-axis composition)", () => {
+  it("crosses north from the top row into the neighbor's bottom row", () => {
     // Non-square maps + a vertical crossing: exercises the dy/localRow window
-    // composition that the east-crossing tests never touch
+    // composition that the east-crossing tests never touch. Rendered y grows
+    // northward, so the north neighbor is dy=+1.
     const nav = buildWindowNav(
       [
         { dx: 0, dy: 0, map: makeMap(4, 6) },
@@ -203,6 +204,35 @@ describe("buildWindowNav", () => {
       dy: 1,
       col: 1,
       row: 0,
+    });
+  });
+
+  it("crosses south from the bottom row into the neighbor's top row", () => {
+    const nav = buildWindowNav(
+      [
+        { dx: 0, dy: 0, map: makeMap(4, 6) },
+        { dx: 0, dy: -1, map: makeMap(4, 6) },
+      ],
+      HEXSIZE,
+      mergeTerrainSpecs([]),
+    );
+    if (!nav) throw new Error("no nav");
+    const start = nav.toUnified(0, 0, 1, 0);
+    const goal = nav.toUnified(0, -1, 1, 5);
+    expect(start && goal).toBeTruthy();
+    if (!start || !goal) return;
+    const path = nav.pathFinder.getShortestPath(start, goal);
+    expect(path).toBeDefined();
+    if (!path) return;
+    const rowsVisited = new Set(path.map((tile) => nav.fromUnified(tile).dy));
+    expect(rowsVisited.has(0)).toBe(true);
+    expect(rowsVisited.has(-1)).toBe(true);
+    expect(nav.fromUnified(path[0]!)).toEqual({ dx: 0, dy: 0, col: 1, row: 0 });
+    expect(nav.fromUnified(path[path.length - 1]!)).toEqual({
+      dx: 0,
+      dy: -1,
+      col: 1,
+      row: 5,
     });
   });
 
