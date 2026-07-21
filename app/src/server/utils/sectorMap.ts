@@ -5,7 +5,6 @@ import { sectorMap } from "@/drizzle/schema";
 import {
   type EdgeIndex,
   resolveSectorMapEdgeCrossing,
-  seamRotation,
 } from "@/libs/sector-map/crossing";
 import { isValidSectorId } from "@/libs/sector-map/sector-ids";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
@@ -131,31 +130,30 @@ export const getSectorNeighborIds = (
 };
 
 /**
- * Entry edge (0=N,1=E,2=S,3=W) of the neighbour reached by crossing each of this
- * sector's edges. Within a cube face this is the opposite edge; across the 12
- * cube-edge seams it encodes the 90/270 rotation. Reciprocal with the neighbour
- * graph: globalMap.tiles[n[e]].n[ne[e]] === sector.
+ * Entry edge (0=N,1=E,2=S,3=W) of the neighbor reached across each edge.
+ * Cylindrical-grid neighbors always use the opposite edge; -1 marks a blocked
+ * north/south polar boundary.
  */
 export const getSectorEntryEdges = (
   sector: number,
-): Record<SectorNeighborDirection, EdgeIndex> => {
+): Record<SectorNeighborDirection, number> => {
   const entries = globalMap.tiles[sector]?.ne;
   if (entries?.length !== 4) {
     throw new Error(`Sector ${sector} has no entry-edge data`);
   }
   return {
-    north: entries[0]! as EdgeIndex,
-    east: entries[1]! as EdgeIndex,
-    south: entries[2]! as EdgeIndex,
-    west: entries[3]! as EdgeIndex,
+    north: entries[0]!,
+    east: entries[1]!,
+    south: entries[2]!,
+    west: entries[3]!,
   };
 };
 
 /**
  * Resolve a cross-border move from rendered sector-map coordinates. Exiting
  * `sector` toward `direction` from the visible edge cell (x, y) lands in the
- * neighbour at the returned rendered-map entry cell. Handles both the map/globe
- * vertical-axis reflection and cube-sphere seam rotation in one code path.
+ * neighbor at the returned rendered-map entry cell. The only coordinate adapter
+ * is the map/globe vertical-axis reflection; all real sector edges are aligned.
  */
 export const resolveSectorCrossing = (
   sector: number,
@@ -170,13 +168,16 @@ export const resolveSectorCrossing = (
   const exitEdge = DIRECTION_TO_EDGE[direction];
   const toSector = getSectorNeighborIds(sector)[direction];
   const globeEntryEdge = getSectorEntryEdges(sector)[direction];
+  if (toSector < 0 || globeEntryEdge < 0) {
+    throw new Error(`Cannot cross ${direction} from sector ${sector}: polar boundary`);
+  }
   const { entryEdge, entryX, entryY } = resolveSectorMapEdgeCrossing(
     exitEdge,
     x,
     y,
     fromWidth,
     fromHeight,
-    globeEntryEdge,
+    globeEntryEdge as EdgeIndex,
     toWidth,
     toHeight,
   );
@@ -187,34 +188,28 @@ export interface SectorWindowEntry {
   sector: number;
   dx: number;
   dy: number;
-  rotation: number;
 }
 
 /**
- * The 3x3 rendered window layout around a sector: the center, its cardinal neighbors
- * (with their quarter-turn seam rotation relative to the center - 0 within a
- * cube face, 1 or 3 across the rotated cube-edge seams), and its diagonals
- * (rotation 0; used only for rendering). Missing polar/edge sectors are
- * filtered out. Pure over the baked globe data so it is unit-testable; the
+ * The unrotated 3x3 rendered window around a sector. Longitude wraps at the
+ * east/west edge, while missing neighbors beyond the polar caps are filtered
+ * out. Pure over the baked globe data so it is unit-testable; the
  * worldMap.getSectorWindow endpoint builds its response from this. Rendered y
  * increases upward, so north is dy=+1 and south is dy=-1.
  */
 export const buildSectorWindowLayout = (sector: number): SectorWindowEntry[] => {
   const cardinals = getSectorNeighborIds(sector);
   const diagonals = getSectorDiagonalIds(sector);
-  const centerEdges = getSectorEntryEdges(sector);
-  const rotationFor = (edge: EdgeIndex, direction: SectorNeighborDirection) =>
-    seamRotation(edge, centerEdges[direction]);
   return [
-    { sector, dx: 0, dy: 0, rotation: 0 },
-    { sector: cardinals.north, dx: 0, dy: 1, rotation: rotationFor(0, "north") },
-    { sector: cardinals.south, dx: 0, dy: -1, rotation: rotationFor(2, "south") },
-    { sector: cardinals.west, dx: -1, dy: 0, rotation: rotationFor(3, "west") },
-    { sector: cardinals.east, dx: 1, dy: 0, rotation: rotationFor(1, "east") },
-    { sector: diagonals.northeast, dx: 1, dy: 1, rotation: 0 },
-    { sector: diagonals.northwest, dx: -1, dy: 1, rotation: 0 },
-    { sector: diagonals.southeast, dx: 1, dy: -1, rotation: 0 },
-    { sector: diagonals.southwest, dx: -1, dy: -1, rotation: 0 },
+    { sector, dx: 0, dy: 0 },
+    { sector: cardinals.north, dx: 0, dy: 1 },
+    { sector: cardinals.south, dx: 0, dy: -1 },
+    { sector: cardinals.west, dx: -1, dy: 0 },
+    { sector: cardinals.east, dx: 1, dy: 0 },
+    { sector: diagonals.northeast, dx: 1, dy: 1 },
+    { sector: diagonals.northwest, dx: -1, dy: 1 },
+    { sector: diagonals.southeast, dx: 1, dy: -1 },
+    { sector: diagonals.southwest, dx: -1, dy: -1 },
   ].filter((entry) => entry.sector >= 0);
 };
 

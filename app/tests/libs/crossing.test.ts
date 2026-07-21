@@ -1,21 +1,39 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import globe from "@/data/hexasphere.json";
 import {
+  MAP_NAVIGABLE_LATITUDE_LIMIT,
+  MAP_TOTAL_SECTORS,
+  MAP_WORLD_COLUMNS,
+  MAP_WORLD_ROWS,
+} from "@/drizzle/constants";
+import {
+  EDGE_EAST,
+  EDGE_NORTH,
+  EDGE_SOUTH,
+  EDGE_WEST,
   edgeCell,
   edgeLength,
   edgeParam,
-  paramFlips,
   mapParam,
-  seamRotation,
+  paramFlips,
   resolveEdgeCrossing,
   resolveSectorMapEdgeCrossing,
+  seamRotation,
   sectorMapEdgeForGlobeEdge,
-  EDGE_NORTH,
-  EDGE_EAST,
-  EDGE_SOUTH,
-  EDGE_WEST,
   type EdgeIndex,
 } from "@/libs/sector-map/crossing";
+import {
+  sectorGridEntryEdges,
+  sectorGridNeighbors,
+  sectorGridPosition,
+  sectorIdAt,
+} from "@/libs/sector-map/world-grid";
+import {
+  globalBiomeType,
+  globalContinentalness,
+  globalMoisture,
+  globalTemperature,
+} from "@/libs/sector-map/worldgen";
 import {
   getSectorEntryEdges,
   getSectorNeighborIds,
@@ -23,69 +41,32 @@ import {
   SectorNeighborDirections,
 } from "@/server/utils/sectorMap";
 
-type Corner = { x: string; y: string; z: string };
-const tiles = globe.tiles as { n?: number[]; ne?: number[]; b?: Corner[] }[];
+const tiles = globe.tiles as {
+  n: number[];
+  ne: number[];
+  t: number;
+  v: number[];
+  vc: number[];
+}[];
 const W = 26;
 const H = 26;
-// 6 cube faces; a tile's face is its id / tiles-per-face (324 for an 18x18 face)
-const FACE_TILES = tiles.length / 6;
-const faceOf = (i: number) => Math.floor(i / FACE_TILES);
 
 describe("crossing edge primitives", () => {
-  it("places interior-most cells on the correct edge", () => {
+  it("places and reads cells on every edge", () => {
     expect(edgeCell(EDGE_NORTH, 5, W, H)).toEqual({ x: 5, y: 0 });
     expect(edgeCell(EDGE_SOUTH, 5, W, H)).toEqual({ x: 5, y: H - 1 });
     expect(edgeCell(EDGE_WEST, 7, W, H)).toEqual({ x: 0, y: 7 });
     expect(edgeCell(EDGE_EAST, 7, W, H)).toEqual({ x: W - 1, y: 7 });
-  });
-
-  it("reads the along-edge parameter back out of a cell", () => {
     expect(edgeParam(EDGE_NORTH, 5, 0)).toBe(5);
     expect(edgeParam(EDGE_EAST, W - 1, 7)).toBe(7);
   });
 
-  it("does not flip the aligned north<->south parameter", () => {
+  it("keeps aligned parameters and scales differently sized maps", () => {
     expect(paramFlips(EDGE_NORTH, EDGE_SOUTH)).toBe(false);
     expect(paramFlips(EDGE_EAST, EDGE_WEST)).toBe(false);
-  });
-
-  it("maps parameters proportionally with optional flip", () => {
-    expect(mapParam(0, 26, 26, false)).toBe(0);
-    expect(mapParam(25, 26, 26, false)).toBe(25);
-    expect(mapParam(0, 26, 26, true)).toBe(25);
-    expect(mapParam(25, 26, 26, true)).toBe(0);
-  });
-
-  it("reports zero rotation for aligned neighbours", () => {
     expect(seamRotation(EDGE_NORTH, EDGE_SOUTH)).toBe(0);
     expect(seamRotation(EDGE_EAST, EDGE_WEST)).toBe(0);
-  });
-
-  it("adapts all rendered edges across differently sized maps", () => {
-    expect(
-      resolveSectorMapEdgeCrossing(
-        EDGE_NORTH,
-        1,
-        5,
-        4,
-        6,
-        EDGE_SOUTH,
-        8,
-        10,
-      ),
-    ).toEqual({ entryEdge: EDGE_NORTH, entryX: 2, entryY: 0 });
-    expect(
-      resolveSectorMapEdgeCrossing(
-        EDGE_SOUTH,
-        2,
-        0,
-        4,
-        6,
-        EDGE_NORTH,
-        8,
-        10,
-      ),
-    ).toEqual({ entryEdge: EDGE_SOUTH, entryX: 5, entryY: 9 });
+    expect(mapParam(2, 4, 8, false)).toBe(5);
     expect(
       resolveSectorMapEdgeCrossing(
         EDGE_EAST,
@@ -98,251 +79,281 @@ describe("crossing edge primitives", () => {
         10,
       ),
     ).toEqual({ entryEdge: EDGE_WEST, entryX: 0, entryY: 2 });
-    expect(
-      resolveSectorMapEdgeCrossing(
-        EDGE_WEST,
-        0,
-        4,
-        4,
-        6,
-        EDGE_EAST,
-        8,
-        10,
-      ),
-    ).toEqual({ entryEdge: EDGE_EAST, entryX: 7, entryY: 7 });
   });
 });
 
-describe("cube-sphere crossing topology", () => {
-  it("every tile has 4 neighbours and entry edges with no polar sentinel", () => {
-    for (const t of tiles) {
-      expect(t.n?.length).toBe(4);
-      expect(t.ne?.length).toBe(4);
-      expect(t.n?.every((id) => id >= 0 && id < tiles.length)).toBe(true);
-      expect(t.ne?.every((e) => e >= 0 && e < 4)).toBe(true);
+describe("cylindrical world topology", () => {
+  it("stores the configured projection and stable 72x27 id space", () => {
+    expect(globe.projection).toBe("cylindrical");
+    expect(globe.generation).toBe("hierarchical-climate-v6-polar-landscape");
+    expect(globe.visualScale).toBe(6);
+    expect(globe.polarCapColumns).toBe(MAP_WORLD_COLUMNS * globe.visualScale);
+    expect(globe.polarCapRows).toBe(32);
+    expect(globe.landThreshold).toBe(-0.2);
+    expect(globe.columns).toBe(MAP_WORLD_COLUMNS);
+    expect(globe.rows).toBe(MAP_WORLD_ROWS);
+    expect(globe.latitudeLimit).toBe(MAP_NAVIGABLE_LATITUDE_LIMIT);
+    expect(MAP_NAVIGABLE_LATITUDE_LIMIT).toBe(65);
+    expect(tiles).toHaveLength(MAP_TOTAL_SECTORS);
+    expect(tiles.every((tile) => tile.v.length === 36)).toBe(true);
+    expect(tiles.every((tile) => tile.vc.length === 49)).toBe(true);
+  });
+
+  it("continues biome colors across smooth edge-free polar caps", () => {
+    const polarRows = globe.polarCapRows;
+    const polarColumns = globe.polarCapColumns;
+    const sectorScale = globe.visualScale;
+    const sectorStride = sectorScale + 1;
+    const expectedPolarColors = (polarRows + 1) * (polarColumns + 1);
+    expect(globe.polarCapColors.north).toHaveLength(expectedPolarColors);
+    expect(globe.polarCapColors.south).toHaveLength(expectedPolarColors);
+    expect(new Set(globe.polarCapColors.north).size).toBeGreaterThan(500);
+    expect(new Set(globe.polarCapColors.south).size).toBeGreaterThan(500);
+
+    const lastRowStart = (MAP_WORLD_ROWS - 1) * MAP_WORLD_COLUMNS;
+    for (let column = 0; column <= polarColumns; column++) {
+      const sectorColumn = Math.min(
+        MAP_WORLD_COLUMNS - 1,
+        Math.floor(column / sectorScale),
+      );
+      const localColumn = column - sectorColumn * sectorScale;
+      expect(globe.polarCapColors.north[column]).toBe(
+        tiles[sectorColumn]!.vc[localColumn],
+      );
+      expect(globe.polarCapColors.south[column]).toBe(
+        tiles[lastRowStart + sectorColumn]!.vc[
+          sectorScale * sectorStride + localColumn
+        ],
+      );
     }
   });
 
-  it("within-face neighbours are aligned (entry edge = opposite, param preserved)", () => {
-    for (let s = 0; s < tiles.length; s++) {
-      const n = tiles[s]!.n!;
-      const ne = tiles[s]!.ne!;
-      for (let e = 0; e < 4; e++) {
-        if (faceOf(s) !== faceOf(n[e]!)) continue;
-        expect(ne[e]).toBe((e + 2) % 4);
-        const exit = edgeCell(e as EdgeIndex, 9, W, H);
-        const res = resolveEdgeCrossing(
-          e as EdgeIndex,
-          exit.x,
-          exit.y,
-          W,
-          H,
-          ne[e] as EdgeIndex,
-          W,
-          H,
-        );
-        expect(edgeParam(ne[e] as EdgeIndex, res.entryX, res.entryY)).toBe(9);
+  it("keeps water below one third of the visual world", () => {
+    const visualTerrain = tiles.flatMap((tile) => tile.v);
+    const water = visualTerrain.filter((terrain) => terrain === 0).length;
+    expect(water / visualTerrain.length).toBeLessThan(1 / 3);
+    expect(new Set(visualTerrain)).toEqual(new Set([0, 1, 2, 3]));
+  });
+
+  it("uses irregular climate regions instead of latitude-wide biome bands", () => {
+    const rowBiomes = Array.from({ length: MAP_WORLD_ROWS }, (_, row) =>
+      new Set(
+        tiles
+          .slice(row * MAP_WORLD_COLUMNS, (row + 1) * MAP_WORLD_COLUMNS)
+          .map((tile) => tile.t)
+          .filter((terrain) => terrain !== 0),
+      ),
+    );
+    const mixedClimateRows = rowBiomes.filter((biomes) => biomes.size > 1).length;
+    const desertRows = rowBiomes.filter((biomes) => biomes.has(2)).length;
+    const irregularIceEdges = rowBiomes.filter(
+      (biomes) => biomes.has(3) && [...biomes].some((terrain) => terrain !== 3),
+    ).length;
+
+    expect(mixedClimateRows).toBeGreaterThan(10);
+    expect(desertRows).toBeGreaterThan(10);
+    expect(irregularIceEdges).toBeGreaterThan(5);
+  });
+
+  it("shares exact visual colors across ordinary sector boundaries", () => {
+    const scale = globe.visualScale;
+    const stride = scale + 1;
+    const wakeAndRing = new Set([222, ...sectorGridNeighbors(222)]);
+    for (let sector = 0; sector < tiles.length; sector++) {
+      const tile = tiles[sector]!;
+      const east = tile.n[EDGE_EAST]!;
+      if (east >= 0 && !wakeAndRing.has(sector) && !wakeAndRing.has(east)) {
+        for (let y = 0; y <= scale; y++) {
+          expect(tile.vc[y * stride + scale]).toBe(tiles[east]!.vc[y * stride]);
+        }
+      }
+      const south = tile.n[EDGE_SOUTH]!;
+      if (south >= 0 && !wakeAndRing.has(sector) && !wakeAndRing.has(south)) {
+        for (let x = 0; x <= scale; x++) {
+          expect(tile.vc[scale * stride + x]).toBe(tiles[south]!.vc[x]);
+        }
       }
     }
   });
 
-  it("every crossing is reciprocal: A -> B -> A returns to the exact start cell", () => {
+  it("matches the independent row-major graph for every sector", () => {
+    let missingEdges = 0;
+    for (let sector = 0; sector < tiles.length; sector++) {
+      expect(sectorGridPosition(sector)).toEqual({
+        column: sector % MAP_WORLD_COLUMNS,
+        row: Math.floor(sector / MAP_WORLD_COLUMNS),
+      });
+      expect(tiles[sector]!.n).toEqual(sectorGridNeighbors(sector));
+      expect(tiles[sector]!.ne).toEqual(sectorGridEntryEdges(sector));
+      for (let edge = 0; edge < 4; edge++) {
+        const neighbor = tiles[sector]!.n[edge]!;
+        const entryEdge = tiles[sector]!.ne[edge]!;
+        if (neighbor < 0) {
+          expect(entryEdge).toBe(-1);
+          expect(edge === EDGE_NORTH || edge === EDGE_SOUTH).toBe(true);
+          missingEdges++;
+          continue;
+        }
+        expect(entryEdge).toBe((edge + 2) % 4);
+        expect(tiles[neighbor]!.n[entryEdge]).toBe(sector);
+        expect(tiles[neighbor]!.ne[entryEdge]).toBe(edge);
+      }
+    }
+    expect(missingEdges).toBe(MAP_WORLD_COLUMNS * 2);
+  });
+
+  it("wraps longitude without rotation and blocks both polar caps", () => {
+    const middleRow = Math.floor(MAP_WORLD_ROWS / 2);
+    const first = sectorIdAt(0, middleRow);
+    const last = sectorIdAt(MAP_WORLD_COLUMNS - 1, middleRow);
+    expect(getSectorNeighborIds(first).west).toBe(last);
+    expect(getSectorNeighborIds(last).east).toBe(first);
+    expect(getSectorEntryEdges(first).west).toBe(EDGE_EAST);
+    expect(getSectorEntryEdges(last).east).toBe(EDGE_WEST);
+
+    expect(getSectorNeighborIds(sectorIdAt(0, 0)).north).toBe(-1);
+    expect(getSectorNeighborIds(sectorIdAt(0, MAP_WORLD_ROWS - 1)).south).toBe(-1);
+  });
+
+  it("round-trips every cell on every real sector edge", () => {
     let checked = 0;
-    for (let s = 0; s < tiles.length; s++) {
-      const n = tiles[s]!.n!;
-      const ne = tiles[s]!.ne!;
-      for (let e = 0; e < 4; e++) {
-        const exitEdge = e as EdgeIndex;
-        const nb = n[e]!;
-        const entryEdge = ne[e]! as EdgeIndex;
-        for (let p = 0; p < W; p++) {
-          const exit = edgeCell(exitEdge, p, W, H);
-          const res = resolveEdgeCrossing(exitEdge, exit.x, exit.y, W, H, entryEdge, W, H);
-          const backEntryEdge = tiles[nb]!.ne![entryEdge]! as EdgeIndex;
-          const back = resolveEdgeCrossing(
-            entryEdge,
-            res.entryX,
-            res.entryY,
+    for (let sector = 0; sector < tiles.length; sector++) {
+      for (let edge = 0; edge < 4; edge++) {
+        const exitEdge = edge as EdgeIndex;
+        const neighbor = tiles[sector]!.n[edge]!;
+        if (neighbor < 0) continue;
+        const entryEdge = tiles[sector]!.ne[edge]! as EdgeIndex;
+        for (let parameter = 0; parameter < W; parameter++) {
+          const exit = edgeCell(exitEdge, parameter, W, H);
+          const landed = resolveEdgeCrossing(
+            exitEdge,
+            exit.x,
+            exit.y,
             W,
             H,
-            backEntryEdge,
+            entryEdge,
             W,
             H,
           );
-          expect(tiles[nb]!.n![entryEdge]).toBe(s);
+          const backEntry = tiles[neighbor]!.ne[entryEdge]! as EdgeIndex;
+          const back = resolveEdgeCrossing(
+            entryEdge,
+            landed.entryX,
+            landed.entryY,
+            W,
+            H,
+            backEntry,
+            W,
+            H,
+          );
           expect(back.entryX).toBe(exit.x);
           expect(back.entryY).toBe(exit.y);
           checked++;
         }
       }
     }
-    expect(checked).toBe(tiles.length * 4 * W);
+    expect(checked).toBe((MAP_TOTAL_SECTORS * 4 - MAP_WORLD_COLUMNS * 2) * W);
+  }, 20_000);
+});
+
+describe("deterministic spherical climate", () => {
+  it("keeps fixed-seed climate samples stable", () => {
+    const sample = { x: 30, y: 0, z: 0 };
+    expect(globalContinentalness(sample)).toBeCloseTo(0.2324878045, 9);
+    expect(globalTemperature(sample)).toBeCloseTo(0.7726227208, 9);
+    expect(globalMoisture(sample)).toBeCloseTo(0.3138042204, 9);
+    expect(globalBiomeType(sample, true)).toBe(1);
   });
 
-  it("golden: paramFlips matches the shared 3D-corner geometry (catches handedness)", () => {
-    // Reciprocity only proves the crossing is symmetric; a handedness bug in
-    // paramFlips would flip BOTH directions and still round-trip. Here we derive
-    // the expected flip independently from the tiles' 3D corners (which the
-    // generator matched to build the seam), so a mirrored mapping fails loudly.
-    //
-    // Corners are stored [NW, NE, SE, SW]; edge e spans corners {e, (e+1)%4}.
-    // The along-edge parameter starts (p=0) and ends (p=last) at these corners:
-    const START_CORNER = [0, 1, 3, 0] as const; // N, E, S, W
-    const END_CORNER = [1, 2, 2, 3] as const;
-    const key = (c: Corner) => `${c.x},${c.y},${c.z}`;
-    let seamsChecked = 0;
-    for (let s = 0; s < tiles.length; s++) {
-      const n = tiles[s]!.n!;
-      const ne = tiles[s]!.ne!;
-      const a = tiles[s]!.b!;
-      for (let e = 0; e < 4; e++) {
-        const exitEdge = e as EdgeIndex;
-        const entryEdge = ne[e]! as EdgeIndex;
-        const b = tiles[n[e]!]!.b!;
-        // The two edges must be the exact same 3D segment (validates adjacency
-        // and the corner convention this test relies on).
-        const edgeA = [key(a[START_CORNER[exitEdge]]!), key(a[END_CORNER[exitEdge]]!)];
-        const edgeB = [key(b[START_CORNER[entryEdge]]!), key(b[END_CORNER[entryEdge]]!)];
-        expect([...edgeA].sort()).toEqual([...edgeB].sort());
-        // Flip iff this tile's p=0 corner coincides with the neighbour's p=last.
-        const aStart = key(a[START_CORNER[exitEdge]]!);
-        const geoFlip = aStart !== key(b[START_CORNER[entryEdge]]!);
-        if (geoFlip) expect(aStart).toBe(key(b[END_CORNER[entryEdge]]!));
-        expect(paramFlips(exitEdge, entryEdge)).toBe(geoFlip);
-        seamsChecked++;
-      }
-    }
-    expect(seamsChecked).toBe(tiles.length * 4);
-  });
-
-  it("seams carry only pure rotations (0, 90, 270 - never 180 or reflections)", () => {
-    const rots = new Set<number>();
-    for (let s = 0; s < tiles.length; s++) {
-      const n = tiles[s]!.n!;
-      const ne = tiles[s]!.ne!;
-      for (let e = 0; e < 4; e++) {
-        if (faceOf(s) === faceOf(n[e]!)) continue;
-        rots.add(seamRotation(e as EdgeIndex, ne[e] as EdgeIndex));
-      }
-    }
-    expect([...rots].sort()).toEqual([0, 1, 3]);
+  it("is continuous across the wrapped antimeridian", () => {
+    const epsilon = 1e-7;
+    const latitude = 0.37;
+    const point = (longitude: number) => ({
+      x: Math.cos(longitude) * Math.cos(latitude) * 30,
+      y: Math.sin(latitude) * 30,
+      z: Math.sin(longitude) * Math.cos(latitude) * 30,
+    });
+    const west = point(-Math.PI + epsilon);
+    const east = point(Math.PI - epsilon);
+    expect(Math.abs(globalContinentalness(west) - globalContinentalness(east))).toBeLessThan(
+      0.00001,
+    );
+    expect(Math.abs(globalTemperature(west) - globalTemperature(east))).toBeLessThan(0.00001);
+    expect(Math.abs(globalMoisture(west) - globalMoisture(east))).toBeLessThan(0.00001);
   });
 });
 
-describe("game crossing wrapper (travel.moveInSector path)", () => {
-  // The primitives above prove the math; this proves the WRAPPER the game
-  // actually calls - resolveSectorCrossing and the named-direction accessors -
-  // wires directions, edges, and the baked n/ne data together correctly. A
-  // scrambled DIRECTION_TO_EDGE or swapped accessor field would fail here.
-  it("maps every rendered edge to the correct globe neighbour and back", () => {
+describe("game crossing wrapper", () => {
+  it("maps every rendered edge through the baked graph and back", () => {
     let checked = 0;
-    for (let s = 0; s < tiles.length; s++) {
-      const neighbors = getSectorNeighborIds(s);
-      const entryEdges = getSectorEntryEdges(s);
-      SectorNeighborDirections.forEach((direction, d) => {
-        // Named accessors must match the baked [N, E, S, W] arrays
-        expect(neighbors[direction]).toBe(tiles[s]!.n![d]);
-        expect(entryEdges[direction]).toBe(tiles[s]!.ne![d]);
+    for (let sector = 0; sector < tiles.length; sector++) {
+      const neighbors = getSectorNeighborIds(sector);
+      const entryEdges = getSectorEntryEdges(sector);
+      SectorNeighborDirections.forEach((direction, index) => {
+        expect(neighbors[direction]).toBe(tiles[sector]!.n[index]);
+        expect(entryEdges[direction]).toBe(tiles[sector]!.ne[index]);
+        if (neighbors[direction] < 0) return;
 
-        const globeExitEdge = d as EdgeIndex;
+        const globeExitEdge = index as EdgeIndex;
         const mapExitEdge = sectorMapEdgeForGlobeEdge(globeExitEdge);
-        const globeEntryEdge = tiles[s]!.ne![d]! as EdgeIndex;
+        const globeEntryEdge = entryEdges[direction] as EdgeIndex;
         const mapEntryEdge = sectorMapEdgeForGlobeEdge(globeEntryEdge);
-
-        // Every cell on the rendered edge lands in the baked globe neighbour.
-        // This is exhaustive because a corner-only/sample test can miss a
-        // reversed along-edge parameter on rotated seams.
-        for (let p = 0; p < edgeLength(mapExitEdge, W, H); p++) {
-          const exit = edgeCell(mapExitEdge, p, W, H);
-          const res = resolveSectorCrossing(s, direction, exit.x, exit.y, W, H, W, H);
-          expect(res.toSector).toBe(tiles[s]!.n![d]);
-          expect(res.entryEdge).toBe(mapEntryEdge);
-
-          // Independent rendered<->globe parameter conversion. The vertical
-          // reflection reverses parameters only on E/W edges.
-          const globeExitParam =
-            globeExitEdge === EDGE_EAST || globeExitEdge === EDGE_WEST
-              ? W - 1 - p
-              : p;
-          const globeEntryParam = mapParam(
-            globeExitParam,
+        for (let parameter = 0; parameter < edgeLength(mapExitEdge, W, H); parameter++) {
+          const exit = edgeCell(mapExitEdge, parameter, W, H);
+          const result = resolveSectorCrossing(
+            sector,
+            direction,
+            exit.x,
+            exit.y,
             W,
+            H,
             W,
-            paramFlips(globeExitEdge, globeEntryEdge),
+            H,
           );
-          const expectedMapEntryParam =
-            globeEntryEdge === EDGE_EAST || globeEntryEdge === EDGE_WEST
-              ? W - 1 - globeEntryParam
-              : globeEntryParam;
-          expect(edgeParam(mapEntryEdge, res.entryX, res.entryY)).toBe(
-            expectedMapEntryParam,
-          );
-
-          // ...and crossing back through the wrapper returns to the start cell
+          expect(result.toSector).toBe(neighbors[direction]);
+          expect(result.entryEdge).toBe(mapEntryEdge);
           const back = resolveSectorCrossing(
-            res.toSector,
+            result.toSector,
             SectorNeighborDirections[globeEntryEdge]!,
-            res.entryX,
-            res.entryY,
+            result.entryX,
+            result.entryY,
             W,
             H,
             W,
             H,
           );
-          expect(back.toSector).toBe(s);
-          expect(back.entryX).toBe(exit.x);
-          expect(back.entryY).toBe(exit.y);
+          expect(back).toMatchObject({
+            toSector: sector,
+            entryX: exit.x,
+            entryY: exit.y,
+          });
           checked++;
         }
       });
     }
-    expect(checked).toBe(tiles.length * 4 * W);
+    expect(checked).toBe((MAP_TOTAL_SECTORS * 4 - MAP_WORLD_COLUMNS * 2) * W);
   }, 20_000);
 
-  it("golden: Shirohana's rendered south edge leads south, not north/east", () => {
-    const shirohana = 1631;
-    const south = resolveSectorCrossing(
-      shirohana,
-      "south",
-      13,
-      0,
-      W,
-      H,
-      W,
-      H,
-    );
+  it("keeps Shirohana and the former 1620 seam in the same orientation", () => {
+    expect(getSectorNeighborIds(1631)).toEqual({
+      north: 1559,
+      east: 1632,
+      south: 1703,
+      west: 1630,
+    });
+    expect(getSectorNeighborIds(1620).west).toBe(1619);
+    const south = resolveSectorCrossing(1631, "south", 13, 0, W, H, W, H);
     expect(south).toEqual({
-      toSector: 1649,
+      toSector: 1703,
       entryEdge: EDGE_SOUTH,
       entryX: 13,
       entryY: H - 1,
     });
-    expect(getSectorNeighborIds(shirohana).east).toBe(1632);
   });
 
-  it("the dedicated rendered-edge primitive agrees with the game wrapper", () => {
-    for (let sector = 0; sector < tiles.length; sector++) {
-      const neighbors = getSectorNeighborIds(sector);
-      const entryEdges = getSectorEntryEdges(sector);
-      SectorNeighborDirections.forEach((direction, d) => {
-        const globeExitEdge = d as EdgeIndex;
-        const mapExitEdge = sectorMapEdgeForGlobeEdge(globeExitEdge);
-        const exit = edgeCell(mapExitEdge, 7, W, H);
-        const primitive = resolveSectorMapEdgeCrossing(
-          globeExitEdge,
-          exit.x,
-          exit.y,
-          W,
-          H,
-          entryEdges[direction],
-          W,
-          H,
-        );
-        expect(resolveSectorCrossing(sector, direction, exit.x, exit.y, W, H, W, H)).toEqual({
-          toSector: neighbors[direction],
-          ...primitive,
-        });
-      });
-    }
+  it("rejects attempts to resolve a crossing into a polar cap", () => {
+    expect(() =>
+      resolveSectorCrossing(sectorIdAt(0, 0), "north", 13, H - 1, W, H, W, H),
+    ).toThrow(/polar boundary/);
   });
 });

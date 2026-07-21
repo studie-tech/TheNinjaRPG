@@ -6,19 +6,19 @@
  * sector borders and biomes changed abruptly across them. These fields instead
  * are defined ONCE over the whole sphere and sampled at each tile's true 3D
  * position, so neighbouring sectors agree along their shared edge and the world
- * reads as continuous. Because everything is a function of the 3D position, the
- * 90/270-degree cube-edge seams are handled for free (the shared edge is the
- * same set of 3D points regardless of either sector's local orientation).
- *
- * The global per-sector biome map (hexasphere.json `t`) is still respected: a
- * sector's interior votes for its own biome; only near the edges do neighbours'
- * biomes interleave, via a domain-warped nearest-centre vote.
+ * reads as continuous. The cylindrical longitude/latitude graph uses one local
+ * orientation everywhere, and 3D sampling remains continuous across its wrapped
+ * east/west boundary. Both the globe and local map generator call these same
+ * fields directly, rather than deriving one view from the other's resolution.
  */
 import alea from "alea";
 import { createNoise3D } from "simplex-noise";
 
 /** Sphere radius; matches scripts/generate-globe.ts and the tile corner data */
 export const WORLDGEN_RADIUS = 30;
+export const WORLDGEN_LAND_THRESHOLD = -0.2;
+export const WORLDGEN_PROTECTED_LAND_RADIUS = 1.4;
+export const WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR = 0.46;
 
 export interface Vec3 {
   x: number;
@@ -30,9 +30,12 @@ export interface Vec3 {
 const elevationNoise = createNoise3D(alea("worldgen-elevation-v1"));
 const detailNoise = createNoise3D(alea("worldgen-detail-v1"));
 const featureNoise = createNoise3D(alea("worldgen-feature-v1"));
-const warpNoiseA = createNoise3D(alea("worldgen-warp-a-v1"));
-const warpNoiseB = createNoise3D(alea("worldgen-warp-b-v1"));
-const warpNoiseC = createNoise3D(alea("worldgen-warp-c-v1"));
+const continentalNoise = createNoise3D(alea("worldgen-continental-v2"));
+const continentalDetailNoise = createNoise3D(alea("worldgen-continental-detail-v2"));
+const temperatureNoise = createNoise3D(alea("worldgen-temperature-v2"));
+const temperatureDetailNoise = createNoise3D(alea("worldgen-temperature-detail-v2"));
+const moistureNoise = createNoise3D(alea("worldgen-moisture-v2"));
+const moistureDetailNoise = createNoise3D(alea("worldgen-moisture-detail-v2"));
 
 /**
  * Normalize a point onto the WORLDGEN_RADIUS sphere. Bilinear corner
@@ -96,46 +99,112 @@ export const globalFeature = (p: Vec3): number => {
   return featureNoise(p.x * s, p.y * s, p.z * s);
 };
 
-/** Domain-warp a position so biome boundaries wiggle organically across borders */
-const warp = (p: Vec3, amplitude: number): Vec3 => {
-  const s = 1 / 7;
-  return {
-    x: p.x + warpNoiseA(p.x * s, p.y * s, p.z * s) * amplitude,
-    y: p.y + warpNoiseB(p.x * s, p.y * s, p.z * s) * amplitude,
-    z: p.z + warpNoiseC(p.x * s, p.y * s, p.z * s) * amplitude,
-  };
+/**
+ * Low-frequency continental structure with a smaller coastline octave. All
+ * fields use 3D sphere coordinates, so values remain continuous across the
+ * wrapped antimeridian and are reproducible from their fixed seeds.
+ */
+export const globalContinentalness = (p: Vec3): number => {
+  const coarse = 1 / 13.5;
+  const detail = 1 / 6;
+  return (
+    continentalNoise(p.x * coarse, p.y * coarse, p.z * coarse) * 0.76 +
+    continentalDetailNoise(p.x * detail, p.y * detail, p.z * detail) * 0.24
+  );
 };
 
-export interface BiomeCandidate {
-  center: Vec3;
-  /** Terrain type from hexasphere.json: 0 ocean, 1 ground, 2 dessert, 3 ice */
-  t: number;
+export interface WorldLandScoreOptions {
+  protectedCenters: Vec3[];
+  wakeIslandSector: number;
+  wakeIslandCenter: Vec3;
+  wakeIslandNeighborSectors: ReadonlySet<number>;
+  wakeIslandRadius: number;
 }
 
 /**
- * The global biome (`t`) at a position: the terrain of the nearest sector centre
- * after domain-warping the sample point. Within a sector's interior its own
- * centre is nearest, so its biome is preserved; near an edge the warp lets a
- * neighbour's centre win, producing an organic transition band that crosses the
- * border identically from both sides (both use the same warp and centres).
+ * The single deterministic land/water decision used by both the global globe
+ * and high-resolution local sector maps. Landmark protection is deliberately
+ * local: it guarantees a usable settlement centre without creating the broad,
+ * artificial circular continents produced by the old seven-unit radius.
+ *
+ * Wake Island uses a radial override across its sector and cardinal ocean
+ * ring. This creates a real island with water inside the logical sector rather
+ * than painting one entire square sector as land.
  */
-export const biomeVote = (
-  p: Vec3,
-  candidates: BiomeCandidate[],
-  warpAmplitude: number,
-): number => {
-  const pw = warp(p, warpAmplitude);
-  let bestT = candidates[0]?.t ?? 1;
-  let bestDist = Infinity;
-  for (const candidate of candidates) {
-    const dx = pw.x - candidate.center.x;
-    const dy = pw.y - candidate.center.y;
-    const dz = pw.z - candidate.center.z;
-    const dist = dx * dx + dy * dy + dz * dz;
-    if (dist < bestDist) {
-      bestDist = dist;
-      bestT = candidate.t;
+export const createWorldLandScore = (options: WorldLandScoreOptions) => {
+  const wakeSectors = new Set([
+    options.wakeIslandSector,
+    ...options.wakeIslandNeighborSectors,
+  ]);
+  return (point: Vec3, sector: number): number => {
+    if (wakeSectors.has(sector)) {
+      const distance = Math.hypot(
+        point.x - options.wakeIslandCenter.x,
+        point.y - options.wakeIslandCenter.y,
+        point.z - options.wakeIslandCenter.z,
+      );
+      return ((options.wakeIslandRadius - distance) / options.wakeIslandRadius) * 0.25;
     }
-  }
-  return bestT;
+
+    let continentalness = globalContinentalness(point);
+    for (const center of options.protectedCenters) {
+      const distance = Math.hypot(
+        point.x - center.x,
+        point.y - center.y,
+        point.z - center.z,
+      );
+      if (distance >= WORLDGEN_PROTECTED_LAND_RADIUS) continue;
+      const proximity = 1 - distance / WORLDGEN_PROTECTED_LAND_RADIUS;
+      continentalness = Math.max(
+        continentalness,
+        WORLDGEN_LAND_THRESHOLD + proximity * proximity * 0.3,
+      );
+    }
+    return continentalness - WORLDGEN_LAND_THRESHOLD;
+  };
+};
+
+/**
+ * Deterministic climate temperature. Latitude supplies the broad energy
+ * gradient, while two noise scales and elevation make the isotherms irregular
+ * instead of tracing exact rows around the globe.
+ */
+export const globalTemperature = (p: Vec3, elevation = 0): number => {
+  const latitude = Math.asin(Math.max(-1, Math.min(1, p.y / WORLDGEN_RADIUS)));
+  const latitudeCooling = (Math.abs(latitude) / (Math.PI / 2)) ** 1.18;
+  const coarse = 1 / 16;
+  const detail = 1 / 7;
+  return (
+    0.82 -
+    latitudeCooling * 1.72 +
+    temperatureNoise(p.x * coarse, p.y * coarse, p.z * coarse) * 0.38 +
+    temperatureDetailNoise(p.x * detail, p.y * detail, p.z * detail) * 0.12 -
+    Math.max(0, elevation) * 0.18
+  );
+};
+
+/**
+ * Moisture is independent of temperature, allowing dry continental interiors,
+ * wet tropics, and irregular rain-shadow-like patches at the same latitude.
+ */
+export const globalMoisture = (p: Vec3, elevation = 0): number => {
+  const coarse = 1 / 14;
+  const detail = 1 / 5.5;
+  const equatorialHumidity = 0.12 * (1 - Math.abs(p.y) / WORLDGEN_RADIUS);
+  return (
+    moistureNoise(p.x * coarse, p.y * coarse, p.z * coarse) * 0.72 +
+    moistureDetailNoise(p.x * detail, p.y * detail, p.z * detail) * 0.28 +
+    equatorialHumidity -
+    Math.max(0, elevation) * 0.08
+  );
+};
+
+/** Global-map terrain id: 0 ocean, 1 grass, 2 desert, 3 ice. */
+export const globalBiomeType = (p: Vec3, land: boolean, elevation = 0): number => {
+  if (!land) return 0;
+  const temperature = globalTemperature(p, elevation);
+  const moisture = globalMoisture(p, elevation);
+  if (temperature < -0.14) return 3;
+  if (temperature > 0.12 && moisture < -0.08) return 2;
+  return 1;
 };

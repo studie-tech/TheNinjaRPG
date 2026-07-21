@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
-import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
+import {
+  mergeTerrainSpecs,
+  resolveStructureTerrainSpec,
+} from "@/libs/sector-map/terrains";
 import { hexTileToPixel, normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
 import { toWysiwygTiledJson } from "@/libs/sector-map/tiled-download";
 import type {
@@ -886,6 +889,38 @@ describe("creator-added terrain and decorations", () => {
 });
 
 describe("standard terrain palette", () => {
+  it("preserves authored land beneath structures even when the globe biome differs", () => {
+    const registry = mergeTerrainSpecs([]);
+    expect(
+      resolveStructureTerrainSpec({
+        authoredTerrain: "dessert",
+        authoredBattleBiome: "dessert",
+        baseBiome: "ice",
+        registry,
+      }).key,
+    ).toBe("dessert");
+    expect(
+      resolveStructureTerrainSpec({
+        authoredTerrain: "ground",
+        authoredBattleBiome: "ground",
+        baseBiome: "ice",
+        registry,
+      }).key,
+    ).toBe("ground");
+  });
+
+  it("uses a land foundation only when a structure occupies water", () => {
+    const registry = mergeTerrainSpecs([]);
+    expect(
+      resolveStructureTerrainSpec({
+        authoredTerrain: "ocean",
+        authoredBattleBiome: "ocean",
+        baseBiome: "ground",
+        registry,
+      }).key,
+    ).toBe("dessert");
+  });
+
   // Full-property signature of a terrain tile, matching the fields the dedup
   // compares. Two tiles with the same signature are duplicate palette entries.
   const terrainSignature = (tile: { properties?: { name: string; value: unknown }[] }) => {

@@ -1,5 +1,5 @@
 /**
- * Pure geometry for crossing a sector border on the cube-sphere world.
+ * Pure geometry for crossing a sector border.
  *
  * The low-level primitives in this file use the baked globe's canonical edge
  * frame. Edges are indexed the same way as a tile's neighbour array `n` and
@@ -12,12 +12,10 @@
  * visually north). `resolveSectorMapEdgeCrossing` is the adapter for all game
  * movement and must be used instead of the raw globe-space primitive there.
  *
- * Within a cube face, neighbours are aligned: crossing north lands on the
- * neighbour's south edge at the SAME column (the parameter is preserved). Across
- * the 12 cube-edge seams the neighbour is rotated 90/270 degrees, so the entry
- * edge (from the tile's `ne` data) differs from the aligned expectation and the
- * along-edge parameter may run the opposite way. These helpers resolve both from
- * the baked `ne` value, with no runtime 3D geometry.
+ * The cylindrical world graph only uses aligned neighbors: crossing north lands
+ * on the neighbor's south edge at the same column, and east/west behaves likewise.
+ * The generic entry-edge primitives remain useful for map-axis conversion and
+ * differently sized authored maps.
  *
  * The edge geometry is bound to the tile's 3D corners b = [NW, NE, SE, SW] via
  * the grid corners (x0,y0)=NW, (xW,y0)=NE, (xW,yH)=SE, (x0,yH)=SW - the binding
@@ -105,9 +103,8 @@ export const mapParam = (
 };
 
 /**
- * Number of clockwise 90-degree turns the neighbour across `exitEdge` is rotated
- * relative to an aligned neighbour. 0 for within-face and rot-0 seams; 1 or 3 for
- * the rotated cube-edge seams. Used to orient the neighbour's rendered map.
+ * Number of clockwise quarter turns relative to an aligned neighbor. Production
+ * cylindrical topology always returns 0; the helper remains as a geometry check.
  */
 export const seamRotation = (exitEdge: EdgeIndex, entryEdge: EdgeIndex): number =>
   (((entryEdge - ((exitEdge + 2) % 4)) % 4) + 4) % 4;

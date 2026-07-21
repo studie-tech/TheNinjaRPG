@@ -94,9 +94,14 @@ export const MAP_RESERVED_SECTORS = [
   283, 284, 340, 334, 330, 331, 332, 337, 342, 336, 341, 335, 113, 109, 443,
 ];
 export const MAP_SECTOR_ID_MIN = 0;
-// Cube-sphere: 6 faces x FACE_SIZE^2 tiles (FACE_SIZE=18 -> 6*324 = 1944).
-export const MAP_SECTOR_ID_MAX = 1943;
-export const MAP_TOTAL_SECTORS = MAP_SECTOR_ID_MAX + 1;
+// Cylindrical longitude/latitude sector grid. East/west wraps; the north and
+// south edges terminate at 25-degree non-navigable polar caps. 72 * 27 preserves
+// the existing 1,944 sector ids so database references do not need remapping.
+export const MAP_WORLD_COLUMNS = 72;
+export const MAP_WORLD_ROWS = 27;
+export const MAP_NAVIGABLE_LATITUDE_LIMIT = 65;
+export const MAP_TOTAL_SECTORS = MAP_WORLD_COLUMNS * MAP_WORLD_ROWS;
+export const MAP_SECTOR_ID_MAX = MAP_TOTAL_SECTORS - 1;
 export const MAP_WAKE_ISLAND_SECTOR = 222;
 export const MAP_WAR_TORN_BATTLEGROUND_SECTOR = 335;
 export const MAP_GLOBAL_TRAVEL_TIME_CAP_SECS = 10;
@@ -563,8 +568,8 @@ export const HEX_STACKING_DISPLACEMENT = 0.25; // To compensate for how hexagons
 export const HEX_ASPECT_RATIO = 0.5; // To give perspective, make hex height smaller than width
 export const NO_DURABILITY_LOSS_COMBATS: BattleType[] = ["SPARRING"];
 
-// Sector settings. Square (26x26) so sector maps tile across the cube-sphere's
-// 90/270-degree face seams - a rotated square is still the same shape.
+// Sector settings. Every sector uses the same unrotated local hex frame; the
+// cylindrical world grid only needs ordinary N/S and E/W edge stitching.
 export const SECTOR_WIDTH = 26;
 export const SECTOR_HEIGHT = 26;
 
@@ -2084,17 +2089,6 @@ export const IMG_SECTOR_VS_ICON =
   "https://uploadthing.b-cdn.net/f/be789e50-095f-4e50-bffc-fe0fedd8777b-dd7l0q.webp";
 export const IMG_SECTOR_WALL_STONE_TOWER =
   "https://uploadthing.b-cdn.net/f/aab037bb-7ac7-48f7-9994-548d87eb55f1-lga892.webp";
-export const IMG_MAP_HEXASPHERE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRpfHi20udmODoNtpa0FMcwI4k2Eq7nJhyvjl";
-// SHA-256 of the expected hexasphere.json bytes. scripts/ensure-map-data.ts
-// verifies the CDN download against this before writing it into the build, so a
-// compromised CDN/account cannot bake arbitrary globe topology into the server.
-// Regenerating the globe (scripts/generate-globe.ts + upload-map-asset.ts) must
-// update this to the new file's `shasum -a 256 src/data/hexasphere.json`.
-export const IMG_MAP_HEXASPHERE_SHA256 =
-  "ec203f7c1fe33fa7fc3474dff500ade6850b6517ac8de552371d75e05465e4de";
-export const IMG_MAP_TILESET_ATLAS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMavndmtsO4cexqW2RDgkE3zZbNXSFGitmnar.png";
 export const IMG_MAP_WAR_ICON =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgipq89cU9cpECTimBdjaqbNn7vQsxGR1wLk4.webp";
 export const IMG_MAP_QUEST_ICON =

@@ -148,3 +148,28 @@ export const resolveTerrainSpec = (
     (BUILTIN_TERRAINS_BY_KEY.get(FALLBACK_TERRAIN_KEY) as TerrainSpec)
   );
 };
+
+/**
+ * Terrain rendered below a village structure. Authored land must remain
+ * untouched: deriving this from the globe's centre biome can paint snow over
+ * a desert/grass map when a stale or hand-authored map disagrees with the
+ * current topology. Only water is replaced, because a building needs a small
+ * biome-appropriate island rather than floating directly on waves.
+ */
+export const resolveStructureTerrainSpec = (options: {
+  authoredTerrain: string | undefined;
+  authoredBattleBiome: CombatBiome | undefined;
+  baseBiome: CombatBiome;
+  registry: Map<string, TerrainSpec>;
+}): TerrainSpec => {
+  const authoredSpec = resolveTerrainSpec(
+    options.authoredTerrain ?? options.baseBiome,
+    options.registry,
+  );
+  if (!authoredSpec.isWater) return authoredSpec;
+  const islandTerrain =
+    STRUCTURE_GROUND_TERRAIN[
+      options.authoredBattleBiome ?? authoredSpec.battleBiome ?? options.baseBiome
+    ];
+  return resolveTerrainSpec(islandTerrain, options.registry);
+};

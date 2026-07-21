@@ -4,14 +4,6 @@
  * workflow: regenerate an asset -> run this to push it to the CDN -> paste the
  * printed url into the matching constant.
  *
- * The two assets that go through here:
- *   - the world topology `src/data/hexasphere.json` (produced by
- *     scripts/generate-globe.ts) -> paste into IMG_MAP_HEXASPHERE, then bump
- *     MAP_CACHE_VERSION in libs/threejs/globe.ts. This is the file the server
- *     imports and the client fetches from the CDN, so it is uploaded whenever
- *     the world is regenerated.
- *   - the globe coastline atlas PNG -> paste into IMG_MAP_TILESET_ATLAS.
- *
  * Map assets are served from UploadThing's CDN (uploadthing.b-cdn.net), never
  * from the Next.js `public/` folder — the CDN is far cheaper than serving
  * static assets through Vercel, and it keeps generated binaries out of the repo.
@@ -19,9 +11,6 @@
  * Usage:
  *   bun run scripts/upload-map-asset.ts <path-to-file> [content-type]
  *
- * Examples:
- *   bun run scripts/upload-map-asset.ts src/data/hexasphere.json application/json
- *   bun run scripts/upload-map-asset.ts scripts/.artifacts/globe-atlas.png image/png
  */
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";

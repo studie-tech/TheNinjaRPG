@@ -28,6 +28,9 @@ import alea from "alea";
 import { createNoise2D } from "simplex-noise";
 import * as globalMapData from "@/data/hexasphere.json";
 import {
+  MAP_RESERVED_SECTORS,
+  MAP_WAKE_ISLAND_SECTOR,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   SECTOR_HEIGHT,
   SECTOR_MAP_MAX_DIMENSION,
   SECTOR_WIDTH,
@@ -43,21 +46,18 @@ import {
 } from "@/libs/sector-map/tiled";
 import { getNeighborCoordinates } from "@/libs/sector-map/validation";
 import { getBiomeFromTileType } from "@/libs/travel";
-import {
-  getSectorDiagonalIds,
-  getSectorNeighborIds,
-  getSectorTileType,
-} from "@/server/utils/sectorMap";
+import { getSectorTileType } from "@/server/utils/sectorMap";
 import { getFlagValue, parseIntList } from "./cli";
 import {
-  biomeVote,
+  createWorldLandScore,
+  globalBiomeType,
   globalElevation,
   globalFeature,
   tilePosition,
-  WORLDGEN_RADIUS,
-  type BiomeCandidate,
+  WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR,
   type Vec3,
 } from "@/libs/sector-map/worldgen";
+import { WORLD_PROTECTED_LAND_SECTORS } from "@/libs/sector-map/landmarks";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
 import type { SectorMapZone } from "@/libs/sector-map/types";
 import type { GlobalMapData } from "@/libs/threejs/types";
@@ -108,45 +108,38 @@ const centerVec = (sector: number): Vec3 => {
   return { x: c.x, y: c.y, z: c.z };
 };
 
-/**
- * Biome-vote candidates for a sector: its own centre plus every cardinal and
- * diagonal neighbour's centre (with each one's global biome). The per-tile
- * biome is the nearest of these after domain-warping, so a sector keeps its own
- * biome in the interior but its neighbours' biomes bleed organically across the
- * shared edges - the same on both sides, so borders stay seamless.
- */
-const buildBiomeCandidates = (sector: number): BiomeCandidate[] => {
-  const direct = getSectorNeighborIds(sector);
-  const diagonal = getSectorDiagonalIds(sector);
-  // Insertion order (self, N/E/S/W, NE/SE/SW/NW) is part of the generator's
-  // deterministic output - keep it stable across refactors.
-  const ids = new Set<number>([sector]);
-  [direct.north, direct.east, direct.south, direct.west].forEach(
-    (id) => id >= 0 && ids.add(id),
-  );
+const protectedLandSectors =
+  globalMap.protectedLandSectors ??
   [
-    diagonal.northeast,
-    diagonal.southeast,
-    diagonal.southwest,
-    diagonal.northwest,
-  ].forEach((id) => id >= 0 && ids.add(id));
-  return [...ids].map((id) => ({
-    center: centerVec(id),
-    t: getSectorTileType(id),
-  }));
-};
-
-/** Mean 3D distance from a sector's centre to its cardinal neighbours' centres */
-const neighborSpacing = (sector: number): number => {
-  const c = centerVec(sector);
-  const cardinals = (globalMap.tiles[sector]?.n ?? []).filter((id) => id >= 0);
-  if (cardinals.length === 0) return WORLDGEN_RADIUS;
-  const total = cardinals.reduce((sum, id) => {
-    const o = centerVec(id);
-    return sum + Math.hypot(c.x - o.x, c.y - o.y, c.z - o.z);
-  }, 0);
-  return total / cardinals.length;
-};
+    ...MAP_RESERVED_SECTORS,
+    ...WORLD_PROTECTED_LAND_SECTORS,
+    MAP_WAKE_ISLAND_SECTOR,
+    MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  ];
+const wakeIslandCenter = centerVec(MAP_WAKE_ISLAND_SECTOR);
+const wakeIslandNeighborSectors = new Set(
+  (globalMap.tiles[MAP_WAKE_ISLAND_SECTOR]?.n ?? []).filter((sector) => sector >= 0),
+);
+const wakeIslandRadius =
+  Math.min(
+    ...[...wakeIslandNeighborSectors].map((sector) => {
+      const center = centerVec(sector);
+      return Math.hypot(
+        wakeIslandCenter.x - center.x,
+        wakeIslandCenter.y - center.y,
+        wakeIslandCenter.z - center.z,
+      );
+    }),
+  ) * WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR;
+const worldLandScore = createWorldLandScore({
+  protectedCenters: protectedLandSectors
+    .filter((sector) => sector !== MAP_WAKE_ISLAND_SECTOR)
+    .map(centerVec),
+  wakeIslandSector: MAP_WAKE_ISLAND_SECTOR,
+  wakeIslandCenter,
+  wakeIslandNeighborSectors,
+  wakeIslandRadius,
+});
 
 /** Anchor keys mirror the legacy sector anchor layout so downstream lookups keep working */
 const buildAnchors = (options: GeneratorOptions): AnchorSpec[] => {
@@ -199,8 +192,6 @@ const generateCells = (options: GeneratorOptions) => {
   // Coherent world fields, sampled at each tile's true 3D position so features
   // and biomes line up with neighbouring sectors along every shared edge.
   const corners = cornerVecs(sector);
-  const candidates = buildBiomeCandidates(sector);
-  const warpAmplitude = neighborSpacing(sector) * 0.42;
 
   const cells: CellSpec[][] = [];
   // Per-tile helpers used when forcing perimeter/road/anchor tiles walkable:
@@ -216,8 +207,10 @@ const generateCells = (options: GeneratorOptions) => {
       const position = tilePosition(corners, x, y, width, height);
       const elevation = globalElevation(position);
       const feature = globalFeature(position);
-      const voteTerrain = getBiomeFromTileType(biomeVote(position, candidates, warpAmplitude));
-      const landTerrain: string = voteTerrain === "ocean" ? "ground" : voteTerrain;
+      const voteTerrain = getBiomeFromTileType(
+        globalBiomeType(position, worldLandScore(position, sector) > 0, elevation),
+      );
+      const landTerrain = getBiomeFromTileType(globalBiomeType(position, true, elevation));
       let cell: CellSpec = {
         terrain: landTerrain,
         zone: "wilderness",
@@ -226,16 +219,24 @@ const generateCells = (options: GeneratorOptions) => {
       };
       let sea = false;
       if (village) {
-        // Village sectors stay a uniform village zone (legacy gameplay parity)
-        // in the sector's own biome, with ponds and rocky outcrops as accents
-        const villageTerrain = baseTerrain === "ocean" ? "ground" : baseTerrain;
-        cell = { terrain: villageTerrain, zone: "village", blocked: false, walkCost: 1 };
-        if (elevation < -0.6) {
+        // A village changes gameplay zones and guarantees its paths/anchors,
+        // but does not repaint the underlying global biome. Coastal villages
+        // and Wake Island therefore retain the water visible on the globe.
+        if (voteTerrain === "ocean") {
           cell = { terrain: "ocean", zone: "water", blocked: true, walkCost: 0 };
-        } else if (elevation > 0.68) {
-          cell = { terrain: villageTerrain, zone: "village", blocked: true, walkCost: 0 };
+          sea = true;
+        } else {
+          cell = { terrain: voteTerrain, zone: "village", blocked: false, walkCost: 1 };
+          if (elevation > 0.68) {
+            cell = {
+              terrain: voteTerrain,
+              zone: "village",
+              blocked: true,
+              walkCost: 0,
+            };
+          }
         }
-        landRow.push(villageTerrain);
+        landRow.push(landTerrain);
       } else if (voteTerrain === "ocean") {
         // Open sea with scattered islands where the elevation field rises
         cell = { terrain: "ocean", zone: "wilderness", blocked: false, walkCost: 3 };

@@ -100,7 +100,7 @@ const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
 /** A stored per-sector window entry (position within a window comes from the layout) */
 type StoredSectorEntry =
   RouterOutputs["worldMap"]["getSectorEntries"]["entries"][number];
-/** One sector's dx/dy/rotation placement within a specific window */
+/** One sector's dx/dy placement within a specific window */
 type WindowLayoutEntry =
   RouterOutputs["worldMap"]["getSectorWindow"]["windowLayouts"][number]["entries"][number];
 
@@ -178,7 +178,7 @@ export default function Travel() {
   // session; windows are assembled locally from it so a border crossing needs
   // no blocking request. null marks a sector known to have no published map.
   const sectorStoreRef = useRef(new Map<number, StoredSectorEntry | null>());
-  // Window layouts (dx/dy/rotation topology) keyed by window-center sector
+  // Window layouts (aligned dx/dy topology) keyed by window-center sector
   const windowLayoutsRef = useRef(new Map<number, WindowLayoutEntry[]>());
   // storeTick re-runs assembly after ingests; visibleEpoch only bumps when data
   // for the currently visible window may have changed (bootstrap refetch), so
@@ -204,7 +204,7 @@ export default function Travel() {
       windowLayoutsRef.current.set(layout.center, layout.entries);
     }
     for (const entry of bootWindow.sectors) {
-      const { dx: _dx, dy: _dy, rotation: _rotation, ...data } = entry;
+      const { dx: _dx, dy: _dy, ...data } = entry;
       sectorStoreRef.current.set(entry.sector, data);
     }
     // Layout sectors absent from the response have no published map
@@ -245,7 +245,7 @@ export default function Travel() {
       center: sector,
       sectors: layout.flatMap((e) => {
         const data = store.get(e.sector);
-        return data ? [{ ...data, dx: e.dx, dy: e.dy, rotation: e.rotation }] : [];
+        return data ? [{ ...data, dx: e.dx, dy: e.dy }] : [];
       }),
     });
   }, [userData?.sector, storeTick, assembled?.center]);
