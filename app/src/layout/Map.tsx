@@ -380,6 +380,12 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         const tapGesture = { x: 0, y: 0, active: false, navigated: false };
         onLabelPointerDown = (e: PointerEvent) => {
           if (e.isPrimary) {
+            // Only a touch/pen contact or the left mouse button can start a
+            // tap; right/middle clicks are trackball input, never travel
+            if (e.pointerType === "mouse" && e.button !== 0) {
+              tapGesture.active = false;
+              return;
+            }
             tapGesture.active = true;
             tapGesture.navigated = false;
             tapGesture.x = e.clientX;
