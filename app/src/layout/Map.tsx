@@ -307,7 +307,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       let onDblClick: (() => void) | null = null;
       let onTouchEnd: ((e: TouchEvent) => void) | null = null;
       let onLabelPointerDown: ((e: PointerEvent) => void) | null = null;
+      let onLabelPointerMove: ((e: PointerEvent) => void) | null = null;
       let onLabelPointerUp: ((e: PointerEvent) => void) | null = null;
+      let onLabelPointerCancel: (() => void) | null = null;
 
       if (props.intersection && props.onTileClick) {
         // Desktop: double-click handler
@@ -369,23 +371,37 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         renderer.domElement.addEventListener("touchend", onTouchEnd, { passive: true });
 
         // Single click/tap on a village label or map pin starts travel to the
-        // sector it points at. Pointer events cover mouse and touch alike; the
-        // movement threshold keeps rotate/zoom drags from triggering it on
-        // release.
-        const pointerDownAt = { x: 0, y: 0 };
+        // sector it points at. Pointer events cover mouse and touch alike. A
+        // gesture only counts as a tap when it was single-pointer for its whole
+        // lifetime and the pointer never strayed from the start point - peak
+        // displacement, not start-to-end, so a rotate drag that circles back
+        // and a pinch whose primary finger barely moves both stay navigation.
+        const TAP_SLOP_PX = 10;
+        const tapGesture = { x: 0, y: 0, active: false, navigated: false };
         onLabelPointerDown = (e: PointerEvent) => {
           if (e.isPrimary) {
-            pointerDownAt.x = e.clientX;
-            pointerDownAt.y = e.clientY;
+            tapGesture.active = true;
+            tapGesture.navigated = false;
+            tapGesture.x = e.clientX;
+            tapGesture.y = e.clientY;
+          } else {
+            // A second finger arrived: the whole gesture is a pinch/zoom
+            tapGesture.navigated = true;
           }
         };
+        onLabelPointerMove = (e: PointerEvent) => {
+          if (!tapGesture.active || tapGesture.navigated || !e.isPrimary) return;
+          const moved = Math.hypot(e.clientX - tapGesture.x, e.clientY - tapGesture.y);
+          if (moved > TAP_SLOP_PX) tapGesture.navigated = true;
+        };
+        onLabelPointerCancel = () => {
+          tapGesture.active = false;
+        };
         onLabelPointerUp = (e: PointerEvent) => {
-          if (!e.isPrimary) return;
-          const moved = Math.hypot(
-            e.clientX - pointerDownAt.x,
-            e.clientY - pointerDownAt.y,
-          );
-          if (moved > 10) return;
+          if (!e.isPrimary || !tapGesture.active) return;
+          tapGesture.active = false;
+          const moved = Math.hypot(e.clientX - tapGesture.x, e.clientY - tapGesture.y);
+          if (tapGesture.navigated || moved > TAP_SLOP_PX) return;
           const bounding_box = sceneRef.getBoundingClientRect();
           const point = new Vector2(
             ((e.clientX - bounding_box.left) / bounding_box.width) * 2 - 1,
@@ -398,7 +414,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           }
         };
         renderer.domElement.addEventListener("pointerdown", onLabelPointerDown);
+        renderer.domElement.addEventListener("pointermove", onLabelPointerMove);
         renderer.domElement.addEventListener("pointerup", onLabelPointerUp);
+        renderer.domElement.addEventListener("pointercancel", onLabelPointerCancel);
       }
 
       // Flat textured globe: every tile is a sea-level quad textured through the
@@ -921,8 +939,17 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           if (onLabelPointerDown) {
             renderer.domElement.removeEventListener("pointerdown", onLabelPointerDown);
           }
+          if (onLabelPointerMove) {
+            renderer.domElement.removeEventListener("pointermove", onLabelPointerMove);
+          }
           if (onLabelPointerUp) {
             renderer.domElement.removeEventListener("pointerup", onLabelPointerUp);
+          }
+          if (onLabelPointerCancel) {
+            renderer.domElement.removeEventListener(
+              "pointercancel",
+              onLabelPointerCancel,
+            );
           }
           controls.dispose();
           window.removeEventListener("resize", handleResize);
