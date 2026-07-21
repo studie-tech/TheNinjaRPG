@@ -20,9 +20,10 @@ const CARDINAL_SPEC: Record<
   string,
   { dx: number; dy: number; edge: EdgeIndex }
 > = {
-  north: { dx: 0, dy: -1, edge: 0 },
+  // Three.js sector-map y increases upward, so north is positive window y.
+  north: { dx: 0, dy: 1, edge: 0 },
   east: { dx: 1, dy: 0, edge: 1 },
-  south: { dx: 0, dy: 1, edge: 2 },
+  south: { dx: 0, dy: -1, edge: 2 },
   west: { dx: -1, dy: 0, edge: 3 },
 };
 
@@ -59,10 +60,10 @@ describe("buildSectorWindowLayout (getSectorWindow assembly)", () => {
       // Diagonals render unrotated at the corner offsets
       const diagonals = getSectorDiagonalIds(sector);
       for (const [key, offset] of [
-        ["northeast", { dx: 1, dy: -1 }],
-        ["northwest", { dx: -1, dy: -1 }],
-        ["southeast", { dx: 1, dy: 1 }],
-        ["southwest", { dx: -1, dy: 1 }],
+        ["northeast", { dx: 1, dy: 1 }],
+        ["northwest", { dx: -1, dy: 1 }],
+        ["southeast", { dx: 1, dy: -1 }],
+        ["southwest", { dx: -1, dy: -1 }],
       ] as const) {
         const diagonal = diagonals[key];
         if (diagonal < 0) continue;
@@ -71,6 +72,60 @@ describe("buildSectorWindowLayout (getSectorWindow assembly)", () => {
 
       // No negative (missing) sectors ever leak into the layout
       expect(layout.every((entry) => entry.sector >= 0)).toBe(true);
+      expect(new Set(layout.map((entry) => entry.sector)).size).toBe(layout.length);
+      expect(new Set(layout.map((entry) => `${entry.dx},${entry.dy}`)).size).toBe(
+        layout.length,
+      );
     }
+  });
+
+  it("keeps overlapping windows aligned within every flat cube face", () => {
+    let overlapsChecked = 0;
+    for (let sector = 0; sector < tiles.length; sector++) {
+      const layout = buildSectorWindowLayout(sector);
+      const bySector = new Map(layout.map((entry) => [entry.sector, entry]));
+      const neighbors = getSectorNeighborIds(sector);
+      const entryEdges = getSectorEntryEdges(sector);
+      for (const direction of SectorNeighborDirections) {
+        const spec = CARDINAL_SPEC[direction]!;
+        const neighbor = neighbors[direction];
+        if (
+          neighbor < 0 ||
+          faceOf(neighbor) !== faceOf(sector) ||
+          seamRotation(spec.edge, entryEdges[direction]) !== 0
+        ) {
+          continue;
+        }
+        const neighborOffset = bySector.get(neighbor);
+        expect(neighborOffset).toBeDefined();
+        if (!neighborOffset) continue;
+        for (const entry of buildSectorWindowLayout(neighbor)) {
+          const existing = bySector.get(entry.sector);
+          if (!existing || faceOf(entry.sector) !== faceOf(sector)) continue;
+          expect(
+            {
+              dx: neighborOffset.dx + entry.dx,
+              dy: neighborOffset.dy + entry.dy,
+            },
+            `center=${sector} direction=${direction} neighbor=${neighbor} overlap=${entry.sector}`,
+          ).toEqual({ dx: existing.dx, dy: existing.dy });
+          overlapsChecked++;
+        }
+      }
+    }
+    expect(overlapsChecked).toBeGreaterThan(tiles.length * 4);
+  });
+
+  it("golden: places Shirohana's true globe neighbours on the rendered sides", () => {
+    const byOffset = new Map(
+      buildSectorWindowLayout(1631).map((entry) => [
+        `${entry.dx},${entry.dy}`,
+        entry.sector,
+      ]),
+    );
+    expect(byOffset.get("0,1")).toBe(522);
+    expect(byOffset.get("1,0")).toBe(1632);
+    expect(byOffset.get("0,-1")).toBe(1649);
+    expect(byOffset.get("-1,0")).toBe(1630);
   });
 });

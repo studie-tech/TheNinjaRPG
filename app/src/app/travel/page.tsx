@@ -399,9 +399,15 @@ export default function Travel() {
       onSuccess: async (result) => {
         showMutationToast(result);
         if (result.success && result.data) {
-          await updateUser(result.data);
+          // The local target was only the departure edge. Clear it before the
+          // destination coordinates enter UserContext, otherwise Sector sees
+          // the stale target after global travel and walks the user back to
+          // that same edge, persisting the wrong arrival position.
+          setTargetPosition(null);
+          setTargetSector(null);
           setShowModal(false);
           setActiveTab(globalLink);
+          await updateUser(result.data);
           if (globe) {
             const tile = globe.tiles[result.data.sector];
             if (tile) {
@@ -643,6 +649,7 @@ export default function Travel() {
           userLocation={true}
           showOwnership={showOwnership && !userData?.tutorialOn}
           autoRotate={false}
+          markerOnlyInteraction={true}
           focusSector={focusSector}
           focusSectorLabel="Target"
           onTileClick={(sector) => {

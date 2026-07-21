@@ -156,11 +156,13 @@ export const resolveSectorAnchor = (
 export const findNearestWalkableCoordinate = (
   map: Pick<NormalizedSectorMap, "width" | "height" | "tiles" | "anchors">,
   coordinate: SectorCoordinate,
-  fallbackAnchor = "spawn.default",
+  fallbackAnchor: string | null = "spawn.default",
 ): SectorCoordinate | null => {
   if (isWalkableCoordinate(map, coordinate)) return coordinate;
 
-  const fallback = resolveSectorAnchor(map, fallbackAnchor);
+  const fallback = fallbackAnchor
+    ? resolveSectorAnchor(map, fallbackAnchor)
+    : undefined;
   if (fallback && isWalkableCoordinate(map, fallback)) {
     return { x: fallback.x, y: fallback.y };
   }

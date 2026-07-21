@@ -66,6 +66,8 @@ interface MapProps {
   actionExplanation?: string;
   focusSector?: number | null;
   focusSectorLabel?: string;
+  /** Restrict clicks/taps to visible labels and pins instead of bare sectors. */
+  markerOnlyInteraction?: boolean;
   onTileClick?: (sector: number | null, tile: GlobalTile | null) => void;
   onTileHover?: (sector: number | null, tile: GlobalTile | null) => void;
 }
@@ -81,7 +83,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   const { hexasphere, showOwnership } = props;
   const autoRotate = props.autoRotate ?? true;
   const actionExplanation =
-    props.actionExplanation || "Double click tile to move there";
+    props.actionExplanation ||
+    (props.markerOnlyInteraction
+      ? "Click marker to fast travel"
+      : "Double click tile to move there");
 
   // Get sector ownerships if needed
   const { data: ownershipData } = api.village.getSectorOwnerships.useQuery(
@@ -303,7 +308,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         return typeof sector === "number" ? sector : null;
       };
 
-      // Add on double click/tap tile handler
+      // Add map interaction handlers. Travel can opt into marker-only mode,
+      // while map editing and war declaration retain direct sector selection.
       let onDblClick: (() => void) | null = null;
       let onTouchEnd: ((e: TouchEvent) => void) | null = null;
       let onLabelPointerDown: ((e: PointerEvent) => void) | null = null;
@@ -314,6 +320,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       if (props.intersection && props.onTileClick) {
         // Desktop: double-click handler
         onDblClick = () => {
+          if (props.markerOnlyInteraction) return;
           const intersects = raycaster.intersectObjects(group_tiles.children);
           if (intersects.length > 0) {
             const sector = intersects?.[0]?.object?.userData?.id as number;
@@ -328,7 +335,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         // Mobile: double-tap detection via touchend
         // We detect double-tap by checking if two taps happen within 300ms on the same sector
         onTouchEnd = (e: TouchEvent) => {
-          if (e.changedTouches.length === 0) return;
+          if (props.markerOnlyInteraction || e.changedTouches.length === 0) return;
           const touch = e.changedTouches[0];
           if (!touch) return;
 
@@ -859,27 +866,34 @@ const GlobalMap: React.FC<MapProps> = (props) => {
               hoveredLabelSector = null;
               setHoverOutline(null);
               hoverCanvas.style.cursor = "default";
+              setHoverSector(null);
             }
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(group_tiles.children);
-            if (intersects.length > 0) {
-              // if the closest object intersected is not the currently stored intersection object
-              if (intersects[0] && intersects[0].object !== intersected) {
-                intersected = intersects[0].object as HexagonalFaceMesh;
-                const sector = intersected.userData.id;
-                // Outline the hovered sector (its terrain colour is untouched) and
-                // show a pointer, signalling a click starts global travel
-                setHoverOutline(sector);
-                hoverCanvas.style.cursor = "pointer";
-                const tile = hexasphere?.tiles[sector];
-                if (props.onTileHover && tile) props.onTileHover(sector, tile);
-                setHoverSector(sector);
+            if (!props.markerOnlyInteraction) {
+              raycaster.setFromCamera(mouse, camera);
+              const intersects = raycaster.intersectObjects(group_tiles.children);
+              if (intersects.length > 0) {
+                // if the closest object intersected is not the currently stored intersection object
+                if (intersects[0] && intersects[0].object !== intersected) {
+                  intersected = intersects[0].object as HexagonalFaceMesh;
+                  const sector = intersected.userData.id;
+                  setHoverOutline(sector);
+                  hoverCanvas.style.cursor = "pointer";
+                  const tile = hexasphere?.tiles[sector];
+                  if (props.onTileHover && tile) props.onTileHover(sector, tile);
+                  setHoverSector(sector);
+                }
+              } else if (intersected) {
+                // Pointer moved off the globe: clear the outline and the pointer
+                intersected = undefined;
+                setHoverOutline(null);
+                hoverCanvas.style.cursor = "default";
+                setHoverSector(null);
               }
             } else if (intersected) {
-              // Pointer moved off the globe: clear the outline and the pointer
               intersected = undefined;
               setHoverOutline(null);
               hoverCanvas.style.cursor = "default";
+              setHoverSector(null);
             }
           }
         }
@@ -978,6 +992,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     props.highlights,
     props.usersHighlighted,
     props.intersection,
+    props.markerOnlyInteraction,
     props.focusSector,
     showOwnership,
     ownershipData,
@@ -993,10 +1008,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       {webglError && <WebGlError />}
       <div className="absolute top-0 left-0 m-5">
         <ul>
-          {hoverSector && (
+          {hoverSector !== null && (
             <li className="flex flex-row items-center">
               <span className="mr-1 animate-pulse text-2xl text-orange-500">⬢</span>{" "}
-              Quest
+              {props.markerOnlyInteraction ? "Travel marker" : "Quest"}
             </li>
           )}
           {props.focusSector !== undefined && props.focusSector !== null && (
@@ -1009,7 +1024,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       </div>
       <div className="absolute top-0 right-0 m-5">
         <ul>
-          {hoverSector && (
+          {hoverSector !== null && (
             <>
               <li>- Highlighting sector {hoverSector}</li>
               <li>- {actionExplanation}</li>

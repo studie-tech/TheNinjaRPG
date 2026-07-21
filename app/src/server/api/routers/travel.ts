@@ -29,6 +29,7 @@ import type { GlobalMapData } from "@/libs/threejs/types";
 import {
   calcGlobalTravelTime,
   calcIsInVillage,
+  findGlobalTravelDestination,
   isAtEdge,
   maxDistance,
 } from "@/libs/travel";
@@ -419,6 +420,8 @@ export const travelRouter = createTRPCRouter({
         data: z
           .object({
             sector: z.number(),
+            longitude: z.number(),
+            latitude: z.number(),
             travelFinishAt: z.date(),
             status: z.enum(UserStatuses),
           })
@@ -430,10 +433,12 @@ export const travelRouter = createTRPCRouter({
       if (!targetTile) {
         return { success: false, message: "Target sector does not exist" };
       }
-      // Fetch the user and their claimed current sector's map in parallel
-      let [user, currentSectorMap] = await Promise.all([
+      // Fetch the user plus both ends of the journey in parallel. The target
+      // map determines a safe center-tile landing position.
+      let [user, currentSectorMap, targetSectorMap] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchPublishedSectorMap(ctx.drizzle, input.curSector).catch(() => null),
+        fetchPublishedSectorMap(ctx.drizzle, input.sector).catch(() => null),
       ]);
       // Validate the hint: the map we loaded must be the sector the player is
       // actually in, otherwise the isAtEdge check below would use the wrong map
@@ -442,6 +447,9 @@ export const travelRouter = createTRPCRouter({
       }
       if (!currentSectorMap) {
         return errorResponse("This sector has no published map yet");
+      }
+      if (!targetSectorMap) {
+        return errorResponse("The destination sector has no published map yet");
       }
       if (
         !isAtEdge(
@@ -460,16 +468,24 @@ export const travelRouter = createTRPCRouter({
         map as unknown as GlobalMapData,
       );
       const endTime = secondsFromNow(travelTime);
+      const destination = findGlobalTravelDestination(targetSectorMap);
+      if (!destination) {
+        return errorResponse("The destination sector has no walkable tiles");
+      }
       const result = await ctx.drizzle
         .update(userData)
         .set({
           sector: input.sector,
+          longitude: destination.x,
+          latitude: destination.y,
           status: "TRAVEL",
           travelFinishAt: endTime,
         })
         .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
       if (result.rowsAffected === 1) {
         user.sector = input.sector;
+        user.longitude = destination.x;
+        user.latitude = destination.y;
         user.status = "TRAVEL";
         user.travelFinishAt = endTime;
         // Only broadcast if user is NOT stealthed
@@ -479,7 +495,13 @@ export const travelRouter = createTRPCRouter({
         return {
           success: true,
           message: "OK",
-          data: { sector: input.sector, travelFinishAt: endTime, status: "TRAVEL" },
+          data: {
+            sector: input.sector,
+            longitude: destination.x,
+            latitude: destination.y,
+            travelFinishAt: endTime,
+            status: "TRAVEL",
+          },
         };
       } else {
         user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -857,8 +879,10 @@ const resolveAdjacentCrossing = (
   | null => {
   const outWest = target.x === -1;
   const outEast = target.x === map.width;
-  const outNorth = target.y === -1;
-  const outSouth = target.y === map.height;
+  // Rendered sector coordinates increase upward: y=-1 is the visible south
+  // edge and y=height is the visible north edge.
+  const outSouth = target.y === -1;
+  const outNorth = target.y === map.height;
   const outCount = [outWest, outEast, outNorth, outSouth].filter(Boolean).length;
   const inX = target.x >= 0 && target.x < map.width;
   const inY = target.y >= 0 && target.y < map.height;
@@ -867,7 +891,7 @@ const resolveAdjacentCrossing = (
     return { valid: false, error: "Only adjacent sectors can be reached by walking" };
   }
   if (outNorth || outSouth) {
-    const atEdge = outNorth ? current.y === 0 : current.y === map.height - 1;
+    const atEdge = outNorth ? current.y === map.height - 1 : current.y === 0;
     if (!atEdge || target.x !== current.x) {
       return { valid: false, error: "You must be at the matching edge to cross over" };
     }
