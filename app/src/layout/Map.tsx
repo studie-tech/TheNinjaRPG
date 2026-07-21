@@ -1,5 +1,6 @@
 import * as TWEEN from "@tweenjs/tween.js";
 import alea from "alea";
+import { ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   BufferAttribute,
@@ -21,6 +22,7 @@ import {
   Vector3,
 } from "three";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import {
   IMG_BADGE_MOVE_TO_LOCATION,
   IMG_MAP_QUEST_ICON,
@@ -59,6 +61,8 @@ interface MapProps {
   intersection: boolean;
   hexasphere: GlobalMapData;
   showOwnership?: boolean;
+  /** Slowly spin the globe while the user is idle (default on) */
+  autoRotate?: boolean;
   actionExplanation?: string;
   focusSector?: number | null;
   focusSectorLabel?: string;
@@ -71,8 +75,11 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   const [webglError, setWebglError] = useState<boolean>(false);
   const [hoverSector, setHoverSector] = useState<number | null>(null);
   const mountRef = useRef<HTMLDivElement | null>(null);
+  // Bridges the overlay zoom buttons into the three.js scene built below
+  const zoomActionRef = useRef<((factor: number) => void) | null>(null);
   const mouse = new Vector2();
   const { hexasphere, showOwnership } = props;
+  const autoRotate = props.autoRotate ?? true;
   const actionExplanation =
     props.actionExplanation || "Double click tile to move there";
 
@@ -275,9 +282,32 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         hoverOutline.visible = true;
       };
 
+      // Village labels and quest/war/focus pins double as travel shortcuts: a
+      // single click/tap on one acts like clicking the sector it points at.
+      // Populated further down where the sprites are created.
+      const labelTargets: Sprite[] = [];
+
+      /**
+       * Sector of the closest label/pin under the given NDC point, or null.
+       * Sprites still raycast when the globe occludes them, so a label hit
+       * only counts when no tile sits in front of it along the same ray.
+       */
+      const pickLabelTarget = (point: Vector2): number | null => {
+        if (labelTargets.length === 0) return null;
+        raycaster.setFromCamera(point, camera);
+        const labelHit = raycaster.intersectObjects(labelTargets, false)[0];
+        if (!labelHit) return null;
+        const tileHit = raycaster.intersectObjects(group_tiles.children)[0];
+        if (tileHit && tileHit.distance < labelHit.distance) return null;
+        const sector = labelHit.object.userData.sector as number;
+        return typeof sector === "number" ? sector : null;
+      };
+
       // Add on double click/tap tile handler
       let onDblClick: (() => void) | null = null;
       let onTouchEnd: ((e: TouchEvent) => void) | null = null;
+      let onLabelPointerDown: ((e: PointerEvent) => void) | null = null;
+      let onLabelPointerUp: ((e: PointerEvent) => void) | null = null;
 
       if (props.intersection && props.onTileClick) {
         // Desktop: double-click handler
@@ -337,6 +367,38 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           }
         };
         renderer.domElement.addEventListener("touchend", onTouchEnd, { passive: true });
+
+        // Single click/tap on a village label or map pin starts travel to the
+        // sector it points at. Pointer events cover mouse and touch alike; the
+        // movement threshold keeps rotate/zoom drags from triggering it on
+        // release.
+        const pointerDownAt = { x: 0, y: 0 };
+        onLabelPointerDown = (e: PointerEvent) => {
+          if (e.isPrimary) {
+            pointerDownAt.x = e.clientX;
+            pointerDownAt.y = e.clientY;
+          }
+        };
+        onLabelPointerUp = (e: PointerEvent) => {
+          if (!e.isPrimary) return;
+          const moved = Math.hypot(
+            e.clientX - pointerDownAt.x,
+            e.clientY - pointerDownAt.y,
+          );
+          if (moved > 10) return;
+          const bounding_box = sceneRef.getBoundingClientRect();
+          const point = new Vector2(
+            ((e.clientX - bounding_box.left) / bounding_box.width) * 2 - 1,
+            -((e.clientY - bounding_box.top) / bounding_box.height) * 2 + 1,
+          );
+          const sector = pickLabelTarget(point);
+          const tile = sector !== null ? hexasphere?.tiles[sector] : undefined;
+          if (sector !== null && tile) {
+            props.onTileClick?.(sector, tile);
+          }
+        };
+        renderer.domElement.addEventListener("pointerdown", onLabelPointerDown);
+        renderer.domElement.addEventListener("pointerup", onLabelPointerUp);
       }
 
       // Flat textured globe: every tile is a sea-level quad textured through the
@@ -508,6 +570,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
               labelSprite.renderOrder = 2;
               labelSprite.scale.set(canvas.width / 40, canvas.height / 40, 1);
               labelSprite.position.set(sector.x / 2.5, sector.y / 2.5, sector.z / 2.5);
+              labelSprite.userData.sector = highlight.sector;
+              labelTargets.push(labelSprite);
               group_highlights.add(labelSprite);
             }
           });
@@ -643,6 +707,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           iconSprite.renderOrder = 2;
           iconSprite.scale.set(1, 1, 1);
           iconSprite.position.set(sector.x / 2.5, sector.y / 2.5, sector.z / 2.5);
+          iconSprite.userData.sector = highlight.sector;
+          labelTargets.push(iconSprite);
           group_highlights.add(iconSprite);
         }
       });
@@ -651,8 +717,14 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       const controls = new TrackballControls(camera, renderer.domElement);
       controls.noPan = true;
       controls.staticMoving = true;
-      controls.zoomSpeed = 0.1;
+      controls.zoomSpeed = 1.2;
       const cameraDistance = 22;
+      // At distance 16 the tiles facing the camera render at twice their
+      // default on-screen size, i.e. a 2x zoom - enough to tap the right
+      // sector on mobile without the front village labels filling the view
+      const minCameraDistance = 16;
+      controls.minDistance = minCameraDistance;
+      controls.maxDistance = cameraDistance;
       let lastTime = Date.now();
       let sigma = 0;
       let phi = 0;
@@ -674,6 +746,27 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         }
       }
 
+      // Place the camera before the first frame; the render loop keeps the
+      // CURRENT distance from then on, so zooming is not undone each frame
+      camera.position.set(
+        cameraDistance * Math.sin(phi) * Math.cos(sigma),
+        cameraDistance * Math.sin(phi) * Math.sin(sigma),
+        cameraDistance * Math.cos(phi),
+      );
+      camera.lookAt(scene.position);
+
+      // Zoom helper for the overlay buttons, clamped to the same distance
+      // limits as the wheel/pinch zoom
+      zoomActionRef.current = (factor: number) => {
+        const distance = camera.position.length();
+        if (distance === 0) return;
+        const next = Math.min(
+          Math.max(distance * factor, minCameraDistance),
+          cameraDistance,
+        );
+        camera.position.multiplyScalar(next / distance);
+      };
+
       // Render the image
       let animationId = 0;
       // Gate the ~486-mesh hover raycast: only re-run it when the pointer or the
@@ -685,6 +778,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       let lastRaycastCamZ = Number.NaN;
       let lastRaycastMouseX = Number.NaN;
       let lastRaycastMouseY = Number.NaN;
+      let hoveredLabelSector: number | null = null;
       function render() {
         // Update all TWEEN animations (color pulsing, etc.)
         TWEEN.update();
@@ -723,26 +817,46 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           lastRaycastCamZ = camera.position.z;
           lastRaycastMouseX = mouse.x;
           lastRaycastMouseY = mouse.y;
-          raycaster.setFromCamera(mouse, camera);
-          const intersects = raycaster.intersectObjects(group_tiles.children);
-          if (intersects.length > 0) {
-            // if the closest object intersected is not the currently stored intersection object
-            if (intersects[0] && intersects[0].object !== intersected) {
-              intersected = intersects[0].object as HexagonalFaceMesh;
-              const sector = intersected.userData.id;
-              // Outline the hovered sector (its terrain colour is untouched) and
-              // show a pointer, signalling a click starts global travel
-              setHoverOutline(sector);
+          // Labels and pins take hover precedence over the tiles behind them;
+          // hovering one outlines its target sector, matching what a click does
+          const labelSector = pickLabelTarget(mouse);
+          if (labelSector !== null) {
+            if (hoveredLabelSector !== labelSector) {
+              hoveredLabelSector = labelSector;
+              intersected = undefined;
+              setHoverOutline(labelSector);
               hoverCanvas.style.cursor = "pointer";
-              const tile = hexasphere?.tiles[sector];
-              if (props.onTileHover && tile) props.onTileHover(sector, tile);
-              setHoverSector(sector);
+              const tile = hexasphere?.tiles[labelSector];
+              if (props.onTileHover && tile) props.onTileHover(labelSector, tile);
+              setHoverSector(labelSector);
             }
-          } else if (intersected) {
-            // Pointer moved off the globe: clear the outline and the pointer
-            intersected = undefined;
-            setHoverOutline(null);
-            hoverCanvas.style.cursor = "default";
+          } else {
+            if (hoveredLabelSector !== null) {
+              hoveredLabelSector = null;
+              setHoverOutline(null);
+              hoverCanvas.style.cursor = "default";
+            }
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(group_tiles.children);
+            if (intersects.length > 0) {
+              // if the closest object intersected is not the currently stored intersection object
+              if (intersects[0] && intersects[0].object !== intersected) {
+                intersected = intersects[0].object as HexagonalFaceMesh;
+                const sector = intersected.userData.id;
+                // Outline the hovered sector (its terrain colour is untouched) and
+                // show a pointer, signalling a click starts global travel
+                setHoverOutline(sector);
+                hoverCanvas.style.cursor = "pointer";
+                const tile = hexasphere?.tiles[sector];
+                if (props.onTileHover && tile) props.onTileHover(sector, tile);
+                setHoverSector(sector);
+              }
+            } else if (intersected) {
+              // Pointer moved off the globe: clear the outline and the pointer
+              intersected = undefined;
+              setHoverOutline(null);
+              hoverCanvas.style.cursor = "default";
+            }
           }
         }
 
@@ -755,18 +869,21 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           current.z !== previous.up.z;
 
         // Auto-rotate when not user interacting
-        if ((animationId === 0 || !isTravelStep) && !isUserInteracting) {
+        if (autoRotate && (animationId === 0 || !isTravelStep) && !isUserInteracting) {
           const dt = Date.now() - lastTime;
           const rotateCameraBy = (1 * Math.PI) / (50000 / dt);
           phi += rotateCameraBy;
-          lastTime = Date.now();
         }
+        lastTime = Date.now();
 
-        // Update camera position when not user interacting
+        // Update camera position when not user interacting. Keep the CURRENT
+        // camera distance rather than the fixed default, so wheel/pinch/button
+        // zoom is not undone on the next frame
         if (!isUserInteracting) {
-          camera.position.x = cameraDistance * Math.sin(phi) * Math.cos(sigma);
-          camera.position.y = cameraDistance * Math.sin(phi) * Math.sin(sigma);
-          camera.position.z = cameraDistance * Math.cos(phi);
+          const distance = camera.position.length() || cameraDistance;
+          camera.position.x = distance * Math.sin(phi) * Math.cos(sigma);
+          camera.position.y = distance * Math.sin(phi) * Math.sin(sigma);
+          camera.position.z = distance * Math.cos(phi);
           camera.lookAt(scene.position);
         }
 
@@ -788,6 +905,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
 
       return () => {
         cancelAnimationFrame(animationId);
+        zoomActionRef.current = null;
 
         // Remove event listeners safely
         try {
@@ -800,6 +918,13 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           if (onTouchEnd) {
             renderer.domElement.removeEventListener("touchend", onTouchEnd);
           }
+          if (onLabelPointerDown) {
+            renderer.domElement.removeEventListener("pointerdown", onLabelPointerDown);
+          }
+          if (onLabelPointerUp) {
+            renderer.domElement.removeEventListener("pointerup", onLabelPointerUp);
+          }
+          controls.dispose();
           window.removeEventListener("resize", handleResize);
           contextHandlers.cleanup();
         } catch {
@@ -824,6 +949,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     showOwnership,
     ownershipData,
     atlasTexture,
+    autoRotate,
   ]);
 
   return (
@@ -857,6 +983,26 @@ const GlobalMap: React.FC<MapProps> = (props) => {
             </>
           )}
         </ul>
+      </div>
+      <div className="absolute right-0 bottom-0 m-3 flex flex-col gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          aria-label="Zoom in"
+          onClick={() => zoomActionRef.current?.(0.8)}
+        >
+          <ZoomIn className="h-5 w-5" />
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          aria-label="Zoom out"
+          onClick={() => zoomActionRef.current?.(1.25)}
+        >
+          <ZoomOut className="h-5 w-5" />
+        </Button>
       </div>
     </div>
   );

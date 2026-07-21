@@ -642,6 +642,7 @@ export default function Travel() {
           usersHighlighted={trackedBounties}
           userLocation={true}
           showOwnership={showOwnership && !userData?.tutorialOn}
+          autoRotate={false}
           focusSector={focusSector}
           focusSectorLabel="Target"
           onTileClick={(sector) => {
