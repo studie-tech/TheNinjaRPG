@@ -1946,9 +1946,11 @@ export const verifyQuestContentForSave = (
   objectives: AllObjectivesType[],
   consecutiveObjectives: boolean,
 ): { check: boolean; message: string } => {
+  // Consecutive quests run the full flow check, whose first step is the same dialog-branch scan —
+  // so only the non-consecutive branch needs the standalone dialog check here (avoids scanning twice).
+  if (consecutiveObjectives) return verifyQuestObjectiveFlow(objectives);
   const dialogCheck = verifyDialogBranches(objectives);
   if (!dialogCheck.check) return dialogCheck;
-  if (consecutiveObjectives) return verifyQuestObjectiveFlow(objectives);
   const boundObjectiveCount = objectives.filter((o) => !!o.overworldPlacementId).length;
   if (boundObjectiveCount >= 2) {
     return {

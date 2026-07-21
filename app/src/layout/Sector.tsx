@@ -336,6 +336,10 @@ const Sector: React.FC<SectorProps> = (props) => {
     placementId: string;
     positionVersion: number;
   } | null>(null);
+  // Mirror of `npcDialog` for the long-lived scene click closure, so a new NPC interaction can't
+  // overwrite `pendingNpcInteractRef` (and mis-target the open dialog's next branch click) while a
+  // dialog is up. Continuing the current dialog uses `interactNpc` directly, so it stays unblocked.
+  const npcDialogRef = useRef(npcDialog);
   const lastPromptedPlacementIdRef = useRef<string | null>(null);
   const cameraRef = useRef<OrthographicCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -1548,9 +1552,10 @@ const Sector: React.FC<SectorProps> = (props) => {
   // sets the pending-interaction ref (so the dialog-continuation flow keeps working) and
   // fires the existing mutation. Used by both the sprite click and the arrival modal.
   const interactWithNpc = (npc: SectorUser) => {
-    // Read through the ref: the scene's click handler closes over this callback
-    // for the lifetime of the build, so the state value would go stale.
-    if (isInteractingRef.current || !npc.npcPlacementId) return;
+    // Read through refs: the scene's click handler closes over this callback for the lifetime of the
+    // build, so state values would go stale. Skip while a dialog is open so its pending-interaction
+    // ref isn't overwritten before the player finishes (or closes) that dialog.
+    if (isInteractingRef.current || !npc.npcPlacementId || npcDialogRef.current) return;
     pendingNpcInteractRef.current = {
       placementId: npc.npcPlacementId,
       positionVersion: npc.npcPositionVersion ?? 0,
@@ -1563,21 +1568,26 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   // Shared NPC-tile interaction for the sprite click handler: locate the placement's NPC and, when
   // the player is standing on its tile, interact — otherwise route toward it. Returns true when the
-  // sprite carries a bound placement (the click is consumed either way), false when it does not, so
-  // the attack branch can fall through to the normal player-attack path. Reads through refs because
-  // the click handler lives in a long-lived scene closure that would otherwise capture stale state.
+  // click resolved to a live NPC, false when the sprite carries no placement OR its placement has
+  // despawned, so the attack branch can fall through to the normal player-attack path. Reads through
+  // refs because the click handler lives in a long-lived scene closure that captures stale state.
   const handleNpcTileInteraction = (placementId: string | undefined): boolean => {
     if (!placementId) return false;
     const npc = usersRef.current?.find((u) => u.npcPlacementId === placementId);
-    if (npc) {
-      if (
-        npc.longitude === originRef.current?.col &&
-        npc.latitude === originRef.current?.row
-      ) {
-        interactWithNpc(npc);
-      } else {
-        setTarget({ x: npc.longitude, y: npc.latitude });
-      }
+    if (!npc) {
+      // Sprite is stale (placement despawned between scene build and click): refresh the sector so
+      // the ghost sprite disappears, and report not-consumed so the caller isn't left with silent
+      // no-op feedback.
+      void utils.travel.getSectorData.invalidate();
+      return false;
+    }
+    if (
+      npc.longitude === originRef.current?.col &&
+      npc.latitude === originRef.current?.row
+    ) {
+      interactWithNpc(npc);
+    } else {
+      setTarget({ x: npc.longitude, y: npc.latitude });
     }
     return true;
   };
@@ -1636,6 +1646,10 @@ const Sector: React.FC<SectorProps> = (props) => {
     isInteractingRef.current = isInteracting;
   }, [isInteracting]);
 
+  useEffect(() => {
+    npcDialogRef.current = npcDialog;
+  }, [npcDialog]);
+
   // Close an open arrival prompt once it no longer describes reality: the NPC despawned out of the
   // sector data, or it and the player are no longer on the same tile (either one moved). Without the
   // position half, walking off the tile leaves the modal up and its CTA trips the server-side
@@ -1653,6 +1667,26 @@ const Sector: React.FC<SectorProps> = (props) => {
       setArrivalNpc(null);
     }
   }, [data?.overworldAis, arrivalNpc, userData?.longitude, userData?.latitude]);
+
+  // Same stale-close for the dialog modal (keyed on the pending interaction's placement): close it
+  // when the player walks off the NPC's tile or the NPC despawns, so a later branch click can't fire
+  // an interaction against a tile the player no longer stands on (the server rejects it with a
+  // spurious error toast).
+  useEffect(() => {
+    if (!npcDialog) return;
+    const pending = pendingNpcInteractRef.current;
+    if (
+      !pending ||
+      isArrivalPromptStale({
+        promptedPlacementId: pending.placementId,
+        npcs: data?.overworldAis ?? [],
+        playerLongitude: userData?.longitude,
+        playerLatitude: userData?.latitude,
+      })
+    ) {
+      setNpcDialog(null);
+    }
+  }, [data?.overworldAis, npcDialog, userData?.longitude, userData?.latitude]);
 
   useEffect(() => {
     const longitude = userData?.longitude;

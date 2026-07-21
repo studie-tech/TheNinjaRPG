@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import type { inferRouterOutputs } from "@trpc/server";
-import { and, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
@@ -383,6 +383,9 @@ export const travelRouter = createTRPCRouter({
             eq(overworldAiPlacement.sector, user.sector),
             eq(overworldAiPlacement.isActive, true),
           ),
+          // Stable order so the arrival-prompt `find`-first NPC can't flip between polls when two
+          // placements share a tile (which would ping-pong the modal open on every sector refresh).
+          orderBy: asc(overworldAiPlacement.id),
           columns: {
             id: true,
             aiTemplateUserId: true,

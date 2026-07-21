@@ -614,6 +614,10 @@ export const questsRouter = createTRPCRouter({
           .set({
             questFinishAt: new Date(),
             questData: questData,
+            // If the abandoned quest held the single active-NPC-mission slot, free it in the same
+            // write (questId-scoped so a concurrent grant of a different quest is never cleared).
+            // Otherwise the slot stays stale and blocks the next overworld NPC interaction.
+            activeNpcQuestId: sql`IF(${userData.activeNpcQuestId} = ${input.id}, NULL, ${userData.activeNpcQuestId})`,
           })
           .where(eq(userData.userId, ctx.userId)),
       ]);
@@ -1900,6 +1904,27 @@ export const ASSIGNABLE_QUEST_TYPES: string[] = [
   "war",
 ];
 
+/**
+ * Quest types an overworld NPC must NOT grant. Their UI start path enforces an
+ * occupation / squad-membership / structure-location prerequisite (HUNTER, GATHERING, anbuId,
+ * Global Anbu HQ, adminbuilding) via {@link uiStructureAccessGuard}, which
+ * {@link assignQuestToUser} only runs for `source === "ui"`. A player interacting with a friendly
+ * NPC in the field can satisfy none of these, so pooling such a quest would hand its content to a
+ * player who fails the gate the mission-hall path enforces.
+ */
+export const OVERWORLD_GATED_QUEST_TYPES: string[] = [
+  "story",
+  "hunting",
+  "gathering",
+  "anbu",
+  "event",
+];
+
+/** Quest types an overworld NPC pool may offer/grant: assignable minus the gated set above. */
+export const OVERWORLD_ASSIGNABLE_QUEST_TYPES: string[] = ASSIGNABLE_QUEST_TYPES.filter(
+  (type) => !OVERWORLD_GATED_QUEST_TYPES.includes(type),
+);
+
 export const questTypeConcurrentBlockMessage = (
   quest: Pick<Quest, "questType" | "name">,
   user: NonNullable<UserWithRelations>,
@@ -2064,6 +2089,16 @@ export const assignQuestToUser = async (args: {
   if (source === "ui") {
     const guard = uiStructureAccessGuard(questData, user, sectorVillage ?? null);
     if (guard) return guard;
+  }
+
+  // Overworld NPC grants skip the UI structure/occupation gate (the player is in the field, not at
+  // the gating structure), so a gated type must never reach here. The overworld pool filter already
+  // excludes these types; this is the authoritative backstop for any future caller.
+  if (
+    source === "overworld_npc" &&
+    OVERWORLD_GATED_QUEST_TYPES.includes(questData.questType)
+  ) {
+    return errorResponse("This quest type cannot be granted by an overworld NPC.");
   }
 
   // Reject unknown quest types before touching the DB (mirrors the original serverError throw)
@@ -2261,14 +2296,19 @@ const revertQuestCompletionAfterFailedClaim = async (
   userId: string,
   questId: string,
   completedEndAt: Date,
+  wrotePeriodCounter: boolean,
 ) => {
   await client
     .update(questHistory)
     .set({
       completed: 0,
       previousCompletes: sql`GREATEST(${questHistory.previousCompletes} - 1, 0)`,
-      // Only roll back the period counter if it still belongs to the same completion instance.
-      periodCompletes: sql`GREATEST(${questHistory.periodCompletes} - 1, 0)`,
+      // Only roll back the period counter when the completion CAS actually incremented it (it
+      // writes periodCompletes only for retryDelay !== "none"). Decrementing it otherwise would
+      // corrupt a stale non-zero counter the failed completion never touched.
+      ...(wrotePeriodCounter
+        ? { periodCompletes: sql`GREATEST(${questHistory.periodCompletes} - 1, 0)` }
+        : {}),
       endAt: null,
     })
     .where(
@@ -2386,6 +2426,9 @@ export const commitQuestObjectiveRewards = async (info: {
   let resolvedCompletionCommitted = false;
   // The exact endAt stamped by the completion CAS, reused to anchor the revert below.
   let completedEndAt: Date | null = null;
+  // Whether the completion CAS wrote the period counter (only for retryDelay !== "none"); the
+  // revert must mirror this so it doesn't roll back a counter that was never incremented.
+  let periodCounterWritten = false;
   if (resolved) {
     // Achievements (and any quest shown only via mock rows) may have progress in questData
     // without a QuestHistory row yet — create one at claim time only.
@@ -2418,6 +2461,7 @@ export const commitQuestObjectiveRewards = async (info: {
     const retryDelay = userQuest?.quest?.retryDelay ?? "none";
     completedEndAt = new Date();
     const { cps } = periodCompletionSet(retryDelay, completedEndAt);
+    periodCounterWritten = !!cps;
 
     const questCompletionResult = await client
       .update(questHistory)
@@ -2473,6 +2517,7 @@ export const commitQuestObjectiveRewards = async (info: {
         userId,
         userQuest.questId,
         completedEndAt,
+        periodCounterWritten,
       );
     }
     return { outcome: "state_changed" };
