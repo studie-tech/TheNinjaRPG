@@ -1,131 +1,105 @@
 import { describe, expect, it } from "vitest";
 import globe from "@/data/hexasphere.json";
-import { type EdgeIndex, seamRotation } from "@/libs/sector-map/crossing";
+import {
+  MAP_TOTAL_SECTORS,
+  MAP_WORLD_COLUMNS,
+  MAP_WORLD_ROWS,
+} from "@/drizzle/constants";
+import { sectorGridPosition, sectorIdAt } from "@/libs/sector-map/world-grid";
 import {
   buildSectorWindowLayout,
-  getSectorDiagonalIds,
-  getSectorEntryEdges,
   getSectorNeighborIds,
   SectorNeighborDirections,
 } from "@/server/utils/sectorMap";
 
-const tiles = globe.tiles as { n?: number[] }[];
-const FACE_TILES = tiles.length / 6;
-const faceOf = (i: number) => Math.floor(i / FACE_TILES);
+const tiles = globe.tiles;
+const CARDINAL_OFFSET = {
+  north: { dx: 0, dy: 1 },
+  east: { dx: 1, dy: 0 },
+  south: { dx: 0, dy: -1 },
+  west: { dx: -1, dy: 0 },
+} as const;
 
-// Independent statement of the direction conventions (baked n[] order is
-// [N, E, S, W]; edge indices 0=N, 1=E, 2=S, 3=W) and the grid offsets the
-// client's 3x3 window renderer expects per direction
-const CARDINAL_SPEC: Record<
-  string,
-  { dx: number; dy: number; edge: EdgeIndex }
-> = {
-  // Three.js sector-map y increases upward, so north is positive window y.
-  north: { dx: 0, dy: 1, edge: 0 },
-  east: { dx: 1, dy: 0, edge: 1 },
-  south: { dx: 0, dy: -1, edge: 2 },
-  west: { dx: -1, dy: 0, edge: 3 },
+const expectedSectorAtOffset = (center: number, dx: number, dy: number) => {
+  const position = sectorGridPosition(center);
+  if (!position) return -1;
+  // Rendered window y points north, while row indices increase southward.
+  return sectorIdAt(position.column + dx, position.row - dy);
 };
 
-describe("buildSectorWindowLayout (getSectorWindow assembly)", () => {
-  it("lays out center, cardinals, and diagonals with correct offsets and rotations", () => {
+describe("buildSectorWindowLayout", () => {
+  it("projects every sector into an unrotated rectangular window", () => {
     for (let sector = 0; sector < tiles.length; sector++) {
       const layout = buildSectorWindowLayout(sector);
-      const bySector = new Map(layout.map((entry) => [entry.sector, entry]));
+      const byOffset = new Map(layout.map((entry) => [`${entry.dx},${entry.dy}`, entry]));
+      const position = sectorGridPosition(sector)!;
+      expect(layout).toHaveLength(
+        position.row === 0 || position.row === MAP_WORLD_ROWS - 1 ? 6 : 9,
+      );
 
-      // Center is present at (0, 0) with no rotation
-      expect(bySector.get(sector)).toMatchObject({ dx: 0, dy: 0, rotation: 0 });
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const expected = expectedSectorAtOffset(sector, dx, dy);
+          const entry = byOffset.get(`${dx},${dy}`);
+          if (expected < 0) {
+            expect(entry).toBeUndefined();
+          } else {
+            expect(entry).toEqual({ sector: expected, dx, dy });
+          }
+        }
+      }
+      expect(new Set(layout.map((entry) => entry.sector)).size).toBe(layout.length);
+    }
+  });
 
-      // Every existing cardinal neighbor sits at its direction's offset, and
-      // its rotation is the seam rotation of the shared edge; missing (polar)
-      // neighbors are excluded entirely
+  it("keeps every overlapping window aligned, including longitude wrap", () => {
+    let overlaps = 0;
+    for (let sector = 0; sector < MAP_TOTAL_SECTORS; sector++) {
+      const layout = buildSectorWindowLayout(sector);
+      const currentBySector = new Map(layout.map((entry) => [entry.sector, entry]));
       const neighbors = getSectorNeighborIds(sector);
-      const entryEdges = getSectorEntryEdges(sector);
       for (const direction of SectorNeighborDirections) {
-        const spec = CARDINAL_SPEC[direction]!;
         const neighbor = neighbors[direction];
         if (neighbor < 0) continue;
-        const entry = bySector.get(neighbor);
-        expect(entry).toMatchObject({ dx: spec.dx, dy: spec.dy });
-        const expectedRotation = seamRotation(spec.edge, entryEdges[direction]);
-        expect(entry?.rotation).toBe(expectedRotation);
-        // Same-face neighbors are always aligned; cross-face are 0/1/3
-        if (faceOf(neighbor) === faceOf(sector)) {
-          expect(entry?.rotation).toBe(0);
-        } else {
-          expect([0, 1, 3]).toContain(entry?.rotation);
-        }
-      }
-
-      // Diagonals render unrotated at the corner offsets
-      const diagonals = getSectorDiagonalIds(sector);
-      for (const [key, offset] of [
-        ["northeast", { dx: 1, dy: 1 }],
-        ["northwest", { dx: -1, dy: 1 }],
-        ["southeast", { dx: 1, dy: -1 }],
-        ["southwest", { dx: -1, dy: -1 }],
-      ] as const) {
-        const diagonal = diagonals[key];
-        if (diagonal < 0) continue;
-        expect(bySector.get(diagonal)).toMatchObject({ ...offset, rotation: 0 });
-      }
-
-      // No negative (missing) sectors ever leak into the layout
-      expect(layout.every((entry) => entry.sector >= 0)).toBe(true);
-      expect(new Set(layout.map((entry) => entry.sector)).size).toBe(layout.length);
-      expect(new Set(layout.map((entry) => `${entry.dx},${entry.dy}`)).size).toBe(
-        layout.length,
-      );
-    }
-  });
-
-  it("keeps overlapping windows aligned within every flat cube face", () => {
-    let overlapsChecked = 0;
-    for (let sector = 0; sector < tiles.length; sector++) {
-      const layout = buildSectorWindowLayout(sector);
-      const bySector = new Map(layout.map((entry) => [entry.sector, entry]));
-      const neighbors = getSectorNeighborIds(sector);
-      const entryEdges = getSectorEntryEdges(sector);
-      for (const direction of SectorNeighborDirections) {
-        const spec = CARDINAL_SPEC[direction]!;
-        const neighbor = neighbors[direction];
-        if (
-          neighbor < 0 ||
-          faceOf(neighbor) !== faceOf(sector) ||
-          seamRotation(spec.edge, entryEdges[direction]) !== 0
-        ) {
-          continue;
-        }
-        const neighborOffset = bySector.get(neighbor);
-        expect(neighborOffset).toBeDefined();
-        if (!neighborOffset) continue;
+        const offset = CARDINAL_OFFSET[direction];
         for (const entry of buildSectorWindowLayout(neighbor)) {
-          const existing = bySector.get(entry.sector);
-          if (!existing || faceOf(entry.sector) !== faceOf(sector)) continue;
-          expect(
-            {
-              dx: neighborOffset.dx + entry.dx,
-              dy: neighborOffset.dy + entry.dy,
-            },
-            `center=${sector} direction=${direction} neighbor=${neighbor} overlap=${entry.sector}`,
-          ).toEqual({ dx: existing.dx, dy: existing.dy });
-          overlapsChecked++;
+          const current = currentBySector.get(entry.sector);
+          if (!current) continue;
+          expect({
+            dx: offset.dx + entry.dx,
+            dy: offset.dy + entry.dy,
+          }).toEqual({ dx: current.dx, dy: current.dy });
+          overlaps++;
         }
       }
     }
-    expect(overlapsChecked).toBeGreaterThan(tiles.length * 4);
+    expect(overlaps).toBeGreaterThan(MAP_TOTAL_SECTORS * 8);
   });
 
-  it("golden: places Shirohana's true globe neighbours on the rendered sides", () => {
-    const byOffset = new Map(
-      buildSectorWindowLayout(1631).map((entry) => [
-        `${entry.dx},${entry.dy}`,
-        entry.sector,
-      ]),
+  it("wraps the west/east window edge without rotating sectors", () => {
+    const row = Math.floor(MAP_WORLD_ROWS / 2);
+    const first = sectorIdAt(0, row);
+    const last = sectorIdAt(MAP_WORLD_COLUMNS - 1, row);
+    const firstWindow = new Map(
+      buildSectorWindowLayout(first).map((entry) => [`${entry.dx},${entry.dy}`, entry]),
     );
-    expect(byOffset.get("0,1")).toBe(522);
-    expect(byOffset.get("1,0")).toBe(1632);
-    expect(byOffset.get("0,-1")).toBe(1649);
-    expect(byOffset.get("-1,0")).toBe(1630);
+    expect(firstWindow.get("-1,0")).toEqual({
+      sector: last,
+      dx: -1,
+      dy: 0,
+    });
+  });
+
+  it("golden: Shirohana and sector 1620 use ordinary grid neighbors", () => {
+    const shirohana = new Map(
+      buildSectorWindowLayout(1631).map((entry) => [`${entry.dx},${entry.dy}`, entry.sector]),
+    );
+    expect(shirohana.get("0,1")).toBe(1559);
+    expect(shirohana.get("1,0")).toBe(1632);
+    expect(shirohana.get("0,-1")).toBe(1703);
+    expect(shirohana.get("-1,0")).toBe(1630);
+    expect(
+      buildSectorWindowLayout(1620).find((entry) => entry.dx === -1 && entry.dy === 0),
+    ).toEqual({ sector: 1619, dx: -1, dy: 0 });
   });
 });

@@ -49,5 +49,5 @@ certificates
 
 scripts/.artifacts/
 
-# Globe topology: single-sourced from UploadThing, fetched by scripts/ensure-map-data.ts on postinstall
-src/data/hexasphere.json
+# World topology is generated deterministically and committed so the browser and
+# server always deploy the same neighbor graph.

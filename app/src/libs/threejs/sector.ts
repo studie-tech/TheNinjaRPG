@@ -48,8 +48,8 @@ import {
   resolveDecorationAsset,
 } from "@/libs/sector-map/decorations";
 import {
+  resolveStructureTerrainSpec,
   resolveTerrainSpec,
-  STRUCTURE_GROUND_TERRAIN,
   type TerrainSpec,
 } from "@/libs/sector-map/terrains";
 import type {
@@ -98,8 +98,6 @@ export interface WindowNavEntry {
   dx: number;
   dy: number;
   map: NormalizedSectorMap;
-  /** Quarter-turn rotation of this neighbor relative to the center (cube seams) */
-  rotation?: number;
 }
 
 /**
@@ -145,18 +143,12 @@ export const buildWindowNav = (
   const H = first.height;
   // Per-window-offset tile lookups for O(1) walkability composition
   const tilesByOffset = new Map<string, Map<string, NormalizedSectorTile>>();
-  // Neighbors reached across a rotated cube-edge seam can't be represented in
-  // this axis-aligned unified grid, so they are treated as impassable: paths
-  // and hover highlights stop cleanly at the border instead of wrapping the
-  // long way around, and crossings into them use the server-driven re-center.
-  const rotatedOffsets = new Set<string>();
   for (const entry of entries) {
     const lookup = new Map<string, NormalizedSectorTile>();
     for (const tile of entry.map.tiles) {
       lookup.set(getSectorMapTileKey(tile.x, tile.y), tile);
     }
     tilesByOffset.set(`${entry.dx},${entry.dy}`, lookup);
-    if ((entry.rotation ?? 0) !== 0) rotatedOffsets.add(`${entry.dx},${entry.dy}`);
   }
   const Tile = defineHex({
     dimensions: { width: hexsize, height: hexsize * HEX_ASPECT_RATIO },
@@ -177,12 +169,6 @@ export const buildWindowNav = (
       const localCol = tile.col - (dx + 1) * W;
       const localRow = tile.row - (dy + 1) * H;
       const offsetKey = `${dx},${dy}`;
-      if (rotatedOffsets.has(offsetKey)) {
-        // Rotated-seam neighbor: impassable in the unified grid (see above)
-        tile.blocked = true;
-        tile.cost = 9999;
-        return tile;
-      }
       const lookup = tilesByOffset.get(offsetKey);
       const mapTile = lookup?.get(getSectorMapTileKey(localCol, localRow));
       if (!mapTile) {
@@ -563,19 +549,24 @@ export const drawSector = (
       // Structure tiles stay flat and walkable (includes shrines and other
       // added structures)
       if (structureTileKeys.has(tileKey)) {
-        // Structures always sit on their sector biome's land terrain,
-        // overriding the authored tile: the sprites' baked ground patches
-        // (snow/grass/sand) must blend with what is beneath them, and a
-        // shrine anchored on water gets a sand island instead of floating
-        const groundSpec = resolveTerrainSpec(
-          STRUCTURE_GROUND_TERRAIN[baseBiome],
-          terrainRegistry,
-        );
+        // Preserve the authored terrain and its shade beneath structures. Only
+        // water becomes a small land island; repainting every footprint from
+        // the globe's centre biome caused white snow patches on Horizon's
+        // legacy desert map when the topology and published map disagreed.
+        const groundSpec = resolveStructureTerrainSpec({
+          authoredTerrain: authoredTile?.terrain,
+          authoredBattleBiome: authoredTile?.battleBiome,
+          baseBiome,
+          registry: terrainRegistry,
+        });
         tile.spec = groundSpec;
         tile.battleBiome = authoredTile?.battleBiome ?? groundSpec.battleBiome;
         tile.cost = 2;
-        // Mid shade so the ground under buildings reads flat and uniform
-        tile.level = 0.5;
+        if (spec.isWater) {
+          // A consistent mid shade makes the replacement island read as one
+          // intentional foundation instead of noisy water-colored fragments.
+          tile.level = 0.5;
+        }
         tile.hasStructure = true;
         tile.blocked = false;
       }

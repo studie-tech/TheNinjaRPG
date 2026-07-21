@@ -1,9 +1,11 @@
 import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
-import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  plugins: [react(), tsconfigPaths()],
+  // Vite transpiles JSX/TSX through esbuild in tests. Loading the React dev
+  // plugin here is unnecessary and couples Vitest to that plugin's Vite peer
+  // version (currently Vite 8 while this project intentionally uses Vite 7).
+  plugins: [tsconfigPaths()],
   test: {
     environment: "jsdom",
   },

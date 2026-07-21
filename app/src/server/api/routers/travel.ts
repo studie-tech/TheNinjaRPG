@@ -46,7 +46,7 @@ import { findRelationship } from "@/utils/alliance";
 import { groupBy } from "@/utils/grouping";
 import { secondsFromNow } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
-import { sectorIdSchema } from "@/validators/travel";
+import { sectorIdSchema, startGlobalMoveSchema } from "@/validators/travel";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -414,12 +414,13 @@ export const travelRouter = createTRPCRouter({
     // curSector is the client's view of where the player currently stands; it
     // lets us fetch that sector's map in parallel with the user instead of
     // waiting to learn user.sector. The guard below rejects a stale/wrong hint.
-    .input(z.object({ sector: sectorIdSchema, curSector: sectorIdSchema }))
+    .input(startGlobalMoveSchema)
     .output(
       baseServerResponse.extend({
         data: z
           .object({
             sector: z.number(),
+            // Server-generated response coordinates, never client input.
             longitude: z.number(),
             latitude: z.number(),
             travelFinishAt: z.date(),
@@ -561,8 +562,8 @@ export const travelRouter = createTRPCRouter({
     }),
   /**
    * Move the user tile-by-tile within their sector, or one step across a
-   * border into the adjacent sector (resolving cube-seam rotation via
-   * resolveSectorCrossing). Snaps an unwalkable current tile to the nearest
+   * border into the adjacent aligned-grid sector via resolveSectorCrossing.
+   * Snaps an unwalkable current tile to the nearest
    * walkable one, optionally carries destLongitude/destLatitude so a
    * cross-border walk commits in a single round trip, guards the position
    * update with a CAS WHERE clause, and broadcasts the move to both the
@@ -657,10 +658,9 @@ export const travelRouter = createTRPCRouter({
           return errorResponse("The neighbouring sector has no published map yet");
         }
         targetMap = neighbourMap;
-        // The cube-sphere rotates orientation across some face seams, so both
-        // the entry edge and the along-edge direction can change. The shared
-        // crossing math resolves the exact entry cell from the tile's baked
-        // `ne` data (aligned within a face, 90/270 rotated across the seams).
+        // Cylindrical-grid neighbors are aligned and use the opposite entry
+        // edge. Shared crossing math still adapts the rendered map's vertical
+        // axis and maps proportionally if neighboring authored maps differ in size.
         const resolved = resolveSectorCrossing(
           sector,
           crossing.direction,

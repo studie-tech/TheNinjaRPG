@@ -12,10 +12,13 @@ export interface GlobalTile {
   b: NonEmptyArray<GlobalPoint>; // boundary
   c: GlobalPoint; // centerPoint
   t: number; // 0=ocean, 1=land, 2=desert
-  n?: number[]; // quad neighbors [north, east, south, west] sector ids
-  ne?: number[]; // entry edge on each neighbor [N,E,S,W]: which edge (0..3) the
-  // crossing enters through. Within a cube face this is (k+2)%4 (aligned grid);
-  // across the 12 cube-edge seams it encodes the 90/270 rotation.
+  /** Row-major sub-sector terrain samples used only for smooth global rendering. */
+  v?: number[];
+  /** Row-major packed RGB colors at sub-sector grid vertices. */
+  vc?: number[];
+  n?: number[]; // neighbors [north, east, south, west]; -1 at a polar boundary
+  ne?: number[]; // entry edge on each neighbor; always the opposite edge for a
+  // real cylindrical-grid neighbor, and -1 where the polar cap blocks travel
 }
 
 export interface SectorPoint {
@@ -25,6 +28,20 @@ export interface SectorPoint {
 
 export interface GlobalMapData {
   radius: number;
+  projection?: "cylindrical";
+  generation?: string;
+  visualScale?: number;
+  polarCapColumns?: number;
+  polarCapRows?: number;
+  polarCapColors?: {
+    north: number[];
+    south: number[];
+  };
+  landThreshold?: number;
+  protectedLandSectors?: number[];
+  columns?: number;
+  rows?: number;
+  latitudeLimit?: number;
   tiles: NonEmptyArray<GlobalTile>;
 }
 

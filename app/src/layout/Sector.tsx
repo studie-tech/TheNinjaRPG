@@ -287,10 +287,8 @@ const Sector: React.FC<SectorProps> = (props) => {
   // cross sector borders as if the world were a single map
   const windowNavRef = useRef<WindowNav | null>(null);
   const rebuildSceneRef = useRef<(() => void) | null>(null);
-  // Set true to make the next window update do a full rebuild instead of an
-  // incremental patch (used after a rotated-seam crossing, which must re-draw
-  // the new center sector upright rather than re-anchor the misoriented one).
-  const forceFullRebuildRef = useRef(false);
+  // Incremented whenever a completed crossing changes the window center, so
+  // stale async window patches cannot win a race against the latest crossing.
   const windowUpdateTokenRef = useRef(0);
   const centerOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   // The character's live tile during walk animations; authoritative for
@@ -903,58 +901,6 @@ const Sector: React.FC<SectorProps> = (props) => {
       y: data.entryLatitude ?? data.latitude,
     };
     const registry = worldRegistryRef.current;
-    // Across a rotated cube-edge seam the destination is drawn unrotated in the
-    // current window, so re-anchoring the walk there would misplace it. Anchor
-    // originRef in the destination's grid right away (movement stays live - the
-    // marker is never stuck), place it at the committed landing, then force ONE
-    // full rebuild that re-draws the new sector upright and centered.
-    if (
-      (sectorWindowRef.current.sectors.find((s) => s.sector === data.sector)
-        ?.rotation ?? 0) !== 0
-    ) {
-      const seamGrid = registry.grids.get(data.sector);
-      const seamWrapper = registry.wrappers.get(data.sector);
-      if (seamGrid && seamWrapper && registry.groupUsers && registry.groupQuest) {
-        seamWrapper.add(registry.groupUsers);
-        seamWrapper.add(registry.groupQuest);
-        gridRef.current = seamGrid;
-        pathFinderRef.current = new PathCalculator(seamGrid);
-        originRef.current = seamGrid.getHex({
-          col: data.longitude,
-          row: data.latitude,
-        });
-        centerOffsetRef.current = {
-          x: seamWrapper.position.x,
-          y: seamWrapper.position.y,
-        };
-      }
-      animatedPositionRef.current = { x: data.longitude, y: data.latitude };
-      pendingWorldTargetRef.current = null;
-      clearAllHighlights();
-      void updateUsersList(
-        {
-          ...userData,
-          sector: data.sector,
-          longitude: data.longitude,
-          latitude: data.latitude,
-          location: data.location,
-        } as UserData,
-        true,
-        true,
-      );
-      setPosition({ x: data.longitude, y: data.latitude });
-      setTarget(null);
-      forceFullRebuildRef.current = true;
-      await updateUser({
-        sector: data.sector,
-        longitude: data.longitude,
-        latitude: data.latitude,
-        location: data.location,
-        updatedAt: new Date(),
-      });
-      runQuestTriggers(data, true);
-      return;
-    }
     const wrapper = registry.wrappers.get(data.sector);
     const grid = registry.grids.get(data.sector);
     const anchored = !!(wrapper && grid && registry.groupUsers && registry.groupQuest);
@@ -1093,15 +1039,9 @@ const Sector: React.FC<SectorProps> = (props) => {
     location: string,
   ) => {
     const nav = windowNavRef.current;
-    // The unified window grid assumes aligned neighbors, so the optimistic
-    // client-side walk is only valid across aligned borders. Rotated cube-edge
-    // seams fall through to the server-driven crossing, which resolves the
-    // rotated entry cell correctly (via resolveSectorCrossing) and re-anchors.
-    const destEntry = crossDest
-      ? sectorWindowRef.current.sectors.find((s) => s.sector === crossDest.sector)
-      : undefined;
-    const rotatedSeam = (destEntry?.rotation ?? 0) !== 0;
-    if (crossDest && nav && !rotatedSeam) {
+    // Every cylindrical-grid neighbor is aligned, so a click into an adjacent
+    // sector can animate across the border without a scene rebuild.
+    if (crossDest && nav) {
       const destOffset = offsetOfSector(crossDest.sector);
       const startU = nav.toUnified(0, 0, edge.x, edge.y);
       const goalU = destOffset
@@ -1330,7 +1270,6 @@ const Sector: React.FC<SectorProps> = (props) => {
         dx: entry.dx,
         dy: entry.dy,
         map: entry.map,
-        rotation: entry.rotation ?? 0,
       })),
       // Adjacency only depends on grid coordinates, so the hex size is
       // arbitrary here (rendering uses the per-sector grids)
@@ -1371,13 +1310,6 @@ const Sector: React.FC<SectorProps> = (props) => {
     const registry = worldRegistryRef.current;
     const window = sectorWindowRef.current;
     if (!registry.worldRoot || registry.entries.size === 0) return;
-    // A rotated-seam crossing asked for a clean full rebuild (re-draw the new
-    // center upright); the incremental patch below can't re-orient a sector.
-    if (forceFullRebuildRef.current) {
-      forceFullRebuildRef.current = false;
-      rebuildSceneRef.current?.();
-      return;
-    }
     const token = ++windowUpdateTokenRef.current;
     const windowCenter = window.sectors.find(
       (candidate) => candidate.dx === 0 && candidate.dy === 0,

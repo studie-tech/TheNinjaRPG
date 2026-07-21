@@ -1,5 +1,4 @@
 import * as TWEEN from "@tweenjs/tween.js";
-import alea from "alea";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -13,11 +12,9 @@ import {
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
+  SphereGeometry,
   Sprite,
   SpriteMaterial,
-  SRGBColorSpace,
-  type Texture,
-  TextureLoader,
   Vector2,
   Vector3,
 } from "three";
@@ -26,7 +23,6 @@ import { Button } from "@/components/ui/button";
 import {
   IMG_BADGE_MOVE_TO_LOCATION,
   IMG_MAP_QUEST_ICON,
-  IMG_MAP_TILESET_ATLAS,
   IMG_MAP_WAR_ICON,
   MAP_RESERVED_SECTORS,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
@@ -35,7 +31,11 @@ import type { Village } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import WebGlError from "@/layout/WebGLError";
 import type { HexagonalFaceMesh } from "@/libs/hexgrid";
-import { buildGlobeTileGeometry, createUserAvatarSprite } from "@/libs/threejs/globe";
+import {
+  buildGlobeTileGeometry,
+  createUserAvatarSprite,
+  samplePolarCapColor,
+} from "@/libs/threejs/globe";
 import { TrackballControls } from "@/libs/threejs/TrackBallControls";
 import type { GlobalMapData, GlobalPoint, GlobalTile } from "@/libs/threejs/types";
 import {
@@ -122,35 +122,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   const { currentStep } = useTutorialStep();
   const isTravelStep = currentStep?.title === "Travel";
 
-  // Render the map
-  const [atlasTexture, setAtlasTexture] = useState<Texture | null>(null);
   useEffect(() => {
-    let cancelled = false;
-    void new TextureLoader()
-      .loadAsync(IMG_MAP_TILESET_ATLAS)
-      .then((texture) => {
-        if (cancelled) return;
-        texture.colorSpace = SRGBColorSpace;
-        texture.generateMipmaps = false;
-        texture.minFilter = LinearFilter;
-        setAtlasTexture(texture);
-      })
-      .catch((error) => {
-        // The globe cannot render without its coastline atlas (served from the
-        // CDN); surface the WebGL error UI instead of a silently blank map.
-        if (cancelled) return;
-        console.error("Failed to load the globe tileset atlas", error);
-        setWebglError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    // Reference to the mount; the scene builds once the tile atlas is ready
+    // Reference to the mount
     const sceneRef = mountRef.current;
-    if (sceneRef && atlasTexture) {
+    if (sceneRef) {
       // Performance stats
       // const stats = new Stats();
       // document.body.appendChild(stats.dom);
@@ -217,9 +192,6 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       // Setup camera
       const camera = new PerspectiveCamera(fov, aspect, near, far);
 
-      // Random number gen
-      const prng = alea(42);
-
       // Groups to hold items. three.js sorts by a group's renderOrder before any
       // per-object order or depth, so putting highlights in a later group makes
       // every marker (avatars, quest/war pins, labels) draw after the tiles AND
@@ -230,6 +202,49 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       const group_tiles = new Group();
       const group_highlights = new Group();
       group_highlights.renderOrder = 1;
+
+      // The latitude/longitude sector grid intentionally stops short of the
+      // poles. A continuous sphere underlay supplies the deterministic polar
+      // biome colors and depth occlusion, but never contributes sector edges or
+      // intercepts sector raycasts.
+      if (hexasphere.projection === "cylindrical") {
+        const polarGeometry = new SphereGeometry(
+          (hexasphere.radius / 3) * 0.998,
+          hexasphere.polarCapColumns ?? 72,
+          Math.max(
+            72,
+            Math.round(
+              ((hexasphere.polarCapRows ?? 10) * 180) /
+                (90 - (hexasphere.latitudeLimit ?? 65)),
+            ),
+          ),
+        );
+        const positions = polarGeometry.getAttribute("position");
+        const colors = new Float32Array(positions.count * 3);
+        const underlayColor = { x: 0.78, y: 0.91, z: 0.94 };
+        for (let i = 0; i < positions.count; i++) {
+          const color =
+            samplePolarCapColor(hexasphere, {
+              x: positions.getX(i),
+              y: positions.getY(i),
+              z: positions.getZ(i),
+            }) ?? underlayColor;
+          colors[i * 3] = color.x;
+          colors[i * 3 + 1] = color.y;
+          colors[i * 3 + 2] = color.z;
+        }
+        polarGeometry.setAttribute("color", new BufferAttribute(colors, 3));
+        const globeUnderlay = new Mesh(
+          polarGeometry,
+          new MeshBasicMaterial({
+            vertexColors: true,
+            side: DoubleSide,
+          }),
+        );
+        globeUnderlay.name = "biome-colored-polar-underlay";
+        globeUnderlay.raycast = () => {};
+        group_tiles.add(globeUnderlay);
+      }
 
       // Reusable bright outline that marks the hovered sector. The tile keeps
       // its own terrain colour - we only outline it and switch the cursor to a
@@ -432,19 +447,19 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         renderer.domElement.addEventListener("pointercancel", onLabelPointerCancel);
       }
 
-      // Flat textured globe: every tile is a sea-level quad textured through the
-      // Kenney coastline atlas. Alongside the tiles we collect each tile's quad
-      // boundary into a single light wireframe so the sectors (zones) read
-      // clearly. The atlas texture is pre-loaded before this scene builds.
+      // Textured globe: each logical sector is rendered from a finer visual
+      // terrain field, while its outer quad remains the interaction boundary.
+      // The sector grid stops with the navigable tiles; the separate polar-cap
+      // sphere never contributes edges and therefore remains a solid surface.
       const edgePositions: number[] = [];
       const EDGE_LIFT = 1.0015; // sit the outline just above the tile faces
       for (let i = 0; i < hexasphere.tiles.length; i++) {
         const t = hexasphere.tiles[i];
-        const built = t && buildGlobeTileGeometry(hexasphere, t, prng());
+        const built = t && buildGlobeTileGeometry(hexasphere, t);
         if (t && built) {
           const geometry = new BufferGeometry();
           geometry.setAttribute("position", new BufferAttribute(built.positions, 3));
-          geometry.setAttribute("uv", new BufferAttribute(built.uvs, 2));
+          geometry.setAttribute("color", new BufferAttribute(built.colors, 3));
 
           // Ownership view tints the tile texture by owning village
           let color: string | number = 0xffffff;
@@ -462,7 +477,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           }
           const material = new MeshBasicMaterial({
             color,
-            map: atlasTexture,
+            vertexColors: true,
             side: DoubleSide,
           });
 
@@ -487,8 +502,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         }
       }
 
-      // Light sector-separation grid overlaid on the globe. Occluded by the
-      // opaque tiles on the far side (depthTest), so only front edges show.
+      // Dark sector-separation grid overlaid on the globe. The deeper blue-grey
+      // remains legible on snow without overpowering grass, desert, or water.
+      // It is occluded by opaque tiles on the far side (depthTest), so only
+      // front edges show.
       if (edgePositions.length > 0) {
         const edgeGeometry = new BufferGeometry();
         edgeGeometry.setAttribute(
@@ -498,9 +515,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         const edgeLines = new LineSegments(
           edgeGeometry,
           new LineBasicMaterial({
-            color: 0xf2f6fb,
+            color: 0x243f52,
             transparent: true,
-            opacity: 0.4,
+            opacity: 0.62,
             depthWrite: false,
           }),
         );
@@ -996,7 +1013,6 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     props.focusSector,
     showOwnership,
     ownershipData,
-    atlasTexture,
     autoRotate,
   ]);
 

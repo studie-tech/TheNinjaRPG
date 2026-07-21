@@ -114,31 +114,11 @@ describe("buildWindowNav", () => {
     expect(nav.pathFinder.getShortestPath(start, goalInMissing)).toBeUndefined();
   });
 
-  it("treats a rotated-seam neighbor as an impassable wall (no wrapping paths)", () => {
-    // The east neighbor is present but reached across a rotated cube-edge seam;
-    // the axis-aligned unified grid can't represent its rotation, so it must be
-    // impassable - hover/optimistic paths stop cleanly at the border.
+  it("crosses freely into an aligned neighbor", () => {
     const nav = buildWindowNav(
       [
         { dx: 0, dy: 0, map: makeMap(4, 4) },
-        { dx: 1, dy: 0, map: makeMap(4, 4), rotation: 1 },
-      ],
-      HEXSIZE,
-      mergeTerrainSpecs([]),
-    );
-    if (!nav) throw new Error("no nav");
-    const start = nav.toUnified(0, 0, 0, 1);
-    const goalInRotated = nav.toUnified(1, 0, 3, 1);
-    if (!start || !goalInRotated) throw new Error("coords");
-    expect(goalInRotated.blocked).toBe(true);
-    expect(nav.pathFinder.getShortestPath(start, goalInRotated)).toBeUndefined();
-  });
-
-  it("still crosses freely into an aligned (rotation 0) neighbor", () => {
-    const nav = buildWindowNav(
-      [
-        { dx: 0, dy: 0, map: makeMap(4, 4) },
-        { dx: 1, dy: 0, map: makeMap(4, 4), rotation: 0 },
+        { dx: 1, dy: 0, map: makeMap(4, 4) },
       ],
       HEXSIZE,
       mergeTerrainSpecs([]),
