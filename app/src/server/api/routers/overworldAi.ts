@@ -28,9 +28,9 @@ import { initiateBattle } from "@/routers/combat";
 import { fetchUserItems } from "@/routers/item";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import {
-  ASSIGNABLE_QUEST_TYPES,
   assignQuestToUser,
   commitQuestObjectiveRewards,
+  OVERWORLD_ASSIGNABLE_QUEST_TYPES,
   questTypeConcurrentBlockMessage,
 } from "@/routers/quests";
 import type { DrizzleClient } from "@/server/db";
@@ -102,24 +102,32 @@ export const overworldAiRouter = createTRPCRouter({
       // HOSTILE — those only resolve at a FRIENDLY NPC (the inverse of the quest-save check).
       const placementId = input.id;
       const makingHostile = input.data.interactionType === "HOSTILE";
-      if (placementId && (!input.data.isActive || makingHostile)) {
+      if (placementId && makingHostile) {
+        // HOSTILE needs objective content to detect friendly deliver/dialog bindings; that fetch
+        // already carries the quest names, so a single query also covers the deactivate check.
         const binding = await fetchQuestsBindingPlacement(ctx.drizzle, placementId);
         if (!input.data.isActive && binding.length > 0) {
           return errorResponse(
             `Cannot deactivate: bound to quest(s): ${binding.map((q) => q.name).join(", ")}.`,
           );
         }
-        if (makingHostile) {
-          const friendlyBound = binding.filter((q) =>
-            hasFriendlyBindingToPlacement(q.content.objectives, placementId),
+        const friendlyBound = binding.filter((q) =>
+          hasFriendlyBindingToPlacement(q.content.objectives, placementId),
+        );
+        if (friendlyBound.length > 0) {
+          return errorResponse(
+            `Cannot set HOSTILE: deliver/dialog objectives in quest(s) ${friendlyBound
+              .map((q) => q.name)
+              .join(", ")} require a FRIENDLY NPC. Unbind them first.`,
           );
-          if (friendlyBound.length > 0) {
-            return errorResponse(
-              `Cannot set HOSTILE: deliver/dialog objectives in quest(s) ${friendlyBound
-                .map((q) => q.name)
-                .join(", ")} require a FRIENDLY NPC. Unbind them first.`,
-            );
-          }
+        }
+      } else if (placementId && !input.data.isActive) {
+        // Pure deactivation only needs the bound quest names, so skip the heavy content JSON.
+        const binding = await fetchQuestNamesBindingPlacement(ctx.drizzle, placementId);
+        if (binding.length > 0) {
+          return errorResponse(
+            `Cannot deactivate: bound to quest(s): ${binding.map((q) => q.name).join(", ")}.`,
+          );
         }
       }
       // Prepare
@@ -183,8 +191,8 @@ export const overworldAiRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
-      // Guard: refuse to delete a placement that a quest objective references
-      const binding = await fetchQuestsBindingPlacement(ctx.drizzle, input.id);
+      // Guard: refuse to delete a placement that a quest objective references (names only)
+      const binding = await fetchQuestNamesBindingPlacement(ctx.drizzle, input.id);
       if (binding.length > 0) {
         return errorResponse(
           `Cannot delete: bound to quest(s): ${binding.map((q) => q.name).join(", ")}. Unbind them first.`,
@@ -448,10 +456,11 @@ export const overworldAiRouter = createTRPCRouter({
         .map((p, poolIndex) => {
           const q = questsById.get(p.questId);
           if (!q) return null;
-          // Skip types the centralized assigner can't start (e.g. errand, whose daily cap
-          // only startRandom enforces). Reaching assignQuestToUser with one throws and would
-          // strand the claimed active-NPC-quest slot, leaving the player permanently blocked.
-          if (!ASSIGNABLE_QUEST_TYPES.includes(q.questType)) return null;
+          // Skip types the overworld pool can't grant: ones the centralized assigner can't start
+          // (e.g. errand, whose daily cap only startRandom enforces — reaching assignQuestToUser
+          // with one throws and strands the claimed slot), plus occupation/structure-gated types
+          // (hunting/gathering/anbu/story/event) whose UI gate the overworld path can't enforce.
+          if (!OVERWORLD_ASSIGNABLE_QUEST_TYPES.includes(q.questType)) return null;
           const prev = prevByQuest.find((ph) => ph.questId === q.id);
           const available =
             isAvailableUserQuests({ ...q, ...prev }, activeUser).check &&
@@ -608,15 +617,31 @@ export const overworldAiRouter = createTRPCRouter({
     }),
 });
 
-/** Quests whose objective content binds to this placement (overworldPlacementId).
- *  Exact JSON membership on the content column (admin-only guard). */
+/** Exact JSON membership predicate: a quest's objective content binds this placement
+ *  (overworldPlacementId). Shared by the name-only and content-bearing fetches below. */
+const questBindsPlacementWhere = (placementId: string) =>
+  sql`JSON_CONTAINS(JSON_EXTRACT(${quest.content}, '$.objectives[*].overworldPlacementId'), JSON_QUOTE(${placementId})) = 1`;
+
+/** Quests (id + name only) whose objective content binds this placement — for name-only guards.
+ *  Skips the potentially large `content` JSON the deactivate/delete callers never inspect. */
+const fetchQuestNamesBindingPlacement = async (
+  client: DrizzleClient,
+  placementId: string,
+) =>
+  client.query.quest.findMany({
+    columns: { id: true, name: true },
+    where: questBindsPlacementWhere(placementId),
+  });
+
+/** Same binding set, plus the objective content needed to detect friendly deliver/dialog
+ *  bindings (only the make-HOSTILE guard reads it). Admin-only guard. */
 const fetchQuestsBindingPlacement = async (
   client: DrizzleClient,
   placementId: string,
 ) =>
   client.query.quest.findMany({
     columns: { id: true, name: true, content: true },
-    where: sql`JSON_CONTAINS(JSON_EXTRACT(${quest.content}, '$.objectives[*].overworldPlacementId'), JSON_QUOTE(${placementId})) = 1`,
+    where: questBindsPlacementWhere(placementId),
   });
 
 /** Load a placement with its quest pool and the AI template identity/isAi flag. */
