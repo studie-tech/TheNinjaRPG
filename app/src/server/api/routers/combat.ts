@@ -1127,7 +1127,7 @@ export const combatRouter = createTRPCRouter({
       const bloodline = user.bloodlineId
         ? userBattle.extraState.bloodlines?.[user.bloodlineId]
         : null;
-      const sageMode = user.sageModeId
+      const equippedSageMode = user.sageModeId
         ? userBattle.extraState.sageModes?.[user.sageModeId]
         : null;
       const questData = userBattle.extraState.questData?.[user.controllerId];
@@ -1140,7 +1140,7 @@ export const combatRouter = createTRPCRouter({
       const rawUserForProcessing = {
         ...user,
         bloodline: bloodline ?? null,
-        sageMode: sageMode ?? null,
+        sageMode: equippedSageMode ?? null,
         jutsuLoadout: jId ?? user.jutsuLoadout,
         itemLoadout: iId ?? user.itemLoadout,
         jutsus: hydratedJutsus,

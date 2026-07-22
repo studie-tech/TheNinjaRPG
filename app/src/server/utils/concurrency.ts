@@ -9,7 +9,7 @@
  * Failed CAS (`success: false` / `false`) means another request mutated the row first — return a
  * safe client error and retry-friendly message.
  */
-import { and, eq, exists, gte, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, exists, gt, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { BattleType } from "@/drizzle/constants";
 import {
   bloodlineRolls,
@@ -323,7 +323,9 @@ type RefundPityCreditParams = {
  * surfaced as a TRPCError from the grant helper) — NOT when a post-CAS side-effect write in that
  * helper throws, since those run only after the grant has committed and refunding then would hand
  * back a credit that already funded a grant. Each successful reservation is refunded at most once,
- * so `pityRolls` returns to the count the caller read without underflowing.
+ * so `pityRolls` returns to the count the caller read without underflowing. The `pityRolls > 0`
+ * predicate is a floor rather than the correctness mechanism: a misuse or duplicated refund becomes
+ * a no-op instead of driving the (signed) column negative.
  */
 export const refundPityCredit = async ({
   client,
@@ -333,5 +335,5 @@ export const refundPityCredit = async ({
   await client
     .update(table)
     .set({ pityRolls: sql`${table.pityRolls} - 1`, updatedAt: new Date() })
-    .where(eq(table.id, rollId));
+    .where(and(eq(table.id, rollId), gt(table.pityRolls, 0)));
 };
