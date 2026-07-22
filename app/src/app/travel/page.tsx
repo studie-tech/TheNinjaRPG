@@ -81,7 +81,7 @@ import { getStealthStatus } from "@/libs/stealth";
 import type { GlobalTile, SectorPoint } from "@/libs/threejs/types";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
-import { calcGlobalTravelTime, findNearestEdge, isAtEdge } from "@/libs/travel";
+import { calcGlobalTravelTime } from "@/libs/travel";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { useAwake } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -399,10 +399,8 @@ export default function Travel() {
       onSuccess: async (result) => {
         showMutationToast(result);
         if (result.success && result.data) {
-          // The local target was only the departure edge. Clear it before the
-          // destination coordinates enter UserContext, otherwise Sector sees
-          // the stale target after global travel and walks the user back to
-          // that same edge, persisting the wrong arrival position.
+          // Clear any local-sector movement target before the destination
+          // coordinates enter UserContext so it cannot overwrite the arrival.
           setTargetPosition(null);
           setTargetSector(null);
           setShowModal(false);
@@ -563,53 +561,17 @@ export default function Travel() {
           return;
         }
       }
-      // Start global move. Pass the current sector so the server can load its
-      // map in parallel with the user fetch (it re-validates against the DB).
-      if (userData?.sector === undefined) return;
-      startGlobalMove({ sector, curSector: userData.sector });
+      // Stop any local-sector movement and begin global travel immediately.
+      setTargetPosition(null);
+      startGlobalMove({ sector });
     },
-    [currentStep, userData?.tutorialOn, userData?.sector, startGlobalMove],
+    [currentStep, userData?.tutorialOn, startGlobalMove],
   );
 
-  // Convenience variables
-  const currentSectorDimensions = currentSectorMap
-    ? { width: currentSectorMap.width, height: currentSectorMap.height }
-    : undefined;
-  const onEdge = currentSectorDimensions
-    ? isAtEdge(currentPosition, currentSectorDimensions)
-    : false;
   const isGlobal = activeTab === globalLink;
   const showGlobal = villages && globe && isGlobal;
   const showSector =
     villages && hasCurrentSector && currentTile && currentSectorMap && !isGlobal;
-
-  useEffect(() => {
-    // Check if user reached the target position on the current map
-    const atTarget =
-      currentPosition &&
-      targetPosition &&
-      currentPosition.x === targetPosition.x &&
-      currentPosition.y === targetPosition.y;
-    // Auto-initiate global move when: user is at target hex, on sector edge,
-    // target sector differs from current, and not already traveling
-    if (
-      atTarget &&
-      onEdge &&
-      targetSector !== null &&
-      targetSector !== currentSector &&
-      !isStartingTravel
-    ) {
-      handleGlobalMove(targetSector);
-    }
-  }, [
-    currentPosition,
-    targetPosition,
-    targetSector,
-    currentSector,
-    onEdge,
-    isStartingTravel,
-    handleGlobalMove,
-  ]);
 
   // Attack revealed stealthed player after moving to their position
   useEffect(() => {
@@ -1028,17 +990,7 @@ export default function Travel() {
             setIsOpen={setShowModal}
             proceed_label={!isStartingTravel ? "Travel" : undefined}
             isValid={false}
-            onAccept={() => {
-              if (!onEdge && currentPosition && currentSectorDimensions) {
-                setShowModal(false);
-                setTargetPosition(
-                  findNearestEdge(currentPosition, currentSectorDimensions),
-                );
-                setActiveTab(sectorLink);
-              } else {
-                handleGlobalMove(targetSector);
-              }
-            }}
+            onAccept={() => handleGlobalMove(targetSector)}
           >
             {isStartingTravel && <Loader explanation="Preparing to Travel" />}
             {!isStartingTravel && (
@@ -1047,13 +999,6 @@ export default function Travel() {
                 <p className="py-2">
                   The travel time is estimated to be{" "}
                   {calcGlobalTravelTime(userData.sector, targetSector, globe)} seconds.
-                </p>
-                <p className="py-2">
-                  Your character will first have to move to the edge of his current
-                  sector.
-                </p>
-                <p className="pb-2">
-                  Current location: {currentPosition?.x}, {currentPosition?.y}
                 </p>
                 Do you confirm?
               </div>

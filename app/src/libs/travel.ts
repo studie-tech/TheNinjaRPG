@@ -10,27 +10,6 @@ import {
 } from "@/libs/sector-map/validation";
 import type { GlobalMapData, GlobalTile, SectorPoint } from "@/libs/threejs/types";
 
-export interface SectorDimensions {
-  width: number;
-  height: number;
-}
-
-/**
- * Check if a given position is at the edge of a sector
- */
-export const isAtEdge = (
-  position: SectorPoint | null,
-  dimensions: SectorDimensions,
-) => {
-  return (
-    position &&
-    (position.x === 0 ||
-      position.x === dimensions.width - 1 ||
-      position.y === 0 ||
-      position.y === dimensions.height - 1)
-  );
-};
-
 /**
  * Gets the biome for a globe tile terrain type (0=ocean, 1=land, 2=desert, 3=ice)
  */
@@ -74,18 +53,6 @@ export const getBiomeAtSectorAnchor = (
       ? tile.terrain
       : undefined;
   return visibleBiome ?? tile?.battleBiome ?? getBiomeFromTileType(globalTileType);
-};
-
-/**
- * Based on current position, find the nearest edge
- */
-export const findNearestEdge = (
-  position: SectorPoint,
-  dimensions: SectorDimensions,
-) => {
-  const x = position.x < dimensions.width / 2 ? 0 : dimensions.width - 1;
-  const y = position.y < dimensions.height / 2 ? 0 : dimensions.height - 1;
-  return { x: x, y: y };
 };
 
 /** Center-tile landing point for global travel, adjusted only when blocked. */

@@ -30,7 +30,6 @@ import {
   calcGlobalTravelTime,
   calcIsInVillage,
   findGlobalTravelDestination,
-  isAtEdge,
   maxDistance,
 } from "@/libs/travel";
 import { initiateBattle } from "@/routers/combat";
@@ -411,9 +410,6 @@ export const travelRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Start global travel to another sector" },
     })
-    // curSector is the client's view of where the player currently stands; it
-    // lets us fetch that sector's map in parallel with the user instead of
-    // waiting to learn user.sector. The guard below rejects a stale/wrong hint.
     .input(startGlobalMoveSchema)
     .output(
       baseServerResponse.extend({
@@ -434,31 +430,17 @@ export const travelRouter = createTRPCRouter({
       if (!targetTile) {
         return { success: false, message: "Target sector does not exist" };
       }
-      // Fetch the user plus both ends of the journey in parallel. The target
-      // map determines a safe center-tile landing position.
-      let [user, currentSectorMap, targetSectorMap] = await Promise.all([
+      // Fetch the user and destination in parallel. Global travel can begin
+      // from any local tile; the target map only determines a safe landing.
+      let [user, targetSectorMap] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchPublishedSectorMap(ctx.drizzle, input.curSector).catch(() => null),
         fetchPublishedSectorMap(ctx.drizzle, input.sector).catch(() => null),
       ]);
-      // Validate the hint: the map we loaded must be the sector the player is
-      // actually in, otherwise the isAtEdge check below would use the wrong map
-      if (user.sector !== input.curSector) {
-        return errorResponse("Your location changed; please reload and try again");
-      }
-      if (!currentSectorMap) {
-        return errorResponse("This sector has no published map yet");
-      }
       if (!targetSectorMap) {
         return errorResponse("The destination sector has no published map yet");
       }
-      if (
-        !isAtEdge(
-          { x: user.longitude, y: user.latitude },
-          { width: currentSectorMap.width, height: currentSectorMap.height },
-        )
-      ) {
-        return { success: false, message: "You are not at the edge of a sector" };
+      if (user.sector === input.sector) {
+        return errorResponse("You are already in that sector");
       }
       if (user.status !== "AWAKE") {
         return { success: false, message: `Status is: ${user.status.toLowerCase()}` };
