@@ -2136,8 +2136,8 @@ const Sector: React.FC<SectorProps> = (props) => {
           showAll: showStructureLabelsRef.current,
           pointerOnMap: pointerOnMapRef.current,
           camera,
-          viewportWidth: rendererElement.clientWidth,
-          viewportHeight: rendererElement.clientHeight,
+          viewportWidth: cachedWidth,
+          viewportHeight: cachedHeight,
         });
         endStructures();
 
