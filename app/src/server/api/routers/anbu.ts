@@ -349,7 +349,7 @@ export const anbuRouter = createTRPCRouter({
           reassignPendingAnbuRequestsOnPromotion(
             ctx.drizzle,
             squad.id,
-            request.receiverId,
+            null, // squad is leaderless; avoid touching other squads' relatedId=null requests
             requester.userId,
           ),
         ]);
