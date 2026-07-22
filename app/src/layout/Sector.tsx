@@ -351,22 +351,7 @@ const Sector: React.FC<SectorProps> = (props) => {
   const structures = useMemo(() => {
     const base = villageData?.structures ?? [];
     if (base.some((s) => s.route === "/shrine")) return base;
-    const shrineAnchor = sectorMap.anchors.find(
-      (anchor) => anchor.key === "shrine.default",
-    );
-    return [
-      ...base,
-      createGenericStructure({
-        name: "Sector Shrine",
-        route: "/shrine",
-        image:
-          WAR_SHRINE_IMAGE_BY_BIOME[
-            getBiomeAtSectorAnchor(sectorMap, "shrine.default", props.tile.t)
-          ],
-        longitude: shrineAnchor?.x ?? 10,
-        latitude: shrineAnchor?.y ?? 5,
-      }),
-    ];
+    return [...base, createShrineStructure(sectorMap, props.tile.t)];
   }, [villageData?.structures, sectorMap, props.tile.t]);
 
   // Query for raids in this sector (only when user is in this sector)
@@ -1144,21 +1129,7 @@ const Sector: React.FC<SectorProps> = (props) => {
     // query's), so a sector looks identical from every window position
     const entryStructures = [...entry.structures];
     if (!entryStructures.find((st) => st.route === "/shrine")) {
-      const shrineAnchor = entry.map.anchors.find(
-        (anchor) => anchor.key === "shrine.default",
-      );
-      entryStructures.push(
-        createGenericStructure({
-          name: "Sector Shrine",
-          route: "/shrine",
-          image:
-            WAR_SHRINE_IMAGE_BY_BIOME[
-              getBiomeAtSectorAnchor(entry.map, "shrine.default", entry.globalTileType)
-            ],
-          longitude: shrineAnchor?.x ?? 10,
-          latitude: shrineAnchor?.y ?? 5,
-        }),
-      );
+      entryStructures.push(createShrineStructure(entry.map, entry.globalTileType));
     }
     const groups = drawSector(
       registry.buildWidth,
@@ -2479,6 +2450,20 @@ const Sector: React.FC<SectorProps> = (props) => {
 };
 
 export default Sector;
+
+const createShrineStructure = (map: NormalizedSectorMap, globalTileType: number) => {
+  const shrineAnchor = map.anchors.find((anchor) => anchor.key === "shrine.default");
+  return createGenericStructure({
+    name: "Sector Shrine",
+    route: "/shrine",
+    image:
+      WAR_SHRINE_IMAGE_BY_BIOME[
+        getBiomeAtSectorAnchor(map, "shrine.default", globalTileType)
+      ],
+    longitude: shrineAnchor?.x ?? 10,
+    latitude: shrineAnchor?.y ?? 5,
+  });
+};
 
 interface SorroundingUsersProps {
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;

@@ -64,10 +64,16 @@ export const getBiomeAtSectorAnchor = (
   globalTileType: number,
 ): CombatBiome => {
   const anchor = sectorMap.anchors.find((candidate) => candidate.key === anchorKey);
-  return (
-    (anchor ? getSectorTile(sectorMap, anchor)?.battleBiome : undefined) ??
-    getBiomeFromTileType(globalTileType)
-  );
+  const tile = anchor ? getSectorTile(sectorMap, anchor) : undefined;
+  const visibleBiome =
+    tile?.terrain === "ocean" ||
+    tile?.terrain === "ground" ||
+    tile?.terrain === "dessert" ||
+    tile?.terrain === "ice" ||
+    tile?.terrain === "snow"
+      ? tile.terrain
+      : undefined;
+  return visibleBiome ?? tile?.battleBiome ?? getBiomeFromTileType(globalTileType);
 };
 
 /**

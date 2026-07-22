@@ -933,6 +933,18 @@ describe("standard terrain palette", () => {
     ).toBe("snow");
   });
 
+  it("preserves visible land when only its combat override is ice", () => {
+    const registry = mergeTerrainSpecs([]);
+    expect(
+      resolveStructureTerrainSpec({
+        authoredTerrain: "dessert",
+        authoredBattleBiome: "ice",
+        baseBiome: "ice",
+        registry,
+      }).key,
+    ).toBe("dessert");
+  });
+
   // Full-property signature of a terrain tile, matching the fields the dedup
   // compares. Two tiles with the same signature are duplicate palette entries.
   const terrainSignature = (tile: { properties?: { name: string; value: unknown }[] }) => {
