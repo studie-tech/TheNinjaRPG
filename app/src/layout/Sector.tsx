@@ -1143,6 +1143,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       // ride on the window query, merged once per window (see mergedTerrainsRef)
       mergedDecorationsRef.current,
       mergedTerrainsRef.current,
+      entry.villageType,
     );
     drawVillage(
       groups.group_assets,
@@ -1150,6 +1151,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       groups.honeycombGrid,
       entry.map,
       entry.villageType,
+      groups.villageWallPlan,
     );
     sortSectorAssetsByGroundContact(groups.group_assets);
     groups.group_interaction.children.forEach((mesh) => {

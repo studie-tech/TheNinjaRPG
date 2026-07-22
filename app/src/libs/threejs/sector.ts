@@ -67,9 +67,11 @@ import {
 } from "@/libs/sector-map/village-wall-assets";
 import {
   getVillageWallDecorationClearanceKeys,
+  getVillageWallFoundationKeys,
   planVillageWalls,
   selectVillageWallTowerVertices,
   usesVillageWalls,
+  type VillageWallPlan,
 } from "@/libs/sector-map/village-walls";
 import {
   getAuthoredTileMaterial,
@@ -404,6 +406,7 @@ export const drawSector = (
   sectorMap: NormalizedSectorMap,
   decorationAssets: Map<string, DecorationAsset>,
   terrainRegistry: Map<string, TerrainSpec>,
+  villageType: string | null,
 ) => {
   const endMark = profiler.mark("drawSector");
   const { width: sectorWidth, height: sectorHeight } = sectorMap;
@@ -439,6 +442,12 @@ export const drawSector = (
       structureTileKeys.add(getSectorMapTileKey(s.longitude + dCol, s.latitude + dRow));
     }
   }
+  const villageWallPlan = usesVillageWalls(villageType)
+    ? planVillageWalls(sectorMap, allStructures)
+    : null;
+  const wallFoundationKeys = villageWallPlan
+    ? getVillageWallFoundationKeys(villageWallPlan)
+    : new Set<string>();
   const grid = new Grid(Tile, rectangle({ width: sectorWidth, height: sectorHeight }))
     .filter((tile) => {
       try {
@@ -472,9 +481,11 @@ export const drawSector = (
       // wins, else the terrain's configured arena
       tile.battleBiome = authoredTile?.battleBiome ?? spec.battleBiome;
 
-      // Structure tiles stay flat and walkable (includes shrines and other
-      // added structures)
-      if (structureTileKeys.has(tileKey)) {
+      const hasStructureFoundation = structureTileKeys.has(tileKey);
+      // Structures and the village-facing tile below each wall segment use a
+      // flat, biome-appropriate foundation. This keeps walls from floating on
+      // recessed water/ice while leaving the exterior terrain untouched.
+      if (hasStructureFoundation || wallFoundationKeys.has(tileKey)) {
         // Preserve authored land beneath structures. Water becomes a small
         // land island and blue ice becomes snow; repainting every footprint
         // from the globe's centre biome caused white patches on Horizon's
@@ -493,8 +504,10 @@ export const drawSector = (
           // intentional foundation instead of noisy fragments.
           tile.level = 0.5;
         }
-        tile.hasStructure = true;
-        tile.blocked = false;
+        if (hasStructureFoundation) {
+          tile.hasStructure = true;
+          tile.blocked = false;
+        }
       }
       return tile;
     });
@@ -736,6 +749,7 @@ export const drawSector = (
     group_interaction,
     animatedMaterials: Array.from(animatedMaterials),
     honeycombGrid: grid,
+    villageWallPlan,
   };
 };
 
@@ -1316,11 +1330,9 @@ export const sortSectorAssetsByGroundContact = (group: Group) => {
 
 const drawVillageWall = (
   group: Group,
-  structures: VillageStructure[],
   grid: Grid<TerrainHex>,
-  sectorMap: NormalizedSectorMap,
+  plan: VillageWallPlan,
 ) => {
-  const plan = planVillageWalls(sectorMap, structures);
   if (plan.edges.length === 0) return;
   const decorationClearance = getVillageWallDecorationClearanceKeys(plan);
   group.children.forEach((child) => {
@@ -1400,11 +1412,12 @@ export const drawVillage = (
   grid: Grid<TerrainHex>,
   sectorMap: NormalizedSectorMap,
   villageType: string | null,
+  wallPlan?: VillageWallPlan | null,
 ) => {
   // Structure-derived modular wall: a connected contour one clear hex beyond
   // every physical structure, with authored road crossings rendered as gates.
   if (usesVillageWalls(villageType)) {
-    drawVillageWall(group, structures, grid, sectorMap);
+    drawVillageWall(group, grid, wallPlan ?? planVillageWalls(sectorMap, structures));
   }
   // Village structures
   for (const structure of structures.filter((s) => s.hasPage !== 0)) {
