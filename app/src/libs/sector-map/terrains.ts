@@ -166,8 +166,11 @@ export const resolveStructureTerrainSpec = (options: {
     options.authoredTerrain ?? options.baseBiome,
     options.registry,
   );
+  if (authoredSpec.key === "ice") {
+    return resolveTerrainSpec(STRUCTURE_GROUND_TERRAIN.ice, options.registry);
+  }
+  if (!authoredSpec.isWater) return authoredSpec;
   const structureBiome =
     options.authoredBattleBiome ?? authoredSpec.battleBiome ?? options.baseBiome;
-  if (!authoredSpec.isWater && structureBiome !== "ice") return authoredSpec;
   return resolveTerrainSpec(STRUCTURE_GROUND_TERRAIN[structureBiome], options.registry);
 };

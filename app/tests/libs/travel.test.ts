@@ -64,6 +64,18 @@ describe("getBiomeAtSectorAnchor", () => {
     expect(getBiomeAtSectorAnchor(map, "shrine.default", 3)).toBe("dessert");
   });
 
+  it("uses visible terrain instead of an independent combat override", () => {
+    const map = makeMap(3, 3);
+    map.anchors = [{ key: "shrine.default", x: 1, y: 1 }];
+    map.tiles[4] = {
+      ...map.tiles[4]!,
+      terrain: "dessert",
+      battleBiome: "ground",
+    };
+
+    expect(getBiomeAtSectorAnchor(map, "shrine.default", 1)).toBe("dessert");
+  });
+
   it("falls back to the globe biome when the anchor is absent", () => {
     expect(getBiomeAtSectorAnchor(makeMap(3, 3), "shrine.default", 3)).toBe(
       "ice",
