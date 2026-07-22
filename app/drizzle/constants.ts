@@ -2086,7 +2086,7 @@ export const IMG_MANUAL_TRAVEL =
 export const IMG_MANUAL_BLOODLINE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaCMo8gYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk.webp";
 export const IMG_MANUAL_SAGE_MODE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJunUUX2bCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8";
+  "https://uploadthing.b-cdn.net/f/ZV0VxZ-iWF6FW84u-0B4t.webp";
 export const IMG_MANUAL_JUTSU =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMI7fE4tsO4cexqW2RDgkE3zZbNXSFGitmnar.webp";
 export const IMG_MANUAL_JUTSU_RESKINS =
