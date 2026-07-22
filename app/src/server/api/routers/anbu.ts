@@ -129,14 +129,15 @@ export const anbuRouter = createTRPCRouter({
         const ownSquadRequests = ownRequests.filter((r) =>
           isAnbuRequestForSquad(r, squadId, squad.leaderId),
         );
-        const { isLeader, isKageOfSquadVillage } = getConvenienceStatus(user, squad);
+        const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
+          getConvenienceStatus(user, squad);
         const canStaffEdit = canEditClans(user.role);
-        // Leader path only when a leader exists; kage/staff must still see requests
-        // on a leaderless squad (leaderId can be null after removeFromSquad).
+        // Leader path only when a leader exists; kage/elder/staff must still see
+        // requests on a leaderless squad (leaderId can be null after removeFromSquad).
         if (isLeader) {
           return ownSquadRequests;
         }
-        if (isKageOfSquadVillage || canStaffEdit) {
+        if (isKageOfSquadVillage || isElderOfSquadVillage || canStaffEdit) {
           const [byRelatedId, byLeader] = await Promise.all([
             fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, undefined, squadId),
             squad.leaderId
@@ -176,23 +177,28 @@ export const anbuRouter = createTRPCRouter({
       // Guards
       if (!squad) return errorResponse("Squad not found");
       if (!user) return errorResponse("User not found");
-      if (!squad.leaderId) return errorResponse("No leader currently");
       if (user.villageId !== squad.villageId) return errorResponse("Wrong village");
       if (user.anbuId) return errorResponse("Already in a squad");
       if (isKage || isElder) return errorResponse("Kage or elder cannot join");
       if (!hasRequiredRank(user.rank, ANBU_MEMBER_RANK_REQUIREMENT)) {
         return errorResponse(`Rank must be at least ${ANBU_MEMBER_RANK_REQUIREMENT}`);
       }
+      // Leaderless squads stay joinable — route the request to the village kage so
+      // kage/elder/staff can accept (relatedId still identifies the squad).
+      const receiverId = squad.leaderId ?? user.village?.kageId;
+      if (!receiverId) {
+        return errorResponse("No leader or kage available to receive request");
+      }
       // Mutate — persist squad id on relatedId so requests survive leader changes
       await insertRequest(
         ctx.drizzle,
         user.userId,
-        squad.leaderId,
+        receiverId,
         "ANBU",
         undefined,
         squad.id,
       );
-      void pusher.trigger(squad.leaderId, "event", { type: "anbu" });
+      void pusher.trigger(receiverId, "event", { type: "anbu" });
       // Create
       return { success: true, message: "User assigned to squad" };
     }),
@@ -210,9 +216,15 @@ export const anbuRouter = createTRPCRouter({
       ]);
       const squad = await fetchSquadForAnbuRequest(ctx.drizzle, request);
       const { user } = updatedUser;
-      const { isLeader, isKageOfSquadVillage } = getConvenienceStatus(user, squad);
+      const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
+        getConvenienceStatus(user, squad);
       const canStaffEdit = user ? canEditClans(user.role) : false;
-      if (!isLeader && !isKageOfSquadVillage && !canStaffEdit) {
+      if (
+        !isLeader &&
+        !isKageOfSquadVillage &&
+        !isElderOfSquadVillage &&
+        !canStaffEdit
+      ) {
         return errorResponse("Not allowed to reject this request");
       }
       if (request.status !== "PENDING") {
@@ -258,13 +270,19 @@ export const anbuRouter = createTRPCRouter({
       // Derived
       const { user } = updatedUser;
       const nMembers = squad?.members.length || 0;
-      const { isLeader, isKageOfSquadVillage } = getConvenienceStatus(user, squad);
+      const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
+        getConvenienceStatus(user, squad);
       const canStaffEdit = user ? canEditClans(user.role) : false;
       // Guards
       if (!squad) return errorResponse("Squad not found");
       if (!user) return errorResponse("User not found");
       if (!requester) return errorResponse("Requester not found");
-      if (!isLeader && !isKageOfSquadVillage && !canStaffEdit) {
+      if (
+        !isLeader &&
+        !isKageOfSquadVillage &&
+        !isElderOfSquadVillage &&
+        !canStaffEdit
+      ) {
         return errorResponse("Not allowed");
       }
       if (nMembers >= ANBU_MAX_MEMBERS) return errorResponse("Squad is full");
@@ -315,6 +333,25 @@ export const anbuRouter = createTRPCRouter({
             and(eq(userData.userId, requester.userId), eq(userData.anbuId, squad.id)),
           );
         return errorResponse("You can only accept pending requests");
+      }
+      // Leaderless recovery: if the squad has no leader and the joiner is eligible,
+      // make them leader so the squad is not stuck empty/leaderless.
+      if (
+        !squad.leaderId &&
+        hasRequiredRank(requester.rank, ANBU_LEADER_RANK_REQUIREMENT)
+      ) {
+        await Promise.all([
+          ctx.drizzle
+            .update(anbuSquad)
+            .set({ leaderId: requester.userId })
+            .where(and(eq(anbuSquad.id, squad.id), isNull(anbuSquad.leaderId))),
+          reassignPendingAnbuRequestsOnPromotion(
+            ctx.drizzle,
+            squad.id,
+            request.receiverId,
+            requester.userId,
+          ),
+        ]);
       }
       void pusher.trigger(request.senderId, "event", { type: "anbu" });
       // Create
@@ -900,10 +937,20 @@ const getConvenienceStatus = (
   const isLeader = user?.userId === squad?.leaderId;
   const village = user?.village;
   const inSquad = user?.anbuId === squad?.id;
-  // Kage of the village that owns this squad (distinct from `isKage`, which only
-  // checks the user against their own village and ignores the squad's village).
+  // Kage of / elder in the village that owns this squad (distinct from `isKage` /
+  // `isElder`, which only check the user against their own village/rank).
   const isKageOfSquadVillage = !!squad && isKage && user?.villageId === squad.villageId;
-  return { isKage, isElder, isLeader, inSquad, village, isKageOfSquadVillage };
+  const isElderOfSquadVillage =
+    !!squad && isElder && user?.villageId === squad.villageId;
+  return {
+    isKage,
+    isElder,
+    isLeader,
+    inSquad,
+    village,
+    isKageOfSquadVillage,
+    isElderOfSquadVillage,
+  };
 };
 
 /**
