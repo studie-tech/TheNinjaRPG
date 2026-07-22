@@ -14,7 +14,10 @@ import type { TerrainHex } from "@/libs/hexgrid";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
-import { isVillageStructurePlacementAllowed } from "@/libs/sector-map/village-walls";
+import {
+  isVillageStructurePlacementAllowed,
+  usesVillageWalls,
+} from "@/libs/sector-map/village-walls";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import {
   drawSector,
@@ -190,10 +193,11 @@ const SectorPreview: React.FC<SectorPreviewProps> = (props) => {
           );
           const placementAllowed =
             !occupied &&
-            isVillageStructurePlacementAllowed(map, {
-              x: hit.tile.col,
-              y: hit.tile.row,
-            });
+            (!usesVillageWalls(villageType) ||
+              isVillageStructurePlacementAllowed(map, {
+                x: hit.tile.col,
+                y: hit.tile.row,
+              }));
           // Snap the building to the hovered hex and light the tile up
           targetTile = placementAllowed ? hit.tile : null;
           const h = hit.tile.height;

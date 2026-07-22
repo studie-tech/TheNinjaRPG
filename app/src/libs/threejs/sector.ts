@@ -69,6 +69,7 @@ import {
   getVillageWallDecorationClearanceKeys,
   planVillageWalls,
   selectVillageWallTowerVertices,
+  usesVillageWalls,
 } from "@/libs/sector-map/village-walls";
 import {
   getAuthoredTileMaterial,
@@ -1402,7 +1403,7 @@ export const drawVillage = (
 ) => {
   // Structure-derived modular wall: a connected contour one clear hex beyond
   // every physical structure, with authored road crossings rendered as gates.
-  if (villageType === "VILLAGE" || villageType === "TOWN") {
+  if (usesVillageWalls(villageType)) {
     drawVillageWall(group, structures, grid, sectorMap);
   }
   // Village structures

@@ -8,7 +8,19 @@ import {
   isVillageStructurePlacementAllowed,
   planVillageWalls,
   selectVillageWallTowerVertices,
+  usesVillageWalls,
 } from "@/libs/sector-map/village-walls";
+
+describe("usesVillageWalls", () => {
+  it("only enables walls for village and town settlements", () => {
+    expect(usesVillageWalls("VILLAGE")).toBe(true);
+    expect(usesVillageWalls("TOWN")).toBe(true);
+    expect(usesVillageWalls("OUTLAW")).toBe(false);
+    expect(usesVillageWalls("HIDEOUT")).toBe(false);
+    expect(usesVillageWalls("SAFEZONE")).toBe(false);
+    expect(usesVillageWalls(null)).toBe(false);
+  });
+});
 
 describe("getVillageWallAxis", () => {
   it("maps odd-q directions to signed screen-space sprite slopes", () => {
