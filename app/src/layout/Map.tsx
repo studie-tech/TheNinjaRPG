@@ -1013,10 +1013,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       return () => {
         cancelAnimationFrame(animationId);
         zoomActionRef.current = null;
-        if (zoomSaveTimeout) {
-          clearTimeout(zoomSaveTimeout);
-          persistZoomDistance(lastZoomDistance);
-        }
+        if (zoomSaveTimeout) clearTimeout(zoomSaveTimeout);
+        persistZoomDistance(camera.position.length());
 
         // Remove event listeners safely
         try {

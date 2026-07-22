@@ -6,7 +6,10 @@ import { type SectorMapStatus, SectorMapStatuses } from "@/drizzle/constants";
 import { actionLog, sectorMap, villageStructure } from "@/drizzle/schema";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
-import { isVillageStructurePlacementAllowed } from "@/libs/sector-map/village-walls";
+import {
+  isVillageStructurePlacementAllowed,
+  usesVillageWalls,
+} from "@/libs/sector-map/village-walls";
 import { fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -493,6 +496,7 @@ export const worldMapRouter = createTRPCRouter({
         );
       }
       if (
+        usesVillageWalls(structure.village.type) &&
         !isVillageStructurePlacementAllowed(map, {
           x: input.longitude,
           y: input.latitude,

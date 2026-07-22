@@ -14,6 +14,9 @@ export const VILLAGE_WALL_CLEARANCE = 1;
 export const VILLAGE_STRUCTURE_BORDER_MARGIN =
   VILLAGE_STRUCTURE_FOOTPRINT_RADIUS + VILLAGE_WALL_CLEARANCE + 1;
 
+export const usesVillageWalls = (villageType: string | null | undefined) =>
+  villageType === "VILLAGE" || villageType === "TOWN";
+
 export type VillageWallAxis = "horizontal" | "diagonalDown" | "diagonalUp";
 export type VillageWallEdgeKind = "wall" | "gate";
 
