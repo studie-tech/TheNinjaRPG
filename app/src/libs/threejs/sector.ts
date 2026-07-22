@@ -1083,6 +1083,28 @@ export const wrapStructureLabelWords = (
   return lines;
 };
 
+export const wrapStructureLabelCharacters = (
+  text: string,
+  measureText: (line: string) => number,
+  maxWidth: number,
+) => {
+  if (measureText(text) <= maxWidth) return [text];
+
+  const lines: string[] = [];
+  let currentLine = "";
+  for (const character of text) {
+    const candidate = `${currentLine}${character}`;
+    if (currentLine && measureText(candidate) > maxWidth) {
+      lines.push(currentLine);
+      currentLine = character;
+    } else {
+      currentLine = candidate;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines;
+};
+
 export const createStructureLabel = (structure: VillageStructure, h: number) => {
   const canvasWidth = 512;
   const horizontalPadding = 24;
@@ -1115,6 +1137,15 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
         maxTextWidth,
       );
     }
+    // A single unbroken word may still be wider than the canvas at the
+    // minimum font size. Split only those remaining oversized lines.
+    lines = lines.flatMap((line) =>
+      wrapStructureLabelCharacters(
+        line,
+        (candidate) => context.measureText(candidate).width,
+        maxTextWidth,
+      ),
+    );
 
     const lineHeight = Math.ceil(fontSize * 1.08);
     canvasHeight = Math.max(96, lines.length * lineHeight + verticalPadding * 2);
@@ -1129,6 +1160,7 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
     context.fill();
     context.strokeStyle = "black";
     context.lineWidth = 4;
+    context.stroke();
     context.fillStyle = "white";
     const firstLineY = (canvasHeight - lines.length * lineHeight) / 2 + lineHeight / 2;
     lines.forEach((line, index) => {
