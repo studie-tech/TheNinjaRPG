@@ -28,6 +28,7 @@ import {
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
 } from "@/drizzle/constants";
 import type { Village } from "@/drizzle/schema";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
 import WebGlError from "@/layout/WebGLError";
 import type { HexagonalFaceMesh } from "@/libs/hexgrid";
@@ -71,6 +72,25 @@ interface MapProps {
   onTileClick?: (sector: number | null, tile: GlobalTile | null) => void;
   onTileHover?: (sector: number | null, tile: GlobalTile | null) => void;
 }
+
+const GLOBAL_MAP_ZOOM_STORAGE_KEY = "globalMapZoom";
+
+/**
+ * Persist a projection-independent fraction of the allowed camera-distance
+ * range: 0 is fully zoomed in and 1 is fully zoomed out.
+ */
+const getStoredGlobalMapZoom = () => {
+  const stored = safeLocalStorageGetItem(GLOBAL_MAP_ZOOM_STORAGE_KEY);
+  if (stored === null) return 0;
+  try {
+    const parsed = JSON.parse(stored) as unknown;
+    return typeof parsed === "number" && Number.isFinite(parsed)
+      ? Math.min(1, Math.max(0, parsed))
+      : 0;
+  } catch {
+    return 0;
+  }
+};
 
 const GlobalMap: React.FC<MapProps> = (props) => {
   const { data: userData } = useUserData();
@@ -780,10 +800,12 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       // Distance 16 was the previous maximum zoom; compensate it through the
       // same projection so mobile tile sizing remains familiar.
       const minCameraDistance = compensateDistanceForFov(16);
-      // Start fully zoomed in; users can pull back to distance 22 when they
-      // need the complete globe and its surrounding labels in view.
-      const cameraDistance = minCameraDistance;
       const maxCameraDistance = compensateDistanceForFov(22);
+      // New visitors start fully zoomed in. Returning visitors resume at the
+      // same relative point in the current projection's allowed zoom range.
+      const storedZoom = getStoredGlobalMapZoom();
+      const cameraDistance =
+        minCameraDistance + storedZoom * (maxCameraDistance - minCameraDistance);
       const initialCameraDirection = new Vector3(0, 0, 1);
 
       // Initial camera positioning - prioritize focus sector over user location
@@ -822,6 +844,32 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       };
       controls.addEventListener("start", onControlStart);
       controls.addEventListener("end", onControlEnd);
+      let zoomSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+      let lastZoomDistance = cameraDistance;
+      const persistZoomDistance = (distance: number) => {
+        const zoomRange = maxCameraDistance - minCameraDistance;
+        const normalizedZoom =
+          zoomRange > 0
+            ? Math.min(1, Math.max(0, (distance - minCameraDistance) / zoomRange))
+            : 0;
+        safeLocalStorageSetItem(
+          GLOBAL_MAP_ZOOM_STORAGE_KEY,
+          JSON.stringify(normalizedZoom),
+        );
+      };
+      const onZoomChange = () => {
+        const distance = camera.position.length();
+        // TrackballControls also emits changes while the globe rotates. Only
+        // camera-distance changes represent zoom and should touch storage.
+        if (Math.abs(distance - lastZoomDistance) < 0.001) return;
+        lastZoomDistance = distance;
+        if (zoomSaveTimeout) clearTimeout(zoomSaveTimeout);
+        zoomSaveTimeout = setTimeout(() => {
+          persistZoomDistance(lastZoomDistance);
+          zoomSaveTimeout = null;
+        }, 300);
+      };
+      controls.addEventListener("change", onZoomChange);
       const worldUp = new Vector3(0, 1, 0);
       let lastTime = Date.now();
 
@@ -965,6 +1013,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       return () => {
         cancelAnimationFrame(animationId);
         zoomActionRef.current = null;
+        if (zoomSaveTimeout) {
+          clearTimeout(zoomSaveTimeout);
+          persistZoomDistance(lastZoomDistance);
+        }
 
         // Remove event listeners safely
         try {
@@ -994,6 +1046,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           }
           controls.removeEventListener("start", onControlStart);
           controls.removeEventListener("end", onControlEnd);
+          controls.removeEventListener("change", onZoomChange);
           controls.dispose();
           window.removeEventListener("resize", handleResize);
           contextHandlers.cleanup();
