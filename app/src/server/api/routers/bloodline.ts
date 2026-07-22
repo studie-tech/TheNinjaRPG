@@ -951,11 +951,18 @@ export const bloodlineRouter = createTRPCRouter({
         );
       } catch (error) {
         if (error instanceof BloodlineGrantRejectedError) {
-          await refundPityCredit({
-            client: ctx.drizzle,
-            table: bloodlineRolls,
-            rollId: prevRoll.id,
-          });
+          // Swallow refund failures: the grant rejection is the meaningful error for the caller,
+          // and letting a transient refund error propagate would mask it. A dropped refund leaves
+          // the credit reserved (user-visible as one missing pity roll) rather than double-spent.
+          try {
+            await refundPityCredit({
+              client: ctx.drizzle,
+              table: bloodlineRolls,
+              rollId: prevRoll.id,
+            });
+          } catch (refundError) {
+            console.error("Pity credit refund failed", refundError);
+          }
         }
         throw error;
       }

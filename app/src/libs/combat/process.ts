@@ -1985,6 +1985,12 @@ function applyActivateSageMode(
     // Exception: `rounds === 0` means an instant / one-shot tag — leave unchanged.
     if (realized.rounds !== 0) {
       realized.rounds = activeDurationRounds;
+      // The sage router strips `rounds` before storage, so `realizeTag`'s own
+      // (`"rounds" in tag`) initialisation never fires for these tags. Seed the tracker here
+      // alongside the duration, otherwise the per-round dedup in `calcApplyRatio` — which is
+      // gated on `timeTracker` being present — silently no-ops and every non-`alwaysApply` tag
+      // stacks multiple times within a single round.
+      realized.timeTracker = {};
       // `applySingleEffect` recomputes castThisRound from (createdRound === battle.round), which
       // would skip modifier tags (`!castThisRound` in tags.ts) on the activation round. Backdate
       // one round so persistent activation modifiers apply the same round the mode is entered
@@ -2079,6 +2085,9 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
         // activation path above).
         if (realized.rounds !== 0) {
           realized.rounds = afterRounds;
+          // Same reason as the activation path: stored after-effects carry no `rounds`, so
+          // `realizeTag` skips the tracker init and the per-round dedup would be bypassed.
+          realized.timeTracker = {};
           realized.createdRound = Math.max(0, battle.round - 1);
         }
         realized.isNew = false;
