@@ -445,8 +445,9 @@ export const travelRouter = createTRPCRouter({
       if (user.status !== "AWAKE") {
         return { success: false, message: `Status is: ${user.status.toLowerCase()}` };
       }
+      const departureSector = user.sector;
       const travelTime = calcGlobalTravelTime(
-        user.sector,
+        departureSector,
         input.sector,
         map as unknown as GlobalMapData,
       );
@@ -464,7 +465,13 @@ export const travelRouter = createTRPCRouter({
           status: "TRAVEL",
           travelFinishAt: endTime,
         })
-        .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.status, "AWAKE"),
+            eq(userData.sector, departureSector),
+          ),
+        );
       if (result.rowsAffected === 1) {
         user.sector = input.sector;
         user.longitude = destination.x;
@@ -492,6 +499,11 @@ export const travelRouter = createTRPCRouter({
           return {
             success: false,
             message: `Status is: ${user.status.toLowerCase()}`,
+          };
+        } else if (user.sector !== departureSector) {
+          return {
+            success: false,
+            message: "Your location changed; please try again",
           };
         } else {
           return { success: false, message: "Failed to start travel" };

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { wrapStructureLabelWords } from "@/libs/threejs/sector";
+import {
+  wrapStructureLabelCharacters,
+  wrapStructureLabelWords,
+} from "@/libs/threejs/sector";
 
 const measureText = (text: string) => text.length * 10;
 
@@ -20,5 +23,15 @@ describe("wrapStructureLabelWords", () => {
     expect(
       wrapStructureLabelWords("Center Science Building", measureText, 140),
     ).toEqual(["Center Science", "Building"]);
+  });
+});
+
+describe("wrapStructureLabelCharacters", () => {
+  it("keeps every fallback line within the available width", () => {
+    expect(wrapStructureLabelCharacters("ABCDEFGHIJK", measureText, 50)).toEqual([
+      "ABCDE",
+      "FGHIJ",
+      "K",
+    ]);
   });
 });
