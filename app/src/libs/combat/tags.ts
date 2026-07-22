@@ -350,11 +350,16 @@ export const mirror = (
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
       // Persistent, per-caster ceiling: only this caster's active mirrors on the target.
+      // The MIRROR_EXCLUDED_EFFECT_TYPES guard scopes the budget to effects `mirror`
+      // can actually produce (mirroring the COPYABLE_EFFECT_TYPES guard on activeCopied),
+      // so a future tag that lands a fromEffectId-bearing effect on the target with
+      // creatorId === user.userId can't silently consume a mirror slot.
       const activeMirrored = usersEffects.filter(
         (e) =>
           e.targetId === target.userId &&
           e.creatorId === user.userId &&
           e.fromEffectId &&
+          !MIRROR_EXCLUDED_EFFECT_TYPES.includes(e.type) &&
           e.rounds &&
           e.rounds > 0,
       );
