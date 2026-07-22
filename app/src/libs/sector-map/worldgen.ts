@@ -17,7 +17,10 @@ import { createNoise3D } from "simplex-noise";
 /** Sphere radius; matches scripts/generate-globe.ts and the tile corner data */
 export const WORLDGEN_RADIUS = 30;
 export const WORLDGEN_LAND_THRESHOLD = -0.2;
-export const WORLDGEN_PROTECTED_LAND_RADIUS = 1.4;
+// A sector is roughly 2.5 world units tall. Extending protection 2.2 units
+// lets reserved/landmark terrain spill well into adjacent sectors without
+// recreating the very broad circular continents produced by the old radius 7.
+export const WORLDGEN_PROTECTED_LAND_RADIUS = 2.2;
 export const WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR = 0.46;
 
 export interface Vec3 {
@@ -115,10 +118,9 @@ export const globalContinentalness = (p: Vec3): number => {
 
 export interface WorldLandScoreOptions {
   protectedCenters: Vec3[];
-  wakeIslandSector: number;
   wakeIslandCenter: Vec3;
-  wakeIslandNeighborSectors: ReadonlySet<number>;
   wakeIslandRadius: number;
+  wakeMoatRadius: number;
 }
 
 /**
@@ -132,20 +134,7 @@ export interface WorldLandScoreOptions {
  * than painting one entire square sector as land.
  */
 export const createWorldLandScore = (options: WorldLandScoreOptions) => {
-  const wakeSectors = new Set([
-    options.wakeIslandSector,
-    ...options.wakeIslandNeighborSectors,
-  ]);
-  return (point: Vec3, sector: number): number => {
-    if (wakeSectors.has(sector)) {
-      const distance = Math.hypot(
-        point.x - options.wakeIslandCenter.x,
-        point.y - options.wakeIslandCenter.y,
-        point.z - options.wakeIslandCenter.z,
-      );
-      return ((options.wakeIslandRadius - distance) / options.wakeIslandRadius) * 0.25;
-    }
-
+  return (point: Vec3): number => {
     let continentalness = globalContinentalness(point);
     for (const center of options.protectedCenters) {
       const distance = Math.hypot(
@@ -160,7 +149,30 @@ export const createWorldLandScore = (options: WorldLandScoreOptions) => {
         WORLDGEN_LAND_THRESHOLD + proximity * proximity * 0.3,
       );
     }
-    return continentalness - WORLDGEN_LAND_THRESHOLD;
+    const naturalScore = continentalness - WORLDGEN_LAND_THRESHOLD;
+
+    // Wake Island must be a function of POSITION, not the sector currently
+    // sampling that position. The old sector-id branch made the same shared
+    // edge evaluate differently on the inside and outside of Wake's neighbor
+    // ring. Keep the island and its ocean moat, then blend continuously back
+    // into the natural continental field over a one-radius transition band.
+    const wakeDistance = Math.hypot(
+      point.x - options.wakeIslandCenter.x,
+      point.y - options.wakeIslandCenter.y,
+      point.z - options.wakeIslandCenter.z,
+    );
+    // Keep the four immediate neighbor sectors as a readable ocean moat. The
+    // transition begins beyond their visual samples, but remains positional
+    // and continuous when it reaches the next ring.
+    const wakeBlendStart = options.wakeMoatRadius;
+    const wakeBlendEnd = options.wakeMoatRadius + options.wakeIslandRadius;
+    if (wakeDistance >= wakeBlendEnd) return naturalScore;
+    const islandScore =
+      ((options.wakeIslandRadius - wakeDistance) / options.wakeIslandRadius) * 0.25;
+    if (wakeDistance <= wakeBlendStart) return islandScore;
+    const t = (wakeDistance - wakeBlendStart) / (wakeBlendEnd - wakeBlendStart);
+    const smoothT = t * t * (3 - 2 * t);
+    return islandScore + (naturalScore - islandScore) * smoothT;
   };
 };
 

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { NormalizedSectorTile } from "@/libs/sector-map/types";
-import { findGlobalTravelDestination } from "@/libs/travel";
+import {
+  findGlobalTravelDestination,
+  getBiomeAtSectorAnchor,
+} from "@/libs/travel";
 
 const makeTile = (
   x: number,
@@ -45,5 +48,25 @@ describe("findGlobalTravelDestination", () => {
         Math.abs((destination?.y ?? 0) - 2),
       ),
     ).toBe(1);
+  });
+});
+
+describe("getBiomeAtSectorAnchor", () => {
+  it("uses the authored anchor tile instead of a conflicting globe biome", () => {
+    const map = makeMap(3, 3);
+    map.anchors = [{ key: "shrine.default", x: 1, y: 1 }];
+    map.tiles[4] = {
+      ...map.tiles[4]!,
+      terrain: "dessert",
+      battleBiome: "dessert",
+    };
+
+    expect(getBiomeAtSectorAnchor(map, "shrine.default", 3)).toBe("dessert");
+  });
+
+  it("falls back to the globe biome when the anchor is absent", () => {
+    expect(getBiomeAtSectorAnchor(makeMap(3, 3), "shrine.default", 3)).toBe(
+      "ice",
+    );
   });
 });

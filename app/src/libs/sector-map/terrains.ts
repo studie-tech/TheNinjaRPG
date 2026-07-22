@@ -150,11 +150,11 @@ export const resolveTerrainSpec = (
 };
 
 /**
- * Terrain rendered below a village structure. Authored land must remain
- * untouched: deriving this from the globe's centre biome can paint snow over
- * a desert/grass map when a stale or hand-authored map disagrees with the
- * current topology. Only water is replaced, because a building needs a small
- * biome-appropriate island rather than floating directly on waves.
+ * Terrain rendered below a structure. Authored grass/desert/custom land must
+ * remain untouched: deriving this from the globe's centre biome can paint
+ * snow over a desert/grass map when a stale or hand-authored map disagrees
+ * with the current topology. Water becomes a small land island, while an ice
+ * sheet becomes flat snow so structures do not appear to float on blue ice.
  */
 export const resolveStructureTerrainSpec = (options: {
   authoredTerrain: string | undefined;
@@ -166,10 +166,8 @@ export const resolveStructureTerrainSpec = (options: {
     options.authoredTerrain ?? options.baseBiome,
     options.registry,
   );
-  if (!authoredSpec.isWater) return authoredSpec;
-  const islandTerrain =
-    STRUCTURE_GROUND_TERRAIN[
-      options.authoredBattleBiome ?? authoredSpec.battleBiome ?? options.baseBiome
-    ];
-  return resolveTerrainSpec(islandTerrain, options.registry);
+  const structureBiome =
+    options.authoredBattleBiome ?? authoredSpec.battleBiome ?? options.baseBiome;
+  if (!authoredSpec.isWater && structureBiome !== "ice") return authoredSpec;
+  return resolveTerrainSpec(STRUCTURE_GROUND_TERRAIN[structureBiome], options.registry);
 };

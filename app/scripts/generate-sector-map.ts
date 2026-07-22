@@ -131,14 +131,24 @@ const wakeIslandRadius =
       );
     }),
   ) * WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR;
+const wakeMoatRadius = Math.max(
+  ...[...wakeIslandNeighborSectors].flatMap((sector) =>
+    globalMap.tiles[sector]!.b.map((corner) =>
+      Math.hypot(
+        wakeIslandCenter.x - +corner.x,
+        wakeIslandCenter.y - +corner.y,
+        wakeIslandCenter.z - +corner.z,
+      ),
+    ),
+  ),
+);
 const worldLandScore = createWorldLandScore({
   protectedCenters: protectedLandSectors
     .filter((sector) => sector !== MAP_WAKE_ISLAND_SECTOR)
     .map(centerVec),
-  wakeIslandSector: MAP_WAKE_ISLAND_SECTOR,
   wakeIslandCenter,
-  wakeIslandNeighborSectors,
   wakeIslandRadius,
+  wakeMoatRadius,
 });
 
 /** Anchor keys mirror the legacy sector anchor layout so downstream lookups keep working */
@@ -192,6 +202,11 @@ const generateCells = (options: GeneratorOptions) => {
   // Coherent world fields, sampled at each tile's true 3D position so features
   // and biomes line up with neighbouring sectors along every shared edge.
   const corners = cornerVecs(sector);
+  // Authored/rendered map y increases northward, whereas tilePosition follows
+  // the globe corner order with y=0 at geographic north. Reflect exactly once
+  // here, matching resolveSectorMapEdgeCrossing's coordinate adapter.
+  const worldPositionAt = (x: number, y: number) =>
+    tilePosition(corners, x, height - 1 - y, width, height);
 
   const cells: CellSpec[][] = [];
   // Per-tile helpers used when forcing perimeter/road/anchor tiles walkable:
@@ -204,11 +219,11 @@ const generateCells = (options: GeneratorOptions) => {
     const landRow: string[] = [];
     const seaRow: boolean[] = [];
     for (let x = 0; x < width; x++) {
-      const position = tilePosition(corners, x, y, width, height);
+      const position = worldPositionAt(x, y);
       const elevation = globalElevation(position);
       const feature = globalFeature(position);
       const voteTerrain = getBiomeFromTileType(
-        globalBiomeType(position, worldLandScore(position, sector) > 0, elevation),
+        globalBiomeType(position, worldLandScore(position) > 0, elevation),
       );
       const landTerrain = getBiomeFromTileType(globalBiomeType(position, true, elevation));
       let cell: CellSpec = {
@@ -396,14 +411,17 @@ const generateCells = (options: GeneratorOptions) => {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const cell = cells[y]![x]!;
+      // A boundary cell is shared with another independently generated map.
+      // Its base terrain already matches exactly; shoreline conversion depends
+      // on interior-only neighbors and could otherwise repaint just one side.
+      if (x === 0 || y === 0 || x === width - 1 || y === height - 1) continue;
       if (cell.blocked || cell.terrain !== "ground" || cell.zone === "road") {
         continue;
       }
       const bordersLargeWater = getNeighborCoordinates({ x, y }).some(
         (n) => (waterBodySize.get(`${n.x},${n.y}`) ?? 0) >= 2,
       );
-      const erode =
-        globalFeature(tilePosition(corners, x, y, width, height)) < -0.55;
+      const erode = globalFeature(worldPositionAt(x, y)) < -0.55;
       if (bordersLargeWater && !erode) {
         cell.terrain = "dessert";
         cell.battleBiome = "ground";

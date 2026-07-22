@@ -921,6 +921,18 @@ describe("standard terrain palette", () => {
     ).toBe("dessert");
   });
 
+  it("uses flat snow beneath structures authored on an ice sheet", () => {
+    const registry = mergeTerrainSpecs([]);
+    expect(
+      resolveStructureTerrainSpec({
+        authoredTerrain: "ice",
+        authoredBattleBiome: "ice",
+        baseBiome: "ice",
+        registry,
+      }).key,
+    ).toBe("snow");
+  });
+
   // Full-property signature of a terrain tile, matching the fields the dedup
   // compares. Two tiles with the same signature are duplicate palette entries.
   const terrainSignature = (tile: { properties?: { name: string; value: unknown }[] }) => {

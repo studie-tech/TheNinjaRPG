@@ -54,6 +54,23 @@ export const getBiomeFromGlobalTile = (tile: GlobalTile): CombatBiome => {
 };
 
 /**
+ * Resolve the visible biome at a named authored-map anchor. The local tile is
+ * authoritative for structures standing on it; the globe's sector-center
+ * biome is only a fallback for incomplete legacy maps.
+ */
+export const getBiomeAtSectorAnchor = (
+  sectorMap: Pick<NormalizedSectorMap, "tiles" | "anchors">,
+  anchorKey: string,
+  globalTileType: number,
+): CombatBiome => {
+  const anchor = sectorMap.anchors.find((candidate) => candidate.key === anchorKey);
+  return (
+    (anchor ? getSectorTile(sectorMap, anchor)?.battleBiome : undefined) ??
+    getBiomeFromTileType(globalTileType)
+  );
+};
+
+/**
  * Based on current position, find the nearest edge
  */
 export const findNearestEdge = (

@@ -85,7 +85,7 @@ describe("crossing edge primitives", () => {
 describe("cylindrical world topology", () => {
   it("stores the configured projection and stable 72x27 id space", () => {
     expect(globe.projection).toBe("cylindrical");
-    expect(globe.generation).toBe("hierarchical-climate-v6-polar-landscape");
+    expect(globe.generation).toBe("hierarchical-climate-v7-continuous-protection");
     expect(globe.visualScale).toBe(6);
     expect(globe.polarCapColumns).toBe(MAP_WORLD_COLUMNS * globe.visualScale);
     expect(globe.polarCapRows).toBe(32);
@@ -158,17 +158,16 @@ describe("cylindrical world topology", () => {
   it("shares exact visual colors across ordinary sector boundaries", () => {
     const scale = globe.visualScale;
     const stride = scale + 1;
-    const wakeAndRing = new Set([222, ...sectorGridNeighbors(222)]);
     for (let sector = 0; sector < tiles.length; sector++) {
       const tile = tiles[sector]!;
       const east = tile.n[EDGE_EAST]!;
-      if (east >= 0 && !wakeAndRing.has(sector) && !wakeAndRing.has(east)) {
+      if (east >= 0) {
         for (let y = 0; y <= scale; y++) {
           expect(tile.vc[y * stride + scale]).toBe(tiles[east]!.vc[y * stride]);
         }
       }
       const south = tile.n[EDGE_SOUTH]!;
-      if (south >= 0 && !wakeAndRing.has(sector) && !wakeAndRing.has(south)) {
+      if (south >= 0) {
         for (let x = 0; x <= scale; x++) {
           expect(tile.vc[scale * stride + x]).toBe(tiles[south]!.vc[x]);
         }
