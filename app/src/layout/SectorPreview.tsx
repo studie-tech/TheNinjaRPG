@@ -108,6 +108,7 @@ const SectorPreview: React.FC<SectorPreviewProps> = (props) => {
         map,
         decorationAssets,
         terrainRegistry,
+        villageType ?? null,
       );
       drawVillage(
         groups.group_assets,
@@ -115,6 +116,7 @@ const SectorPreview: React.FC<SectorPreviewProps> = (props) => {
         groups.honeycombGrid,
         map,
         villageType ?? null,
+        groups.villageWallPlan,
       );
       sortSectorAssetsByGroundContact(groups.group_assets);
       scene.add(groups.group_dirt);

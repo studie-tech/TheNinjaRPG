@@ -4,6 +4,7 @@ import { getNeighborCoordinates, getSectorTileKey } from "@/libs/sector-map/vali
 import {
   getOddQHexDistance,
   getVillageWallDecorationClearanceKeys,
+  getVillageWallFoundationKeys,
   getVillageWallAxis,
   isVillageStructurePlacementAllowed,
   planVillageWalls,
@@ -155,6 +156,19 @@ describe("planVillageWalls", () => {
       }
     }
     expect(clearance.has("5,5")).toBe(false);
+  });
+
+  it("marks the village-side terrain below every wall segment as foundation", () => {
+    const plan = planVillageWalls(makeMap(), [physical(5, 5)]);
+    const foundations = getVillageWallFoundationKeys(plan);
+    expect(foundations.size).toBeGreaterThan(0);
+    for (const edge of plan.edges) {
+      expect(foundations.has(getSectorTileKey(edge.tile.x, edge.tile.y))).toBe(true);
+      const outside = getNeighborCoordinates(edge.tile)[edge.direction];
+      if (outside) {
+        expect(foundations.has(getSectorTileKey(outside.x, outside.y))).toBe(false);
+      }
+    }
   });
 
   it("connects far-apart protected regions into one deterministic enclosure", () => {
