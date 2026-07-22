@@ -37,7 +37,7 @@ import {
   samplePolarCapColor,
 } from "@/libs/threejs/globe";
 import { TrackballControls } from "@/libs/threejs/TrackBallControls";
-import type { GlobalMapData, GlobalPoint, GlobalTile } from "@/libs/threejs/types";
+import type { GlobalMapData, GlobalTile } from "@/libs/threejs/types";
 import {
   cleanUp,
   createTexture,
@@ -139,7 +139,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       const WIDTH = sceneRef.getBoundingClientRect().width;
       const HEIGHT = WIDTH;
 
-      const fov = 75;
+      // A narrower lens reduces the near-vs-limb distortion of the globe. The
+      // camera distance is compensated below so its on-screen size stays put.
+      const originalFov = 75;
+      const fov = 50;
       const aspect = WIDTH / HEIGHT;
       const near = 0.5;
       const far = 1000;
@@ -502,8 +505,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         }
       }
 
-      // Dark sector-separation grid overlaid on the globe. The deeper blue-grey
-      // remains legible on snow without overpowering grass, desert, or water.
+      // Soft sector-separation grid overlaid on the globe. A translucent light
+      // grey keeps sectors readable without obscuring the terrain underneath.
       // It is occluded by opaque tiles on the far side (depthTest), so only
       // front edges show.
       if (edgePositions.length > 0) {
@@ -515,9 +518,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         const edgeLines = new LineSegments(
           edgeGeometry,
           new LineBasicMaterial({
-            color: 0x243f52,
+            color: 0x4b5563,
             transparent: true,
-            opacity: 0.62,
+            opacity: 0.2,
             depthWrite: false,
           }),
         );
@@ -761,47 +764,66 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         }
       });
 
-      //Enable controls
-      const controls = new TrackballControls(camera, renderer.domElement);
-      controls.noPan = true;
-      controls.staticMoving = true;
-      controls.zoomSpeed = 1.2;
-      const cameraDistance = 22;
-      // At distance 16 the tiles facing the camera render at twice their
-      // default on-screen size, i.e. a 2x zoom - enough to tap the right
-      // sector on mobile without the front village labels filling the view
-      const minCameraDistance = 16;
-      controls.minDistance = minCameraDistance;
-      controls.maxDistance = cameraDistance;
-      let lastTime = Date.now();
-      let sigma = 0;
-      let phi = 0;
+      // Compensate camera distance for the narrower lens using the globe's
+      // projected angular radius. This keeps the established zoom range while
+      // making the globe read flatter.
+      const globeRadius = hexasphere.radius / 3;
+      const compensateDistanceForFov = (originalDistance: number) => {
+        const originalHalfFov = (originalFov * Math.PI) / 360;
+        const nextHalfFov = (fov * Math.PI) / 360;
+        const originalAngularRadius = Math.asin(globeRadius / originalDistance);
+        const projectedRadius =
+          Math.tan(originalAngularRadius) / Math.tan(originalHalfFov);
+        const nextAngularRadius = Math.atan(projectedRadius * Math.tan(nextHalfFov));
+        return globeRadius / Math.sin(nextAngularRadius);
+      };
+      // Distance 16 was the previous maximum zoom; compensate it through the
+      // same projection so mobile tile sizing remains familiar.
+      const minCameraDistance = compensateDistanceForFov(16);
+      // Start fully zoomed in; users can pull back to distance 22 when they
+      // need the complete globe and its surrounding labels in view.
+      const cameraDistance = minCameraDistance;
+      const maxCameraDistance = compensateDistanceForFov(22);
+      const initialCameraDirection = new Vector3(0, 0, 1);
 
       // Initial camera positioning - prioritize focus sector over user location
       if (props.focusSector !== undefined && props.focusSector !== null) {
         const focusSectorData = hexasphere?.tiles[props.focusSector]?.c;
         if (focusSectorData) {
           const { x, y, z } = focusSectorData;
-          sigma = Math.atan2(y, x);
-          phi = Math.acos(z / Math.sqrt(x * x + y * y + z * z));
+          initialCameraDirection.set(x, y, z).normalize();
         }
       } else if (props.userLocation && userData) {
         const sector = hexasphere?.tiles[userData.sector]?.c;
         if (sector) {
           const { x, y, z } = sector;
-          sigma = Math.atan2(y, x);
-          phi = Math.acos(z / Math.sqrt(x * x + y * y + z * z));
+          initialCameraDirection.set(x, y, z).normalize();
         }
       }
 
-      // Place the camera before the first frame; the render loop keeps the
-      // CURRENT distance from then on, so zooming is not undone each frame
-      camera.position.set(
-        cameraDistance * Math.sin(phi) * Math.cos(sigma),
-        cameraDistance * Math.sin(phi) * Math.sin(sigma),
-        cameraDistance * Math.cos(phi),
-      );
+      camera.position.copy(initialCameraDirection.multiplyScalar(cameraDistance));
       camera.lookAt(scene.position);
+
+      // Keep the globe upright while allowing bounded north-south tilt. The
+      // camera can reach every navigable latitude but cannot flip over a pole.
+      const controls = new TrackballControls(camera, renderer.domElement);
+      controls.maxLatitude = ((hexasphere.latitudeLimit ?? 65) * Math.PI) / 180;
+      controls.noPan = true;
+      controls.staticMoving = true;
+      controls.zoomSpeed = 1.2;
+      controls.minDistance = minCameraDistance;
+      controls.maxDistance = maxCameraDistance;
+      let isUserInteracting = false;
+      const onControlStart = () => {
+        isUserInteracting = true;
+      };
+      const onControlEnd = () => {
+        isUserInteracting = false;
+      };
+      controls.addEventListener("start", onControlStart);
+      controls.addEventListener("end", onControlEnd);
+      const worldUp = new Vector3(0, 1, 0);
+      let lastTime = Date.now();
 
       // Zoom helper for the overlay buttons, clamped to the same distance
       // limits as the wheel/pinch zoom
@@ -810,7 +832,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         if (distance === 0) return;
         const next = Math.min(
           Math.max(distance * factor, minCameraDistance),
-          cameraDistance,
+          maxCameraDistance,
         );
         camera.position.multiplyScalar(next / distance);
       };
@@ -915,32 +937,14 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           }
         }
 
-        // Rotate the camera, only if trackball not enabled && highlight not selected
-        const current = controls.up0 as GlobalPoint;
-        const previous = controls?.object as { up: GlobalPoint };
-        const isUserInteracting =
-          current.x !== previous.up.x ||
-          current.y !== previous.up.y ||
-          current.z !== previous.up.z;
-
-        // Auto-rotate when not user interacting
+        // Auto-rotate around the same fixed north-south axis as manual drags.
         if (autoRotate && (animationId === 0 || !isTravelStep) && !isUserInteracting) {
           const dt = Date.now() - lastTime;
           const rotateCameraBy = (1 * Math.PI) / (50000 / dt);
-          phi += rotateCameraBy;
-        }
-        lastTime = Date.now();
-
-        // Update camera position when not user interacting. Keep the CURRENT
-        // camera distance rather than the fixed default, so wheel/pinch/button
-        // zoom is not undone on the next frame
-        if (!isUserInteracting) {
-          const distance = camera.position.length() || cameraDistance;
-          camera.position.x = distance * Math.sin(phi) * Math.cos(sigma);
-          camera.position.y = distance * Math.sin(phi) * Math.sin(sigma);
-          camera.position.z = distance * Math.cos(phi);
+          camera.position.applyAxisAngle(worldUp, rotateCameraBy);
           camera.lookAt(scene.position);
         }
+        lastTime = Date.now();
 
         // Trackball updates
         controls.update();
@@ -988,6 +992,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
               onLabelPointerCancel,
             );
           }
+          controls.removeEventListener("start", onControlStart);
+          controls.removeEventListener("end", onControlEnd);
           controls.dispose();
           window.removeEventListener("resize", handleResize);
           contextHandlers.cleanup();

@@ -69,6 +69,9 @@ export class TrackballControls extends EventDispatcher<TrackballControlsEventMap
   noZoom = false;
   noPan = false;
 
+  /** Maximum camera latitude in radians; null keeps trackball rotation unrestricted. */
+  maxLatitude: number | null = null;
+
   staticMoving = false;
   dynamicDampingFactor = 0.2;
 
@@ -271,6 +274,48 @@ export class TrackballControls extends EventDispatcher<TrackballControlsEventMap
   /* -- transform helpers -------------------------------------------------- */
 
   private _rotateCamera(): void {
+    if (this.maxLatitude !== null) {
+      const horizontalAngle = -(this._moveCurr.x - this._movePrev.x) * this.rotateSpeed;
+      const verticalInput = (this._moveCurr.y - this._movePrev.y) * this.rotateSpeed;
+
+      if (horizontalAngle || verticalInput) {
+        this._eye.copy(this.object.position).sub(this.target);
+        const upAxis = this.up0.clone().normalize();
+
+        if (horizontalAngle) {
+          this._eye.applyQuaternion(
+            new Quaternion().setFromAxisAngle(upAxis, horizontalAngle),
+          );
+        }
+
+        if (verticalInput) {
+          const currentLatitude = Math.asin(
+            Math.max(-1, Math.min(1, this._eye.clone().normalize().dot(upAxis))),
+          );
+          const nextLatitude = Math.max(
+            -this.maxLatitude,
+            Math.min(this.maxLatitude, currentLatitude - verticalInput),
+          );
+          const appliedAngle = currentLatitude - nextLatitude;
+          const sidewaysAxis = new Vector3()
+            .crossVectors(upAxis, this._eye)
+            .normalize();
+          this._eye.applyQuaternion(
+            new Quaternion().setFromAxisAngle(sidewaysAxis, appliedAngle),
+          );
+        }
+
+        // Keep north upright instead of rolling the camera as a free trackball
+        // does. Vertical travel is bounded above, so pole-over-pole spins are
+        // impossible while every navigable latitude can still be centered.
+        this.object.up.copy(upAxis);
+        this._lastAngle = 0;
+      }
+
+      this._movePrev.copy(this._moveCurr);
+      return;
+    }
+
     const moveDirection = new Vector3(
       this._moveCurr.x - this._movePrev.x,
       this._moveCurr.y - this._movePrev.y,
