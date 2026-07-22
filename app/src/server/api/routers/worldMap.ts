@@ -6,6 +6,7 @@ import { type SectorMapStatus, SectorMapStatuses } from "@/drizzle/constants";
 import { actionLog, sectorMap, villageStructure } from "@/drizzle/schema";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
+import { isVillageStructurePlacementAllowed } from "@/libs/sector-map/village-walls";
 import { fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -489,6 +490,16 @@ export const worldMapRouter = createTRPCRouter({
       if (input.longitude >= map.width || input.latitude >= map.height) {
         return errorResponse(
           `Target tile is outside the ${map.width}x${map.height} sector map`,
+        );
+      }
+      if (
+        !isVillageStructurePlacementAllowed(map, {
+          x: input.longitude,
+          y: input.latitude,
+        })
+      ) {
+        return errorResponse(
+          "Structures must stay at least three hexes away from the sector border",
         );
       }
       const occupant = structure.village.structures.find(

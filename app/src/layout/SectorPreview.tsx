@@ -14,8 +14,13 @@ import type { TerrainHex } from "@/libs/hexgrid";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import { isVillageStructurePlacementAllowed } from "@/libs/sector-map/village-walls";
 import { getBackgroundColor } from "@/libs/threejs/biome";
-import { drawSector, drawVillage } from "@/libs/threejs/sector";
+import {
+  drawSector,
+  drawVillage,
+  sortSectorAssetsByGroundContact,
+} from "@/libs/threejs/sector";
 import { updateWaveAnimation, updateWindAnimation } from "@/libs/threejs/shaders";
 import {
   disposeGroupPreservingShared,
@@ -108,7 +113,7 @@ const SectorPreview: React.FC<SectorPreviewProps> = (props) => {
         map,
         villageType ?? null,
       );
-      groups.group_assets.children.sort((a, b) => b.position.y - a.position.y);
+      sortSectorAssetsByGroundContact(groups.group_assets);
       scene.add(groups.group_dirt);
       scene.add(groups.group_tiles);
       scene.add(groups.group_edges);
@@ -146,7 +151,9 @@ const SectorPreview: React.FC<SectorPreviewProps> = (props) => {
       };
       const clearHighlight = () => {
         if (highlighted) {
-          (highlighted.material as MeshBasicMaterial).visible = false;
+          const material = highlighted.material as MeshBasicMaterial;
+          material.visible = false;
+          material.color.setHex(0xffc23e);
           highlighted = null;
         }
       };
@@ -175,14 +182,28 @@ const SectorPreview: React.FC<SectorPreviewProps> = (props) => {
         }
         const hit = tileAt(event);
         if (hit) {
+          const occupied = structures?.some(
+            (candidate) =>
+              candidate.id !== dragged?.userData.structureId &&
+              candidate.longitude === hit.tile.col &&
+              candidate.latitude === hit.tile.row,
+          );
+          const placementAllowed =
+            !occupied &&
+            isVillageStructurePlacementAllowed(map, {
+              x: hit.tile.col,
+              y: hit.tile.row,
+            });
           // Snap the building to the hovered hex and light the tile up
-          targetTile = hit.tile;
+          targetTile = placementAllowed ? hit.tile : null;
           const h = hit.tile.height;
           dragged.position.set(hit.tile.x, hit.tile.y + h / 10, ASSETS_LAYER);
           if (highlighted !== hit.mesh) {
             clearHighlight();
             highlighted = hit.mesh;
-            (highlighted.material as MeshBasicMaterial).visible = true;
+            const material = highlighted.material as MeshBasicMaterial;
+            material.color.setHex(placementAllowed ? 0xffc23e : 0xef4444);
+            material.visible = true;
           }
         }
       };

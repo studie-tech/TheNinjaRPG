@@ -2,9 +2,7 @@ import { Grid, Orientation, rectangle } from "honeycomb-grid";
 import { nanoid } from "nanoid";
 import { createNoise2D } from "simplex-noise";
 import {
-  BufferAttribute,
-  BufferGeometry,
-  DoubleSide,
+  type BufferGeometry,
   EdgesGeometry,
   Group,
   Line,
@@ -13,6 +11,7 @@ import {
   LineSegments,
   Mesh,
   MeshBasicMaterial,
+  NearestFilter,
   type Raycaster,
   Sprite,
   SpriteMaterial,
@@ -32,7 +31,6 @@ import {
   IMG_SECTOR_USERSPRITE_LEFT,
   IMG_SECTOR_USERSPRITE_RIGHT,
   IMG_SECTOR_VS_ICON,
-  IMG_SECTOR_WALL_STONE_TOWER,
   MEDNIN_MIN_RANK,
   RANKS_RESTRICTED_FROM_PVP,
   STATUS_LAYER,
@@ -56,7 +54,17 @@ import type {
   NormalizedSectorMap,
   NormalizedSectorTile,
 } from "@/libs/sector-map/types";
-import { getNeighborCoordinates } from "@/libs/sector-map/validation";
+import {
+  getVillageWallSpriteSpec,
+  STONE_VILLAGE_WALL_KIT,
+  type VillageWallPanelSpriteSpec,
+  type VillageWallSpriteSpec,
+} from "@/libs/sector-map/village-wall-assets";
+import {
+  getVillageWallDecorationClearanceKeys,
+  planVillageWalls,
+  selectVillageWallTowerVertices,
+} from "@/libs/sector-map/village-walls";
 import {
   getAuthoredTileMaterial,
   getDirtMaterial,
@@ -246,6 +254,11 @@ const drawSectorMapObjects = (
         sprite.userData.small = asset.small === true;
         sprite.userData.type = object.type;
         sprite.userData.objectId = object.id;
+        sprite.userData.mapX = object.x;
+        sprite.userData.mapY = object.y;
+        // Painter ordering follows the trunk/ground contact, not the visual
+        // center of a tall tree sprite (which varies with renderScale).
+        sprite.userData.assetSortY = y + h * (object.offsetY ?? 0);
         group.add(sprite);
         return;
       }
@@ -264,6 +277,7 @@ const drawSectorMapObjects = (
       sprite.position.set(x, y + h / 8, ASSETS_LAYER);
       sprite.userData.type = object.type;
       sprite.userData.objectId = object.id;
+      sprite.userData.assetSortY = y + h / 8;
       group.add(sprite);
     });
 };
@@ -365,106 +379,12 @@ export const drawQuest = (info: {
   endMark();
 };
 
-// Sector-boundary line: the same slate tone as the tile grid but drawn as a
-// real filled ribbon (WebGL ignores LineBasicMaterial.linewidth), so it reads
-// clearly thicker and marks every transition between sectors.
-const SECTOR_BOUNDARY_COLOR = 0x4a4a4a;
-/** Ribbon half-width as a fraction of the hex size (~1x the tile grid line) */
-const SECTOR_BOUNDARY_THICKNESS = 0.011;
-
 // Hover-path highlight: the per-tile interaction meshes double as the
 // highlight overlay. They stay not-rendered (material.visible = false, so no
 // draw cost) until a tile joins the hovered path, when they light up - making
 // it clear you can click anywhere on the map to walk there.
 const TILE_HIGHLIGHT_COLOR = 0xffc23e;
 const TILE_HIGHLIGHT_OPACITY = 0.4;
-
-/**
- * Build a thick outline around the sector's rectangular hex block. An edge is
- * on the perimeter when exactly one tile owns it (interior edges are shared by
- * two tiles), so this traces the true zig-zag boundary. Each perimeter edge
- * becomes a quad ribbon; ends are extended by the half-width so consecutive
- * segments overlap at the corners instead of leaving gaps.
- */
-const buildSectorBoundary = (grid: Grid<TerrainHex>, hexsize: number) => {
-  const round = (value: number) => Math.round(value * 100) / 100;
-  const edges = new Map<
-    string,
-    { a: { x: number; y: number }; b: { x: number; y: number }; count: number }
-  >();
-  grid.forEach((tile) => {
-    const corners = tile.corners;
-    for (let i = 0; i < corners.length; i++) {
-      const a = corners[i];
-      const b = corners[(i + 1) % corners.length];
-      if (!a || !b) continue;
-      const ka = `${round(a.x)},${round(a.y)}`;
-      const kb = `${round(b.x)},${round(b.y)}`;
-      const key = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
-      const existing = edges.get(key);
-      if (existing) existing.count++;
-      else edges.set(key, { a, b, count: 1 });
-    }
-  });
-
-  const half = hexsize * SECTOR_BOUNDARY_THICKNESS;
-  const z = TILES_LAYER + 1;
-  const positions: number[] = [];
-  edges.forEach(({ a, b, count }) => {
-    if (count !== 1) return; // interior edge shared by two tiles
-    let dx = b.x - a.x;
-    let dy = b.y - a.y;
-    const length = Math.hypot(dx, dy) || 1;
-    dx /= length;
-    dy /= length;
-    const nx = -dy * half;
-    const ny = dx * half;
-    const ax = a.x - dx * half;
-    const ay = a.y - dy * half;
-    const bx = b.x + dx * half;
-    const by = b.y + dy * half;
-    positions.push(
-      ax + nx,
-      ay + ny,
-      z,
-      ax - nx,
-      ay - ny,
-      z,
-      bx - nx,
-      by - ny,
-      z,
-      ax + nx,
-      ay + ny,
-      z,
-      bx - nx,
-      by - ny,
-      z,
-      bx + nx,
-      by + ny,
-      z,
-    );
-  });
-  if (positions.length === 0) return null;
-
-  const geometry = new BufferGeometry();
-  geometry.setAttribute(
-    "position",
-    new BufferAttribute(new Float32Array(positions), 3),
-  );
-  // Opaque so it renders in the opaque pass, before the decoration/structure
-  // group - the boundary then sits at the tile level, under every object,
-  // rather than on top of them (a transparent mesh would draw after all the
-  // opaque scenery). It is drawn just above the tile faces (z here) so it
-  // reads clearly over the terrain while trees and buildings still occlude it.
-  const material = new MeshBasicMaterial({
-    color: SECTOR_BOUNDARY_COLOR,
-    side: DoubleSide,
-  });
-  const mesh = new Mesh(geometry, material);
-  mesh.matrixAutoUpdate = false;
-  mesh.userData.type = "sector_boundary";
-  return mesh;
-};
 
 /**
  * Creates heaxognal grid & draw it using js. Return groups of objects drawn
@@ -798,10 +718,6 @@ export const drawSector = (
     mergedTileEdgeMesh.matrixAutoUpdate = false;
     group_edges.add(mergedTileEdgeMesh);
   }
-
-  // Thicker outline marking this sector's borders with its neighbors
-  const boundaryMesh = buildSectorBoundary(grid, hexsize);
-  if (boundaryMesh) group_edges.add(boundaryMesh);
 
   profiler.reportCount("sector_tiles", grid.size);
   profiler.reportCount("sector_draw_calls_tiles", materialGroups.size);
@@ -1236,6 +1152,178 @@ export const intersectStructures = (info: {
   });
 };
 
+const WALL_CORNERS_BY_DIRECTION = [
+  [2, 3],
+  [5, 0],
+  [3, 4],
+  [1, 2],
+  [4, 5],
+  [0, 1],
+] as const;
+
+export const createVillageWallSprite = (
+  spec: VillageWallSpriteSpec,
+  point: { x: number; y: number },
+  hexHeight: number,
+  type: "village_wall_panel" | "village_wall_pier" | "village_wall_tower",
+) => {
+  const texture = loadTexture(spec.url, 256);
+  texture.magFilter = NearestFilter;
+  const material = new SpriteMaterial({
+    map: texture,
+    alphaTest: 0.2,
+    depthTest: false,
+    depthWrite: false,
+    transparent: true,
+  });
+  const size = hexHeight * spec.scale;
+  const sprite = new Sprite(material);
+  sprite.scale.set(size, size, 1);
+  // Keep position.y on the true ground contact so the existing painter sort
+  // compares walls, posts and buildings by their common footpoint. Sprite
+  // center uses bottom-origin texture coordinates, hence 1 - anchorY.
+  sprite.center.set(0.5, 1 - spec.anchorY);
+  sprite.position.set(point.x, point.y, ASSETS_LAYER);
+  sprite.userData.type = type;
+  sprite.userData.wallKit = STONE_VILLAGE_WALL_KIT.version;
+  sprite.userData.assetSortY = point.y;
+  return sprite;
+};
+
+/**
+ * Fit a panel's authored connector points exactly onto one world-space wall
+ * edge. Independent X/Y fitting is intentional: the perspective hex grid is
+ * vertically compressed, while the source art lives on a square canvas.
+ */
+export const createVillageWallPanelSprite = (
+  spec: VillageWallPanelSpriteSpec,
+  first: { x: number; y: number },
+  second: { x: number; y: number },
+  hexHeight: number,
+) => {
+  const [connectorA, connectorB] = spec.connectors;
+  const connectorDx = Math.abs(connectorB.x - connectorA.x);
+  const connectorDy = Math.abs(connectorB.y - connectorA.y);
+  const worldDx = Math.abs(second.x - first.x);
+  const worldDy = Math.abs(second.y - first.y);
+  const texture = loadTexture(spec.url, 256);
+  texture.magFilter = NearestFilter;
+  const material = new SpriteMaterial({
+    map: texture,
+    alphaTest: 0.2,
+    depthTest: false,
+    depthWrite: false,
+    transparent: true,
+  });
+  const sprite = new Sprite(material);
+  sprite.scale.set(
+    connectorDx > 0.001 ? worldDx / connectorDx : hexHeight * spec.height,
+    connectorDy > 0.001 ? worldDy / connectorDy : hexHeight * spec.height,
+    1,
+  );
+  sprite.center.set(
+    (connectorA.x + connectorB.x) / 2,
+    1 - (connectorA.y + connectorB.y) / 2,
+  );
+  sprite.position.set((first.x + second.x) / 2, (first.y + second.y) / 2, ASSETS_LAYER);
+  sprite.userData.type = "village_wall_panel";
+  sprite.userData.wallKit = STONE_VILLAGE_WALL_KIT.version;
+  sprite.userData.assetSortY = (first.y + second.y) / 2;
+  return sprite;
+};
+
+/** Sort transparent sector sprites back-to-front from their ground contact. */
+export const sortSectorAssetsByGroundContact = (group: Group) => {
+  group.children.sort((a, b) => {
+    const aSortY =
+      typeof a.userData.assetSortY === "number"
+        ? (a.userData.assetSortY as number)
+        : a.position.y;
+    const bSortY =
+      typeof b.userData.assetSortY === "number"
+        ? (b.userData.assetSortY as number)
+        : b.position.y;
+    return bSortY - aSortY;
+  });
+};
+
+const drawVillageWall = (
+  group: Group,
+  structures: VillageStructure[],
+  grid: Grid<TerrainHex>,
+  sectorMap: NormalizedSectorMap,
+) => {
+  const plan = planVillageWalls(sectorMap, structures);
+  if (plan.edges.length === 0) return;
+  const decorationClearance = getVillageWallDecorationClearanceKeys(plan);
+  group.children.forEach((child) => {
+    if (child.userData.type !== "decoration") return;
+    const mapX = child.userData.mapX;
+    const mapY = child.userData.mapY;
+    if (typeof mapX !== "number" || typeof mapY !== "number") return;
+    if (decorationClearance.has(getSectorMapTileKey(mapX, mapY))) {
+      // Keep the hidden sprite owned by the group so normal scene teardown
+      // still disposes its material while avoiding a wall/tree collision.
+      child.visible = false;
+    }
+  });
+  const vertexPositions = new Map<string, { x: number; y: number; h: number }>();
+  const gateVertices = new Set<string>();
+
+  plan.edges.forEach((edge) => {
+    const tile = grid.getHex({ col: edge.tile.x, row: edge.tile.y });
+    const cornerIndices = WALL_CORNERS_BY_DIRECTION[edge.direction];
+    if (!tile || !cornerIndices) return;
+    const first = tile.corners[cornerIndices[0]];
+    const second = tile.corners[cornerIndices[1]];
+    if (!first || !second) return;
+    const spec = getVillageWallSpriteSpec(STONE_VILLAGE_WALL_KIT, edge.kind, edge.axis);
+    const sprite = createVillageWallPanelSprite(spec, first, second, tile.height);
+    sprite.userData.wallKind = edge.kind;
+    sprite.userData.wallAxis = edge.axis;
+    group.add(sprite);
+    vertexPositions.set(edge.vertices[0], {
+      x: first.x,
+      y: first.y,
+      h: tile.height,
+    });
+    vertexPositions.set(edge.vertices[1], {
+      x: second.x,
+      y: second.y,
+      h: tile.height,
+    });
+    if (edge.kind === "gate") {
+      edge.vertices.forEach((vertex) => {
+        gateVertices.add(vertex);
+      });
+    }
+  });
+
+  const towerVertices = new Set<string>();
+  plan.contours.forEach((contour) => {
+    selectVillageWallTowerVertices(
+      contour,
+      gateVertices,
+      STONE_VILLAGE_WALL_KIT.maxTowers,
+    ).forEach((vertex) => {
+      towerVertices.add(vertex);
+    });
+  });
+
+  plan.vertices.forEach((vertex) => {
+    const point = vertexPositions.get(vertex.id);
+    if (!point) return;
+    const isTower = towerVertices.has(vertex.id) && !gateVertices.has(vertex.id);
+    const sprite = createVillageWallSprite(
+      isTower ? STONE_VILLAGE_WALL_KIT.tower : STONE_VILLAGE_WALL_KIT.pier,
+      point,
+      point.h,
+      isTower ? "village_wall_tower" : "village_wall_pier",
+    );
+    group.add(sprite);
+  });
+};
+
 /**
  * Draw village on map
  */
@@ -1246,37 +1334,10 @@ export const drawVillage = (
   sectorMap: NormalizedSectorMap,
   villageType: string | null,
 ) => {
-  // Village wall: towers along the village-zone boundary; roads crossing
-  // the boundary are left open and read as gates
+  // Structure-derived modular wall: a connected contour one clear hex beyond
+  // every physical structure, with authored road crossings rendered as gates.
   if (villageType === "VILLAGE" || villageType === "TOWN") {
-    const tilesByKey = new Map(
-      sectorMap.tiles.map((tile) => [getSectorMapTileKey(tile.x, tile.y), tile]),
-    );
-    const wallTexture = loadTexture(IMG_SECTOR_WALL_STONE_TOWER);
-    const wallMaterial = new SpriteMaterial({ map: wallTexture });
-    sectorMap.tiles.forEach((tile) => {
-      if (tile.zone !== "village") return;
-      const isBoundary = getNeighborCoordinates(tile).some((coordinate) => {
-        const neighbor = tilesByKey.get(
-          getSectorMapTileKey(coordinate.x, coordinate.y),
-        );
-        return (
-          !neighbor ||
-          (neighbor.zone !== "village" &&
-            neighbor.zone !== "road" &&
-            neighbor.zone !== "structure" &&
-            neighbor.zone !== "shrine")
-        );
-      });
-      if (!isBoundary) return;
-      const pos = grid.getHex({ col: tile.x, row: tile.y });
-      if (!pos) return;
-      const { height: h, x, y } = pos;
-      const sprite = new Sprite(wallMaterial);
-      sprite.scale.set(h * 0.8, h * 1.2, 1);
-      sprite.position.set(x, y + h / 3, ASSETS_LAYER);
-      group.add(sprite);
-    });
+    drawVillageWall(group, structures, grid, sectorMap);
   }
   // Village structures
   for (const structure of structures.filter((s) => s.hasPage !== 0)) {
@@ -1299,6 +1360,7 @@ export const drawVillage = (
       sprite.userData.type = "structure";
       sprite.userData.structureId = structure.id;
       sprite.userData.structureName = structure.name;
+      sprite.userData.assetSortY = y + h / 10;
       group.add(sprite);
       // Floating name label, revealed on hover or via the travel page's
       // label toggle (see intersectStructures). Bottom-anchored just above

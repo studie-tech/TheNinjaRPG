@@ -67,6 +67,7 @@ import {
   intersectStructures,
   intersectUsers,
   intersectWindowTiles,
+  sortSectorAssetsByGroundContact,
   type WindowNav,
 } from "@/libs/threejs/sector";
 import { updateWaveAnimation, updateWindAnimation } from "@/libs/threejs/shaders";
@@ -122,7 +123,7 @@ interface SectorRenderEntry {
 /** Content identity of a window entry: map version plus dynamic structures */
 const renderKeyOf = (entry: SectorWindowEntry) => {
   const structuresKey = entry.structures
-    .map((s) => `${s.id}:${s.level}:${s.image}`)
+    .map((s) => `${s.id}:${s.level}:${s.image}:${s.longitude}:${s.latitude}`)
     .join(",");
   return [
     entry.map.metadata.importedAt,
@@ -1150,7 +1151,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       entry.map,
       entry.villageType,
     );
-    groups.group_assets.children.sort((a, b) => b.position.y - a.position.y);
+    sortSectorAssetsByGroundContact(groups.group_assets);
     groups.group_interaction.children.forEach((mesh) => {
       mesh.userData.sector = entry.sector;
     });
