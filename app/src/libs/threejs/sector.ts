@@ -549,9 +549,9 @@ export const drawSector = (
       // Structure tiles stay flat and walkable (includes shrines and other
       // added structures)
       if (structureTileKeys.has(tileKey)) {
-        // Preserve the authored terrain and its shade beneath structures. Only
-        // water becomes a small land island; repainting every footprint from
-        // the globe's centre biome caused white snow patches on Horizon's
+        // Preserve authored land beneath structures. Water becomes a small
+        // land island and blue ice becomes snow; repainting every footprint
+        // from the globe's centre biome caused white patches on Horizon's
         // legacy desert map when the topology and published map disagreed.
         const groundSpec = resolveStructureTerrainSpec({
           authoredTerrain: authoredTile?.terrain,
@@ -562,9 +562,9 @@ export const drawSector = (
         tile.spec = groundSpec;
         tile.battleBiome = authoredTile?.battleBiome ?? groundSpec.battleBiome;
         tile.cost = 2;
-        if (spec.isWater) {
-          // A consistent mid shade makes the replacement island read as one
-          // intentional foundation instead of noisy water-colored fragments.
+        if (groundSpec.key !== spec.key) {
+          // A consistent mid shade makes replacement terrain read as one
+          // intentional foundation instead of noisy fragments.
           tile.level = 0.5;
         }
         tile.hasStructure = true;

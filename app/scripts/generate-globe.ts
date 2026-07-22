@@ -159,13 +159,23 @@ const createLandScore = (tiles: RawTile[], protectedSectors: number[]) => {
         );
       }),
     ) * WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR;
+  const wakeMoatRadius = Math.max(
+    ...[...wakeNeighbors].flatMap((sector) =>
+      tiles[sector]!.corners.map((corner) =>
+        Math.hypot(
+          wakeCenter.x - corner.x,
+          wakeCenter.y - corner.y,
+          wakeCenter.z - corner.z,
+        ),
+      ),
+    ),
+  );
 
   return createWorldLandScore({
     protectedCenters,
-    wakeIslandSector: MAP_WAKE_ISLAND_SECTOR,
     wakeIslandCenter: wakeCenter,
-    wakeIslandNeighborSectors: wakeNeighbors,
     wakeIslandRadius,
+    wakeMoatRadius,
   });
 };
 
@@ -228,7 +238,7 @@ const main = () => {
     ]),
   ];
   const landScore = createLandScore(tiles, protectedSectors);
-  const land = tiles.map((tile) => landScore(tile.center, tile.id) > 0);
+  const land = tiles.map((tile) => landScore(tile.center) > 0);
 
   const outTiles = tiles.map((tile) => ({
     c: tile.center,
@@ -248,7 +258,7 @@ const main = () => {
       );
       return globalBiomeType(
         point,
-        landScore(point, tile.id) > 0,
+        landScore(point) > 0,
         globalElevation(point),
       );
     }),
@@ -256,7 +266,7 @@ const main = () => {
       const x = index % (VISUAL_SCALE + 1);
       const y = Math.floor(index / (VISUAL_SCALE + 1));
       const point = tilePointAt(tile, x / VISUAL_SCALE, y / VISUAL_SCALE);
-      return visualColorAt(point, landScore(point, tile.id));
+      return visualColorAt(point, landScore(point));
     }),
     n: sectorGridNeighbors(tile.id),
     ne: sectorGridEntryEdges(tile.id),
@@ -290,7 +300,7 @@ const main = () => {
           MAP_NAVIGABLE_LATITUDE_LIMIT +
           (ring / POLAR_CAP_VISUAL_ROWS) * (90 - MAP_NAVIGABLE_LATITUDE_LIMIT);
         const point = pointAt(longitude, latitude);
-        return visualColorAt(point, landScore(point, -1));
+        return visualColorAt(point, landScore(point));
       },
     ),
     south: Array.from(
@@ -304,7 +314,7 @@ const main = () => {
           -MAP_NAVIGABLE_LATITUDE_LIMIT -
           (ring / POLAR_CAP_VISUAL_ROWS) * (90 - MAP_NAVIGABLE_LATITUDE_LIMIT);
         const point = pointAt(longitude, latitude);
-        return visualColorAt(point, landScore(point, -1));
+        return visualColorAt(point, landScore(point));
       },
     ),
   };
@@ -340,7 +350,7 @@ const main = () => {
   const payload = JSON.stringify({
     radius: RADIUS,
     projection: "cylindrical",
-    generation: "hierarchical-climate-v6-polar-landscape",
+    generation: "hierarchical-climate-v7-continuous-protection",
     visualScale: VISUAL_SCALE,
     polarCapColumns: POLAR_CAP_VISUAL_COLUMNS,
     polarCapRows: POLAR_CAP_VISUAL_ROWS,

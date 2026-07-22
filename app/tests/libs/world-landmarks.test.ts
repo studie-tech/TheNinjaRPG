@@ -8,6 +8,10 @@ import {
   WORLD_LANDMARKS,
 } from "@/libs/sector-map/landmarks";
 import {
+  type EdgeIndex,
+  sectorMapEdgeForGlobeEdge,
+} from "@/libs/sector-map/crossing";
+import {
   globalElevation,
   globalMoisture,
 } from "@/libs/sector-map/worldgen";
@@ -76,12 +80,12 @@ const globalTerrainCounts = (sector: number) => {
   return counts;
 };
 
-const localTerrainGrid = (sector: number) => {
+const localTerrainGrid = (sector: number, village = true) => {
   const tiled = buildTiledJson({
     sector,
     width: MAP_SIZE,
     height: MAP_SIZE,
-    village: true,
+    village,
     seed: "v1",
     ensureWalkable: [],
   });
@@ -205,6 +209,41 @@ describe("canonical world landmarks", () => {
         structure.name,
       ).not.toBe("ocean");
     }
+  });
+
+  it("keeps every generated local-map seam terrain-identical", () => {
+    const grids = globe.tiles.map((_, sector) => localTerrainGrid(sector, false));
+    const edge = (grid: string[], side: number) => {
+      if (side === 0) return grid.slice(0, MAP_SIZE);
+      if (side === 2) return grid.slice((MAP_SIZE - 1) * MAP_SIZE);
+      return Array.from({ length: MAP_SIZE }, (_, y) =>
+        grid[y * MAP_SIZE + (side === 1 ? MAP_SIZE - 1 : 0)],
+      );
+    };
+    const mismatches: string[] = [];
+    for (let sector = 0; sector < globe.tiles.length; sector++) {
+      for (const side of [1, 2] as const) {
+        const neighbor = globe.tiles[sector]!.n[side]!;
+        if (neighbor < 0) continue;
+        const entry = globe.tiles[sector]!.ne[side]!;
+        const mapSide = sectorMapEdgeForGlobeEdge(side);
+        const mapEntry = sectorMapEdgeForGlobeEdge(entry as EdgeIndex);
+        if (
+          edge(grids[sector]!, mapSide).join("|") !==
+          edge(grids[neighbor]!, mapEntry).join("|")
+        ) {
+          mismatches.push(`${sector}:${side}->${neighbor}:${entry}`);
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
+  }, 20_000);
+
+  it("spills reserved polar terrain naturally into adjacent sectors", () => {
+    const northOfReservedSector = localTerrainGrid(0, false);
+    const ice = northOfReservedSector.filter((terrain) => terrain === "ice").length;
+    expect(ice).toBeGreaterThan(northOfReservedSector.length * 0.25);
+    expect(ice).toBeLessThan(northOfReservedSector.length * 0.6);
   });
 
   it("uses the same biome families in generated local village maps", () => {
