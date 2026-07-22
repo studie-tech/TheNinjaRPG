@@ -1085,7 +1085,9 @@ export const wrapStructureLabelWords = (
 
 export const createStructureLabel = (structure: VillageStructure, h: number) => {
   const canvasWidth = 512;
-  const maxTextWidth = canvasWidth - 24;
+  const horizontalPadding = 24;
+  const verticalPadding = 16;
+  const maxTextWidth = canvasWidth - horizontalPadding * 2;
   const canvas = document.createElement("canvas");
   canvas.width = canvasWidth;
   canvas.height = 84;
@@ -1095,7 +1097,7 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
     // Wrap long multi-word names before shrinking the font. This preserves a
     // readable type size for labels such as "Administration Building".
     let fontSize = 64;
-    context.font = `bold ${fontSize}px Serif`;
+    context.font = `700 ${fontSize}px sans-serif`;
     let lines = wrapStructureLabelWords(
       structure.name,
       (line) => context.measureText(line).width,
@@ -1106,7 +1108,7 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
       lines.some((line) => context.measureText(line).width > maxTextWidth)
     ) {
       fontSize -= 2;
-      context.font = `bold ${fontSize}px Serif`;
+      context.font = `700 ${fontSize}px sans-serif`;
       lines = wrapStructureLabelWords(
         structure.name,
         (line) => context.measureText(line).width,
@@ -1115,14 +1117,18 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
     }
 
     const lineHeight = Math.ceil(fontSize * 1.08);
-    canvasHeight = Math.max(84, lines.length * lineHeight + 16);
+    canvasHeight = Math.max(96, lines.length * lineHeight + verticalPadding * 2);
     canvas.height = canvasHeight;
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.font = `bold ${fontSize}px Serif`;
+    context.font = `700 ${fontSize}px sans-serif`;
     context.lineJoin = "round";
+    context.fillStyle = "rgba(0, 0, 0, 0.72)";
+    context.beginPath();
+    context.roundRect(4, 4, canvasWidth - 8, canvasHeight - 8, 18);
+    context.fill();
     context.strokeStyle = "black";
-    context.lineWidth = 9;
+    context.lineWidth = 4;
     context.fillStyle = "white";
     const firstLineY = (canvasHeight - lines.length * lineHeight) / 2 + lineHeight / 2;
     lines.forEach((line, index) => {
@@ -1144,15 +1150,17 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
   // and must be disposed together with the material to avoid leaking GPU memory
   material.userData.ownsMap = true;
   const sprite = new Sprite(material);
-  sprite.scale.set(h * 3.0, h * 3.0 * (canvasHeight / canvasWidth), 1);
+  const labelWidth = h * 5.0;
+  const labelHeight = labelWidth * (canvasHeight / canvasWidth);
+  sprite.scale.set(labelWidth, labelHeight, 1);
   // Anchor at the bottom edge so zoom compensation grows the label upwards,
   // away from the building, instead of over it
   sprite.center.set(0.5, 0);
   sprite.renderOrder = 10;
   sprite.name = `structure-label-${structure.id}`;
   sprite.userData.type = "structureLabel";
-  sprite.userData.baseWidth = h * 3.0;
-  sprite.userData.baseHeight = h * 3.0 * (canvasHeight / canvasWidth);
+  sprite.userData.baseWidth = labelWidth;
+  sprite.userData.baseHeight = labelHeight;
   sprite.visible = false;
   return sprite;
 };
