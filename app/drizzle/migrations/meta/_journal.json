@@ -155,6 +155,13 @@
       "when": 1784631661541,
       "tag": "0021_relocate_world_landmarks",
       "breakpoints": false
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1784707432447,
+      "tag": "0022_water_walkability",
+      "breakpoints": false
     }
   ]
 }

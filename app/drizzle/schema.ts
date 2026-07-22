@@ -3024,8 +3024,8 @@ export const mapTerrain = mysqlTable(
     battleBiome: mysqlEnum("battleBiome", consts.COMBAT_BIOMES)
       .default("ground")
       .notNull(),
-    // Water terrain: recessed + animated waves + swim travel cost, and the
-    // Tiled palette offers it as an impassable lake as well
+    // Water terrain: recessed + animated waves. Standard water is walkable;
+    // the Tiled palette can still provide an explicitly blocked obstacle tile.
     isWater: boolean("isWater").default(false).notNull(),
     // How deep the tile face is sunk below ground level, as a fraction of the
     // tile edge (ocean 0.5, ice sheet 0.25, solid ground 0)

@@ -100,6 +100,28 @@ const localTerrainGrid = (sector: number, village = true) => {
   return terrainData.map((gid) => terrainByGid.get(gid)!);
 };
 
+const localTileProperties = (sector: number, village = true) => {
+  const tiled = buildTiledJson({
+    sector,
+    width: MAP_SIZE,
+    height: MAP_SIZE,
+    village,
+    seed: "v1",
+    ensureWalkable: [],
+  });
+  const terrainData = tiled.layers[0]?.data;
+  if (!terrainData) throw new Error(`Sector ${sector} has no terrain tile layer`);
+  const propertiesByGid = new Map(
+    tiled.tilesets[0]!.tiles.map((tile) => [
+      tile.id + 1,
+      Object.fromEntries(
+        tile.properties.map((property) => [property.name, property.value]),
+      ),
+    ]),
+  );
+  return terrainData.map((gid) => propertiesByGid.get(gid)!);
+};
+
 describe("canonical world landmarks", () => {
   it("keeps every settlement on a distinct, intentional sector", () => {
     expect(
@@ -208,6 +230,18 @@ describe("canonical world landmarks", () => {
         terrain[structure.y * MAP_SIZE + structure.x],
         structure.name,
       ).not.toBe("ocean");
+    }
+  });
+
+  it("makes all standard generated water walkable at ground cost", () => {
+    for (const village of [false, true]) {
+      const water = localTileProperties(MAP_WAKE_ISLAND_SECTOR, village).filter(
+        (tile) => tile.terrain === "ocean",
+      );
+      expect(water.length).toBeGreaterThan(0);
+      expect(
+        water.every((tile) => tile.blocked === false && tile.walkCost === 1),
+      ).toBe(true);
     }
   });
 

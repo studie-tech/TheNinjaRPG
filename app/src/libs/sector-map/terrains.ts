@@ -53,7 +53,7 @@ export const BUILTIN_TERRAINS: TerrainSpec[] = [
     battleBiome: "ocean",
     isWater: true,
     depression: 0.5,
-    defaultWalkCost: 3,
+    defaultWalkCost: 1,
   },
   {
     key: "dessert",
