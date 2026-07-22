@@ -199,8 +199,7 @@ export const anbuRouter = createTRPCRouter({
         squad.id,
       );
       void pusher.trigger(receiverId, "event", { type: "anbu" });
-      // Create
-      return { success: true, message: "User assigned to squad" };
+      return { success: true, message: "Request to join squad sent" };
     }),
   rejectRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Reject ANBU join request" } })
@@ -294,26 +293,28 @@ export const anbuRouter = createTRPCRouter({
       if (!hasRequiredRank(requester.rank, ANBU_MEMBER_RANK_REQUIREMENT)) {
         return errorResponse(`Rank must be at least ${ANBU_MEMBER_RANK_REQUIREMENT}`);
       }
-      // Mutate — join first with CAS on empty anbuId + live member count, then claim
-      // the request. If the request claim loses a race, roll the join back.
+      // Mutate — join with CAS on empty anbuId. Avoid a member-count subquery in the
+      // UPDATE (PlanetScale/Vitess rejects or no-ops subqueries in DML); enforce the
+      // cap with a follow-up count and roll back if a concurrent accept filled the squad.
       const joinResult = await ctx.drizzle
         .update(userData)
         .set({ anbuId: squad.id })
-        .where(
-          and(
-            eq(userData.userId, requester.userId),
-            isNull(userData.anbuId),
-            sql`(
-              SELECT cnt FROM (
-                SELECT COUNT(*) AS cnt
-                FROM ${userData} AS members
-                WHERE members.anbuId = ${squad.id}
-              ) AS memberCounts
-            ) < ${ANBU_MAX_MEMBERS}`,
-          ),
-        );
+        .where(and(eq(userData.userId, requester.userId), isNull(userData.anbuId)));
       if (joinResult.rowsAffected === 0) {
-        return errorResponse("Squad is full or requester already in a squad");
+        return errorResponse("Requester already in a squad");
+      }
+      const [memberCountRow] = await ctx.drizzle
+        .select({ count: sql<number>`COUNT(*)`.mapWith(Number) })
+        .from(userData)
+        .where(eq(userData.anbuId, squad.id));
+      if ((memberCountRow?.count ?? 0) > ANBU_MAX_MEMBERS) {
+        await ctx.drizzle
+          .update(userData)
+          .set({ anbuId: null })
+          .where(
+            and(eq(userData.userId, requester.userId), eq(userData.anbuId, squad.id)),
+          );
+        return errorResponse("Squad is full");
       }
       const claimRequest = await ctx.drizzle
         .update(userRequest)
