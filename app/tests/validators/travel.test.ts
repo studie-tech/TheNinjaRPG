@@ -30,17 +30,27 @@ test("sectorIdSchema coerces string numbers", () => {
   expect(result.data).toBe(200);
 });
 
-test("startGlobalMoveSchema accepts only current and target sectors", () => {
-  expect(startGlobalMoveSchema.parse({ sector: 1649, curSector: 1631 })).toEqual({
-    sector: 1649,
-    curSector: 1631,
-  });
+test("startGlobalMoveSchema accepts only the target sector", () => {
+  expect(startGlobalMoveSchema.parse({ sector: 1649 })).toEqual({ sector: 1649 });
+});
+
+test("startGlobalMoveSchema rejects a client-supplied current sector", () => {
+  const result = startGlobalMoveSchema.safeParse({ sector: 1649, curSector: 1631 });
+
+  expect(result.success).toBe(false);
+  if (!result.success) {
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        code: "unrecognized_keys",
+        keys: expect.arrayContaining(["curSector"]),
+      }),
+    );
+  }
 });
 
 test("startGlobalMoveSchema rejects client-supplied landing coordinates", () => {
   const result = startGlobalMoveSchema.safeParse({
     sector: 1649,
-    curSector: 1631,
     longitude: 0,
     latitude: 0,
   });

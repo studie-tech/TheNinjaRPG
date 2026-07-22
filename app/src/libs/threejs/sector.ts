@@ -1060,32 +1060,76 @@ export const createMultipleUserSprite = (
  * whole label is a single sprite; starts hidden and is toggled by
  * intersectStructures.
  */
+export const wrapStructureLabelWords = (
+  text: string,
+  measureText: (line: string) => number,
+  maxWidth: number,
+) => {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [""];
+
+  const lines: string[] = [];
+  let currentLine = words[0] ?? "";
+  for (const word of words.slice(1)) {
+    const candidate = `${currentLine} ${word}`;
+    if (measureText(candidate) <= maxWidth) {
+      currentLine = candidate;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  lines.push(currentLine);
+  return lines;
+};
+
 export const createStructureLabel = (structure: VillageStructure, h: number) => {
   const canvasWidth = 512;
-  const canvasHeight = 84;
+  const maxTextWidth = canvasWidth - 24;
   const canvas = document.createElement("canvas");
   canvas.width = canvasWidth;
-  canvas.height = canvasHeight;
+  canvas.height = 84;
   const context = canvas.getContext("2d");
+  let canvasHeight = canvas.height;
   if (context) {
-    // Building name, shrunk to fit the canvas width
+    // Wrap long multi-word names before shrinking the font. This preserves a
+    // readable type size for labels such as "Administration Building".
     let fontSize = 64;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
     context.font = `bold ${fontSize}px Serif`;
+    let lines = wrapStructureLabelWords(
+      structure.name,
+      (line) => context.measureText(line).width,
+      maxTextWidth,
+    );
     while (
       fontSize > 24 &&
-      context.measureText(structure.name).width > canvasWidth - 16
+      lines.some((line) => context.measureText(line).width > maxTextWidth)
     ) {
       fontSize -= 2;
       context.font = `bold ${fontSize}px Serif`;
+      lines = wrapStructureLabelWords(
+        structure.name,
+        (line) => context.measureText(line).width,
+        maxTextWidth,
+      );
     }
+
+    const lineHeight = Math.ceil(fontSize * 1.08);
+    canvasHeight = Math.max(84, lines.length * lineHeight + 16);
+    canvas.height = canvasHeight;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.font = `bold ${fontSize}px Serif`;
     context.lineJoin = "round";
     context.strokeStyle = "black";
     context.lineWidth = 9;
-    context.strokeText(structure.name, canvasWidth / 2, canvasHeight / 2);
     context.fillStyle = "white";
-    context.fillText(structure.name, canvasWidth / 2, canvasHeight / 2);
+    const firstLineY = (canvasHeight - lines.length * lineHeight) / 2 + lineHeight / 2;
+    lines.forEach((line, index) => {
+      const y = firstLineY + index * lineHeight;
+      context.strokeText(line, canvasWidth / 2, y);
+      context.fillText(line, canvasWidth / 2, y);
+    });
   }
   const texture = createTexture(canvas);
   texture.generateMipmaps = false;
