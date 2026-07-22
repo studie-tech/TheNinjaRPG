@@ -318,7 +318,7 @@ export default function Travel() {
     if (!villages) return [];
     return villages
       .filter((v) => ["VILLAGE", "SAFEZONE", "OUTLAW"].includes(v.type))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => (a.mapName || a.name).localeCompare(b.mapName || b.name));
   }, [villages]);
 
   // Fetch tracked bounties for map display
