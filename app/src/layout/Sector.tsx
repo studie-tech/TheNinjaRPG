@@ -2135,7 +2135,9 @@ const Sector: React.FC<SectorProps> = (props) => {
           raycaster,
           showAll: showStructureLabelsRef.current,
           pointerOnMap: pointerOnMapRef.current,
-          cameraZoom: camera.zoom,
+          camera,
+          viewportWidth: rendererElement.clientWidth,
+          viewportHeight: rendererElement.clientHeight,
         });
         endStructures();
 

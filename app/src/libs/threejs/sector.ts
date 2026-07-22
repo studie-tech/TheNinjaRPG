@@ -12,6 +12,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   NearestFilter,
+  type OrthographicCamera,
   type Raycaster,
   Sprite,
   SpriteMaterial,
@@ -45,6 +46,10 @@ import {
   type DecorationAsset,
   resolveDecorationAsset,
 } from "@/libs/sector-map/decorations";
+import {
+  type LabelScreenRect,
+  selectNonOverlappingLabels,
+} from "@/libs/sector-map/label-collision";
 import {
   resolveStructureTerrainSpec,
   resolveTerrainSpec,
@@ -1117,39 +1122,100 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
 const STRUCTURE_LABEL_REFERENCE_ZOOM = 2;
 
 /**
- * Toggle building labels each frame: all visible when showAll is set,
- * otherwise only the label of the structure sprite under the pointer.
- * Visible labels are counter-scaled by the camera zoom so they keep a
- * constant, readable on-screen size at every zoom level.
+ * Toggle building labels each frame. The hovered label always wins; when the
+ * label toggle is enabled, remaining labels are admitted in viewport-center
+ * priority order only when their screen rectangles do not overlap. Visible
+ * labels are counter-scaled so their text stays readable at every zoom level.
  */
 export const intersectStructures = (info: {
   structureSprites: Sprite[];
   raycaster: Raycaster;
   showAll: boolean;
   pointerOnMap: boolean;
-  cameraZoom: number;
+  camera: OrthographicCamera;
+  viewportWidth: number;
+  viewportHeight: number;
 }) => {
-  const { structureSprites, raycaster, showAll, pointerOnMap, cameraZoom } = info;
+  const {
+    structureSprites,
+    raycaster,
+    showAll,
+    pointerOnMap,
+    camera,
+    viewportWidth,
+    viewportHeight,
+  } = info;
   let hovered: Sprite | null = null;
-  if (!showAll && pointerOnMap && structureSprites.length > 0) {
+  if (pointerOnMap && structureSprites.length > 0) {
     const intersects = raycaster.intersectObjects(structureSprites, false);
     hovered = (intersects[0]?.object as Sprite) ?? null;
   }
   const zoomComp = Math.min(
     3,
-    Math.max(0.6, STRUCTURE_LABEL_REFERENCE_ZOOM / Math.max(0.1, cameraZoom)),
+    Math.max(0.6, STRUCTURE_LABEL_REFERENCE_ZOOM / Math.max(0.1, camera.zoom)),
   );
+  const projected = new Vector3();
+  const rectBySprite = new Map<Sprite, LabelScreenRect>();
   structureSprites.forEach((sprite) => {
     const label = sprite.userData.labelSprite as Sprite | undefined;
     if (!label) return;
-    label.visible = showAll || sprite === hovered;
-    if (label.visible) {
-      const width = (label.userData.baseWidth as number) * zoomComp;
-      if (Math.abs(label.scale.x - width) > 0.001) {
-        label.scale.set(width, (label.userData.baseHeight as number) * zoomComp, 1);
-      }
+    label.visible = false;
+    const width = (label.userData.baseWidth as number) * zoomComp;
+    if (Math.abs(label.scale.x - width) > 0.001) {
+      label.scale.set(width, (label.userData.baseHeight as number) * zoomComp, 1);
     }
+    label.getWorldPosition(projected).project(camera);
+    const screenX = ((projected.x + 1) / 2) * viewportWidth;
+    const screenBottom = ((1 - projected.y) / 2) * viewportHeight;
+    const pixelWidth =
+      (label.scale.x * camera.zoom * viewportWidth) / (camera.right - camera.left);
+    const pixelHeight =
+      (label.scale.y * camera.zoom * viewportHeight) / (camera.top - camera.bottom);
+    rectBySprite.set(sprite, {
+      left: screenX - pixelWidth / 2,
+      right: screenX + pixelWidth / 2,
+      top: screenBottom - pixelHeight,
+      bottom: screenBottom,
+    });
   });
+
+  const hoveredLabel = hovered?.userData.labelSprite as Sprite | undefined;
+  if (hoveredLabel) hoveredLabel.visible = true;
+  if (!showAll) return;
+
+  const viewportCenterX = viewportWidth / 2;
+  const viewportCenterY = viewportHeight / 2;
+  const candidates = structureSprites.flatMap((sprite) => {
+    if (sprite === hovered) return [];
+    const label = sprite.userData.labelSprite as Sprite | undefined;
+    const rect = rectBySprite.get(sprite);
+    if (!label || !rect) return [];
+    if (
+      rect.right < 0 ||
+      rect.left > viewportWidth ||
+      rect.bottom < 0 ||
+      rect.top > viewportHeight
+    ) {
+      return [];
+    }
+    const centerX = (rect.left + rect.right) / 2;
+    const centerY = (rect.top + rect.bottom) / 2;
+    return [
+      {
+        item: label,
+        rect,
+        priority:
+          ((centerX - viewportCenterX) / viewportWidth) ** 2 +
+          ((centerY - viewportCenterY) / viewportHeight) ** 2,
+      },
+    ];
+  });
+  const reserved = hovered ? [rectBySprite.get(hovered)].filter(Boolean) : [];
+  selectNonOverlappingLabels(candidates, reserved as LabelScreenRect[]).forEach(
+    (label) => {
+      label.visible = true;
+    },
+  );
 };
 
 const WALL_CORNERS_BY_DIRECTION = [
