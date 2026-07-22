@@ -102,9 +102,11 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
   if (userData.isOutlaw) return <Loader explanation="Unlikely to find outlaw ANBU" />;
   if (userData.isBanned) return <BanInfo />;
 
-  // Derived
-  const isKage = userData.userId === userData.village?.kageId;
-  const isElder = userData.rank === "ELDER";
+  // Derived — village-gate kage/elder so cross-village staff (canStaffEdit) do not
+  // inherit village-scoped moderation UI for a foreign squad.
+  const sameVillage = userData.villageId === squad.villageId;
+  const isKage = sameVillage && userData.userId === userData.village?.kageId;
+  const isElder = sameVillage && userData.rank === "ELDER";
   const isLeader = userData.userId === squad.leaderId;
   const inSquad = userData.anbuId === squadId;
   const canStaffEdit = canEditClans(userData.role);
@@ -149,7 +151,7 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
         userId={userData.userId}
         userRank={userData.rank}
         userAnbu={userData.anbuId}
-        sameVillage={userData.villageId === squad.villageId}
+        sameVillage={sameVillage}
         canStaffEdit={canStaffEdit}
       />
       {/* ANBU QUESTS - Only show if user is in the squad */}
@@ -802,10 +804,10 @@ const AnbuRequests: React.FC<AnbuRequestsProps> = (props) => {
   if (!requests) return <Loader explanation="Loading requests" />;
 
   // Derived
-  const canManageRequests = isLeader || isKage || canStaffEdit;
+  const canManageRequests = isLeader || isKage || isElder || canStaffEdit;
   // Kage/elder cannot join (blocked server-side); leaders are always in a squad.
-  // Cross-village viewers (e.g. staff) also cannot join, since the server rejects
-  // join requests for a squad in a different village.
+  // Cross-village viewers (e.g. staff) also cannot join. Leaderless squads stay
+  // joinable — kage/elder/staff can accept via relatedId.
   const canJoinSquad = !isKage && !isElder && sameVillage;
   const hasPending = requests?.some((req) => req.status === "PENDING");
   const showRequestSystem =
