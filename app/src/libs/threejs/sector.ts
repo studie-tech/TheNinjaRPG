@@ -178,9 +178,9 @@ export const buildWindowNav = (
         return tile;
       }
       tile.blocked = mapTile.blocked || mapTile.walkCost <= 0;
-      // Water carries a heavier path weighting so routes prefer dry land
-      const spec = resolveTerrainSpec(mapTile.terrain, terrainRegistry);
-      tile.cost = mapTile.walkCost + (spec.isWater ? 5 : 1);
+      // The authored walk cost is authoritative. Standard water has the same
+      // cost as ground because ninja can traverse it with chakra.
+      tile.cost = mapTile.walkCost + 1;
       return tile;
     });
   return {
@@ -529,8 +529,8 @@ export const drawSector = (
       const ny = tile.row / sectorHeight - 0.5;
       tile.level = noiseGen(nx, ny) / 2 + 0.5;
       tile.assetStrength = 0;
-      // Effective path cost: authored walk cost plus the terrain weighting
-      // (water routes are heavily de-prioritized)
+      // Effective path cost comes from the authored map. Standard water uses
+      // the same walk cost as ground; explicit obstacles remain blocked below.
       const spec = resolveTerrainSpec(
         authoredTile?.terrain ?? baseBiome,
         terrainRegistry,
@@ -539,7 +539,7 @@ export const drawSector = (
       // them off the hex instead of re-doing the lookup + resolve for all 676 tiles
       tile.spec = spec;
       tile.authored = authoredTile;
-      tile.cost = (authoredTile ? authoredTile.walkCost : 1) + (spec.isWater ? 5 : 1);
+      tile.cost = (authoredTile ? authoredTile.walkCost : 1) + 1;
       tile.blocked = authoredTile?.blocked || authoredTile?.walkCost === 0;
       tile.zone = authoredTile?.zone;
       // Combat arena for battles on this tile: the authored per-tile override

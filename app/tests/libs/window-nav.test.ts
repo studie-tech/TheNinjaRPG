@@ -22,7 +22,7 @@ const makeMap = (
         x,
         y,
         terrain: isOcean ? "ocean" : "ground",
-        walkCost: isBlocked ? 0 : isOcean ? 3 : 1,
+        walkCost: isBlocked ? 0 : 1,
         blocked: isBlocked,
         zone: "wilderness",
         battleBiome: isOcean ? "ocean" : "ground",
@@ -216,11 +216,9 @@ describe("buildWindowNav", () => {
     });
   });
 
-  it("prefers a dry detour over a shorter route through water (cost weighting)", () => {
-    // A 2-wide swimmable ocean strip cuts the direct route; the only dry way
-    // around is via the bottom row (~3 extra steps). With the real costs
-    // (walkCost + isWater surcharge) the detour is cheaper; if the surcharge or
-    // walkCost is dropped, the shorter wet route wins and this test fails.
+  it("takes the shortest route through water at the same cost as ground", () => {
+    // A 2-wide ocean strip cuts the direct route; the only dry way around is
+    // via the bottom row. Equal land/water costs should choose the wet shortcut.
     const isOcean = (x: number, y: number) => (x === 3 || x === 4) && y <= 2;
     const map = makeMap(8, 4, () => false, isOcean);
     const nav = buildWindowNav([{ dx: 0, dy: 0, map }], HEXSIZE, mergeTerrainSpecs([]));
@@ -231,12 +229,12 @@ describe("buildWindowNav", () => {
     const path = nav.pathFinder.getShortestPath(start, goal);
     expect(path).toBeDefined();
     if (!path) return;
-    // No tile on the chosen path is ocean
-    for (const tile of path) {
-      const local = nav.fromUnified(tile);
-      expect(isOcean(local.col, local.row)).toBe(false);
-    }
-    // And it really is a detour: longer than the straight wet line
-    expect(path.length).toBeGreaterThan(6);
+    expect(
+      path.some((tile) => {
+        const local = nav.fromUnified(tile);
+        return isOcean(local.col, local.row);
+      }),
+    ).toBe(true);
+    expect(path.length).toBeLessThanOrEqual(6);
   });
 });

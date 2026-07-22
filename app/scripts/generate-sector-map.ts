@@ -211,7 +211,7 @@ const generateCells = (options: GeneratorOptions) => {
   const cells: CellSpec[][] = [];
   // Per-tile helpers used when forcing perimeter/road/anchor tiles walkable:
   // the land biome a tile should show if drained, and whether it is genuine
-  // open sea (which stays walkable water so coastlines cross the border).
+  // open sea (which remains water when a road or anchor crosses it).
   const intendedLand: string[][] = [];
   const isSea: boolean[][] = [];
   for (let y = 0; y < height; y++) {
@@ -238,7 +238,7 @@ const generateCells = (options: GeneratorOptions) => {
         // but does not repaint the underlying global biome. Coastal villages
         // and Wake Island therefore retain the water visible on the globe.
         if (voteTerrain === "ocean") {
-          cell = { terrain: "ocean", zone: "water", blocked: true, walkCost: 0 };
+          cell = { terrain: "ocean", zone: "water", blocked: false, walkCost: 1 };
           sea = true;
         } else {
           cell = { terrain: voteTerrain, zone: "village", blocked: false, walkCost: 1 };
@@ -254,7 +254,7 @@ const generateCells = (options: GeneratorOptions) => {
         landRow.push(landTerrain);
       } else if (voteTerrain === "ocean") {
         // Open sea with scattered islands where the elevation field rises
-        cell = { terrain: "ocean", zone: "wilderness", blocked: false, walkCost: 3 };
+        cell = { terrain: "ocean", zone: "wilderness", blocked: false, walkCost: 1 };
         sea = true;
         if (elevation > 0.42) {
           cell = { terrain: landTerrain, zone: "wilderness", blocked: false, walkCost: 1 };
@@ -262,10 +262,11 @@ const generateCells = (options: GeneratorOptions) => {
         }
         landRow.push(landTerrain);
       } else {
-        // Lakes in low ground (rare in deserts), impassable rocks in high ground
+        // Walkable lakes in low ground (rare in deserts), impassable rocks in
+        // high ground. Ninja traverse standard water with chakra at land speed.
         const lakeLevel = voteTerrain === "dessert" ? -0.72 : -0.52;
         if (elevation < lakeLevel) {
-          cell = { terrain: "ocean", zone: "water", blocked: true, walkCost: 0 };
+          cell = { terrain: "ocean", zone: "water", blocked: false, walkCost: 1 };
         } else if (elevation > (voteTerrain === "dessert" ? 0.55 : 0.58)) {
           cell = { terrain: voteTerrain, zone: "wilderness", blocked: true, walkCost: 0 };
         } else if (voteTerrain === "ice" && feature > 0.35) {
@@ -288,9 +289,9 @@ const generateCells = (options: GeneratorOptions) => {
     if (!cell) return;
     cell.blocked = false;
     if (isSea[y]?.[x]) {
-      // Genuine open sea stays walkable water so the coastline is not broken by
-      // a ring of forced-walkable land along the perimeter
-      if (cell.walkCost <= 0) cell.walkCost = 3;
+      // Genuine open sea stays water so the coastline is not broken by a ring
+      // of forced land along the perimeter.
+      if (cell.walkCost <= 0) cell.walkCost = 1;
     } else {
       if (cell.walkCost <= 0) cell.walkCost = 1;
       if (cell.terrain === "ocean") cell.terrain = intendedLand[y]?.[x] ?? baseTerrain;

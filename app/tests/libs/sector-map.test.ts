@@ -1025,7 +1025,7 @@ describe("standard terrain palette", () => {
       tile(0, "ground", "wilderness", false, 1, "ground"),
       tile(1, "ground", "road", false, 1, "ground"),
       tile(2, "ocean", "water", true, 0, "ocean"),
-      tile(3, "ocean", "wilderness", false, 3, "ocean"),
+      tile(3, "ocean", "wilderness", false, 1, "ocean"),
     ];
     ensureFullTerrainPalette(tiles, mergeTerrainSpecs([]));
     // The four seed tiles match palette entries and are deduped, so the total is
@@ -1034,6 +1034,12 @@ describe("standard terrain palette", () => {
     expect(tiles.length).toBe(12);
     // and every resulting tile is a distinct terrain kind (no duplicates)
     expect(new Set(tiles.map(terrainSignature)).size).toBe(tiles.length);
+  });
+
+  it("gives standard ocean terrain the same default walk cost as ground", () => {
+    const registry = mergeTerrainSpecs([]);
+    expect(registry.get("ocean")?.defaultWalkCost).toBe(1);
+    expect(registry.get("ground")?.defaultWalkCost).toBe(1);
   });
 });
 
