@@ -143,6 +143,29 @@ const Conversation: React.FC<ConversationProps> = (props) => {
       : composeRestriction;
   type ReturnedComment = ArrayElement<typeof allComments>;
 
+  const utils = api.useUtils();
+
+  /**
+   * Shared infinite-query cache writer for conversation comments. The
+   * `pages[0].convo` guard and ValidPage cast live here only — callers just
+   * map each page's `data` array.
+   */
+  const updateCachedComments = (
+    mapPageData: (data: ReturnedComment[], pageIndex: number) => ReturnedComment[],
+  ) => {
+    utils.comments.getConversationComments.setInfiniteData(queryKey, (old) => {
+      if (!old?.pages[0]?.convo) return old;
+      type ValidPage = Extract<(typeof old.pages)[number], { convo: object }>;
+      return {
+        pageParams: old.pageParams,
+        pages: (old.pages as ValidPage[]).map((page, i) => ({
+          ...page,
+          data: mapPageData(page.data, i),
+        })),
+      };
+    });
+  };
+
   // Search functionality
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
@@ -250,43 +273,17 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     emoji: string,
     username: string,
   ) => {
-    let old = utils.comments.getConversationComments.getInfiniteData();
     await utils.comments.getConversationComments.cancel();
-    utils.comments.getConversationComments.setInfiniteData(queryKey, (oldQueryData) => {
-      if (!oldQueryData) return undefined;
+    const cached = utils.comments.getConversationComments.getInfiniteData();
+    const comment = cached?.pages
+      .flatMap((page) => page.data)
+      .find((c) => c.id === commentId);
+    if (!comment) return;
 
-      // Guard: Don't update if there's no conversation
-      if (!oldQueryData.pages[0]?.convo) return oldQueryData;
-
-      // Find the comment looking at all pages in the oldQueryData
-      const comment = oldQueryData.pages
-        .flatMap((page) => page.data)
-        .find((c) => c.id === commentId);
-      if (!comment) return oldQueryData;
-
-      // Update the reactions
-      const newReactions = getNewReactions(comment.reactions, emoji, username);
-
-      // Type assertion: we know pages have valid convo after guard check
-      type ValidPage = Extract<(typeof oldQueryData.pages)[number], { convo: object }>;
-
-      old = {
-        pageParams: oldQueryData.pageParams,
-        pages: (oldQueryData.pages as ValidPage[]).map((page) => {
-          return {
-            ...page,
-            data: page.data.map((c) => {
-              if (c.id === commentId) {
-                return { ...c, reactions: newReactions };
-              }
-              return c;
-            }),
-          };
-        }),
-      };
-      return old;
-    });
-    return { old };
+    const newReactions = getNewReactions(comment.reactions, emoji, username);
+    updateCachedComments((data) =>
+      data.map((c) => (c.id === commentId ? { ...c, reactions: newReactions } : c)),
+    );
   };
 
   // Mutation for reactions
@@ -306,9 +303,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   // Mutation for typing indicator
   const { mutate: sendTypingIndicator } =
     api.comments.sendTypingIndicator.useMutation();
-
-  // tRPC utils
-  const utils = api.useUtils();
 
   // infinite pagination
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
@@ -399,92 +393,76 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     // We are active
     setQuietTime(secondsFromNow(CONVERSATION_QUIET_MINS * 60));
 
-    // Bookkeeping of old and new
-    let old = utils.comments.getConversationComments.getInfiniteData();
-
-    // Get previous data
-    if (!userData || !conversation) return { old };
+    if (!userData || !conversation) return {};
 
     // If we're in search mode and this is a new message, don't show it unless it matches the search
     if (searchQuery && "comment" in newMessage) {
       if (!newMessage.comment.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return { old };
+        return {};
       }
     }
 
     // Optimistic update
     await utils.comments.getConversationComments.cancel();
-    utils.comments.getConversationComments.setInfiniteData(queryKey, (oldQueryData) => {
-      if (!oldQueryData) return undefined;
 
-      // Guard: Don't update if there's no conversation
-      if (!oldQueryData.pages[0]?.convo) return oldQueryData;
-      const quoteText =
-        quoteIds
-          ?.map((id) => {
-            const quote = allComments?.find((c) => c.id === id);
-            return quote
-              ? `<blockquote author="${quote.username || "Unknown"}" date="${format(quote.createdAt, "MM/dd/yyyy")}">${stripBlockquotes(quote.content)}</blockquote>`
-              : "";
-          })
-          .join("") || "";
+    const quoteText =
+      quoteIds
+        ?.map((id) => {
+          const quote = allComments?.find((c) => c.id === id);
+          return quote
+            ? `<blockquote author="${quote.username || "Unknown"}" date="${format(quote.createdAt, "MM/dd/yyyy")}">${stripBlockquotes(quote.content)}</blockquote>`
+            : "";
+        })
+        .join("") || "";
 
-      // Process content for mentions and formatting if this is a new comment
-      let processedContent = "";
-      if (!("id" in newMessage)) {
-        const content = quoteText + newMessage.comment;
-        const { processedContent: processed } = processMentions(content);
-        processedContent = processed;
-      }
+    // Build optimistic comment in component scope so types narrow without `!`.
+    // Temp id is only present when we insert; success/failure reconcile by it.
+    const optimisticComment =
+      "id" in newMessage
+        ? null
+        : {
+            id: nanoid(),
+            createdAt: new Date(),
+            conversationId: conversation.id,
+            content: processMentions(quoteText + newMessage.comment).processedContent,
+            reactions: {},
+            isPinned: false,
+            isReported: false,
+            isStaffOnly: false,
+            villageName: userData.village?.name ?? null,
+            villageHexColor: userData.village?.hexColor ?? null,
+            villageKageId: userData.village?.kageId ?? null,
+            userId: senderUser ? senderUser.userId : userData.userId,
+            authorId: userData.userId,
+            username: senderUser?.username ?? userData.username,
+            avatar: senderUser?.avatar ?? userData.avatar,
+            rank: senderUser?.rank ?? userData.rank,
+            isOutlaw: userData.isOutlaw,
+            level: userData.level,
+            role: userData.role,
+            customTitle: userData.customTitle,
+            federalStatus: userData.federalStatus,
+            nRecruited: userData.nRecruited,
+            tavernMessages: userData.tavernMessages,
+          };
+    // `?? newMessage` keeps MutateCommentSchema in the union; narrow explicitly.
+    const next: ReturnedComment | undefined =
+      optimisticComment ?? ("id" in newMessage ? newMessage : undefined);
+    if (!next) return {};
 
-      const next =
-        "id" in newMessage
-          ? newMessage
-          : {
-              id: nanoid(),
-              createdAt: new Date(),
-              conversationId: conversation.id,
-              content: processedContent,
-              reactions: {},
-              isPinned: false,
-              isReported: false,
-              isStaffOnly: false,
-              villageName: userData.village?.name ?? null,
-              villageHexColor: userData.village?.hexColor ?? null,
-              villageKageId: userData.village?.kageId ?? null,
-              userId: senderUser ? senderUser.userId : userData.userId,
-              authorId: userData.userId,
-              username: senderUser?.username ?? userData.username,
-              avatar: senderUser?.avatar ?? userData.avatar,
-              rank: senderUser?.rank ?? userData.rank,
-              isOutlaw: userData.isOutlaw,
-              level: userData.level,
-              role: userData.role,
-              customTitle: userData.customTitle,
-              federalStatus: userData.federalStatus,
-              nRecruited: userData.nRecruited,
-              tavernMessages: userData.tavernMessages,
-            };
+    const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
+    if (!cached?.pages[0]?.convo) return {};
 
-      // Type assertion: we know pages have valid convo after guard check
-      type ValidPage = Extract<(typeof oldQueryData.pages)[number], { convo: object }>;
+    updateCachedComments((data, pageIndex) =>
+      pageIndex === 0 ? [next, ...data] : data,
+    );
+    return { optimisticCommentId: optimisticComment?.id };
+  };
 
-      // Bookkeeping of old and new
-      old = {
-        pageParams: oldQueryData.pageParams,
-        pages: (oldQueryData.pages as ValidPage[]).map((page, i) => {
-          if (i === 0) {
-            return {
-              ...page,
-              data: [next, ...page.data],
-            };
-          }
-          return page;
-        }),
-      };
-      return old;
-    });
-    return { old };
+  /** Remove a single optimistic comment by temp id without discarding later cache updates. */
+  const removeOptimisticComment = (optimisticCommentId: string | undefined) => {
+    if (!optimisticCommentId) return;
+    updateCachedComments((data) => data.filter((c) => c.id !== optimisticCommentId));
   };
 
   // Create comment & optimistically update the interface
@@ -507,24 +485,23 @@ const Conversation: React.FC<ConversationProps> = (props) => {
           if (props.onCommentPosted) {
             props.onCommentPosted();
           }
-          if (data.commentId) {
-            // Update the ID of the latest message without a current ID
-            if (!context?.old) return;
-            const newComment = { ...context.old };
-            if (newComment?.pages?.[0]?.data?.[0]) {
-              newComment.pages[0].data[0].id = data.commentId;
-              utils.comments.getConversationComments.setInfiniteData(
-                queryKey,
-                newComment,
-              );
-            }
+          if (data.commentId && context?.optimisticCommentId) {
+            // Stamp the server id onto the matching optimistic comment only.
+            const { commentId } = data;
+            const { optimisticCommentId } = context;
+            updateCachedComments((data) =>
+              data.map((c) =>
+                c.id === optimisticCommentId ? { ...c, id: commentId } : c,
+              ),
+            );
           }
         } else {
+          removeOptimisticComment(context?.optimisticCommentId);
           showMutationToast({ success: false, message: data.message });
         }
       },
       onError: (error, _newComment, context) => {
-        utils.comments.getConversationComments.setInfiniteData(queryKey, context?.old);
+        removeOptimisticComment(context?.optimisticCommentId);
         showMutationToast({ success: false, message: error.message });
       },
     });

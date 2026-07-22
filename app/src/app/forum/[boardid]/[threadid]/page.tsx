@@ -60,6 +60,7 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
     api.comments.createForumComment.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
+        if (!data.success) return;
         reset();
         if (totalComments && totalPages && allComments) {
           const newPage = totalComments % limit === 0 ? totalPages : totalPages - 1;
