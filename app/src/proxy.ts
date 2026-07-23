@@ -120,7 +120,7 @@ export const config = {
      * links have Clerk context instead of turning an ordinary 404 into a 500.
      * Next internals and the legacy static directory do not use that layout.
      */
-    "/((?!_next|static).*)",
+    "/((?!_next(?:/|$)|static(?:/|$)).*)",
     "/",
   ],
 };
