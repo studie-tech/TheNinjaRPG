@@ -1,7 +1,5 @@
 import ContentBox from "@/layout/ContentBox";
 
-export const dynamicParams = false;
-
 export default function NotFoundPage() {
   return (
     <ContentBox title="404: Page Not Found">
