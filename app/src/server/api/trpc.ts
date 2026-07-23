@@ -125,23 +125,6 @@ const ratelimit = new Ratelimit({
   prefix: "trpc-ratelimit",
 });
 
-/**
- * Checks the shared procedure limiter without applying the punitive middleware.
- * Use this for idempotency-sensitive mutations where silently retrying or
- * charging the user would be unsafe, but request storms still need containment.
- */
-export const checkProcedureRateLimit = async (path: string, identifier: string) => {
-  try {
-    return (await ratelimit.limit(`check:${path}-${identifier}`)).success;
-  } catch (error) {
-    if (process.env.NODE_ENV !== "development") throw error;
-    console.warn(
-      `Rate limiter unreachable in dev, allowing ${path}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return true;
-  }
-};
-
 export const sentryMiddleware = t.middleware(
   Sentry.trpcMiddleware({
     attachRpcInput: true,

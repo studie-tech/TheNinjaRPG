@@ -17,11 +17,12 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   baseServerResponse,
-  checkProcedureRateLimit,
   createTRPCRouter,
   errorResponse,
+  hasUserMiddleware,
   protectedProcedure,
   publicProcedure,
+  ratelimitMiddleware,
   serverError,
 } from "@/api/trpc";
 import type { ItemSlot } from "@/drizzle/constants";
@@ -1050,6 +1051,8 @@ export const itemRouter = createTRPCRouter({
   // Split item stack
   splitStack: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Split an item stack" } })
+    .use(ratelimitMiddleware)
+    .use(hasUserMiddleware)
     .input(
       z.object({
         userItemId: z.string(),
@@ -1058,14 +1061,6 @@ export const itemRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const withinRateLimit = await checkProcedureRateLimit(
-        "item.splitStack",
-        ctx.userId,
-      );
-      if (!withinRateLimit) {
-        return errorResponse("Too many split requests. Please wait and try again.");
-      }
-
       // Use the convenience method to split the stack
       const result = await splitItemStack(
         ctx.drizzle,
