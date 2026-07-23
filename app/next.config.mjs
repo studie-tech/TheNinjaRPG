@@ -18,6 +18,7 @@ const withBundleAnalyzer = bundleAnalyzer({
 const config = {
   reactCompiler: true, // Fix user search, money sending, combat, search jutsu name
   experimental: {
+    globalNotFound: true,
     nextScriptWorkers: true,
     optimizePackageImports: ["three"],
   },

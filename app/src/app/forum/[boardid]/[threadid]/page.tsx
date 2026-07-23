@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { use, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import NotFoundPage from "@/app/[...not-found]/page";
+import NotFoundPage from "@/components/layout/NotFoundPage";
 import { FORUM_MIN_LEVEL, forumLevelMessage } from "@/drizzle/constants";
 import { CommentOnForum } from "@/layout/Comment";
 import ContentBox from "@/layout/ContentBox";

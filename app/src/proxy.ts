@@ -1,4 +1,4 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import {
   AB_PIXEL_LAYOUT_COOKIE,
@@ -7,28 +7,6 @@ import {
 
 // import type { NextRequest } from "next/server";
 // import * as UAParser from "ua-parser-js";
-
-const isPublicRoute = createRouteMatcher([
-  "/(.*)",
-  "/api/cleaner",
-  "/api/daily",
-  "/api/healthcheck",
-  "/api/ipn",
-  "/api/mcp/(.*)",
-  "/api/subscriptions",
-  "/api/trpc/(.*)",
-  "/api/uploadthing",
-  "/.well-known/oauth-authorization-server(.*)",
-  "/.well-known/oauth-protected-resource(.*)",
-  "/conceptart(.*)",
-  "/forum(.*)",
-  "/github",
-  "/help",
-  "/login(.*)",
-  "/manual(.*)",
-  "/news",
-  "/rules",
-]);
 
 // export function uaMiddleware(request: NextRequest) {
 //   const userAgent = request.headers.get("user-agent") || undefined;
@@ -42,11 +20,11 @@ const isPublicRoute = createRouteMatcher([
 //   return NextResponse.next();
 // }
 
-const isMcpRoute = createRouteMatcher([
-  "/api/mcp/(.*)",
-  "/.well-known/oauth-authorization-server(.*)",
-  "/.well-known/oauth-protected-resource(.*)",
-]);
+const isMcpRoute = (pathname: string) =>
+  pathname === "/api/mcp" ||
+  pathname.startsWith("/api/mcp/") ||
+  pathname.startsWith("/.well-known/oauth-authorization-server") ||
+  pathname.startsWith("/.well-known/oauth-protected-resource");
 
 const appendCookieHeader = (
   existingCookieHeader: string | null,
@@ -59,21 +37,21 @@ const appendCookieHeader = (
 
 export default clerkMiddleware(
   async (auth, request) => {
-    // Protect all routes except for the public ones
-    if (!isPublicRoute(request)) {
-      await auth.protect();
-    }
+    const { pathname } = request.nextUrl;
 
     // Skip auth() call for MCP routes - they handle OAuth tokens separately
-    if (isMcpRoute(request)) {
+    if (isMcpRoute(pathname)) {
       return NextResponse.next();
     }
 
+    // Only the landing-page A/B rewrite needs auth inside Proxy. Server-side
+    // resources enforce their own access, and the root layout reads auth for UI.
+    if (pathname !== "/") return;
+
     // Ensure valid user agent
     // return uaMiddleware(request);
-    const { pathname } = request.nextUrl;
     const { userId } = await auth();
-    if (pathname === "/" && !userId) {
+    if (!userId) {
       const cookie = request.cookies.get(LEGACY_AB_LAYOUT_COOKIE);
       const variant = cookie?.value ?? (Math.random() < 0.5 ? "treatment" : "control");
       const pixelCookie = request.cookies.get(AB_PIXEL_LAYOUT_COOKIE);
@@ -115,12 +93,21 @@ export default clerkMiddleware(
 export const config = {
   matcher: [
     /*
-     * The root layout calls Clerk's auth(), including when Next renders the
-     * global 404. Match missing dotted paths too so asset-like probes and stale
-     * links have Clerk context instead of turning an ordinary 404 into a 500.
-     * Next internals and the legacy static directory do not use that layout.
+     * Skip Next internals, legacy static files, and any file-like path. Unmatched
+     * URLs render through global-not-found.tsx without the Clerk-dependent root
+     * layout, so missing assets and scanner probes remain cheap 404 responses.
      */
-    "/((?!_next(?:/|$)|static(?:/|$)).*)",
-    "/",
+    "/((?!api(?:/|$)|trpc(?:/|$)|_next(?:/|$)|static(?:/|$)|[^?]*\\.[^/?]+).*)",
+    // Only route handlers that call Clerk's server helpers need its context.
+    "/api/trpc/(.*)",
+    "/api/chat/:path*",
+    "/api/uploadthing(.*)",
+    // The IP parameter legitimately contains dots.
+    "/users/ipsearch/:path*",
+    // MCP OAuth endpoints intentionally bypass Clerk auth in the callback above.
+    "/.well-known/oauth-authorization-server(.*)",
+    "/.well-known/oauth-protected-resource(.*)",
+    // Keep Clerk's optional frontend API proxy path compatible.
+    "/__clerk/(.*)",
   ],
 };

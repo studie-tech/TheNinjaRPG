@@ -8,7 +8,7 @@ const FANCY_FORUM_THREADS_PER_PAGE = 10;
 import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
-import NotFoundPage from "@/app/[...not-found]/page";
+import NotFoundPage from "@/components/layout/NotFoundPage";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";

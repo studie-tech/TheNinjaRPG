@@ -7,7 +7,7 @@ import { use, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
-import NotFoundPage from "@/app/[...not-found]/page";
+import NotFoundPage from "@/components/layout/NotFoundPage";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
