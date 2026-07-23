@@ -1,0 +1,1 @@
+CREATE INDEX `BattleAction_updatedAt_battleId_idx` ON `BattleAction` (`updatedAt`,`battleId`);
