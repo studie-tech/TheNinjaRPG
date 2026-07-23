@@ -31,23 +31,26 @@ const makeMap = (width: number, height: number, blocked: Set<string> = new Set()
 });
 
 describe("findGlobalTravelDestination", () => {
-  it("lands on the center tile", () => {
-    expect(findGlobalTravelDestination(makeMap(26, 26))).toEqual({ x: 13, y: 13 });
+  it("selects a walkable tile using the supplied random sample", () => {
+    expect(findGlobalTravelDestination(makeMap(3, 2), () => 0.5)).toEqual({
+      x: 0,
+      y: 1,
+    });
   });
 
-  it("uses a nearby walkable tile when the center is blocked", () => {
-    const destination = findGlobalTravelDestination(
-      makeMap(5, 5, new Set(["2,2"])),
-    );
+  it("never selects blocked tiles", () => {
+    const map = makeMap(3, 1, new Set(["1,0"]));
 
-    expect(destination).not.toEqual({ x: 0, y: 0 });
-    expect(destination).not.toBeNull();
+    expect(findGlobalTravelDestination(map, () => 0)).toEqual({ x: 0, y: 0 });
+    expect(findGlobalTravelDestination(map, () => 0.99)).toEqual({ x: 2, y: 0 });
+  });
+
+  it("returns null when the sector has no walkable tiles", () => {
     expect(
-      Math.max(
-        Math.abs((destination?.x ?? 0) - 2),
-        Math.abs((destination?.y ?? 0) - 2),
+      findGlobalTravelDestination(
+        makeMap(2, 2, new Set(["0,0", "1,0", "0,1", "1,1"])),
       ),
-    ).toBe(1);
+    ).toBeNull();
   });
 });
 
