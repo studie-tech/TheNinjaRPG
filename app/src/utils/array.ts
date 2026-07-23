@@ -16,6 +16,21 @@ export const getRandomElement = <T>(arr?: T[] | readonly T[]) => {
 };
 
 /**
+ * Splits an array into bounded batches without mutating the input.
+ */
+export const chunkArray = <T>(values: readonly T[], batchSize: number): T[][] => {
+  if (!Number.isInteger(batchSize) || batchSize < 1) {
+    throw new RangeError("batchSize must be a positive integer");
+  }
+
+  const batches: T[][] = [];
+  for (let index = 0; index < values.length; index += batchSize) {
+    batches.push(values.slice(index, index + batchSize));
+  }
+  return batches;
+};
+
+/**
  * Checks if the given item is in the given array.
  * @param item
  * @param array

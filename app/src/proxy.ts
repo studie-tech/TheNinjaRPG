@@ -115,14 +115,12 @@ export default clerkMiddleware(
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
-     * - _next
-     * - static (static files)
-     * - favicon.ico (favicon file)
-     * - public folder
+     * The root layout calls Clerk's auth(), including when Next renders the
+     * global 404. Match missing dotted paths too so asset-like probes and stale
+     * links have Clerk context instead of turning an ordinary 404 into a 500.
+     * Next internals and the legacy static directory do not use that layout.
      */
-    "/(.*?trpc.*?|.*?api.*?|(?!static|.*\\..*|_next|favicon.ico).*)",
+    "/((?!_next|static).*)",
     "/",
-    "/.well-known/:path*",
   ],
 };

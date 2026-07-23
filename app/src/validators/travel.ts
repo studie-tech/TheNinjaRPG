@@ -8,11 +8,18 @@ export const sectorIdSchema = z.coerce
   .max(MAP_SECTOR_ID_MAX);
 
 /**
- * Global travel accepts only the target sector. Strict mode rejects injected
- * coordinates or stale client-side location hints; the server derives the
- * player's departure and landing state itself.
+ * Global travel accepts the target sector and tolerates the previous client's
+ * current-sector hint during rolling deployments. The transform discards the
+ * hint, while strict mode still rejects client-supplied landing coordinates;
+ * the server derives departure and landing state itself.
  */
-export const startGlobalMoveSchema = z.object({ sector: sectorIdSchema }).strict();
+export const startGlobalMoveSchema = z
+  .object({
+    sector: sectorIdSchema,
+    curSector: sectorIdSchema.optional(),
+  })
+  .strict()
+  .transform(({ sector }) => ({ sector }));
 
 export const quickTravelSchema = z.object({ sector: sectorIdSchema });
 export type QuickTravelSchemaInput = z.input<typeof quickTravelSchema>;

@@ -94,24 +94,38 @@ export async function GET() {
     // Join with battleHistory to get the battleType for each battleAction
     // Delete PVP battle actions older than 72 hours
     await drizzleDB.execute(
-      sql`DELETE a FROM ${battleAction} a
-          INNER JOIN ${battleHistory} h ON a.battleId = h.battleId
-          WHERE h.battleType IN (${sql.join(
-            pvpTypes.map((t) => sql`${t}`),
-            sql`, `,
-          )})
-          AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 72 HOUR) LIMIT 99999`,
+      sql`DELETE FROM ${battleAction}
+          WHERE id IN (
+            SELECT id FROM (
+              SELECT a.id
+              FROM ${battleAction} a
+              INNER JOIN ${battleHistory} h ON a.battleId = h.battleId
+              WHERE h.battleType IN (${sql.join(
+                pvpTypes.map((t) => sql`${t}`),
+                sql`, `,
+              )})
+              AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)
+              LIMIT 99999
+            ) expired_actions
+          )`,
     );
 
     // Delete all other battle actions older than 12 hours (including new/unknown types)
     await drizzleDB.execute(
-      sql`DELETE a FROM ${battleAction} a
-          INNER JOIN ${battleHistory} h ON a.battleId = h.battleId
-          WHERE (h.battleType NOT IN (${sql.join(
-            pvpTypes.map((t) => sql`${t}`),
-            sql`, `,
-          )}) OR h.battleType IS NULL)
-          AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR) LIMIT 99999`,
+      sql`DELETE FROM ${battleAction}
+          WHERE id IN (
+            SELECT id FROM (
+              SELECT a.id
+              FROM ${battleAction} a
+              INNER JOIN ${battleHistory} h ON a.battleId = h.battleId
+              WHERE (h.battleType NOT IN (${sql.join(
+                pvpTypes.map((t) => sql`${t}`),
+                sql`, `,
+              )}) OR h.battleType IS NULL)
+              AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)
+              LIMIT 99999
+            ) expired_actions
+          )`,
     );
 
     // Delete orphaned battle actions (no matching battle AND no matching history) older than 12 hours

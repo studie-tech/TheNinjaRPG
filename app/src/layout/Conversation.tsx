@@ -363,6 +363,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   useEffect(() => {
     const DEBOUNCE_MS = 2000;
     if (
+      userData?.userId &&
       conversation?.isPublic &&
       commentValue &&
       commentValue.length > 0 &&
@@ -371,7 +372,13 @@ const Conversation: React.FC<ConversationProps> = (props) => {
       lastTypingSentRef.current = Date.now();
       sendTypingIndicator({ conversationId: conversation.id });
     }
-  }, [commentValue, conversation?.isPublic, conversation?.id, sendTypingIndicator]);
+  }, [
+    commentValue,
+    conversation?.isPublic,
+    conversation?.id,
+    sendTypingIndicator,
+    userData?.userId,
+  ]);
 
   // Set the object_id to the conversation id
   useEffect(() => {
