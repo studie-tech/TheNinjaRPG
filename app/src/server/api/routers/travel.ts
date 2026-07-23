@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import type { inferRouterOutputs } from "@trpc/server";
 import { and, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -452,7 +453,7 @@ export const travelRouter = createTRPCRouter({
         map as unknown as GlobalMapData,
       );
       const endTime = secondsFromNow(travelTime);
-      const destination = findGlobalTravelDestination(targetSectorMap);
+      const destination = findGlobalTravelDestination(targetSectorMap, randomInt);
       if (!destination) {
         return errorResponse("The destination sector has no walkable tiles");
       }
