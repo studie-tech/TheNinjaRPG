@@ -4,10 +4,7 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
 } from "@/drizzle/constants";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
-import {
-  findNearestWalkableCoordinate,
-  getSectorTile,
-} from "@/libs/sector-map/validation";
+import { getSectorTile } from "@/libs/sector-map/validation";
 import type { GlobalMapData, GlobalTile, SectorPoint } from "@/libs/threejs/types";
 
 /**
@@ -55,17 +52,23 @@ export const getBiomeAtSectorAnchor = (
   return visibleBiome ?? tile?.battleBiome ?? getBiomeFromTileType(globalTileType);
 };
 
-/** Center-tile landing point for global travel, adjusted only when blocked. */
+/** Uniformly random walkable landing point for global travel. */
 export const findGlobalTravelDestination = (
-  sectorMap: Pick<NormalizedSectorMap, "width" | "height" | "tiles" | "anchors">,
+  sectorMap: Pick<NormalizedSectorMap, "tiles">,
+  random: () => number = Math.random,
 ) => {
-  const center = {
-    x: Math.floor(sectorMap.width / 2),
-    y: Math.floor(sectorMap.height / 2),
-  };
-  // Global travel should stay near the center rather than falling back to the
-  // map's default spawn anchor, which can intentionally sit near an edge.
-  return findNearestWalkableCoordinate(sectorMap, center, null);
+  const walkableTiles = sectorMap.tiles.filter(
+    (tile) => !tile.blocked && tile.walkCost > 0,
+  );
+  if (walkableTiles.length === 0) return null;
+
+  const index = Math.min(
+    Math.floor(random() * walkableTiles.length),
+    walkableTiles.length - 1,
+  );
+  const tile = walkableTiles[index];
+  if (!tile) return null;
+  return { x: tile.x, y: tile.y };
 };
 
 // Calculate distance between two points on the hexasphere
