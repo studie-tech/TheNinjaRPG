@@ -162,6 +162,13 @@
       "when": 1784707432447,
       "tag": "0022_water_walkability",
       "breakpoints": false
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1784831856090,
+      "tag": "0023_shallow_blackheart",
+      "breakpoints": false
     }
   ]
 }

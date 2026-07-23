@@ -80,6 +80,8 @@ export async function GET() {
     // Battle retention periods:
     // - PVP (72 hours): Explicit PVP types that we want longer retention for
     // - Everything else (12 hours): All other battle types default to short retention
+    // Each statement drains at most 5,000 oldest rows so the hourly cleaner has
+    // bounded lock time and memory use even when it encounters a large backlog.
     const pvpTypes = [
       "SPARRING",
       "CLAN_BATTLE",
@@ -105,7 +107,8 @@ export async function GET() {
                 sql`, `,
               )})
               AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)
-              LIMIT 99999
+              ORDER BY a.updatedAt
+              LIMIT 5000
             ) expired_actions
           )`,
     );
@@ -123,7 +126,8 @@ export async function GET() {
                 sql`, `,
               )}) OR h.battleType IS NULL)
               AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)
-              LIMIT 99999
+              ORDER BY a.updatedAt
+              LIMIT 5000
             ) expired_actions
           )`,
     );
@@ -133,7 +137,9 @@ export async function GET() {
       sql`DELETE FROM ${battleAction} a WHERE
           NOT EXISTS (SELECT id FROM ${battle} b WHERE b.id = a.battleId) AND
           NOT EXISTS (SELECT battleId FROM ${battleHistory} h WHERE h.battleId = a.battleId) AND
-          a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR) LIMIT 99999`,
+          a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)
+          ORDER BY a.updatedAt
+          LIMIT 5000`,
     );
 
     // Step 5: Delete battle history based on battle type
@@ -145,7 +151,13 @@ export async function GET() {
             pvpTypes.map((t) => sql`${t}`),
             sql`, `,
           )})
-          AND createdAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)`,
+          AND createdAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)
+          AND NOT EXISTS (
+            SELECT 1 FROM ${battleAction} a
+            WHERE a.battleId = ${battleHistory}.battleId
+          )
+          ORDER BY createdAt
+          LIMIT 5000`,
     );
 
     // Delete all other battles older than 12 hours (including null/unknown types)
@@ -155,7 +167,13 @@ export async function GET() {
             pvpTypes.map((t) => sql`${t}`),
             sql`, `,
           )}) OR battleType IS NULL)
-          AND createdAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)`,
+          AND createdAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)
+          AND NOT EXISTS (
+            SELECT 1 FROM ${battleAction} a
+            WHERE a.battleId = ${battleHistory}.battleId
+          )
+          ORDER BY createdAt
+          LIMIT 5000`,
     );
 
     // Step 6: Delete conversations older than 14 days
