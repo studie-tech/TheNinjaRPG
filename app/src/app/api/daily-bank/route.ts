@@ -110,6 +110,10 @@ export async function GET() {
 
         // Insert interest records (upsert to handle duplicates)
         if (interestRecords.length > 0) {
+          // Earlier batches may commit before a later batch fails. Retrying is
+          // safe because amounts are deterministic for the day and the upsert
+          // replaces the same user/date record. Keep that property if the
+          // calculation changes, or wrap the job in a transaction.
           for (const batch of chunkArray(interestRecords, INTEREST_INSERT_BATCH_SIZE)) {
             await drizzleDB
               .insert(dailyBankInterest)
@@ -145,7 +149,9 @@ export async function GET() {
     // Rollback timer on error
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
     console.error(cause);
-    const message = cause instanceof Error ? cause.message : String(cause);
-    return new Response(`ERROR - ${ENDPOINT_NAME}: ${message}`, { status: 500 });
+    return Response.json(
+      { error: `Failed to process ${ENDPOINT_NAME}` },
+      { status: 500 },
+    );
   }
 }

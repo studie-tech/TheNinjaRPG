@@ -132,7 +132,7 @@ const ratelimit = new Ratelimit({
  */
 export const checkProcedureRateLimit = async (path: string, identifier: string) => {
   try {
-    return (await ratelimit.limit(`${path}-${identifier}`)).success;
+    return (await ratelimit.limit(`check:${path}-${identifier}`)).success;
   } catch (error) {
     if (process.env.NODE_ENV !== "development") throw error;
     console.warn(
