@@ -225,6 +225,37 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       const group_tiles = new Group();
       const group_highlights = new Group();
       group_highlights.renderOrder = 1;
+      const villageLabelSprites: Sprite[] = [];
+      const ownershipVillageBySector = new Map(
+        ownershipData?.sectors.map((entry) => [entry.sector, entry.villageId]),
+      );
+      const ownershipColorByVillageId = new Map(
+        ownershipData?.colors.map((entry) => [entry.id, entry.hexColor]),
+      );
+
+      /**
+       * Make the owner of the hovered sector immediately identifiable without
+       * adding another label to the globe. The matching village label receives
+       * a small scale lift while the other labels recede. A DOM chip below
+       * mirrors the owner name for cases where its home marker is off-screen.
+       */
+      const setOwnershipLabelEmphasis = (sector: number | null) => {
+        if (!showOwnership || villageLabelSprites.length === 0) return;
+        const ownerVillageId =
+          sector === null ? null : (ownershipVillageBySector.get(sector) ?? null);
+        for (const label of villageLabelSprites) {
+          const material = label.material as SpriteMaterial;
+          const baseWidth = label.userData.baseWidth as number;
+          const baseHeight = label.userData.baseHeight as number;
+          const isOwner =
+            ownerVillageId !== null && label.userData.villageId === ownerVillageId;
+          const hasOwner = ownerVillageId !== null;
+          const scale = isOwner ? 1.14 : 1;
+          label.scale.set(baseWidth * scale, baseHeight * scale, 1);
+          material.opacity = hasOwner && !isOwner ? 0.48 : 1;
+          label.renderOrder = isOwner ? 3 : 2;
+        }
+      };
 
       // The latitude/longitude sector grid intentionally stops short of the
       // poles. A continuous sphere underlay supplies the deterministic polar
@@ -298,6 +329,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
        * z-fighting). Hidden for null or non-quad tiles.
        */
       const setHoverOutline = (sector: number | null) => {
+        setOwnershipLabelEmphasis(sector);
         const tile = sector !== null ? hexasphere?.tiles[sector] : null;
         if (!tile || tile.b.length !== 4) {
           hoverOutline.visible = false;
@@ -487,15 +519,15 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           // Ownership view tints the tile texture by owning village
           let color: string | number = 0xffffff;
           if (showOwnership && ownershipData?.sectors && ownershipData?.colors) {
-            const ownership = ownershipData.sectors.find((s) => s.sector === i);
-            const villageColor = ownershipData.colors.find(
-              (v) => v.id === ownership?.villageId,
-            );
+            const ownerVillageId = ownershipVillageBySector.get(i);
+            const villageColor = ownerVillageId
+              ? ownershipColorByVillageId.get(ownerVillageId)
+              : undefined;
             if (MAP_RESERVED_SECTORS.includes(i)) {
               color = "#b3afae";
             }
             if (villageColor) {
-              color = villageColor.hexColor;
+              color = villageColor;
             }
           }
           const material = new MeshBasicMaterial({
@@ -642,6 +674,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
               labelSprite.scale.set(canvas.width / 40, canvas.height / 40, 1);
               labelSprite.position.set(sector.x / 2.5, sector.y / 2.5, sector.z / 2.5);
               labelSprite.userData.sector = highlight.sector;
+              labelSprite.userData.villageId = highlight.id;
+              labelSprite.userData.baseWidth = labelSprite.scale.x;
+              labelSprite.userData.baseHeight = labelSprite.scale.y;
+              villageLabelSprites.push(labelSprite);
               labelTargets.push(labelSprite);
               group_highlights.add(labelSprite);
             }
@@ -955,7 +991,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
               hoverCanvas.style.cursor = "default";
               setHoverSector(null);
             }
-            if (!props.markerOnlyInteraction) {
+            // Marker-only travel still needs bare-sector inspection while the
+            // ownership layer is enabled. This restores hover information
+            // without making those sectors clickable travel targets.
+            if (!props.markerOnlyInteraction || showOwnership) {
               raycaster.setFromCamera(mouse, camera);
               const intersects = raycaster.intersectObjects(group_tiles.children);
               if (intersects.length > 0) {
@@ -964,7 +1003,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
                   intersected = intersects[0].object as HexagonalFaceMesh;
                   const sector = intersected.userData.id;
                   setHoverOutline(sector);
-                  hoverCanvas.style.cursor = "pointer";
+                  hoverCanvas.style.cursor = props.markerOnlyInteraction
+                    ? "crosshair"
+                    : "pointer";
                   const tile = hexasphere?.tiles[sector];
                   if (props.onTileHover && tile) props.onTileHover(sector, tile);
                   setHoverSector(sector);
@@ -1073,6 +1114,16 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     autoRotate,
   ]);
 
+  const hoveredOwnership =
+    showOwnership && hoverSector !== null
+      ? ownershipData?.sectors.find((entry) => entry.sector === hoverSector)
+      : undefined;
+  const hoveredOwner = hoveredOwnership
+    ? props.highlights?.find((village) => village.id === hoveredOwnership.villageId)
+    : undefined;
+  const hoveredOwnerColor = hoveredOwner?.hexColor ?? "#9ca3af";
+  const hoveredOwnerName = hoveredOwner?.mapName ?? hoveredOwner?.name ?? "Unclaimed";
+
   return (
     // The overlay labels anchor to this wrapper (the map itself), so they sit
     // on the globe no matter what page embeds the component
@@ -1081,7 +1132,23 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       {webglError && <WebGlError />}
       <div className="absolute top-0 left-0 m-5">
         <ul>
-          {hoverSector !== null && (
+          {hoverSector !== null && showOwnership && (
+            <li className="pointer-events-none flex min-w-36 items-center gap-2 rounded-lg border border-white/20 bg-black/75 px-3 py-2 shadow-lg backdrop-blur-sm">
+              <span
+                className="h-3 w-3 shrink-0 rounded-sm border border-white/50 shadow-sm"
+                style={{ backgroundColor: hoveredOwnerColor }}
+              />
+              <span className="flex min-w-0 flex-col">
+                <span className="text-[10px] text-white/65 uppercase tracking-wide">
+                  Sector {hoverSector} · Owned by
+                </span>
+                <span className="truncate font-semibold text-sm text-white">
+                  {hoveredOwnerName}
+                </span>
+              </span>
+            </li>
+          )}
+          {hoverSector !== null && !showOwnership && (
             <li className="flex flex-row items-center">
               <span className="mr-1 animate-pulse text-2xl text-orange-500">⬢</span>{" "}
               {props.markerOnlyInteraction ? "Travel marker" : "Quest"}

@@ -1043,8 +1043,8 @@ export const wrapStructureLabelCharacters = (
 
 export const createStructureLabel = (structure: VillageStructure, h: number) => {
   const canvasWidth = 512;
-  const horizontalPadding = 24;
-  const verticalPadding = 16;
+  const horizontalPadding = 30;
+  const verticalPadding = 12;
   const maxTextWidth = canvasWidth - horizontalPadding * 2;
   const canvas = document.createElement("canvas");
   canvas.width = canvasWidth;
@@ -1054,19 +1054,19 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
   if (context) {
     // Wrap long multi-word names before shrinking the font. This preserves a
     // readable type size for labels such as "Administration Building".
-    let fontSize = 64;
-    context.font = `700 ${fontSize}px sans-serif`;
+    let fontSize = 54;
+    context.font = `600 ${fontSize}px sans-serif`;
     let lines = wrapStructureLabelWords(
       structure.name,
       (line) => context.measureText(line).width,
       maxTextWidth,
     );
     while (
-      fontSize > 24 &&
+      fontSize > 22 &&
       lines.some((line) => context.measureText(line).width > maxTextWidth)
     ) {
       fontSize -= 2;
-      context.font = `700 ${fontSize}px sans-serif`;
+      context.font = `600 ${fontSize}px sans-serif`;
       lines = wrapStructureLabelWords(
         structure.name,
         (line) => context.measureText(line).width,
@@ -1083,25 +1083,27 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
       ),
     );
 
-    const lineHeight = Math.ceil(fontSize * 1.08);
-    canvasHeight = Math.max(96, lines.length * lineHeight + verticalPadding * 2);
+    const lineHeight = Math.ceil(fontSize * 1.04);
+    canvasHeight = Math.max(76, lines.length * lineHeight + verticalPadding * 2);
     canvas.height = canvasHeight;
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.font = `700 ${fontSize}px sans-serif`;
+    context.font = `600 ${fontSize}px sans-serif`;
     context.lineJoin = "round";
-    context.fillStyle = "rgba(0, 0, 0, 0.72)";
+    context.fillStyle = "rgba(3, 10, 8, 0.68)";
     context.beginPath();
-    context.roundRect(4, 4, canvasWidth - 8, canvasHeight - 8, 18);
+    context.roundRect(5, 5, canvasWidth - 10, canvasHeight - 10, 16);
     context.fill();
-    context.strokeStyle = "black";
-    context.lineWidth = 4;
+    context.strokeStyle = "rgba(255, 255, 255, 0.34)";
+    context.lineWidth = 2;
     context.stroke();
-    context.fillStyle = "white";
+    context.fillStyle = "rgba(255, 255, 255, 0.94)";
+    context.shadowColor = "rgba(0, 0, 0, 0.9)";
+    context.shadowBlur = 5;
+    context.shadowOffsetY = 2;
     const firstLineY = (canvasHeight - lines.length * lineHeight) / 2 + lineHeight / 2;
     lines.forEach((line, index) => {
       const y = firstLineY + index * lineHeight;
-      context.strokeText(line, canvasWidth / 2, y);
       context.fillText(line, canvasWidth / 2, y);
     });
   }
@@ -1118,7 +1120,7 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
   // and must be disposed together with the material to avoid leaking GPU memory
   material.userData.ownsMap = true;
   const sprite = new Sprite(material);
-  const labelWidth = h * 5.0;
+  const labelWidth = h * 3.5;
   const labelHeight = labelWidth * (canvasHeight / canvasWidth);
   sprite.scale.set(labelWidth, labelHeight, 1);
   // Anchor at the bottom edge so zoom compensation grows the label upwards,
@@ -1135,6 +1137,20 @@ export const createStructureLabel = (structure: VillageStructure, h: number) => 
 
 /** Camera zoom at which structure labels render at their authored world size */
 const STRUCTURE_LABEL_REFERENCE_ZOOM = 2;
+
+/**
+ * Keep labels readable without letting them dominate small screens or a
+ * zoomed-out map. At normal desktop zoom the authored size is preserved;
+ * narrow layouts and distant views progressively reduce it.
+ */
+export const getStructureLabelScale = (viewportWidth: number, cameraZoom: number) => {
+  const viewportScale = Math.min(1, Math.max(0.72, viewportWidth / 1000));
+  const zoomScale = Math.min(
+    1.6,
+    Math.max(0.65, STRUCTURE_LABEL_REFERENCE_ZOOM / Math.max(0.1, cameraZoom)),
+  );
+  return viewportScale * zoomScale;
+};
 
 /**
  * Toggle building labels each frame. The hovered label always wins; when the
@@ -1165,10 +1181,7 @@ export const intersectStructures = (info: {
     const intersects = raycaster.intersectObjects(structureSprites, false);
     hovered = (intersects[0]?.object as Sprite) ?? null;
   }
-  const zoomComp = Math.min(
-    3,
-    Math.max(0.6, STRUCTURE_LABEL_REFERENCE_ZOOM / Math.max(0.1, camera.zoom)),
-  );
+  const zoomComp = getStructureLabelScale(viewportWidth, camera.zoom);
   const projected = new Vector3();
   const rectBySprite = new Map<Sprite, LabelScreenRect>();
   structureSprites.forEach((sprite) => {
