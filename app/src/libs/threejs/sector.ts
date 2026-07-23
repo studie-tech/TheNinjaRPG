@@ -1326,9 +1326,18 @@ export const createVillageWallPanelSprite = (
   return sprite;
 };
 
-/** Sort transparent sector sprites back-to-front from their ground contact. */
+/**
+ * Sort transparent sector sprites back-to-front from their ground contact,
+ * then keep structure labels in a final overlay pass. The renderer deliberately
+ * leaves object sorting disabled, so this child order is what prevents trees,
+ * buildings and walls from painting over label text.
+ */
 export const sortSectorAssetsByGroundContact = (group: Group) => {
   group.children.sort((a, b) => {
+    const aIsLabel = a.userData.type === "structureLabel";
+    const bIsLabel = b.userData.type === "structureLabel";
+    if (aIsLabel !== bIsLabel) return aIsLabel ? 1 : -1;
+
     const aSortY =
       typeof a.userData.assetSortY === "number"
         ? (a.userData.assetSortY as number)
