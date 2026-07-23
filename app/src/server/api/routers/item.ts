@@ -17,6 +17,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   baseServerResponse,
+  checkProcedureRateLimit,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -1057,6 +1058,14 @@ export const itemRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      const withinRateLimit = await checkProcedureRateLimit(
+        "item.splitStack",
+        ctx.userId,
+      );
+      if (!withinRateLimit) {
+        return errorResponse("Too many split requests. Please wait and try again.");
+      }
+
       // Use the convenience method to split the stack
       const result = await splitItemStack(
         ctx.drizzle,

@@ -10,9 +10,11 @@ import {
 import { dailyBankInterest, userData } from "@/drizzle/schema";
 import { lockWithDailyTimer, updateGameSetting } from "@/libs/gamesettings";
 import { drizzleDB } from "@/server/db";
+import { chunkArray } from "@/utils/array";
 import { calcBankInterest, getStrucBoost } from "@/utils/village";
 
 const ENDPOINT_NAME = "daily-bank";
+const INTEREST_INSERT_BATCH_SIZE = 500;
 
 export async function GET() {
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
@@ -108,15 +110,17 @@ export async function GET() {
 
         // Insert interest records (upsert to handle duplicates)
         if (interestRecords.length > 0) {
-          await drizzleDB
-            .insert(dailyBankInterest)
-            .values(interestRecords)
-            .onDuplicateKeyUpdate({
-              set: {
-                amount: sql`VALUES(${dailyBankInterest.amount})`,
-                interestPercent: sql`VALUES(${dailyBankInterest.interestPercent})`,
-              },
-            });
+          for (const batch of chunkArray(interestRecords, INTEREST_INSERT_BATCH_SIZE)) {
+            await drizzleDB
+              .insert(dailyBankInterest)
+              .values(batch)
+              .onDuplicateKeyUpdate({
+                set: {
+                  amount: sql`VALUES(${dailyBankInterest.amount})`,
+                  interestPercent: sql`VALUES(${dailyBankInterest.interestPercent})`,
+                },
+              });
+          }
         }
 
         return interestRecords.length;
@@ -141,6 +145,7 @@ export async function GET() {
     // Rollback timer on error
     await updateGameSetting(drizzleDB, ENDPOINT_NAME, 0, timerCheck.prevTime);
     console.error(cause);
-    return new Response(`ERROR - ${ENDPOINT_NAME}: ${JSON.stringify(cause)}`);
+    const message = cause instanceof Error ? cause.message : String(cause);
+    return new Response(`ERROR - ${ENDPOINT_NAME}: ${message}`, { status: 500 });
   }
 }
