@@ -55,17 +55,14 @@ export const getBiomeAtSectorAnchor = (
 /** Uniformly random walkable landing point for global travel. */
 export const findGlobalTravelDestination = (
   sectorMap: Pick<NormalizedSectorMap, "tiles">,
-  random: () => number = Math.random,
+  randomIndex: (upperBound: number) => number,
 ) => {
   const walkableTiles = sectorMap.tiles.filter(
     (tile) => !tile.blocked && tile.walkCost > 0,
   );
   if (walkableTiles.length === 0) return null;
 
-  const index = Math.min(
-    Math.floor(random() * walkableTiles.length),
-    walkableTiles.length - 1,
-  );
+  const index = randomIndex(walkableTiles.length);
   const tile = walkableTiles[index];
   if (!tile) return null;
   return { x: tile.x, y: tile.y };

@@ -32,7 +32,7 @@ const makeMap = (width: number, height: number, blocked: Set<string> = new Set()
 
 describe("findGlobalTravelDestination", () => {
   it("selects a walkable tile using the supplied random sample", () => {
-    expect(findGlobalTravelDestination(makeMap(3, 2), () => 0.5)).toEqual({
+    expect(findGlobalTravelDestination(makeMap(3, 2), () => 3)).toEqual({
       x: 0,
       y: 1,
     });
@@ -42,13 +42,14 @@ describe("findGlobalTravelDestination", () => {
     const map = makeMap(3, 1, new Set(["1,0"]));
 
     expect(findGlobalTravelDestination(map, () => 0)).toEqual({ x: 0, y: 0 });
-    expect(findGlobalTravelDestination(map, () => 0.99)).toEqual({ x: 2, y: 0 });
+    expect(findGlobalTravelDestination(map, () => 1)).toEqual({ x: 2, y: 0 });
   });
 
   it("returns null when the sector has no walkable tiles", () => {
     expect(
       findGlobalTravelDestination(
         makeMap(2, 2, new Set(["0,0", "1,0", "0,1", "1,1"])),
+        () => 0,
       ),
     ).toBeNull();
   });
