@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getStructureLabelScale,
   wrapStructureLabelCharacters,
   wrapStructureLabelWords,
 } from "@/libs/threejs/sector";
@@ -33,5 +34,19 @@ describe("wrapStructureLabelCharacters", () => {
       "FGHIJ",
       "K",
     ]);
+  });
+});
+
+describe("getStructureLabelScale", () => {
+  it("preserves the authored size at the desktop reference zoom", () => {
+    expect(getStructureLabelScale(1200, 2)).toBe(1);
+  });
+
+  it("makes labels more compact on narrow layouts", () => {
+    expect(getStructureLabelScale(720, 2)).toBeCloseTo(0.72);
+  });
+
+  it("caps zoom compensation so distant labels do not dominate the map", () => {
+    expect(getStructureLabelScale(1200, 0.5)).toBe(1.6);
   });
 });
