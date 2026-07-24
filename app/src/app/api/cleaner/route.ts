@@ -80,8 +80,9 @@ export async function GET() {
     // Battle retention periods:
     // - PVP (72 hours): Explicit PVP types that we want longer retention for
     // - Everything else (12 hours): All other battle types default to short retention
-    // Each statement drains at most 5,000 oldest rows so the ten-minute cleaner
-    // has bounded lock time and memory use even when it encounters a large backlog.
+    // Drain small batches so the ten-minute cleaner stays within the route timeout
+    // even while production has a multi-million-row backlog.
+    const cleanupBatchSize = 1000;
     const pvpTypes = [
       "SPARRING",
       "CLAN_BATTLE",
@@ -92,42 +93,37 @@ export async function GET() {
       "RANKED_PVP",
     ] as const;
 
-    // Step 3: Delete from battle action based on battle type (matching battleHistory retention)
-    // Join with battleHistory to get the battleType for each battleAction
-    // Delete PVP battle actions older than 72 hours
+    // Step 3: Delete battle actions based on battle type (matching BattleHistory retention).
+    //
+    // STRAIGHT_JOIN and FORCE INDEX are intentional. Without them MySQL may drive
+    // this query from BattleHistory, materialize and sort millions of joined rows,
+    // and only then apply LIMIT. Scanning the updatedAt index in order stops as soon
+    // as one small batch of eligible primary keys has been found.
     await drizzleDB.execute(
       sql`DELETE FROM ${battleAction}
           WHERE id IN (
             SELECT id FROM (
-              SELECT a.id
+              SELECT STRAIGHT_JOIN a.id
               FROM ${battleAction} a
+              FORCE INDEX (BattleAction_updatedAt_battleId_idx)
               INNER JOIN ${battleHistory} h ON a.battleId = h.battleId
-              WHERE h.battleType IN (${sql.join(
-                pvpTypes.map((t) => sql`${t}`),
-                sql`, `,
-              )})
-              AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)
+              WHERE a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)
+              AND (
+                (
+                  h.battleType IN (${sql.join(
+                    pvpTypes.map((t) => sql`${t}`),
+                    sql`, `,
+                  )})
+                  AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)
+                )
+                OR h.battleType NOT IN (${sql.join(
+                  pvpTypes.map((t) => sql`${t}`),
+                  sql`, `,
+                )})
+                OR h.battleType IS NULL
+              )
               ORDER BY a.updatedAt
-              LIMIT 5000
-            ) expired_actions
-          )`,
-    );
-
-    // Delete all other battle actions older than 12 hours (including new/unknown types)
-    await drizzleDB.execute(
-      sql`DELETE FROM ${battleAction}
-          WHERE id IN (
-            SELECT id FROM (
-              SELECT a.id
-              FROM ${battleAction} a
-              INNER JOIN ${battleHistory} h ON a.battleId = h.battleId
-              WHERE (h.battleType NOT IN (${sql.join(
-                pvpTypes.map((t) => sql`${t}`),
-                sql`, `,
-              )}) OR h.battleType IS NULL)
-              AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)
-              ORDER BY a.updatedAt
-              LIMIT 5000
+              LIMIT ${cleanupBatchSize}
             ) expired_actions
           )`,
     );
@@ -139,7 +135,7 @@ export async function GET() {
           NOT EXISTS (SELECT battleId FROM ${battleHistory} h WHERE h.battleId = a.battleId) AND
           a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)
           ORDER BY a.updatedAt
-          LIMIT 5000`,
+          LIMIT ${cleanupBatchSize}`,
     );
 
     // Step 5: Delete battle history based on battle type
@@ -157,7 +153,7 @@ export async function GET() {
             WHERE a.battleId = ${battleHistory}.battleId
           )
           ORDER BY createdAt
-          LIMIT 5000`,
+          LIMIT ${cleanupBatchSize}`,
     );
 
     // Delete all other battles older than 12 hours (including null/unknown types)
@@ -173,7 +169,7 @@ export async function GET() {
             WHERE a.battleId = ${battleHistory}.battleId
           )
           ORDER BY createdAt
-          LIMIT 5000`,
+          LIMIT ${cleanupBatchSize}`,
     );
 
     // Step 6: Delete conversations older than 14 days
