@@ -80,8 +80,9 @@ export async function GET() {
     // Battle retention periods:
     // - PVP (72 hours): Explicit PVP types that we want longer retention for
     // - Everything else (12 hours): All other battle types default to short retention
-    // Drain small batches so the ten-minute cleaner stays within the route timeout
-    // even while production has a multi-million-row backlog.
+    // The join-free range delete can safely drain a larger batch. Keep relational
+    // cleanup smaller because each candidate requires indexed lookup work.
+    const backlogCleanupBatchSize = 10_000;
     const cleanupBatchSize = 1000;
     const pvpTypes = [
       "SPARRING",
@@ -99,7 +100,7 @@ export async function GET() {
       sql`DELETE FROM ${battleAction}
           WHERE updatedAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)
           ORDER BY updatedAt
-          LIMIT ${cleanupBatchSize}`,
+          LIMIT ${backlogCleanupBatchSize}`,
     );
 
     // Step 3b: Only inspect the bounded 12-72 hour window for shorter non-PVP
