@@ -93,12 +93,14 @@ export async function GET() {
       "RANKED_PVP",
     ] as const;
 
-    // Step 3: Delete battle actions based on battle type (matching BattleHistory retention).
+    // Step 3: Delete battle actions based on battle type (matching BattleHistory retention)
+    // or when both their active battle and history entry are gone.
     //
     // STRAIGHT_JOIN and FORCE INDEX are intentional. Without them MySQL may drive
     // this query from BattleHistory, materialize and sort millions of joined rows,
     // and only then apply LIMIT. Scanning the updatedAt index in order stops as soon
-    // as one small batch of eligible primary keys has been found.
+    // as one small batch of eligible primary keys has been found. The LEFT JOINs
+    // ensure an orphan-heavy backlog is drained instead of scanned past.
     await drizzleDB.execute(
       sql`DELETE FROM ${battleAction}
           WHERE id IN (
@@ -106,36 +108,36 @@ export async function GET() {
               SELECT STRAIGHT_JOIN a.id
               FROM ${battleAction} a
               FORCE INDEX (BattleAction_updatedAt_battleId_idx)
-              INNER JOIN ${battleHistory} h ON a.battleId = h.battleId
+              LEFT JOIN ${battleHistory} h ON a.battleId = h.battleId
+              LEFT JOIN ${battle} b ON a.battleId = b.id
               WHERE a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)
               AND (
                 (
-                  h.battleType IN (${sql.join(
-                    pvpTypes.map((t) => sql`${t}`),
-                    sql`, `,
-                  )})
-                  AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)
+                  h.battleId IS NULL
+                  AND b.id IS NULL
                 )
-                OR h.battleType NOT IN (${sql.join(
-                  pvpTypes.map((t) => sql`${t}`),
-                  sql`, `,
-                )})
-                OR h.battleType IS NULL
+                OR (
+                  h.battleId IS NOT NULL
+                  AND (
+                    (
+                      h.battleType IN (${sql.join(
+                        pvpTypes.map((t) => sql`${t}`),
+                        sql`, `,
+                      )})
+                      AND a.updatedAt < DATE_SUB(NOW(), INTERVAL 72 HOUR)
+                    )
+                    OR h.battleType NOT IN (${sql.join(
+                      pvpTypes.map((t) => sql`${t}`),
+                      sql`, `,
+                    )})
+                    OR h.battleType IS NULL
+                  )
+                )
               )
               ORDER BY a.updatedAt
               LIMIT ${cleanupBatchSize}
             ) expired_actions
           )`,
-    );
-
-    // Delete orphaned battle actions (no matching battle AND no matching history) older than 12 hours
-    await drizzleDB.execute(
-      sql`DELETE FROM ${battleAction} a WHERE
-          NOT EXISTS (SELECT id FROM ${battle} b WHERE b.id = a.battleId) AND
-          NOT EXISTS (SELECT battleId FROM ${battleHistory} h WHERE h.battleId = a.battleId) AND
-          a.updatedAt < DATE_SUB(NOW(), INTERVAL 12 HOUR)
-          ORDER BY a.updatedAt
-          LIMIT ${cleanupBatchSize}`,
     );
 
     // Step 5: Delete battle history based on battle type
