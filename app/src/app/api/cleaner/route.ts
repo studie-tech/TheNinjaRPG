@@ -36,20 +36,20 @@ import {
   village,
   warKill,
 } from "@/drizzle/schema";
-import { checkGameTimer, updateGameSetting } from "@/libs/gamesettings";
+import { checkGameTimerMinutes, updateGameSetting } from "@/libs/gamesettings";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { drizzleDB } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
 
 export async function GET() {
   // Check timer
-  const frequency = 1;
-  const response = await checkGameTimer(drizzleDB, frequency);
+  const frequencyMinutes = 10;
+  const response = await checkGameTimerMinutes(drizzleDB, frequencyMinutes);
   if (response) return response;
 
   try {
     // Update timer
-    await updateGameSetting(drizzleDB, `timer-${frequency}h`, 0, new Date());
+    await updateGameSetting(drizzleDB, `timer-${frequencyMinutes}m`, 0, new Date());
 
     // Step 1: Delete from battle table where updatedAt is older than 1 day
     await drizzleDB
@@ -80,8 +80,8 @@ export async function GET() {
     // Battle retention periods:
     // - PVP (72 hours): Explicit PVP types that we want longer retention for
     // - Everything else (12 hours): All other battle types default to short retention
-    // Each statement drains at most 5,000 oldest rows so the hourly cleaner has
-    // bounded lock time and memory use even when it encounters a large backlog.
+    // Each statement drains at most 5,000 oldest rows so the ten-minute cleaner
+    // has bounded lock time and memory use even when it encounters a large backlog.
     const pvpTypes = [
       "SPARRING",
       "CLAN_BATTLE",

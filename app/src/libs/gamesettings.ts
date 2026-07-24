@@ -201,8 +201,10 @@ export const lockWithMonthlyTimer = async (client: DrizzleClient, name: string) 
 
 /**
  * Checks the game timer and returns a response indicating how much time is left before the game can be run again.
- * @param res - The NextApiResponse object used to send the response.
+ * @param client - The database client used to read or initialize the timer.
  * @param hours - The number of hours for the game timer.
+ * @param unit - The label used in the timer's persisted name.
+ * @param prefix - The prefix used in the timer's persisted name.
  * @returns A JSON response indicating the time left before the game can be run again.
  */
 export const checkGameTimer = async (
@@ -211,8 +213,35 @@ export const checkGameTimer = async (
   unit = "h",
   prefix = "timer",
 ) => {
-  const timer = await getGameSetting(client, `${prefix}-${hours}${unit}`);
-  const deltaTime = 1000 * 60 * 60 * hours * 0.9999;
+  return checkGameTimerDuration(
+    client,
+    `${prefix}-${hours}${unit}`,
+    1000 * 60 * 60 * hours,
+  );
+};
+
+/**
+ * Checks a game timer expressed in minutes.
+ *
+ * This is intentionally separate from checkGameTimer so existing callers that
+ * historically pass hour fractions together with an "m" label retain their
+ * current timing behavior.
+ */
+export const checkGameTimerMinutes = async (
+  client: DrizzleClient,
+  minutes: number,
+  prefix = "timer",
+) => {
+  return checkGameTimerDuration(client, `${prefix}-${minutes}m`, 1000 * 60 * minutes);
+};
+
+const checkGameTimerDuration = async (
+  client: DrizzleClient,
+  timerName: string,
+  durationMs: number,
+) => {
+  const timer = await getGameSetting(client, timerName);
+  const deltaTime = durationMs * 0.9999;
   if (timer.time > new Date(Date.now() - deltaTime)) {
     const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(
       timer.time.getTime() + deltaTime - Date.now(),
