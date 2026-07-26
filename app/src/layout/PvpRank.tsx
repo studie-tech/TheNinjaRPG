@@ -10,11 +10,8 @@ import {
   RANKED_ENTRY_COST,
   RANKED_LOADOUT_MAX_CONSUMABLES,
   RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
-  RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
   RANKED_LOADOUT_MAX_JUTSUS,
   RANKED_LOADOUT_MAX_POISON_ITEMS,
-  RANKED_LOADOUT_MAX_POISON_JUTSUS,
-  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
   RANKED_LOADOUT_MAX_WEAPONS,
 } from "@/drizzle/constants";
 import type { Item, Jutsu } from "@/drizzle/schema";
@@ -26,6 +23,12 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
+import {
+  getJutsuCapFlags,
+  getJutsuCategoryDef,
+  RANKED_JUTSU_CAPS,
+  RANKED_JUTSU_SELECT_WARNINGS,
+} from "@/libs/jutsu";
 import { validateItemLoadout, validateJutsuLoadout } from "@/libs/ranked_pvp";
 import { showMutationToast } from "@/libs/toast";
 import { useRequireInVillage } from "@/utils/UserContext";
@@ -757,35 +760,21 @@ export const RankedLoadoutSelector: React.FC = () => {
               </Button>
             </div>
             {!loadoutJutsus.includes(selectedJutsu.id) &&
-              selectedJutsu.effects.some(
-                (e) => "residualModifier" in e && e.residualModifier,
-              ) && (
-                <div className="text-muted-foreground text-sm">
-                  <p>
-                    ⚠️ This is a residual jutsu. You can equip up to{" "}
-                    {RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS} residual jutsu in ranked PvP.
-                  </p>
-                </div>
-              )}
-            {!loadoutJutsus.includes(selectedJutsu.id) &&
-              selectedJutsu.effects.some((e) => e.type === "poison") && (
-                <div className="text-muted-foreground text-sm">
-                  <p>
-                    ⚠️ This is a poison jutsu. You can equip up to{" "}
-                    {RANKED_LOADOUT_MAX_POISON_JUTSUS} poison jutsu in ranked PvP.
-                  </p>
-                </div>
-              )}
-            {!loadoutJutsus.includes(selectedJutsu.id) &&
-              selectedJutsu.effects.some((e) => e.type === "increasepoolcost") && (
-                <div className="text-muted-foreground text-sm">
-                  <p>
-                    ⚠️ This is an increasecost jutsu. You can equip up to{" "}
-                    {RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS} increasecost jutsu in
-                    ranked PvP.
-                  </p>
-                </div>
-              )}
+              RANKED_JUTSU_SELECT_WARNINGS.map((key) => {
+                const flags = getJutsuCapFlags(selectedJutsu);
+                if (!flags[key]) return null;
+                const cap = RANKED_JUTSU_CAPS.find((c) => c.key === key);
+                if (!cap) return null;
+                const label = getJutsuCategoryDef(key).label;
+                return (
+                  <div key={key} className="text-muted-foreground text-sm">
+                    <p>
+                      ⚠️ This is a {label} jutsu. You can equip up to {cap.max} {label}{" "}
+                      jutsu in ranked PvP.
+                    </p>
+                  </div>
+                );
+              })}
           </div>
         </Modal2>
       )}

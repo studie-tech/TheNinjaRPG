@@ -10,6 +10,7 @@ import {
   FED_GOLD_JUTSU_SLOTS,
   FED_NORMAL_JUTSU_SLOTS,
   FED_SILVER_JUTSU_SLOTS,
+  JUTSU_TRAIN_TO_LEARN_RESTRICTED_TYPES,
   LetterRanks,
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_JUTSU_TRAIN_TIME_MS,
@@ -266,6 +267,12 @@ export const canTrainJutsu = (
   // the item only gates equipping and in-combat use, so skip that check here.
   return canUseJutsu(jutsu, userdata, true);
 };
+
+/** True for jutsu types that cannot be initially learned via training (owned ones can still be leveled). */
+export const isJutsuTrainToLearnRestricted = (jutsuType: Jutsu["jutsuType"]) =>
+  (JUTSU_TRAIN_TO_LEARN_RESTRICTED_TYPES as readonly Jutsu["jutsuType"][]).includes(
+    jutsuType,
+  );
 
 export const canUseJutsu = (
   jutsu: Jutsu,

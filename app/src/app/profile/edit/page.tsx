@@ -2041,7 +2041,8 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
             unequipAllGear();
           }}
         >
-          This will unequip all currently equipped gear <b>FOR ALL USERS</b>. Are you
+          This will unequip all currently equipped gear <b>FOR ALL NON-AI USERS</b> and
+          clear all of their item loadouts (AI opponents are left unchanged). Are you
           sure you want to continue?
         </Confirm2>
       )}
@@ -2069,8 +2070,9 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
             unequipAllJutsus();
           }}
         >
-          This will unequip all currently equipped jutsus <b>FOR ALL USERS</b>. Are you
-          sure you want to continue?
+          This will unequip all currently equipped jutsus <b>FOR ALL NON-AI USERS</b>{" "}
+          and clear all of their jutsu loadouts (AI opponents are left unchanged). Are
+          you sure you want to continue?
         </Confirm2>
       )}
       {canUnequipAllUsers(user) && (

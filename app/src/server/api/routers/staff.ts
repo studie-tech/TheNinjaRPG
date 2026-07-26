@@ -24,6 +24,7 @@ import {
   forumThread,
   historicalAvatar,
   historicalIp,
+  itemLoadout,
   jutsuLoadout,
   kageDefendedChallenges,
   linkPromotion,
@@ -273,17 +274,36 @@ export const staffRouter = createTRPCRouter({
       if (!canUnequipAllUsers(user)) {
         return errorResponse("You do not have permission to unequip all jutsus");
       }
-      // Update all equipped jutsus to set equipped = 0 for all users and clear loadouts
+      // Non-AI only — AI opponents keep their equipped loadouts for combat.
+      // Non-AI only — AI opponents keep equipped jutsu for combat.
+      // Prefer NOT IN (isAi = true): AI accounts are few, so the subquery stays small;
+      // IN (isAi = false) would materialize essentially every human userId.
+      // Orphan userJutsu/loadout rows (userId missing from UserData) are included —
+      // harmless for unequip-all.
       await Promise.all([
         ctx.drizzle
           .update(userJutsu)
           .set({ equipped: false })
-          .where(ne(userJutsu.equipped, false)),
-        ctx.drizzle.update(jutsuLoadout).set({ jutsuIds: [] }),
+          .where(
+            and(
+              ne(userJutsu.equipped, false),
+              sql`${userJutsu.userId} NOT IN (
+                SELECT ${userData.userId} FROM ${userData} WHERE ${userData.isAi} = true
+              )`,
+            ),
+          ),
+        ctx.drizzle
+          .update(jutsuLoadout)
+          .set({ jutsuIds: [] })
+          .where(
+            sql`${jutsuLoadout.userId} NOT IN (
+              SELECT ${userData.userId} FROM ${userData} WHERE ${userData.isAi} = true
+            )`,
+          ),
       ]);
       return {
         success: true,
-        message: `All jutsu has been unequipped for all users.`,
+        message: `All jutsu has been unequipped for all non-AI users.`,
       };
     }),
   unequipAllGear: protectedProcedure
@@ -295,14 +315,33 @@ export const staffRouter = createTRPCRouter({
       if (!canUnequipAllUsers(user)) {
         return errorResponse("You do not have permission to unequip all gear");
       }
-      // Update all equipped items to set equipped = 'NONE' for all users
-      await ctx.drizzle
-        .update(userItem)
-        .set({ equipped: "NONE" })
-        .where(ne(userItem.equipped, "NONE"));
+      // Non-AI only — AI opponents keep their equipped gear for combat.
+      // Clear every item loadout (not only the active pointer), matching unequipAllJutsus.
+      // Same NOT IN (isAi = true) pattern as unequipAllJutsus (small AI set vs all humans).
+      await Promise.all([
+        ctx.drizzle
+          .update(userItem)
+          .set({ equipped: "NONE" })
+          .where(
+            and(
+              ne(userItem.equipped, "NONE"),
+              sql`${userItem.userId} NOT IN (
+                SELECT ${userData.userId} FROM ${userData} WHERE ${userData.isAi} = true
+              )`,
+            ),
+          ),
+        ctx.drizzle
+          .update(itemLoadout)
+          .set({ itemData: [] })
+          .where(
+            sql`${itemLoadout.userId} NOT IN (
+              SELECT ${userData.userId} FROM ${userData} WHERE ${userData.isAi} = true
+            )`,
+          ),
+      ]);
       return {
         success: true,
-        message: `All gear has been unequipped for all users.`,
+        message: `All gear has been unequipped for all non-AI users.`,
       };
     }),
   forceAwake: protectedProcedure

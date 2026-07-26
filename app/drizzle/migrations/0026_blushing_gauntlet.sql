@@ -1,0 +1,1 @@
+CREATE INDEX `UserJutsu_userId_equipped_idx` ON `UserJutsu` (`userId`,`equipped`);

@@ -11,6 +11,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   RANKED_LOADOUT_MAX_CONSUMABLES,
+  RANKED_LOADOUT_MAX_HEAL_JUTSUS,
   RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
   RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
   RANKED_LOADOUT_MAX_JUTSUS,
@@ -113,6 +114,7 @@ export default function RankedManualPage() {
                     <li>
                       Maximum {RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} increasecost item
                     </li>
+                    <li>Maximum {RANKED_LOADOUT_MAX_HEAL_JUTSUS} heal jutsu</li>
                   </ul>
                 </div>
               </CardContent>
@@ -210,6 +212,10 @@ export default function RankedManualPage() {
                     <li>
                       Increasecost items are limited to{" "}
                       {RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} in ranked battles
+                    </li>
+                    <li>
+                      Heal jutsu are limited to {RANKED_LOADOUT_MAX_HEAL_JUTSUS} in
+                      ranked battles
                     </li>
                   </ul>
                 </div>

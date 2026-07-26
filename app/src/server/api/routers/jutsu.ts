@@ -20,12 +20,6 @@ import {
   COST_RESKIN_JUTSU,
   IMG_AVATAR_DEFAULT,
   JUTSU_LEVEL_CAP,
-  JUTSU_MAX_BARRIER_EQUIPPED,
-  JUTSU_MAX_EVENT_EQUIPPED,
-  JUTSU_MAX_PIERCE_EQUIPPED,
-  JUTSU_MAX_RESIDUAL_EQUIPPED,
-  JUTSU_MAX_SHIELD_EQUIPPED,
-  JUTSU_MAX_STUN_EQUIPPED,
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_TRANSFER_COST,
   JUTSU_TRANSFER_DAYS,
@@ -47,12 +41,17 @@ import {
   userData,
   userJutsu,
 } from "@/drizzle/schema";
-import type { ComputedJutsuLoadout } from "@/libs/jutsu";
+import type { ComputedJutsuLoadout, JutsuCapFlags, JutsuEquipCap } from "@/libs/jutsu";
 import {
+  canEquipUnderCaps,
   computeJutsuLoadoutAssignments,
+  countEquippedByCap,
+  findExceededJutsuEquipCap,
   getFreeTransfers,
   getJutsuCapFlags,
   getReskinnedUserJutsu,
+  hasAnyJutsuEquipCap,
+  JUTSU_EQUIP_CAPS,
 } from "@/libs/jutsu";
 import {
   buildMissingLoadouts,
@@ -72,6 +71,7 @@ import {
   checkJutsuBloodlineItem,
   hasRequiredLevel,
   hasRequiredRank,
+  isJutsuTrainToLearnRestricted,
 } from "@/libs/train";
 import { fetchStudents } from "@/routers/sensei";
 import {
@@ -582,13 +582,7 @@ export const jutsuRouter = createTRPCRouter({
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       const evolutionCapFlags = getJutsuCapFlags(evolutionJutsu);
-      const isRestrictedEquipType =
-        evolutionCapFlags.isEvent ||
-        evolutionCapFlags.isPierce ||
-        evolutionCapFlags.isBarrier ||
-        evolutionCapFlags.isStun ||
-        evolutionCapFlags.isShield ||
-        evolutionCapFlags.isResidual;
+      const isRestrictedEquipType = hasAnyJutsuEquipCap(evolutionCapFlags);
       // Single compare-and-swap update that applies every userJutsu-row change at once:
       // - jutsuId/level/experience/finishTraining — the evolution itself
       // - equipped — force off for restricted types to avoid cap overflows
@@ -1036,28 +1030,14 @@ export const jutsuRouter = createTRPCRouter({
       const equippedJutsus = userjutsus.filter((uj) => uj.equipped);
       const curEquip = equippedJutsus.length;
       const maxEquip = calcJutsuEquipLimit(user);
-      const residualJutsus = equippedJutsus.filter(
-        (uj) => getJutsuCapFlags(uj.jutsu).isResidual,
-      );
-      const pierceJutsus = equippedJutsus.filter(
-        (uj) => getJutsuCapFlags(uj.jutsu).isPierce,
-      );
-      const eventJutsus = equippedJutsus.filter(
-        (uj) => getJutsuCapFlags(uj.jutsu).isEvent,
-      );
-      const barrierJutsus = equippedJutsus.filter(
-        (uj) => getJutsuCapFlags(uj.jutsu).isBarrier,
-      );
-      const stunJutsus = equippedJutsus.filter(
-        (uj) => getJutsuCapFlags(uj.jutsu).isStun,
-      );
-      const shieldJutsus = equippedJutsus.filter(
-        (uj) => getJutsuCapFlags(uj.jutsu).isShield,
-      );
+      const equippedCapCounts = countEquippedByCap(equippedJutsus);
 
       if (!info) return errorResponse("Jutsu not found");
       if (!canTrainJutsu(info, user) && !info.parentJutsuId)
         return errorResponse("Jutsu not for you");
+      if (!userjutsuObj && isJutsuTrainToLearnRestricted(info.jutsuType)) {
+        return errorResponse("This jutsu cannot be learned through training");
+      }
       if (info.parentJutsuId && !userjutsuObj)
         return errorResponse(
           "Evolution jutsus can only be obtained by evolving the parent jutsu",
@@ -1099,6 +1079,11 @@ export const jutsuRouter = createTRPCRouter({
         questDataFull = trackers;
       }
       const questDataForDb = filterQuestTrackersForDbPersist(questDataFull, user);
+      // Pre-mutation snapshot for refund if the new-jutsu insert fails after deduct.
+      const questDataBeforeTrain = filterQuestTrackersForDbPersist(
+        user.questData ?? [],
+        user,
+      );
 
       // Deduct money
       const moneyUpdate = await ctx.drizzle
@@ -1125,37 +1110,62 @@ export const jutsuRouter = createTRPCRouter({
             and(eq(userJutsu.id, userjutsuObj.id), eq(userJutsu.userId, ctx.userId)),
           );
       } else {
-        // Check if jutsu can be auto-equipped
-        const {
-          isResidual: jutsuHasResidual,
-          isPierce: jutsuHasPierce,
-          isEvent: jutsuIsEvent,
-          isBarrier: jutsuHasBarrier,
-          isStun: jutsuHasStun,
-          isShield: jutsuHasShield,
-        } = getJutsuCapFlags(info);
-
+        // Soft pre-check whether auto-equip is likely to succeed. Insert already
+        // equipped when the snapshot says yes; only the over-cap rollback CAS
+        // runs afterward to handle concurrent equips (under-cap re-check would
+        // duplicate what the rollback covers a moment later).
+        const capFlags = getJutsuCapFlags(info);
         const canAutoEquip =
           curEquip < maxEquip &&
           checkJutsuBloodlineItem(info, user.items) &&
-          (!jutsuHasResidual || residualJutsus.length < JUTSU_MAX_RESIDUAL_EQUIPPED) &&
-          (!jutsuHasPierce || pierceJutsus.length < JUTSU_MAX_PIERCE_EQUIPPED) &&
-          (!jutsuIsEvent || eventJutsus.length < JUTSU_MAX_EVENT_EQUIPPED) &&
-          (!jutsuHasBarrier || barrierJutsus.length < JUTSU_MAX_BARRIER_EQUIPPED) &&
-          (!jutsuHasStun || stunJutsus.length < JUTSU_MAX_STUN_EQUIPPED) &&
-          (!jutsuHasShield || shieldJutsus.length < JUTSU_MAX_SHIELD_EQUIPPED);
+          canEquipUnderCaps(capFlags, equippedCapCounts);
 
-        // Use onDuplicateKeyUpdate to handle race conditions
-        await ctx.drizzle
-          .insert(userJutsu)
-          .values({
-            id: nanoid(),
+        const newUserJutsuId = nanoid();
+        // onDuplicateKeyUpdate no-op (`id = id`) absorbs unique-index races. PlanetScale
+        // reports changed rows, so a duplicate yields rowsAffected === 0 (not 2). Deduct
+        // already happened above — refund money + quest snapshot when this request did
+        // not insert (otherwise jutsus_mastered / train_specific_jutsu stay incremented).
+        const refundTrainCost = () =>
+          ctx.drizzle
+            .update(userData)
+            .set({
+              money: sql`${userData.money} + ${trainCost}`,
+              questData: questDataBeforeTrain,
+            })
+            .where(eq(userData.userId, ctx.userId));
+
+        try {
+          const insertResult = await ctx.drizzle
+            .insert(userJutsu)
+            .values({
+              id: newUserJutsuId,
+              userId: ctx.userId,
+              jutsuId: input.jutsuId,
+              finishTraining: new Date(Date.now() + trainTime),
+              equipped: canAutoEquip,
+            })
+            .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+
+          if (insertResult.rowsAffected !== 1) {
+            await refundTrainCost();
+            return errorResponse(
+              "You already own this jutsu — please refresh and try again",
+            );
+          }
+        } catch {
+          await refundTrainCost();
+          return errorResponse("Failed to start training — please try again");
+        }
+
+        if (canAutoEquip) {
+          await rollbackEquipIfOverCap({
+            client: ctx.drizzle,
             userId: ctx.userId,
-            jutsuId: input.jutsuId,
-            finishTraining: new Date(Date.now() + trainTime),
-            equipped: canAutoEquip,
-          })
-          .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+            userJutsuId: newUserJutsuId,
+            maxEquip,
+            flags: capFlags,
+          });
+        }
       }
 
       return {
@@ -1253,39 +1263,11 @@ export const jutsuRouter = createTRPCRouter({
       const curJutsuFlags = userjutsuObj
         ? getJutsuCapFlags(userjutsuObj.jutsu)
         : undefined;
-      const pierceEquipped = equippedJutsus.filter(
-        (j) => getJutsuCapFlags(j.jutsu).isPierce,
-      ).length;
-      const curJutsuIsPierce = curJutsuFlags?.isPierce;
-      const eventEquipped = equippedJutsus.filter(
-        (j) => getJutsuCapFlags(j.jutsu).isEvent,
-      ).length;
-      const curJutsuIsEvent = curJutsuFlags?.isEvent ?? false;
-      const barrierEquipped = equippedJutsus.filter(
-        (j) => getJutsuCapFlags(j.jutsu).isBarrier,
-      ).length;
-      const curJutsuIsBarrier = curJutsuFlags?.isBarrier;
-      const stunEquipped = equippedJutsus.filter(
-        (j) => getJutsuCapFlags(j.jutsu).isStun,
-      ).length;
-      const curJutsuIsStun = curJutsuFlags?.isStun;
-      const shieldEquipped = equippedJutsus.filter(
-        (j) => getJutsuCapFlags(j.jutsu).isShield,
-      ).length;
-      const curJutsuIsShield = curJutsuFlags?.isShield;
+      const equippedCapCounts = countEquippedByCap(equippedJutsus);
       const newEquippedState = !isEquipped;
       const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
-      const isLoaded = userjutsuObj && loadout?.jutsuIds.includes(userjutsuObj.jutsuId);
-      const residualJutsus = userjutsus.filter(
-        (uj) => uj.equipped && getJutsuCapFlags(uj.jutsu).isResidual,
-      );
 
       // Guards
-      if (residualJutsus.length >= JUTSU_MAX_RESIDUAL_EQUIPPED && newEquippedState) {
-        return errorResponse(
-          `You cannot equip more than ${JUTSU_MAX_RESIDUAL_EQUIPPED} residual jutsu. Please unequip first.`,
-        );
-      }
       if (!userjutsuObj) return errorResponse("Jutsu not found");
       if (!isEquipped && userjutsuObj.jutsu.hidden && !canChangeContent(user.role))
         return errorResponse("Jutsu is hidden, cannot be equipped");
@@ -1304,63 +1286,131 @@ export const jutsuRouter = createTRPCRouter({
       if (!isEquipped && curEquip >= maxEquip) {
         return errorResponse("You cannot equip more jutsu");
       }
-      if (
-        !isEquipped &&
-        curJutsuIsPierce &&
-        pierceEquipped >= JUTSU_MAX_PIERCE_EQUIPPED
-      ) {
-        return errorResponse(
-          `You cannot equip more than ${JUTSU_MAX_PIERCE_EQUIPPED} piercing jutsu`,
-        );
-      }
-      if (!isEquipped && curJutsuIsEvent && eventEquipped >= JUTSU_MAX_EVENT_EQUIPPED) {
-        return errorResponse(
-          `You cannot equip more than ${JUTSU_MAX_EVENT_EQUIPPED} event jutsu`,
-        );
-      }
-      if (
-        !isEquipped &&
-        curJutsuIsBarrier &&
-        barrierEquipped >= JUTSU_MAX_BARRIER_EQUIPPED
-      ) {
-        return errorResponse(
-          `You cannot equip more than ${JUTSU_MAX_BARRIER_EQUIPPED} barrier jutsu`,
-        );
-      }
-      if (!isEquipped && curJutsuIsStun && stunEquipped >= JUTSU_MAX_STUN_EQUIPPED) {
-        return errorResponse(
-          `You cannot equip more than ${JUTSU_MAX_STUN_EQUIPPED} stun jutsu`,
-        );
-      }
-      if (
-        !isEquipped &&
-        curJutsuIsShield &&
-        shieldEquipped >= JUTSU_MAX_SHIELD_EQUIPPED
-      ) {
-        return errorResponse(
-          `You cannot equip more than ${JUTSU_MAX_SHIELD_EQUIPPED} shield jutsu`,
-        );
+      if (!isEquipped && curJutsuFlags) {
+        const exceeded = findExceededJutsuEquipCap(curJutsuFlags, equippedCapCounts);
+        if (exceeded) {
+          return errorResponse(
+            `You cannot equip more than ${exceeded.max} ${exceeded.label} jutsu`,
+          );
+        }
       }
 
-      // Calculate loadout
-      if (loadout && isLoaded && !newEquippedState) {
-        loadout.jutsuIds = loadout.jutsuIds.filter((id) => id !== userjutsuObj.jutsuId);
-      } else if (loadout && !isLoaded && newEquippedState) {
-        loadout.jutsuIds.push(userjutsuObj.jutsuId);
+      // Calculate loadout after a successful equip/unequip write
+      if (newEquippedState) {
+        // CAS equip with live cap counts so concurrent equips cannot both slip under a
+        // snapshot-based heal/pierce/… check (see tryEquipUserJutsuAtomically).
+        const equipResult = await tryEquipUserJutsuAtomically({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          userJutsuId: input.userJutsuId,
+          maxEquip,
+          flags: getJutsuCapFlags(userjutsuObj.jutsu),
+        });
+        if (equipResult === "already-equipped") {
+          return errorResponse(
+            "Could not equip jutsu — it may already be equipped. Please refresh and retry.",
+          );
+        }
+        if (equipResult === "cap-reached") {
+          return errorResponse(
+            "Could not equip jutsu — an equip limit was reached. Please retry.",
+          );
+        }
+        // Atomic JSON append — concurrent equips must not replace the whole array from
+        // stale snapshots (last writer would drop the other jutsuId). If sync fails,
+        // roll back the equip only when the active loadout still lacks this jutsu —
+        // membership is checked inside the UPDATE so a concurrent selectLoadout/equip
+        // that already made state consistent cannot be clobbered (check-then-act window).
+        if (loadout) {
+          const synced = await appendJutsuIdToLoadoutAtomically({
+            client: ctx.drizzle,
+            loadoutId: loadout.id,
+            userId: ctx.userId,
+            jutsuId: userjutsuObj.jutsuId,
+          });
+          if (!synced) {
+            const rolledBack = await ctx.drizzle
+              .update(userJutsu)
+              .set({ equipped: false })
+              .where(
+                and(
+                  eq(userJutsu.id, input.userJutsuId),
+                  eq(userJutsu.userId, ctx.userId),
+                  eq(userJutsu.equipped, true),
+                  sql`NOT EXISTS (
+                    SELECT 1 FROM (
+                      SELECT ${jutsuLoadout.jutsuIds} AS ids
+                      FROM ${userData}
+                      INNER JOIN ${jutsuLoadout} ON ${jutsuLoadout.id} = ${userData.jutsuLoadout}
+                      WHERE ${userData.userId} = ${ctx.userId}
+                        AND ${jutsuLoadout.userId} = ${ctx.userId}
+                    ) AS active_loadout
+                    WHERE JSON_CONTAINS(active_loadout.ids, JSON_QUOTE(${userjutsuObj.jutsuId}))
+                  )`,
+                ),
+              );
+            if (rolledBack.rowsAffected === 1) {
+              return errorResponse("Failed to update loadout — please retry");
+            }
+          }
+        }
+      } else {
+        // Remove from loadout first, then unequip. On unequip failure, re-append only
+        // when the row is still equipped — if the UPDATE committed but the response
+        // was lost, re-appending would leave the loadout listing an unequipped jutsu.
+        if (loadout) {
+          const synced = await removeJutsuIdFromLoadoutAtomically({
+            client: ctx.drizzle,
+            loadoutId: loadout.id,
+            userId: ctx.userId,
+            jutsuId: userjutsuObj.jutsuId,
+          });
+          if (!synced) {
+            return errorResponse("Failed to update loadout — please retry");
+          }
+        }
+        try {
+          await ctx.drizzle
+            .update(userJutsu)
+            .set({ equipped: false })
+            .where(
+              and(
+                eq(userJutsu.id, input.userJutsuId),
+                eq(userJutsu.userId, ctx.userId),
+                eq(userJutsu.equipped, true),
+              ),
+            );
+        } catch {
+          const [row] = await ctx.drizzle
+            .select({ equipped: userJutsu.equipped })
+            .from(userJutsu)
+            .where(
+              and(
+                eq(userJutsu.id, input.userJutsuId),
+                eq(userJutsu.userId, ctx.userId),
+              ),
+            )
+            .limit(1);
+          if (row && !row.equipped) {
+            // Unequip committed despite the lost/failed response — loadout already
+            // removed; treat as success rather than restoring a stale id.
+            return {
+              success: true,
+              message: "Jutsu unequipped",
+              data: { equipped: false, jutsuId: userjutsuObj.jutsuId },
+            };
+          }
+          if (loadout && row?.equipped) {
+            await appendJutsuIdToLoadoutAtomically({
+              client: ctx.drizzle,
+              loadoutId: loadout.id,
+              userId: ctx.userId,
+              jutsuId: userjutsuObj.jutsuId,
+            });
+          }
+          return errorResponse("Failed to unequip jutsu — please retry");
+        }
       }
-
-      await Promise.all([
-        ctx.drizzle
-          .update(userJutsu)
-          .set({ equipped: newEquippedState })
-          .where(eq(userJutsu.id, input.userJutsuId)),
-        loadout
-          ? ctx.drizzle
-              .update(jutsuLoadout)
-              .set({ jutsuIds: loadout.jutsuIds })
-              .where(eq(jutsuLoadout.id, loadout.id))
-          : null,
-      ]);
 
       return {
         success: true,
@@ -2284,4 +2334,286 @@ export const selectJutsuLoadout = async (
     message,
     jutsus: userjutsus.filter((u) => equipIds.includes(u.jutsuId)),
   };
+};
+
+/**
+ * Materialized equip-cap counts for MySQL UPDATE guards. Wrapping in a derived
+ * table avoids ERROR 1093 (can't select from the table being updated).
+ *
+ * All counters share one UserJutsu ⨝ Jutsu pass driven by JUTSU_EQUIP_CAPS.
+ * jutsuType != 'AI' mirrors fetchUserJutsus so CAS guards agree with JS pre-checks.
+ *
+ * residualModifier is numeric JSON, so JSON_SEARCH (string-only) cannot detect it,
+ * and PlanetScale has no JSON_TABLE. One `$[*].residualModifier` extract returns
+ * every match; REGEXP `[1-9]` then tests for any non-zero value in that array
+ * (matches getJutsuCapFlags truthiness; combat schema is 0..2).
+ */
+const residualModifierOnAliasSql = (alias: string) =>
+  sql.raw(
+    `CAST(JSON_EXTRACT(${alias}.effects, '$[*].residualModifier') AS CHAR) REGEXP '[1-9]'`,
+  );
+
+const equipCapCategorySql = (cap: JutsuEquipCap, alias: string) => {
+  const kind = cap.sql;
+  if (kind.kind === "residual") return residualModifierOnAliasSql(alias);
+  if (kind.kind === "jutsuType") {
+    return sql.raw(`${alias}.jutsuType = '${kind.jutsuType}'`);
+  }
+  return sql`JSON_SEARCH(${sql.raw(`${alias}.effects`)}, 'one', ${kind.effectType}, NULL, '$[*].type') IS NOT NULL`;
+};
+
+const equippedCapCountsDerivedSql = (userId: string) => {
+  const sumCols = JUTSU_EQUIP_CAPS.map(
+    (cap) =>
+      sql`COALESCE(SUM(CASE WHEN ${equipCapCategorySql(cap, "j_cap")} THEN 1 ELSE 0 END), 0) AS ${sql.raw(cap.countAlias)}`,
+  );
+  return sql`(
+    SELECT
+      COUNT(*) AS total,
+      ${sql.join(
+        sumCols,
+        sql`,
+      `,
+      )}
+    FROM ${userJutsu} AS uj_cap
+    INNER JOIN ${jutsu} AS j_cap ON j_cap.id = uj_cap.jutsuId
+    WHERE uj_cap.userId = ${userId}
+      AND uj_cap.equipped = true
+      AND j_cap.jutsuType != 'AI'
+  )`;
+};
+
+/** Under-cap predicate: all applicable counts must still have room (AND). */
+const equipCapUnderGuardSql = (
+  userId: string,
+  maxEquip: number,
+  flags: JutsuCapFlags,
+) => {
+  const parts = [sql`c.total < ${maxEquip}`];
+  for (const cap of JUTSU_EQUIP_CAPS) {
+    if (flags[cap.key]) {
+      parts.push(sql`${sql.raw(`c.${cap.countAlias}`)} < ${cap.max}`);
+    }
+  }
+  return sql`(
+    SELECT ${sql.join(parts, sql` AND `)}
+    FROM ${equippedCapCountsDerivedSql(userId)} AS c
+  )`;
+};
+
+/**
+ * True when this updated row's rank among equipped peers (updatedAt ASC, id ASC)
+ * exceeds `cap`. Optional `categorySql` restricts the peer set (heal/event/…).
+ * Derived-table wrapper avoids ERROR 1093 on the table being updated.
+ */
+const equippedRankExceedsCapSql = (
+  userId: string,
+  cap: number,
+  categorySql?: ReturnType<typeof sql>,
+) => sql`(
+  SELECT cnt FROM (
+    SELECT COUNT(*) AS cnt
+    FROM ${userJutsu} AS uj_rank
+    INNER JOIN ${jutsu} AS j_rank ON j_rank.id = uj_rank.jutsuId
+    WHERE uj_rank.userId = ${userId}
+      AND uj_rank.equipped = true
+      AND j_rank.jutsuType != 'AI'
+      ${categorySql ? sql`AND ${categorySql}` : sql``}
+      AND (
+        uj_rank.updatedAt < ${userJutsu.updatedAt}
+        OR (
+          uj_rank.updatedAt = ${userJutsu.updatedAt}
+          AND uj_rank.id <= ${userJutsu.id}
+        )
+      )
+  ) AS equip_rank_cnt
+) > ${cap}`;
+
+/**
+ * Rollback predicate: unequip this row only when it sits outside the first N
+ * kept slots for an exceeded cap. Concurrent racers that both passed under-cap
+ * then both equip no longer both lose — earlier (updatedAt, id) keeps the slot.
+ */
+const equipCapRollbackGuardSql = (
+  userId: string,
+  maxEquip: number,
+  flags: JutsuCapFlags,
+) => {
+  const parts = [equippedRankExceedsCapSql(userId, maxEquip)];
+  for (const cap of JUTSU_EQUIP_CAPS) {
+    if (flags[cap.key]) {
+      parts.push(
+        equippedRankExceedsCapSql(userId, cap.max, equipCapCategorySql(cap, "j_rank")),
+      );
+    }
+  }
+  return sql`(${sql.join(parts, sql` OR `)})`;
+};
+
+/**
+ * Unequip a row if it falls outside the first-N kept slots for any exceeded cap.
+ * Used after inserting already-equipped (startTraining) and after a successful
+ * under-cap equip CAS (toggleEquip) to close concurrent-equip races without
+ * making both racers lose.
+ *
+ * Returns true when the row remains equipped (no rollback).
+ */
+export const rollbackEquipIfOverCap = async (args: {
+  client: DrizzleClient;
+  userId: string;
+  userJutsuId: string;
+  maxEquip: number;
+  flags: JutsuCapFlags;
+}): Promise<boolean> => {
+  const { client, userId, userJutsuId, maxEquip, flags } = args;
+  const rollback = await client
+    .update(userJutsu)
+    .set({ equipped: false })
+    .where(
+      and(
+        eq(userJutsu.id, userJutsuId),
+        eq(userJutsu.userId, userId),
+        eq(userJutsu.equipped, true),
+        equipCapRollbackGuardSql(userId, maxEquip, flags),
+      ),
+    );
+  return rollback.rowsAffected === 0;
+};
+
+/**
+ * Equip a single userJutsu row under live equip-cap guards.
+ *
+ * Pre-check counts in the UPDATE WHERE reject the common already-at-cap case.
+ * Those counts alone are not race-safe across distinct rows: two concurrent
+ * equips can each lock a different PK, both observe "under cap", and both
+ * persist. After a successful equip we therefore re-rank and roll this row
+ * back only when it sits outside the first-N kept slots for an exceeded cap
+ * (so one concurrent racer keeps the slot).
+ */
+export type TryEquipUserJutsuResult = "equipped" | "already-equipped" | "cap-reached";
+
+export const tryEquipUserJutsuAtomically = async (args: {
+  client: DrizzleClient;
+  userId: string;
+  userJutsuId: string;
+  maxEquip: number;
+  flags: JutsuCapFlags;
+}): Promise<TryEquipUserJutsuResult> => {
+  const { client, userId, userJutsuId, maxEquip, flags } = args;
+
+  const result = await client
+    .update(userJutsu)
+    .set({ equipped: true, updatedAt: new Date() })
+    .where(
+      and(
+        eq(userJutsu.id, userJutsuId),
+        eq(userJutsu.userId, userId),
+        eq(userJutsu.equipped, false),
+        equipCapUnderGuardSql(userId, maxEquip, flags),
+      ),
+    );
+  if (result.rowsAffected !== 1) {
+    // Distinguish double-click / concurrent equip from a genuine cap rejection.
+    const [row] = await client
+      .select({ equipped: userJutsu.equipped })
+      .from(userJutsu)
+      .where(and(eq(userJutsu.id, userJutsuId), eq(userJutsu.userId, userId)))
+      .limit(1);
+    return row?.equipped ? "already-equipped" : "cap-reached";
+  }
+
+  const kept = await rollbackEquipIfOverCap({
+    client,
+    userId,
+    userJutsuId,
+    maxEquip,
+    flags,
+  });
+  return kept ? "equipped" : "cap-reached";
+};
+
+/**
+ * Append a jutsuId to a loadout's JSON array without rewriting the whole array, so
+ * concurrent equips cannot drop each other's IDs. Idempotent via NOT JSON_CONTAINS.
+ * Returns true when the loadout ends up containing jutsuId (append or already present).
+ */
+const appendJutsuIdToLoadoutAtomically = async (args: {
+  client: DrizzleClient;
+  loadoutId: string;
+  userId: string;
+  jutsuId: string;
+}): Promise<boolean> => {
+  const { client, loadoutId, userId, jutsuId } = args;
+  try {
+    const result = await client
+      .update(jutsuLoadout)
+      .set({
+        jutsuIds: sql`JSON_ARRAY_APPEND(${jutsuLoadout.jutsuIds}, '$', ${jutsuId})`,
+      })
+      .where(
+        and(
+          eq(jutsuLoadout.id, loadoutId),
+          eq(jutsuLoadout.userId, userId),
+          sql`NOT JSON_CONTAINS(${jutsuLoadout.jutsuIds}, JSON_QUOTE(${jutsuId}))`,
+        ),
+      );
+    if (result.rowsAffected === 1) return true;
+    // Already present (PlanetScale reports 0 changed rows) or missing loadout — verify.
+    const row = await client.query.jutsuLoadout.findFirst({
+      where: and(eq(jutsuLoadout.id, loadoutId), eq(jutsuLoadout.userId, userId)),
+      columns: { jutsuIds: true },
+    });
+    return !!row?.jutsuIds.includes(jutsuId);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Escape `%`, `_`, and `\` so MySQL JSON_SEARCH treats the needle as a literal
+ * (JSON_SEARCH uses LIKE matching). nanoid IDs commonly contain `_`.
+ */
+const escapeJsonSearchPattern = (value: string) =>
+  value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+
+/**
+ * Remove a jutsuId from a loadout's JSON array without rewriting the whole array, so
+ * concurrent unequips cannot restore each other's IDs from stale snapshots.
+ * Returns true when the loadout no longer contains jutsuId (removed or already absent).
+ */
+const removeJutsuIdFromLoadoutAtomically = async (args: {
+  client: DrizzleClient;
+  loadoutId: string;
+  userId: string;
+  jutsuId: string;
+}): Promise<boolean> => {
+  const { client, loadoutId, userId, jutsuId } = args;
+  const searchPattern = escapeJsonSearchPattern(jutsuId);
+  try {
+    const result = await client
+      .update(jutsuLoadout)
+      .set({
+        jutsuIds: sql`JSON_REMOVE(
+          ${jutsuLoadout.jutsuIds},
+          JSON_UNQUOTE(JSON_SEARCH(${jutsuLoadout.jutsuIds}, 'one', ${searchPattern}, ${"\\"}))
+        )`,
+      })
+      .where(
+        and(
+          eq(jutsuLoadout.id, loadoutId),
+          eq(jutsuLoadout.userId, userId),
+          // Exact membership — do not use unescaped JSON_SEARCH (LIKE wildcards).
+          sql`JSON_CONTAINS(${jutsuLoadout.jutsuIds}, JSON_QUOTE(${jutsuId}))`,
+        ),
+      );
+    if (result.rowsAffected === 1) return true;
+    const row = await client.query.jutsuLoadout.findFirst({
+      where: and(eq(jutsuLoadout.id, loadoutId), eq(jutsuLoadout.userId, userId)),
+      columns: { jutsuIds: true },
+    });
+    // Missing loadout is fine (nothing to keep in sync); otherwise require absence.
+    return !row || !row.jutsuIds.includes(jutsuId);
+  } catch {
+    return false;
+  }
 };

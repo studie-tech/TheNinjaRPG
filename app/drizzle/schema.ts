@@ -2781,6 +2781,11 @@ export const userJutsu = mysqlTable(
       ),
       jutsuIdIdx: index("UserJutsu_jutsuId_idx").on(table.jutsuId),
       equippedIdx: index("Jutsu_equipped_idx").on(table.equipped),
+      // Composite index for equip-cap guards: WHERE userId = ? AND equipped = true
+      userIdEquippedIdx: index("UserJutsu_userId_equipped_idx").on(
+        table.userId,
+        table.equipped,
+      ),
       reskinIdIdx: index("UserJutsu_reskinId_idx").on(table.reskinId),
     };
   },

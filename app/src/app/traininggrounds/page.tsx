@@ -85,6 +85,7 @@ import {
   checkJutsuBloodline,
   checkJutsuRank,
   checkJutsuVillage,
+  isJutsuTrainToLearnRestricted,
   trainEfficiency,
   trainingSpeedSeconds,
 } from "@/libs/train";
@@ -743,7 +744,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     .filter((j) => !evolvedAncestorIds.has(j.id))
     .filter((j) => {
       const userJutsu = userJutsus?.find((uj) => uj.jutsuId === j.id);
-      return userJutsu || !["EVENT", "LOYALTY", "SPECIAL"].includes(j.jutsuType);
+      return userJutsu || !isJutsuTrainToLearnRestricted(j.jutsuType);
     })
     .map((j) => {
       const uj = userJutsus?.find((uj) => uj.jutsuId === j.id);

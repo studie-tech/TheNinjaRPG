@@ -183,6 +183,13 @@
       "when": 1785879665755,
       "tag": "0025_hot_ken_ellis",
       "breakpoints": false
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1786785600765,
+      "tag": "0026_blushing_gauntlet",
+      "breakpoints": false
     }
   ]
 }
