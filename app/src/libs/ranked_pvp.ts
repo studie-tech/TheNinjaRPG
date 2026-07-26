@@ -1,19 +1,11 @@
 import type { RankedRank } from "@/drizzle/constants";
 import {
-  JUTSU_MAX_EVENT_EQUIPPED,
   RANKED_DIVISIONS,
   RANKED_LEGEND_LP_REQUIREMENT,
-  RANKED_LOADOUT_MAX_BARRIER_JUTSUS,
   RANKED_LOADOUT_MAX_CONSUMABLES,
   RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
-  RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
   RANKED_LOADOUT_MAX_JUTSUS,
   RANKED_LOADOUT_MAX_POISON_ITEMS,
-  RANKED_LOADOUT_MAX_POISON_JUTSUS,
-  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
-  RANKED_LOADOUT_MAX_SHIELD_JUTSUS,
-  RANKED_LOADOUT_MAX_STUN_JUTSUS,
-  RANKED_LOADOUT_MAX_SUMMON_JUTSUS,
   RANKED_LOADOUT_MAX_WEAPONS,
   RANKED_MIN_LP_GAIN,
   RANKED_QUEUE_MAX_WAIT_SECS,
@@ -22,6 +14,7 @@ import {
   RANKED_STREAK_BONUS,
 } from "@/drizzle/constants";
 import type { Item, Jutsu, UserData } from "@/drizzle/schema";
+import { getJutsuCapFlags, getJutsuCategoryDef, RANKED_JUTSU_CAPS } from "@/libs/jutsu";
 
 /**
  * Determine player rank based on LP and top players
@@ -149,74 +142,14 @@ export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
   let check = true;
   let message = "";
 
-  // Check residual jutsu limit
-  const residualJutsus = jutsus.filter((jutsu) =>
-    jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
-  );
-  if (residualJutsus.length > RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS) {
-    check = false;
-    message = `You can only equip up to ${RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS} residual jutsu in ranked PvP`;
-  }
-
-  // Check poison jutsu limit
-  const poisonJutsus = jutsus.filter((jutsu) =>
-    jutsu.effects.some((e) => e.type === "poison"),
-  );
-  if (poisonJutsus.length > RANKED_LOADOUT_MAX_POISON_JUTSUS) {
-    check = false;
-    message = `You can only equip up to ${RANKED_LOADOUT_MAX_POISON_JUTSUS} poison jutsu in ranked PvP`;
-  }
-
-  // Check increasecost jutsu limit
-  const increasecostJutsus = jutsus.filter((jutsu) =>
-    jutsu.effects.some((e) => e.type === "increasepoolcost"),
-  );
-  if (increasecostJutsus.length > RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS) {
-    check = false;
-    message = `You can only equip up to ${RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS} increasecost jutsu in ranked PvP`;
-  }
-
-  // Check summon jutsu limit
-  const summonJutsus = jutsus.filter((jutsu) =>
-    jutsu.effects.some((e) => e.type === "summon"),
-  );
-  if (summonJutsus.length > RANKED_LOADOUT_MAX_SUMMON_JUTSUS) {
-    check = false;
-    message = `You can only equip up to ${RANKED_LOADOUT_MAX_SUMMON_JUTSUS} summon jutsu in ranked PvP`;
-  }
-
-  // Check barrier jutsu limit
-  const barrierJutsus = jutsus.filter((jutsu) =>
-    jutsu.effects.some((e) => e.type === "barrier"),
-  );
-  if (barrierJutsus.length > RANKED_LOADOUT_MAX_BARRIER_JUTSUS) {
-    check = false;
-    message = `You can only equip up to ${RANKED_LOADOUT_MAX_BARRIER_JUTSUS} barrier jutsu in ranked PvP`;
-  }
-
-  // Check stun jutsu limit
-  const stunJutsus = jutsus.filter((jutsu) =>
-    jutsu.effects.some((e) => e.type === "stun"),
-  );
-  if (stunJutsus.length > RANKED_LOADOUT_MAX_STUN_JUTSUS) {
-    check = false;
-    message = `You can only equip up to ${RANKED_LOADOUT_MAX_STUN_JUTSUS} stun jutsu in ranked PvP`;
-  }
-
-  // Check shield jutsu limit
-  const shieldJutsus = jutsus.filter((jutsu) =>
-    jutsu.effects.some((e) => e.type === "shield"),
-  );
-  if (shieldJutsus.length > RANKED_LOADOUT_MAX_SHIELD_JUTSUS) {
-    check = false;
-    message = `You can only equip up to ${RANKED_LOADOUT_MAX_SHIELD_JUTSUS} shield jutsu in ranked PvP`;
-  }
-
-  // Check event jutsu limit
-  const eventJutsus = jutsus.filter((jutsu) => jutsu.jutsuType === "EVENT");
-  if (eventJutsus.length > JUTSU_MAX_EVENT_EQUIPPED) {
-    check = false;
-    message = `You can only equip up to ${JUTSU_MAX_EVENT_EQUIPPED} event jutsu in ranked PvP`;
+  const flagged = jutsus.map((jutsu) => getJutsuCapFlags(jutsu));
+  for (const cap of RANKED_JUTSU_CAPS) {
+    const count = flagged.filter((flags) => flags[cap.key]).length;
+    if (count > cap.max) {
+      check = false;
+      const label = getJutsuCategoryDef(cap.key).label;
+      message = `You can only equip up to ${cap.max} ${label} jutsu in ranked PvP`;
+    }
   }
 
   if (jutsus.length > RANKED_LOADOUT_MAX_JUTSUS) {

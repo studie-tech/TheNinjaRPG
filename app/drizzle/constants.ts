@@ -490,6 +490,16 @@ export const JutsuTypes = [
 ] as const;
 export type JutsuType = (typeof JutsuTypes)[number];
 
+/** Jutsu types that cannot be initially learned via training grounds (leveling owned ones is allowed). */
+export const JUTSU_TRAIN_TO_LEARN_RESTRICTED_TYPES = [
+  "EVENT",
+  "LOYALTY",
+  "SPECIAL",
+  "FORBIDDEN",
+] as const satisfies readonly JutsuType[];
+export type JutsuTrainToLearnRestrictedType =
+  (typeof JUTSU_TRAIN_TO_LEARN_RESTRICTED_TYPES)[number];
+
 export const UserStatNames = [
   "ninjutsuOffence",
   "taijutsuOffence",
@@ -698,9 +708,11 @@ export type TrainingSpeed = (typeof TrainingSpeeds)[number];
 export const JUTSU_MAX_RESIDUAL_EQUIPPED = 4;
 export const JUTSU_MAX_PIERCE_EQUIPPED = 9999;
 export const JUTSU_MAX_EVENT_EQUIPPED = 2;
+export const JUTSU_MAX_FORBIDDEN_EQUIPPED = 1;
 export const JUTSU_MAX_BARRIER_EQUIPPED = 1;
 export const JUTSU_MAX_STUN_EQUIPPED = 2;
 export const JUTSU_MAX_SHIELD_EQUIPPED = 2;
+export const JUTSU_MAX_HEAL_EQUIPPED = 3;
 
 // Content difficulty ratings
 export const BloodlineDifficultyRatings = ["Easy", "Medium", "Hard", "Expert"] as const;
@@ -1737,6 +1749,7 @@ export const RANKED_LOADOUT_MAX_SUMMON_JUTSUS = 0;
 export const RANKED_LOADOUT_MAX_BARRIER_JUTSUS = 1;
 export const RANKED_LOADOUT_MAX_STUN_JUTSUS = 2;
 export const RANKED_LOADOUT_MAX_SHIELD_JUTSUS = 2;
+export const RANKED_LOADOUT_MAX_HEAL_JUTSUS = 3;
 
 // Game assets
 export const ID_ANIMATION_SMOKE = "gkYHdSzsHu";
