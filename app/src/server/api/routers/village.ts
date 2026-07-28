@@ -151,6 +151,8 @@ export const villageRouter = createTRPCRouter({
         ctx.drizzle.query.village.findMany({
           columns: {
             id: true,
+            name: true,
+            mapName: true,
             hexColor: true,
           },
         }),

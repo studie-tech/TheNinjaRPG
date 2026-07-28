@@ -243,16 +243,20 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         if (!showOwnership || villageLabelSprites.length === 0) return;
         const ownerVillageId =
           sector === null ? null : (ownershipVillageBySector.get(sector) ?? null);
+        const hasOwnerLabel =
+          ownerVillageId !== null &&
+          villageLabelSprites.some(
+            (label) => label.userData.villageId === ownerVillageId,
+          );
         for (const label of villageLabelSprites) {
           const material = label.material as SpriteMaterial;
           const baseWidth = label.userData.baseWidth as number;
           const baseHeight = label.userData.baseHeight as number;
           const isOwner =
             ownerVillageId !== null && label.userData.villageId === ownerVillageId;
-          const hasOwner = ownerVillageId !== null;
           const scale = isOwner ? 1.14 : 1;
           label.scale.set(baseWidth * scale, baseHeight * scale, 1);
-          material.opacity = hasOwner && !isOwner ? 0.48 : 1;
+          material.opacity = hasOwnerLabel && !isOwner ? 0.48 : 1;
           label.renderOrder = isOwner ? 3 : 2;
         }
       };
@@ -1119,10 +1123,13 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       ? ownershipData?.sectors.find((entry) => entry.sector === hoverSector)
       : undefined;
   const hoveredOwner = hoveredOwnership
-    ? props.highlights?.find((village) => village.id === hoveredOwnership.villageId)
+    ? ownershipData?.colors.find((village) => village.id === hoveredOwnership.villageId)
     : undefined;
   const hoveredOwnerColor = hoveredOwner?.hexColor ?? "#9ca3af";
-  const hoveredOwnerName = hoveredOwner?.mapName ?? hoveredOwner?.name ?? "Unclaimed";
+  const hoveredOwnerName =
+    hoveredOwner?.mapName ??
+    hoveredOwner?.name ??
+    (hoveredOwnership ? "Claimed" : "Unclaimed");
 
   return (
     // The overlay labels anchor to this wrapper (the map itself), so they sit

@@ -110,18 +110,17 @@ export async function GET() {
 
         // Insert interest records (upsert to handle duplicates)
         if (interestRecords.length > 0) {
-          // Earlier batches may commit before a later batch fails. Retrying is
-          // safe because amounts are deterministic for the day and the upsert
-          // replaces the same user/date record. Keep that property if the
-          // calculation changes, or wrap the job in a transaction.
+          // A user/date row is an immutable snapshot. Earlier batches may
+          // commit before a later batch fails, and retries re-read live bank
+          // balances and membership tiers. Never overwrite a snapshot that was
+          // already created (or even claimed) by an earlier attempt.
           for (const batch of chunkArray(interestRecords, INTEREST_INSERT_BATCH_SIZE)) {
             await drizzleDB
               .insert(dailyBankInterest)
               .values(batch)
               .onDuplicateKeyUpdate({
                 set: {
-                  amount: sql`VALUES(${dailyBankInterest.amount})`,
-                  interestPercent: sql`VALUES(${dailyBankInterest.interestPercent})`,
+                  id: sql`id`,
                 },
               });
           }

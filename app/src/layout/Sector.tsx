@@ -140,7 +140,6 @@ interface SectorProps {
   target: SectorPoint | null;
   showSorrounding: boolean;
   showActive: boolean;
-  showStructureLabels: boolean;
   autoAttackMode: boolean;
   setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
   setTarget: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
@@ -180,14 +179,7 @@ const findNearestWalkableEdgeTile = (
  */
 const Sector: React.FC<SectorProps> = (props) => {
   // Incoming props
-  const {
-    sector,
-    sectorWindow,
-    target,
-    showActive,
-    showStructureLabels,
-    autoAttackMode,
-  } = props;
+  const { sector, sectorWindow, target, showActive, autoAttackMode } = props;
   // The window always contains the current sector: crossings move into a
   // sector that was part of the previous window
   const centerEntry = sectorWindow.sectors.find((entry) => entry.sector === sector);
@@ -216,6 +208,11 @@ const Sector: React.FC<SectorProps> = (props) => {
   const [currentStructure, setCurrentStructure] = useState<VillageStructure | null>(
     null,
   );
+  // Structure under the pointer (sticky while interacting with the panel so
+  // the pointer can leave the canvas to click "Go to" without clearing).
+  const [hoveredStructure, setHoveredStructure] = useState<VillageStructure | null>(
+    null,
+  );
   const [logbookModalOpen, setLogbookModalOpen] = useState<boolean>(false);
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
   const [showRaidModal, setShowRaidModal] = useState<boolean>(false);
@@ -227,8 +224,9 @@ const Sector: React.FC<SectorProps> = (props) => {
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const usersRef = useRef<SectorUser[]>([]);
   const showUsersRef = useRef<boolean>(showActive);
-  const showStructureLabelsRef = useRef<boolean>(showStructureLabels);
   const minBracketDrawRef = useRef<number>(storedBracket);
+  const hoveredStructureIdRef = useRef<string | null>(null);
+  const structuresRef = useRef<VillageStructure[]>([]);
   const showAllyAttackRef = useRef<boolean>(allyAttack);
   const userRef = useRef<UserWithRelations>(undefined);
   const lastAutoAttackTimeRef = useRef<number | null>(null);
@@ -354,6 +352,7 @@ const Sector: React.FC<SectorProps> = (props) => {
     if (base.some((s) => s.route === "/shrine")) return base;
     return [...base, createShrineStructure(sectorMap, props.tile.t)];
   }, [villageData?.structures, sectorMap, props.tile.t]);
+  structuresRef.current = structures;
 
   // Query for raids in this sector (only when user is in this sector)
   const { data: sectorRaidsData } = api.raids.getAvailableRaids.useQuery(
@@ -1220,11 +1219,14 @@ const Sector: React.FC<SectorProps> = (props) => {
     const entries = [...registry.entries.values()];
     interactionGroupsRef.current = entries.map((render) => render.interaction);
     assetsGroupsRef.current = entries.map((render) => render.assets);
-    structureSpritesRef.current = entries.flatMap((render) =>
-      render.assets.children.filter(
+    // The HTML structure card can route only within the active sector. Keep
+    // neighboring-sector structures out of this raycast collection so their
+    // local coordinates cannot be mistaken for a destination in this sector.
+    const currentAssets = registry.entries.get(sectorRef.current)?.assets;
+    structureSpritesRef.current =
+      currentAssets?.children.filter(
         (child): child is Sprite => child.userData.type === "structure",
-      ),
-    );
+      ) ?? [];
     animatedMaterialsRef.current = entries.flatMap(
       (render) => render.animatedMaterials,
     );
@@ -1515,10 +1517,6 @@ const Sector: React.FC<SectorProps> = (props) => {
   useEffect(() => {
     showUsersRef.current = showActive;
   }, [showActive]);
-
-  useEffect(() => {
-    showStructureLabelsRef.current = showStructureLabels;
-  }, [showStructureLabels]);
 
   useEffect(() => {
     isAttackingRef.current = isAttacking;
@@ -1944,6 +1942,21 @@ const Sector: React.FC<SectorProps> = (props) => {
       const onClick = (e: MouseEvent) => {
         // Find intersects with the scene
         setRaycasterFromMouse(raycaster, sceneRef, e, camera);
+        // Sticky-select a structure under the pointer so touch / click can
+        // open the "Go to" card the same way desktop hover does.
+        const structureHit = raycaster.intersectObjects(
+          structureSpritesRef.current,
+          false,
+        )[0];
+        const structureId = structureHit?.object.userData.structureId;
+        if (typeof structureId === "string") {
+          if (structureId !== hoveredStructureIdRef.current) {
+            hoveredStructureIdRef.current = structureId;
+            setHoveredStructure(
+              structuresRef.current.find((s) => s.id === structureId) ?? null,
+            );
+          }
+        }
         // PERFORMANCE: Only raycast against interaction and users/quest groups
         const intersects = raycaster.intersectObjects([
           ...interactionGroupsRef.current,
@@ -2129,18 +2142,21 @@ const Sector: React.FC<SectorProps> = (props) => {
           endQuest();
         }
 
-        // Building name labels: hovered building only, or every building
-        // while the travel page's label toggle is on
+        // Building hover for the fixed HTML "Go to" card. Only update while the
+        // pointer is on the map so moving onto the card itself keeps the selection.
         const endStructures = profiler.mark("animate_intersect_structures");
-        intersectStructures({
-          structureSprites: structureSpritesRef.current,
-          raycaster,
-          showAll: showStructureLabelsRef.current,
-          pointerOnMap: pointerOnMapRef.current,
-          camera,
-          viewportWidth: cachedWidth,
-          viewportHeight: cachedHeight,
-        });
+        if (pointerOnMapRef.current) {
+          const hoveredId = intersectStructures({
+            structureSprites: structureSpritesRef.current,
+            raycaster,
+            pointerOnMap: true,
+          });
+          if (hoveredId !== hoveredStructureIdRef.current) {
+            hoveredStructureIdRef.current = hoveredId;
+            const next = structuresRef.current.find((s) => s.id === hoveredId) ?? null;
+            setHoveredStructure(next);
+          }
+        }
         endStructures();
 
         // Highlight the hover path across the whole 3x3 window (offsetOfSector
@@ -2332,8 +2348,44 @@ const Sector: React.FC<SectorProps> = (props) => {
           </div>
         </div>
       )}
-      {activeRaid && (
+      {hoveredStructure && hoveredStructure.id !== currentStructure?.id && (
         <div className="absolute right-4 bottom-4 z-20 rounded-lg bg-black/70 p-4 text-white shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="flex-shrink-0">
+              <Image
+                src={hoveredStructure.image}
+                alt={hoveredStructure.name}
+                width={48}
+                height={48}
+                className="rounded-md"
+              />
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg">{hoveredStructure.name}</h3>
+              <button
+                type="button"
+                onClick={() =>
+                  setTarget({
+                    x: hoveredStructure.longitude,
+                    y: hoveredStructure.latitude,
+                  })
+                }
+                className="mt-2 inline-block rounded-md bg-blue-500 px-4 py-2 font-medium text-sm text-white transition-colors hover:bg-blue-600"
+              >
+                Go to {hoveredStructure.name}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {activeRaid && (
+        <div
+          className={`absolute right-4 z-20 rounded-lg bg-black/70 p-4 text-white shadow-lg ${
+            hoveredStructure && hoveredStructure.id !== currentStructure?.id
+              ? "bottom-28"
+              : "bottom-4"
+          }`}
+        >
           <div className="flex items-center gap-4">
             <Swords className="h-12 w-12 text-red-500" />
             <div>

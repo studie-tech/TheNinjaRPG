@@ -12,7 +12,6 @@ import {
   Mesh,
   MeshBasicMaterial,
   NearestFilter,
-  type OrthographicCamera,
   type Raycaster,
   Sprite,
   SpriteMaterial,
@@ -46,10 +45,6 @@ import {
   type DecorationAsset,
   resolveDecorationAsset,
 } from "@/libs/sector-map/decorations";
-import {
-  type LabelScreenRect,
-  selectNonOverlappingLabels,
-} from "@/libs/sector-map/label-collision";
 import {
   resolveStructureTerrainSpec,
   resolveTerrainSpec,
@@ -992,258 +987,21 @@ export const createMultipleUserSprite = (
 };
 
 /**
- * Floating name label for a village structure, rendered to a canvas so the
- * whole label is a single sprite; starts hidden and is toggled by
- * intersectStructures.
- */
-export const wrapStructureLabelWords = (
-  text: string,
-  measureText: (line: string) => number,
-  maxWidth: number,
-) => {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [""];
-
-  const lines: string[] = [];
-  let currentLine = words[0] ?? "";
-  for (const word of words.slice(1)) {
-    const candidate = `${currentLine} ${word}`;
-    if (measureText(candidate) <= maxWidth) {
-      currentLine = candidate;
-    } else {
-      lines.push(currentLine);
-      currentLine = word;
-    }
-  }
-  lines.push(currentLine);
-  return lines;
-};
-
-export const wrapStructureLabelCharacters = (
-  text: string,
-  measureText: (line: string) => number,
-  maxWidth: number,
-) => {
-  if (measureText(text) <= maxWidth) return [text];
-
-  const lines: string[] = [];
-  let currentLine = "";
-  for (const character of text) {
-    const candidate = `${currentLine}${character}`;
-    if (currentLine && measureText(candidate) > maxWidth) {
-      lines.push(currentLine);
-      currentLine = character;
-    } else {
-      currentLine = candidate;
-    }
-  }
-  if (currentLine) lines.push(currentLine);
-  return lines;
-};
-
-export const createStructureLabel = (structure: VillageStructure, h: number) => {
-  const canvasWidth = 512;
-  const horizontalPadding = 30;
-  const verticalPadding = 12;
-  const maxTextWidth = canvasWidth - horizontalPadding * 2;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvasWidth;
-  canvas.height = 84;
-  const context = canvas.getContext("2d");
-  let canvasHeight = canvas.height;
-  if (context) {
-    // Wrap long multi-word names before shrinking the font. This preserves a
-    // readable type size for labels such as "Administration Building".
-    let fontSize = 54;
-    context.font = `600 ${fontSize}px sans-serif`;
-    let lines = wrapStructureLabelWords(
-      structure.name,
-      (line) => context.measureText(line).width,
-      maxTextWidth,
-    );
-    while (
-      fontSize > 22 &&
-      lines.some((line) => context.measureText(line).width > maxTextWidth)
-    ) {
-      fontSize -= 2;
-      context.font = `600 ${fontSize}px sans-serif`;
-      lines = wrapStructureLabelWords(
-        structure.name,
-        (line) => context.measureText(line).width,
-        maxTextWidth,
-      );
-    }
-    // A single unbroken word may still be wider than the canvas at the
-    // minimum font size. Split only those remaining oversized lines.
-    lines = lines.flatMap((line) =>
-      wrapStructureLabelCharacters(
-        line,
-        (candidate) => context.measureText(candidate).width,
-        maxTextWidth,
-      ),
-    );
-
-    const lineHeight = Math.ceil(fontSize * 1.04);
-    canvasHeight = Math.max(76, lines.length * lineHeight + verticalPadding * 2);
-    canvas.height = canvasHeight;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.font = `600 ${fontSize}px sans-serif`;
-    context.lineJoin = "round";
-    context.fillStyle = "rgba(3, 10, 8, 0.68)";
-    context.beginPath();
-    context.roundRect(5, 5, canvasWidth - 10, canvasHeight - 10, 16);
-    context.fill();
-    context.strokeStyle = "rgba(255, 255, 255, 0.34)";
-    context.lineWidth = 2;
-    context.stroke();
-    context.fillStyle = "rgba(255, 255, 255, 0.94)";
-    context.shadowColor = "rgba(0, 0, 0, 0.9)";
-    context.shadowBlur = 5;
-    context.shadowOffsetY = 2;
-    const firstLineY = (canvasHeight - lines.length * lineHeight) / 2 + lineHeight / 2;
-    lines.forEach((line, index) => {
-      const y = firstLineY + index * lineHeight;
-      context.fillText(line, canvasWidth / 2, y);
-    });
-  }
-  const texture = createTexture(canvas);
-  texture.generateMipmaps = false;
-  texture.minFilter = LinearFilter;
-  texture.needsUpdate = true;
-  const material = new SpriteMaterial({
-    map: texture,
-    depthWrite: false,
-    depthTest: false,
-  });
-  // Signal to disposeGroupPreservingShared that this texture is not shared
-  // and must be disposed together with the material to avoid leaking GPU memory
-  material.userData.ownsMap = true;
-  const sprite = new Sprite(material);
-  const labelWidth = h * 3.5;
-  const labelHeight = labelWidth * (canvasHeight / canvasWidth);
-  sprite.scale.set(labelWidth, labelHeight, 1);
-  // Anchor at the bottom edge so zoom compensation grows the label upwards,
-  // away from the building, instead of over it
-  sprite.center.set(0.5, 0);
-  sprite.renderOrder = 10;
-  sprite.name = `structure-label-${structure.id}`;
-  sprite.userData.type = "structureLabel";
-  sprite.userData.baseWidth = labelWidth;
-  sprite.userData.baseHeight = labelHeight;
-  sprite.visible = false;
-  return sprite;
-};
-
-/** Camera zoom at which structure labels render at their authored world size */
-const STRUCTURE_LABEL_REFERENCE_ZOOM = 2;
-
-/**
- * Keep labels readable without letting them dominate small screens or a
- * zoomed-out map. At normal desktop zoom the authored size is preserved;
- * narrow layouts and distant views progressively reduce it.
- */
-export const getStructureLabelScale = (viewportWidth: number, cameraZoom: number) => {
-  const viewportScale = Math.min(1, Math.max(0.72, viewportWidth / 1000));
-  const zoomScale = Math.min(
-    1.6,
-    Math.max(0.65, STRUCTURE_LABEL_REFERENCE_ZOOM / Math.max(0.1, cameraZoom)),
-  );
-  return viewportScale * zoomScale;
-};
-
-/**
- * Toggle building labels each frame. The hovered label always wins; when the
- * label toggle is enabled, remaining labels are admitted in viewport-center
- * priority order only when their screen rectangles do not overlap. Visible
- * labels are counter-scaled so their text stays readable at every zoom level.
+ * Raycast village structure sprites under the pointer. Returns the hovered
+ * structure id (or null) so the sector UI can show a fixed HTML "Go to"
+ * card that stays readable at every resolution and zoom level.
  */
 export const intersectStructures = (info: {
   structureSprites: Sprite[];
   raycaster: Raycaster;
-  showAll: boolean;
   pointerOnMap: boolean;
-  camera: OrthographicCamera;
-  viewportWidth: number;
-  viewportHeight: number;
-}) => {
-  const {
-    structureSprites,
-    raycaster,
-    showAll,
-    pointerOnMap,
-    camera,
-    viewportWidth,
-    viewportHeight,
-  } = info;
-  let hovered: Sprite | null = null;
-  if (pointerOnMap && structureSprites.length > 0) {
-    const intersects = raycaster.intersectObjects(structureSprites, false);
-    hovered = (intersects[0]?.object as Sprite) ?? null;
-  }
-  const zoomComp = getStructureLabelScale(viewportWidth, camera.zoom);
-  const projected = new Vector3();
-  const rectBySprite = new Map<Sprite, LabelScreenRect>();
-  structureSprites.forEach((sprite) => {
-    const label = sprite.userData.labelSprite as Sprite | undefined;
-    if (!label) return;
-    label.visible = false;
-    const width = (label.userData.baseWidth as number) * zoomComp;
-    if (Math.abs(label.scale.x - width) > 0.001) {
-      label.scale.set(width, (label.userData.baseHeight as number) * zoomComp, 1);
-    }
-    label.getWorldPosition(projected).project(camera);
-    const screenX = ((projected.x + 1) / 2) * viewportWidth;
-    const screenBottom = ((1 - projected.y) / 2) * viewportHeight;
-    const pixelWidth =
-      (label.scale.x * camera.zoom * viewportWidth) / (camera.right - camera.left);
-    const pixelHeight =
-      (label.scale.y * camera.zoom * viewportHeight) / (camera.top - camera.bottom);
-    rectBySprite.set(sprite, {
-      left: screenX - pixelWidth / 2,
-      right: screenX + pixelWidth / 2,
-      top: screenBottom - pixelHeight,
-      bottom: screenBottom,
-    });
-  });
-
-  const hoveredLabel = hovered?.userData.labelSprite as Sprite | undefined;
-  if (hoveredLabel) hoveredLabel.visible = true;
-  if (!showAll) return;
-
-  const viewportCenterX = viewportWidth / 2;
-  const viewportCenterY = viewportHeight / 2;
-  const candidates = structureSprites.flatMap((sprite) => {
-    if (sprite === hovered) return [];
-    const label = sprite.userData.labelSprite as Sprite | undefined;
-    const rect = rectBySprite.get(sprite);
-    if (!label || !rect) return [];
-    if (
-      rect.right < 0 ||
-      rect.left > viewportWidth ||
-      rect.bottom < 0 ||
-      rect.top > viewportHeight
-    ) {
-      return [];
-    }
-    const centerX = (rect.left + rect.right) / 2;
-    const centerY = (rect.top + rect.bottom) / 2;
-    return [
-      {
-        item: label,
-        rect,
-        priority:
-          ((centerX - viewportCenterX) / viewportWidth) ** 2 +
-          ((centerY - viewportCenterY) / viewportHeight) ** 2,
-      },
-    ];
-  });
-  const reserved = hovered ? [rectBySprite.get(hovered)].filter(Boolean) : [];
-  selectNonOverlappingLabels(candidates, reserved as LabelScreenRect[]).forEach(
-    (label) => {
-      label.visible = true;
-    },
-  );
+}): string | null => {
+  const { structureSprites, raycaster, pointerOnMap } = info;
+  if (!pointerOnMap || structureSprites.length === 0) return null;
+  const intersects = raycaster.intersectObjects(structureSprites, false);
+  const hovered = intersects[0]?.object as Sprite | undefined;
+  const structureId = hovered?.userData.structureId;
+  return typeof structureId === "string" ? structureId : null;
 };
 
 const WALL_CORNERS_BY_DIRECTION = [
@@ -1327,17 +1085,12 @@ export const createVillageWallPanelSprite = (
 };
 
 /**
- * Sort transparent sector sprites back-to-front from their ground contact,
- * then keep structure labels in a final overlay pass. The renderer deliberately
- * leaves object sorting disabled, so this child order is what prevents trees,
- * buildings and walls from painting over label text.
+ * Sort transparent sector sprites back-to-front from their ground contact.
+ * The renderer deliberately leaves object sorting disabled, so this child
+ * order is what prevents trees, buildings and walls from painting over each other.
  */
 export const sortSectorAssetsByGroundContact = (group: Group) => {
   group.children.sort((a, b) => {
-    const aIsLabel = a.userData.type === "structureLabel";
-    const bIsLabel = b.userData.type === "structureLabel";
-    if (aIsLabel !== bIsLabel) return aIsLabel ? 1 : -1;
-
     const aSortY =
       typeof a.userData.assetSortY === "number"
         ? (a.userData.assetSortY as number)
@@ -1464,13 +1217,6 @@ export const drawVillage = (
       sprite.userData.structureName = structure.name;
       sprite.userData.assetSortY = y + h / 10;
       group.add(sprite);
-      // Floating name label, revealed on hover or via the travel page's
-      // label toggle (see intersectStructures). Bottom-anchored just above
-      // the building sprite's top edge.
-      const label = createStructureLabel(structure, h);
-      label.position.set(x, y + h / 10 + h * 1.55, STATUS_LAYER);
-      sprite.userData.labelSprite = label;
-      group.add(label);
     }
   }
 };
