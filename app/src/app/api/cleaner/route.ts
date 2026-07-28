@@ -36,16 +36,12 @@ import {
   village,
   warKill,
 } from "@/drizzle/schema";
-import { lockWithDailyTimer } from "@/libs/gamesettings";
+import { lockWithDailyTimer, updateGameSetting } from "@/libs/gamesettings";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { drizzleDB } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
 
 export async function GET() {
-  // The cleaner includes daily decay and must only run once per UTC day.
-  const timerCheck = await lockWithDailyTimer(drizzleDB, "cleaner-daily");
-  if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
-
   try {
     // Range deletes use indexed ordering and a bounded batch so one large
     // backlog cannot consume the entire route execution window.
@@ -360,10 +356,28 @@ export async function GET() {
       sql`UPDATE ${userData} u INNER JOIN ${clan} c ON u.clanId = c.id SET u.villageId = c.villageId WHERE c.hasHideout = true AND u.villageId != c.villageId`,
     );
 
-    // Step 30: Apply the daily 5% tavern activity decay.
-    await drizzleDB.execute(
-      sql`UPDATE ${userData} SET tavernMessages = FLOOR(tavernMessages * 0.95)`,
-    );
+    // Step 30: Gate only the non-idempotent daily decay. The surrounding
+    // housekeeping remains safe to retry if a later cleanup statement fails.
+    // Keeping the marker after a successful decay also prevents a retry from
+    // applying the reduction twice.
+    const tavernDecayTimer = await lockWithDailyTimer(drizzleDB, "cleaner-daily");
+    if (tavernDecayTimer.isNewDay) {
+      try {
+        await drizzleDB.execute(
+          sql`UPDATE ${userData} SET tavernMessages = FLOOR(tavernMessages * 0.95)`,
+        );
+      } catch (cause) {
+        // The decay statement failed, so allow a later cleaner retry to attempt
+        // this day's decay again.
+        await updateGameSetting(
+          drizzleDB,
+          "cleaner-daily",
+          0,
+          tavernDecayTimer.prevTime,
+        );
+        throw cause;
+      }
+    }
 
     // Step 31: Clear automatedModeration older than  3 months
     await drizzleDB.execute(
