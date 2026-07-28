@@ -355,7 +355,15 @@ export const saveUsage = async (
     if (uniqueData.length > 0) {
       await client
         .insert(dataBattleAction)
-        .values(uniqueData)
+        // MySQL UNIQUE indexes treat NULL values as distinct. Normalize the
+        // absent bloodline dimension so repeated AI/bloodline aggregates hit
+        // the existing row and increment it atomically.
+        .values(
+          uniqueData.map((entry) => ({
+            ...entry,
+            relatedBloodlineId: entry.relatedBloodlineId ?? "",
+          })),
+        )
         .onDuplicateKeyUpdate({
           set: {
             count: sql`${dataBattleAction.count} + 1`,

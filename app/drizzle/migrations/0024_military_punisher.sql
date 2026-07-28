@@ -1,0 +1,10 @@
+ALTER TABLE `DataBattleAction` MODIFY COLUMN `relatedBloodlineId` varchar(191) DEFAULT '';
+CREATE INDEX `AutoMod_createdAt_idx` ON `AutomatedModeration` (`createdAt`);
+CREATE INDEX `Battle_updatedAt_idx` ON `Battle` (`updatedAt`);
+CREATE INDEX `DailyBankInterest_updatedAt_idx` ON `DailyBankInterest` (`updatedAt`);
+CREATE INDEX `DailyBankInterest_claimed_updatedAt_idx` ON `DailyBankInterest` (`claimed`,`updatedAt`);
+CREATE INDEX `DataBattleActions_updatedAt_idx` ON `DataBattleAction` (`updatedAt`);
+CREATE INDEX `HistoricalIp_usedAt_idx` ON `HistoricalIp` (`usedAt`);
+CREATE INDEX `RankedPvpQueue_createdAt_idx` ON `RankedPvpQueue` (`createdAt`);
+CREATE INDEX `UserActivityEvent_createdAt_idx` ON `UserActivityEvent` (`createdAt`);
+CREATE INDEX `WarKill_killedAt_idx` ON `WarKill` (`killedAt`);

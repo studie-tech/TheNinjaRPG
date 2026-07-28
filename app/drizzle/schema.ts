@@ -250,6 +250,7 @@ export const battle = mysqlTable(
   (table) => {
     return {
       idVersionKey: uniqueIndex("Battle_id_version_key").on(table.id, table.version),
+      updatedAtIdx: index("Battle_updatedAt_idx").on(table.updatedAt),
       battleTypeCreatedAt: index("Battle_battleType_createdAt_idx").on(
         table.battleType,
         table.createdAt,
@@ -1671,6 +1672,7 @@ export const rankedPvpQueue = mysqlTable(
     return {
       userIdIdx: index("RankedPvpQueue_userId_idx").on(table.userId),
       rankedLpIdx: index("RankedPvpQueue_rankedLp_idx").on(table.rankedLp),
+      createdAtIdx: index("RankedPvpQueue_createdAt_idx").on(table.createdAt),
     };
   },
 );
@@ -2465,14 +2467,20 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   raidBuffs: many(userRaidBuff),
 }));
 
-export const userActivityEvent = mysqlTable("UserActivityEvent", {
-  id: int("id").primaryKey().autoincrement().notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  streak: int("streak").notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
-    .default(sql`(CURRENT_TIMESTAMP(3))`)
-    .notNull(),
-});
+export const userActivityEvent = mysqlTable(
+  "UserActivityEvent",
+  {
+    id: int("id").primaryKey().autoincrement().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    streak: int("streak").notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    createdAtIdx: index("UserActivityEvent_createdAt_idx").on(table.createdAt),
+  }),
+);
 
 export const historicalIp = mysqlTable(
   "HistoricalIp",
@@ -2489,6 +2497,7 @@ export const historicalIp = mysqlTable(
       userIdIpKey: uniqueIndex("HistoricalIp_userId_ip_key").on(table.userId, table.ip),
       userIdIdx: index("HistoricalIp_userId_idx").on(table.userId),
       userIpIdx: index("HistoricalIp_userIp_idx").on(table.ip),
+      usedAtIdx: index("HistoricalIp_usedAt_idx").on(table.usedAt),
     };
   },
 );
@@ -2907,6 +2916,7 @@ export const automatedModeration = mysqlTable(
     return {
       userIdIdx: index("AutoMod_userId_idx").on(table.userId),
       relationTypeIdx: index("AutoMod_relationType_idx").on(table.relationType),
+      createdAtIdx: index("AutoMod_createdAt_idx").on(table.createdAt),
     };
   },
 );
@@ -3298,7 +3308,7 @@ export const dataBattleAction = mysqlTable(
     id: int("id").autoincrement().primaryKey().notNull(),
     type: mysqlEnum("type", consts.BattleDataEntryType).notNull(),
     contentId: varchar("contentId", { length: 191 }).notNull(),
-    relatedBloodlineId: varchar("relatedBloodlineId", { length: 191 }),
+    relatedBloodlineId: varchar("relatedBloodlineId", { length: 191 }).default(""),
     battleType: mysqlEnum("battleType", consts.BattleTypes).notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
@@ -3324,6 +3334,7 @@ export const dataBattleAction = mysqlTable(
       contentIdIdx: index("DataBattleActions_contentId_idx").on(table.contentId),
       countIdx: index("DataBattleActions_count_idx").on(table.count),
       createdAt: index("DataBattleActions_createdAt").on(table.createdAt),
+      updatedAtIdx: index("DataBattleActions_updatedAt_idx").on(table.updatedAt),
     };
   },
 );
@@ -3740,6 +3751,11 @@ export const dailyBankInterest = mysqlTable(
         table.date,
       ),
       userIdIdx: index("DailyBankInterest_userId_idx").on(table.userId),
+      updatedAtIdx: index("DailyBankInterest_updatedAt_idx").on(table.updatedAt),
+      claimedUpdatedAtIdx: index("DailyBankInterest_claimed_updatedAt_idx").on(
+        table.claimed,
+        table.updatedAt,
+      ),
     };
   },
 );
@@ -4186,6 +4202,7 @@ export const warKill = mysqlTable(
       victimVillageIdIdx: index("WarKill_victimVillageId_idx").on(
         table.victimVillageId,
       ),
+      killedAtIdx: index("WarKill_killedAt_idx").on(table.killedAt),
     };
   },
 );

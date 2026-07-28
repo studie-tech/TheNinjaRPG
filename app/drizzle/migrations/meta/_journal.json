@@ -169,6 +169,13 @@
       "when": 1784831856090,
       "tag": "0023_shallow_blackheart",
       "breakpoints": false
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1785235420047,
+      "tag": "0024_military_punisher",
+      "breakpoints": false
     }
   ]
 }

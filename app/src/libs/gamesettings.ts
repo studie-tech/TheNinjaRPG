@@ -138,12 +138,16 @@ export const lockWithMinuteTimer = async (client: DrizzleClient, name: string) =
 export const lockWithDailyTimer = async (client: DrizzleClient, name: string) => {
   const timer = await getGameSetting(client, name);
   const prevTime = timer.time;
-  const isNewDay = new Date().getUTCDate() !== prevTime.getUTCDate();
+  const now = new Date();
+  const isNewDay =
+    now.getUTCFullYear() !== prevTime.getUTCFullYear() ||
+    now.getUTCMonth() !== prevTime.getUTCMonth() ||
+    now.getUTCDate() !== prevTime.getUTCDate();
   let response: string | null = null;
   if (!isNewDay) {
     response = "Wait until the next day to run this again";
   } else {
-    await updateGameSetting(client, name, 0, new Date());
+    await updateGameSetting(client, name, 0, now);
   }
   return { isNewDay, prevTime, response: Response.json(response, { status: 200 }) };
 };
