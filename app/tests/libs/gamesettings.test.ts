@@ -1,16 +1,12 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { lockWithDailyTimer } from "@/libs/gamesettings";
 import type { DrizzleClient } from "@/server/db";
 
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe("lockWithDailyTimer", () => {
-  it("treats the same day number in a different month as a new day", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-28T12:00:00.000Z"));
-
+  it("treats the same day number in a different year as a new day", async () => {
+    const now = new Date();
+    const previousYear = new Date(now);
+    previousYear.setUTCFullYear(now.getUTCFullYear() - 1);
     const where = vi.fn().mockResolvedValue(undefined);
     const set = vi.fn().mockReturnValue({ where });
     const update = vi.fn().mockReturnValue({ set });
@@ -21,7 +17,7 @@ describe("lockWithDailyTimer", () => {
             id: "timer-id",
             name: "cleaner-daily",
             value: 0,
-            time: new Date("2026-06-28T12:00:00.000Z"),
+            time: previousYear,
           }),
         },
       },
