@@ -36,25 +36,28 @@ import {
   village,
   warKill,
 } from "@/drizzle/schema";
-import { checkGameTimerMinutes, updateGameSetting } from "@/libs/gamesettings";
+import { lockWithDailyTimer } from "@/libs/gamesettings";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { drizzleDB } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
 
 export async function GET() {
-  // Check timer
-  const frequencyMinutes = 10;
-  const response = await checkGameTimerMinutes(drizzleDB, frequencyMinutes);
-  if (response) return response;
+  // The cleaner includes daily decay and must only run once per UTC day.
+  const timerCheck = await lockWithDailyTimer(drizzleDB, "cleaner-daily");
+  if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
   try {
-    // Update timer
-    await updateGameSetting(drizzleDB, `timer-${frequencyMinutes}m`, 0, new Date());
+    // Range deletes use indexed ordering and a bounded batch so one large
+    // backlog cannot consume the entire route execution window.
+    const rangeCleanupBatchSize = 10_000;
 
     // Step 1: Delete from battle table where updatedAt is older than 1 day
-    await drizzleDB
-      .delete(battle)
-      .where(lte(battle.updatedAt, new Date(Date.now() - 1000 * 60 * 60 * 24)));
+    await drizzleDB.execute(
+      sql`DELETE FROM ${battle}
+          WHERE updatedAt < CURRENT_TIMESTAMP(3) - INTERVAL 1 DAY
+          ORDER BY updatedAt
+          LIMIT ${rangeCleanupBatchSize}`,
+    );
 
     // Step 2: Update users who are in battle where the battle no longer exists to be awake and not in battle
     await drizzleDB.execute(
@@ -357,14 +360,17 @@ export async function GET() {
       sql`UPDATE ${userData} u INNER JOIN ${clan} c ON u.clanId = c.id SET u.villageId = c.villageId WHERE c.hasHideout = true AND u.villageId != c.villageId`,
     );
 
-    // Step 30: Reduce tavern activity every day by 50%
+    // Step 30: Apply the daily 5% tavern activity decay.
     await drizzleDB.execute(
       sql`UPDATE ${userData} SET tavernMessages = FLOOR(tavernMessages * 0.95)`,
     );
 
     // Step 31: Clear automatedModeration older than  3 months
     await drizzleDB.execute(
-      sql`DELETE FROM ${automatedModeration} WHERE createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 3 MONTH`,
+      sql`DELETE FROM ${automatedModeration}
+          WHERE createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 3 MONTH
+          ORDER BY createdAt
+          LIMIT ${rangeCleanupBatchSize}`,
     );
 
     // Step 32: Clear old paypal subscriptions
@@ -387,37 +393,59 @@ export async function GET() {
 
     // Step 34: Clear daily bank interest older than 7 days
     await drizzleDB.execute(
-      sql`DELETE FROM ${dailyBankInterest} WHERE updatedAt < CURRENT_TIMESTAMP(3) - INTERVAL 7 DAY`,
+      sql`DELETE FROM ${dailyBankInterest}
+          WHERE updatedAt < CURRENT_TIMESTAMP(3) - INTERVAL 7 DAY
+          ORDER BY updatedAt
+          LIMIT ${rangeCleanupBatchSize}`,
     );
 
     // Step 35: Clear daily bank interest older than 2 days which are already claimed
     await drizzleDB.execute(
-      sql`DELETE FROM ${dailyBankInterest} WHERE claimed = 1 AND updatedAt < CURRENT_TIMESTAMP(3) - INTERVAL 2 DAY`,
+      sql`DELETE FROM ${dailyBankInterest}
+          WHERE claimed = 1
+          AND updatedAt < CURRENT_TIMESTAMP(3) - INTERVAL 2 DAY
+          ORDER BY updatedAt
+          LIMIT ${rangeCleanupBatchSize}`,
     );
 
     // Delete historical ips older than 90 days
     await drizzleDB.execute(
-      sql`DELETE FROM ${historicalIp} WHERE usedAt < CURRENT_TIMESTAMP(3) - INTERVAL 90 DAY`,
+      sql`DELETE FROM ${historicalIp}
+          WHERE usedAt < CURRENT_TIMESTAMP(3) - INTERVAL 90 DAY
+          ORDER BY usedAt
+          LIMIT ${rangeCleanupBatchSize}`,
     );
 
     // Clean activity events older than 10 days
     await drizzleDB.execute(
-      sql`DELETE FROM ${userActivityEvent} WHERE createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 10 DAY`,
+      sql`DELETE FROM ${userActivityEvent}
+          WHERE createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 10 DAY
+          ORDER BY createdAt
+          LIMIT ${rangeCleanupBatchSize}`,
     );
 
     // Clear rankedPvpQueue entries older than 1 day
     await drizzleDB.execute(
-      sql`DELETE FROM ${rankedPvpQueue} WHERE createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 1 DAY`,
+      sql`DELETE FROM ${rankedPvpQueue}
+          WHERE createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 1 DAY
+          ORDER BY createdAt
+          LIMIT ${rangeCleanupBatchSize}`,
     );
 
     // Clear war kills older than 10 days
     await drizzleDB.execute(
-      sql`DELETE FROM ${warKill} WHERE killedAt < CURRENT_TIMESTAMP(3) - INTERVAL 30 DAY`,
+      sql`DELETE FROM ${warKill}
+          WHERE killedAt < CURRENT_TIMESTAMP(3) - INTERVAL 30 DAY
+          ORDER BY killedAt
+          LIMIT ${rangeCleanupBatchSize}`,
     );
 
     // Clear dataBattleAction entries older than 30 days
     await drizzleDB.execute(
-      sql`DELETE FROM ${dataBattleAction} WHERE updatedAt < CURRENT_TIMESTAMP(3) - INTERVAL 30 DAY`,
+      sql`DELETE FROM ${dataBattleAction}
+          WHERE updatedAt < CURRENT_TIMESTAMP(3) - INTERVAL 30 DAY
+          ORDER BY updatedAt
+          LIMIT ${rangeCleanupBatchSize}`,
     );
 
     // Handle expired exclusive raids - return sectors to neutral if raid timed out without boss defeat

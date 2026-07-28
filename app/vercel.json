@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cleaner",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 1 * * *"
     },
     {
       "path": "/api/daily-votes",
