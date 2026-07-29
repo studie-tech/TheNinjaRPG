@@ -89,12 +89,13 @@ export const lockWithGameTimer = async (
 export const lockWithHourlyTimer = async (client: DrizzleClient, name: string) => {
   const timer = await getGameSetting(client, name);
   const prevTime = timer.time;
-  const isNewHour = new Date().getUTCHours() !== prevTime.getUTCHours();
+  const now = new Date();
+  const isNewHour = now.getTime() - prevTime.getTime() >= 60 * 60 * 1000;
   let response: string | null = null;
   if (!isNewHour) {
-    response = "Wait until the next hour to run this again";
+    response = "Wait until an hour has passed before running this again";
   } else {
-    await updateGameSetting(client, name, 0, new Date());
+    await updateGameSetting(client, name, 0, now);
   }
   return { isNewHour, prevTime, response: Response.json(response, { status: 200 }) };
 };

@@ -36,12 +36,21 @@ import {
   village,
   warKill,
 } from "@/drizzle/schema";
-import { lockWithDailyTimer, updateGameSetting } from "@/libs/gamesettings";
+import {
+  lockWithDailyTimer,
+  lockWithHourlyTimer,
+  updateGameSetting,
+} from "@/libs/gamesettings";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { drizzleDB } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
 
+const HOURLY_TIMER_NAME = "cleaner-hourly";
+
 export async function GET() {
+  const cleanerTimer = await lockWithHourlyTimer(drizzleDB, HOURLY_TIMER_NAME);
+  if (!cleanerTimer.isNewHour) return cleanerTimer.response;
+
   try {
     // Range deletes use indexed ordering and a bounded batch so one large
     // backlog cannot consume the entire route execution window.
@@ -468,6 +477,13 @@ export async function GET() {
     return Response.json(`OK`);
   } catch (cause) {
     console.error(cause);
+    try {
+      // The cleaner is invoked every ten minutes. Restore the hourly marker
+      // after a failed run so the next invocation can retry the unfinished work.
+      await updateGameSetting(drizzleDB, HOURLY_TIMER_NAME, 0, cleanerTimer.prevTime);
+    } catch (rollbackCause) {
+      console.error("Failed to restore cleaner hourly timer", rollbackCause);
+    }
     if (cause instanceof TRPCError) {
       // An error from tRPC occured
       const httpCode = getHTTPStatusCodeFromError(cause);
