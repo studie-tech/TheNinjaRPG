@@ -17,8 +17,9 @@ Sentry.init({
   // Which errors to ignore (synced with server config)
   ignoreErrors: ["Unauthorized for tRPC endpoint", "You are acting too fast"],
 
-  // Set the environment
-  environment: process.env.NODE_ENV,
+  // Set the environment. NODE_ENV is "production" for every Vercel build, so
+  // VERCEL_ENV is what separates production from preview deployments.
+  environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
 
   // Adds request headers and IP for users, for more info visit:
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
