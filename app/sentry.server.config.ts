@@ -23,8 +23,9 @@ Sentry.init({
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
   sendDefaultPii: true,
 
-  // Set the environment
-  environment: process.env.NODE_ENV,
+  // Set the environment. NODE_ENV is "production" for every Vercel build, so
+  // VERCEL_ENV is what separates production from preview deployments.
+  environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
 
   // Uncomment the line below to enable Spotlight (https://spotlightjs.com)
   // spotlight: process.env.NODE_ENV === 'development',
