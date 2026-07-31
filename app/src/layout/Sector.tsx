@@ -2508,18 +2508,29 @@ const Sector: React.FC<SectorProps> = (props) => {
 
 export default Sector;
 
+/**
+ * Identity of the synthetic shrine, which is created once for the sector state
+ * and again for the rendered scene. Both copies must share an id so a raycast
+ * hit on the shrine sprite resolves back to a structure, the same way it does
+ * for database-backed buildings.
+ */
+const SECTOR_SHRINE_ID = "sector-shrine";
+
 const createShrineStructure = (map: NormalizedSectorMap, globalTileType: number) => {
   const shrineAnchor = map.anchors.find((anchor) => anchor.key === "shrine.default");
-  return createGenericStructure({
-    name: "Sector Shrine",
-    route: "/shrine",
-    image:
-      WAR_SHRINE_IMAGE_BY_BIOME[
-        getBiomeAtSectorAnchor(map, "shrine.default", globalTileType)
-      ],
-    longitude: shrineAnchor?.x ?? 10,
-    latitude: shrineAnchor?.y ?? 5,
-  });
+  return {
+    ...createGenericStructure({
+      name: "Sector Shrine",
+      route: "/shrine",
+      image:
+        WAR_SHRINE_IMAGE_BY_BIOME[
+          getBiomeAtSectorAnchor(map, "shrine.default", globalTileType)
+        ],
+      longitude: shrineAnchor?.x ?? 10,
+      latitude: shrineAnchor?.y ?? 5,
+    }),
+    id: SECTOR_SHRINE_ID,
+  };
 };
 
 interface SorroundingUsersProps {

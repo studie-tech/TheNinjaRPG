@@ -203,6 +203,12 @@ Sentry.init({
     if (isClerkSignOutError(event)) {
       return null; // Drop Clerk sign-out race condition errors
     }
+    if (isClerkSessionTouchNetworkError(event)) {
+      return null; // Drop failed Clerk session heartbeats (no user-visible impact)
+    }
+    if (isNavigationAbortError(event)) {
+      return null; // Drop requests the browser aborted when the user navigated away
+    }
     if (isOutOfMemoryError(event)) {
       return null; // Drop scoped out of memory errors from /travel 3D rendering
     }
@@ -788,6 +794,96 @@ const isClerkSyntaxError = (event: Sentry.ErrorEvent): boolean => {
 };
 
 /**
+ * Check if an error is a request aborted by the browser during navigation.
+ *
+ * When a user navigates (or closes a tab) while requests are still in flight,
+ * the browser rejects them. Firefox words this "AbortError: The operation was
+ * aborted."; Chrome and Safari produce "Failed to fetch" / "Load failed", which
+ * are already filtered above. This is the Firefox equivalent of those entries.
+ *
+ * UX note: no user-visible impact. The requests belong to a page the user has
+ * left; react-query refetches whatever the destination page needs.
+ *
+ * Deliberately narrow - only filters when there is NO stack trace at all, which
+ * is the signature of a browser-level DOMException. Every place this codebase
+ * aborts on purpose (fetchWithTimeout) surfaces the error to its caller with a
+ * real stack, so those keep reporting.
+ */
+const isNavigationAbortError = (event: Sentry.ErrorEvent): boolean => {
+  const exception = event.exception?.values?.[0];
+  const message = exception?.value ?? "";
+  const errorType = exception?.type ?? "";
+  const stackFrames = exception?.stacktrace?.frames ?? [];
+  const mechanism = exception?.mechanism?.type ?? "";
+
+  if (errorType !== "AbortError") return false;
+  if (!message.trim().startsWith("The operation was aborted")) return false;
+
+  // A browser-level abort carries no frames; anything with a stack is ours to fix
+  if (stackFrames.length > 0) return false;
+
+  return mechanism.includes("onunhandledrejection");
+};
+
+/**
+ * Check if an error is a failed Clerk session "touch" request.
+ *
+ * Clerk periodically POSTs to /v1/client/sessions/<id>/touch to refresh the
+ * session's last-active timestamp. On flaky mobile networks (device sleep, WiFi
+ * to cellular handoff, tunnels) this background request fails and Clerk rejects
+ * the promise, which our global handler reports.
+ *
+ * UX note: no user-visible impact. Touch is a heartbeat that only updates
+ * "last active at"; it does not mint or refresh the session token, so a failed
+ * touch never signs the user out or blocks a request. Clerk simply retries on
+ * its next poll. This is deliberately scoped to the touch endpoint - failures on
+ * token or sign-in endpoints DO affect the user and must keep reporting.
+ *
+ * Detection pattern:
+ * - Message begins with "ClerkJS: Network error at"
+ * - The quoted URL is a Clerk host and a /v1/client/sessions/<id>/touch path
+ * - The underlying cause is a network-level TypeError, whose wording differs per
+ *   browser ("Load failed" on Safari, "NetworkError when attempting to fetch
+ *   resource." on Firefox, "Failed to fetch" on Chrome)
+ */
+const isClerkSessionTouchNetworkError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+
+  if (!message.startsWith("ClerkJS: Network error at")) return false;
+
+  // Extract the quoted request URL so the host and path can be validated
+  // properly rather than substring-matched (a spoofed path could otherwise pass)
+  const quotedUrl = /^ClerkJS: Network error at "([^"]+)"/.exec(message)?.[1];
+  if (!quotedUrl) return false;
+
+  let isSessionTouchEndpoint = false;
+  try {
+    const url = new URL(quotedUrl);
+    const isClerkHost =
+      url.hostname.startsWith("clerk.") ||
+      url.hostname.endsWith(".clerk.com") ||
+      url.hostname.endsWith(".clerk.accounts.dev");
+    isSessionTouchEndpoint =
+      isClerkHost && /^\/v1\/client\/sessions\/[^/]+\/touch$/.test(url.pathname);
+  } catch {
+    // Not a parseable URL - do not filter
+    return false;
+  }
+
+  if (!isSessionTouchEndpoint) return false;
+
+  // Only transient network failures; anything else from this endpoint is worth seeing
+  const networkCauses = [
+    "Load failed",
+    "Failed to fetch",
+    "NetworkError when attempting to fetch resource.",
+    "network error",
+    "The network connection was lost.",
+  ];
+  return networkCauses.some((cause) => message.includes(cause));
+};
+
+/**
  * Check if an error is a Clerk sign-out race condition error that should be filtered.
  * These occur when Clerk attempts to sign out a user whose session has already been
  * invalidated server-side. This is a transient race condition in Clerk's sign-out flow:
@@ -1233,6 +1329,14 @@ const isThirdPartyStackOverflowError = (event: Sentry.ErrorEvent): boolean => {
 
     // Anonymous script markers
     if (filename === "<anonymous>" || absPath === "<anonymous>") return true;
+
+    // Cross-origin scripts whose source URL could not be resolved are reported
+    // with the literal strings "undefined"/"null" as the path. Such a frame can
+    // never point at our own code, so it carries no diagnostic value.
+    const isUnresolvedPath = (path: string) => path === "undefined" || path === "null";
+    if (isUnresolvedPath(filename) && (!absPath || isUnresolvedPath(absPath))) {
+      return true;
+    }
 
     // Check for the "undefined:? in ?" pattern (function is "?" with no filename)
     if (func === "?" && !filename && !absPath) return true;
@@ -1919,11 +2023,21 @@ const hasUserscriptStackSignal = (
     return (
       filename.includes("app:///userscripts/") ||
       absPath.includes("app:///userscripts/") ||
-      filename.endsWith(".user.js") ||
-      absPath.endsWith(".user.js") ||
+      isUserscriptFilename(filename) ||
+      isUserscriptFilename(absPath) ||
       hasUserscriptFunctionName(func)
     );
   });
+};
+
+/**
+ * Match a Tampermonkey/Greasemonkey script path. Tampermonkey appends an
+ * injection index to the source URL (e.g. "app:///%20TNR%20Builder.user.js#26"),
+ * so the extension must be matched allowing a trailing fragment or query rather
+ * than only at the very end of the string.
+ */
+const isUserscriptFilename = (path: string): boolean => {
+  return /\.user\.js(?:[#?]|$)/.test(path);
 };
 
 const hasMeaningfulAppCodeFrame = (
