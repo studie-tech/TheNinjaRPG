@@ -58,15 +58,33 @@ export const isTransientDatabaseResponse = (status: number, body: string): boole
   return TRANSIENT_MARKERS.some((marker) => body.includes(marker));
 };
 
-/** Pull the SQL text out of the JSON body the PlanetScale driver posts. */
-const extractQuery = (body: BodyInit | null | undefined): string | null => {
+interface DriverRequest {
+  query: string;
+  /**
+   * True while the statement runs between BEGIN and COMMIT. The driver echoes
+   * the vitess session on every request, and it carries `inTransaction` only
+   * for statements inside a transaction - plain autocommit connections omit it.
+   */
+  inTransaction: boolean;
+}
+
+/** Pull the SQL text and transaction state out of the driver's JSON body. */
+const parseDriverRequest = (
+  body: BodyInit | null | undefined,
+): DriverRequest | null => {
   if (typeof body !== "string") return null;
   try {
     const parsed: unknown = JSON.parse(body);
-    if (parsed && typeof parsed === "object" && "query" in parsed) {
-      const { query } = parsed as { query?: unknown };
-      return typeof query === "string" ? query : null;
-    }
+    if (!parsed || typeof parsed !== "object" || !("query" in parsed)) return null;
+    const { query, session } = parsed as {
+      query?: unknown;
+      session?: { vitessSession?: { inTransaction?: unknown } } | null;
+    };
+    if (typeof query !== "string") return null;
+    return {
+      query,
+      inTransaction: session?.vitessSession?.inTransaction === true,
+    };
   } catch {
     // Not a JSON body (e.g. session creation) - never retried.
   }
@@ -81,6 +99,10 @@ const extractQuery = (body: BodyInit | null | undefined): string | null => {
  * the connection reset, and this codebase grants money/XP through non-idempotent
  * increments, so a blind retry could double-apply a reward.
  *
+ * Statements inside a transaction are also passed through. A reset aborts the
+ * transaction server-side, so re-issuing the read would run it outside the
+ * transaction's snapshot - `paypal.ts` depends on that isolation.
+ *
  * When every attempt fails the final response is returned unchanged, so the
  * driver still raises its normal `DatabaseError` and callers behave as before.
  */
@@ -89,8 +111,8 @@ export const createRetryingFetch = (
   options: RetryOptions = {},
 ): typeof fetch => {
   return async (input, init) => {
-    const query = extractQuery(init?.body);
-    if (!query || !isReadOnlyQuery(query)) {
+    const request = parseDriverRequest(init?.body);
+    if (!request || request.inTransaction || !isReadOnlyQuery(request.query)) {
       return baseFetch(input, init);
     }
 

@@ -859,8 +859,12 @@ const isClerkSessionTouchNetworkError = (event: Sentry.ErrorEvent): boolean => {
   let isSessionTouchEndpoint = false;
   try {
     const url = new URL(quotedUrl);
+    // Anchored so a lookalike host (clerk.attacker.com) cannot suppress reports.
+    // Covers our Clerk custom domains - the CSP in next.config.mjs allows the
+    // clerk.www.* forms, and production currently reports clerk.theninja-rpg.com
+    // - plus Clerk's own domains used by preview deployments.
     const isClerkHost =
-      url.hostname.startsWith("clerk.") ||
+      /^clerk\.(www\.)?theninja-rpg\.(com|ai)$/.test(url.hostname) ||
       url.hostname.endsWith(".clerk.com") ||
       url.hostname.endsWith(".clerk.accounts.dev");
     isSessionTouchEndpoint =

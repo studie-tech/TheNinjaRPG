@@ -19,6 +19,24 @@ const RESET_BODY = JSON.stringify({
 
 const post = (query: string) => ({ method: "POST", body: JSON.stringify({ query }) });
 
+// Shape the driver actually posts once a connection has a session. `inTransaction`
+// is present only between BEGIN and COMMIT; plain autocommit sessions omit it.
+const postInTransaction = (query: string) => ({
+  method: "POST",
+  body: JSON.stringify({
+    query,
+    session: { signature: "sig", vitessSession: { inTransaction: true, autocommit: true } },
+  }),
+});
+
+const postWithSession = (query: string) => ({
+  method: "POST",
+  body: JSON.stringify({
+    query,
+    session: { signature: "sig", vitessSession: { autocommit: true } },
+  }),
+});
+
 describe("isReadOnlyQuery", () => {
   it("accepts read statements", () => {
     expect(isReadOnlyQuery("select `id` from `UserData`")).toBe(true);
@@ -109,6 +127,33 @@ describe("createRetryingFetch", () => {
 
     expect(baseFetch).toHaveBeenCalledTimes(1);
     expect(await response.text()).toContain("Unknown column");
+  });
+
+  it("never retries a read inside a transaction", async () => {
+    const baseFetch = vi.fn(async () => new Response(RESET_BODY, { status: 200 }));
+    const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
+
+    // A reset aborts the transaction server-side; re-issuing would read outside it
+    const response = await retrying("https://db.test", postInTransaction("select 1"));
+
+    expect(baseFetch).toHaveBeenCalledTimes(1);
+    expect(await response.text()).toContain("connection reset by peer");
+  });
+
+  it("still retries a read on an ordinary session outside a transaction", async () => {
+    let calls = 0;
+    const baseFetch = vi.fn(async () => {
+      calls += 1;
+      return calls < 2
+        ? new Response(RESET_BODY, { status: 200 })
+        : new Response('{"result":{"rows":[]}}', { status: 200 });
+    });
+    const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
+
+    const response = await retrying("https://db.test", postWithSession("select 1"));
+
+    expect(calls).toBe(2);
+    expect(await response.json()).toEqual({ result: { rows: [] } });
   });
 
   it("passes through non-query requests untouched", async () => {
