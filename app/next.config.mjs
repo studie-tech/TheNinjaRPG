@@ -64,6 +64,18 @@ const config = {
       },
     ],
   },
+  async redirects() {
+    return [
+      // Referral links from the original PHP game are still in circulation and
+      // land on /index.php?ref=<username>. Next forwards the query string, so
+      // the referral is preserved instead of dead-ending on the 404 page.
+      {
+        source: "/index.php",
+        destination: "/",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
