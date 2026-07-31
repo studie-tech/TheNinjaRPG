@@ -9,11 +9,11 @@ export async function register() {
   (globalThis as Record<string, unknown>).__TNR_SENTRY_REGISTER__ = marker;
   try {
     if (process.env.NEXT_RUNTIME === "nodejs") {
-      await import("./sentry.server.config");
+      await import("../sentry.server.config");
       marker.imported = "nodejs";
     }
     if (process.env.NEXT_RUNTIME === "edge") {
-      await import("./sentry.edge.config");
+      await import("../sentry.edge.config");
       marker.imported = "edge";
     }
     marker.clientAfterInit = !!Sentry.getClient();
