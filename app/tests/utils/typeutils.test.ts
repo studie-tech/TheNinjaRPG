@@ -10,8 +10,8 @@ describe("setEmptyStringsToNulls", () => {
   });
 
   it("leaves NOT NULL columns as empty strings", () => {
-    // THENINJARPG-2P0: Item.battleDescription is NOT NULL with a '' default, so
-    // nulling a blank one made every item.update fail with errno 1048.
+    // Item.battleDescription is NOT NULL with a '' default, so nulling a blank
+    // one makes the whole update fail on the database rather than the column.
     const data: Record<string, unknown> = { battleDescription: "", description: "" };
     setEmptyStringsToNulls(data, item);
     expect(data.battleDescription).toBe("");
