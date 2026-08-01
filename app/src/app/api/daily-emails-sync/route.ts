@@ -120,39 +120,43 @@ export async function GET() {
     }
 
     // Insert the clerk users & their emails into the database
-    await drizzleDB.insert(emailReminder).values(
-      allClerkUsers
-        .map((user) => {
-          // Data to fill in
-          const mail = user.email_addresses.find(
-            (e) => e.id === user.primary_email_address_id,
-          );
-          const callName = user.username || `${user.first_name} ${user.last_name}`;
-          const lastActivity = new Date(user.last_active_at);
-          if (mail) {
-            return {
-              userId: user.id,
-              callName: callName,
-              email: mail.email_address,
-              secret: nanoid(21),
-              lastActivity: lastActivity,
-            };
-          } else {
-            return null;
-          }
-        })
-        .filter(
-          (
-            v,
-          ): v is {
-            userId: string;
-            callName: string;
-            email: string;
-            secret: string;
-            lastActivity: Date;
-          } => v !== null,
-        ),
-    );
+    const newReminders = allClerkUsers
+      .map((user) => {
+        // Data to fill in
+        const mail = user.email_addresses.find(
+          (e) => e.id === user.primary_email_address_id,
+        );
+        const callName = user.username || `${user.first_name} ${user.last_name}`;
+        const lastActivity = new Date(user.last_active_at);
+        if (mail) {
+          return {
+            userId: user.id,
+            callName: callName,
+            email: mail.email_address,
+            secret: nanoid(21),
+            lastActivity: lastActivity,
+          };
+        } else {
+          return null;
+        }
+      })
+      .filter(
+        (
+          v,
+        ): v is {
+          userId: string;
+          callName: string;
+          email: string;
+          secret: string;
+          lastActivity: Date;
+        } => v !== null,
+      );
+
+    // Every Clerk user may already be known, or none may have a primary email, in
+    // which case there is nothing to insert - drizzle rejects an empty values() list.
+    if (newReminders.length > 0) {
+      await drizzleDB.insert(emailReminder).values(newReminders);
+    }
 
     // Update emailReminder's lastActivity with userData's updatedAt for matching userIds
     await drizzleDB.execute(sql`

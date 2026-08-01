@@ -1310,7 +1310,7 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Set empty strings to null
-      setEmptyStringsToNulls(input.data);
+      setEmptyStringsToNulls(input.data, userData);
       input.data.customTitle = input.data.customTitle ?? "";
 
       // Queries

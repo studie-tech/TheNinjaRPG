@@ -328,7 +328,7 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ id: z.string(), data: ItemValidator }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      setEmptyStringsToNulls(input.data);
+      setEmptyStringsToNulls(input.data, item);
       // Query
       const [user, entry, itemWithName] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),

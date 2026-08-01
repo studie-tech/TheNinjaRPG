@@ -883,7 +883,7 @@ export const questsRouter = createTRPCRouter({
     .input(z.object({ id: z.string(), data: QuestValidator }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      setEmptyStringsToNulls(input.data);
+      setEmptyStringsToNulls(input.data, quest);
       // Query
       const [user, entry, tierQuests] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),

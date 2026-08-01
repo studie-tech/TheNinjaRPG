@@ -149,6 +149,7 @@ export const bloodlineRouter = createTRPCRouter({
         description: "New bloodline description",
         effects: [],
         rank: "D",
+        statClassification: "Highest",
         hidden: true,
       });
       return { success: true, message: id };
@@ -646,7 +647,10 @@ export const bloodlineRouter = createTRPCRouter({
         return errorResponse("Bloodline name already exists");
       if (canChangeContent(user.role)) {
         // Prepare data: convert empty strings to null for optional fields
-        setEmptyStringsToNulls(input.data as unknown as Record<string, unknown>);
+        setEmptyStringsToNulls(
+          input.data as unknown as Record<string, unknown>,
+          bloodline,
+        );
         // Calculate diff
         const newData = {
           ...input.data,

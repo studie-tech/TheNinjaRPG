@@ -67,7 +67,6 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
-  serverError,
 } from "../trpc";
 
 export const warRouter = createTRPCRouter({
@@ -1186,14 +1185,20 @@ export const warRouter = createTRPCRouter({
     })
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
+      // Optimistically fetch for the requested village; it is the user's own in
+      // every normal case, so this stays a single round-trip.
       const [user, votes] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchElderVotes(ctx.drizzle, input.villageId),
       ]);
-      if (user.villageId !== input.villageId && !canSeeSecretData(user.role)) {
-        throw serverError("FORBIDDEN", "You can only view votes for your own village");
+      // Staff may inspect any village. Everyone else only ever sees their own, so
+      // a villageId the client cached before switching village re-reads the
+      // current one instead of failing the townhall page with an error toast.
+      if (canSeeSecretData(user.role) || user.villageId === input.villageId) {
+        return votes;
       }
-      return votes;
+      if (!user.villageId) return [];
+      return await fetchElderVotes(ctx.drizzle, user.villageId);
     }),
 
   // Kage cancels a pending war declaration before elders vote

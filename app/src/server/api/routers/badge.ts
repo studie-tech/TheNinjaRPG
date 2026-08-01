@@ -61,7 +61,7 @@ export const badgeRouter = createTRPCRouter({
     .input(z.object({ id: z.string(), data: BadgeValidator }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      setEmptyStringsToNulls(input.data);
+      setEmptyStringsToNulls(input.data, badge);
       const [user, entry, badgeWithName] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchBadge(ctx.drizzle, input.id),

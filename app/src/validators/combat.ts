@@ -1215,7 +1215,13 @@ export const JutsuValidatorRawSchema = z.object({
   method: z.enum(AttackMethods),
   target: z.enum(AttackTargets),
   range: z.coerce.number().int().min(0).max(5),
-  statClassification: z.enum(StatTypes),
+  // The column is nullable and predates this field, so content saved before it
+  // existed - and anything freshly created - arrives as null. Fall back to the
+  // catch-all classification rather than blocking the save.
+  statClassification: z
+    .enum(StatTypes)
+    .nullish()
+    .transform((v) => v ?? "Highest"),
   hidden: z.coerce.boolean().optional(),
   injectableInBattle: z.coerce.boolean().prefault(false),
   healthCost: z.coerce.number().min(0).max(10000),
@@ -1268,7 +1274,11 @@ export const BloodlineValidator = z.object({
   description: z.string(),
   rank: z.enum(LetterRanks),
   regenIncrease: z.coerce.number().int().min(0).max(100),
-  statClassification: z.enum(StatTypes),
+  // Nullable in the schema for the same reason as on jutsu - see JutsuValidatorRawSchema.
+  statClassification: z
+    .enum(StatTypes)
+    .nullish()
+    .transform((v) => v ?? "Highest"),
   villageId: z.string().nullable(),
   hidden: z.coerce.boolean().optional(),
   difficulty: z.enum(BloodlineDifficultyRatings).nullable().optional(),

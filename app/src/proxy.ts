@@ -98,6 +98,15 @@ export const config = {
      * layout, so missing assets and scanner probes remain cheap 404 responses.
      */
     "/((?!api(?:/|$)|trpc(?:/|$)|_next(?:/|$)|static(?:/|$)|[^?]*\\.[^/?]+).*)",
+    /*
+     * Optional catch-all routes are the exception to the file-like skip above:
+     * they render the Clerk-dependent root layout for paths such as
+     * /signup/administration/index.php, which scanners probe for. Without the
+     * proxy those requests reach auth() with no Clerk context and throw.
+     */
+    "/login(.*)",
+    "/signup(.*)",
+    "/manual/damage_calcs(.*)",
     // Only route handlers that call Clerk's server helpers need its context.
     "/api/trpc/(.*)",
     "/api/chat/:path*",

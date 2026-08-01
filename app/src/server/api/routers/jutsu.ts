@@ -405,6 +405,7 @@ export const jutsuRouter = createTRPCRouter({
         requiredLevel: 1,
         target: "OTHER_USER",
         jutsuType: "AI",
+        statClassification: "Highest",
         image: IMG_AVATAR_DEFAULT,
       });
       return { success: true, message: id };

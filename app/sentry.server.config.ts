@@ -14,7 +14,16 @@ Sentry.init({
   sampleRate: 1.0,
 
   // Which errors to ignore from frontend
-  ignoreErrors: ["Unauthorized for tRPC endpoint", "You are acting too fast"],
+  ignoreErrors: [
+    "Unauthorized for tRPC endpoint",
+    "You are acting too fast",
+    // Stale client after a deployment: the router state tree's last element used
+    // to be a boolean and is now a number, so a browser still running the
+    // previous build fails Next's schema check on every RSC request. UX: the
+    // failed RSC fetch makes Next fall back to a full page load, and the client
+    // picks up the new build in the process, so it self-heals on that navigation.
+    "The router state header was sent but could not be parsed.",
+  ],
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
