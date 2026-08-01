@@ -138,6 +138,7 @@ import {
   alignBattle,
   applyPoolAdjustmentsToBase,
   calcBattleResult,
+  getBattleClaimIds,
   getBattleGrid,
   getDefaultBattleSizes,
   isEffectActive,
@@ -2137,15 +2138,13 @@ export const initiateBattle = async (
       ID_SFX_CLEAR,
     ]);
 
-  // Calculate expected rows for user status update
-  // For auto battles (KAGE_AI, CLAN_CHALLENGE), only the attacker userIds are updated
-  // For other battles, all participants (userIds + targetIds) should be updated
-  // Use Set to deduplicate - the database UPDATE affects unique rows by userId
-  const allParticipantIds = [
-    ...new Set(
-      AutoBattleTypes.includes(battleType) ? userIds : [...userIds, ...targetIds],
-    ),
-  ];
+  // Rows the status update below is expected to claim, used as the CAS guard
+  const allParticipantIds = getBattleClaimIds({
+    battleType,
+    userIds,
+    targetIds,
+    participants: users,
+  });
   const expectedRows = allParticipantIds.length;
 
   // Handle stealth breaking for combat
@@ -2253,8 +2252,8 @@ export const initiateBattle = async (
     client
       .update(userData)
       .set({
-        status: sql`CASE WHEN isAi = false THEN "BATTLE" ELSE "AWAKE" END`,
-        battleId: sql`CASE WHEN isAi = false THEN ${battleId} ELSE NULL END`,
+        status: "BATTLE",
+        battleId: battleId,
         pvpActivity: ["COMBAT"].includes(battleType)
           ? sql`${userData.pvpActivity} + 1`
           : sql`${userData.pvpActivity}`,
@@ -2301,6 +2300,9 @@ export const initiateBattle = async (
               ? [inArray(userData.userId, targetIds)]
               : []),
           ),
+          // Never move an AI into a battle: its row is shared by everyone
+          // fighting it, and the battle state clones it under a fresh id anyway.
+          eq(userData.isAi, false),
           // Ranked participants are claimed straight from the queue, so require
           // QUEUED specifically: a player who just left the queue (now AWAKE)
           // must not be pulled into a ranked battle by a poll whose snapshot
