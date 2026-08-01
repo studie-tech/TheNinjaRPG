@@ -10,6 +10,7 @@ import {
 } from "honeycomb-grid";
 import type { BattleType, PoolType } from "@/drizzle/constants";
 import {
+  AutoBattleTypes,
   CLAN_BATTLE_REWARD_POINTS,
   FRIENDLY_PRESTIGE_COST,
   getUserCaps,
@@ -2837,4 +2838,35 @@ export const getDistanceToClosestEnemy = (
  */
 export const getPreventTypeName = (preventType: string): string => {
   return preventType.replace(/prevent$/, "");
+};
+
+/**
+ * Determines which participant rows the battle-start update should claim.
+ *
+ * AI opponents are left out. One row backs every fight against a given AI, so
+ * claiming it makes concurrent battles contend on a single shared row, and the
+ * battle state clones AI under a fresh id anyway. Auto battles only ever claim
+ * the attackers.
+ *
+ * The returned length is the expected rowsAffected for the compare-and-swap
+ * guard, so it has to stay in step with that update's WHERE clause.
+ *
+ * @param battleType - The type of battle being started
+ * @param userIds - The attacking user ids
+ * @param targetIds - The defending user ids
+ * @param participants - Fetched rows for the battle, used to identify AI
+ * @returns Deduplicated ids of the non-AI rows the update should claim
+ */
+export const getBattleClaimIds = (info: {
+  battleType: BattleType;
+  userIds: string[];
+  targetIds: string[];
+  participants: { userId: string; isAi: boolean }[];
+}): string[] => {
+  const { battleType, userIds, targetIds, participants } = info;
+  const aiIds = new Set(participants.filter((u) => u.isAi).map((u) => u.userId));
+  const claimed = AutoBattleTypes.includes(battleType)
+    ? userIds
+    : [...userIds, ...targetIds];
+  return [...new Set(claimed)].filter((id) => !aiIds.has(id));
 };
