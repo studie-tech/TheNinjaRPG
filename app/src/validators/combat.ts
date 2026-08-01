@@ -1215,9 +1215,9 @@ export const JutsuValidatorRawSchema = z.object({
   method: z.enum(AttackMethods),
   target: z.enum(AttackTargets),
   range: z.coerce.number().int().min(0).max(5),
-  // The column is nullable and predates this field, so content saved before it
-  // existed - and anything freshly created - arrives as null. Fall back to the
-  // catch-all classification rather than blocking the save.
+  // The column is nullable, so rows stored before this field existed - and any
+  // write that leaves it out - arrive as null. Fall back to the catch-all
+  // classification rather than blocking the save.
   statClassification: z
     .enum(StatTypes)
     .nullish()
