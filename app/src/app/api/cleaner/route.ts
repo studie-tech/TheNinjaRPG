@@ -41,7 +41,6 @@ import {
   lockWithHourlyTimer,
   updateGameSetting,
 } from "@/libs/gamesettings";
-import { runDailyTavernMaintenance } from "@/libs/tavern-maintenance";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { drizzleDB } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
@@ -363,7 +362,29 @@ export async function GET() {
     // Step 30: Keep tavern cleanup and activity decay on their original daily
     // cadence even though the rest of this cleaner now runs hourly.
     const tavernDecayTimer = await lockWithDailyTimer(drizzleDB, "cleaner-daily");
-    await runDailyTavernMaintenance(drizzleDB, tavernDecayTimer);
+    if (tavernDecayTimer.isNewDay) {
+      try {
+        await drizzleDB.execute(
+          sql`
+            DELETE a FROM ${conversationComment} a
+            INNER JOIN ${conversation} b ON a.conversationId = b.id
+            WHERE b.isPublic AND b.title = 'Global'
+              AND a.createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 2 HOUR
+          `,
+        );
+        await drizzleDB.execute(
+          sql`UPDATE ${userData} SET tavernMessages = FLOOR(tavernMessages * 0.95)`,
+        );
+      } catch (cause) {
+        await updateGameSetting(
+          drizzleDB,
+          "cleaner-daily",
+          0,
+          tavernDecayTimer.prevTime,
+        );
+        throw cause;
+      }
+    }
 
     // Step 31: Clear automatedModeration older than  3 months
     await drizzleDB.execute(
