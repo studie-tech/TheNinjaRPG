@@ -1,5 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { updateGameSetting } from "@/libs/gamesettings";
+import { describe, expect, it, vi } from "vitest";
 import {
   GLOBAL_TAVERN_CLEANUP_QUERY,
   runDailyTavernMaintenance,
@@ -7,15 +6,7 @@ import {
 } from "@/libs/tavern-maintenance";
 import type { DrizzleClient } from "@/server/db";
 
-vi.mock("@/libs/gamesettings", () => ({
-  updateGameSetting: vi.fn(),
-}));
-
 describe("runDailyTavernMaintenance", () => {
-  beforeEach(() => {
-    vi.mocked(updateGameSetting).mockReset().mockResolvedValue(undefined);
-  });
-
   it("does not clear tavern messages again during the same UTC day", async () => {
     const execute = vi.fn();
     const client = { execute } as unknown as DrizzleClient;
@@ -50,12 +41,17 @@ describe("runDailyTavernMaintenance", () => {
       execute.mockRejectedValueOnce(failure);
       const client = { execute } as unknown as DrizzleClient;
       const prevTime = new Date(0);
+      const restoreDailyTimer = vi.fn().mockResolvedValue(undefined);
 
       await expect(
-        runDailyTavernMaintenance(client, { isNewDay: true, prevTime }),
+        runDailyTavernMaintenance(
+          client,
+          { isNewDay: true, prevTime },
+          restoreDailyTimer,
+        ),
       ).rejects.toBe(failure);
 
-      expect(updateGameSetting).toHaveBeenCalledWith(
+      expect(restoreDailyTimer).toHaveBeenCalledWith(
         client,
         "cleaner-daily",
         0,
