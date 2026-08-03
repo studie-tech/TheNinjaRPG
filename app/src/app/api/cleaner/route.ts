@@ -41,6 +41,7 @@ import {
   lockWithHourlyTimer,
   updateGameSetting,
 } from "@/libs/gamesettings";
+import { runDailyTavernMaintenance } from "@/libs/tavern-maintenance";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { drizzleDB } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
@@ -211,15 +212,7 @@ export async function GET() {
       `,
     );
 
-    // Step 8b: Delete global tavern conversation comments older than 2 hours
-    await drizzleDB.execute(
-      sql`
-        DELETE a FROM ${conversationComment} a 
-        INNER JOIN ${conversation} b ON a.conversationId = b.id
-        WHERE b.isPublic AND b.title = 'Global' AND a.createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 2 HOUR`,
-    );
-
-    // Step 8c: Delete other public conversation comments older than 1 days
+    // Step 8b: Delete other public conversation comments older than 2 days
     await drizzleDB.execute(
       sql`
         DELETE a FROM ${conversationComment} a 
@@ -365,28 +358,10 @@ export async function GET() {
       sql`UPDATE ${userData} u INNER JOIN ${clan} c ON u.clanId = c.id SET u.villageId = c.villageId WHERE c.hasHideout = true AND u.villageId != c.villageId`,
     );
 
-    // Step 30: Gate only the non-idempotent daily decay. The surrounding
-    // housekeeping remains safe to retry if a later cleanup statement fails.
-    // Keeping the marker after a successful decay also prevents a retry from
-    // applying the reduction twice.
+    // Step 30: Keep tavern cleanup and activity decay on their original daily
+    // cadence even though the rest of this cleaner now runs hourly.
     const tavernDecayTimer = await lockWithDailyTimer(drizzleDB, "cleaner-daily");
-    if (tavernDecayTimer.isNewDay) {
-      try {
-        await drizzleDB.execute(
-          sql`UPDATE ${userData} SET tavernMessages = FLOOR(tavernMessages * 0.95)`,
-        );
-      } catch (cause) {
-        // The decay statement failed, so allow a later cleaner retry to attempt
-        // this day's decay again.
-        await updateGameSetting(
-          drizzleDB,
-          "cleaner-daily",
-          0,
-          tavernDecayTimer.prevTime,
-        );
-        throw cause;
-      }
-    }
+    await runDailyTavernMaintenance(drizzleDB, tavernDecayTimer);
 
     // Step 31: Clear automatedModeration older than  3 months
     await drizzleDB.execute(
