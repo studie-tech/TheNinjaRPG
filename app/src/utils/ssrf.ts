@@ -81,6 +81,11 @@ export function isPrivateIp(ip: string): boolean {
   const ipv6 = parseIPv6(ip);
   if (!ipv6) return false;
 
+  return isPrivateIpv6(ipv6);
+}
+
+/** Classify non-public and IPv4-transition IPv6 ranges. */
+function isPrivateIpv6(ipv6: number[]): boolean {
   const first = ipv6[0] ?? 0;
   const isUnspecified = ipv6.every((part) => part === 0);
   const isLoopback = ipv6.slice(0, 7).every((part) => part === 0) && ipv6[7] === 1;
@@ -101,8 +106,9 @@ export function isPrivateIp(ip: string): boolean {
   const isTeredo = ipv6[0] === 0x2001 && ipv6[1] === 0x0000; // 2001::/32
   const isIpv4Mapped =
     ipv6.slice(0, 5).every((part) => part === 0) && ipv6[5] === 0xffff; // ::ffff:0:0/96
+  const isIpv4Compatible = ipv6.slice(0, 6).every((part) => part === 0); // ::/96
 
-  if (
+  return (
     isUnspecified ||
     isLoopback ||
     isLinkLocal ||
@@ -112,12 +118,9 @@ export function isPrivateIp(ip: string): boolean {
     isLocalUseNat64 ||
     is6to4 ||
     isTeredo ||
-    isIpv4Mapped
-  ) {
-    return true;
-  }
-
-  return false;
+    isIpv4Mapped ||
+    isIpv4Compatible
+  );
 }
 
 /** Parse an IPv6 address into eight 16-bit words for prefix-safe comparisons. */
