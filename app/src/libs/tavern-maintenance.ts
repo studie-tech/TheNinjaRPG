@@ -26,6 +26,7 @@ type DailyTimer = {
 export async function runDailyTavernMaintenance(
   client: DrizzleClient,
   timer: DailyTimer,
+  restoreDailyTimer: typeof updateGameSetting = updateGameSetting,
 ) {
   if (!timer.isNewDay) return;
 
@@ -33,7 +34,7 @@ export async function runDailyTavernMaintenance(
     await client.execute(GLOBAL_TAVERN_CLEANUP_QUERY);
     await client.execute(TAVERN_ACTIVITY_DECAY_QUERY);
   } catch (cause) {
-    await updateGameSetting(client, "cleaner-daily", 0, timer.prevTime);
+    await restoreDailyTimer(client, "cleaner-daily", 0, timer.prevTime);
     throw cause;
   }
 }
