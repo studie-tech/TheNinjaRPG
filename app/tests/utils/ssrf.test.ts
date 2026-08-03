@@ -12,6 +12,8 @@ describe("isPrivateIp", () => {
     "::ffff:127.0.0.1",
     "::ffff:7f00:1",
     "0:0:0:0:0:ffff:7f00:1",
+    "::127.0.0.1",
+    "::192.168.1.1",
   ])("blocks IPv6 transition address %s", (ip) => {
     expect(isPrivateIp(ip)).toBe(true);
   });

@@ -208,7 +208,9 @@ export async function GET() {
       sql`
         DELETE a FROM ${conversationComment} a
         INNER JOIN ${conversation} b ON a.conversationId = b.id
-        WHERE a.createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 14 DAY AND b.isStaffAvailable = false
+        WHERE a.createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 14 DAY
+          AND b.isStaffAvailable = false
+          AND (b.isPublic = false OR b.title IS NULL OR b.title != 'Global')
       `,
     );
 
