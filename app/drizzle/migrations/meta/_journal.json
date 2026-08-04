@@ -176,6 +176,13 @@
       "when": 1785235420047,
       "tag": "0024_military_punisher",
       "breakpoints": false
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1785879665755,
+      "tag": "0025_hot_ken_ellis",
+      "breakpoints": false
     }
   ]
 }
