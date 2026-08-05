@@ -386,7 +386,7 @@ export default function HomePage() {
             subtitle={`Items in home (${totalStoredItems}/${homeStorage} slots used) | Materials in home (${storedMaterials.length}/${userData && homeData ? calcMaxHouseMaterials(userData, homeData.storage) : 0} slots used)`}
             initialBreak={true}
             topRightContent={
-              homeData?.homeType !== "NONE" ? (
+              homeData && homeData.homeType !== "NONE" ? (
                 <MergeAllStacksButton
                   storedAtHome={true}
                   onMerged={() => {

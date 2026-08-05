@@ -314,6 +314,7 @@ export default function MyItems() {
                 canRepairWithKits && !isRepairAllPending ? "Repair with Kits" : null
               }
               isValid={canRepairWithKits && !isRepairAllPending}
+              disabled={isRepairAllPending}
               button={
                 <Button disabled={isRepairAllPending} variant="outline">
                   <Wrench className="mr-2 h-4 w-4" />
