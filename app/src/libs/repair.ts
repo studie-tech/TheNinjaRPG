@@ -22,6 +22,22 @@ export interface RepairKitCalculationResult {
 }
 
 /**
+ * Whether a user item is eligible for inventory / crafting-occupation repair flows.
+ * Excludes home-stored and auction-listed items so bulk repair never charges for
+ * items the player cannot see on the inventory page.
+ */
+export const needsInventoryRepair = (ui: {
+  storedAtHome: boolean;
+  isInAuction: boolean;
+  durability: number;
+  item: { maxDurability: number };
+}): boolean =>
+  !ui.storedAtHome &&
+  !ui.isInAuction &&
+  ui.item.maxDurability > 0 &&
+  ui.durability < ui.item.maxDurability;
+
+/**
  * Gets all repair kits from user items. Shared by the inventory UI and
  * `item.useRepairAll` so preview and mutation pick the same stacks.
  */

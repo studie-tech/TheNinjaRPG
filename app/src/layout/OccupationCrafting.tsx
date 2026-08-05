@@ -27,6 +27,7 @@ import {
   getEffectiveMaxImbuements,
 } from "@/libs/crafting";
 import { calcItemRepairCost } from "@/libs/item";
+import { needsInventoryRepair } from "@/libs/repair";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
@@ -631,11 +632,7 @@ export default function OccupationCrafting() {
 
         {/* Repair Items */}
         {(() => {
-          const itemsNeedingRepair = (userItems || []).filter(
-            (userItem) =>
-              userItem.durability < userItem.item.maxDurability &&
-              userItem.item.maxDurability > 0,
-          );
+          const itemsNeedingRepair = (userItems || []).filter(needsInventoryRepair);
 
           return itemsNeedingRepair.length > 0 ? (
             <Card>

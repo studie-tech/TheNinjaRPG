@@ -65,7 +65,7 @@ import {
   showsItemLevelBadge,
   userItemActionBadges,
 } from "@/libs/item";
-import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
+import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
@@ -187,11 +187,7 @@ export default function MyItems() {
     userData.reputationPoints && userData.reputationPoints >= COST_EXTRA_ITEM_SLOT;
 
   // Calculate items needing repair and which kits will be used
-  const itemsNeedingRepair = (userItems || []).filter(
-    (useritem) =>
-      useritem.durability < useritem.item.maxDurability &&
-      useritem.item.maxDurability > 0,
-  );
+  const itemsNeedingRepair = (userItems || []).filter(needsInventoryRepair);
   const repairKits = getRepairKits(userItems);
   const isCrafter = userData.occupation === "CRAFTING";
   const totalRyoRepairCost = itemsNeedingRepair.reduce(

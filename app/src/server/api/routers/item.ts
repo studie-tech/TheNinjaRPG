@@ -97,7 +97,11 @@ import {
   objectiveContentIds,
   postProcessRewards,
 } from "@/libs/quest";
-import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
+import {
+  calculateKitsToUse,
+  getRepairKits,
+  needsInventoryRepair,
+} from "@/libs/repair";
 import {
   fetchSageModeRolls,
   fetchSageModes,
@@ -2052,6 +2056,12 @@ export const itemRouter = createTRPCRouter({
       if (useritem.durability >= useritem.item.maxDurability) {
         return errorResponse("Item is already at full durability");
       }
+      if (useritem.storedAtHome) {
+        return errorResponse("Fetch at home first");
+      }
+      if (useritem.isInAuction) {
+        return errorResponse("Cannot repair items that are in auction");
+      }
       // Calculate repair cost
       const repairCost = calcItemRepairCost(useritem);
       if (user.money < repairCost) {
@@ -2093,12 +2103,8 @@ export const itemRouter = createTRPCRouter({
       if (user.status !== "AWAKE") {
         return errorResponse(`Cannot repair items while ${user.status.toLowerCase()}`);
       }
-      // Filter items that need repair
-      const itemsNeedingRepair = useritems.filter(
-        (useritem) =>
-          useritem.durability < useritem.item.maxDurability &&
-          useritem.item.maxDurability > 0,
-      );
+      // Filter items that need repair (carried inventory only — not home/auction)
+      const itemsNeedingRepair = useritems.filter(needsInventoryRepair);
       if (itemsNeedingRepair.length === 0) {
         return errorResponse("No items need repair");
       }
@@ -2171,6 +2177,12 @@ export const itemRouter = createTRPCRouter({
       }
       if (targetUserItem.durability >= targetUserItem.item.maxDurability) {
         return errorResponse("Item is already at full durability");
+      }
+      if (targetUserItem.storedAtHome) {
+        return errorResponse("Fetch at home first");
+      }
+      if (targetUserItem.isInAuction) {
+        return errorResponse("Cannot repair items that are in auction");
       }
       // Check if repair item has repair tag
       const repairEffect = repairUserItem.item.effects.find((e) => e.type === "repair");
@@ -2246,12 +2258,8 @@ export const itemRouter = createTRPCRouter({
       if (user.status !== "AWAKE") {
         return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
       }
-      // Filter items that need repair
-      const itemsNeedingRepair = useritems.filter(
-        (useritem) =>
-          useritem.durability < useritem.item.maxDurability &&
-          useritem.item.maxDurability > 0,
-      );
+      // Filter items that need repair (carried inventory only — not home/auction)
+      const itemsNeedingRepair = useritems.filter(needsInventoryRepair);
       if (itemsNeedingRepair.length === 0) {
         return errorResponse("No items need repair");
       }
