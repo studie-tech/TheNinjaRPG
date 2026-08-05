@@ -8,7 +8,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import Loader from "@/layout/Loader";
+import ListLoader from "@/layout/ListLoader";
 import QuestFiltering, { getFilter, useFiltering } from "@/layout/QuestFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
@@ -137,7 +137,6 @@ export default function ManualQuests() {
           </div>
         }
       >
-        {totalLoading && <Loader explanation="Loading data" />}
         {allQuests?.map((quest, i) => (
           <div
             key={`${quest.id}-${i}`}
@@ -152,6 +151,7 @@ export default function ManualQuests() {
             />
           </div>
         ))}
+        <ListLoader loading={totalLoading} explanation="Loading data" />
       </ContentBox>
     </>
   );

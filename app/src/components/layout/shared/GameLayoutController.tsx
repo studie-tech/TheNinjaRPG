@@ -11,6 +11,7 @@ import {
 import { FONT_SCALE_STORAGE_KEY } from "@/hooks/useFontScale";
 import { GlobalAudioProvider } from "@/layout/GameSettings";
 import TutorialAssistant from "@/layout/TutorialAssistant";
+import { persistFontScaleCookie, toFontScale } from "@/libs/layoutPreference";
 import { getMainNavbarLinks, useGameMenu } from "@/libs/menus";
 import {
   DEFAULT_MOBILE_NAV_CONFIG,
@@ -72,11 +73,21 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       }
     }
 
+    // The scale is inlined on <html> during SSR from the font-scale cookie, so this is
+    // only a recovery path for visitors who have a stored preference but no cookie yet.
+    // Writing the cookie means the next request renders at the right size server-side
+    // instead of re-flowing the document once this effect runs.
     const savedFontScale = safeLocalStorageGetItem(FONT_SCALE_STORAGE_KEY);
     if (savedFontScale) {
       try {
-        const parsed = JSON.parse(savedFontScale) as number;
-        document.documentElement.style.setProperty("--font-scale", String(parsed));
+        const parsed = toFontScale(JSON.parse(savedFontScale) as number);
+        if (parsed) {
+          const root = document.documentElement;
+          if (root.style.getPropertyValue("--font-scale") !== String(parsed)) {
+            root.style.setProperty("--font-scale", String(parsed));
+          }
+          persistFontScaleCookie(parsed);
+        }
       } catch {
         // Use the default scale if localStorage contains stale data.
       }

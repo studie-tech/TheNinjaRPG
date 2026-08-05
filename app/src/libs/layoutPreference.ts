@@ -4,6 +4,29 @@ export const AB_PIXEL_LAYOUT_COOKIE = "ab_pixel_layout_1";
 export const LEGACY_AB_LAYOUT_COOKIE = "ab_lemu_replacement_2";
 export const LAYOUT_PREFERENCE_COOKIE = "tnr_layout_preference";
 
+/**
+ * Font scale is mirrored into a cookie purely so the server can inline it on <html>.
+ * Applying it from localStorage after hydration changes the root font-size, which
+ * re-flows every rem-based measurement on the page in one frame.
+ */
+export const FONT_SCALE_COOKIE = "tnr_font_scale";
+export const FONT_SCALE_VALUES = [0.9, 1, 1.15, 1.3] as const;
+export type FontScaleValue = (typeof FONT_SCALE_VALUES)[number];
+export const DEFAULT_FONT_SCALE: FontScaleValue = 1;
+
+/**
+ * toFontScale
+ * - Validates an unknown stored value against the supported scales
+ * @param value - Raw cookie or localStorage value
+ */
+export const toFontScale = (
+  value?: string | number | null,
+): FontScaleValue | undefined => {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return FONT_SCALE_VALUES.find((scale) => scale === parsed);
+};
+
 export type EffectiveLayout = "default" | "pixel";
 
 export interface LayoutExperimentAssignment {
@@ -84,6 +107,18 @@ export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
       secure,
     });
   }
+};
+
+/**
+ * persistFontScaleCookie
+ * - Mirrors the chosen font scale into a cookie so the next server render can inline it
+ * @param scale - Validated font scale
+ */
+export const persistFontScaleCookie = (scale: FontScaleValue) => {
+  if (typeof window === "undefined") return;
+  const secureAttribute = window.location.protocol === "https:" ? "; secure" : "";
+  // biome-ignore lint/suspicious/noDocumentCookie: mirrors persistLayoutPreferenceCookie above.
+  document.cookie = `${FONT_SCALE_COOKIE}=${scale}; path=/; max-age=31536000; samesite=lax${secureAttribute}`;
 };
 
 export const storedValueToLayout = (

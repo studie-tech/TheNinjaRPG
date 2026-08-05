@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import ItemFiltering, { getFilter, useFiltering } from "@/layout/ItemFiltering";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import Loader from "@/layout/Loader";
+import ListLoader from "@/layout/ListLoader";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
@@ -129,7 +129,6 @@ export default function ManualItems() {
           </div>
         }
       >
-        {totalLoading && <Loader explanation="Loading data" />}
         {allItems?.map((item, i) => (
           <div key={item.id} ref={i === allItems.length - 1 ? setLastElement : null}>
             <ItemWithEffects
@@ -143,6 +142,7 @@ export default function ManualItems() {
             />
           </div>
         ))}
+        <ListLoader loading={totalLoading} explanation="Loading data" />
       </ContentBox>
     </>
   );

@@ -91,6 +91,13 @@ const parseStyleAttribute = (styleJson?: string): React.CSSProperties | undefine
 };
 
 /**
+ * Placeholder ratio for legacy post images stored without dimensions. Uploads are capped
+ * at 512x512 by resizeImage and are predominantly landscape screenshots, so 4:3 is the
+ * closest single guess; it only has to hold until the image itself loads.
+ */
+const LEGACY_IMAGE_RESERVE = { width: 512, height: 384 };
+
+/**
  * Transform image nodes with error handling and fallback.
  * Returns undefined if the node cannot be transformed (e.g., missing attributes).
  */
@@ -108,14 +115,23 @@ const tryTransformImageNode = (imageNode: HtmlNode): React.ReactElement | undefi
   } = imageNode.attribs;
   const parsedStyle = parseStyleAttribute(style);
 
+  // Posts written before uploads recorded their dimensions have no width/height, so the
+  // image reserves zero height and shoves the rest of the thread down once it loads.
+  // Tailwind's preflight sets `img { height: auto }`, which turns these attributes into
+  // an `aspect-ratio: auto w / h` hint: the estimate reserves space before load and the
+  // image's real aspect ratio takes over afterwards, so nothing is ever distorted.
+  const hasAuthoredSize = width !== undefined || height !== undefined;
+  const reservedWidth = hasAuthoredSize ? width : String(LEGACY_IMAGE_RESERVE.width);
+  const reservedHeight = hasAuthoredSize ? height : String(LEGACY_IMAGE_RESERVE.height);
+
   const imageAttributes: React.ImgHTMLAttributes<HTMLImageElement> = {
     src: sourceUrl,
     alt: alternativeText || randomString(DEFAULT_ALT_TEXT_LENGTH),
     className,
     id: imageIdentifier,
     style: parsedStyle,
-    width,
-    height,
+    width: reservedWidth,
+    height: reservedHeight,
     onError: (event: React.SyntheticEvent<HTMLImageElement>) => {
       const target = event.currentTarget;
       target.onerror = null;

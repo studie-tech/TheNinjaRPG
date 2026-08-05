@@ -22,7 +22,10 @@ import StructuredData from "@/layout/StructuredData";
 import {
   AB_PIXEL_LAYOUT_COOKIE,
   cookieValueToLayout,
+  DEFAULT_FONT_SCALE,
+  FONT_SCALE_COOKIE,
   LAYOUT_PREFERENCE_COOKIE,
+  toFontScale,
 } from "@/libs/layoutPreference";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/libs/seo";
 import { UserContextProvider } from "@/utils/UserContext";
@@ -38,11 +41,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     cookieValueToLayout(readCookies.get(LAYOUT_PREFERENCE_COOKIE)?.value) ??
     cookieValueToLayout(readCookies.get(AB_PIXEL_LAYOUT_COOKIE)?.value) ??
     "default";
+  // Inlined here rather than applied from localStorage after hydration: --font-scale
+  // feeds the root font-size, so changing it client-side re-flows the entire document.
+  const initialFontScale =
+    toFontScale(readCookies.get(FONT_SCALE_COOKIE)?.value) ?? DEFAULT_FONT_SCALE;
 
   return (
     <html
       lang="en"
       className={initialLayout === "pixel" ? "dark" : undefined}
+      style={{ "--font-scale": initialFontScale } as React.CSSProperties}
       suppressHydrationWarning
     >
       <body className="h-full">

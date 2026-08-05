@@ -97,7 +97,7 @@ const RichInput: React.FC<RichInputProps> = (props) => {
 
       try {
         // Resize the image before uploading
-        const resizedFile = await resizeImage(file);
+        const { file: resizedFile, width, height } = await resizeImage(file);
 
         // Upload the resized file using useUploadThing hook
         const uploadResponse = await startUpload([resizedFile]);
@@ -115,8 +115,10 @@ const RichInput: React.FC<RichInputProps> = (props) => {
         if (!uploadUrl) {
           throw new Error("Upload failed - no URL returned");
         }
-        // Replace the loading text with the actual image markdown
-        const imgHtml = `<img src="${uploadUrl}" alt="${file.name}" />`;
+        // Replace the loading text with the actual image markdown. Dimensions are
+        // recorded so the browser can reserve the right space before the image loads,
+        // instead of collapsing to zero height and shoving the rest of the post down.
+        const imgHtml = `<img src="${uploadUrl}" alt="${file.name}" width="${width}" height="${height}" />`;
         const newText = textWhileUploading.replace(loadingText, imgHtml);
         field.onChange(newText);
       } catch (error) {

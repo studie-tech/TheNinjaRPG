@@ -5,7 +5,7 @@ import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
-import Loader from "@/layout/Loader";
+import ListLoader from "@/layout/ListLoader";
 import { useInfinitePagination } from "@/libs/pagination";
 
 export default function ManualJutsuReskins() {
@@ -75,7 +75,6 @@ export default function ManualJutsuReskins() {
           </div>
         }
       >
-        {totalLoading && <Loader explanation="Loading data" />}
         {transformedReskins?.map((reskin, i) => (
           <div
             key={reskin.id}
@@ -87,6 +86,7 @@ export default function ManualJutsuReskins() {
         {!totalLoading && transformedReskins?.length === 0 && (
           <div>No reskins found given the search criteria.</div>
         )}
+        <ListLoader loading={totalLoading} explanation="Loading data" />
       </ContentBox>
     </>
   );

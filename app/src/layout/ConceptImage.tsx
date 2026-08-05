@@ -261,10 +261,12 @@ const ConceptImage: React.FC<InputProps> = (props) => {
                 title: isVideo
                   ? "Purposefully inappropriate video"
                   : "Purposefully inappropriate image",
+                // Both dimensions are given so the report preview reserves space before
+                // the media loads. Concept art is generated at a 2:3 portrait ratio.
                 content:
                   isVideo && image.video
-                    ? `<video src="${image.video}" width="200" controls />`
-                    : `<img src="${image.image}" width="200" />`,
+                    ? `<video src="${image.video}" width="200" height="300" controls />`
+                    : `<img src="${image.image}" width="200" height="300" />`,
               }}
               system="concept_art"
               button={<Flag className="h-6 w-6 text-white hover:text-orange-500" />}
