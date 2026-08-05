@@ -652,7 +652,10 @@ export default function Travel() {
           markerOnlyInteraction={true}
           focusSector={focusSector}
           focusSectorLabel="Target"
-          onTileClick={initiateTravelToSector}
+          onTileClick={(sector) => {
+            if (sector === null) return;
+            initiateTravelToSector(sector);
+          }}
           hexasphere={globe}
         />
       )
