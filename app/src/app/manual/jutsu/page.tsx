@@ -136,6 +136,7 @@ export default function ManualJutsus() {
           <div key={jutsu.id} ref={i === alljutsus.length - 1 ? setLastElement : null}>
             <ItemWithEffects
               item={jutsu}
+              detailHref={`/manual/jutsu/${jutsu.id}`}
               onDelete={(id: string) => remove({ id })}
               showEdit="jutsu"
               showStatistic="jutsu"

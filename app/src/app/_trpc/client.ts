@@ -51,8 +51,18 @@ export const onError = (err: unknown) => {
 /**
  * List of tRPC mutation paths that are allowed for unauthenticated users.
  * These mutations have publicProcedure on the server and should not be blocked client-side.
+ * Every publicProcedure mutation belongs here, otherwise the guard below throws before
+ * the request is ever sent and the signed-out flow silently breaks.
  */
-export const PUBLIC_MUTATIONS: string[] = ["towerDefense.initiateGuestSession"];
+export const PUBLIC_MUTATIONS: string[] = [
+  "towerDefense.initiateGuestSession",
+  // Landing-page analytics: writes VisitorLog and the A/B "loaded" events. Only ever
+  // runs for signed-out visitors, so blocking it here disabled recruitment tracking.
+  "misc.trackVisitor",
+  // Email preference links are followed straight from an email, usually signed out.
+  "misc.toggleEmailReminder",
+  "misc.deleteEmailReminder",
+];
 
 export const useGlobalOnMutateProtect = () => {
   const { isSignedIn } = useUser();

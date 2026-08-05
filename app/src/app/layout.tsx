@@ -18,11 +18,13 @@ import { InstallPromptProvider } from "@/hooks/useInstallPrompt";
 import AcceptWarning from "@/layout/AcceptWarning";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
 import LayoutSwitcher from "@/layout/LayoutSwitcher";
+import StructuredData from "@/layout/StructuredData";
 import {
   AB_PIXEL_LAYOUT_COOKIE,
   cookieValueToLayout,
   LAYOUT_PREFERENCE_COOKIE,
 } from "@/libs/layoutPreference";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/libs/seo";
 import { UserContextProvider } from "@/utils/UserContext";
 
 import "../styles/globals.css";
@@ -44,6 +46,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       suppressHydrationWarning
     >
       <body className="h-full">
+        <StructuredData />
         <NextSSRPlugin
           /** https://docs.uploadthing.com/getting-started/appdir */
           routerConfig={extractRouterConfig(ourFileRouter)}
@@ -88,19 +91,24 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 }
 
 // Reused variables
-const title = "TheNinja-RPG - Online RPG - Free Online Game for Ninjas";
-const description =
-  "A free browser game with ninja set in the world of Seichi. A free online game";
+const title = SITE_TITLE;
+const description = SITE_DESCRIPTION;
 
 // Metadata
 export const metadata: Metadata = {
-  title: title,
+  // Without this Next resolves relative metadata URLs against localhost, and every
+  // page-level canonical below would point at the wrong origin.
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: title,
+    // Pages built with buildMetadata pass a short title and get the brand appended.
+    template: `%s | ${SITE_NAME}`,
+  },
   description: description,
   keywords: [
     "anime",
+    "browser game",
     "community",
-    "core 3",
-    "core 4",
     "free",
     "game",
     "manga",
@@ -124,8 +132,8 @@ export const metadata: Metadata = {
   openGraph: {
     title: title,
     description: description,
-    url: "https://www.theninja-rpg.com",
-    siteName: "TheNinja-RPG",
+    url: SITE_URL,
+    siteName: SITE_NAME,
     images: [
       {
         url: IMG_LOGO_FULL,
@@ -142,7 +150,7 @@ export const metadata: Metadata = {
     title: title,
     description: description,
     siteId: "137431404",
-    creator: "@nextjs",
+    creator: "@RealTheNinjaRPG",
     creatorId: "137431404",
     images: [IMG_LOGO_FULL], // Must be an absolute URL
   },
@@ -156,8 +164,10 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "TheNinja-RPG",
   },
-  other: {
-    googleSiteVerification: "0yl4KCd6udl9DAo_TMf8esN6snWH0_gqwf2EShlogRU",
+  // `other` would emit <meta name="googleSiteVerification">, which Google ignores; the
+  // dedicated field emits the hyphenated name that Search Console actually looks for.
+  verification: {
+    google: "0yl4KCd6udl9DAo_TMf8esN6snWH0_gqwf2EShlogRU",
   },
 };
 

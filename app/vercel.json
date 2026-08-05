@@ -100,6 +100,9 @@
     },
     "src/app/api/trpc/[trpc]/route.ts": {
       "includeFiles": "./fonts/OpenSans.ttf"
+    },
+    "src/app/opengraph-image.tsx": {
+      "includeFiles": "public/icons/icon-512x512.png"
     }
   },
   "regions": ["iad1"]

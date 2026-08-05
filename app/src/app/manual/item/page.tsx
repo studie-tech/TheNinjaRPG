@@ -135,6 +135,7 @@ export default function ManualItems() {
             <ItemWithEffects
               item={item}
               key={item.id}
+              detailHref={`/manual/item/${item.id}`}
               onDelete={(id: string) => remove({ id })}
               showEdit="item"
               showStatistic="item"
