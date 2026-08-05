@@ -1315,7 +1315,7 @@ export const ItemValidatorRawSchema = z.object({
   image: z.string(),
   description: z.string(),
   battleDescription: z.string(),
-  stackSize: z.coerce.number().int().min(1).max(999),
+  stackSize: z.coerce.number().int().min(1).max(9999),
   destroyOnUse: z.coerce.boolean().prefault(false),
   chakraCost: z.coerce.number().int().min(0).max(10000),
   healthCost: z.coerce.number().int().min(0).max(10000),
@@ -1362,7 +1362,7 @@ export const ItemValidatorRawSchema = z.object({
     .array(
       z.object({
         ids: z.array(z.string()),
-        number: z.coerce.number().int().min(1).max(100),
+        number: z.coerce.number().int().min(1).max(9999),
       }),
     )
     .prefault([])
