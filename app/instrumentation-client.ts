@@ -15,10 +15,11 @@ import {
 Sentry.init({
   dsn: "https://c35c54f99b73b4a3b8a7e60936bc2967@o4507797256601600.ingest.de.sentry.io/4507797262958672",
 
-  // Replay may only be enabled for the client-side
-  integrations: [
-    Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
-  ],
+  // Session Replay is intentionally not registered. Both replay sample rates were set
+  // to 0, so the rrweb recorder was downloaded, parsed and initialised on every page
+  // load without ever recording a session — pure cost against the interaction budget.
+  // To re-enable, prefer Sentry.lazyLoadIntegration("replayIntegration") so the
+  // recorder is only fetched once a session is actually being sampled.
 
   // Adjust this value in production, or use tracesSampler for greater control
   tracesSampleRate: 0.001,
@@ -233,12 +234,8 @@ Sentry.init({
   // Only on production URLs
   // allowUrls: [/https?:\/\/(www\.)?theninja-rpg\.com.*/],
 
-  /**
-   * @function ReplaySessions/Errors
-   * @description Captures Replay for 0% of all session, and 100% session with an Error
-   */
-  replaysSessionSampleRate: 0,
-  replaysOnErrorSampleRate: 0,
+  // Replay sample rates are omitted along with the integration above; they have no
+  // effect on their own.
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,

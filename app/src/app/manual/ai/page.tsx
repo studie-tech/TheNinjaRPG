@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import type { GenericObject } from "@/layout/ItemWithEffects";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import Loader from "@/layout/Loader";
+import ListLoader from "@/layout/ListLoader";
 import UserFiltering, { getFilter, useFiltering } from "@/layout/UserFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
@@ -118,7 +118,6 @@ export default function ManualAI() {
           </div>
         }
       >
-        {totalLoading && <Loader explanation="Loading data" />}
         {allUsers?.map((user, i) => (
           <div key={user.id} ref={i === allUsers.length - 1 ? setLastElement : null}>
             <ItemWithEffects
@@ -131,6 +130,7 @@ export default function ManualAI() {
             />
           </div>
         ))}
+        <ListLoader loading={totalLoading} explanation="Loading data" />
       </ContentBox>
     </>
   );

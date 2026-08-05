@@ -6,16 +6,23 @@ interface ImageResizeOptions {
   outputFormat?: "webp" | "jpeg" | "png" | "original";
 }
 
+export interface ResizedImage {
+  file: File;
+  /** Final pixel dimensions, so callers can emit width/height and avoid layout shift. */
+  width: number;
+  height: number;
+}
+
 /**
  * Resizes and compresses an image to fit within maxWidth x maxHeight
  * @param file The image file to resize and compress
  * @param options Configuration options for resizing and compression
- * @returns A promise that resolves to a File object containing the resized image
+ * @returns A promise resolving to the resized file plus its final dimensions
  */
 export const resizeImage = async (
   file: File,
   options: ImageResizeOptions = {},
-): Promise<File> => {
+): Promise<ResizedImage> => {
   const {
     maxWidth = 512,
     maxHeight = 512,
@@ -110,7 +117,7 @@ export const resizeImage = async (
             lastModified: Date.now(),
           });
 
-          resolve(resizedFile);
+          resolve({ file: resizedFile, width, height });
         },
         outputMimeType,
         quality, // Configurable quality parameter

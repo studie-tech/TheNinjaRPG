@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import BloodFiltering, { getFilter, useFiltering } from "@/layout/BloodlineFiltering";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import Loader from "@/layout/Loader";
+import ListLoader from "@/layout/ListLoader";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
@@ -135,7 +135,6 @@ export default function ManualBloodlines() {
           </div>
         }
       >
-        {totalLoading && <Loader explanation="Loading data" />}
         {allBloodlines?.map((bloodline, i) => (
           <div
             key={bloodline.id}
@@ -151,6 +150,7 @@ export default function ManualBloodlines() {
             />
           </div>
         ))}
+        <ListLoader loading={totalLoading} explanation="Loading data" />
       </ContentBox>
     </>
   );

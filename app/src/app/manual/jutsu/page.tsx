@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
-import Loader from "@/layout/Loader";
+import ListLoader from "@/layout/ListLoader";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
@@ -131,7 +131,6 @@ export default function ManualJutsus() {
           </div>
         }
       >
-        {totalLoading && <Loader explanation="Loading data" />}
         {alljutsus?.map((jutsu, i) => (
           <div key={jutsu.id} ref={i === alljutsus.length - 1 ? setLastElement : null}>
             <ItemWithEffects
@@ -146,6 +145,7 @@ export default function ManualJutsus() {
         {!totalLoading && alljutsus?.length === 0 && (
           <div>No jutsus found given the search criteria.</div>
         )}
+        <ListLoader loading={totalLoading} explanation="Loading data" />
       </ContentBox>
     </>
   );

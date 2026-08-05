@@ -2,6 +2,12 @@
 
 import { useEffect } from "react";
 import { useLocalStorage } from "@/hooks/localstorage";
+import {
+  DEFAULT_FONT_SCALE,
+  type FontScaleValue,
+  persistFontScaleCookie,
+  toFontScale,
+} from "@/libs/layoutPreference";
 
 export const FONT_SCALE_OPTIONS = [
   { value: 0.9, label: "Small" },
@@ -10,12 +16,9 @@ export const FONT_SCALE_OPTIONS = [
   { value: 1.3, label: "Extra Large" },
 ] as const;
 
-export type FontScaleValue = (typeof FONT_SCALE_OPTIONS)[number]["value"];
+export type { FontScaleValue };
 
 export const FONT_SCALE_STORAGE_KEY = "fontScale";
-
-const DEFAULT_FONT_SCALE: FontScaleValue = 1;
-const VALID_FONT_SCALES = FONT_SCALE_OPTIONS.map((o) => o.value) as readonly number[];
 
 export const useFontScale = () => {
   const [fontScale, setFontScale] = useLocalStorage<FontScaleValue>(
@@ -23,9 +26,7 @@ export const useFontScale = () => {
     DEFAULT_FONT_SCALE,
   );
 
-  const validatedScale = VALID_FONT_SCALES.includes(fontScale)
-    ? fontScale
-    : DEFAULT_FONT_SCALE;
+  const validatedScale = toFontScale(fontScale) ?? DEFAULT_FONT_SCALE;
 
   useEffect(() => {
     if (fontScale !== validatedScale) {
@@ -35,6 +36,9 @@ export const useFontScale = () => {
 
   useEffect(() => {
     document.documentElement.style.setProperty("--font-scale", String(validatedScale));
+    // Mirrored to a cookie so the server can inline the scale on <html>; without it the
+    // root font-size only changes after hydration and re-flows the whole document.
+    persistFontScaleCookie(validatedScale);
   }, [validatedScale]);
 
   return { fontScale: validatedScale, setFontScale };
