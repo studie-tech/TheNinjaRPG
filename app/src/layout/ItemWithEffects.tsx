@@ -72,6 +72,9 @@ export interface ItemWithEffectsProps {
   showCopy?: "quest" | "ai" | "item";
   show3d?: boolean;
   hideTitle?: boolean;
+  /** Turns the entry name into a link to its own page, so list views give search
+   *  engines a crawlable path to each piece of content. */
+  detailHref?: string;
   hideImage?: boolean;
   hideEffects?: boolean;
   hideDates?: boolean;
@@ -88,6 +91,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
     showCopy,
     show3d,
     hideTitle,
+    detailHref,
     hideDetails,
     showEvolutions,
     hideImage,
@@ -205,7 +209,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
           <div className="relative flex basis-full flex-col pl-5 md:pl-0">
             {!hideTitle ? (
               <h3 className="font-bold text-popover-foreground text-xl tracking-tight">
-                {item.name}
+                {detailHref ? (
+                  <Link className="hover:text-orange-500" href={detailHref}>
+                    {item.name}
+                  </Link>
+                ) : (
+                  item.name
+                )}
               </h3>
             ) : (
               <br />

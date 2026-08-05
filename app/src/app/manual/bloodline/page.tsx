@@ -144,6 +144,7 @@ export default function ManualBloodlines() {
             <ItemWithEffects
               item={bloodline}
               key={bloodline.id}
+              detailHref={`/manual/bloodline/${bloodline.id}`}
               onDelete={(id: string) => remove({ id })}
               showEdit="bloodline"
               showStatistic="bloodline"

@@ -1033,11 +1033,16 @@ const usePixelHeroVideoPlayback = (
   }, [videoRef, scrollContainerRef]);
 };
 
+// Bumped from "visitor_tracked" so visitors whose flag was set while the mutation was
+// being rejected client-side get one more chance to be counted. Re-tracking an already
+// known visitor is a no-op server-side thanks to the duplicate-key guards.
+const VISITOR_TRACKED_KEY = "visitor_tracked_v2";
+
 const SetReferal = () => {
   const searchParams = useSearchParams();
   const { isSignedIn, isLoaded } = useUser();
   const { mutate: trackVisitor } = api.misc.trackVisitor.useMutation({
-    onMutate: undefined,
+    onSuccess: () => safeLocalStorageSetItem(VISITOR_TRACKED_KEY, "1"),
   });
   useEffect(() => {
     // Set reference user
@@ -1047,12 +1052,11 @@ const SetReferal = () => {
     const utm_source = searchParams?.get("utm_source");
     if (utm_source) safeLocalStorageSetItem("utm_source", utm_source);
     // Track anonymous visitor once
-    const alreadyTracked = safeLocalStorageGetItem("visitor_tracked");
+    const alreadyTracked = safeLocalStorageGetItem(VISITOR_TRACKED_KEY);
     if (!alreadyTracked && isLoaded && !isSignedIn) {
       const savedRef = safeLocalStorageGetItem("ref") ?? undefined;
       const savedUtm = safeLocalStorageGetItem("utm_source") ?? undefined;
       trackVisitor({ ref: savedRef, utmSource: savedUtm });
-      safeLocalStorageSetItem("visitor_tracked", "1");
     }
   }, [searchParams, isLoaded, isSignedIn, trackVisitor]);
   return null;

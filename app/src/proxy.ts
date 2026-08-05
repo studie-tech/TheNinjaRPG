@@ -35,6 +35,27 @@ const appendCookieHeader = (
   return existingCookieHeader ? `${existingCookieHeader}; ${cookie}` : cookie;
 };
 
+/**
+ * Search engines and social preview services discard cookies between fetches, so the
+ * random landing-page assignment below would hand them a different variant — different
+ * headings, copy and hero asset — on every crawl of the site's highest-value URL.
+ * Anything matching here is pinned to a single variant instead.
+ *
+ * Control is chosen because it renders the long-form section copy (Jutsus, Combat,
+ * Village, Sectors, Travel), roughly twice the indexable text of the pixel variant.
+ * Both are variants real visitors receive, so this is an A/B split rather than
+ * crawler-specific content. Note that Welcome.tsx hides that copy when
+ * NEXT_PUBLIC_MCP_ENABLED is set, so enabling MCP in production would leave crawlers
+ * on a near-empty landing page and this choice should be revisited.
+ */
+const PINNED_CRAWLER_VARIANT = "control";
+
+const CRAWLER_USER_AGENT =
+  /bot|crawler|spider|crawling|slurp|mediapartners|facebookexternalhit|bingpreview|whatsapp|telegram|embedly|quora link preview|pinterest|vkshare|w3c_validator|lighthouse|chrome-lighthouse/i;
+
+const isSearchCrawler = (userAgent: string | null) =>
+  !!userAgent && CRAWLER_USER_AGENT.test(userAgent);
+
 export default clerkMiddleware(
   async (auth, request) => {
     const { pathname } = request.nextUrl;
@@ -47,6 +68,19 @@ export default clerkMiddleware(
     // Only the landing-page A/B rewrite needs auth inside Proxy. Server-side
     // resources enforce their own access, and the root layout reads auth for UI.
     if (pathname !== "/") return;
+
+    // Crawlers are never signed in, so pin them to the control layout before the auth()
+    // round-trip. No Set-Cookie is issued, which also keeps the response CDN-cacheable.
+    if (isSearchCrawler(request.headers.get("user-agent"))) {
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set(
+        "cookie",
+        `${LEGACY_AB_LAYOUT_COOKIE}=${PINNED_CRAWLER_VARIANT}; ${AB_PIXEL_LAYOUT_COOKIE}=${PINNED_CRAWLER_VARIANT}`,
+      );
+      return NextResponse.rewrite(request.nextUrl.clone(), {
+        request: { headers: requestHeaders },
+      });
+    }
 
     // Ensure valid user agent
     // return uaMiddleware(request);

@@ -1,41 +1,48 @@
+import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
+import { conceptImage } from "@/drizzle/schema";
+import { absoluteUrl, noindexMetadata, SITE_NAME } from "@/libs/seo";
+import { drizzleDB } from "@/server/db";
 import ConceptBox_ConceptImage from "./conceptimage";
 
 type Props = { params: Promise<{ imageid: string }> };
 
+/**
+ * Note: openGraph.images is deliberately left unset so Next keeps using the generated
+ * card from opengraph-image.tsx in this folder. Setting it here would override that
+ * with a link to the HTML page rather than an actual image.
+ */
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const params = await props.params;
-  // read route params
   const id = params.imageid;
-
+  const image = await drizzleDB.query.conceptImage.findFirst({
+    columns: { prompt: true },
+    where: eq(conceptImage.id, id),
+  });
+  if (!image) return noindexMetadata("Concept Art Not Found");
+  // Prompts run up to 5000 characters, so trim to something that fits a search result.
+  const prompt = image.prompt.trim().replace(/\s+/g, " ");
+  const shortPrompt = prompt.length > 70 ? `${prompt.slice(0, 67)}...` : prompt;
+  const url = absoluteUrl(`/conceptart/${id}`);
+  const description = `AI generated ${SITE_NAME} concept art: ${
+    prompt.length > 140 ? `${prompt.slice(0, 137)}...` : prompt
+  }`;
   return {
-    title: "TheNinja-RPG Concept Art",
+    title: `Concept Art: ${shortPrompt}`,
+    description,
+    alternates: { canonical: url },
     openGraph: {
-      title: "TheNinja-RPG",
-      description:
-        "A free browser based game set in the ninja world of the Seichi. A multiplayer game with 2D travel and combat system",
-      url: "https://www.theninja-rpg.com",
-      siteName: "TheNinja-RPG",
-      images: [
-        {
-          url: `https://www.theninja-rpg.com/conceptart/${id}`,
-          width: 512,
-          height: 768,
-          alt: "AI generated image",
-        },
-      ],
+      title: `Concept Art: ${shortPrompt}`,
+      description,
+      url,
+      siteName: SITE_NAME,
       locale: "en_US",
-      type: "website",
+      type: "article",
     },
     twitter: {
       card: "summary_large_image",
-      title: "The Ninja-RPG.com - a free browser based mmorpg",
-      description:
-        "A free browser based game set in the ninja world of the Seichi. A multiplayer game with 2D travel and combat system",
-      siteId: "137431404",
-      creator: "@user",
-      creatorId: "137431404",
-      images: [`https://www.theninja-rpg.com/conceptart/${id}`],
+      title: `Concept Art: ${shortPrompt}`,
+      description,
     },
   };
 }
