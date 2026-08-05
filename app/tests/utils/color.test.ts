@@ -42,3 +42,8 @@ test("contrastingTextColor picks black on light and white on dark", () => {
   expect(contrastingTextColor("#000000")).toBe("#FFFFFF");
   expect(contrastingTextColor(getReadableVillageHexColor("#FFFFFF"))).toBe("#000000");
 });
+
+test("contrastingTextColor prefers black on #ff0000 (higher contrast than white)", () => {
+  // White on #ff0000 is ~4.00:1; black is ~5.25:1 — prefer black.
+  expect(contrastingTextColor("#ff0000")).toBe("#000000");
+});
