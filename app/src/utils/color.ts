@@ -105,9 +105,22 @@ export const getReadableVillageHexColor = (hex: string): string => {
   return rgbToHex(hslToRgb(h, s, clampedL));
 };
 
-/** Black or white text that contrasts with the given fill colour */
+/** WCAG contrast ratio between two relative luminances (0–1) */
+const contrastRatio = (a: number, b: number) => {
+  const lighter = Math.max(a, b);
+  const darker = Math.min(a, b);
+  return (lighter + 0.05) / (darker + 0.05);
+};
+
+/**
+ * Black or white text that maximizes WCAG contrast against the given fill colour.
+ * Prefers black when ratios are equal.
+ */
 export const contrastingTextColor = (hex: string): "#000000" | "#FFFFFF" => {
   const rgb = parseHexColor(hex);
   if (!rgb) return "#000000";
-  return relativeLuminance(rgb) > 0.4 ? "#000000" : "#FFFFFF";
+  const fill = relativeLuminance(rgb);
+  const blackContrast = contrastRatio(fill, 0);
+  const whiteContrast = contrastRatio(fill, 1);
+  return blackContrast >= whiteContrast ? "#000000" : "#FFFFFF";
 };
