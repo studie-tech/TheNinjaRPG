@@ -48,6 +48,7 @@ import {
   setupContextLossHandling,
   setupScene,
 } from "@/libs/threejs/util";
+import { contrastingTextColor, getReadableVillageHexColor } from "@/utils/color";
 import { useUserData } from "@/utils/UserContext";
 
 interface MapProps {
@@ -639,8 +640,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
               canvas.height = h;
               const context = canvas.getContext("2d");
               if (context) {
+                const labelFill = getReadableVillageHexColor(highlight.hexColor);
+                const labelText = contrastingTextColor(labelFill);
                 context.globalAlpha = 0.9;
-                context.fillStyle = highlight.hexColor;
+                context.fillStyle = labelFill;
                 context.lineWidth = 4;
                 context.strokeStyle = "black";
                 if (context.roundRect) {
@@ -653,8 +656,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
                 context.globalAlpha = 1.0;
                 context.textAlign = "center";
                 context.textBaseline = "middle";
-                context.fillStyle = "black";
-                context.strokeStyle = "#F0F0F0";
+                context.fillStyle = labelText;
+                context.strokeStyle = labelText === "#000000" ? "#F0F0F0" : "#1a1a1a";
                 context.font = `${f}px arial narrow`;
                 context.strokeText(highlight.mapName || highlight.name, w / 2, h / 2);
                 context.fillText(highlight.mapName || highlight.name, w / 2, h / 2);

@@ -42,6 +42,8 @@ import {
 } from "@/components/ui/tooltip";
 import {
   HIDEOUT_COST,
+  MAP_SECTOR_ID_MAX,
+  MAP_SECTOR_ID_MIN,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   STEALTH_SENSORY_CAP,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
@@ -82,6 +84,7 @@ import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import { calcGlobalTravelTime } from "@/libs/travel";
 import { findVillageUserRelationship } from "@/utils/alliance";
+import { getReadableVillageHexColor } from "@/utils/color";
 import { useAwake } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
@@ -313,12 +316,28 @@ export default function Travel() {
     return villageData.filter((v) => ["VILLAGE", "SAFEZONE"].includes(v.type));
   }, [villageData, userData?.isOutlaw]);
 
-  // Quick-travel destinations: main villages/safezones (+ outlaw hubs for outlaws)
+  // Quick-travel destinations: main villages/safezones (+ outlaw hubs for outlaws),
+  // plus a synthetic war-torn entry so the list uses one button template.
   const travelDestinations = useMemo(() => {
     if (!villages) return [];
-    return villages
+    const villagesAsDestinations = villages
       .filter((v) => ["VILLAGE", "SAFEZONE", "OUTLAW"].includes(v.type))
-      .sort((a, b) => (a.mapName || a.name).localeCompare(b.mapName || b.name));
+      .sort((a, b) => (a.mapName || a.name).localeCompare(b.mapName || b.name))
+      .map((v) => ({
+        id: v.id,
+        label: v.mapName || v.name,
+        sector: v.sector,
+        color: v.hexColor,
+      }));
+    return [
+      ...villagesAsDestinations,
+      {
+        id: "war-torn",
+        label: "War-Torn Battleground",
+        sector: MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+        color: "#dc2626",
+      },
+    ];
   }, [villages]);
 
   // Fetch tracked bounties for map display
@@ -571,14 +590,20 @@ export default function Travel() {
     [currentStep, userData?.tutorialOn, startGlobalMove],
   );
 
+  // Whether world-travel can be started toward a given sector
+  const canTravelTo = useCallback(
+    (sector: number) => sector !== userData?.sector && !isStartingTravel,
+    [userData?.sector, isStartingTravel],
+  );
+
   // Open the world-travel confirm modal for a destination sector
   const initiateTravelToSector = useCallback(
     (sector: number) => {
-      if (sector === userData?.sector || isStartingTravel) return;
+      if (!canTravelTo(sector)) return;
       setTargetSector(sector);
       setShowModal(true);
     },
-    [userData?.sector, isStartingTravel],
+    [canTravelTo],
   );
 
   const isGlobal = activeTab === globalLink;
@@ -627,10 +652,7 @@ export default function Travel() {
           markerOnlyInteraction={true}
           focusSector={focusSector}
           focusSectorLabel="Target"
-          onTileClick={(sector) => {
-            setTargetSector(sector);
-            setShowModal(true);
-          }}
+          onTileClick={initiateTravelToSector}
           hexasphere={globe}
         />
       )
@@ -642,6 +664,7 @@ export default function Travel() {
     showOwnership,
     focusSector,
     userData?.tutorialOn,
+    initiateTravelToSector,
   ]);
 
   // Battle scene
@@ -826,7 +849,7 @@ export default function Travel() {
                               <FormControl>
                                 <Input
                                   className="w-full"
-                                  placeholder="Sector ID (0-491)"
+                                  placeholder={`Sector ID (${MAP_SECTOR_ID_MIN}-${MAP_SECTOR_ID_MAX})`}
                                   type="number"
                                   {...field}
                                   value={field.value as number}
@@ -870,54 +893,30 @@ export default function Travel() {
                       Travel to a village, or enter a sector ID.
                     </p>
                     <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pb-3">
-                      {travelDestinations.map((village) => {
-                        // Hyorin's stored color is near-white and invisible on the
-                        // popover background; show it as a light blue instead.
-                        const dotColor =
-                          village.name === "Hyorin" ? "#93c5fd" : village.hexColor;
+                      {travelDestinations.map((destination) => {
+                        const dotColor = getReadableVillageHexColor(destination.color);
                         return (
                           <Button
-                            key={village.id}
+                            key={destination.id}
                             type="button"
                             size="sm"
                             variant="outline"
                             className="justify-start"
                             style={{ borderColor: dotColor }}
-                            disabled={
-                              village.sector === userData?.sector || isStartingTravel
-                            }
-                            onClick={() => initiateTravelToSector(village.sector)}
+                            disabled={!canTravelTo(destination.sector)}
+                            onClick={() => initiateTravelToSector(destination.sector)}
                           >
                             <span
-                              className="mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                              className="mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/30 dark:ring-white/30"
                               style={{ backgroundColor: dotColor }}
                             />
-                            {village.mapName || village.name}
+                            {destination.label}
                             <span className="ml-auto text-muted-foreground text-xs">
-                              {village.sector}
+                              {destination.sector}
                             </span>
                           </Button>
                         );
                       })}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="justify-start border-red-600"
-                        disabled={
-                          MAP_WAR_TORN_BATTLEGROUND_SECTOR === userData?.sector ||
-                          isStartingTravel
-                        }
-                        onClick={() =>
-                          initiateTravelToSector(MAP_WAR_TORN_BATTLEGROUND_SECTOR)
-                        }
-                      >
-                        <Swords className="mr-2 h-3.5 w-3.5 shrink-0 text-red-500" />
-                        War-Torn Battleground
-                        <span className="ml-auto text-muted-foreground text-xs">
-                          {MAP_WAR_TORN_BATTLEGROUND_SECTOR}
-                        </span>
-                      </Button>
                     </div>
                     <Form {...quickTravelForm}>
                       <form
@@ -934,7 +933,7 @@ export default function Travel() {
                               <FormControl>
                                 <Input
                                   className="w-full"
-                                  placeholder="Sector ID"
+                                  placeholder={`Sector ID (${MAP_SECTOR_ID_MIN}-${MAP_SECTOR_ID_MAX})`}
                                   type="number"
                                   {...field}
                                   value={field.value as number}
@@ -949,8 +948,7 @@ export default function Travel() {
                           size="sm"
                           disabled={
                             quickTravelSector === undefined ||
-                            quickTravelSector === userData?.sector ||
-                            isStartingTravel
+                            !canTravelTo(quickTravelSector)
                           }
                         >
                           Travel to Sector {quickTravelSector ?? "..."}
