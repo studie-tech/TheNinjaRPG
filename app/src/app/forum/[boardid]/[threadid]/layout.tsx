@@ -11,7 +11,7 @@ export async function generateMetadata(props: {
   // forumThread has no board relation, so both are fetched in one parallel round-trip.
   const [thread, boardRow] = await Promise.all([
     drizzleDB.query.forumThread.findFirst({
-      columns: { title: true, nPosts: true },
+      columns: { title: true, nPosts: true, boardId: true },
       where: eq(forumThread.id, params.threadid),
     }),
     drizzleDB.query.forumBoard.findFirst({
@@ -26,7 +26,10 @@ export async function generateMetadata(props: {
     description: `${thread.title} - a discussion with ${thread.nPosts} ${
       thread.nPosts === 1 ? "post" : "posts"
     }${board ? ` in the ${board} board` : ""} on the TheNinja-RPG community forums.`,
-    path: `/forum/${params.boardid}/${params.threadid}`,
+    // Built from the thread's own boardId rather than the requested one. Any board id
+    // resolves this route, so pairing a real thread with an unrelated board would
+    // otherwise mint unlimited URLs that each declare themselves canonical.
+    path: `/forum/${thread.boardId}/${params.threadid}`,
     type: "article",
   });
 }
