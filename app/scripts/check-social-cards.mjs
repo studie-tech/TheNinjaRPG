@@ -109,10 +109,19 @@ const check = (ok, label, detail) => ({ ok, label, detail });
  */
 const CANONICAL_ORIGIN = "https://www.theninja-rpg.com";
 const resolveAgainstBase = (rawUrl, base) => {
-  if (!rawUrl?.startsWith(CANONICAL_ORIGIN)) return rawUrl;
+  if (!rawUrl) return rawUrl;
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return rawUrl;
+  }
+  // Compared as a parsed origin rather than a string prefix: "https://www.theninja-rpg.com"
+  // is also a prefix of "https://www.theninja-rpg.com.example.org".
+  if (parsed.origin !== CANONICAL_ORIGIN) return rawUrl;
   const baseOrigin = new URL(base).origin;
   if (baseOrigin === CANONICAL_ORIGIN) return rawUrl;
-  return rawUrl.replace(CANONICAL_ORIGIN, baseOrigin);
+  return `${baseOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
 };
 
 async function inspect(base, path) {

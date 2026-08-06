@@ -11,8 +11,16 @@ import NextImage from "next/image";
  */
 const BUNNY_CDN_HOSTS = ["uploadthing.b-cdn.net", "tnr-storage-cdn.b-cdn.net"];
 
-const isBunnyCdnUrl = (url: string) =>
-  BUNNY_CDN_HOSTS.some((host) => url.includes(host));
+const isBunnyCdnUrl = (url: string) => {
+  try {
+    // Matched on the parsed hostname rather than a substring: "uploadthing.b-cdn.net"
+    // also appears inside URLs such as https://example.org/?ref=uploadthing.b-cdn.net.
+    return BUNNY_CDN_HOSTS.includes(new URL(url).hostname);
+  } catch {
+    // Relative paths (local /public assets) are never Bunny-hosted.
+    return false;
+  }
+};
 
 /**
  * bunnyImageUrl
