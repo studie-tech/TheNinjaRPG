@@ -91,15 +91,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .from(forumThread)
         .orderBy(desc(forumThread.updatedAt))
         .limit(MAX_THREADS),
-      // Matched on what actually renders rather than on `status`: the pipeline writes
-      // two different terminal values ("succeeded" for images, "success" for the video
-      // path), and the public listing filters on neither. `hidden` is respected so
-      // anything withdrawn from the gallery is never advertised to crawlers.
+      // Deliberately not matched on `status`: the pipeline writes two different terminal
+      // values ("succeeded" for images, "success" for the video path) and the public
+      // listing filters on neither, so a status predicate silently drops rows. `done` is
+      // the flag the pipeline actually maintains, and it is set in the same update that
+      // stores the finished output — so a video whose thumbnail exists while the render
+      // is still processing or has failed is excluded. `hidden` keeps anything withdrawn
+      // from the gallery out of the index.
       drizzleDB
         .select({ id: conceptImage.id, createdAt: conceptImage.createdAt })
         .from(conceptImage)
         .where(
           and(
+            eq(conceptImage.done, true),
             isNotNull(conceptImage.image),
             isNotNull(conceptImage.userId),
             eq(conceptImage.hidden, false),
