@@ -1,4 +1,4 @@
-import { desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
 import type { MetadataRoute } from "next";
 import {
   bloodline,
@@ -12,14 +12,20 @@ import {
 import { absoluteUrl } from "@/libs/seo";
 import { drizzleDB } from "@/server/db";
 
-// Regenerated hourly rather than per request: the content tables barely move and this
-// issues seven queries.
-export const revalidate = 3600;
+// Rendered per request rather than prerendered: this reads seven tables, and the build
+// runs without a database, so baking it at build time fails the production build. The
+// CDN caching that keeps the seven queries off the hot path is configured against
+// /sitemap.xml in next.config.mjs.
+export const dynamic = "force-dynamic";
 
-// Cap on the number of player profiles listed. There are far more accounts than this,
-// but low-level and abandoned characters are thin pages that dilute the sitemap.
+// Caps on the unbounded tables. A sitemap may hold at most 50,000 URLs, and threads,
+// concept art and accounts all grow without limit, so each is bounded and ordered so the
+// newest entries win once a table outgrows its share. Content tables (bloodline, jutsu,
+// item) are curated and small, so they stay uncapped.
 const MAX_PROFILES = 5000;
 const MIN_PROFILE_LEVEL = 10;
+const MAX_THREADS = 10000;
+const MAX_CONCEPT_ART = 5000;
 
 const STATIC_ROUTES: {
   path: string;
@@ -82,11 +88,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           boardId: forumThread.boardId,
           updatedAt: forumThread.updatedAt,
         })
-        .from(forumThread),
+        .from(forumThread)
+        .orderBy(desc(forumThread.updatedAt))
+        .limit(MAX_THREADS),
+      // Matched on what actually renders rather than on `status`: the pipeline writes
+      // two different terminal values ("succeeded" for images, "success" for the video
+      // path), and the public listing filters on neither. `hidden` is respected so
+      // anything withdrawn from the gallery is never advertised to crawlers.
       drizzleDB
         .select({ id: conceptImage.id, createdAt: conceptImage.createdAt })
         .from(conceptImage)
-        .where(eq(conceptImage.status, "succeeded")),
+        .where(
+          and(
+            isNotNull(conceptImage.image),
+            isNotNull(conceptImage.userId),
+            eq(conceptImage.hidden, false),
+          ),
+        )
+        .orderBy(desc(conceptImage.createdAt))
+        .limit(MAX_CONCEPT_ART),
       drizzleDB
         .select({ username: userData.username, updatedAt: userData.updatedAt })
         .from(userData)

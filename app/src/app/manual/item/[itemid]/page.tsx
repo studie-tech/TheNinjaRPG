@@ -9,8 +9,15 @@ import { capitalizeFirstLetter } from "@/utils/sanitize";
 
 type Props = { params: Promise<{ itemid: string }> };
 
-// Shared between generateMetadata and the render so each request hits the DB once.
-const getItem = cache(async (id: string) => fetchItem(drizzleDB, id));
+/**
+ * Shared between generateMetadata and the render so each request hits the DB once.
+ * Hidden entries are treated as missing: `hidden` gates unreleased content to staff,
+ * and this route is public, so serving one would disclose it to anyone with the id.
+ */
+const getItem = cache(async (id: string) => {
+  const item = await fetchItem(drizzleDB, id);
+  return item && !item.hidden ? item : undefined;
+});
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { itemid } = await props.params;

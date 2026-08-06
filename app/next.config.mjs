@@ -86,6 +86,18 @@ const config = {
         source: "/:path*",
         headers: securityHeaders,
       },
+      {
+        // The sitemap is generated per request (it reads seven tables and the build has
+        // no database), so it is cached at the edge instead. Crawlers fetch it rarely,
+        // and a stale copy for an hour is harmless.
+        source: "/sitemap.xml",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
     ];
   },
 };

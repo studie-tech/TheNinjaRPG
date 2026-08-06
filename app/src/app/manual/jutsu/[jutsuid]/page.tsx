@@ -9,8 +9,16 @@ import { capitalizeFirstLetter } from "@/utils/sanitize";
 
 type Props = { params: Promise<{ jutsuid: string }> };
 
-// Shared between generateMetadata and the render so each request hits the DB once.
-const getJutsu = cache(async (id: string) => fetchJutsu(drizzleDB, id));
+/**
+ * Shared between generateMetadata and the render so each request hits the DB once.
+ * Hidden entries are treated as missing: `hidden` gates unreleased content to staff
+ * (see the canChangeContent check in libs/jutsu.ts), and this route is public, so
+ * serving one would disclose it to anyone who guessed the id.
+ */
+const getJutsu = cache(async (id: string) => {
+  const jutsu = await fetchJutsu(drizzleDB, id);
+  return jutsu && !jutsu.hidden ? jutsu : undefined;
+});
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { jutsuid } = await props.params;

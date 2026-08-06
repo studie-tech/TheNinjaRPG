@@ -8,8 +8,15 @@ import { drizzleDB } from "@/server/db";
 
 type Props = { params: Promise<{ bloodlineid: string }> };
 
-// Shared between generateMetadata and the render so each request hits the DB once.
-const getBloodline = cache(async (id: string) => fetchBloodline(drizzleDB, id));
+/**
+ * Shared between generateMetadata and the render so each request hits the DB once.
+ * Hidden entries are treated as missing: `hidden` gates unreleased content to staff,
+ * and this route is public, so serving one would disclose it to anyone with the id.
+ */
+const getBloodline = cache(async (id: string) => {
+  const bloodline = await fetchBloodline(drizzleDB, id);
+  return bloodline && !bloodline.hidden ? bloodline : undefined;
+});
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { bloodlineid } = await props.params;
