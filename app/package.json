@@ -23,7 +23,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:native": "tsgo --noEmit",
     "postinstall": "bun run scripts/ensure-map-data.ts",
-    "prepare": "cd .. && husky"
+    "prepare": "cd .. && husky",
+    "check:social": "node scripts/check-social-cards.mjs"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
