@@ -49,13 +49,22 @@ const NAMED_ENTITIES: Record<string, string> = {
  * "&#39;" would survive verbatim into the search snippet.
  * @param text - Text that may contain HTML entities
  */
+const decodeCodePoint = (raw: string, value: number) => {
+  // String.fromCodePoint throws a RangeError outside the Unicode scalar range, which
+  // would abort the whole description. Lone surrogates are excluded too: they decode
+  // without throwing but produce unpaired code units that break downstream encoding.
+  if (!Number.isInteger(value) || value < 0 || value > 0x10ffff) return raw;
+  if (value >= 0xd800 && value <= 0xdfff) return raw;
+  return String.fromCodePoint(value);
+};
+
 const decodeHtmlEntities = (text: string) =>
   text
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) =>
-      String.fromCodePoint(Number.parseInt(hex, 16)),
+    .replace(/&#x([0-9a-f]+);/gi, (raw, hex: string) =>
+      decodeCodePoint(raw, Number.parseInt(hex, 16)),
     )
-    .replace(/&#(\d+);/g, (_, dec: string) =>
-      String.fromCodePoint(Number.parseInt(dec, 10)),
+    .replace(/&#(\d+);/g, (raw, dec: string) =>
+      decodeCodePoint(raw, Number.parseInt(dec, 10)),
     )
     .replace(/&([a-z]+);/gi, (match, name: string) => {
       return NAMED_ENTITIES[name.toLowerCase()] ?? match;
