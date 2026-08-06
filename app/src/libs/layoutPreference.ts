@@ -19,10 +19,15 @@ export const DEFAULT_FONT_SCALE: FontScaleValue = 1;
  * - Validates an unknown stored value against the supported scales
  * @param value - Raw cookie or localStorage value
  */
-export const toFontScale = (
-  value?: string | number | null,
-): FontScaleValue | undefined => {
-  const parsed = typeof value === "number" ? value : Number(value);
+export const toFontScale = (value?: unknown): FontScaleValue | undefined => {
+  // Narrowed before coercion: callers pass unchecked JSON.parse output, and Number()
+  // happily turns `true` into 1 and `[1.15]` into 1.15, both of which would match a
+  // supported scale.
+  if (typeof value === "number") {
+    return FONT_SCALE_VALUES.find((scale) => scale === value);
+  }
+  if (typeof value !== "string" || value.trim() === "") return undefined;
+  const parsed = Number(value);
   if (!Number.isFinite(parsed)) return undefined;
   return FONT_SCALE_VALUES.find((scale) => scale === parsed);
 };

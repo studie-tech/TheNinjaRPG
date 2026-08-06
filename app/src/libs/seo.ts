@@ -25,6 +25,42 @@ export const absoluteUrl = (path: string) => {
   return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 };
 
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  hellip: "…",
+  mdash: "—",
+  ndash: "–",
+  rsquo: "’",
+  lsquo: "‘",
+  rdquo: "”",
+  ldquo: "“",
+};
+
+/**
+ * decodeHtmlEntities
+ * - Resolves the entities that show up in stored descriptions to their characters
+ *
+ * Dropping them instead would turn "Don&apos;t" into "Don t", and numeric forms such as
+ * "&#39;" would survive verbatim into the search snippet.
+ * @param text - Text that may contain HTML entities
+ */
+const decodeHtmlEntities = (text: string) =>
+  text
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) =>
+      String.fromCodePoint(Number.parseInt(hex, 16)),
+    )
+    .replace(/&#(\d+);/g, (_, dec: string) =>
+      String.fromCodePoint(Number.parseInt(dec, 10)),
+    )
+    .replace(/&([a-z]+);/gi, (match, name: string) => {
+      return NAMED_ENTITIES[name.toLowerCase()] ?? match;
+    });
+
 /**
  * metaDescription
  * - Turns stored content descriptions, which may contain HTML and long prose, into a
@@ -33,9 +69,7 @@ export const absoluteUrl = (path: string) => {
  * @param prefix - Optional lead-in placed before the description
  */
 export const metaDescription = (text: string, prefix?: string) => {
-  const clean = text
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&[a-z]+;/gi, " ")
+  const clean = decodeHtmlEntities(text.replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ")
     .trim();
   const full = prefix ? `${prefix} ${clean}` : clean;
@@ -109,9 +143,13 @@ export const buildMetadata = ({
  * noindexMetadata
  * - Convenience wrapper for staff-only and utility routes that must stay out of the
  *   index but still need a sensible title in the browser tab.
+ *
+ * Uses `absolute` for the same reason buildMetadata does: these are segment layouts, and
+ * a plain string title here would replace the root template for every nested route that
+ * does not set its own.
  * @param title - Page title
  */
 export const noindexMetadata = (title: string): Metadata => ({
-  title,
+  title: { absolute: `${title} | ${SITE_NAME}` },
   robots: { index: false, follow: false },
 });

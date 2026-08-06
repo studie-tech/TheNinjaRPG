@@ -78,13 +78,16 @@ export const LayoutBackground: React.FC<LayoutBackgroundProps> = ({
   const pixelWallpaper = getPixelWallpaper(userData);
   const isUserWallpaperLoaded = loadedWallpaper === pixelWallpaper;
 
+  // All three layers are decorative backdrops rather than content, so they carry an
+  // empty alt and are hidden from assistive technology.
   if (variant === "beta") {
     return (
       <Wallpaper
         className="fixed z-[-1] select-none object-contain md:top-0 md:left-0 md:h-full md:w-full md:object-cover"
         src={imageset.wallpaper}
-        alt="wallpaper"
+        alt=""
         priority
+        ariaHidden
       />
     );
   }
@@ -109,7 +112,8 @@ export const LayoutBackground: React.FC<LayoutBackgroundProps> = ({
             isUserWallpaperLoaded ? "opacity-100" : "opacity-0",
           )}
           src={pixelWallpaper}
-          alt="wallpaper"
+          alt=""
+          ariaHidden
           onLoad={() => setLoadedWallpaper(pixelWallpaper)}
         />
       )}
