@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import type { MetadataRoute } from "next";
 import {
   bloodline,
@@ -107,10 +107,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         )
         .orderBy(desc(conceptImage.createdAt))
         .limit(MAX_CONCEPT_ART),
+      // Mirrors the visibility filters the public user listing already applies, so AI
+      // characters, banned accounts and accounts pending deletion are never advertised.
       drizzleDB
         .select({ username: userData.username, updatedAt: userData.updatedAt })
         .from(userData)
-        .where(gte(userData.level, MIN_PROFILE_LEVEL))
+        .where(
+          and(
+            gte(userData.level, MIN_PROFILE_LEVEL),
+            eq(userData.isAi, false),
+            eq(userData.isBanned, false),
+            isNull(userData.deletionAt),
+          ),
+        )
         .orderBy(desc(userData.level))
         .limit(MAX_PROFILES),
     ]);

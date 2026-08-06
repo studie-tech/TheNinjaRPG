@@ -73,9 +73,23 @@ export default clerkMiddleware(
     // round-trip. No Set-Cookie is issued, which also keeps the response CDN-cacheable.
     if (isSearchCrawler(request.headers.get("user-agent"))) {
       const requestHeaders = new Headers(request.headers);
+      // Only the two layout cookies are overridden. The user-agent match is broad
+      // enough to catch a signed-in visitor whose browser string contains "bot", and
+      // replacing the whole header would drop their Clerk session before auth runs.
+      const preserved = request.cookies
+        .getAll()
+        .filter(
+          ({ name }) =>
+            name !== LEGACY_AB_LAYOUT_COOKIE && name !== AB_PIXEL_LAYOUT_COOKIE,
+        )
+        .map(({ name, value }) => `${name}=${value}`);
       requestHeaders.set(
         "cookie",
-        `${LEGACY_AB_LAYOUT_COOKIE}=${PINNED_CRAWLER_VARIANT}; ${AB_PIXEL_LAYOUT_COOKIE}=${PINNED_CRAWLER_VARIANT}`,
+        [
+          ...preserved,
+          `${LEGACY_AB_LAYOUT_COOKIE}=${PINNED_CRAWLER_VARIANT}`,
+          `${AB_PIXEL_LAYOUT_COOKIE}=${PINNED_CRAWLER_VARIANT}`,
+        ].join("; "),
       );
       return NextResponse.rewrite(request.nextUrl.clone(), {
         request: { headers: requestHeaders },

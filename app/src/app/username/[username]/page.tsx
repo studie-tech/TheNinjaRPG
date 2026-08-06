@@ -4,7 +4,7 @@ import { cache } from "react";
 import { userData } from "@/drizzle/schema";
 import PublicUserComponent from "@/layout/PublicUser";
 import { showUserRank } from "@/libs/profile";
-import { buildMetadata, noindexMetadata } from "@/libs/seo";
+import { absoluteUrl, buildMetadata, noindexMetadata } from "@/libs/seo";
 import { drizzleDB } from "@/server/db";
 
 // Cached so generateMetadata and the page render share a single lookup rather than
@@ -39,7 +39,7 @@ export async function generateMetadata(props: {
       village ? ` of ${village}` : ""
     } in TheNinja-RPG. View their stats, bloodline, badges and battle history.`,
     path: `/username/${encodeURIComponent(user.username)}`,
-    image: user.avatar ?? undefined,
+    image: user.avatar ? absoluteUrl(user.avatar) : undefined,
     type: "article",
   });
 }
