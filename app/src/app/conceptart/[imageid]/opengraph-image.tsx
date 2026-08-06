@@ -24,7 +24,9 @@ export default async function Image({
   const image = await drizzleDB.query.conceptImage.findFirst({
     where: eq(conceptImage.id, imageid || ""),
   });
-  const url = image?.image;
+  // Withdrawn artwork falls back to the logo card rather than rendering the image, so
+  // hiding a piece also removes it from any social preview that links to it.
+  const url = image?.hidden ? undefined : image?.image;
   const width = url ? 576 : 512;
   const height = url ? 768 : 130;
 
