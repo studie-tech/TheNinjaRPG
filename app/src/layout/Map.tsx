@@ -25,6 +25,7 @@ import {
   IMG_MAP_QUEST_ICON,
   IMG_MAP_WAR_ICON,
   MAP_RESERVED_SECTORS,
+  MAP_WAR_TORN_BATTLEGROUND_COLOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
 } from "@/drizzle/constants";
 import type { Village } from "@/drizzle/schema";
@@ -48,7 +49,11 @@ import {
   setupContextLossHandling,
   setupScene,
 } from "@/libs/threejs/util";
-import { contrastingTextColor, getReadableVillageHexColor } from "@/utils/color";
+import {
+  contrastingTextColor,
+  getReadableVillageHexColor,
+  parseHexColor,
+} from "@/utils/color";
 import { useUserData } from "@/utils/UserContext";
 
 interface MapProps {
@@ -100,6 +105,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   // Bridges the overlay zoom buttons into the three.js scene built below
   const zoomActionRef = useRef<((factor: number) => void) | null>(null);
+  // Scene handlers close over this ref so they always call the latest callback
+  // without rebuilding the three.js scene when travel state changes.
+  const onTileClickRef = useRef(props.onTileClick);
+  onTileClickRef.current = props.onTileClick;
   const mouse = new Vector2();
   const { hexasphere, showOwnership } = props;
   const autoRotate = props.autoRotate ?? true;
@@ -231,7 +240,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         ownershipData?.sectors.map((entry) => [entry.sector, entry.villageId]),
       );
       const ownershipColorByVillageId = new Map(
-        ownershipData?.colors.map((entry) => [entry.id, entry.hexColor]),
+        ownershipData?.colors.map((entry) => [
+          entry.id,
+          getReadableVillageHexColor(entry.hexColor),
+        ]),
       );
 
       /**
@@ -401,7 +413,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
             const sector = intersects?.[0]?.object?.userData?.id as number;
             const tile = hexasphere?.tiles[sector];
             if (tile !== undefined) {
-              props.onTileClick?.(sector, tile);
+              onTileClickRef.current?.(sector, tile);
             }
           }
         };
@@ -441,7 +453,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
             // Double-tap detected!
             const tile = hexasphere?.tiles[sector];
             if (tile !== undefined) {
-              props.onTileClick?.(sector, tile);
+              onTileClickRef.current?.(sector, tile);
             }
             // Reset to prevent triple-tap
             lastTapRef.current = { time: 0, sector: null };
@@ -498,7 +510,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           const sector = pickLabelTarget(point);
           const tile = sector !== null ? hexasphere?.tiles[sector] : undefined;
           if (sector !== null && tile) {
-            props.onTileClick?.(sector, tile);
+            onTileClickRef.current?.(sector, tile);
           }
         };
         renderer.domElement.addEventListener("pointerdown", onLabelPointerDown);
@@ -696,7 +708,12 @@ const GlobalMap: React.FC<MapProps> = (props) => {
 
       // Add tweening highlights
       const questTweenColor = { r: 0.8, g: 0.6, b: 0.0 };
-      const warTweenColor = { r: 1.0, g: 0.0, b: 0.0 }; // Red color for war zones
+      const warTornRgb = parseHexColor(MAP_WAR_TORN_BATTLEGROUND_COLOR);
+      const warTweenColor = {
+        r: (warTornRgb?.r ?? 255) / 255,
+        g: (warTornRgb?.g ?? 0) / 255,
+        b: (warTornRgb?.b ?? 0) / 255,
+      };
       const focusTweenColor = { r: 0.66, g: 0.33, b: 0.97 }; // Purple color for focus sector
       const sectorsToHighlight: {
         sector: number;
@@ -1128,7 +1145,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   const hoveredOwner = hoveredOwnership
     ? ownershipData?.colors.find((village) => village.id === hoveredOwnership.villageId)
     : undefined;
-  const hoveredOwnerColor = hoveredOwner?.hexColor ?? "#9ca3af";
+  const hoveredOwnerColor = getReadableVillageHexColor(hoveredOwner?.hexColor ?? "");
   const hoveredOwnerName =
     hoveredOwner?.mapName ??
     hoveredOwner?.name ??

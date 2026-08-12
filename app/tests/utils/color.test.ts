@@ -3,29 +3,58 @@ import {
   contrastingTextColor,
   getReadableVillageHexColor,
   parseHexColor,
-  relativeLuminance,
 } from "@/utils/color";
+
+/** Must match MIN_LIGHTNESS / MAX_LIGHTNESS in `@/utils/color`. */
+const MIN_LIGHTNESS = 0.28;
+const MAX_LIGHTNESS = 0.72;
+
+const hslLightness = (rgb: { r: number; g: number; b: number }) => {
+  const rn = rgb.r / 255;
+  const gn = rgb.g / 255;
+  const bn = rgb.b / 255;
+  return (Math.max(rn, gn, bn) + Math.min(rn, gn, bn)) / 2;
+};
 
 test("parseHexColor accepts 3- and 6-digit hex", () => {
   expect(parseHexColor("#fff")).toEqual({ r: 255, g: 255, b: 255 });
+  expect(parseHexColor("fff")).toEqual({ r: 255, g: 255, b: 255 });
   expect(parseHexColor("003366")).toEqual({ r: 0, g: 51, b: 102 });
   expect(parseHexColor("not-a-color")).toBeNull();
+  expect(parseHexColor("")).toBeNull();
+  expect(parseHexColor("#ff000080")).toBeNull();
+  expect(parseHexColor("rgb(255,0,0)")).toBeNull();
 });
 
 test("getReadableVillageHexColor darkens near-white fills", () => {
   const readable = getReadableVillageHexColor("#FFFFFF");
   const rgb = parseHexColor(readable);
   expect(rgb).not.toBeNull();
-  expect(relativeLuminance(rgb!)).toBeLessThan(0.85);
-  expect(relativeLuminance(rgb!)).toBeGreaterThan(0.15);
+  expect(hslLightness(rgb!)).toBeCloseTo(MAX_LIGHTNESS, 2);
 });
 
 test("getReadableVillageHexColor lightens near-black fills", () => {
   const readable = getReadableVillageHexColor("#000000");
   const rgb = parseHexColor(readable);
   expect(rgb).not.toBeNull();
-  expect(rgb!.r + rgb!.g + rgb!.b).toBeGreaterThan(0);
-  expect(relativeLuminance(rgb!)).toBeGreaterThan(relativeLuminance({ r: 0, g: 0, b: 0 }));
+  expect(hslLightness(rgb!)).toBeCloseTo(MIN_LIGHTNESS, 2);
+});
+
+test("getReadableVillageHexColor preserves hue when lifting a dark saturated colour", () => {
+  const rgb = parseHexColor(getReadableVillageHexColor("#000080"));
+  expect(rgb).not.toBeNull();
+  expect(rgb!.b).toBeGreaterThan(rgb!.r);
+  expect(rgb!.r).toBe(0);
+  expect(rgb!.g).toBe(0);
+  expect(hslLightness(rgb!)).toBeCloseTo(MIN_LIGHTNESS, 2);
+});
+
+test("getReadableVillageHexColor preserves hue when darkening a light saturated colour", () => {
+  const rgb = parseHexColor(getReadableVillageHexColor("#FFE0E0"));
+  expect(rgb).not.toBeNull();
+  expect(rgb!.r).toBeGreaterThan(rgb!.g);
+  expect(rgb!.r).toBeGreaterThan(rgb!.b);
+  expect(hslLightness(rgb!)).toBeCloseTo(MAX_LIGHTNESS, 2);
 });
 
 test("getReadableVillageHexColor leaves mid-tone colours unchanged in hue band", () => {

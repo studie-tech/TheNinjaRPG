@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,7 @@ import {
   HIDEOUT_COST,
   MAP_SECTOR_ID_MAX,
   MAP_SECTOR_ID_MIN,
+  MAP_WAR_TORN_BATTLEGROUND_COLOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   STEALTH_SENSORY_CAP,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
@@ -335,7 +336,8 @@ export default function Travel() {
         id: "war-torn",
         label: "War-Torn Battleground",
         sector: MAP_WAR_TORN_BATTLEGROUND_SECTOR,
-        color: "#dc2626",
+        color: MAP_WAR_TORN_BATTLEGROUND_COLOR,
+        description: "Free-for-all PvP, no sleeping",
       },
     ];
   }, [villages]);
@@ -596,15 +598,31 @@ export default function Travel() {
     [userData?.sector, isStartingTravel],
   );
 
-  // Open the world-travel confirm modal for a destination sector
-  const initiateTravelToSector = useCallback(
-    (sector: number) => {
-      if (!canTravelTo(sector)) return;
-      setTargetSector(sector);
-      setShowModal(true);
-    },
-    [canTravelTo],
-  );
+  // Stable identity for the globe click path: MapComponent is memoized to avoid
+  // re-renders during countdown updates, so this callback must not change when
+  // sector / isStartingTravel change. The guard is read from a ref instead.
+  const travelGuardRef = useRef({
+    sector: userData?.sector,
+    isStartingTravel,
+  });
+  travelGuardRef.current = {
+    sector: userData?.sector,
+    isStartingTravel,
+  };
+
+  const initiateTravelToSector = useCallback((sector: number) => {
+    const { sector: current, isStartingTravel: busy } = travelGuardRef.current;
+    if (busy) return;
+    if (sector === current) {
+      showMutationToast({
+        success: false,
+        message: "You are already in that sector",
+      });
+      return;
+    }
+    setTargetSector(sector);
+    setShowModal(true);
+  }, []);
 
   const isGlobal = activeTab === globalLink;
   const showGlobal = villages && globe && isGlobal;
@@ -667,7 +685,6 @@ export default function Travel() {
     showOwnership,
     focusSector,
     userData?.tutorialOn,
-    initiateTravelToSector,
   ]);
 
   // Battle scene
@@ -898,13 +915,16 @@ export default function Travel() {
                     <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pb-3">
                       {travelDestinations.map((destination) => {
                         const dotColor = getReadableVillageHexColor(destination.color);
-                        return (
+                        const description =
+                          "description" in destination
+                            ? destination.description
+                            : undefined;
+                        const button = (
                           <Button
-                            key={destination.id}
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="justify-start"
+                            className="h-auto justify-start py-1.5"
                             style={{ borderColor: dotColor }}
                             disabled={!canTravelTo(destination.sector)}
                             onClick={() => initiateTravelToSector(destination.sector)}
@@ -913,11 +933,29 @@ export default function Travel() {
                               className="mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/30 dark:ring-white/30"
                               style={{ backgroundColor: dotColor }}
                             />
-                            {destination.label}
+                            <span className="flex min-w-0 flex-col items-start text-left">
+                              <span>{destination.label}</span>
+                              {description && (
+                                <span className="font-normal text-[10px] text-red-600 dark:text-red-400">
+                                  {description}
+                                </span>
+                              )}
+                            </span>
                             <span className="ml-auto text-muted-foreground text-xs">
                               {destination.sector}
                             </span>
                           </Button>
+                        );
+                        if (!description) {
+                          return <Fragment key={destination.id}>{button}</Fragment>;
+                        }
+                        return (
+                          <TooltipProvider key={destination.id} delayDuration={50}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>{button}</TooltipTrigger>
+                              <TooltipContent>{description}</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         );
                       })}
                     </div>
@@ -1036,6 +1074,12 @@ export default function Travel() {
                   The travel time is estimated to be{" "}
                   {calcGlobalTravelTime(userData.sector, targetSector, globe)} seconds.
                 </p>
+                {targetSector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && (
+                  <p className="mb-2 rounded-md border border-red-600/40 bg-red-600/10 p-2 text-sm text-red-700 dark:text-red-400">
+                    Warning: this is a free-for-all PvP zone. Anyone can attack you
+                    regardless of village or XP bracket, and you cannot sleep there.
+                  </p>
+                )}
                 Do you confirm?
               </div>
             )}
