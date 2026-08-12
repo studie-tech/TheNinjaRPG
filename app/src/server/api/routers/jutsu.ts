@@ -2548,10 +2548,33 @@ export const tryEquipUserJutsuAtomically = async (args: {
   return kept ? "equipped" : "cap-reached";
 };
 
+/** True when this loadout is still the user's active `userData.jutsuLoadout`. */
+const isActiveJutsuLoadoutSql = (userId: string, loadoutId: string) => sql`EXISTS (
+  SELECT 1 FROM ${userData}
+  WHERE ${userData.userId} = ${userId}
+    AND ${userData.jutsuLoadout} = ${loadoutId}
+)`;
+
+/** Active loadout's jutsuIds, or null when the user has no pointer / join miss. */
+const fetchActiveLoadoutJutsuIds = async (
+  client: DrizzleClient,
+  userId: string,
+): Promise<string[] | null> => {
+  const [active] = await client
+    .select({ jutsuIds: jutsuLoadout.jutsuIds })
+    .from(userData)
+    .innerJoin(jutsuLoadout, eq(jutsuLoadout.id, userData.jutsuLoadout))
+    .where(and(eq(userData.userId, userId), eq(jutsuLoadout.userId, userId)))
+    .limit(1);
+  return active?.jutsuIds ?? null;
+};
+
 /**
  * Append a jutsuId to a loadout's JSON array without rewriting the whole array, so
  * concurrent equips cannot drop each other's IDs. Idempotent via NOT JSON_CONTAINS.
- * Returns true when the loadout ends up containing jutsuId (append or already present).
+ * Only mutates the loadout if it is still the user's active pointer — otherwise a
+ * concurrent selectJutsuLoadout would desynchronize the old loadout from equipped
+ * rows. Returns true when the *active* loadout contains jutsuId.
  */
 const appendJutsuIdToLoadoutAtomically = async (args: {
   client: DrizzleClient;
@@ -2570,16 +2593,14 @@ const appendJutsuIdToLoadoutAtomically = async (args: {
         and(
           eq(jutsuLoadout.id, loadoutId),
           eq(jutsuLoadout.userId, userId),
+          isActiveJutsuLoadoutSql(userId, loadoutId),
           sql`NOT JSON_CONTAINS(${jutsuLoadout.jutsuIds}, JSON_QUOTE(${jutsuId}))`,
         ),
       );
     if (result.rowsAffected === 1) return true;
-    // Already present (PlanetScale reports 0 changed rows) or missing loadout — verify.
-    const row = await client.query.jutsuLoadout.findFirst({
-      where: and(eq(jutsuLoadout.id, loadoutId), eq(jutsuLoadout.userId, userId)),
-      columns: { jutsuIds: true },
-    });
-    return !!row?.jutsuIds.includes(jutsuId);
+    // Already present, pointer moved, or missing loadout — check the active one.
+    const ids = await fetchActiveLoadoutJutsuIds(client, userId);
+    return !!ids?.includes(jutsuId);
   } catch {
     return false;
   }
@@ -2595,7 +2616,8 @@ const escapeJsonSearchPattern = (value: string) =>
 /**
  * Remove a jutsuId from a loadout's JSON array without rewriting the whole array, so
  * concurrent unequips cannot restore each other's IDs from stale snapshots.
- * Returns true when the loadout no longer contains jutsuId (removed or already absent).
+ * Only mutates the loadout if it is still the user's active pointer.
+ * Returns true when the *active* loadout no longer contains jutsuId.
  */
 const removeJutsuIdFromLoadoutAtomically = async (args: {
   client: DrizzleClient;
@@ -2618,17 +2640,15 @@ const removeJutsuIdFromLoadoutAtomically = async (args: {
         and(
           eq(jutsuLoadout.id, loadoutId),
           eq(jutsuLoadout.userId, userId),
+          isActiveJutsuLoadoutSql(userId, loadoutId),
           // Exact membership — do not use unescaped JSON_SEARCH (LIKE wildcards).
           sql`JSON_CONTAINS(${jutsuLoadout.jutsuIds}, JSON_QUOTE(${jutsuId}))`,
         ),
       );
     if (result.rowsAffected === 1) return true;
-    const row = await client.query.jutsuLoadout.findFirst({
-      where: and(eq(jutsuLoadout.id, loadoutId), eq(jutsuLoadout.userId, userId)),
-      columns: { jutsuIds: true },
-    });
-    // Missing loadout is fine (nothing to keep in sync); otherwise require absence.
-    return !row || !row.jutsuIds.includes(jutsuId);
+    // Pointer moved or already absent — only the active loadout must lack this id.
+    const ids = await fetchActiveLoadoutJutsuIds(client, userId);
+    return !ids || !ids.includes(jutsuId);
   } catch {
     return false;
   }
