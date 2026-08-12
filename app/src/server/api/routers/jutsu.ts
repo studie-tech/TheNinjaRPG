@@ -1352,6 +1352,22 @@ export const jutsuRouter = createTRPCRouter({
             if (rolledBack.rowsAffected === 1) {
               return errorResponse("Failed to update loadout — please retry");
             }
+            // 0 rows: either a concurrent writer already put this id in the
+            // active loadout (leave equipped), or a concurrent unequip already
+            // flipped the row. Only report success when the row is still on.
+            const [row] = await ctx.drizzle
+              .select({ equipped: userJutsu.equipped })
+              .from(userJutsu)
+              .where(
+                and(
+                  eq(userJutsu.id, input.userJutsuId),
+                  eq(userJutsu.userId, ctx.userId),
+                ),
+              )
+              .limit(1);
+            if (!row?.equipped) {
+              return errorResponse("Failed to update loadout — please retry");
+            }
           }
         }
       } else {
