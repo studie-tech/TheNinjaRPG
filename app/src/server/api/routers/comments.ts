@@ -408,6 +408,9 @@ export const commentsRouter = createTRPCRouter({
     .input(z.object({ convo_id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      if (isRaidChatConversationId(input.convo_id)) {
+        return errorResponse("Raid chat membership is managed by the raid queue");
+      }
       const [user, convo] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchConversation({
@@ -421,30 +424,27 @@ export const commentsRouter = createTRPCRouter({
       if (!canViewConversation(convo, ctx.userId, user.role)) {
         return errorResponse("You are not allowed to view this conversation");
       }
-      // Raid-chat membership is managed by joinRaidQueue / leaveRaidQueue /
-      // updateBattle purges, not from the inbox UI. Allowing a manual exit
-      // would silently revoke the user's mid-raid chat access and, if they are
-      // the last member, hard-delete the deterministic conversation row and
-      // all comments — wiping chat history for future raid runs of the same
-      // questId since the conversation ID is stable across raid resets.
-      if (isRaidChatConversationId(convo.id)) {
-        return errorResponse("Raid chat membership is managed by the raid queue");
-      }
+      const isLastMember =
+        convo.users.length === 1 && convo.users[0]?.userId === ctx.userId;
       // Mutate
-      await ctx.drizzle
-        .delete(user2conversation)
-        .where(
-          and(
-            eq(user2conversation.conversationId, convo.id),
-            eq(user2conversation.userId, ctx.userId),
+      await Promise.all([
+        ctx.drizzle
+          .delete(user2conversation)
+          .where(
+            and(
+              eq(user2conversation.conversationId, convo.id),
+              eq(user2conversation.userId, ctx.userId),
+            ),
           ),
-        );
-      if (convo.users.length === 1) {
-        await ctx.drizzle.delete(conversation).where(eq(conversation.id, convo.id));
-        await ctx.drizzle
-          .delete(conversationComment)
-          .where(eq(conversationComment.conversationId, convo.id));
-      }
+        ...(isLastMember
+          ? [
+              ctx.drizzle.delete(conversation).where(eq(conversation.id, convo.id)),
+              ctx.drizzle
+                .delete(conversationComment)
+                .where(eq(conversationComment.conversationId, convo.id)),
+            ]
+          : []),
+      ]);
       return { success: true, message: "Conversation exited" };
     }),
   fetchConversationComment: protectedProcedure
