@@ -424,27 +424,32 @@ export const commentsRouter = createTRPCRouter({
       if (!canViewConversation(convo, ctx.userId, user.role)) {
         return errorResponse("You are not allowed to view this conversation");
       }
-      const isLastMember =
-        convo.users.length === 1 && convo.users[0]?.userId === ctx.userId;
       // Mutate
-      await Promise.all([
-        ctx.drizzle
-          .delete(user2conversation)
+      const membershipDeleteResult = await ctx.drizzle
+        .delete(user2conversation)
+        .where(
+          and(
+            eq(user2conversation.conversationId, convo.id),
+            eq(user2conversation.userId, ctx.userId),
+          ),
+        );
+
+      if (membershipDeleteResult.rowsAffected === 1) {
+        const conversationDeleteResult = await ctx.drizzle
+          .delete(conversation)
           .where(
             and(
-              eq(user2conversation.conversationId, convo.id),
-              eq(user2conversation.userId, ctx.userId),
+              eq(conversation.id, convo.id),
+              sql`NOT EXISTS (SELECT 1 FROM ${user2conversation} WHERE ${user2conversation.conversationId} = ${convo.id})`,
             ),
-          ),
-        ...(isLastMember
-          ? [
-              ctx.drizzle.delete(conversation).where(eq(conversation.id, convo.id)),
-              ctx.drizzle
-                .delete(conversationComment)
-                .where(eq(conversationComment.conversationId, convo.id)),
-            ]
-          : []),
-      ]);
+          );
+
+        if (conversationDeleteResult.rowsAffected === 1) {
+          await ctx.drizzle
+            .delete(conversationComment)
+            .where(eq(conversationComment.conversationId, convo.id));
+        }
+      }
       return { success: true, message: "Conversation exited" };
     }),
   fetchConversationComment: protectedProcedure
