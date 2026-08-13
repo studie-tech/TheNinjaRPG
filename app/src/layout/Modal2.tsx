@@ -3,7 +3,7 @@
  * This is a modal that is used to display a modal.
  */
 import type React from "react";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -48,23 +48,44 @@ const Modal2: React.FC<Modal2Props> = (props) => {
 
   const isProceedDisabled = props.isLoading || props.proceedDisabled;
 
+  const handleAccept = useCallback(
+    (
+      e:
+        | React.MouseEvent<HTMLButtonElement, MouseEvent>
+        | React.KeyboardEvent<KeyboardEvent>,
+    ) => {
+      if (!props.onAccept) return;
+      props.onAccept(e);
+      if (props.isValid === undefined || props.isValid) {
+        props.setIsOpen(false);
+      }
+    },
+    [props.onAccept, props.isValid, props.setIsOpen],
+  );
+
   // Handle key-presses for Enter key only when this modal is open
   useEffect(() => {
+    if (!props.isOpen) return;
+
     const onDocumentKeyDown = (event: KeyboardEvent) => {
-      if (!props.isOpen) return;
       // Don't trigger if the active element is a button (it will handle Enter itself)
       const activeElement = document.activeElement;
       const isButton = activeElement?.tagName === "BUTTON";
 
-      if (event.key === "Enter" && props.onAccept && !isButton && !isProceedDisabled) {
-        props.onAccept(event as unknown as React.KeyboardEvent<KeyboardEvent>);
+      if (
+        event.key === "Enter" &&
+        props.proceed_label &&
+        !isButton &&
+        !isProceedDisabled
+      ) {
+        handleAccept(event as unknown as React.KeyboardEvent<KeyboardEvent>);
       }
     };
     document.addEventListener("keydown", onDocumentKeyDown);
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
-  }, [props.isOpen, props.onAccept, isProceedDisabled]);
+  }, [props.isOpen, props.proceed_label, isProceedDisabled, handleAccept]);
 
   const handleDialogClose = () => {
     if (props.onClose) props.onClose();
@@ -112,10 +133,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (props.onAccept) props.onAccept(e);
-                  if (props.isValid === undefined || props.isValid) {
-                    props.setIsOpen(false);
-                  }
+                  handleAccept(e);
                 }}
                 className={`z-30 rounded-lg ${confirmBtnClassName}`}
               >

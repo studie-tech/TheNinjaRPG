@@ -38,6 +38,7 @@ import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import Conversation from "@/layout/Conversation";
 import Loader from "@/layout/Loader";
+import Modal2 from "@/layout/Modal2";
 import RichInput from "@/layout/RichInput";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -119,6 +120,8 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
   // Get user data & destructure
   const { data: userData } = useRequiredUserData();
   const { selectedConvo, setSelectedConvo } = props;
+  const [pendingConvoId, setPendingConvoId] = useState<string | null>(null);
+  const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
 
   // Fetch conversations. Note we pass the selected convo to automatically re-fetch when it changes
   const {
@@ -131,11 +134,15 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
   );
 
   // Mutations
-  const { mutate: exitConversation } = api.comments.exitConversation.useMutation({
-    onSuccess: async (data) => {
+  const {
+    mutate: exitConversation,
+    isPending: isExitingConversation,
+    variables: exitConversationVariables,
+  } = api.comments.exitConversation.useMutation({
+    onSuccess: (data) => {
       showMutationToast(data);
       if (data.success) {
-        await refetch();
+        void refetch();
       }
     },
   });
@@ -146,6 +153,11 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
     const hasNewMessages = !user?.lastReadAt || user.lastReadAt < c.updatedAt;
     return { ...c, hasNewMessages };
   });
+  const pendingConversation = filteredConversations?.find(
+    (convo) => convo.id === pendingConvoId,
+  );
+  const exitingConvoId = exitConversationVariables?.convo_id;
+  const isExitingPending = isExitingConversation && exitingConvoId === pendingConvoId;
 
   // Render
   return (
@@ -170,61 +182,106 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
             </li>
 
             <hr />
-            {filteredConversations?.map((convo) => (
-              <li
-                className={`relative mx-3 my-3 flex h-12 flex-row items-center rounded-lg hover:bg-popover ${selectedConvo && selectedConvo === convo.id ? "bg-popover" : ""}`}
-                key={convo.id}
-              >
-                <button
-                  type="button"
-                  className="absolute inset-0 h-full w-full"
-                  onClick={() => setSelectedConvo(convo.id)}
-                  aria-label={`Select conversation with ${convo.users.map((u) => u.userData.username).join(", ")}`}
-                />
-                {convo.users.length > 0 &&
-                  convo.users.map((relation, i) => {
-                    const user = relation.userData;
-                    return (
-                      <div
-                        key={user.userId}
-                        className={`absolute w-14`}
-                        style={{ left: `${i * 2}rem` }}
-                      >
-                        <AvatarImage
-                          href={user.avatar}
-                          userId={user.userId}
-                          alt={user.username}
-                          size={50}
-                          priority
-                        />
-                      </div>
-                    );
-                  })}
-                <span
-                  className="... grow truncate text-sm"
-                  style={{
-                    marginLeft: `${(convo.users.length * 2 + 1.5).toString()}rem`,
-                  }}
+            {filteredConversations?.map((convo) => {
+              const isExiting = isExitingConversation && exitingConvoId === convo.id;
+              return (
+                <li
+                  className={`relative mx-3 my-3 flex h-12 flex-row items-center rounded-lg hover:bg-popover ${selectedConvo && selectedConvo === convo.id ? "bg-popover" : ""}`}
+                  key={convo.id}
                 >
-                  {convo.title}
-                  <br />
-                  {convo.createdAt.toDateString()}
-                </span>
-                <div className="grow"></div>
-                {convo.hasNewMessages && (
-                  <BellRing className="h-6 w-6 animate-[wiggle_1s_ease-in-out_infinite] text-red-500 hover:cursor-pointer hover:text-orange-500" />
-                )}
-                <Trash2
-                  className="mx-2 h-6 w-6 rounded-full hover:cursor-pointer hover:text-orange-500"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    exitConversation({ convo_id: convo.id });
-                  }}
-                />
-              </li>
-            ))}
+                  <button
+                    type="button"
+                    className="absolute inset-0 h-full w-full"
+                    onClick={() => setSelectedConvo(convo.id)}
+                    aria-label={`Select conversation with ${convo.users.map((u) => u.userData.username).join(", ")}`}
+                  />
+                  {convo.users.length > 0 &&
+                    convo.users.map((relation, i) => {
+                      const user = relation.userData;
+                      return (
+                        <div
+                          key={user.userId}
+                          className={`absolute w-14`}
+                          style={{ left: `${i * 2}rem` }}
+                        >
+                          <AvatarImage
+                            href={user.avatar}
+                            userId={user.userId}
+                            alt={user.username}
+                            size={50}
+                            priority
+                          />
+                        </div>
+                      );
+                    })}
+                  <span
+                    className="... grow truncate text-sm"
+                    style={{
+                      marginLeft: `${(convo.users.length * 2 + 1.5).toString()}rem`,
+                    }}
+                  >
+                    {convo.title}
+                    <br />
+                    {convo.createdAt.toDateString()}
+                  </span>
+                  <div className="grow"></div>
+                  {convo.hasNewMessages && (
+                    <BellRing className="h-6 w-6 animate-[wiggle_1s_ease-in-out_infinite] text-red-500 hover:cursor-pointer hover:text-orange-500" />
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="relative z-10 mx-2 rounded-full"
+                    aria-label={`Exit conversation ${convo.title}`}
+                    disabled={isExiting}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setPendingConvoId(convo.id);
+                      setIsExitConfirmOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-6 w-6 hover:text-orange-500" />
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
+          <Modal2
+            title="Confirm exiting conversation"
+            isOpen={isExitConfirmOpen}
+            setIsOpen={setIsExitConfirmOpen}
+            isLoading={isExitingPending}
+            proceed_loading_label="Exiting..."
+            proceed_label="Proceed"
+            proceedDisabled={!pendingConvoId || isExitingPending}
+            onAccept={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!pendingConvoId) return;
+              const requestedConvoId = pendingConvoId;
+              exitConversation(
+                { convo_id: requestedConvoId },
+                {
+                  onSettled: () => {
+                    setPendingConvoId((currentConvoId) =>
+                      currentConvoId === requestedConvoId ? null : currentConvoId,
+                    );
+                  },
+                },
+              );
+            }}
+            onClose={() => {
+              if (!isExitingPending) {
+                setPendingConvoId(null);
+              }
+            }}
+          >
+            {pendingConversation
+              ? `You are about to exit "${pendingConversation.title}". Are you sure?`
+              : "You are about to exit this conversation. Are you sure?"}
+          </Modal2>
           <div className="m-3 italic">- Messages deleted after 14 days</div>
         </div>
       )}
