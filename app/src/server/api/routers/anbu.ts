@@ -251,6 +251,39 @@ export async function acceptAnbuRequest(
   return { success: true, message: "Request accepted" };
 }
 
+export async function rejectAnbuRequest(
+  args: { ctx: AnbuRequestContext; input: { id: string } },
+  dependencies = getAnbuRequestDependencies(),
+) {
+  const { ctx, input } = args;
+  const [request, updatedUser] = await Promise.all([
+    dependencies.fetchRequest(ctx.drizzle, input.id, "ANBU"),
+    dependencies.fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+  ]);
+  const squad = await fetchSquadForAnbuRequest(ctx.drizzle, request);
+  const { user } = updatedUser;
+  const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
+    getConvenienceStatus(user, squad);
+  const canStaffEdit = user ? canEditClans(user.role) : false;
+  if (!isLeader && !isKageOfSquadVillage && !isElderOfSquadVillage && !canStaffEdit) {
+    return errorResponse("Not allowed to reject this request");
+  }
+  if (request.status !== "PENDING") {
+    return errorResponse("You can only reject pending requests");
+  }
+  const rejected = await transitionAnbuRequestState(
+    ctx.drizzle,
+    input.id,
+    "PENDING",
+    "REJECTED",
+  );
+  if (!rejected) {
+    return errorResponse("You can only reject pending requests");
+  }
+  dependencies.notify(request.senderId);
+  return { success: true, message: "Request rejected" };
+}
+
 export const anbuRouter = createTRPCRouter({
   get: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get ANBU squad details" } })
@@ -317,42 +350,7 @@ export const anbuRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Reject ANBU join request" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      const [request, updatedUser] = await Promise.all([
-        fetchRequest(ctx.drizzle, input.id, "ANBU"),
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-      ]);
-      const squad = await fetchSquadForAnbuRequest(ctx.drizzle, request);
-      const { user } = updatedUser;
-      const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
-        getConvenienceStatus(user, squad);
-      const canStaffEdit = user ? canEditClans(user.role) : false;
-      if (
-        !isLeader &&
-        !isKageOfSquadVillage &&
-        !isElderOfSquadVillage &&
-        !canStaffEdit
-      ) {
-        return errorResponse("Not allowed to reject this request");
-      }
-      if (request.status !== "PENDING") {
-        return errorResponse("You can only reject pending requests");
-      }
-      const rejected = await transitionAnbuRequestState(
-        ctx.drizzle,
-        input.id,
-        "PENDING",
-        "REJECTED",
-      );
-      if (!rejected) {
-        return errorResponse("You can only reject pending requests");
-      }
-      void pusher.trigger(request.senderId, "event", { type: "anbu" });
-      return { success: true, message: "Request rejected" };
-    }),
+    .mutation(rejectAnbuRequest),
   cancelRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Cancel ANBU join request" } })
     .input(z.object({ id: z.string() }))

@@ -10,6 +10,7 @@ import {
   getAnbuRequests,
   isAnbuRequestForSquad,
   promoteAnbuLeader,
+  rejectAnbuRequest,
   reassignPendingAnbuRequestsOnPromotion,
   removeFromSquad,
 } from "@/routers/anbu";
@@ -402,6 +403,75 @@ describe("ANBU router request permissions and concurrency", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it("blocks a different-village kage from rejecting a request", async () => {
+    const squad = makeSquad();
+    const { client, update } = makeDrizzleMock(squad, []);
+    fetchRequestMock.mockResolvedValue({
+      id: "request-1",
+      senderId: "requester",
+      receiverId: "leader",
+      relatedId: "squad-1",
+      status: "PENDING",
+    } as never);
+    fetchUpdatedUserMock.mockResolvedValue({
+      user: makeUser({
+        villageId: "village-2",
+        village: { id: "village-2", kageId: "actor" },
+      }),
+    } as never);
+
+    await expect(
+      rejectAnbuRequest(
+        {
+          ctx: { drizzle: client, userId: "actor" },
+          input: { id: "request-1" },
+        } as never,
+        requestDependencies,
+      ),
+    ).resolves.toEqual({
+      success: false,
+      message: "Not allowed to reject this request",
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  for (const [label, actor] of [
+    ["same-village elder", { rank: "ELDER" }],
+    ["staff editor", { villageId: "village-2", role: "CONTENT" }],
+  ] as const) {
+    it(`allows a ${label} through the accept authorization guard`, async () => {
+      const squad = makeSquad({ memberCount: 4 });
+      const { client, updates } = makeDrizzleMock(squad, [
+        [userRequest, [{ rowsAffected: 1 }, { rowsAffected: 1 }]],
+        [anbuSquad, [{ rowsAffected: 0 }]],
+      ]);
+      fetchRequestMock.mockResolvedValue({
+        id: "request-1",
+        senderId: "requester",
+        receiverId: "leader",
+        relatedId: "squad-1",
+        status: "PENDING",
+      } as never);
+      fetchUpdatedUserMock.mockResolvedValue({
+        user: makeUser(actor),
+      } as never);
+      fetchUserMock.mockResolvedValue(
+        makeUser({ userId: "requester", villageId: "village-1" }) as never,
+      );
+
+      await expect(
+        acceptAnbuRequest(
+          {
+            ctx: { drizzle: client, userId: "actor" },
+            input: { id: "request-1" },
+          } as never,
+          requestDependencies,
+        ),
+      ).resolves.toEqual({ success: false, message: "Squad is full" });
+      expect(updates.some((entry) => entry.table === userRequest)).toBe(true);
+    });
+  }
+
   it("rolls back the request claim when the atomic capacity claim loses", async () => {
     const squad = makeSquad({ leaderId: "actor", memberCount: 3 });
     const { client, updates } = makeDrizzleMock(squad, [
@@ -435,6 +505,49 @@ describe("ANBU router request permissions and concurrency", () => {
       2,
     );
     expect(updates.some((entry) => entry.table === userData)).toBe(false);
+  });
+
+  it("rolls back capacity and request claims when the membership CAS loses", async () => {
+    const squad = makeSquad({ leaderId: "actor", memberCount: 2 });
+    const { client, updates } = makeDrizzleMock(squad, [
+      [userRequest, [{ rowsAffected: 1 }, { rowsAffected: 1 }]],
+      [anbuSquad, [{ rowsAffected: 1 }, { rowsAffected: 1 }]],
+      [userData, [{ rowsAffected: 0 }]],
+    ]);
+    fetchRequestMock.mockResolvedValue({
+      id: "request-1",
+      senderId: "requester",
+      receiverId: "actor",
+      relatedId: "squad-1",
+      status: "PENDING",
+    } as never);
+    fetchUpdatedUserMock.mockResolvedValue({
+      user: makeUser({ anbuId: "squad-1" }),
+    } as never);
+    fetchUserMock.mockResolvedValue(
+      makeUser({ userId: "requester", villageId: "village-1" }) as never,
+    );
+
+    await expect(
+      acceptAnbuRequest(
+        {
+          ctx: { drizzle: client, userId: "actor" },
+          input: { id: "request-1" },
+        } as never,
+        requestDependencies,
+      ),
+    ).resolves.toEqual({
+      success: false,
+      message: "Requester already in a squad",
+    });
+    expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(
+      2,
+    );
+    expect(updates.filter((entry) => entry.table === anbuSquad)).toHaveLength(
+      2,
+    );
+    expect(updates.filter((entry) => entry.table === userData)).toHaveLength(1);
+    expect(notifyMock).not.toHaveBeenCalled();
   });
 
   it("does not reassign leaderless requests when another leader claim wins", async () => {
