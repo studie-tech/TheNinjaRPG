@@ -48,6 +48,209 @@ import {
 
 const pusher = getServerPusher();
 
+type AnbuRequestContext = { drizzle: DrizzleClient; userId: string };
+
+type AnbuRequestDependencies = {
+  fetchRequest: typeof fetchRequest;
+  fetchRequests: typeof fetchRequests;
+  fetchUpdatedUser: typeof fetchUpdatedUser;
+  fetchUser: typeof fetchUser;
+  insertRequest: typeof insertRequest;
+  notify: (userId: string) => void;
+};
+
+const getAnbuRequestDependencies = (): AnbuRequestDependencies => ({
+  fetchRequest,
+  fetchRequests,
+  fetchUpdatedUser,
+  fetchUser,
+  insertRequest,
+  notify: (userId) => {
+    void pusher.trigger(userId, "event", { type: "anbu" });
+  },
+});
+
+export async function getAnbuRequests(
+  args: {
+    ctx: AnbuRequestContext;
+    input?: { squadId?: string };
+  },
+  dependencies = getAnbuRequestDependencies(),
+) {
+  const { ctx, input } = args;
+  if (input?.squadId) {
+    const squadId = input.squadId;
+    const [updatedUser, squad, ownRequests, squadRequests] = await Promise.all([
+      dependencies.fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+      fetchSquad(ctx.drizzle, squadId),
+      dependencies.fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId),
+      dependencies.fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, undefined, squadId),
+    ]);
+    const { user } = updatedUser;
+    if (!user || !squad) return [];
+    const ownSquadRequests = ownRequests.filter(
+      (request) =>
+        request.senderId === ctx.userId &&
+        isAnbuRequestForSquad(request, squadId, squad.leaderId),
+    );
+    const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
+      getConvenienceStatus(user, squad);
+    if (
+      isLeader ||
+      isKageOfSquadVillage ||
+      isElderOfSquadVillage ||
+      canEditClans(user.role)
+    ) {
+      return squadRequests;
+    }
+    return user.anbuId ? [] : ownSquadRequests;
+  }
+  return dependencies.fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId);
+}
+
+export async function createAnbuRequest(
+  args: { ctx: AnbuRequestContext; input: { squadId: string } },
+  dependencies = getAnbuRequestDependencies(),
+) {
+  const { ctx, input } = args;
+  const [updatedUser, squad, ownRequests] = await Promise.all([
+    dependencies.fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+    fetchSquad(ctx.drizzle, input.squadId),
+    dependencies.fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId),
+  ]);
+  const { user } = updatedUser;
+  const { isKage, isElder } = getConvenienceStatus(user, squad);
+  if (!squad) return errorResponse("Squad not found");
+  if (!user) return errorResponse("User not found");
+  if (user.villageId !== squad.villageId) return errorResponse("Wrong village");
+  if (user.anbuId) return errorResponse("Already in a squad");
+  if (isKage || isElder) return errorResponse("Kage or elder cannot join");
+  if (
+    ownRequests.some(
+      (request) => request.senderId === user.userId && request.status === "PENDING",
+    )
+  ) {
+    return errorResponse("You already have a pending ANBU request");
+  }
+  if (!hasRequiredRank(user.rank, ANBU_MEMBER_RANK_REQUIREMENT)) {
+    return errorResponse(`Rank must be at least ${ANBU_MEMBER_RANK_REQUIREMENT}`);
+  }
+  const receiverId = squad.leaderId ?? user.village?.kageId;
+  if (!receiverId) {
+    return errorResponse("No leader or kage available to receive request");
+  }
+  await ctx.drizzle
+    .update(userRequest)
+    .set({ status: "CANCELLED" })
+    .where(
+      and(
+        eq(userRequest.senderId, user.userId),
+        eq(userRequest.type, "ANBU"),
+        eq(userRequest.status, "PENDING"),
+        lt(userRequest.createdAt, secondsFromNow(-3600 * 12)),
+      ),
+    );
+  try {
+    await dependencies.insertRequest(
+      ctx.drizzle,
+      user.userId,
+      receiverId,
+      "ANBU",
+      undefined,
+      squad.id,
+    );
+  } catch (error) {
+    if (isMysqlDuplicateKeyError(error)) {
+      return errorResponse("You already have a pending ANBU request");
+    }
+    throw error;
+  }
+  dependencies.notify(receiverId);
+  return { success: true, message: "Request to join squad sent" };
+}
+
+export async function acceptAnbuRequest(
+  args: { ctx: AnbuRequestContext; input: { id: string } },
+  dependencies = getAnbuRequestDependencies(),
+) {
+  const { ctx, input } = args;
+  const [request, updatedUser] = await Promise.all([
+    dependencies.fetchRequest(ctx.drizzle, input.id, "ANBU"),
+    dependencies.fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+  ]);
+  const [squad, requester] = await Promise.all([
+    fetchSquadForAnbuRequest(ctx.drizzle, request),
+    dependencies.fetchUser(ctx.drizzle, request.senderId),
+  ]);
+  const { user } = updatedUser;
+  const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
+    getConvenienceStatus(user, squad);
+  const canStaffEdit = user ? canEditClans(user.role) : false;
+  if (!squad) return errorResponse("Squad not found");
+  if (!user) return errorResponse("User not found");
+  if (!requester) return errorResponse("Requester not found");
+  if (!isLeader && !isKageOfSquadVillage && !isElderOfSquadVillage && !canStaffEdit) {
+    return errorResponse("Not allowed");
+  }
+  if (request.status !== "PENDING") {
+    return errorResponse("You can only accept pending requests");
+  }
+  if (requester.anbuId) return errorResponse("Requester already in a squad");
+  if (requester.villageId !== squad.villageId) return errorResponse("!= village");
+  if (!hasRequiredRank(requester.rank, ANBU_MEMBER_RANK_REQUIREMENT)) {
+    return errorResponse(`Rank must be at least ${ANBU_MEMBER_RANK_REQUIREMENT}`);
+  }
+  const claimRequest = await transitionAnbuRequestState(
+    ctx.drizzle,
+    input.id,
+    "PENDING",
+    "ACCEPTED",
+  );
+  if (!claimRequest) {
+    return errorResponse("You can only accept pending requests");
+  }
+  const capacityClaim = await ctx.drizzle
+    .update(anbuSquad)
+    .set({ memberCount: sql`${anbuSquad.memberCount} + 1` })
+    .where(
+      and(eq(anbuSquad.id, squad.id), lt(anbuSquad.memberCount, ANBU_MAX_MEMBERS)),
+    );
+  if (capacityClaim.rowsAffected === 0) {
+    await transitionAnbuRequestState(ctx.drizzle, input.id, "ACCEPTED", "PENDING");
+    return errorResponse("Squad is full");
+  }
+  const joinResult = await ctx.drizzle
+    .update(userData)
+    .set({ anbuId: squad.id })
+    .where(and(eq(userData.userId, requester.userId), isNull(userData.anbuId)));
+  if (joinResult.rowsAffected === 0) {
+    await Promise.all([
+      releaseAnbuCapacity(ctx.drizzle, squad.id),
+      transitionAnbuRequestState(ctx.drizzle, input.id, "ACCEPTED", "PENDING"),
+    ]);
+    return errorResponse("Requester already in a squad");
+  }
+  if (
+    !squad.leaderId &&
+    hasRequiredRank(requester.rank, ANBU_LEADER_RANK_REQUIREMENT)
+  ) {
+    const leaderClaim = await ctx.drizzle
+      .update(anbuSquad)
+      .set({ leaderId: requester.userId })
+      .where(and(eq(anbuSquad.id, squad.id), isNull(anbuSquad.leaderId)));
+    if (leaderClaim.rowsAffected === 1) {
+      await reassignPendingAnbuRequestsOnPromotion(
+        ctx.drizzle,
+        squad.id,
+        null,
+        requester.userId,
+      );
+    }
+  }
+  dependencies.notify(request.senderId);
+  return { success: true, message: "Request accepted" };
+}
+
 export const anbuRouter = createTRPCRouter({
   get: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get ANBU squad details" } })
@@ -104,112 +307,12 @@ export const anbuRouter = createTRPCRouter({
   getRequests: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get ANBU join requests" } })
     .input(z.object({ squadId: z.string().optional() }).optional())
-    .query(async ({ ctx, input }) => {
-      // When viewing a specific squad, leaders and village kage see that squad's requests
-      if (input?.squadId) {
-        const squadId = input.squadId;
-        const [updatedUser, squad, ownRequests, squadRequests] = await Promise.all([
-          fetchUpdatedUser({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-          }),
-          fetchSquad(ctx.drizzle, squadId),
-          fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId),
-          fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, undefined, squadId),
-        ]);
-        const { user } = updatedUser;
-        if (!user || !squad) {
-          return [];
-        }
-        const ownSquadRequests = ownRequests.filter(
-          (request) =>
-            request.senderId === ctx.userId &&
-            isAnbuRequestForSquad(request, squadId, squad.leaderId),
-        );
-        const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
-          getConvenienceStatus(user, squad);
-        const canStaffEdit = canEditClans(user.role);
-        if (isLeader || isKageOfSquadVillage || isElderOfSquadVillage || canStaffEdit) {
-          return squadRequests;
-        }
-        // Applicants (not already in an ANBU) see their own outgoing requests
-        if (!user.anbuId) {
-          return ownSquadRequests;
-        }
-        return [];
-      }
-      return fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId);
-    }),
+    .query(getAnbuRequests),
   createRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Request to join an ANBU squad" } })
     .input(z.object({ squadId: z.string() }))
     .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [updatedUser, squad, ownRequests] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        fetchSquad(ctx.drizzle, input.squadId),
-        fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId),
-      ]);
-      // Derived
-      const { user } = updatedUser;
-      const { isKage, isElder } = getConvenienceStatus(user, squad);
-      // Guards
-      if (!squad) return errorResponse("Squad not found");
-      if (!user) return errorResponse("User not found");
-      if (user.villageId !== squad.villageId) return errorResponse("Wrong village");
-      if (user.anbuId) return errorResponse("Already in a squad");
-      if (isKage || isElder) return errorResponse("Kage or elder cannot join");
-      if (
-        ownRequests.some(
-          (request) => request.senderId === user.userId && request.status === "PENDING",
-        )
-      ) {
-        return errorResponse("You already have a pending ANBU request");
-      }
-      if (!hasRequiredRank(user.rank, ANBU_MEMBER_RANK_REQUIREMENT)) {
-        return errorResponse(`Rank must be at least ${ANBU_MEMBER_RANK_REQUIREMENT}`);
-      }
-      // Leaderless squads stay joinable — route the request to the village kage so
-      // kage/elder/staff can accept (relatedId still identifies the squad).
-      const receiverId = squad.leaderId ?? user.village?.kageId;
-      if (!receiverId) {
-        return errorResponse("No leader or kage available to receive request");
-      }
-      // Expire invisible requests before the unique pending-request constraint is
-      // exercised, then rely on that constraint to close concurrent double-clicks.
-      await ctx.drizzle
-        .update(userRequest)
-        .set({ status: "CANCELLED" })
-        .where(
-          and(
-            eq(userRequest.senderId, user.userId),
-            eq(userRequest.type, "ANBU"),
-            eq(userRequest.status, "PENDING"),
-            lt(userRequest.createdAt, secondsFromNow(-3600 * 12)),
-          ),
-        );
-      try {
-        await insertRequest(
-          ctx.drizzle,
-          user.userId,
-          receiverId,
-          "ANBU",
-          undefined,
-          squad.id,
-        );
-      } catch (error) {
-        if (isMysqlDuplicateKeyError(error)) {
-          return errorResponse("You already have a pending ANBU request");
-        }
-        throw error;
-      }
-      void pusher.trigger(receiverId, "event", { type: "anbu" });
-      return { success: true, message: "Request to join squad sent" };
-    }),
+    .mutation(createAnbuRequest),
   rejectRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Reject ANBU join request" } })
     .input(z.object({ id: z.string() }))
@@ -276,100 +379,7 @@ export const anbuRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Accept ANBU join request" } })
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Fetch — request + acting user are independent; squad/requester need the request
-      const [request, updatedUser] = await Promise.all([
-        fetchRequest(ctx.drizzle, input.id, "ANBU"),
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-      ]);
-      const [squad, requester] = await Promise.all([
-        fetchSquadForAnbuRequest(ctx.drizzle, request),
-        fetchUser(ctx.drizzle, request.senderId),
-      ]);
-      // Derived
-      const { user } = updatedUser;
-      const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
-        getConvenienceStatus(user, squad);
-      const canStaffEdit = user ? canEditClans(user.role) : false;
-      // Guards
-      if (!squad) return errorResponse("Squad not found");
-      if (!user) return errorResponse("User not found");
-      if (!requester) return errorResponse("Requester not found");
-      if (
-        !isLeader &&
-        !isKageOfSquadVillage &&
-        !isElderOfSquadVillage &&
-        !canStaffEdit
-      ) {
-        return errorResponse("Not allowed");
-      }
-      if (request.status !== "PENDING") {
-        return errorResponse("You can only accept pending requests");
-      }
-      if (requester.anbuId) return errorResponse("Requester already in a squad");
-      if (requester.villageId !== squad.villageId) return errorResponse("!= village");
-      if (!hasRequiredRank(requester.rank, ANBU_MEMBER_RANK_REQUIREMENT)) {
-        return errorResponse(`Rank must be at least ${ANBU_MEMBER_RANK_REQUIREMENT}`);
-      }
-      // Claim the request first so concurrent accept/reject/cancel calls have one
-      // winner. The memberCount CAS then reserves exactly one capacity slot.
-      const claimRequest = await transitionAnbuRequestState(
-        ctx.drizzle,
-        input.id,
-        "PENDING",
-        "ACCEPTED",
-      );
-      if (!claimRequest) {
-        return errorResponse("You can only accept pending requests");
-      }
-      const capacityClaim = await ctx.drizzle
-        .update(anbuSquad)
-        .set({ memberCount: sql`${anbuSquad.memberCount} + 1` })
-        .where(
-          and(eq(anbuSquad.id, squad.id), lt(anbuSquad.memberCount, ANBU_MAX_MEMBERS)),
-        );
-      if (capacityClaim.rowsAffected === 0) {
-        await transitionAnbuRequestState(ctx.drizzle, input.id, "ACCEPTED", "PENDING");
-        return errorResponse("Squad is full");
-      }
-
-      const joinResult = await ctx.drizzle
-        .update(userData)
-        .set({ anbuId: squad.id })
-        .where(and(eq(userData.userId, requester.userId), isNull(userData.anbuId)));
-      if (joinResult.rowsAffected === 0) {
-        await Promise.all([
-          releaseAnbuCapacity(ctx.drizzle, squad.id),
-          transitionAnbuRequestState(ctx.drizzle, input.id, "ACCEPTED", "PENDING"),
-        ]);
-        return errorResponse("Requester already in a squad");
-      }
-      // Leaderless recovery: if the squad has no leader and the joiner is eligible,
-      // make them leader so the squad is not stuck empty/leaderless.
-      if (
-        !squad.leaderId &&
-        hasRequiredRank(requester.rank, ANBU_LEADER_RANK_REQUIREMENT)
-      ) {
-        const leaderClaim = await ctx.drizzle
-          .update(anbuSquad)
-          .set({ leaderId: requester.userId })
-          .where(and(eq(anbuSquad.id, squad.id), isNull(anbuSquad.leaderId)));
-        if (leaderClaim.rowsAffected === 1) {
-          await reassignPendingAnbuRequestsOnPromotion(
-            ctx.drizzle,
-            squad.id,
-            null, // squad is leaderless; avoid touching other squads' relatedId=null requests
-            requester.userId,
-          );
-        }
-      }
-      void pusher.trigger(request.senderId, "event", { type: "anbu" });
-      // Create
-      return { success: true, message: "Request accepted" };
-    }),
+    .mutation(acceptAnbuRequest),
   createSquad: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Create new ANBU squad" } })
     .input(anbuCreateSchema)

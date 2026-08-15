@@ -3,85 +3,31 @@
 import { and, eq, isNull, or } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
-
-type AnbuTestGlobals = {
-  pusherTrigger: ReturnType<typeof vi.fn>;
-  procedureStub: {
-    meta: ReturnType<typeof vi.fn>;
-    input: ReturnType<typeof vi.fn>;
-    output: ReturnType<typeof vi.fn>;
-    query: ReturnType<typeof vi.fn>;
-    mutation: ReturnType<typeof vi.fn>;
-  };
-};
-
-function getAnbuTestMocks(): AnbuTestGlobals {
-  const g = globalThis as unknown as { __anbuTestMocks?: AnbuTestGlobals };
-  if (!g.__anbuTestMocks) {
-    const procedureStub = {
-      meta: vi.fn().mockReturnThis(),
-      input: vi.fn().mockReturnThis(),
-      output: vi.fn().mockReturnThis(),
-      query: vi.fn((handler: unknown) => handler),
-      mutation: vi.fn((handler: unknown) => handler),
-    };
-    g.__anbuTestMocks = {
-      pusherTrigger: vi.fn(),
-      procedureStub,
-    };
-  }
-  return g.__anbuTestMocks;
-}
-
-vi.mock("@/libs/pusher", () => ({
-  getServerPusher: () => ({
-    trigger: (...args: unknown[]) =>
-      (getAnbuTestMocks().pusherTrigger as (...a: unknown[]) => unknown)(...args),
-  }),
-}));
-
-vi.mock("@/server/api/trpc", () => ({
-  baseServerResponse: {},
-  createTRPCRouter: (router: unknown) => router,
-  errorResponse: (message: string) => ({ success: false, message }),
-  protectedProcedure: getAnbuTestMocks().procedureStub,
-}));
-
-vi.mock("@/routers/profile", () => ({
-  fetchUpdatedUser: vi.fn(),
-  fetchUser: vi.fn(),
-  updateNindo: vi.fn(),
-}));
-
-vi.mock("@/routers/village", () => ({
-  fetchVillage: vi.fn(),
-}));
-
-vi.mock("@/routers/comments", () => ({
-  createConvo: vi.fn(),
-}));
-
-vi.mock("@/routers/clan", () => ({
-  fetchClans: vi.fn(),
-}));
-
-vi.mock("@/routers/sparring", () => ({
-  fetchRequest: vi.fn(),
-  fetchRequests: vi.fn(),
-  insertRequest: vi.fn(),
-  updateRequestState: vi.fn(),
-}));
-
 import {
-  anbuRouter,
+  acceptAnbuRequest,
+  createAnbuRequest,
   fetchSquadForAnbuRequest,
+  getAnbuRequests,
   isAnbuRequestForSquad,
   promoteAnbuLeader,
   reassignPendingAnbuRequestsOnPromotion,
   removeFromSquad,
 } from "@/routers/anbu";
-import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
-import { fetchRequest, fetchRequests, insertRequest } from "@/routers/sparring";
+
+const fetchUpdatedUserMock = vi.fn();
+const fetchUserMock = vi.fn();
+const fetchRequestMock = vi.fn();
+const fetchRequestsMock = vi.fn();
+const insertRequestMock = vi.fn();
+const notifyMock = vi.fn();
+const requestDependencies = {
+  fetchUpdatedUser: fetchUpdatedUserMock,
+  fetchUser: fetchUserMock,
+  fetchRequest: fetchRequestMock,
+  fetchRequests: fetchRequestsMock,
+  insertRequest: insertRequestMock,
+  notify: notifyMock,
+} as never;
 
 /** Stable string form of a drizzle SQL predicate for assertion (cols + params). */
 function describeSql(node: unknown): string {
@@ -174,7 +120,9 @@ describe("ANBU request squad identity", () => {
     });
 
     expect(findFirst).toHaveBeenCalledTimes(1);
-    expect(describeSql(findFirst.mock.calls[0]?.[0]?.where)).toBe(expectedWhere);
+    expect(describeSql(findFirst.mock.calls[0]?.[0]?.where)).toBe(
+      expectedWhere,
+    );
     expect(result).toEqual(squad);
     expect(result?.leaderId).toBe("new-leader");
     expect(result?.leaderId).not.toBe("old-leader");
@@ -207,7 +155,9 @@ describe("ANBU request squad identity", () => {
     });
 
     expect(findFirst).toHaveBeenCalledTimes(1);
-    expect(describeSql(findFirst.mock.calls[0]?.[0]?.where)).toBe(expectedWhere);
+    expect(describeSql(findFirst.mock.calls[0]?.[0]?.where)).toBe(
+      expectedWhere,
+    );
     expect(result).toEqual(squad);
   });
 
@@ -218,7 +168,10 @@ describe("ANBU request squad identity", () => {
         eq(userRequest.status, "PENDING"),
         or(
           eq(userRequest.relatedId, "squad-1"),
-          and(isNull(userRequest.relatedId), eq(userRequest.receiverId, "old-leader")),
+          and(
+            isNull(userRequest.relatedId),
+            eq(userRequest.receiverId, "old-leader"),
+          ),
         ),
       ),
     );
@@ -264,13 +217,6 @@ describe("ANBU request squad identity", () => {
     );
   });
 });
-
-type RouterHandler = (args: {
-  ctx: { drizzle: unknown; userId: string };
-  input: unknown;
-}) => Promise<{ success?: boolean; message?: string } | unknown[]>;
-
-const handlers = anbuRouter as unknown as Record<string, RouterHandler>;
 
 const makeUser = (overrides: Record<string, unknown> = {}) => ({
   userId: "actor",
@@ -346,7 +292,7 @@ describe("ANBU router request permissions and concurrency", () => {
       relatedId: "squad-2",
     };
     const squadRequest = { ...ownForThisSquad, id: "managed-1" };
-    vi.mocked(fetchRequests).mockImplementation(
+    fetchRequestsMock.mockImplementation(
       async (_client, _types, _seconds, id, relatedId) =>
         (relatedId
           ? [squadRequest]
@@ -355,88 +301,103 @@ describe("ANBU router request permissions and concurrency", () => {
             : []) as never,
     );
 
-    vi.mocked(fetchUpdatedUser).mockResolvedValueOnce({
+    fetchUpdatedUserMock.mockResolvedValueOnce({
       user: makeUser({ anbuId: "squad-1" }),
     } as never);
     await expect(
-      handlers.getRequests?.({
-        ctx: { drizzle: client, userId: "actor" },
-        input: { squadId: "squad-1" },
-      }),
+      getAnbuRequests(
+        {
+          ctx: { drizzle: client, userId: "actor" },
+          input: { squadId: "squad-1" },
+        } as never,
+        requestDependencies,
+      ),
     ).resolves.toEqual([squadRequest]);
 
-    vi.mocked(fetchUpdatedUser).mockResolvedValueOnce({
+    fetchUpdatedUserMock.mockResolvedValueOnce({
       user: makeUser({ userId: "applicant" }),
     } as never);
     await expect(
-      handlers.getRequests?.({
-        ctx: { drizzle: client, userId: "applicant" },
-        input: { squadId: "squad-1" },
-      }),
+      getAnbuRequests(
+        {
+          ctx: { drizzle: client, userId: "applicant" },
+          input: { squadId: "squad-1" },
+        } as never,
+        requestDependencies,
+      ),
     ).resolves.toEqual([ownForThisSquad]);
   });
 
   it("returns no squad requests to an ordinary member", async () => {
     const squad = makeSquad();
     const { client } = makeDrizzleMock(squad, []);
-    vi.mocked(fetchUpdatedUser).mockResolvedValue({
+    fetchUpdatedUserMock.mockResolvedValue({
       user: makeUser({ anbuId: "squad-1" }),
     } as never);
-    vi.mocked(fetchRequests).mockResolvedValue([] as never);
+    fetchRequestsMock.mockResolvedValue([] as never);
 
     await expect(
-      handlers.getRequests?.({
-        ctx: { drizzle: client, userId: "actor" },
-        input: { squadId: "squad-1" },
-      }),
+      getAnbuRequests(
+        {
+          ctx: { drizzle: client, userId: "actor" },
+          input: { squadId: "squad-1" },
+        } as never,
+        requestDependencies,
+      ),
     ).resolves.toEqual([]);
   });
 
   it("blocks duplicate pending requests before insert", async () => {
     const squad = makeSquad();
     const { client } = makeDrizzleMock(squad, []);
-    vi.mocked(fetchUpdatedUser).mockResolvedValue({ user: makeUser() } as never);
-    vi.mocked(fetchRequests).mockResolvedValue([
+    fetchUpdatedUserMock.mockResolvedValue({ user: makeUser() } as never);
+    fetchRequestsMock.mockResolvedValue([
       { senderId: "actor", status: "PENDING" },
     ] as never);
 
     await expect(
-      handlers.createRequest?.({
-        ctx: { drizzle: client, userId: "actor" },
-        input: { squadId: "squad-1" },
-      }),
+      createAnbuRequest(
+        {
+          ctx: { drizzle: client, userId: "actor" },
+          input: { squadId: "squad-1" },
+        } as never,
+        requestDependencies,
+      ),
     ).resolves.toEqual({
       success: false,
       message: "You already have a pending ANBU request",
     });
-    expect(insertRequest).not.toHaveBeenCalled();
+    expect(insertRequestMock).not.toHaveBeenCalled();
   });
 
   it("rejects a kage from a different village before any write", async () => {
     const squad = makeSquad();
     const { client, update } = makeDrizzleMock(squad, []);
-    vi.mocked(fetchRequest).mockResolvedValue({
+    fetchRequestMock.mockResolvedValue({
       id: "request-1",
       senderId: "requester",
       receiverId: "leader",
       relatedId: "squad-1",
       status: "PENDING",
     } as never);
-    vi.mocked(fetchUpdatedUser).mockResolvedValue({
+    fetchUpdatedUserMock.mockResolvedValue({
       user: makeUser({
         villageId: "village-2",
         village: { id: "village-2", kageId: "actor" },
       }),
     } as never);
-    vi.mocked(fetchUser).mockResolvedValue(
+    fetchUserMock.mockResolvedValue(
       makeUser({ userId: "requester", villageId: "village-1" }) as never,
     );
 
     await expect(
-      handlers.acceptRequest?.({
-        ctx: { drizzle: client, userId: "actor" },
-        input: { id: "request-1" },
-      }),
+      acceptAnbuRequest(
+        {
+          ctx: { drizzle: client, userId: "actor" },
+          input: { id: "request-1" },
+        } as never,
+        requestDependencies,
+      ),
     ).resolves.toEqual({ success: false, message: "Not allowed" });
     expect(update).not.toHaveBeenCalled();
   });
@@ -447,27 +408,32 @@ describe("ANBU router request permissions and concurrency", () => {
       [userRequest, [{ rowsAffected: 1 }, { rowsAffected: 1 }]],
       [anbuSquad, [{ rowsAffected: 0 }]],
     ]);
-    vi.mocked(fetchRequest).mockResolvedValue({
+    fetchRequestMock.mockResolvedValue({
       id: "request-1",
       senderId: "requester",
       receiverId: "actor",
       relatedId: "squad-1",
       status: "PENDING",
     } as never);
-    vi.mocked(fetchUpdatedUser).mockResolvedValue({
+    fetchUpdatedUserMock.mockResolvedValue({
       user: makeUser({ anbuId: "squad-1" }),
     } as never);
-    vi.mocked(fetchUser).mockResolvedValue(
+    fetchUserMock.mockResolvedValue(
       makeUser({ userId: "requester", villageId: "village-1" }) as never,
     );
 
     await expect(
-      handlers.acceptRequest?.({
-        ctx: { drizzle: client, userId: "actor" },
-        input: { id: "request-1" },
-      }),
+      acceptAnbuRequest(
+        {
+          ctx: { drizzle: client, userId: "actor" },
+          input: { id: "request-1" },
+        } as never,
+        requestDependencies,
+      ),
     ).resolves.toEqual({ success: false, message: "Squad is full" });
-    expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(2);
+    expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(
+      2,
+    );
     expect(updates.some((entry) => entry.table === userData)).toBe(false);
   });
 
@@ -478,27 +444,32 @@ describe("ANBU router request permissions and concurrency", () => {
       [anbuSquad, [{ rowsAffected: 1 }, { rowsAffected: 0 }]],
       [userData, [{ rowsAffected: 1 }]],
     ]);
-    vi.mocked(fetchRequest).mockResolvedValue({
+    fetchRequestMock.mockResolvedValue({
       id: "request-1",
       senderId: "requester",
       receiverId: "actor",
       relatedId: "squad-1",
       status: "PENDING",
     } as never);
-    vi.mocked(fetchUpdatedUser).mockResolvedValue({
+    fetchUpdatedUserMock.mockResolvedValue({
       user: makeUser({ village: { id: "village-1", kageId: "actor" } }),
     } as never);
-    vi.mocked(fetchUser).mockResolvedValue(
+    fetchUserMock.mockResolvedValue(
       makeUser({ userId: "requester", rank: "JONIN" }) as never,
     );
 
     await expect(
-      handlers.acceptRequest?.({
-        ctx: { drizzle: client, userId: "actor" },
-        input: { id: "request-1" },
-      }),
+      acceptAnbuRequest(
+        {
+          ctx: { drizzle: client, userId: "actor" },
+          input: { id: "request-1" },
+        } as never,
+        requestDependencies,
+      ),
     ).resolves.toEqual({ success: true, message: "Request accepted" });
-    expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(1);
+    expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(
+      1,
+    );
   });
 });
 
@@ -513,9 +484,9 @@ describe("ANBU membership invariants", () => {
       [anbuSquad, [{ rowsAffected: 0 }]],
     ]);
 
-    await expect(removeFromSquad(client as never, squad as never, "member-1")).resolves.toBe(
-      false,
-    );
+    await expect(
+      removeFromSquad(client as never, squad as never, "member-1"),
+    ).resolves.toBe(false);
     expect(updates.some((entry) => entry.table === userData)).toBe(false);
   });
 
@@ -531,9 +502,9 @@ describe("ANBU membership invariants", () => {
       [{ userId: "successor", rank: "JONIN" }],
     );
 
-    await expect(removeFromSquad(client as never, squad as never, "leader")).resolves.toBe(
-      true,
-    );
+    await expect(
+      removeFromSquad(client as never, squad as never, "leader"),
+    ).resolves.toBe(true);
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
