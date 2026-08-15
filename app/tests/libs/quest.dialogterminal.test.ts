@@ -10,6 +10,7 @@ import { getNewTrackers } from "@/libs/quest";
 // Fixtures mirror quest_killcount.test.ts: minimal casts accepted at runtime.
 // ---------------------------------------------------------------------------
 
+/** Creates a dialog objective fixture with the supplied branches and optional placement binding. */
 const dialogObjective = (
   id: string,
   branches: { text: string; nextObjectiveId?: string }[],
@@ -24,6 +25,7 @@ const dialogObjective = (
   overworldPlacementId,
 });
 
+/** Creates a minimal collect-item objective fixture. */
 const collectObjective = (id: string) => ({
   id,
   task: "collect_item" as const,
@@ -35,6 +37,7 @@ type Objective =
   | ReturnType<typeof dialogObjective>
   | ReturnType<typeof collectObjective>;
 
+/** Creates a minimal quest fixture containing the supplied objectives. */
 const makeQuest = (id: string, objectives: Objective[]) => ({
   id,
   name: `Quest ${id}`,
@@ -55,6 +58,7 @@ const makeQuest = (id: string, objectives: Objective[]) => ({
   content: { objectives, reward: {}, sceneBackground: "", sceneCharacters: [] },
 });
 
+/** Creates a user fixture with each supplied quest active and no completed objectives. */
 const makeUser = (quests: ReturnType<typeof makeQuest>[]) =>
   ({
     userId: "u1",
@@ -79,6 +83,7 @@ const makeUser = (quests: ReturnType<typeof makeQuest>[]) =>
     })),
   }) as unknown as Parameters<typeof getNewTrackers>[0];
 
+/** Finds one objective goal in the tracker evaluation result. */
 const goal = (
   result: ReturnType<typeof getNewTrackers>,
   questId: string,
@@ -86,6 +91,7 @@ const goal = (
 ) =>
   result.trackers.find((t) => t.id === questId)?.goals.find((g) => g.id === objectiveId);
 
+/** Builds the objective-scoped sentinel used to record a terminal dialog choice. */
 const terminal = (objectiveId: string) => `${TERMINAL_DIALOG_PREFIX}${objectiveId}`;
 
 describe("getNewTrackers — terminal dialog branches", () => {

@@ -6,6 +6,7 @@ import {
   isBoundPlacementFrozen,
 } from "@/libs/quest";
 
+/** Creates the minimal placement-bound dialog objective used by placement-state tests. */
 const obj = (id?: string) =>
   ({ task: "dialog", overworldPlacementId: id } as never);
 
@@ -60,7 +61,7 @@ describe("isBoundPlacementFrozen", () => {
 // checkLocationQuest runs getNewTrackers on every movement.
 // ---------------------------------------------------------------------------
 
-// Linear chain o1 -> o2 -> o3 via nextObjectiveId; each optionally bound to a placement.
+/** Creates one objective in a linear quest chain, optionally bound to a placement. */
 const boundObjective = (
   id: string,
   next: string | undefined,
@@ -75,6 +76,7 @@ const boundObjective = (
     ...(placementId ? { overworldPlacementId: placementId } : {}),
   }) as unknown;
 
+/** Creates a minimal consecutive quest fixture containing the supplied objectives. */
 const makeConsecutiveQuest = (id: string, objectives: unknown[]) => ({
   id,
   name: `Quest ${id}`,
@@ -95,9 +97,10 @@ const makeConsecutiveQuest = (id: string, objectives: unknown[]) => ({
   content: { objectives, reward: {}, sceneBackground: "", sceneCharacters: [] },
 });
 
-// Build a user whose tracker for `quest` carries exactly `goals`. An objective is
-// "reached" only if the tracker's selectedNextObjectiveId chain leads to it, so a
-// goal with `done:false` and no selectedNextObjectiveId parks the player there.
+/**
+ * Builds a user whose tracker contains exactly the supplied goals.
+ * A goal with no selected successor leaves the player parked on that objective.
+ */
 const makeUser = (
   quest: ReturnType<typeof makeConsecutiveQuest>,
   goals: { id: string; done?: boolean; selectedNextObjectiveId?: string }[],
@@ -127,11 +130,13 @@ const makeUser = (
     ],
   }) as unknown as Parameters<typeof getNewTrackers>[0];
 
+/** Returns whether tracker evaluation emitted a failure consequence for the quest. */
 const questFailed = (result: ReturnType<typeof getNewTrackers>, questId: string) =>
   result.consequences.some(
     (c) => c.type === "fail_quest" && c.ids.includes(questId),
   );
 
+/** Finds one objective goal in the tracker evaluation result. */
 const goalOf = (
   result: ReturnType<typeof getNewTrackers>,
   questId: string,

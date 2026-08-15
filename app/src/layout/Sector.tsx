@@ -378,8 +378,7 @@ const Sector: React.FC<SectorProps> = (props) => {
     { enabled: sector !== undefined, placeholderData: (previous) => previous },
   );
   const villageData = data?.village;
-  // Overworld AIs share the sector-user rendering path, so merge them into the
-  // fetched user list before it reaches the scene
+  /** Combines player records and overworld AIs for the shared sector-user rendering path. */
   const fetchedUsers = useMemo(
     () =>
       data?.users === undefined
@@ -1526,6 +1525,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   const { mutate: interactNpc, isPending: isInteracting } =
     api.overworldAi.interactWithOverworldAi.useMutation({
+      /** Applies battle/dialog results and refreshes state after an overworld NPC interaction. */
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success && data.battleId) {
@@ -1547,9 +1547,10 @@ const Sector: React.FC<SectorProps> = (props) => {
       },
     });
 
-  // Single entry point for interacting with an overworld NPC the player is standing on:
-  // sets the pending-interaction ref (so the dialog-continuation flow keeps working) and
-  // fires the existing mutation. Used by both the sprite click and the arrival modal.
+  /**
+   * Starts interaction with an overworld NPC on the player's tile.
+   * Records the placement version so subsequent dialog requests target the same NPC instance.
+   */
   const interactWithNpc = (npc: SectorUser) => {
     // Read through refs: the scene's click handler closes over this callback for the lifetime of the
     // build, so state values would go stale. Skip while a dialog is open so its pending-interaction
@@ -1565,11 +1566,11 @@ const Sector: React.FC<SectorProps> = (props) => {
     });
   };
 
-  // Shared NPC-tile interaction for the sprite click handler: locate the placement's NPC and, when
-  // the player is standing on its tile, interact — otherwise route toward it. Returns true when the
-  // click resolved to a live NPC, false when the sprite carries no placement OR its placement has
-  // despawned, so the attack branch can fall through to the normal player-attack path. Reads through
-  // refs because the click handler lives in a long-lived scene closure that captures stale state.
+  /**
+   * Handles an overworld NPC sprite click by interacting when adjacent or routing toward the NPC.
+   * Returns whether the placement still resolves to a live NPC, allowing stale sprites to fall
+   * through to the normal player-interaction path.
+   */
   const handleNpcTileInteraction = (placementId: string | undefined): boolean => {
     if (!placementId) return false;
     const npc = usersRef.current?.find((u) => u.npcPlacementId === placementId);

@@ -6,6 +6,7 @@ import {
 } from "@/libs/quest";
 import type { AllObjectivesType } from "@/validators/objectives";
 
+/** Narrows compact objective fixtures to the validator's full objective type. */
 const objs = (o: unknown[]) => o as unknown as AllObjectivesType[];
 
 // A dialog branch with no nextObjectiveId can never advance the objective, so it

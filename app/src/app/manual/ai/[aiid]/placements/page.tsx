@@ -37,6 +37,7 @@ import {
   OverworldPlacementSchema,
 } from "@/validators/overworldAi";
 
+/** Renders the placement editor for an AI template after enforcing content-editor access. */
 export default function ManualAiPlacements(props: {
   params: Promise<{ aiid: string }>;
 }) {
@@ -74,6 +75,7 @@ interface PlacementsManagerProps {
   placements: Placement[];
 }
 
+/** Creates a clean placement form state for the given AI template. */
 const defaultFormValues = (aiId: string): OverworldPlacementInput => ({
   aiTemplateUserId: aiId,
   interactionType: "HOSTILE",
@@ -87,6 +89,7 @@ const defaultFormValues = (aiId: string): OverworldPlacementInput => ({
   isActive: true,
 });
 
+/** Manages creation, editing, and deletion of an AI template's overworld placements. */
 const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements }) => {
   const utils = api.useUtils();
   const [editingId, setEditingId] = useState<string | undefined>(undefined);
@@ -104,6 +107,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
     defaultValues: defaultFormValues(aiId),
   });
 
+  /** Leaves edit mode and restores an empty placement form for the current AI template. */
   const resetEditor = useCallback(() => {
     setEditingId(undefined);
     form.reset(defaultFormValues(aiId));
@@ -141,6 +145,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
   // Upsert mutation
   const { mutate: upsert, isPending: isUpserting } =
     api.overworldAi.upsertPlacement.useMutation({
+      /** Refreshes the placement list and clears the editor after a successful upsert. */
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
@@ -155,6 +160,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
   // Delete mutation
   const { mutate: remove, isPending: isRemoving } =
     api.overworldAi.deletePlacement.useMutation({
+      /** Refreshes the placement list and clears the editor after a successful deletion. */
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
@@ -166,10 +172,12 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
       },
     });
 
+  /** Submits the current form as either a new placement or an update to the selected placement. */
   const onSubmit = (values: OverworldPlacementInput) => {
     upsert({ id: editingId, data: values });
   };
 
+  /** Loads an existing placement and its quest pool into the form for editing. */
   const onEdit = (placement: Placement) => {
     setEditingId(placement.id);
     form.reset({
@@ -191,16 +199,19 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
     setSectorInput("");
   };
 
+  /** Cancels the current edit and restores the blank placement form. */
   const onCancelEdit = () => {
     resetEditor();
   };
 
+  /** Adds a quest to the placement pool unless it is empty or already selected. */
   const addQuestId = (questId: string) => {
     if (!questId || watchedQuests.some((q) => q.questId === questId)) return;
     form.setValue("quests", [...watchedQuests, { questId, chance: 0 }]);
     setQuestSearch("");
   };
 
+  /** Removes a quest and its configured chance from the placement pool. */
   const removeQuestId = (questId: string) => {
     form.setValue(
       "quests",
@@ -208,6 +219,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
     );
   };
 
+  /** Updates the weighted selection chance for one quest in the placement pool. */
   const setQuestChance = (questId: string, chance: number) => {
     form.setValue(
       "quests",
@@ -215,6 +227,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
     );
   };
 
+  /** Parses and adds the pending sector number when it is valid and not already selected. */
   const addSector = () => {
     const num = parseInt(sectorInput, 10);
     if (Number.isNaN(num) || watchedSectorList.includes(num)) return;
@@ -222,6 +235,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
     setSectorInput("");
   };
 
+  /** Removes a sector from the placement's random-sector allowlist. */
   const removeSector = (sector: number) => {
     form.setValue(
       "sectorList",

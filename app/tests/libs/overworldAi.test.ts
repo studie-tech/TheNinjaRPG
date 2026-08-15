@@ -52,6 +52,7 @@ describe("resolveOverworldPosition", () => {
 
   it("never resolves to a reserved sector in random mode", () => {
     // Land on the reserved sector first, then verify the bounded scan advances past it.
+    /** Produces an RNG sample that initially selects the reserved Wake Island sector. */
     const reservedRoll = () => (MAP_WAKE_ISLAND_SECTOR + 0.25) / MAP_TOTAL_SECTORS;
     const pos = resolveOverworldPosition(
       { ...cfg, sectorType: "random", locationType: "random" },

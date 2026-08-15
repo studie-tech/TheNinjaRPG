@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { questTypeConcurrentBlockMessage } from "@/routers/quests";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
 
+/** Creates a minimal user fixture with unfinished quests of the supplied types. */
 const userWith = (active: { questType: string }[]) =>
   ({
     userQuests: active.map((q, i) => ({ questId: `a${i}`, endAt: null, quest: q })),

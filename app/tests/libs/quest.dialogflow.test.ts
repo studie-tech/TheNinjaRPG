@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { verifyQuestObjectiveFlow } from "@/libs/quest";
 import type { AllObjectivesType } from "@/validators/objectives";
 
+/** Runs flow validation against a compact objective fixture. */
 const flow = (objectives: unknown[]) =>
   verifyQuestObjectiveFlow(objectives as unknown as AllObjectivesType[]);
 

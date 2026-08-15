@@ -16,6 +16,11 @@ import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
 
 const ENDPOINT_NAME = "daily-overworld-ai";
 
+/**
+ * Repositions every active randomized overworld AI placement for the new day.
+ * The handler authenticates the cron request, serializes execution with the daily timer, and
+ * validates all destinations before persisting any position updates.
+ */
 export const GET = async (request: Request) => {
   // Touch a dynamic API so Next.js does not statically cache this GET handler
   await cookies();

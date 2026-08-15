@@ -19,12 +19,15 @@ const RESERVED_SECTORS = new Set<number>([
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
 ]);
 
+/** Returns whether a sector can host an overworld AI placement. */
 export const isPlaceableSector = (sector: number): boolean =>
   sector >= 0 && sector < MAP_TOTAL_SECTORS && !RESERVED_SECTORS.has(sector);
 
+/** Converts an RNG sample into an integer in `[0, maxExclusive)`. */
 const randInt = (maxExclusive: number, rng: () => number) =>
   Math.min(maxExclusive - 1, Math.floor(rng() * maxExclusive));
 
+/** Selects a valid placement sector while deterministically skipping reserved sectors. */
 const pickPlaceableSector = (rng: () => number): number => {
   // Bounded scan from a random start so a reserved hit deterministically rolls forward.
   let sector = randInt(MAP_TOTAL_SECTORS, rng);
@@ -44,6 +47,10 @@ export interface OverworldPositionConfig {
   sectorList: number[];
 }
 
+/**
+ * Resolves a placement configuration into concrete sector and tile coordinates.
+ * Invalid or reserved configured sectors fall back to a randomly selected placeable sector.
+ */
 export const resolveOverworldPosition = (
   cfg: OverworldPositionConfig,
   rng: () => number = Math.random,
@@ -115,6 +122,7 @@ type TemplateForRender = {
   rank: SectorUser["rank"];
 };
 
+/** Adapts a persisted overworld placement and AI template to the shared sector-user model. */
 export const placementToSectorUser = (
   placement: PlacementForRender,
   template: TemplateForRender,
@@ -228,6 +236,7 @@ export const OVERWORLD_BOUND_OBJECTIVE_TASKS = [
   "dialog",
 ] as const;
 
+/** Returns whether a quest objective type can be bound to an overworld AI placement. */
 export const isSupportedOverworldBindingTask = (task: string): boolean =>
   (OVERWORLD_BOUND_OBJECTIVE_TASKS as readonly string[]).includes(task);
 
