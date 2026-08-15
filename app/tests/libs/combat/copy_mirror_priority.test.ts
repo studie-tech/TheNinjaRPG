@@ -53,6 +53,7 @@ describe("copy/mirror priority constants", () => {
     expect(TRANSFER_EXCLUDED_SOURCE_TYPES).toContain("bloodline");
     expect(TRANSFER_EXCLUDED_SOURCE_TYPES).toContain("item");
     expect(TRANSFER_EXCLUDED_SOURCE_TYPES).toContain("village");
+    expect(TRANSFER_EXCLUDED_SOURCE_TYPES).toContain("ranked");
   });
 });
 
@@ -275,15 +276,49 @@ describe("copy tag: ceiling + priority", () => {
     expect(effects.length).toBe(before); // nothing added
   });
 
-  it("does not count an opponent's mirror on self against the copy ceiling", () => {
+  it("does not count opponent-created transfers on self against the copy ceiling", () => {
+    // 4 copyable-typed, fromEffectId-bearing effects on SELF created by OPP.
+    // Without the creatorId scope in the budget filter these would exhaust the
+    // ceiling and block the cast; with it, the copy must still succeed.
     const effects: UserEffect[] = [
-      // opponent mirrored a debuff onto SELF (creatorId = OPP) -> must NOT count
-      oppBuff("increasedamagetaken", 50, { id: "m1", targetId: SELF, creatorId: OPP, fromEffectId: "srcM" }),
-      oppBuff("increasedamagegiven", 40), // copyable buff on opponent
+      oppBuff("increasedamagegiven", 40, { id: "o1", targetId: SELF, creatorId: OPP, fromEffectId: "s1" }),
+      oppBuff("decreasedamagetaken", 30, { id: "o2", targetId: SELF, creatorId: OPP, fromEffectId: "s2" }),
+      oppBuff("lifesteal", 20, { id: "o3", targetId: SELF, creatorId: OPP, fromEffectId: "s3" }),
+      oppBuff("absorb", 50, { id: "o4", targetId: SELF, creatorId: OPP, fromEffectId: "s4" }),
+      oppBuff("shield", 90), // fresh copyable buff on the opponent
     ];
     copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
     const copied = effects.filter((e) => e.targetId === SELF && e.creatorId === SELF && e.fromEffectId);
-    expect(copied.map((e) => e.type)).toContain("increasedamagegiven");
+    expect(copied.map((e) => e.type)).toContain("shield");
+  });
+
+  it("does not count non-copyable-typed clones (e.g. mirrors) against the copy ceiling", () => {
+    // 4 negative-typed, fromEffectId-bearing effects on SELF that pass the
+    // identity checks (targetId/creatorId = SELF). Only the isCopyableEffect
+    // scope in the budget filter keeps them from exhausting the ceiling.
+    const effects: UserEffect[] = [
+      oppBuff("increasedamagetaken", 40, { id: "n1", targetId: SELF, creatorId: SELF, fromEffectId: "s1" }),
+      oppBuff("poison", 30, { id: "n2", targetId: SELF, creatorId: SELF, fromEffectId: "s2" }),
+      oppBuff("wound", 20, { id: "n3", targetId: SELF, creatorId: SELF, fromEffectId: "s3" }),
+      oppBuff("afterburn", 50, { id: "n4", targetId: SELF, creatorId: SELF, fromEffectId: "s4" }),
+      oppBuff("shield", 90), // fresh copyable buff on the opponent
+    ];
+    copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
+    const copied = effects.filter(
+      (e) => e.targetId === SELF && e.creatorId === SELF && e.fromEffectId && e.type === "shield",
+    );
+    expect(copied).toHaveLength(1);
+  });
+
+  it("skips buffs from excluded passive sources (bloodline, ranked)", () => {
+    const effects: UserEffect[] = [
+      oppBuff("increasedamagegiven", 40, { fromType: "bloodline" }),
+      oppBuff("decreasedamagetaken", 30, { fromType: "ranked" }),
+    ];
+    const before = effects.length;
+    const res = copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
+    expect(effects.length).toBe(before);
+    expect(res?.txt).toContain("no copyable effects");
   });
 
   it("skips a type already actively copied (unique per type across casts)", () => {
@@ -393,6 +428,80 @@ describe("mirror tag: ceiling + priority + wound", () => {
     mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
     const mirrored = effects.find((e) => e.targetId === OPP && e.creatorId === SELF && e.type === "drain");
     expect(mirrored?.power).toBe(Math.floor(40 / 3)); // floor(40 / mirror-tag-rounds=3) = 13
+  });
+
+  it("respects the persistent ceiling across casts (already at 4 -> mirrors nothing)", () => {
+    const effects: UserEffect[] = [
+      // 4 active mirrors by SELF on OPP
+      selfDebuff("increasedamagetaken", 50, { id: "m1", targetId: OPP, creatorId: SELF, fromEffectId: "s1" }),
+      selfDebuff("decreasedamagegiven", 40, { id: "m2", targetId: OPP, creatorId: SELF, fromEffectId: "s2" }),
+      selfDebuff("poison", 30, { id: "m3", targetId: OPP, creatorId: SELF, fromEffectId: "s3" }),
+      selfDebuff("wound", 20, { id: "m4", targetId: OPP, creatorId: SELF, fromEffectId: "s4" }),
+      // a fresh mirrorable debuff on SELF
+      selfDebuff("afterburn", 60),
+    ];
+    const before = effects.length;
+    const res = mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
+    expect(effects.length).toBe(before); // nothing added
+    expect(res?.txt).toContain("maximum mirrored");
+  });
+
+  it("does not count opponent-created transfers on the target against the mirror ceiling", () => {
+    // 4 mirrorable-typed, fromEffectId-bearing effects on OPP created by OPP.
+    // Without the creatorId scope these would exhaust this caster's budget;
+    // with it, the mirror must still succeed.
+    const effects: UserEffect[] = [
+      selfDebuff("increasedamagetaken", 50, { id: "o1", targetId: OPP, creatorId: OPP, fromEffectId: "s1" }),
+      selfDebuff("decreasedamagegiven", 40, { id: "o2", targetId: OPP, creatorId: OPP, fromEffectId: "s2" }),
+      selfDebuff("poison", 30, { id: "o3", targetId: OPP, creatorId: OPP, fromEffectId: "s3" }),
+      selfDebuff("wound", 20, { id: "o4", targetId: OPP, creatorId: OPP, fromEffectId: "s4" }),
+      selfDebuff("afterburn", 60), // fresh mirrorable debuff on SELF
+    ];
+    mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
+    const mirrored = effects.filter(
+      (e) => e.targetId === OPP && e.creatorId === SELF && e.fromEffectId,
+    );
+    expect(mirrored.map((e) => e.type)).toContain("afterburn");
+  });
+
+  it("skips a type already actively mirrored (unique per type across casts)", () => {
+    const effects: UserEffect[] = [
+      selfDebuff("poison", 20, { id: "held", targetId: OPP, creatorId: SELF, fromEffectId: "srcP" }),
+      selfDebuff("poison", 99), // stronger, but type already held -> skipped
+    ];
+    const before = effects.length;
+    mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
+    expect(effects.length).toBe(before); // no new poison mirrored
+  });
+
+  it("skips excluded effect types (damage) even when negative and active", () => {
+    const effects: UserEffect[] = [selfDebuff("damage", 40)];
+    const before = effects.length;
+    const res = mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
+    expect(effects.length).toBe(before);
+    expect(res?.txt).toContain("no negative effects to reflect");
+  });
+
+  it("ranks drain by delivered (duration-scaled) power when competing for a slot", () => {
+    const effects: UserEffect[] = [
+      // 3 active mirrors leave exactly one open slot
+      selfDebuff("increasedamagetaken", 50, { id: "m1", targetId: OPP, creatorId: SELF, fromEffectId: "s1" }),
+      selfDebuff("decreasedamagegiven", 40, { id: "m2", targetId: OPP, creatorId: SELF, fromEffectId: "s2" }),
+      selfDebuff("afterburn", 30, { id: "m3", targetId: OPP, creatorId: SELF, fromEffectId: "s3" }),
+      // both tail-tier: drain delivers floor(60 / mirror-rounds=3) = 20 < 50
+      selfDebuff("drain", 60),
+      selfDebuff("decreasestat", 50),
+    ];
+    const seeded = new Set(["s1", "s2", "s3"]);
+    mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
+    const newMirrors = effects.filter(
+      (e) =>
+        e.targetId === OPP &&
+        e.creatorId === SELF &&
+        e.fromEffectId &&
+        !seeded.has(e.fromEffectId),
+    );
+    expect(newMirrors.map((e) => e.type)).toEqual(["decreasestat"]);
   });
 
   it("is a no-op when the caster targets itself (self-mirror)", () => {
