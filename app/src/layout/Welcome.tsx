@@ -1042,7 +1042,9 @@ const SetReferal = () => {
   const searchParams = useSearchParams();
   const { isSignedIn, isLoaded } = useUser();
   const { mutate: trackVisitor } = api.misc.trackVisitor.useMutation({
-    onSuccess: () => safeLocalStorageSetItem(VISITOR_TRACKED_KEY, "1"),
+    onSuccess: (result) => {
+      if (result.success) safeLocalStorageSetItem(VISITOR_TRACKED_KEY, "1");
+    },
   });
   useEffect(() => {
     // Set reference user

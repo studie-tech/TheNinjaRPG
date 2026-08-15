@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { htmlToPlainText } from "@/utils/sanitize";
 
 /**
  * Canonical origin for the site. Every absolute URL emitted in metadata, the sitemap
@@ -25,51 +26,6 @@ export const absoluteUrl = (path: string) => {
   return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 };
 
-const NAMED_ENTITIES: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  nbsp: " ",
-  hellip: "…",
-  mdash: "—",
-  ndash: "–",
-  rsquo: "’",
-  lsquo: "‘",
-  rdquo: "”",
-  ldquo: "“",
-};
-
-/**
- * decodeHtmlEntities
- * - Resolves the entities that show up in stored descriptions to their characters
- *
- * Dropping them instead would turn "Don&apos;t" into "Don t", and numeric forms such as
- * "&#39;" would survive verbatim into the search snippet.
- * @param text - Text that may contain HTML entities
- */
-const decodeCodePoint = (raw: string, value: number) => {
-  // String.fromCodePoint throws a RangeError outside the Unicode scalar range, which
-  // would abort the whole description. Lone surrogates are excluded too: they decode
-  // without throwing but produce unpaired code units that break downstream encoding.
-  if (!Number.isInteger(value) || value < 0 || value > 0x10ffff) return raw;
-  if (value >= 0xd800 && value <= 0xdfff) return raw;
-  return String.fromCodePoint(value);
-};
-
-const decodeHtmlEntities = (text: string) =>
-  text
-    .replace(/&#x([0-9a-f]+);/gi, (raw, hex: string) =>
-      decodeCodePoint(raw, Number.parseInt(hex, 16)),
-    )
-    .replace(/&#(\d+);/g, (raw, dec: string) =>
-      decodeCodePoint(raw, Number.parseInt(dec, 10)),
-    )
-    .replace(/&([a-z]+);/gi, (match, name: string) => {
-      return NAMED_ENTITIES[name.toLowerCase()] ?? match;
-    });
-
 /**
  * metaDescription
  * - Turns stored content descriptions, which may contain HTML and long prose, into a
@@ -78,9 +34,7 @@ const decodeHtmlEntities = (text: string) =>
  * @param prefix - Optional lead-in placed before the description
  */
 export const metaDescription = (text: string, prefix?: string) => {
-  const clean = decodeHtmlEntities(text.replace(/<[^>]*>/g, " "))
-    .replace(/\s+/g, " ")
-    .trim();
+  const clean = htmlToPlainText(text);
   const full = prefix ? `${prefix} ${clean}` : clean;
   return full.length > 160 ? `${full.slice(0, 157).trimEnd()}...` : full;
 };

@@ -1,3 +1,4 @@
+import { decodeHTML } from "entities";
 import sanitizeHtml from "sanitize-html";
 
 const sanitizeOptions: sanitizeHtml.IOptions = {
@@ -42,6 +43,65 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
 const sanitize = (html: string) => sanitizeHtml(html, sanitizeOptions);
 
 export default sanitize;
+
+const PLAIN_TEXT_SEPARATOR_TAGS = new Set([
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "br",
+  "dd",
+  "div",
+  "dl",
+  "dt",
+  "figcaption",
+  "figure",
+  "footer",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hr",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "p",
+  "pre",
+  "section",
+  "script",
+  "style",
+  "table",
+  "td",
+  "th",
+  "tr",
+  "ul",
+]);
+
+/** Converts stored HTML to normalized text without retaining script/style contents. */
+export const htmlToPlainText = (html: string) => {
+  let needsSpace = false;
+  const plainText = sanitizeHtml(html, {
+    allowedTags: [],
+    allowedAttributes: {},
+    onOpenTag: (tagName) => {
+      if (PLAIN_TEXT_SEPARATOR_TAGS.has(tagName)) needsSpace = true;
+    },
+    onCloseTag: (tagName) => {
+      if (PLAIN_TEXT_SEPARATOR_TAGS.has(tagName)) needsSpace = true;
+    },
+    textFilter: (text) => {
+      if (!needsSpace) return text;
+      needsSpace = false;
+      return ` ${text}`;
+    },
+  });
+
+  return decodeHTML(plainText).replace(/\s+/g, " ").trim();
+};
 
 /**
  * Strict sanitizer for variant description/battleDescription fields.

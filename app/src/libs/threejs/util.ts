@@ -22,6 +22,7 @@ import {
   Vector2,
   WebGLRenderer,
 } from "three";
+import { bunnyImageUrl } from "@/utils/image";
 
 // Simple in-memory cache for textures to avoid re-fetching
 let textureLoaderInstance: TextureLoader | null = null;
@@ -29,17 +30,6 @@ let textureLoaderInstance: TextureLoader | null = null;
 // Performance optimization: Cache status bar textures to avoid recreating canvases
 // Key format: "width-height-color-stroke"
 const statusBarTextureCache = new Map<string, Texture>();
-
-/**
- * Transforms image URLs to use the CDN endpoint.
- * Replaces "utfs.io" or "ui0arpl8sm.ufs.sh" with "uploadthing.b-cdn.net"
- */
-const transformImageUrl = (url: string, width: number): string => {
-  const transformedUrl = url
-    .replace(/utfs\.io/g, "uploadthing.b-cdn.net")
-    .replace(/ui0arpl8sm\.ufs\.sh/g, "uploadthing.b-cdn.net");
-  return `${transformedUrl}?width=${width}`;
-};
 
 /**
  * Lazily get a module-scoped TextureLoader instance.
@@ -69,7 +59,7 @@ export const loadTexture = (path: string, width = 50) => {
     return fallback;
   }
 
-  const transformedPath = transformImageUrl(path, width);
+  const transformedPath = bunnyImageUrl(path, width);
 
   // Return cached texture if available
   const cached = textureCache.get(transformedPath);
@@ -176,9 +166,7 @@ export const clearTextureCaches = () => {
  */
 export const preloadTextures = async (paths: string[]) => {
   const uniquePaths = [
-    ...new Set(
-      paths.filter((p) => Boolean(p)).map((path) => transformImageUrl(path, 50)),
-    ),
+    ...new Set(paths.filter((p) => Boolean(p)).map((path) => bunnyImageUrl(path, 50))),
   ];
   const results = await Promise.allSettled(
     uniquePaths.map((path) => {
