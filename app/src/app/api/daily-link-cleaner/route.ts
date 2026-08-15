@@ -7,6 +7,7 @@ import {
   updateGameSetting,
 } from "@/libs/gamesettings";
 import { drizzleDB } from "@/server/db";
+import { authenticateCronRequest } from "@/server/utils/cron";
 import { isFetchOriginError } from "@/utils/error";
 import { isUrlAccessible, isWithinImgTag } from "@/utils/url";
 
@@ -66,20 +67,8 @@ export const GET = async (request: Request) => {
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
   await cookies();
 
-  // Verify CRON_SECRET header for authentication
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
-
-  if (!cronSecret) {
-    return Response.json({ error: "CRON_SECRET not configured" }, { status: 500 });
-  }
-
-  if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
-    return Response.json(
-      { error: "Unauthorized - Invalid or missing authorization header" },
-      { status: 401 },
-    );
-  }
+  const authError = authenticateCronRequest(request);
+  if (authError) return authError;
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
