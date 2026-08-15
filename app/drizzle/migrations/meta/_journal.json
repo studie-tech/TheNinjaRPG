@@ -211,6 +211,13 @@
       "when": 1786796831251,
       "tag": "0029_left_the_fury",
       "breakpoints": false
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1786799549351,
+      "tag": "0030_pale_kinsey_walden",
+      "breakpoints": false
     }
   ]
 }

@@ -43,6 +43,7 @@ import {
   item,
   jutsu,
   overworldAiPlacement,
+  overworldAiPlacementQuest,
   quest,
   questHistory,
   raidDamageThreshold,
@@ -52,6 +53,7 @@ import {
   userData,
   userItem,
   userJutsu,
+  userQuestAttempt,
   userRaidBuff,
   userRewards,
   village,
@@ -61,6 +63,7 @@ import { getGatheringItemDrops } from "@/libs/gathering";
 import { getHuntingItemDrops } from "@/libs/hunting";
 import {
   deriveOverworldOpponents,
+  isSupportedOverworldBindingTask,
   validateFriendlyPlacementBindings,
 } from "@/libs/overworldAi";
 import type { GetRewardResult, QuestConsequence } from "@/libs/quest";
@@ -104,12 +107,58 @@ import { secondsFromNow } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { canAccessStructure } from "@/utils/village";
+import type { AllObjectivesType } from "@/validators/objectives";
 import { QuestTracker, QuestValidator } from "@/validators/objectives";
 import { questFilteringSchema } from "@/validators/quest";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import type { QuestCounterFieldName } from "@/validators/user";
 import { getQuestCounterFieldName } from "@/validators/user";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+
+/**
+ * Resolve and validate all overworld bindings in one place for both update and clone. Defeat
+ * objectives derive their opponent AI from the placement; friendly interactions must bind to a
+ * FRIENDLY placement. Save-shape validation has already rejected unsupported task bindings.
+ */
+const prepareOverworldBindings = async (
+  client: DrizzleClient,
+  objectives: AllObjectivesType[],
+): Promise<
+  | { success: true; objectives: AllObjectivesType[] }
+  | { success: false; message: string }
+> => {
+  const placementIds = [
+    ...new Set(
+      objectives
+        .map((objective) => objective.overworldPlacementId)
+        .filter((id): id is string => !!id),
+    ),
+  ];
+  if (placementIds.length === 0) return { success: true, objectives };
+
+  const placements = await client.query.overworldAiPlacement.findMany({
+    columns: { id: true, aiTemplateUserId: true, interactionType: true },
+    where: inArray(overworldAiPlacement.id, placementIds),
+  });
+  const { objectives: derived, missing } = deriveOverworldOpponents(
+    objectives,
+    new Map(placements.map((placement) => [placement.id, placement.aiTemplateUserId])),
+  );
+  if (missing.length > 0) {
+    return {
+      success: false,
+      message: `Bound overworld placement not found: ${missing.join(", ")}`,
+    };
+  }
+  const friendlyCheck = validateFriendlyPlacementBindings(
+    derived,
+    new Map(placements.map((placement) => [placement.id, placement])),
+  );
+  return friendlyCheck.check
+    ? { success: true, objectives: derived }
+    : { success: false, message: friendlyCheck.message };
+};
+
 export const questsRouter = createTRPCRouter({
   getAllNames: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get all quest names and IDs" } })
@@ -757,43 +806,12 @@ export const questsRouter = createTRPCRouter({
             message: `Ranks rewards are only allowed with starter or exam quests`,
           };
         }
-        // Overworld placement bindings (single source of truth, validated at save so a
-        // dangling/wrong-type binding can never reach players): defeat_opponents derives its
-        // opponentAIs from the bound placement's AI; deliver_item/dialog must bind to an
-        // existing FRIENDLY placement.
-        const boundPlacementIds = [
-          ...new Set(
-            data.content.objectives
-              .filter((o) => o.overworldPlacementId)
-              .map((o) => o.overworldPlacementId as string),
-          ),
-        ];
-        if (boundPlacementIds.length > 0) {
-          const placements = await ctx.drizzle.query.overworldAiPlacement.findMany({
-            columns: { id: true, aiTemplateUserId: true, interactionType: true },
-            where: inArray(overworldAiPlacement.id, boundPlacementIds),
-          });
-          const aiByPlacementId = new Map(
-            placements.map((p) => [p.id, p.aiTemplateUserId]),
-          );
-          const { objectives, missing } = deriveOverworldOpponents(
-            data.content.objectives,
-            aiByPlacementId,
-          );
-          if (missing.length > 0) {
-            return errorResponse(
-              `Bound overworld placement not found: ${missing.join(", ")}`,
-            );
-          }
-          data.content.objectives = objectives;
-          const friendlyCheck = validateFriendlyPlacementBindings(
-            data.content.objectives,
-            new Map(placements.map((p) => [p.id, p])),
-          );
-          if (!friendlyCheck.check) {
-            return errorResponse(friendlyCheck.message);
-          }
-        }
+        const preparedBindings = await prepareOverworldBindings(
+          ctx.drizzle,
+          data.content.objectives,
+        );
+        if (!preparedBindings.success) return errorResponse(preparedBindings.message);
+        data.content.objectives = preparedBindings.objectives;
         // Calculate diff
         const diff = calculateContentDiff(entry, {
           id: entry.id,
@@ -941,6 +959,12 @@ export const questsRouter = createTRPCRouter({
       if (!check) {
         return errorResponse(`Objective flow invalid: ${message}`);
       }
+      const preparedBindings = await prepareOverworldBindings(
+        ctx.drizzle,
+        questData.content.objectives,
+      );
+      if (!preparedBindings.success) return errorResponse(preparedBindings.message);
+      questData.content.objectives = preparedBindings.objectives;
       await ctx.drizzle.insert(quest).values(questData);
 
       return { success: true, message: questData.id };
@@ -973,6 +997,12 @@ export const questsRouter = createTRPCRouter({
             .delete(raidDamageThreshold)
             .where(eq(raidDamageThreshold.questId, input.id)),
           ctx.drizzle.delete(userRaidBuff).where(eq(userRaidBuff.questId, input.id)),
+          ctx.drizzle
+            .delete(overworldAiPlacementQuest)
+            .where(eq(overworldAiPlacementQuest.questId, input.id)),
+          ctx.drizzle
+            .delete(userQuestAttempt)
+            .where(eq(userQuestAttempt.questId, input.id)),
           ctx.drizzle.insert(actionLog).values({
             id: nanoid(),
             userId: ctx.userId,
@@ -1064,7 +1094,7 @@ export const questsRouter = createTRPCRouter({
         resolved,
         notifications,
         consequences,
-        existingHistory: questHistoryPrefetch,
+        existingHistory: questHistoryPrefetch ?? null,
       });
 
       if (claim.outcome === "already_completed") {
@@ -2865,7 +2895,7 @@ export const fetchBoundPlacementStatus = async (
   const boundIds = new Set<string>();
   for (const q of getUserQuests(user)) {
     for (const obj of q.content.objectives) {
-      if (obj.overworldPlacementId) {
+      if (obj.overworldPlacementId && isSupportedOverworldBindingTask(obj.task)) {
         boundIds.add(obj.overworldPlacementId);
       }
     }

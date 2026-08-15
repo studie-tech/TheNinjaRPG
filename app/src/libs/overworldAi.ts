@@ -11,6 +11,8 @@ import {
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
 } from "@/drizzle/constants";
+import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import { findNearestWalkableCoordinate } from "@/libs/sector-map/validation";
 import type { SectorUser } from "@/libs/threejs/types";
 
 const RESERVED_SECTORS = new Set<number>([
@@ -52,11 +54,13 @@ export const resolveOverworldPosition = (
     sector = pickPlaceableSector(rng);
   } else if (cfg.sectorType === "from_list") {
     const candidates = cfg.sectorList.filter(isPlaceableSector);
+    const candidate =
+      candidates.length > 0 ? candidates[randInt(candidates.length, rng)] : undefined;
     // Fall back to cfg.sector only if it is itself placeable; otherwise roll a placeable
     // sector so an all-reserved list can never resolve to an invalid NPC position.
     sector =
       candidates.length > 0
-        ? candidates[randInt(candidates.length, rng)]!
+        ? (candidate ?? cfg.sector)
         : isPlaceableSector(cfg.sector)
           ? cfg.sector
           : pickPlaceableSector(rng);
@@ -70,6 +74,25 @@ export const resolveOverworldPosition = (
   const latitude =
     cfg.locationType === "random" ? randInt(SECTOR_HEIGHT, rng) : cfg.latitude;
   return { sector, longitude, latitude };
+};
+
+/**
+ * Snap a resolved placement onto the nearest walkable tile in its published sector map.
+ * `fallbackAnchor=null` deliberately prefers the nearest tile over the sector spawn so random
+ * placements do not pile up at spawn whenever their first roll lands on blocked terrain.
+ */
+export const snapOverworldPositionToWalkable = (
+  position: { sector: number; longitude: number; latitude: number },
+  map: NormalizedSectorMap,
+): { sector: number; longitude: number; latitude: number } | null => {
+  const coordinate = findNearestWalkableCoordinate(
+    map,
+    { x: position.longitude, y: position.latitude },
+    null,
+  );
+  return coordinate
+    ? { sector: position.sector, longitude: coordinate.x, latitude: coordinate.y }
+    : null;
 };
 
 type PlacementForRender = {
@@ -214,6 +237,16 @@ type BoundObjective = {
   available?: boolean;
 };
 
+/** Objective tasks whose behavior is defined for an overworld placement binding. */
+export const OVERWORLD_BOUND_OBJECTIVE_TASKS = [
+  "defeat_opponents",
+  "deliver_item",
+  "dialog",
+] as const;
+
+export const isSupportedOverworldBindingTask = (task: string): boolean =>
+  (OVERWORLD_BOUND_OBJECTIVE_TASKS as readonly string[]).includes(task);
+
 /**
  * Absolute-chance band-walk: each quest owns a [acc, acc+chance) band on [0,100).
  * r past the summed chances → null ("nothing"). Order is the caller-provided (stable) order.
@@ -252,6 +285,9 @@ export const findActionableBoundObjective = <T extends BoundObjective>(args: {
     for (const objective of quest.objectives) {
       if (objective.done) continue;
       if (objective.overworldPlacementId !== args.placementId) continue;
+      // Ignore malformed legacy content that attached the shared base field to a task with no
+      // overworld interaction semantics. Save validation prevents new instances of this shape.
+      if (!isSupportedOverworldBindingTask(objective.task)) continue;
       // Consecutive-ordering gate: an objective bound to this tile but not yet reachable in the
       // quest's objective chain is not actionable. Without this, a player who walks straight to a
       // later objective's placement would trigger its dialog / delivery / PvE battle out of
@@ -280,12 +316,21 @@ export const findActionableBoundObjective = <T extends BoundObjective>(args: {
  * so the player would act (and risk HP) for nothing.
  */
 export const earlierBoundObjectivesComplete = (
-  objectives: { overworldPlacementId?: string | null; done?: boolean | null }[],
+  objectives: {
+    task?: string;
+    overworldPlacementId?: string | null;
+    done?: boolean | null;
+  }[],
   index: number,
 ): boolean => {
   for (let j = 0; j < index; j++) {
     const prev = objectives[j];
-    if (prev?.overworldPlacementId && !prev.done) return false;
+    if (
+      prev?.overworldPlacementId &&
+      (prev.task === undefined || isSupportedOverworldBindingTask(prev.task)) &&
+      !prev.done
+    )
+      return false;
   }
   return true;
 };
@@ -464,6 +509,8 @@ export const placementsForObjective = <
   placements: T[],
   args: { task: string; selectedAiIds: string[] },
 ): T[] =>
-  (FRIENDLY_INTERACTION_TASKS as readonly string[]).includes(args.task)
-    ? placements.filter((p) => p.interactionType === "FRIENDLY")
-    : filterPlacementsByAi(placements, args.selectedAiIds);
+  !isSupportedOverworldBindingTask(args.task)
+    ? []
+    : (FRIENDLY_INTERACTION_TASKS as readonly string[]).includes(args.task)
+      ? placements.filter((p) => p.interactionType === "FRIENDLY")
+      : filterPlacementsByAi(placements, args.selectedAiIds);

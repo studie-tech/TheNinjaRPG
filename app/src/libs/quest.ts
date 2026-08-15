@@ -36,7 +36,10 @@ import {
   isQuestComplete,
   isQuestObjectiveAvailable,
 } from "@/libs/objectives";
-import { earlierBoundObjectivesComplete } from "@/libs/overworldAi";
+import {
+  earlierBoundObjectivesComplete,
+  isSupportedOverworldBindingTask,
+} from "@/libs/overworldAi";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUnique } from "@/utils/grouping";
 import { randomInt } from "@/utils/math";
@@ -86,6 +89,7 @@ export const getBoundObjectiveCandidates = (user: NonNullable<UserWithRelations>
     const objectives = q.content.objectives;
     // Placement + done per objective, precomputed so the ordering gate is a plain array scan.
     const meta = objectives.map((objective) => ({
+      task: objective.task,
       overworldPlacementId: objective.overworldPlacementId,
       done: !!tracker?.goals.find((g) => g.id === objective.id)?.done,
     }));
@@ -208,7 +212,11 @@ export const isObjectiveLocationSatisfied = (
 ) => {
   // A placement-bound objective resolves off the placement, never its stored coordinates
   // (which could otherwise coincidentally match a tile and auto-complete on travel).
-  if ("overworldPlacementId" in objective && objective.overworldPlacementId) {
+  if (
+    "overworldPlacementId" in objective &&
+    objective.overworldPlacementId &&
+    isSupportedOverworldBindingTask(objective.task)
+  ) {
     return !!atPlacementIds && atPlacementIds.has(objective.overworldPlacementId);
   }
   return isLocationObjective(location, objective);
@@ -712,10 +720,12 @@ export const killObjectiveCountsForQuest = (
  * every placement id that was returned by the DB query (regardless of isActive).
  */
 export const isBoundPlacementDeleted = (
-  objective: { overworldPlacementId?: string },
+  objective: { task: string; overworldPlacementId?: string },
   existing: Set<string>,
 ): boolean =>
-  !!objective.overworldPlacementId && !existing.has(objective.overworldPlacementId);
+  isSupportedOverworldBindingTask(objective.task) &&
+  !!objective.overworldPlacementId &&
+  !existing.has(objective.overworldPlacementId);
 
 /**
  * Returns true when an objective is bound to a placement that still exists in
@@ -724,17 +734,19 @@ export const isBoundPlacementDeleted = (
  * re-activated.
  */
 export const isBoundPlacementFrozen = (
-  objective: { overworldPlacementId?: string },
+  objective: { task: string; overworldPlacementId?: string },
   existing: Set<string>,
   active: Set<string>,
 ): boolean =>
+  isSupportedOverworldBindingTask(objective.task) &&
   !!objective.overworldPlacementId &&
   existing.has(objective.overworldPlacementId) &&
   !active.has(objective.overworldPlacementId);
 
 /**
  * True when a retryDelay != none quest already hit `maxCompletes` completions in the
- * current calendar period. retryDelay "none" and maxCompletes <= 0 are never capped.
+ * current calendar period. retryDelay "none" is never capped. Invalid persisted content with a
+ * real retry delay and maxCompletes <= 0 fails closed so it cannot silently become unlimited.
  */
 export const periodCapReached = (
   args: {
@@ -745,7 +757,8 @@ export const periodCapReached = (
   },
   now: Date = new Date(),
 ): boolean => {
-  if (args.retryDelay === "none" || args.maxCompletes <= 0) return false;
+  if (args.retryDelay === "none") return false;
+  if (args.maxCompletes <= 0) return true;
   const cps = periodStart(args.retryDelay, now);
   const startedAt = args.periodStartAt ? new Date(args.periodStartAt) : null;
   // Counts from a prior period don't count toward this period.
@@ -1195,7 +1208,14 @@ export const getNewTrackers = (
                 }
               }
               // Dialog objective
-              if (task === "dialog" && taskUpdate.contentId) {
+              if (
+                task === "dialog" &&
+                taskUpdate.contentId &&
+                // A placement-bound dialog can only advance through the authoritative NPC
+                // interaction path. This blocks direct Logbook/API completion from anywhere.
+                (!objective.overworldPlacementId ||
+                  isObjectiveLocationSatisfied(user, objective, atPlacementIds))
+              ) {
                 // A terminal branch carries no follow-up objective, so the client sends an
                 // objective-scoped sentinel (prefix + this objective's id) instead of a next id.
                 // Complete this objective without routing onward — but only if it genuinely owns
@@ -1946,6 +1966,17 @@ export const verifyQuestContentForSave = (
   objectives: AllObjectivesType[],
   consecutiveObjectives: boolean,
 ): { check: boolean; message: string } => {
+  const unsupportedBinding = objectives.find(
+    (objective) =>
+      !!objective.overworldPlacementId &&
+      !isSupportedOverworldBindingTask(objective.task),
+  );
+  if (unsupportedBinding) {
+    return {
+      check: false,
+      message: `Objective task ${unsupportedBinding.task} cannot bind to an overworld placement. Only defeat_opponents, deliver_item, and dialog are supported.`,
+    };
+  }
   // Consecutive quests run the full flow check, whose first step is the same dialog-branch scan —
   // so only the non-consecutive branch needs the standalone dialog check here (avoids scanning twice).
   if (consecutiveObjectives) return verifyQuestObjectiveFlow(objectives);

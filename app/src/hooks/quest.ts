@@ -242,7 +242,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     id: "attemptDelay",
     type: "str_array",
     values: RetryQuestDelays,
-    label: "Attempt Delay",
+    label: "Overworld Roll Delay",
   });
 
   // Add prerequisite quest if quests exist

@@ -1610,7 +1610,6 @@ const Sector: React.FC<SectorProps> = (props) => {
     };
   }, []);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: resubscribe only when the sector changes
   useEffect(() => {
     if (pusher) {
       const channel = pusher.subscribe(props.sector.toString());
@@ -1926,7 +1925,6 @@ const Sector: React.FC<SectorProps> = (props) => {
   // Window changes patch the rendered world in place: crossings and
   // refetches draw only the sectors that entered the window and dispose the
   // ones that left - no scene rebuild, no visual change to shared sectors
-  // biome-ignore lint/correctness/useExhaustiveDependencies: imperative scene patching keyed on window data only
   useEffect(() => {
     sectorWindowRef.current = sectorWindow;
     void applyWindowToScene();
@@ -2532,7 +2530,6 @@ const Sector: React.FC<SectorProps> = (props) => {
     // Window data flows through applyWindowToScene; a full rebuild is only
     // needed when the renderer itself must change. isAttacking is read via
     // isAttackingRef in the click guard so it does not rebuild the world.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
   }, [usersReady]);
 
   // Arrival-modal CTA. `interactWithOverworldAi` dispatches on an actionable bound objective

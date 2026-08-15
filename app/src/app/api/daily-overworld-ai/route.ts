@@ -6,8 +6,12 @@ import {
   lockWithDailyTimer,
   updateGameSetting,
 } from "@/libs/gamesettings";
-import { resolveOverworldPosition } from "@/libs/overworldAi";
+import {
+  resolveOverworldPosition,
+  snapOverworldPositionToWalkable,
+} from "@/libs/overworldAi";
 import { drizzleDB } from "@/server/db";
+import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
 
 const ENDPOINT_NAME = "daily-overworld-ai";
 
@@ -47,10 +51,30 @@ export const GET = async (request: Request) => {
       ),
     });
 
+    const resolved = placements.map((placement) => ({
+      placement,
+      position: resolveOverworldPosition(placement),
+    }));
+    // One batched map read (plus the shared short-lived cache) avoids a map query per NPC while
+    // ensuring every daily roll lands on a tile the movement/pathfinding code can reach.
+    const maps = await fetchPublishedSectorMaps(
+      drizzleDB,
+      resolved.map(({ position }) => position.sector),
+    );
+
+    // Validate every roll before issuing writes. A bad/missing map should fail the cron without
+    // partially moving the placements that happened to appear earlier in this array.
+    const snapped = resolved.map(({ placement, position }) => {
+      const map = maps.get(position.sector);
+      if (!map) throw new Error(`Sector ${position.sector} has no published map`);
+      const pos = snapOverworldPositionToWalkable(position, map);
+      if (!pos) throw new Error(`Sector ${position.sector} has no walkable tile`);
+      return { placement, pos };
+    });
+
     // Re-randomize positions for all fetched placements in parallel
     await Promise.all(
-      placements.map((p) => {
-        const pos = resolveOverworldPosition(p);
+      snapped.map(({ placement, pos }) => {
         return drizzleDB
           .update(overworldAiPlacement)
           .set({
@@ -59,7 +83,7 @@ export const GET = async (request: Request) => {
             latitude: pos.latitude,
             positionVersion: sql`${overworldAiPlacement.positionVersion} + 1`,
           })
-          .where(eq(overworldAiPlacement.id, p.id));
+          .where(eq(overworldAiPlacement.id, placement.id));
       }),
     );
 
