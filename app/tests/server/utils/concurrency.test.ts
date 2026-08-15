@@ -121,7 +121,14 @@ describe("battleClaimRollbackStatus", () => {
     const { sql: rendered, params } = render(expr);
     expect(rendered).toContain('THEN "KAGE_QUEUED" ELSE "AWAKE" END');
     expect(rendered).toMatch(/in \(\?,\s*\?\)/i);
-    expect(params).toEqual(["challenger-1", "challenger-2"]);
+    expect(params).toEqual(["challenger-1", "challenger-2", "KAGE", "PENDING"]);
+  });
+
+  it("only restores KAGE_QUEUED while the kage challenge request is still pending", () => {
+    const expr = battleClaimRollbackStatus(qb as never, "KAGE_PVP", ["challenger-1"]);
+    const { sql: rendered } = render(expr);
+    expect(rendered).toMatch(/exists/i);
+    expect(rendered).toContain("UserRequest");
   });
 
   it("restores RANKED_PVP rows to QUEUED only while their queue row exists", () => {
