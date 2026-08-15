@@ -54,8 +54,9 @@ const Modal2: React.FC<Modal2Props> = (props) => {
         | React.MouseEvent<HTMLButtonElement, MouseEvent>
         | React.KeyboardEvent<KeyboardEvent>,
     ) => {
-      if (!props.onAccept) return;
-      props.onAccept(e);
+      // The close side-effect is independent of onAccept: dialogs that render a
+      // Proceed button without an accept handler still use it to dismiss.
+      props.onAccept?.(e);
       if (props.isValid === undefined || props.isValid) {
         props.setIsOpen(false);
       }
@@ -72,9 +73,12 @@ const Modal2: React.FC<Modal2Props> = (props) => {
       const activeElement = document.activeElement;
       const isButton = activeElement?.tagName === "BUTTON";
 
+      // Enter only mirrors a Proceed button that is visible, enabled, and backed
+      // by an accept handler, so it never dismisses a plain info/edit dialog.
       if (
         event.key === "Enter" &&
         props.proceed_label &&
+        props.onAccept &&
         !isButton &&
         !isProceedDisabled
       ) {
@@ -85,7 +89,13 @@ const Modal2: React.FC<Modal2Props> = (props) => {
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
-  }, [props.isOpen, props.proceed_label, isProceedDisabled, handleAccept]);
+  }, [
+    props.isOpen,
+    props.proceed_label,
+    props.onAccept,
+    isProceedDisabled,
+    handleAccept,
+  ]);
 
   const handleDialogClose = () => {
     if (props.onClose) props.onClose();

@@ -435,20 +435,21 @@ export const commentsRouter = createTRPCRouter({
         );
 
       if (membershipDeleteResult.rowsAffected === 1) {
-        const conversationDeleteResult = await ctx.drizzle
-          .delete(conversation)
-          .where(
-            and(
-              eq(conversation.id, convo.id),
-              sql`NOT EXISTS (SELECT 1 FROM ${user2conversation} WHERE ${user2conversation.conversationId} = ${convo.id})`,
-            ),
-          );
-
-        if (conversationDeleteResult.rowsAffected === 1) {
-          await ctx.drizzle
+        // Both cleanup deletes only need to know that no membership rows remain,
+        // which the awaited membership delete above already settled. Guarding
+        // each one on that condition keeps a concurrent exit from wiping a
+        // conversation someone still belongs to, without serializing them.
+        const noMembersLeft = sql`NOT EXISTS (SELECT 1 FROM ${user2conversation} WHERE ${user2conversation.conversationId} = ${convo.id})`;
+        await Promise.all([
+          ctx.drizzle
+            .delete(conversation)
+            .where(and(eq(conversation.id, convo.id), noMembersLeft)),
+          ctx.drizzle
             .delete(conversationComment)
-            .where(eq(conversationComment.conversationId, convo.id));
-        }
+            .where(
+              and(eq(conversationComment.conversationId, convo.id), noMembersLeft),
+            ),
+        ]);
       }
       return { success: true, message: "Conversation exited" };
     }),

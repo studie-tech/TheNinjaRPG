@@ -42,6 +42,7 @@ import Modal2 from "@/layout/Modal2";
 import RichInput from "@/layout/RichInput";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { isRaidChatConversationId } from "@/libs/raids";
 import { showMutationToast } from "@/libs/toast";
 import { canPostAsAi, getMessagingRestriction } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -184,6 +185,9 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
             <hr />
             {filteredConversations?.map((convo) => {
               const isExiting = isExitingConversation && exitingConvoId === convo.id;
+              // Raid chat membership follows the raid queue, so the server always
+              // rejects a manual exit; don't offer the control for those rows.
+              const canExit = !isRaidChatConversationId(convo.id);
               return (
                 <li
                   className={`relative mx-3 my-3 flex h-12 flex-row items-center rounded-lg hover:bg-popover ${selectedConvo && selectedConvo === convo.id ? "bg-popover" : ""}`}
@@ -228,22 +232,24 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
                   {convo.hasNewMessages && (
                     <BellRing className="h-6 w-6 animate-[wiggle_1s_ease-in-out_infinite] text-red-500 hover:cursor-pointer hover:text-orange-500" />
                   )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="relative z-10 mx-2 rounded-full"
-                    aria-label={`Exit conversation ${convo.title}`}
-                    disabled={isExiting}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setPendingConvoId(convo.id);
-                      setIsExitConfirmOpen(true);
-                    }}
-                  >
-                    <Trash2 className="h-6 w-6 hover:text-orange-500" />
-                  </Button>
+                  {canExit && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="relative z-10 mx-2 rounded-full"
+                      aria-label={`Exit conversation ${convo.title}`}
+                      disabled={isExiting}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setPendingConvoId(convo.id);
+                        setIsExitConfirmOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-6 w-6 hover:text-orange-500" />
+                    </Button>
+                  )}
                 </li>
               );
             })}
@@ -252,6 +258,10 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
             title="Confirm exiting conversation"
             isOpen={isExitConfirmOpen}
             setIsOpen={setIsExitConfirmOpen}
+            // Keep Modal2 from self-closing on accept, so this destructive action
+            // stays visible in its disabled "Exiting..." state until the request
+            // settles and onSettled closes the dialog.
+            isValid={false}
             isLoading={isExitingPending}
             proceed_loading_label="Exiting..."
             proceed_label="Proceed"
@@ -268,6 +278,7 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
                     setPendingConvoId((currentConvoId) =>
                       currentConvoId === requestedConvoId ? null : currentConvoId,
                     );
+                    setIsExitConfirmOpen(false);
                   },
                 },
               );
