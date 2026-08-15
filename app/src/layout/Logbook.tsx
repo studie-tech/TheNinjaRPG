@@ -285,6 +285,49 @@ interface LogbookEntryProps {
   hideTitle?: boolean;
 }
 
+interface QuestDialogSceneProps {
+  background: string;
+  characters: string[];
+  description?: string | null;
+}
+
+/**
+ * Renders the shared quest-dialog scene used by Logbook and overworld NPC dialogs.
+ */
+export const QuestDialogScene: React.FC<QuestDialogSceneProps> = ({
+  background,
+  characters,
+  description,
+}) => (
+  <div className="relative aspect-3/2 w-full overflow-hidden">
+    <Image
+      src={background}
+      alt="SceneBackground"
+      className="relative aspect-3/2 w-full"
+      width={512}
+      height={341}
+    />
+    {characters.map((character, index) => (
+      <div key={`${character}-${index}`} className="absolute bottom-0 w-2/5">
+        <Image
+          src={character}
+          alt="Character"
+          className="max-h-full w-auto object-contain"
+          width={341}
+          height={512}
+        />
+      </div>
+    ))}
+    {description && (
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex max-h-1/3 flex-col items-center">
+        <div className="pointer-events-auto mb-2 max-h-32 min-h-10 w-full max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border-2 bg-poppopover p-2">
+          {parseHtml(description)}
+        </div>
+      </div>
+    )}
+  </div>
+);
+
 /**
  * Represents a logbook entry component.
  *
@@ -484,33 +527,11 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
           </>
         )}
         {showScene && (
-          <div className="relative aspect-3/2 w-full overflow-hidden">
-            <Image
-              src={background}
-              alt="SceneBackground"
-              className="relative aspect-3/2 w-full"
-              width={512}
-              height={341}
-            />
-            {characters.map((character, i) => (
-              <div key={`${character}-${i}`} className="absolute bottom-0 w-2/5">
-                <Image
-                  src={character}
-                  alt="Character"
-                  className="max-h-full w-auto object-contain"
-                  width={341}
-                  height={512}
-                />
-              </div>
-            ))}
-            {/* Bottom dialog area */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex max-h-1/3 flex-col items-center">
-              {/* Shown text */}
-              <div className="pointer-events-auto mb-2 max-h-32 min-h-10 w-full max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border-2 bg-poppopover p-2">
-                {parseHtml(shownText || "")}
-              </div>
-            </div>
-          </div>
+          <QuestDialogScene
+            background={background}
+            characters={characters}
+            description={shownText}
+          />
         )}
         {/* Dialog options */}
         {activeObjective?.task === "dialog" &&
@@ -529,26 +550,26 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
               </h2>
               <div className="pointer-events-auto flex w-full flex-wrap gap-1 px-2 pb-1">
                 {!isCheckingRewards &&
-                  activeObjective.nextObjectiveId.map((entry, idx) => (
-                    <div key={`${idx}-${entry.text}`} className="flex justify-end">
-                      <button
-                        type="button"
-                        className="max-w-full cursor-pointer break-words rounded-lg border-2 bg-popover px-2 py-1 text-right text-xs shadow-lg hover:bg-poppopover sm:text-sm"
-                        onClick={() =>
-                          checkRewards({
-                            questId: quest.id,
-                            // A terminal branch has no follow-up objective; send an objective-scoped
-                            // sentinel so the server completes this dialog objective instead of
-                            // re-opening the same dialog.
-                            nextObjectiveId:
-                              entry.nextObjectiveId ??
-                              `${TERMINAL_DIALOG_PREFIX}${activeObjective.id}`,
-                          })
-                        }
-                      >
-                        {entry.text}
-                      </button>
-                    </div>
+                  activeObjective.nextObjectiveId.map((entry, index) => (
+                    <Button
+                      key={`${index}-${entry.text}`}
+                      type="button"
+                      variant="info"
+                      className="h-auto max-w-full whitespace-normal text-left"
+                      onClick={() =>
+                        checkRewards({
+                          questId: quest.id,
+                          // A terminal branch has no follow-up objective; send an objective-scoped
+                          // sentinel so the server completes this dialog objective instead of
+                          // re-opening the same dialog.
+                          nextObjectiveId:
+                            entry.nextObjectiveId ??
+                            `${TERMINAL_DIALOG_PREFIX}${activeObjective.id}`,
+                        })
+                      }
+                    >
+                      {entry.text}
+                    </Button>
                   ))}
               </div>
             </div>
