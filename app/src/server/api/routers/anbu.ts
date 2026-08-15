@@ -152,7 +152,7 @@ export const anbuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, leader, village, anbuCount] = await Promise.all([
+      const [user, leader, village, anbuCount, moderationResult] = await Promise.all([
         fetchAnbuActor({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -160,6 +160,7 @@ export const anbuRouter = createTRPCRouter({
         fetchAnbuMember(ctx.drizzle, input.leaderId),
         fetchVillage(ctx.drizzle, input.villageId),
         countAnbuSquads(ctx.drizzle, input.villageId),
+        checkForBadWords(input.name),
       ]);
       // Derived
       const villageId = village?.id;
@@ -182,7 +183,6 @@ export const anbuRouter = createTRPCRouter({
       if (!hasRequiredRank(leader.rank, ANBU_LEADER_RANK_REQUIREMENT)) {
         return errorResponse("Leader rank too low");
       }
-      const moderationResult = await checkForBadWords(input.name);
       if (!moderationResult.success) return moderationResult;
       // Mutate
       const anbuId = nanoid();
@@ -267,7 +267,7 @@ export const anbuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, squad, image, squadWithName] = await Promise.all([
+      const [user, squad, image, squadWithName, moderationResult] = await Promise.all([
         fetchAnbuMember(ctx.drizzle, ctx.userId),
         fetchSquadSummary(ctx.drizzle, input.squadId),
         ctx.drizzle.query.historicalAvatar.findFirst({
@@ -277,6 +277,7 @@ export const anbuRouter = createTRPCRouter({
           columns: { name: true, id: true },
           where: eq(anbuSquad.name, input.name),
         }),
+        checkForBadWords(input.name),
       ]);
       // Guards
       if (!squad) return errorResponse("Squad not found");
@@ -296,7 +297,6 @@ export const anbuRouter = createTRPCRouter({
             validated.error.issues[0]?.message ?? "Invalid squad name",
           );
         }
-        const moderationResult = await checkForBadWords(input.name);
         if (!moderationResult.success) return moderationResult;
       }
       // Short-circuit no-op submits so PlanetScale's rowsAffected=0 on

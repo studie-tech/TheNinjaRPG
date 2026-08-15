@@ -1408,18 +1408,18 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, target] = await Promise.all([
+      const [user, target, moderationResult] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.userData.findFirst({
           columns: { username: true },
           where: eq(userData.username, input.username),
         }),
+        checkForBadWords(input.username),
       ]);
       // Guard
       if (user.username === input.username) {
         return errorResponse("Username is the same");
       }
-      const moderationResult = await checkForBadWords(input.username);
       if (!moderationResult.success) return moderationResult;
       if (user.reputationPoints < COST_CHANGE_USERNAME) {
         return errorResponse("Not enough reputation points");

@@ -208,10 +208,11 @@ export const commentsRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, thread, sender] = await Promise.all([
+      const [user, thread, sender, moderated] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchThread(ctx.drizzle, input.object_id),
         input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
+        moderateUserText(input.comment),
       ]);
       // Resolve effective poster (allow staff to post as AI)
       const effectiveUserId = resolveSenderId(user, sender);
@@ -224,7 +225,6 @@ export const commentsRouter = createTRPCRouter({
       if (!thread) {
         return errorResponse("Thread not found");
       }
-      const moderated = await moderateUserText(input.comment);
       if (!moderated.success) return moderated;
       // Mutate
       const sanitized = moderated.sanitized;
@@ -257,7 +257,7 @@ export const commentsRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, comment] = await Promise.all([
+      const [user, comment, moderated] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.forumPost.findFirst({
           where: and(
@@ -265,12 +265,12 @@ export const commentsRouter = createTRPCRouter({
             eq(forumPost.userId, ctx.userId),
           ),
         }),
+        moderateUserText(input.comment),
       ]);
       // Guard
       if (user.isBanned) return errorResponse("You are banned");
       if (user.isSilenced) return errorResponse("You are silenced");
       if (!comment) return errorResponse("Comment not found");
-      const moderated = await moderateUserText(input.comment);
       if (!moderated.success) return moderated;
       // Mutate
       const postId = input.object_id;
@@ -384,17 +384,17 @@ export const commentsRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ conversationId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, sender] = await Promise.all([
+      const [user, sender, titleCheck, moderationResult] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
+        checkForBadWords(input.title),
+        checkForBadWords(input.comment),
       ]);
       // Guard
       const messagingRestriction = getMessagingRestriction(user);
       if (messagingRestriction) return errorResponse(messagingRestriction);
       const effectiveUserId = resolveSenderId(user, sender);
-      const titleCheck = await checkForBadWords(input.title);
       if (!titleCheck.success) return titleCheck;
-      const moderationResult = await checkForBadWords(input.comment);
       if (!moderationResult.success) return moderationResult;
       const { processedContent } = processMentions(input.comment);
       // Mutate
@@ -679,7 +679,7 @@ export const commentsRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ commentId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch data
-      const [convo, user, quotes, sender] = await Promise.all([
+      const [convo, user, quotes, sender, moderationResult] = await Promise.all([
         fetchConversation({
           client: ctx.drizzle,
           id: input.object_id,
@@ -688,6 +688,7 @@ export const commentsRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchComments(ctx.drizzle, input.quoteIds || []),
         input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
+        checkForBadWords(input.comment),
       ]);
 
       // Resolve effective poster (allow staff to post as AI)
@@ -739,7 +740,6 @@ export const commentsRouter = createTRPCRouter({
       const pusher = getServerPusher();
 
       // For staff accounts, verify the language is appropriate
-      const moderationResult = await checkForBadWords(input.comment);
       if (!moderationResult.success) return moderationResult;
 
       // Create the content, santizied & with added quotes
@@ -912,7 +912,7 @@ export const commentsRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, comment] = await Promise.all([
+      const [user, comment, moderated] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.conversationComment.findFirst({
           where: and(
@@ -920,12 +920,12 @@ export const commentsRouter = createTRPCRouter({
             eq(conversationComment.userId, ctx.userId),
           ),
         }),
+        moderateUserText(input.comment),
       ]);
       // Guard
       if (user.isBanned) return errorResponse("You are banned");
       if (user.isSilenced) return errorResponse("You are silenced");
       if (!comment) return errorResponse("Comment not found");
-      const moderated = await moderateUserText(input.comment);
       if (!moderated.success) return moderated;
       // Mutate
       const commentId = input.object_id;
