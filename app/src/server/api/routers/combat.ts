@@ -2289,11 +2289,11 @@ export const initiateBattle = async (
         // Attackers roll to keep stealth based on their stealth stat
         stealthActive:
           stealthBreakUserIds.length > 0
-            ? sql`CASE WHEN userId IN (${stealthBreakUserIds.map((id) => `"${id}"`).join(", ")}) THEN false ELSE stealthActive END`
+            ? sql`CASE WHEN ${inArray(userData.userId, stealthBreakUserIds)} THEN false ELSE ${userData.stealthActive} END`
             : sql`stealthActive`,
         stealthActivatedAt:
           stealthBreakUserIds.length > 0
-            ? sql`CASE WHEN userId IN (${stealthBreakUserIds.map((id) => `"${id}"`).join(", ")}) THEN NULL ELSE stealthActivatedAt END`
+            ? sql`CASE WHEN ${inArray(userData.userId, stealthBreakUserIds)} THEN NULL ELSE ${userData.stealthActivatedAt} END`
             : sql`stealthActivatedAt`,
         // Stamp war aggressors AND bracket-immunity aggressors in the same update so the WHERE guard
         // (status/sector match) gates both the battle entry and these timers atomically. GREATEST never
