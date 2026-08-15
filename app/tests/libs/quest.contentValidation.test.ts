@@ -81,24 +81,24 @@ describe("verifyQuestContentForSave — overworld multi-bound guard", () => {
   // to different NPCs on a non-consecutive quest can be completed out of order — the author must make
   // the quest consecutive so the ordering is expressed in the chain.
   const twoBoundDifferent = objs([
-    { id: "a", task: "collect_item", overworldPlacementId: "p1" },
-    { id: "b", task: "collect_item", overworldPlacementId: "p2" },
+    { id: "a", task: "defeat_opponents", overworldPlacementId: "p1" },
+    { id: "b", task: "deliver_item", overworldPlacementId: "p2" },
   ]);
   const twoBoundSame = objs([
-    { id: "a", task: "collect_item", overworldPlacementId: "p1" },
-    { id: "b", task: "collect_item", overworldPlacementId: "p1" },
+    { id: "a", task: "defeat_opponents", overworldPlacementId: "p1" },
+    { id: "b", task: "deliver_item", overworldPlacementId: "p1" },
   ]);
   const oneBound = objs([
-    { id: "a", task: "collect_item", overworldPlacementId: "p1" },
+    { id: "a", task: "deliver_item", overworldPlacementId: "p1" },
     { id: "b", task: "collect_item" },
   ]);
   const twoBoundConsecutive = objs([
-    { id: "a", task: "collect_item", overworldPlacementId: "p1", nextObjectiveId: "b" },
-    { id: "b", task: "collect_item", overworldPlacementId: "p2" },
+    { id: "a", task: "defeat_opponents", overworldPlacementId: "p1", nextObjectiveId: "b" },
+    { id: "b", task: "deliver_item", overworldPlacementId: "p2" },
   ]);
   const emptyPlacement = objs([
-    { id: "a", task: "collect_item", overworldPlacementId: "" },
-    { id: "b", task: "collect_item", overworldPlacementId: "p1" },
+    { id: "a", task: "deliver_item", overworldPlacementId: "" },
+    { id: "b", task: "deliver_item", overworldPlacementId: "p1" },
   ]);
 
   it("rejects two objectives bound to different placements when non-consecutive", () => {
@@ -119,5 +119,12 @@ describe("verifyQuestContentForSave — overworld multi-bound guard", () => {
 
   it("does not count an empty-string placement as bound", () => {
     expect(verifyQuestContentForSave(emptyPlacement, false).check).toBe(true);
+  });
+
+  it("rejects an unsupported task carrying the shared placement field", () => {
+    const unsupported = objs([
+      { id: "a", task: "pvp_kills", overworldPlacementId: "p1" },
+    ]);
+    expect(verifyQuestContentForSave(unsupported, false).check).toBe(false);
   });
 });

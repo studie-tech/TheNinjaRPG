@@ -13,6 +13,7 @@ import { getNewTrackers } from "@/libs/quest";
 const dialogObjective = (
   id: string,
   branches: { text: string; nextObjectiveId?: string }[],
+  overworldPlacementId?: string,
 ) => ({
   id,
   task: "dialog" as const,
@@ -20,6 +21,7 @@ const dialogObjective = (
   successDescription: "",
   image: "",
   nextObjectiveId: branches,
+  overworldPlacementId,
 });
 
 const collectObjective = (id: string) => ({
@@ -137,5 +139,31 @@ describe("getNewTrackers — terminal dialog branches", () => {
     const g = goal(result, "q1", "d1");
     expect(g?.done).toBe(true);
     expect(g?.selectedNextObjectiveId).toBe("o2");
+  });
+
+  it("does not complete a placement-bound dialog without authoritative placement context", () => {
+    const quest = makeQuest("q1", [
+      dialogObjective("d1", [{ text: "Continue", nextObjectiveId: "o2" }], "p1"),
+      collectObjective("o2"),
+    ]);
+    const result = getNewTrackers(makeUser([quest]), [
+      { task: "dialog", contentId: "o2" },
+    ]);
+    expect(goal(result, "q1", "d1")?.done).toBeFalsy();
+  });
+
+  it("completes a placement-bound dialog at its authoritative placement", () => {
+    const quest = makeQuest("q1", [
+      dialogObjective("d1", [{ text: "Continue", nextObjectiveId: "o2" }], "p1"),
+      collectObjective("o2"),
+    ]);
+    const result = getNewTrackers(
+      makeUser([quest]),
+      [{ task: "dialog", contentId: "o2" }],
+      undefined,
+      undefined,
+      new Set(["p1"]),
+    );
+    expect(goal(result, "q1", "d1")?.done).toBe(true);
   });
 });

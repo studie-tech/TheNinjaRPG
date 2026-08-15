@@ -2,7 +2,7 @@ import { Client as PlanetScaleClient } from "@planetscale/database";
 import * as Sentry from "@sentry/nextjs";
 import type { inferRouterOutputs } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { after } from "next/server";
 import { z } from "zod";
@@ -32,6 +32,8 @@ import {
   mpvpBattleQueue,
   mpvpBattleUser,
   notification,
+  overworldAiPlacement,
+  overworldAiPlacementQuest,
   paypalSubscription,
   paypalTransaction,
   poll,
@@ -57,6 +59,7 @@ import {
   userLikes,
   userNindo,
   userPollVote,
+  userQuestAttempt,
   userRaidBuff,
   userReport,
   userReportComment,
@@ -1150,6 +1153,14 @@ export const deleteUser = async (client: DrizzleClient, userId: string) => {
  * @param userId - The ID of the user to delete.
  */
 const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
+  // AI templates may own placement rows. Capture their ids before the user row disappears so
+  // the no-FK PlanetScale schema can explicitly remove both placement and pool children.
+  const aiPlacements = await client
+    .select({ id: overworldAiPlacement.id })
+    .from(overworldAiPlacement)
+    .where(eq(overworldAiPlacement.aiTemplateUserId, userId));
+  const aiPlacementIds = aiPlacements.map((placement) => placement.id);
+
   // Batch 1: Update foreign key references (must run first)
   await client
     .update(userData)
@@ -1184,6 +1195,7 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     client.delete(userAttribute).where(eq(userAttribute.userId, userId)),
     client.delete(jutsuLoadout).where(eq(jutsuLoadout.userId, userId)),
     client.delete(questHistory).where(eq(questHistory.userId, userId)),
+    client.delete(userQuestAttempt).where(eq(userQuestAttempt.userId, userId)),
     client.delete(bloodlineRolls).where(eq(bloodlineRolls.userId, userId)),
   ]);
 
@@ -1195,6 +1207,16 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     client.delete(actionLog).where(eq(actionLog.userId, userId)),
     client.delete(trainingLog).where(eq(trainingLog.userId, userId)),
     client.delete(aiProfile).where(eq(aiProfile.userId, userId)),
+    ...(aiPlacementIds.length > 0
+      ? [
+          client
+            .delete(overworldAiPlacementQuest)
+            .where(inArray(overworldAiPlacementQuest.placementId, aiPlacementIds)),
+          client
+            .delete(overworldAiPlacement)
+            .where(inArray(overworldAiPlacement.id, aiPlacementIds)),
+        ]
+      : []),
     client.delete(captcha).where(eq(captcha.userId, userId)),
   ]);
 

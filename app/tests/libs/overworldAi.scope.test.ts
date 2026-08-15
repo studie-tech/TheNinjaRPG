@@ -31,8 +31,8 @@ describe("placementsForObjective", () => {
     expect(r).toEqual(PLACEMENTS);
   });
 
-  it("returns all for a non-friendly, non-AI task with no selection", () => {
+  it("returns none for a task that cannot bind to an overworld placement", () => {
     const r = placementsForObjective(PLACEMENTS, { task: "move_to_location", selectedAiIds: [] });
-    expect(r).toEqual(PLACEMENTS);
+    expect(r).toEqual([]);
   });
 });

@@ -48,6 +48,23 @@ describe("findActionableBoundObjective", () => {
       findActionableBoundObjective({ activeQuests: quests, ownedItemIds: [], placementId: "pX" }),
     ).toBeNull();
   });
+
+  it("ignores unsupported task bindings from legacy malformed content", () => {
+    expect(
+      findActionableBoundObjective({
+        activeQuests: [
+          {
+            questId: "bad",
+            objectives: [
+              { id: "o1", task: "pvp_kills", overworldPlacementId: "p1" },
+            ],
+          },
+        ],
+        ownedItemIds: [],
+        placementId: "p1",
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("findActionableBoundObjective — consecutive-objective ordering", () => {

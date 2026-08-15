@@ -1,7 +1,10 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { OVERWORLD_QUEST_ROLLS_PER_DAY } from "@/drizzle/constants";
+import {
+  OVERWORLD_QUEST_ROLLS_PER_DAY,
+  WAR_MISSIONS_PER_DAY,
+} from "@/drizzle/constants";
 import {
   overworldAiPlacement,
   overworldAiPlacementQuest,
@@ -16,6 +19,7 @@ import {
   npcMissionSlotDecision,
   pickWeightedQuest,
   resolveOverworldPosition,
+  snapOverworldPositionToWalkable,
 } from "@/libs/overworldAi";
 import {
   attemptCapReached,
@@ -24,6 +28,7 @@ import {
   isAvailableUserQuests,
   isMockQuestHistoryRow,
 } from "@/libs/quest";
+import { availableQuestLetterRanks } from "@/libs/train";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUserItems } from "@/routers/item";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
@@ -33,8 +38,10 @@ import {
   OVERWORLD_ASSIGNABLE_QUEST_TYPES,
   questTypeConcurrentBlockMessage,
 } from "@/routers/quests";
+import { fetchActiveWars } from "@/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { claimActiveNpcQuest, clearActiveNpcQuest } from "@/server/utils/concurrency";
+import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
 import { canChangeContent } from "@/utils/permissions";
 import { OverworldPlacementSchema } from "@/validators/overworldAi";
 import {
@@ -97,11 +104,59 @@ export const overworldAiRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
-      // Referential-safety guards on a single binding fetch: a bound placement can't be
-      // deactivated, and a placement carrying deliver_item/dialog objectives can't be made
-      // HOSTILE — those only resolve at a FRIENDLY NPC (the inverse of the quest-save check).
+      const { quests, ...cfg } = input.data;
       const placementId = input.id;
+      const [targetAi, existingPlacement, poolQuests] = await Promise.all([
+        ctx.drizzle.query.userData.findFirst({
+          columns: { userId: true, isAi: true },
+          where: eq(userData.userId, cfg.aiTemplateUserId),
+        }),
+        placementId
+          ? ctx.drizzle.query.overworldAiPlacement.findFirst({
+              columns: { id: true, aiTemplateUserId: true },
+              where: eq(overworldAiPlacement.id, placementId),
+            })
+          : Promise.resolve(undefined),
+        quests.length > 0
+          ? ctx.drizzle.query.quest.findMany({
+              columns: { id: true, name: true, questType: true },
+              where: inArray(
+                quest.id,
+                quests.map((q) => q.questId),
+              ),
+            })
+          : Promise.resolve([]),
+      ]);
+      if (!targetAi?.isAi) return errorResponse("AI template does not exist");
+      if (placementId && !existingPlacement) {
+        return errorResponse("Placement no longer exists");
+      }
+      const poolQuestById = new Map(poolQuests.map((q) => [q.id, q]));
+      const missingQuestIds = quests
+        .map((q) => q.questId)
+        .filter((id) => !poolQuestById.has(id));
+      if (missingQuestIds.length > 0) {
+        return errorResponse(
+          `Quest pool contains missing quest(s): ${missingQuestIds.join(", ")}`,
+        );
+      }
+      const unsupportedPoolQuests = poolQuests.filter(
+        (q) => !OVERWORLD_ASSIGNABLE_QUEST_TYPES.includes(q.questType),
+      );
+      if (unsupportedPoolQuests.length > 0) {
+        return errorResponse(
+          `These quest types cannot be granted by an overworld NPC: ${unsupportedPoolQuests
+            .map((q) => `${q.name} (${q.questType})`)
+            .join(", ")}`,
+        );
+      }
+
+      // Referential-safety guards: a bound placement cannot be deactivated, repointed at a
+      // different AI, or changed to HOSTILE while it carries a friendly interaction objective.
       const makingHostile = input.data.interactionType === "HOSTILE";
+      const changingAi =
+        !!existingPlacement &&
+        existingPlacement.aiTemplateUserId !== cfg.aiTemplateUserId;
       if (placementId && makingHostile) {
         // HOSTILE needs objective content to detect friendly deliver/dialog bindings; that fetch
         // already carries the quest names, so a single query also covers the deactivate check.
@@ -109,6 +164,11 @@ export const overworldAiRouter = createTRPCRouter({
         if (!input.data.isActive && binding.length > 0) {
           return errorResponse(
             `Cannot deactivate: bound to quest(s): ${binding.map((q) => q.name).join(", ")}.`,
+          );
+        }
+        if (changingAi && binding.length > 0) {
+          return errorResponse(
+            `Cannot change AI template: bound to quest(s): ${binding.map((q) => q.name).join(", ")}. Unbind them first.`,
           );
         }
         const friendlyBound = binding.filter((q) =>
@@ -121,18 +181,36 @@ export const overworldAiRouter = createTRPCRouter({
               .join(", ")} require a FRIENDLY NPC. Unbind them first.`,
           );
         }
-      } else if (placementId && !input.data.isActive) {
-        // Pure deactivation only needs the bound quest names, so skip the heavy content JSON.
+      } else if (placementId && (!input.data.isActive || changingAi)) {
+        // Pure deactivation / AI reassignment only needs names, so skip the heavy content JSON.
         const binding = await fetchQuestNamesBindingPlacement(ctx.drizzle, placementId);
         if (binding.length > 0) {
           return errorResponse(
-            `Cannot deactivate: bound to quest(s): ${binding.map((q) => q.name).join(", ")}.`,
+            `${changingAi ? "Cannot change AI template" : "Cannot deactivate"}: bound to quest(s): ${binding.map((q) => q.name).join(", ")}.`,
           );
         }
       }
       // Prepare
-      const { quests, ...cfg } = input.data;
-      const pos = resolveOverworldPosition(cfg);
+      const rawPosition = resolveOverworldPosition(cfg);
+      let sectorMap: Awaited<ReturnType<typeof fetchPublishedSectorMap>>;
+      try {
+        sectorMap = await fetchPublishedSectorMap(ctx.drizzle, rawPosition.sector);
+      } catch {
+        return errorResponse(`Sector ${rawPosition.sector} has no published map`);
+      }
+      const pos = snapOverworldPositionToWalkable(rawPosition, sectorMap);
+      if (!pos)
+        return errorResponse(`Sector ${rawPosition.sector} has no walkable tile`);
+      if (
+        cfg.sectorType === "specific" &&
+        cfg.locationType === "specific" &&
+        (pos.longitude !== rawPosition.longitude ||
+          pos.latitude !== rawPosition.latitude)
+      ) {
+        return errorResponse(
+          `Tile (${rawPosition.longitude}, ${rawPosition.latitude}) is blocked. Nearest walkable tile: (${pos.longitude}, ${pos.latitude}).`,
+        );
+      }
       const id = input.id ?? nanoid();
       const row = {
         id,
@@ -288,11 +366,20 @@ export const overworldAiRouter = createTRPCRouter({
       const ownedItemIds = useritems.map((i) => i.itemId);
 
       // 1) Bound-objective sub-path (defeat_opponents | dialog | deliver_item).
-      const bound = findActionableBoundObjective({
-        activeQuests: getBoundObjectiveCandidates(activeUser),
+      const boundCandidates = getBoundObjectiveCandidates(activeUser);
+      const matchedBound = findActionableBoundObjective({
+        activeQuests: boundCandidates,
         ownedItemIds,
         placementId: placement.id,
       });
+      // Friendly-only objectives attached to a HOSTILE placement are malformed legacy content;
+      // ignore them so they cannot make the ordinary hostile fight unreachable.
+      const bound =
+        matchedBound &&
+        (placement.interactionType === "FRIENDLY" ||
+          matchedBound.objective.task === "defeat_opponents")
+          ? matchedBound
+          : null;
 
       if (bound) {
         // Defeat target: start a battle vs the placement's AI. The win is recorded by
@@ -418,6 +505,21 @@ export const overworldAiRouter = createTRPCRouter({
           : errorResponse(battle.message);
       }
 
+      // A reachable delivery with missing items is still the intended interaction. Detect it
+      // before the quest-giver fallback so clicking "Deliver" cannot spend a mission roll or
+      // grant an unrelated quest merely because the possession-aware matcher skipped it.
+      const missingDelivery = findActionableBoundObjective({
+        activeQuests: boundCandidates,
+        ownedItemIds,
+        placementId: placement.id,
+        ignoreItemOwnership: true,
+      });
+      if (missingDelivery?.objective.task === "deliver_item") {
+        const source = missingDelivery.objective.source;
+        const itemName = "item_name" in source ? source.item_name : "the required item";
+        return errorResponse(`You don't have ${itemName} to deliver.`);
+      }
+
       // 3) Quest-giver sub-path: only reached when no bound objective is actionable.
       // Each pool row carries its own per-quest grant chance.
       const poolQuestIds = placement.questPool.map((p) => p.questId);
@@ -448,7 +550,13 @@ export const overworldAiRouter = createTRPCRouter({
       const attemptByQuest = new Map(
         attemptRows.map((r) => [r.questId, r.lastAttemptAt]),
       );
+      const historyByQuest = new Map(prevByQuest.map((r) => [r.questId, r]));
       const questsById = new Map(pool.map((q) => [q.id, q]));
+      const activeWars =
+        activeUser.villageId && pool.some((q) => q.questType === "war")
+          ? await fetchActiveWars(ctx.drizzle, activeUser.villageId)
+          : [];
+      const allowedRanks = availableQuestLetterRanks(activeUser.rank);
 
       // Build the eligible pool, keeping each entry's chance. isAvailableUserQuests now
       // includes the per-period cap, so period-capped quests drop out here automatically.
@@ -461,9 +569,17 @@ export const overworldAiRouter = createTRPCRouter({
           // with one throws and strands the claimed slot), plus occupation/structure-gated types
           // (hunting/gathering/anbu/story/event) whose UI gate the overworld path can't enforce.
           if (!OVERWORLD_ASSIGNABLE_QUEST_TYPES.includes(q.questType)) return null;
-          const prev = prevByQuest.find((ph) => ph.questId === q.id);
+          const prev = historyByQuest.get(q.id);
+          const warEligible =
+            q.questType !== "war" ||
+            (!!activeUser.villageId &&
+              activeUser.dailyWarMissions < WAR_MISSIONS_PER_DAY &&
+              activeWars.length > 0);
           const available =
             isAvailableUserQuests({ ...q, ...prev }, activeUser).check &&
+            allowedRanks.includes(q.questRank) &&
+            !(q.startsAt && q.startsAt > now.toISOString()) &&
+            warEligible &&
             !questTypeConcurrentBlockMessage(q, activeUser) &&
             !attemptCapReached(
               { attemptDelay: q.attemptDelay, lastAttemptAt: attemptByQuest.get(q.id) },

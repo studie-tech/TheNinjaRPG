@@ -513,43 +513,46 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
           </div>
         )}
         {/* Dialog options */}
-        {activeObjective?.task === "dialog" && (
-          <div className="w-full">
-            <h2 className="flex items-center pl-2 font-bold text-lg">
-              Dialog Options
-              {isCheckingRewards && (
-                <Loader2
-                  className="ml-2 inline h-4 w-4 shrink-0 animate-spin"
-                  aria-label="Loading"
-                />
-              )}
-            </h2>
-            <div className="pointer-events-auto flex w-full flex-wrap gap-1 px-2 pb-1">
-              {!isCheckingRewards &&
-                activeObjective.nextObjectiveId.map((entry, idx) => (
-                  <div key={`${idx}-${entry.text}`} className="flex justify-end">
-                    <button
-                      type="button"
-                      className="max-w-full cursor-pointer break-words rounded-lg border-2 bg-popover px-2 py-1 text-right text-xs shadow-lg hover:bg-poppopover sm:text-sm"
-                      onClick={() =>
-                        checkRewards({
-                          questId: quest.id,
-                          // A terminal branch has no follow-up objective; send an objective-scoped
-                          // sentinel so the server completes this dialog objective instead of
-                          // re-opening the same dialog.
-                          nextObjectiveId:
-                            entry.nextObjectiveId ??
-                            `${TERMINAL_DIALOG_PREFIX}${activeObjective.id}`,
-                        })
-                      }
-                    >
-                      {entry.text}
-                    </button>
-                  </div>
-                ))}
+        {activeObjective?.task === "dialog" &&
+          // Placement-bound dialog choices are only actionable at their NPC. The Sector dialog
+          // renders them after the server verifies the player's authoritative placement tile.
+          !activeObjective.overworldPlacementId && (
+            <div className="w-full">
+              <h2 className="flex items-center pl-2 font-bold text-lg">
+                Dialog Options
+                {isCheckingRewards && (
+                  <Loader2
+                    className="ml-2 inline h-4 w-4 shrink-0 animate-spin"
+                    aria-label="Loading"
+                  />
+                )}
+              </h2>
+              <div className="pointer-events-auto flex w-full flex-wrap gap-1 px-2 pb-1">
+                {!isCheckingRewards &&
+                  activeObjective.nextObjectiveId.map((entry, idx) => (
+                    <div key={`${idx}-${entry.text}`} className="flex justify-end">
+                      <button
+                        type="button"
+                        className="max-w-full cursor-pointer break-words rounded-lg border-2 bg-popover px-2 py-1 text-right text-xs shadow-lg hover:bg-poppopover sm:text-sm"
+                        onClick={() =>
+                          checkRewards({
+                            questId: quest.id,
+                            // A terminal branch has no follow-up objective; send an objective-scoped
+                            // sentinel so the server completes this dialog objective instead of
+                            // re-opening the same dialog.
+                            nextObjectiveId:
+                              entry.nextObjectiveId ??
+                              `${TERMINAL_DIALOG_PREFIX}${activeObjective.id}`,
+                          })
+                        }
+                      >
+                        {entry.text}
+                      </button>
+                    </div>
+                  ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {quest.content.objectives && (
           <div

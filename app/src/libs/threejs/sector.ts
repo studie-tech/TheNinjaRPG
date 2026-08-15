@@ -148,7 +148,7 @@ export interface WindowNav {
 export const buildWindowNav = (
   entries: WindowNavEntry[],
   hexsize: number,
-  terrainRegistry: Map<string, TerrainSpec>,
+  _terrainRegistry: Map<string, TerrainSpec>,
 ): WindowNav | null => {
   const first = entries[0]?.map;
   if (!first) return null;
@@ -1423,6 +1423,7 @@ export const intersectUsers = (info: {
     const userHex = userMesh.userData.tile as TerrainHex;
     const locationUsers = users.filter(
       (g) =>
+        !g.isNpc &&
         g.latitude === userHex.row &&
         g.longitude === userHex.col &&
         g.userId !== userData.userId,

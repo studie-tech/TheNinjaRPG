@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isObjectiveLocationSatisfied } from "@/libs/quest";
-import { DeliverItem } from "@/validators/objectives";
+import { DeliverItem, SimpleObjective } from "@/validators/objectives";
 
 // The player has been validated server-side as standing on the NPC placement's
 // CURRENT tile. The objective's own coordinates were baked in at quest-save time
@@ -78,5 +78,17 @@ describe("isObjectiveLocationSatisfied", () => {
       item_name: "Secret scroll",
     });
     expect(isObjectiveLocationSatisfied(onNpcTile, unbound)).toBe(false);
+  });
+
+  it("ignores malformed legacy bindings on unsupported tasks", () => {
+    const unsupported = SimpleObjective.parse({
+      id: "legacy",
+      task: "pvp_kills",
+      overworldPlacementId: "p1",
+      sector: 1,
+      longitude: 1,
+      latitude: 1,
+    });
+    expect(isObjectiveLocationSatisfied(onNpcTile, unsupported)).toBe(true);
   });
 });

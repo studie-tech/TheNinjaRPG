@@ -6,7 +6,8 @@ import {
   isBoundPlacementFrozen,
 } from "@/libs/quest";
 
-const obj = (id?: string) => ({ overworldPlacementId: id } as never);
+const obj = (id?: string) =>
+  ({ task: "dialog", overworldPlacementId: id } as never);
 
 describe("isBoundPlacementDeleted", () => {
   it("returns true when the bound placement is absent from existing (hard-deleted)", () => {
@@ -67,7 +68,7 @@ const boundObjective = (
 ) =>
   ({
     id,
-    task: "collect_item" as const,
+    task: "dialog" as const,
     description: "",
     successDescription: "",
     ...(next ? { nextObjectiveId: next } : {}),

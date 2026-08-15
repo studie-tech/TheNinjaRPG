@@ -8,8 +8,8 @@ describe("periodCapReached", () => {
   it("none → never capped", () => {
     expect(periodCapReached({ retryDelay: "none", maxCompletes: 1, periodCompletes: 99, periodStartAt: NOW }, NOW)).toBe(false);
   });
-  it("maxCompletes<=0 → uncapped", () => {
-    expect(periodCapReached({ retryDelay: "weekly", maxCompletes: 0, periodCompletes: 5, periodStartAt: NOW }, NOW)).toBe(false);
+  it("maxCompletes<=0 with a real retry period fails closed", () => {
+    expect(periodCapReached({ retryDelay: "weekly", maxCompletes: 0, periodCompletes: 5, periodStartAt: NOW }, NOW)).toBe(true);
   });
   it("weekly, completes in current period >= max → capped", () => {
     expect(periodCapReached({ retryDelay: "weekly", maxCompletes: 1, periodCompletes: 1, periodStartAt: new Date("2026-06-15T00:00:00Z") }, NOW)).toBe(true);

@@ -40,7 +40,11 @@ import Modal2 from "@/layout/Modal2";
 import RichInput from "@/layout/RichInput";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import Table from "@/layout/Table";
-import { FRIENDLY_INTERACTION_TASKS, placementsForObjective } from "@/libs/overworldAi";
+import {
+  FRIENDLY_INTERACTION_TASKS,
+  isSupportedOverworldBindingTask,
+  placementsForObjective,
+} from "@/libs/overworldAi";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
@@ -2152,6 +2156,14 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
       return (
         !RaidTasks.includes(watchTask as RaidTask) ||
         !["longitude", "latitude"].includes(value)
+      );
+    })
+    .filter((value) => {
+      // The field is part of the shared base schema, but only these tasks have defined
+      // overworld interaction semantics. Hiding it prevents invalid content at the source;
+      // server save validation is the authoritative backstop.
+      return (
+        value !== "overworldPlacementId" || isSupportedOverworldBindingTask(watchTask)
       );
     })
     .filter((value) => {

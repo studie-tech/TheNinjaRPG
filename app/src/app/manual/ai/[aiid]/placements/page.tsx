@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Copy, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import { type Control, useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -44,11 +44,12 @@ export default function ManualAiPlacements(props: {
   const aiId = params.aiid;
   const router = useRouter();
   const { data: userData } = useRequiredUserData();
+  const canManagePlacements = !!userData && canChangeContent(userData.role);
 
   // Queries
   const { data: placements, isPending } = api.overworldAi.getPlacementsForAi.useQuery(
     { aiTemplateUserId: aiId },
-    { enabled: !!aiId },
+    { enabled: !!aiId && canManagePlacements },
   );
 
   // Redirect to profile if not content or admin
@@ -56,10 +57,10 @@ export default function ManualAiPlacements(props: {
     if (userData && !canChangeContent(userData.role)) {
       router.push("/profile");
     }
-  }, [userData]);
+  }, [router, userData]);
 
   // Prevent unauthorized access
-  if (isPending || !userData || !canChangeContent(userData.role)) {
+  if (!userData || !canManagePlacements || isPending) {
     return <Loader explanation="Loading data" />;
   }
 
@@ -103,6 +104,13 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
     defaultValues: defaultFormValues(aiId),
   });
 
+  const resetEditor = useCallback(() => {
+    setEditingId(undefined);
+    form.reset(defaultFormValues(aiId));
+    setQuestSearch("");
+    setSectorInput("");
+  }, [aiId, form]);
+
   // Watched fields for conditional rendering — all hooks before any early returns
   const interactionType = useWatch({
     control: form.control,
@@ -139,10 +147,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
           await utils.overworldAi.getPlacementsForAi.invalidate({
             aiTemplateUserId: aiId,
           });
-          setEditingId(undefined);
-          form.reset(defaultFormValues(aiId));
-          setQuestSearch("");
-          setSectorInput("");
+          resetEditor();
         }
       },
     });
@@ -156,10 +161,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
           await utils.overworldAi.getPlacementsForAi.invalidate({
             aiTemplateUserId: aiId,
           });
-          setEditingId(undefined);
-          form.reset(defaultFormValues(aiId));
-          setQuestSearch("");
-          setSectorInput("");
+          resetEditor();
         }
       },
     });
@@ -190,10 +192,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
   };
 
   const onCancelEdit = () => {
-    setEditingId(undefined);
-    form.reset(defaultFormValues(aiId));
-    setQuestSearch("");
-    setSectorInput("");
+    resetEditor();
   };
 
   const addQuestId = (questId: string) => {
