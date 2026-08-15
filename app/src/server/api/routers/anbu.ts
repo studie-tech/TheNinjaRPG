@@ -1,5 +1,5 @@
 import type { inferRouterOutputs } from "@trpc/server";
-import { and, eq, gt, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, exists, gt, gte, isNull, lt, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -1007,17 +1007,16 @@ export const promoteAnbuLeader = async (
   expectedLeaderId: string | null,
 ) => {
   const expectedLeader = expectedLeaderId
-    ? sql`squad.leaderId = ${expectedLeaderId}`
-    : sql`squad.leaderId IS NULL`;
-  const result = await client.execute(sql`
-    UPDATE ${anbuSquad} AS squad
-    INNER JOIN ${userData} AS member
-      ON member.userId = ${memberId}
-      AND member.anbuId = squad.id
-    SET squad.leaderId = ${memberId}
-    WHERE squad.id = ${squadId}
-      AND ${expectedLeader}
-  `);
+    ? eq(anbuSquad.leaderId, expectedLeaderId)
+    : isNull(anbuSquad.leaderId);
+  const liveMembership = client
+    .select({ userId: userData.userId })
+    .from(userData)
+    .where(and(eq(userData.userId, memberId), eq(userData.anbuId, squadId)));
+  const result = await client
+    .update(anbuSquad)
+    .set({ leaderId: memberId })
+    .where(and(eq(anbuSquad.id, squadId), expectedLeader, exists(liveMembership)));
   return result.rowsAffected === 1;
 };
 
