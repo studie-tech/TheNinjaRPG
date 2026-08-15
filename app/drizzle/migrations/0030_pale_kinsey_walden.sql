@@ -47,12 +47,12 @@ SET `retryDelay` = 'none'
 WHERE `retryDelay` <> 'none' AND `maxCompletes` <= 1;
 
 -- Existing repeatable quests used the old "one completion, then wait" behavior. If their last
--- completion falls in the current UTC calendar period, seed one spent completion so deployment
--- cannot immediately grant an extra attempt merely because the new columns start at zero.
+-- completion falls in the current UTC calendar period, consume the new period allowance so
+-- deployment cannot immediately grant extra attempts merely because the new columns start at zero.
 UPDATE `QuestHistory` AS `qh`
 INNER JOIN `Quest` AS `q` ON `q`.`id` = `qh`.`questId`
 SET
-	`qh`.`periodCompletes` = 1,
+	`qh`.`periodCompletes` = `q`.`maxCompletes`,
 	`qh`.`periodStartAt` = CASE `q`.`retryDelay`
 		WHEN 'daily' THEN UTC_DATE()
 		WHEN 'weekly' THEN DATE_SUB(UTC_DATE(), INTERVAL WEEKDAY(UTC_DATE()) DAY)

@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { DMG_SETTING_DEFAULTS, DMG_SETTING_NAMES } from "@/drizzle/constants";
 import type { GameSetting } from "@/drizzle/schema";
@@ -82,8 +82,8 @@ export const lockWithGameTimer = async (
 /**
  * Locks the game with a hourly timer.
  *
- * @param client
- * @param name
+ * @param client - Database client used for the compare-and-swap update.
+ * @param name - Stable game-setting name identifying the daily timer.
  * @returns
  */
 export const lockWithHourlyTimer = async (client: DrizzleClient, name: string) => {
@@ -130,26 +130,28 @@ export const lockWithMinuteTimer = async (client: DrizzleClient, name: string) =
 };
 
 /**
- * Locks the game with a daily timer.
+ * Atomically claims a named timer once per UTC calendar day.
  *
  * @param client
  * @param name
- * @returns
+ * @returns The claim result, previous timestamp, and locked response.
  */
 export const lockWithDailyTimer = async (client: DrizzleClient, name: string) => {
   const timer = await getGameSetting(client, name);
   const prevTime = timer.time;
   const now = new Date();
-  const isNewDay =
+  const isDifferentDay =
     now.getUTCFullYear() !== prevTime.getUTCFullYear() ||
     now.getUTCMonth() !== prevTime.getUTCMonth() ||
     now.getUTCDate() !== prevTime.getUTCDate();
-  let response: string | null = null;
-  if (!isNewDay) {
-    response = "Wait until the next day to run this again";
-  } else {
-    await updateGameSetting(client, name, 0, now);
-  }
+  const claim = isDifferentDay
+    ? await client
+        .update(gameSetting)
+        .set({ value: 0, time: now })
+        .where(and(eq(gameSetting.id, timer.id), eq(gameSetting.time, prevTime)))
+    : undefined;
+  const isNewDay = claim?.rowsAffected === 1;
+  const response = isNewDay ? null : "Wait until the next day to run this again";
   return { isNewDay, prevTime, response: Response.json(response, { status: 200 }) };
 };
 
