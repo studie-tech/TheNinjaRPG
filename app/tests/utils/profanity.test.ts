@@ -24,8 +24,8 @@ describe("checkForBadWords", () => {
     await expectFlagged("faggoty", "faggoty");
   });
 
-  it.each(["alligator bait", "alligator-bait"])(
-    "flags offensive phrases joined by spaces or hyphens: %s",
+  it.each(["alligator bait", "alligator-bait", "alligator&nbsp;bait"])(
+    "flags offensive phrases joined by spaces, hyphens, or entity spaces: %s",
     async (content) => {
       await expectFlagged(content, "alligator bait");
     },

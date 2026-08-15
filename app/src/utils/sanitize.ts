@@ -99,7 +99,10 @@ const htmlToText = (html: string, breakText: string, collapse: RegExp) => {
     },
   });
 
-  return decodeHTML(text).replace(collapse, " ").trim();
+  return decodeHTML(text)
+    .replace(/\r\n?/g, "\n")
+    .replace(collapse, " ")
+    .trim();
 };
 
 /** Converts stored HTML to normalized text without retaining script/style contents. */
@@ -107,7 +110,7 @@ export const htmlToPlainText = (html: string) => htmlToText(html, " ", /\s+/g);
 
 /** Visible text for moderation: inline tags vanish, block/br stay as line breaks. */
 export const htmlToModerationText = (html: string) =>
-  htmlToText(html, "\n", /[ \t]+/g);
+  htmlToText(html, "\n", /[^\S\n]+/g);
 
 /**
  * Strict sanitizer for variant description/battleDescription fields.
