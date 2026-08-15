@@ -2,7 +2,7 @@
 
 import { and, eq, isNull, or } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { anbuSquad, userRequest } from "@/drizzle/schema";
+import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
 
 type AnbuTestGlobals = {
   pusherTrigger: ReturnType<typeof vi.fn>;
@@ -22,8 +22,8 @@ function getAnbuTestMocks(): AnbuTestGlobals {
       meta: vi.fn().mockReturnThis(),
       input: vi.fn().mockReturnThis(),
       output: vi.fn().mockReturnThis(),
-      query: vi.fn().mockReturnThis(),
-      mutation: vi.fn().mockReturnThis(),
+      query: vi.fn((handler: unknown) => handler),
+      mutation: vi.fn((handler: unknown) => handler),
     };
     g.__anbuTestMocks = {
       pusherTrigger: vi.fn(),
@@ -73,10 +73,15 @@ vi.mock("@/routers/sparring", () => ({
 }));
 
 import {
+  anbuRouter,
   fetchSquadForAnbuRequest,
   isAnbuRequestForSquad,
+  promoteAnbuLeader,
   reassignPendingAnbuRequestsOnPromotion,
+  removeFromSquad,
 } from "@/routers/anbu";
+import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import { fetchRequest, fetchRequests, insertRequest } from "@/routers/sparring";
 
 /** Stable string form of a drizzle SQL predicate for assertion (cols + params). */
 function describeSql(node: unknown): string {
@@ -257,5 +262,290 @@ describe("ANBU request squad identity", () => {
     expect(set).not.toHaveBeenCalledWith(
       expect.objectContaining({ receiverId: expect.anything() }),
     );
+  });
+});
+
+type RouterHandler = (args: {
+  ctx: { drizzle: unknown; userId: string };
+  input: unknown;
+}) => Promise<{ success?: boolean; message?: string } | unknown[]>;
+
+const handlers = anbuRouter as unknown as Record<string, RouterHandler>;
+
+const makeUser = (overrides: Record<string, unknown> = {}) => ({
+  userId: "actor",
+  username: "Actor",
+  villageId: "village-1",
+  village: { id: "village-1", kageId: "kage" },
+  anbuId: null,
+  rank: "JONIN",
+  role: "USER",
+  ...overrides,
+});
+
+const makeSquad = (overrides: Record<string, unknown> = {}) => ({
+  id: "squad-1",
+  villageId: "village-1",
+  leaderId: "leader",
+  memberCount: 1,
+  members: [],
+  ...overrides,
+});
+
+type UpdateRecord = { table: unknown; values: unknown; predicate: unknown };
+
+function makeDrizzleMock(
+  squad: ReturnType<typeof makeSquad>,
+  results: Array<[unknown, Array<{ rowsAffected: number }>]>,
+  members: Array<{ userId: string; rank: string }> = [],
+) {
+  const queues = new Map(results);
+  const updates: UpdateRecord[] = [];
+  const update = vi.fn((table: unknown) => ({
+    set: vi.fn((values: unknown) => ({
+      where: vi.fn(async (predicate: unknown) => {
+        updates.push({ table, values, predicate });
+        return queues.get(table)?.shift() ?? { rowsAffected: 1 };
+      }),
+    })),
+  }));
+  const execute = vi.fn().mockResolvedValue({ rowsAffected: 1 });
+  return {
+    client: {
+      query: {
+        anbuSquad: { findFirst: vi.fn().mockResolvedValue(squad) },
+        userData: { findMany: vi.fn().mockResolvedValue(members) },
+      },
+      update,
+      execute,
+    },
+    updates,
+    update,
+    execute,
+  };
+}
+
+describe("ANBU router request permissions and concurrency", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns durable squad requests to leaders and only scoped own requests to applicants", async () => {
+    const squad = makeSquad({ leaderId: "actor" });
+    const { client } = makeDrizzleMock(squad, []);
+    const ownForThisSquad = {
+      id: "own-1",
+      senderId: "applicant",
+      receiverId: "old-leader",
+      relatedId: "squad-1",
+      status: "PENDING",
+    };
+    const ownForOtherSquad = {
+      ...ownForThisSquad,
+      id: "own-2",
+      relatedId: "squad-2",
+    };
+    const squadRequest = { ...ownForThisSquad, id: "managed-1" };
+    vi.mocked(fetchRequests).mockImplementation(
+      async (_client, _types, _seconds, id, relatedId) =>
+        (relatedId
+          ? [squadRequest]
+          : id
+            ? [ownForThisSquad, ownForOtherSquad]
+            : []) as never,
+    );
+
+    vi.mocked(fetchUpdatedUser).mockResolvedValueOnce({
+      user: makeUser({ anbuId: "squad-1" }),
+    } as never);
+    await expect(
+      handlers.getRequests?.({
+        ctx: { drizzle: client, userId: "actor" },
+        input: { squadId: "squad-1" },
+      }),
+    ).resolves.toEqual([squadRequest]);
+
+    vi.mocked(fetchUpdatedUser).mockResolvedValueOnce({
+      user: makeUser({ userId: "applicant" }),
+    } as never);
+    await expect(
+      handlers.getRequests?.({
+        ctx: { drizzle: client, userId: "applicant" },
+        input: { squadId: "squad-1" },
+      }),
+    ).resolves.toEqual([ownForThisSquad]);
+  });
+
+  it("returns no squad requests to an ordinary member", async () => {
+    const squad = makeSquad();
+    const { client } = makeDrizzleMock(squad, []);
+    vi.mocked(fetchUpdatedUser).mockResolvedValue({
+      user: makeUser({ anbuId: "squad-1" }),
+    } as never);
+    vi.mocked(fetchRequests).mockResolvedValue([] as never);
+
+    await expect(
+      handlers.getRequests?.({
+        ctx: { drizzle: client, userId: "actor" },
+        input: { squadId: "squad-1" },
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it("blocks duplicate pending requests before insert", async () => {
+    const squad = makeSquad();
+    const { client } = makeDrizzleMock(squad, []);
+    vi.mocked(fetchUpdatedUser).mockResolvedValue({ user: makeUser() } as never);
+    vi.mocked(fetchRequests).mockResolvedValue([
+      { senderId: "actor", status: "PENDING" },
+    ] as never);
+
+    await expect(
+      handlers.createRequest?.({
+        ctx: { drizzle: client, userId: "actor" },
+        input: { squadId: "squad-1" },
+      }),
+    ).resolves.toEqual({
+      success: false,
+      message: "You already have a pending ANBU request",
+    });
+    expect(insertRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects a kage from a different village before any write", async () => {
+    const squad = makeSquad();
+    const { client, update } = makeDrizzleMock(squad, []);
+    vi.mocked(fetchRequest).mockResolvedValue({
+      id: "request-1",
+      senderId: "requester",
+      receiverId: "leader",
+      relatedId: "squad-1",
+      status: "PENDING",
+    } as never);
+    vi.mocked(fetchUpdatedUser).mockResolvedValue({
+      user: makeUser({
+        villageId: "village-2",
+        village: { id: "village-2", kageId: "actor" },
+      }),
+    } as never);
+    vi.mocked(fetchUser).mockResolvedValue(
+      makeUser({ userId: "requester", villageId: "village-1" }) as never,
+    );
+
+    await expect(
+      handlers.acceptRequest?.({
+        ctx: { drizzle: client, userId: "actor" },
+        input: { id: "request-1" },
+      }),
+    ).resolves.toEqual({ success: false, message: "Not allowed" });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("rolls back the request claim when the atomic capacity claim loses", async () => {
+    const squad = makeSquad({ leaderId: "actor", memberCount: 3 });
+    const { client, updates } = makeDrizzleMock(squad, [
+      [userRequest, [{ rowsAffected: 1 }, { rowsAffected: 1 }]],
+      [anbuSquad, [{ rowsAffected: 0 }]],
+    ]);
+    vi.mocked(fetchRequest).mockResolvedValue({
+      id: "request-1",
+      senderId: "requester",
+      receiverId: "actor",
+      relatedId: "squad-1",
+      status: "PENDING",
+    } as never);
+    vi.mocked(fetchUpdatedUser).mockResolvedValue({
+      user: makeUser({ anbuId: "squad-1" }),
+    } as never);
+    vi.mocked(fetchUser).mockResolvedValue(
+      makeUser({ userId: "requester", villageId: "village-1" }) as never,
+    );
+
+    await expect(
+      handlers.acceptRequest?.({
+        ctx: { drizzle: client, userId: "actor" },
+        input: { id: "request-1" },
+      }),
+    ).resolves.toEqual({ success: false, message: "Squad is full" });
+    expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(2);
+    expect(updates.some((entry) => entry.table === userData)).toBe(false);
+  });
+
+  it("does not reassign leaderless requests when another leader claim wins", async () => {
+    const squad = makeSquad({ leaderId: null, memberCount: 0 });
+    const { client, updates } = makeDrizzleMock(squad, [
+      [userRequest, [{ rowsAffected: 1 }]],
+      [anbuSquad, [{ rowsAffected: 1 }, { rowsAffected: 0 }]],
+      [userData, [{ rowsAffected: 1 }]],
+    ]);
+    vi.mocked(fetchRequest).mockResolvedValue({
+      id: "request-1",
+      senderId: "requester",
+      receiverId: "actor",
+      relatedId: "squad-1",
+      status: "PENDING",
+    } as never);
+    vi.mocked(fetchUpdatedUser).mockResolvedValue({
+      user: makeUser({ village: { id: "village-1", kageId: "actor" } }),
+    } as never);
+    vi.mocked(fetchUser).mockResolvedValue(
+      makeUser({ userId: "requester", rank: "JONIN" }) as never,
+    );
+
+    await expect(
+      handlers.acceptRequest?.({
+        ctx: { drizzle: client, userId: "actor" },
+        input: { id: "request-1" },
+      }),
+    ).resolves.toEqual({ success: true, message: "Request accepted" });
+    expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(1);
+  });
+});
+
+describe("ANBU membership invariants", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("atomically refuses to remove the last member", async () => {
+    const squad = makeSquad({ leaderId: "member-1", memberCount: 1 });
+    const { client, updates } = makeDrizzleMock(squad, [
+      [anbuSquad, [{ rowsAffected: 0 }]],
+    ]);
+
+    await expect(removeFromSquad(client as never, squad as never, "member-1")).resolves.toBe(
+      false,
+    );
+    expect(updates.some((entry) => entry.table === userData)).toBe(false);
+  });
+
+  it("elects only a live eligible member after the leader leaves", async () => {
+    const squad = makeSquad({ leaderId: "leader", memberCount: 2 });
+    const { client, execute } = makeDrizzleMock(
+      squad,
+      [
+        [anbuSquad, [{ rowsAffected: 1 }, { rowsAffected: 1 }]],
+        [userData, [{ rowsAffected: 1 }]],
+        [userRequest, [{ rowsAffected: 1 }]],
+      ],
+      [{ userId: "successor", rank: "JONIN" }],
+    );
+
+    await expect(removeFromSquad(client as never, squad as never, "leader")).resolves.toBe(
+      true,
+    );
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses a membership join and outgoing-leader CAS for promotion", async () => {
+    const { client, execute } = makeDrizzleMock(makeSquad(), []);
+    execute.mockResolvedValueOnce({ rowsAffected: 1 });
+
+    await expect(
+      promoteAnbuLeader(client as never, "squad-1", "successor", "leader"),
+    ).resolves.toBe(true);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(describeSql(execute.mock.calls[0]?.[0])).toContain("member.anbuId");
+    expect(describeSql(execute.mock.calls[0]?.[0])).toContain("leader");
   });
 });

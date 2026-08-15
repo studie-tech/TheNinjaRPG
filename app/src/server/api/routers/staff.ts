@@ -11,6 +11,7 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import {
   actionLog,
   aiProfile,
+  anbuSquad,
   automatedModeration,
   bankTransfers,
   bloodlineRolls,
@@ -559,6 +560,24 @@ export const staffRouter = createTRPCRouter({
         ctx.drizzle
           .delete(rankedUserRewards)
           .where(eq(rankedUserRewards.userId, user.userId)),
+        ...(user.anbuId !== target.anbuId && user.anbuId
+          ? [
+              ctx.drizzle
+                .update(anbuSquad)
+                .set({
+                  memberCount: sql`GREATEST(${anbuSquad.memberCount} - 1, 0)`,
+                })
+                .where(eq(anbuSquad.id, user.anbuId)),
+            ]
+          : []),
+        ...(user.anbuId !== target.anbuId && target.anbuId
+          ? [
+              ctx.drizzle
+                .update(anbuSquad)
+                .set({ memberCount: sql`${anbuSquad.memberCount} + 1` })
+                .where(eq(anbuSquad.id, target.anbuId)),
+            ]
+          : []),
         ctx.drizzle
           .update(userData)
           .set({

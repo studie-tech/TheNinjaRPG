@@ -769,46 +769,50 @@ const AnbuRequests: React.FC<AnbuRequestsProps> = (props) => {
   // Get utils
   const utils = api.useUtils();
 
+  const canManageRequests = isLeader || isKage || isElder || canStaffEdit;
+  // Kage/elder cannot join (blocked server-side). Cross-village viewers cannot
+  // join either, while leaderless squads remain joinable by eligible villagers.
+  const canJoinSquad = !isKage && !isElder && sameVillage;
+  const shouldFetch = canManageRequests || (!userAnbu && canJoinSquad);
+
   // Query
   const { data: requests } = api.anbu.getRequests.useQuery(
     { squadId },
     {
-      enabled: !!squadId,
+      enabled: !!squadId && shouldFetch,
       staleTime: 5000,
     },
   );
 
   // How to deal with success responses
-  const onSuccess = async (data: BaseServerResponse) => {
+  const onSuccess = (refreshSquad: boolean) => async (data: BaseServerResponse) => {
     showMutationToast(data);
     if (data.success) {
-      await utils.anbu.get.invalidate();
-      await utils.anbu.getRequests.invalidate();
+      await Promise.all([
+        utils.anbu.getRequests.invalidate(),
+        ...(refreshSquad ? [utils.anbu.get.invalidate()] : []),
+      ]);
     }
   };
 
   // Mutation
   const { mutate: create, isPending: isCreating } = api.anbu.createRequest.useMutation({
-    onSuccess,
+    onSuccess: onSuccess(false),
   });
   const { mutate: accept, isPending: isAccepting } = api.anbu.acceptRequest.useMutation(
-    { onSuccess },
+    { onSuccess: onSuccess(true) },
   );
   const { mutate: reject, isPending: isRejecting } = api.anbu.rejectRequest.useMutation(
-    { onSuccess },
+    { onSuccess: onSuccess(false) },
   );
   const { mutate: cancel, isPending: isCancelling } =
-    api.anbu.cancelRequest.useMutation({ onSuccess });
+    api.anbu.cancelRequest.useMutation({ onSuccess: onSuccess(false) });
 
   // Loaders
+  if (!shouldFetch) return null;
   if (!requests) return <Loader explanation="Loading requests" />;
 
   // Derived
-  const canManageRequests = isLeader || isKage || isElder || canStaffEdit;
-  // Kage/elder cannot join (blocked server-side); leaders are always in a squad.
-  // Cross-village viewers (e.g. staff) also cannot join. Leaderless squads stay
-  // joinable — kage/elder/staff can accept via relatedId.
-  const canJoinSquad = !isKage && !isElder && sameVillage;
   const hasPending = requests?.some((req) => req.status === "PENDING");
   const showRequestSystem =
     (canManageRequests && requests.length > 0) || (!userAnbu && canJoinSquad);

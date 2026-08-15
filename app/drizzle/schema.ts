@@ -181,6 +181,7 @@ export const anbuSquad = mysqlTable(
     name: varchar("name", { length: 191 }).notNull(),
     leaderId: varchar("leaderId", { length: 191 }),
     villageId: varchar("villageId", { length: 191 }).notNull(),
+    memberCount: int("memberCount").default(0).notNull(),
     pvpActivity: int("pvpActivity").default(0).notNull(),
     kageOrderId: varchar("kageOrderId", { length: 191 }).notNull(),
     points: int("points").default(0).notNull(),
@@ -3834,6 +3835,15 @@ export const userRequest = mysqlTable(
     type: mysqlEnum("type", consts.UserRequestTypes).notNull(),
     value: int("value").default(0),
     relatedId: varchar("relatedId", { length: 191 }),
+    // MySQL unique indexes allow multiple NULLs, so this atomically limits a
+    // sender to one pending ANBU request while leaving every other request type
+    // and terminal ANBU request unrestricted.
+    pendingAnbuSenderId: varchar("pendingAnbuSenderId", {
+      length: 191,
+    }).generatedAlwaysAs(
+      sql`CASE WHEN \`type\` = 'ANBU' AND \`status\` = 'PENDING' THEN \`senderId\` ELSE NULL END`,
+      { mode: "stored" },
+    ),
     useRankedRules: boolean("useRankedRules").default(false),
     spectatable: boolean("spectatable").default(false),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
@@ -3846,6 +3856,9 @@ export const userRequest = mysqlTable(
       challengerIdIdx: index("UserRequest_senderId_idx").on(table.senderId),
       challengedIdIdx: index("UserRequest_receiverId_idx").on(table.receiverId),
       typeIdx: index("UserRequest_type_idx").on(table.type),
+      pendingAnbuSenderUnique: unique("UserRequest_pending_anbu_sender_unique").on(
+        table.pendingAnbuSenderId,
+      ),
     };
   },
 );

@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { and, eq, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import {
+  anbuSquad,
   automatedModeration,
   bankTransfers,
   battle,
@@ -342,6 +343,12 @@ export async function GET() {
     // Step 26: Update the population of each village
     await drizzleDB.execute(
       sql`UPDATE ${village} a SET a.populationCount = (SELECT COUNT(*) FROM ${userData} b WHERE b.villageId = a.id)`,
+    );
+
+    // Repair the ANBU capacity counter if a compensated multi-step membership
+    // change was interrupted between statements.
+    await drizzleDB.execute(
+      sql`UPDATE ${anbuSquad} a SET a.memberCount = (SELECT COUNT(*) FROM ${userData} b WHERE b.anbuId = a.id)`,
     );
 
     // Step 27: Clear old captcha checks
