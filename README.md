@@ -1,6 +1,5 @@
 # :tada: TheNinja-RPG - Core 4 :tada:
 
-
 This is the official source code for the game [www.TheNinja-RPG.com](www.TheNinja-RPG.com).
 
 # :computer: Setting up locally
