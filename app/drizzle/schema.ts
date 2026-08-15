@@ -3856,6 +3856,9 @@ export const userRequest = mysqlTable(
       challengerIdIdx: index("UserRequest_senderId_idx").on(table.senderId),
       challengedIdIdx: index("UserRequest_receiverId_idx").on(table.receiverId),
       typeIdx: index("UserRequest_type_idx").on(table.type),
+      relatedIdTypeCreatedAtIdx: index(
+        "UserRequest_relatedId_type_createdAt_idx",
+      ).on(table.relatedId, table.type, table.createdAt),
       pendingAnbuSenderUnique: unique("UserRequest_pending_anbu_sender_unique").on(
         table.pendingAnbuSenderId,
       ),

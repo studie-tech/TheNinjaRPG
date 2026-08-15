@@ -1,0 +1,1 @@
+CREATE INDEX `UserRequest_relatedId_type_createdAt_idx` ON `UserRequest` (`relatedId`,`type`,`createdAt`);
