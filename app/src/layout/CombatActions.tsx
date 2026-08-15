@@ -76,6 +76,13 @@ interface ActionSelectorProps extends ActionSelectorSettingsProps {
         quantity: number;
       }[]
     | null;
+  /** Ownership levels (e.g. item mastery) — rendered bottom-left with a red border. */
+  levels?:
+    | {
+        id: string;
+        level: number;
+      }[]
+    | null;
   renderItem?: (
     item: NonNullable<ActionSelectorProps["items"]>[number],
   ) => React.ReactNode;
@@ -83,7 +90,7 @@ interface ActionSelectorProps extends ActionSelectorSettingsProps {
 
 export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
   const { data: userData } = useUserData();
-  const { items, counts, renderItem, ...settings } = props;
+  const { items, counts, levels, renderItem, ...settings } = props;
   const { combatMode, selectedId, currentRound, userActionPoints, onClick } = props;
   const filtered = items?.filter(
     (i) => !i.hidden || (userData && canChangeContent(userData.role)),
@@ -202,6 +209,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
                     )}
                     isGreyed={isGreyed}
                     count={counts?.find((c) => c.id === item.id)?.quantity}
+                    level={levels?.find((l) => l.id === item.id)?.level}
                   />
                 )}
               </div>
@@ -223,6 +231,7 @@ interface ActionOptionProps {
   settings: ActionSelectorSettingsProps;
   className?: string;
   count?: number;
+  level?: number;
   isGreyed: boolean;
 }
 
@@ -309,10 +318,16 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
             onClick={handleClick}
           />
         )}
-        {/* Count overlay - bottom right corner */}
+        {/* Count overlay - bottom right corner (amber = stack / jutsu quantity) */}
         {props.count !== undefined && (settings.labelSingles || props.count > 1) && (
           <div className="absolute right-0 bottom-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 font-bold text-base text-black">
             {props.count}
+          </div>
+        )}
+        {/* Level overlay - bottom left corner (red border = ownership level) */}
+        {props.level !== undefined && (
+          <div className="absolute bottom-0 left-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-red-600 bg-slate-300 font-bold text-base text-black">
+            {props.level}
           </div>
         )}
         {/* Warning icon - top right corner */}

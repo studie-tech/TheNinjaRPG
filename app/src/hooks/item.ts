@@ -12,6 +12,7 @@ import {
 } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
+import { EVOLUTION_STAT_FORM_FIELDS } from "@/libs/evolution";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
 import type { ZodAllTags, ZodItemInput, ZodItemType } from "@/validators/combat";
@@ -106,6 +107,9 @@ export const useItemEditForm = (
     enabled: canBeCrafted as boolean | undefined,
   });
 
+  // All item names for evolution parent picker
+  const { data: allItemNames } = api.item.getAllNames.useQuery();
+
   // Query for bloodlines for bloodline requirement dropdown
   const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
 
@@ -137,6 +141,7 @@ export const useItemEditForm = (
     { id: "healthCost", type: "number" },
     { id: "maxEquips", type: "number" },
     { id: "requiredLevel", type: "number", label: "Required Level" },
+    { id: "xpToLevel", type: "number", label: "XP Per Level" },
     {
       id: "bloodlineId",
       type: "db_values",
@@ -144,6 +149,21 @@ export const useItemEditForm = (
       label: "Required Bloodline",
       resetButton: true,
     },
+    {
+      id: "parentItemId",
+      label: "Parent Item (Evolution)",
+      type: "db_values",
+      values: allItemNames?.filter((i) => i.id !== item.id),
+      resetButton: true,
+    },
+    ...EVOLUTION_STAT_FORM_FIELDS.map(
+      (field) =>
+        ({
+          id: field.id,
+          label: field.label,
+          type: "number",
+        }) as FormEntry<keyof ZodItemType>,
+    ),
     { id: "destroyOnUse", type: "boolean" },
     { id: "canStack", type: "boolean" },
     { id: "maxImbueNumber", type: "number" },

@@ -443,3 +443,56 @@ export const computeLoadoutAssignments = (
 
   return { assignments, invalidItems };
 };
+
+/** Gear that can meaningfully level — hide badges on consumables, mats, crystals, thrown. */
+export const showsItemLevelBadge = (item: {
+  itemType: string;
+  slot: string;
+}): boolean =>
+  item.itemType !== "CONSUMABLE" &&
+  item.itemType !== "MATERIAL" &&
+  item.itemType !== "CRYSTAL" &&
+  item.slot !== "THROWN";
+
+/** Crystal fields needed to decide if an imbuement can move onto another item. */
+export type ImbuementTransferCrystal = {
+  name: string;
+  crystalTargetTypes?: string | null;
+};
+
+export type ImbuementForTransfer = {
+  id: string;
+  item?: ImbuementTransferCrystal | null;
+};
+
+export type ImbuementTransferTarget = {
+  canBeImbued: boolean;
+  maxImbueNumber: number;
+  itemType: string;
+};
+
+/**
+ * Split imbuements into those that can stay on a target item vs those that must be removed
+ * (target cannot be imbued, crystal type mismatch, or over maxImbueNumber).
+ */
+export const partitionImbuementsForItemTransfer = (
+  imbuements: ImbuementForTransfer[],
+  target: ImbuementTransferTarget,
+): { keep: ImbuementForTransfer[]; remove: ImbuementForTransfer[] } => {
+  if (!target.canBeImbued || target.maxImbueNumber <= 0) {
+    return { keep: [], remove: [...imbuements] };
+  }
+  const keep: ImbuementForTransfer[] = [];
+  const remove: ImbuementForTransfer[] = [];
+  for (const imb of imbuements) {
+    const restrictedType = imb.item?.crystalTargetTypes;
+    const isCompatible =
+      !!imb.item && (!restrictedType || restrictedType === target.itemType);
+    if (isCompatible && keep.length < target.maxImbueNumber) {
+      keep.push(imb);
+    } else {
+      remove.push(imb);
+    }
+  }
+  return { keep, remove };
+};

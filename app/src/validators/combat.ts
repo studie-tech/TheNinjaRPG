@@ -8,6 +8,7 @@ import {
   ElementNames,
   GeneralTypes,
   getUserCaps,
+  ITEM_XP_TO_LEVEL,
   ItemRarities,
   ItemSlotTypes,
   ItemTypes,
@@ -1450,6 +1451,24 @@ export const ItemValidatorRawSchema = z.object({
   rarity: z.enum(ItemRarities),
   slot: z.enum(ItemSlotTypes),
   requiredLevel: z.coerce.number().int().min(1).max(100).prefault(1),
+  xpToLevel: z.coerce.number().int().min(1).max(100000).prefault(ITEM_XP_TO_LEVEL),
+  parentItemId: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((v) => (v === "" ? null : v) ?? null),
+  requiredNinjutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredNinjutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredGenjutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredGenjutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredTaijutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredTaijutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredBukijutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredBukijutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredStrength: makeCappedNullableNumber(MAX_GENS_CAP),
+  requiredSpeed: makeCappedNullableNumber(MAX_GENS_CAP),
+  requiredIntelligence: makeCappedNullableNumber(MAX_GENS_CAP),
+  requiredWillpower: makeCappedNullableNumber(MAX_GENS_CAP),
   expireFromStoreAt: z
     .string()
     .regex(DateTimeRegExp, "Must be of format YYYY-MM-DD")

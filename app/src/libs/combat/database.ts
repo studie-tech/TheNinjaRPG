@@ -4,6 +4,8 @@ import type { BattleDataEntryType, BattleTypes } from "@/drizzle/constants";
 import {
   HOSPITAL_LAT,
   HOSPITAL_LONG,
+  ITEM_LEVEL_CAP,
+  ITEM_XP_TO_LEVEL,
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_XP_TO_LEVEL,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
@@ -53,7 +55,7 @@ import {
   getRaidChatConversationId,
   prepareExclusiveRaidActivation,
 } from "@/libs/raids";
-import { battleJutsuExp } from "@/libs/train";
+import { battleItemExp, battleJutsuExp } from "@/libs/train";
 import { extendWarParticipantSql, findWarsWithUser } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
@@ -1335,6 +1337,24 @@ export const updateUser = async (
       result.eloDiff,
       curBattle.extraState.settings,
     );
+    // Equipped items gain XP from eligible PvP battles (win vs loss amounts + event multiplier)
+    const iExp = battleItemExp(
+      curBattle.battleType,
+      result.didWin > 0,
+      curBattle.extraState.settings,
+    );
+    // Group equipped items by their definition's xpToLevel for batched CAS updates
+    const equippedXpGroups = new Map<number, string[]>();
+    if (iExp > 0) {
+      for (const ui of user.items) {
+        if (ui.equipped === "NONE" || ui.quantity <= 0) continue;
+        const def = getItem(curBattle, ui.itemId);
+        const xpToLevel = def?.xpToLevel ?? ITEM_XP_TO_LEVEL;
+        const ids = equippedXpGroups.get(xpToLevel) ?? [];
+        ids.push(ui.id);
+        equippedXpGroups.set(xpToLevel, ids);
+      }
+    }
     // If new prestige goes below 0, set allyVillage to false
     if (user.villagePrestige + result.villagePrestige < 0) {
       user.allyVillage = false;
@@ -1426,6 +1446,33 @@ export const updateUser = async (
                 ),
               ),
           ]
+        : []),
+      // Item experience & level from PvP (equipped items only; per-item xpToLevel)
+      ...(iExp > 0
+        ? [...equippedXpGroups.entries()].flatMap(([xpToLevel, ids]) => [
+            client
+              .update(userItem)
+              .set({ experience: sql`${userItem.experience} + ${iExp}` })
+              .where(
+                and(
+                  eq(userItem.userId, user.userId),
+                  lt(userItem.experience, xpToLevel - iExp),
+                  lt(userItem.level, ITEM_LEVEL_CAP),
+                  inArray(userItem.id, ids),
+                ),
+              ),
+            client
+              .update(userItem)
+              .set({ level: sql`${userItem.level} + 1`, experience: 0 })
+              .where(
+                and(
+                  eq(userItem.userId, user.userId),
+                  lt(userItem.level, ITEM_LEVEL_CAP),
+                  gte(userItem.experience, xpToLevel - iExp),
+                  inArray(userItem.id, ids),
+                ),
+              ),
+          ])
         : []),
       // Update user data
       client

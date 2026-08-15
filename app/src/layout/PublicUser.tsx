@@ -71,6 +71,7 @@ import {
   type BattleType,
   BattleTypes,
   IMG_AVATAR_DEFAULT,
+  ITEM_LEVEL_CAP,
   RANKS_RESTRICTED_FROM_PVP,
   SEICHI_SILVER_ADJUST_LIMIT,
   TrainingSpeeds,
@@ -1164,6 +1165,9 @@ interface EditUserComponentProps {
 const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }) => {
   // State
   const [jutsu, setJutsu] = useState<Jutsu | undefined>(undefined);
+  const [selectedUserItemId, setSelectedUserItemId] = useState<string | undefined>(
+    undefined,
+  );
   const [showActive, setShowActive] = useState<string>("userData");
   const [selectedQuestType, setSelectedQuestType] = useState<string>("all");
   const now = new Date();
@@ -1256,6 +1260,23 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
     },
   });
 
+  // Staff item level editing
+  const { data: userItems } = api.item.getPublicUserItems.useQuery(
+    { userId },
+    { enabled: perms.canEditItems && !!userId },
+  );
+  const itemLevelForm = useForm<{ level: number }>({
+    defaultValues: { level: 1 },
+  });
+  const adjustItemLevel = api.item.adjustUserItem.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.item.getPublicUserItems.invalidate();
+      }
+    },
+  });
+
   // Query all reskins for selected jutsu
   const { data: jutsuReskins } = api.jutsu.getReskinsForJutsu.useQuery(
     { jutsuId: jutsu?.id || "" },
@@ -1278,6 +1299,23 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
   });
   const hasJutsus = perms.canEditJutsus && userJutsus && userJutsus.length > 0;
 
+  const selectedUserItem = userItems?.find((ui) => ui.id === selectedUserItemId);
+  const allOwnedItems = userItems?.map((ui) => ({
+    ...ui.item,
+    id: ui.id,
+    name:
+      ui.quantity > 1
+        ? `${ui.item.name} x${ui.quantity}`
+        : ui.equipped !== "NONE"
+          ? `${ui.item.name} [${ui.equipped}]`
+          : ui.item.name,
+  }));
+  const userItemCounts = userItems?.map((ui) => ({
+    id: ui.id,
+    quantity: ui.level,
+  }));
+  const hasItems = perms.canEditItems && userItems && userItems.length > 0;
+
   // Update jutsu form default values when selected jutsu changes
   useEffect(() => {
     if (userJutsu) {
@@ -1287,6 +1325,12 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
       });
     }
   }, [userJutsu, jutsuLevelForm]);
+
+  useEffect(() => {
+    if (selectedUserItem) {
+      itemLevelForm.reset({ level: selectedUserItem.level });
+    }
+  }, [selectedUserItem, itemLevelForm]);
 
   // Cases where we don't render anything
   if (!currentUser) return null;
@@ -1301,6 +1345,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
       <TabsList className="mt-3 text-center">
         <TabsTrigger value="userData">Main Data</TabsTrigger>
         {hasJutsus && <TabsTrigger value="jutsus">Jutsus Specifics</TabsTrigger>}
+        {hasItems && <TabsTrigger value="items">Items Specifics</TabsTrigger>}
         {perms.canEditQuests && <TabsTrigger value="quests">Quests</TabsTrigger>}
       </TabsList>
       <TabsContent value="userData">
@@ -1406,6 +1451,70 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
                           )}
                         />
                       )}
+                      <Button type="submit">Update</Button>
+                    </div>
+                  </form>
+                </Form>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+      )}
+      {hasItems && (
+        <TabsContent value="items">
+          <div className="mt-5">
+            <ActionSelector
+              items={allOwnedItems}
+              counts={userItemCounts}
+              selectedId={selectedUserItemId}
+              labelSingles={true}
+              emptyText="No items assigned to this user"
+              gridClassNameOverwrite="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12"
+              onClick={(id) => {
+                setSelectedUserItemId(id === selectedUserItemId ? undefined : id);
+              }}
+              showBgColor={false}
+              showLabels={true}
+            />
+          </div>
+          {selectedUserItem && (
+            <div className="mt-4 flex items-center justify-center gap-4">
+              <div className="flex items-center gap-2">
+                <Form {...itemLevelForm}>
+                  <form
+                    onSubmit={itemLevelForm.handleSubmit((data) => {
+                      adjustItemLevel.mutate({
+                        userId,
+                        userItemId: selectedUserItem.id,
+                        level: data.level,
+                      });
+                    })}
+                    className="flex w-full items-center justify-between gap-2"
+                  >
+                    <div className="flex items-end gap-2">
+                      <FormField
+                        control={itemLevelForm.control}
+                        name="level"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Level</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                className="w-20"
+                                min={1}
+                                max={ITEM_LEVEL_CAP}
+                                {...field}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  field.onChange(value ? parseInt(value, 10) : 1);
+                                }}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       <Button type="submit">Update</Button>
                     </div>
                   </form>

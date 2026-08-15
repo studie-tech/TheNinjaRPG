@@ -18,6 +18,15 @@ export const itemBuySchema = z.object({
   villageId: z.string().nullish(),
 });
 
+export const getItemEvolutionsSchema = z.object({
+  itemId: z.string(),
+});
+
+export const evolveItemSchema = z.object({
+  userItemId: z.string(),
+  evolutionItemId: z.string(),
+});
+
 export const itemFilteringSchema = z.object({
   limit: z.number().min(1).max(500),
   name: z.string().optional(),

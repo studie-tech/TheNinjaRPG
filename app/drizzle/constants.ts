@@ -1296,6 +1296,25 @@ export const JUTSU_TRAIN_LEVEL_CAP = 25;
 export const MAX_DAILY_TRAININGS = 64;
 export const MAX_JUTSU_TRAIN_TIME_MS = 60 * 60 * 1000; // 1 hour in milliseconds
 
+// Item level config (PvP ownership XP on UserItem)
+/** Default Item.xpToLevel when creating/editing items; each item can override this. */
+export const ITEM_XP_TO_LEVEL = 1000;
+export const ITEM_LEVEL_CAP = 25;
+export const ITEM_XP_ON_WIN = 200;
+export const ITEM_XP_ON_LOSS = 100;
+export const ITEM_XP_BATTLE_TYPES: BattleType[] = [
+  "COMBAT",
+  "RANKED_PVP",
+  "KAGE_PVP",
+  "CLAN_BATTLE",
+  "TOURNAMENT",
+  "SHRINE_WAR",
+];
+
+/** Shared evolution graph limits (jutsu, items, …). */
+export const EVOLUTION_MAX_CHILDREN = 3;
+export const EVOLUTION_MAX_DEPTH = 3;
+
 // Combat config
 export const BATTLE_ARENA_DAILY_LIMIT = 99999;
 export const BATTLE_TAG_STACKING = true;

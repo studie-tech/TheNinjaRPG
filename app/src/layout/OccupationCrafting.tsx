@@ -598,13 +598,23 @@ export default function OccupationCrafting() {
                                       })
                                     }
                                   >
-                                    <p>
-                                      Are you sure you want to remove the{" "}
-                                      <strong>{imbuement.item.name}</strong> imbuement
-                                      from <strong>{userItem.item?.name}</strong>? This
-                                      action cannot be undone and you will not get the
-                                      crystal back.
-                                    </p>
+                                    {!userItem.item?.canBeImbued ? (
+                                      <p>
+                                        Remove the{" "}
+                                        <strong>{imbuement.item.name}</strong> imbuement
+                                        from <strong>{userItem.item?.name}</strong>?
+                                        Imbuing is disabled on this item, so the crystal
+                                        will be returned to your inventory.
+                                      </p>
+                                    ) : (
+                                      <p>
+                                        Are you sure you want to remove the{" "}
+                                        <strong>{imbuement.item.name}</strong> imbuement
+                                        from <strong>{userItem.item?.name}</strong>?
+                                        This action cannot be undone and you will not
+                                        get the crystal back.
+                                      </p>
+                                    )}
                                   </Confirm2>
                                 </div>
                               ))}

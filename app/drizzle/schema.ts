@@ -1428,6 +1428,21 @@ export const item = mysqlTable(
     maxEquips: int("maxEquips").default(1).notNull(),
     preventBattleUsage: boolean("preventBattleUsage").default(false).notNull(),
     requiredLevel: int("requiredLevel").default(1).notNull(),
+    xpToLevel: int("xpToLevel").default(consts.ITEM_XP_TO_LEVEL).notNull(),
+    // Evolution fields (shared pattern with jutsu — see libs/evolution.ts)
+    parentItemId: varchar("parentItemId", { length: 191 }),
+    requiredNinjutsuOffence: int("requiredNinjutsuOffence"),
+    requiredNinjutsuDefence: int("requiredNinjutsuDefence"),
+    requiredGenjutsuOffence: int("requiredGenjutsuOffence"),
+    requiredGenjutsuDefence: int("requiredGenjutsuDefence"),
+    requiredTaijutsuOffence: int("requiredTaijutsuOffence"),
+    requiredTaijutsuDefence: int("requiredTaijutsuDefence"),
+    requiredBukijutsuOffence: int("requiredBukijutsuOffence"),
+    requiredBukijutsuDefence: int("requiredBukijutsuDefence"),
+    requiredStrength: int("requiredStrength"),
+    requiredSpeed: int("requiredSpeed"),
+    requiredIntelligence: int("requiredIntelligence"),
+    requiredWillpower: int("requiredWillpower"),
     canBeCrafted: boolean("canBeCrafted").default(false).notNull(),
     canBeImbued: boolean("canBeImbued").default(false).notNull(),
     canBeHunted: boolean("canBeHunted").default(false).notNull(),
@@ -1454,6 +1469,11 @@ export const item = mysqlTable(
       repsCostIdx: index("Item_repsCost_idx").on(table.repsCost),
       requiredLevelIdx: index("Item_requiredLevel_idx").on(table.requiredLevel),
       bloodlineIdIdx: index("Item_bloodlineId_idx").on(table.bloodlineId),
+      parentItemIdIdx: index("Item_parentItemId_idx").on(table.parentItemId),
+      parentItemIdHiddenIdx: index("Item_parentItemId_hidden_idx").on(
+        table.parentItemId,
+        table.hidden,
+      ),
     };
   },
 );
@@ -1470,6 +1490,12 @@ export const itemRelations = relations(item, ({ one, many }) => ({
     fields: [item.bloodlineId],
     references: [bloodline.id],
   }),
+  parentItem: one(item, {
+    fields: [item.parentItemId],
+    references: [item.id],
+    relationName: "itemEvolutions",
+  }),
+  evolutions: many(item, { relationName: "itemEvolutions" }),
   variants: many(itemVariant),
 }));
 
@@ -2746,6 +2772,8 @@ export const userItem = mysqlTable(
     userId: varchar("userId", { length: 191 }).notNull(),
     itemId: varchar("itemId", { length: 191 }).notNull(),
     quantity: int("quantity").default(1).notNull(),
+    level: int("level").default(1).notNull(),
+    experience: int("experience").default(0).notNull(),
     equipped: mysqlEnum("equipped", consts.ItemSlots).default("NONE").notNull(),
     durability: smallint("durability", { unsigned: true })
       .default(consts.DURABILITY_MAX_DEFAULT)

@@ -5,6 +5,7 @@ import {
   CircleDollarSign,
   CircleFadingArrowUp,
   Cookie,
+  Gem,
   Merge,
   Shirt,
   Split,
@@ -25,7 +26,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { COST_EXTRA_ITEM_SLOT, IMG_EQUIP_SILHOUETTE } from "@/drizzle/constants";
+import {
+  COST_EXTRA_ITEM_SLOT,
+  IMG_EQUIP_SILHOUETTE,
+  ITEM_LEVEL_CAP,
+} from "@/drizzle/constants";
 import type {
   Item,
   ItemSlot,
@@ -45,6 +50,7 @@ import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
 import NavTabs from "@/layout/NavTabs";
 import { applyActiveVariant } from "@/libs/combat/util";
+import { meetsEvolutionStatRequirements } from "@/libs/evolution";
 import {
   calcItemSellingPrice,
   calcMaxEventItems,
@@ -52,9 +58,12 @@ import {
   calcMaxMaterials,
   isEquippableUserItem,
   nonCombatConsume,
+  partitionImbuementsForItemTransfer,
+  showsItemLevelBadge,
 } from "@/libs/item";
 import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
+import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { displayCostType } from "@/validators/item";
@@ -665,6 +674,38 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       },
     });
 
+  const { mutate: evolveItem, isPending: isEvolving } = api.item.evolveItem.useMutation(
+    {
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await Promise.all([
+            utils.item.getUserItemsWithVariants.invalidate(),
+            utils.item.getEvolutions.invalidate(),
+            utils.item.getItemLoadouts.invalidate(),
+          ]);
+        }
+      },
+      onSettled,
+    },
+  );
+
+  const { mutate: removeImbuement, isPending: isRemovingImbuement } =
+    api.occupation.removeImbuement.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.item.getUserItemsWithVariants.invalidate();
+        }
+      },
+      onSettled,
+    });
+
+  const { data: availableEvolutions } = api.item.getEvolutions.useQuery(
+    { itemId: useritem?.itemId ?? "" },
+    { enabled: !!useritem?.itemId && isOpen, staleTime: 5 * 60 * 1000 },
+  );
+
   // Derived
   const structures = userData?.village?.structures;
   const isLoading =
@@ -673,11 +714,20 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     isSelling ||
     isEquipping ||
     isSplitting ||
-    isUsingRepairItem;
+    isUsingRepairItem ||
+    isEvolving ||
+    isRemovingImbuement;
   const items = useritems?.map((useritem) => ({
     ...applyActiveVariant(useritem as UserItemWithVariants),
     ...useritem,
   }));
+  // Badges: red-bordered ownership level (bottom-left); amber stack quantity (bottom-right)
+  const itemStackCounts = items
+    ?.filter((ui) => !showsItemLevelBadge(ui) && ui.quantity > 1)
+    .map((ui) => ({ id: ui.id, quantity: ui.quantity }));
+  const itemLevels = items
+    ?.filter((ui) => showsItemLevelBadge(ui))
+    .map((ui) => ({ id: ui.id, level: ui.level }));
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
   const repairItems = (useritems || []).filter(
     (userItem: UserItemWithRelations) =>
@@ -706,7 +756,8 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       <ActionSelector
         className="grid-cols-6 pt-3 sm:grid-cols-4 md:grid-cols-4"
         items={items}
-        counts={items}
+        counts={itemStackCounts}
+        levels={itemLevels}
         selectedId={useritem?.id}
         showBgColor={false}
         showLabels={false}
@@ -727,17 +778,77 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           setIsOpen={setIsOpen}
           isValid={false}
         >
+          <div>
+            {showsItemLevelBadge(useritem.item) && useritem.level < ITEM_LEVEL_CAP && (
+              <p>
+                - Need{" "}
+                {remainingXpToLevel(useritem.item.xpToLevel, useritem.experience)} XP
+                more to level
+              </p>
+            )}
+          </div>
           <ItemWithEffects
             item={{
               ...applyActiveVariant(useritem as UserItemWithVariants),
               imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
               curDurability: useritem.durability,
+              level: useritem.level,
+              experience: useritem.experience,
             }}
             key={useritem.id}
             showStatistic="item"
+            showEvolutions
           />
+          {!useritem.item.canBeImbued &&
+            useritem.equipped === "NONE" &&
+            useritem.imbuements.some(
+              (imbuement) =>
+                !imbuement.craftingFinishedAt ||
+                new Date(imbuement.craftingFinishedAt) <= new Date(),
+            ) && (
+              <div className="mb-2 space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+                <p className="text-destructive text-sm">
+                  Imbuing is disabled on this item. Remove imbuements to return the
+                  crystals to your inventory.
+                </p>
+                {useritem.imbuements
+                  .filter(
+                    (imbuement) =>
+                      !imbuement.craftingFinishedAt ||
+                      new Date(imbuement.craftingFinishedAt) <= new Date(),
+                  )
+                  .map((imbuement) => (
+                    <Confirm2
+                      key={imbuement.id}
+                      title="Remove Imbuement"
+                      proceed_label="Remove & Return Crystal"
+                      button={
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={isLoading}
+                          className="w-full justify-start"
+                        >
+                          <Gem className="mr-2 h-4 w-4" />
+                          Remove {imbuement.item.name}
+                        </Button>
+                      }
+                      onAccept={(e) => {
+                        e.preventDefault();
+                        removeImbuement({ userItemImbuementId: imbuement.id });
+                      }}
+                    >
+                      <p>
+                        Remove <b>{imbuement.item.name}</b> from{" "}
+                        <b>{useritem.item.name}</b>? The crystal will be returned to
+                        your inventory.
+                      </p>
+                    </Confirm2>
+                  ))}
+              </div>
+            )}
           {!isLoading && (
-            <div className="flex flex-row gap-1">
+            <div className="flex flex-row flex-wrap gap-1">
               {useritem.equipped === "NONE" && (
                 <Button
                   variant="info"
@@ -803,6 +914,97 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                   Variants
                 </Button>
               )}
+              {availableEvolutions?.map((evo) => {
+                const isStillCrafting =
+                  !!useritem.craftingFinishedAt &&
+                  useritem.craftingFinishedAt > new Date();
+                const { remove: imbuementsLost } = partitionImbuementsForItemTransfer(
+                  useritem.imbuements,
+                  evo,
+                );
+                const canEvolve =
+                  userData.status === "AWAKE" &&
+                  useritem.level >= ITEM_LEVEL_CAP &&
+                  useritem.quantity === 1 &&
+                  !useritem.isInAuction &&
+                  !isStillCrafting &&
+                  meetsEvolutionStatRequirements(evo, userData) &&
+                  hasRequiredLevel(userData.level, evo.requiredLevel) &&
+                  (!evo.bloodlineId || evo.bloodlineId === userData.bloodlineId);
+                return (
+                  <Confirm2
+                    key={evo.id}
+                    title={`Evolve to ${evo.name}`}
+                    confirmDisabled={!canEvolve}
+                    button={
+                      <Button
+                        id={`evolve-${evo.id}`}
+                        variant="secondary"
+                        disabled={isLoading}
+                      >
+                        <CircleFadingArrowUp className="mr-2 h-5 w-5" />
+                        Evolve
+                      </Button>
+                    }
+                    onAccept={(e) => {
+                      e.preventDefault();
+                      if (!canEvolve) return;
+                      evolveItem({
+                        userItemId: useritem.id,
+                        evolutionItemId: evo.id,
+                      });
+                    }}
+                  >
+                    <p>
+                      Evolve <b>{useritem.item.name}</b> into <b>{evo.name}</b>?
+                    </p>
+                    <p className="mt-2 text-muted-foreground text-sm">
+                      This replaces your current item. The evolved item starts at level
+                      1 and can be leveled to {ITEM_LEVEL_CAP} through PvP. Durability
+                      is capped to the new item&apos;s max.
+                    </p>
+                    {imbuementsLost.length > 0 && (
+                      <p className="text-destructive text-sm">
+                        Warning: the following imbuement
+                        {imbuementsLost.length === 1 ? "" : "s"} cannot transfer to this
+                        evolution and will be removed:{" "}
+                        <b>
+                          {imbuementsLost
+                            .map((imb) => imb.item?.name ?? "Unknown crystal")
+                            .join(", ")}
+                        </b>
+                      </p>
+                    )}
+                    {userData.status !== "AWAKE" && (
+                      <p className="text-destructive text-sm">
+                        Must be awake to evolve an item (current:{" "}
+                        {userData.status.toLowerCase()}).
+                      </p>
+                    )}
+                    {useritem.level < ITEM_LEVEL_CAP && (
+                      <p className="text-destructive text-sm">
+                        Required Item Level: <b>{ITEM_LEVEL_CAP}</b> (current:{" "}
+                        {useritem.level})
+                      </p>
+                    )}
+                    {useritem.quantity !== 1 && (
+                      <p className="text-destructive text-sm">
+                        Split the stack to a single item before evolving.
+                      </p>
+                    )}
+                    {isStillCrafting && (
+                      <p className="text-destructive text-sm">
+                        Cannot evolve an item that is still crafting.
+                      </p>
+                    )}
+                    {evo.requiredLevel > 1 && (
+                      <p className="text-sm">
+                        Required Character Level: <b>{evo.requiredLevel}</b>
+                      </p>
+                    )}
+                  </Confirm2>
+                );
+              })}
               <div className="grow"></div>
               <Confirm2
                 title="Security Confirmation"
@@ -831,6 +1033,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           {isConsuming && <Loader explanation={`Using ${useritem.item.name}`} />}
           {isSelling && <Loader explanation={`Selling ${useritem.item.name}`} />}
           {isEquipping && <Loader explanation={`Equipping ${useritem.item.name}`} />}
+          {isEvolving && <Loader explanation={`Evolving ${useritem.item.name}`} />}
         </Modal2>
       )}
       {isSplitDialogOpen && useritem && (
@@ -941,6 +1144,13 @@ const Character: React.FC<CharacterProps> = (props) => {
     ...applyActiveVariant(useritem as UserItemWithVariants),
     ...useritem,
   }));
+  // Badges: red-bordered ownership level (bottom-left); amber stack quantity (bottom-right)
+  const itemStackCounts = items
+    ?.filter((ui) => !showsItemLevelBadge(ui) && ui.quantity > 1)
+    .map((ui) => ({ id: ui.id, quantity: ui.quantity }));
+  const itemLevels = items
+    ?.filter((ui) => showsItemLevelBadge(ui))
+    .map((ui) => ({ id: ui.id, level: ui.level }));
   const equipped = items?.find((item) => item.equipped === slot);
   const repairItems = (useritems || []).filter(
     (userItem: UserItemWithRelations) =>
@@ -1045,7 +1255,8 @@ const Character: React.FC<CharacterProps> = (props) => {
                 items={items?.filter(
                   (item) => slot?.includes(item.slot) && isEquippableUserItem(item),
                 )}
-                counts={items?.filter((item) => isEquippableUserItem(item))}
+                counts={itemStackCounts}
+                levels={itemLevels}
                 showBgColor={false}
                 showLabels={false}
                 greyedIds={items
@@ -1068,11 +1279,23 @@ const Character: React.FC<CharacterProps> = (props) => {
             setIsOpen={setShowItemDetails}
             isValid={false}
           >
+            <div>
+              {showsItemLevelBadge(useritem.item) &&
+                useritem.level < ITEM_LEVEL_CAP && (
+                  <p>
+                    - Need{" "}
+                    {remainingXpToLevel(useritem.item.xpToLevel, useritem.experience)}{" "}
+                    XP more to level
+                  </p>
+                )}
+            </div>
             <ItemWithEffects
               item={{
                 ...applyActiveVariant(useritem as UserItemWithVariants),
                 imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
                 curDurability: useritem.durability,
+                level: useritem.level,
+                experience: useritem.experience,
               }}
               key={useritem.id}
               showStatistic="item"
@@ -1188,11 +1411,15 @@ const Equip: React.FC<EquipProps> = (props) => {
                 size="medium"
               />
             )}
-          {item.quantity > 1 && (
+          {!showsItemLevelBadge(item) && item.quantity > 1 ? (
             <div className="absolute right-0 bottom-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 font-bold text-black">
               {item.quantity}
             </div>
-          )}
+          ) : showsItemLevelBadge(item) ? (
+            <div className="absolute bottom-0 left-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-red-600 bg-slate-300 font-bold text-black">
+              {item.level}
+            </div>
+          ) : null}
         </div>
       ) : (
         <p className="opacity-100">{props.txt}</p>

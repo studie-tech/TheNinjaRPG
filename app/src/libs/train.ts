@@ -10,6 +10,9 @@ import {
   FED_GOLD_JUTSU_SLOTS,
   FED_NORMAL_JUTSU_SLOTS,
   FED_SILVER_JUTSU_SLOTS,
+  ITEM_XP_BATTLE_TYPES,
+  ITEM_XP_ON_LOSS,
+  ITEM_XP_ON_WIN,
   JUTSU_TRAIN_TO_LEARN_RESTRICTED_TYPES,
   LetterRanks,
   MAX_EXTRA_JUTSU_SLOTS,
@@ -29,6 +32,7 @@ import type {
   UserItemWithItem,
   UserRank,
 } from "@/drizzle/schema";
+import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
 
 type UserStatData = Pick<
   UserData,
@@ -231,32 +235,20 @@ export const checkJutsuBloodlineItem = (
   });
 };
 
-export const isJutsuEvolution = (jutsu: Jutsu): boolean => {
-  return !!jutsu.parentJutsuId;
-};
-
 export const canEvolveJutsu = (
   evolutionJutsu: Jutsu,
   userdata: UserStatData,
 ): boolean => {
-  const statChecks = [
-    { req: evolutionJutsu.requiredNinjutsuOffence, val: userdata.ninjutsuOffence },
-    { req: evolutionJutsu.requiredNinjutsuDefence, val: userdata.ninjutsuDefence },
-    { req: evolutionJutsu.requiredGenjutsuOffence, val: userdata.genjutsuOffence },
-    { req: evolutionJutsu.requiredGenjutsuDefence, val: userdata.genjutsuDefence },
-    { req: evolutionJutsu.requiredTaijutsuOffence, val: userdata.taijutsuOffence },
-    { req: evolutionJutsu.requiredTaijutsuDefence, val: userdata.taijutsuDefence },
-    { req: evolutionJutsu.requiredBukijutsuOffence, val: userdata.bukijutsuOffence },
-    { req: evolutionJutsu.requiredBukijutsuDefence, val: userdata.bukijutsuDefence },
-    { req: evolutionJutsu.requiredStrength, val: userdata.strength },
-    { req: evolutionJutsu.requiredSpeed, val: userdata.speed },
-    { req: evolutionJutsu.requiredIntelligence, val: userdata.intelligence },
-    { req: evolutionJutsu.requiredWillpower, val: userdata.willpower },
-  ];
-  return statChecks.every(
-    ({ req, val }) => req === null || req === undefined || val >= req,
-  );
+  return meetsEvolutionStatRequirements(evolutionJutsu, userdata);
 };
+
+export const isJutsuEvolution = (jutsu: Jutsu): boolean => {
+  return isEvolution(jutsu.parentJutsuId);
+};
+
+/** XP remaining until the next ownership level (jutsu, items, etc.). Never negative. */
+export const remainingXpToLevel = (xpToLevel: number, experience: number): number =>
+  Math.max(0, xpToLevel - experience);
 
 export const canTrainJutsu = (
   jutsu: Jutsu,
@@ -545,6 +537,30 @@ export const battleJutsuExp = (
       const secondsLeft = -secondsPassed(jutsuSetting.time);
       if (secondsLeft > 0 && jutsuSetting.value > 0) {
         baseExp *= jutsuSetting.value;
+      }
+    }
+  }
+
+  return Math.floor(baseExp);
+};
+
+/** Item ownership XP from eligible PvP battles, including active itemExpMultiplier. */
+export const battleItemExp = (
+  battleType: BattleType,
+  didWin: boolean,
+  settings?: GameSetting[],
+) => {
+  if (!(ITEM_XP_BATTLE_TYPES as readonly BattleType[]).includes(battleType)) {
+    return 0;
+  }
+  let baseExp = didWin ? ITEM_XP_ON_WIN : ITEM_XP_ON_LOSS;
+
+  if (settings) {
+    const itemSetting = settings.find((s) => s.name === "itemExpMultiplier");
+    if (itemSetting) {
+      const secondsLeft = -secondsPassed(itemSetting.time);
+      if (secondsLeft > 0 && itemSetting.value > 0) {
+        baseExp *= itemSetting.value;
       }
     }
   }

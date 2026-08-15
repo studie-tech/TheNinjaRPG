@@ -262,6 +262,8 @@ export type BattleUserItem = {
   id: string; // userItem.id
   itemId: string; // Reference to extraState.items[itemId]
   quantity: number;
+  level: number;
+  experience: number;
   equipped: ItemSlot;
   durability: number;
   dropChancePerc: number;
