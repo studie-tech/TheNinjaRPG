@@ -123,6 +123,14 @@ export const forumRouter = createTRPCRouter({
           .update(forumBoard)
           .set({ nThreads: sql`nThreads + 1`, updatedAt: new Date() })
           .where(eq(forumBoard.id, input.board_id)),
+        ...(isNews
+          ? [
+              ctx.drizzle
+                .update(userData)
+                .set({ unreadNews: sql`LEAST(unreadNews + 1, 1000)` })
+                .where(ne(userData.userId, ctx.userId)),
+            ]
+          : []),
       ]);
 
       // Note: In edge case where board is deleted during mutation, thread/post still exist
@@ -133,10 +141,6 @@ export const forumRouter = createTRPCRouter({
         );
       }
       if (isNews) {
-        await ctx.drizzle
-          .update(userData)
-          .set({ unreadNews: sql`LEAST(unreadNews + 1, 1000)` })
-          .where(ne(userData.userId, ctx.userId));
         void Promise.allSettled(
           publishNewsToSocialMedia(
             input.title,

@@ -771,16 +771,13 @@ export const commentsRouter = createTRPCRouter({
         .map((q) => q.user?.userId)
         .filter((id): id is string => !!id);
 
-      // Fetch users to notify about mentions and quotes
-      const notifiedUserIds = await fetchUsersToNotify(
-        ctx.drizzle,
-        ctx.userId,
-        mentionedUserNames,
-        quotedUserIds,
-      );
-
-      // Database mutations first (must complete before Pusher notifications)
-      await Promise.all([
+      const [notifiedUserIds] = await Promise.all([
+        fetchUsersToNotify(
+          ctx.drizzle,
+          ctx.userId,
+          mentionedUserNames,
+          quotedUserIds,
+        ),
         // Insert into DB
         ctx.drizzle.insert(conversationComment).values({
           id: commentId,
