@@ -140,7 +140,7 @@ export const forumRouter = createTRPCRouter({
         void Promise.allSettled(
           publishNewsToSocialMedia(
             input.title,
-            input.content,
+            sanitized,
             user.avatar,
             input.image,
           ),

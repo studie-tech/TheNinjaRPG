@@ -11,7 +11,7 @@ const expectFlagged = async (content: string, detail: string) => {
 const expectAllowed = async (content: string) => {
   await expect(checkForBadWords(content)).resolves.toEqual({
     success: true,
-    message: "Comment passed moderation",
+    message: "Text passed moderation",
   });
 };
 
@@ -44,6 +44,13 @@ describe("checkForBadWords", () => {
     "allows removed low-signal phrases: %s",
     async (content) => {
       await expectAllowed(content);
+    },
+  );
+
+  it.each(["fu<b>cked</b>", "f&#x75;cked"])(
+    "flags words hidden by HTML markup or entities: %s",
+    async (content) => {
+      await expectFlagged(content, "fucked");
     },
   );
 });

@@ -1,4 +1,4 @@
-import sanitize from "@/utils/sanitize";
+import sanitize, { htmlToPlainText } from "@/utils/sanitize";
 
 type BadWordsResult =
   | { success: false; message: string }
@@ -9,15 +9,15 @@ type ModeratedUserText =
   | { success: true; message: string; sanitized: string };
 
 /**
- * Moderates the content of a comment
- * @param content - The content of the comment
- * @returns An error response if the content is flagged, otherwise undefined
+ * Block player-authored text that matches the offensive-word list.
+ * HTML is reduced to visible text first so markup and entities cannot hide a match.
  */
 export const checkForBadWords = async (content: string): Promise<BadWordsResult> => {
+  const visibleText = htmlToPlainText(content);
   // Only horizontal whitespace and hyphens may connect phrase tokens. Sentence,
   // clause, and line boundaries start a new run so phrases cannot match across them.
   const tokenRuns =
-    content
+    visibleText
       .toLowerCase()
       .match(/\w+(?:(?:[ \t]+|-+)\w+)*/g)
       ?.map((run) => run.match(/\w+/g) ?? []) ?? [];
@@ -26,7 +26,7 @@ export const checkForBadWords = async (content: string): Promise<BadWordsResult>
   if (foundWord) {
     return {
       success: false,
-      message: `Your comment was flagged for inappropriate language and will not be shown to others. Details: ${foundWord}`,
+      message: `Your text was flagged for inappropriate language and will not be shown to others. Details: ${foundWord}`,
     };
   }
   for (const run of tokenRuns) {
@@ -35,13 +35,13 @@ export const checkForBadWords = async (content: string): Promise<BadWordsResult>
         if (phrase.every((token, j) => run[i + j] === token)) {
           return {
             success: false,
-            message: `Your comment was flagged for inappropriate language and will not be shown to others. Details: ${phrase.join(" ")}`,
+            message: `Your text was flagged for inappropriate language and will not be shown to others. Details: ${phrase.join(" ")}`,
           };
         }
       }
     }
   }
-  return { success: true, message: "Comment passed moderation" };
+  return { success: true, message: "Text passed moderation" };
 };
 
 /**
