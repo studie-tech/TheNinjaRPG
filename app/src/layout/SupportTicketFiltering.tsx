@@ -13,6 +13,7 @@ import {
   toOptions,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
+import { canViewStaffOnlyComments } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
 interface SupportTicketFilteringProps {
@@ -90,9 +91,7 @@ const makeSupportSchema = (
 
 const SupportTicketFiltering: React.FC<SupportTicketFilteringProps> = (props) => {
   const { data: userData } = useUserData();
-  const isStaff = Boolean(
-    userData?.role && ["ADMIN", "MODERATOR", "SUPPORTER"].includes(userData.role),
-  );
+  const isStaff = Boolean(userData?.role && canViewStaffOnlyComments(userData.role));
   const { data } = api.profile.getPublicUsers.useQuery(
     { orderBy: "Staff", isAi: false, limit: 50 },
     { enabled: isStaff },
@@ -157,9 +156,7 @@ export const getFilter = (state: SupportTicketFilteringState): SupportTicketFilt
 
 export const useFiltering = () => {
   const { data: userData } = useUserData();
-  const isStaff = Boolean(
-    userData?.role && ["ADMIN", "MODERATOR", "SUPPORTER"].includes(userData.role),
-  );
+  const isStaff = Boolean(userData?.role && canViewStaffOnlyComments(userData.role));
   const { data } = api.profile.getPublicUsers.useQuery(
     { orderBy: "Staff", isAi: false, limit: 50 },
     { enabled: isStaff },
