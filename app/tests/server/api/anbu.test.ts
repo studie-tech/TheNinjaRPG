@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
 
 type AnbuTestMocks = {
-  fetchUpdatedUser: ReturnType<typeof vi.fn>;
+  fetchActor: ReturnType<typeof vi.fn>;
+  fetchPendingRequest: ReturnType<typeof vi.fn>;
   fetchUser: ReturnType<typeof vi.fn>;
   fetchRequest: ReturnType<typeof vi.fn>;
   fetchRequests: ReturnType<typeof vi.fn>;
@@ -17,7 +18,8 @@ function getAnbuTestMocks(): AnbuTestMocks {
   const globals = globalThis as unknown as { __anbuTestMocks?: AnbuTestMocks };
   if (!globals.__anbuTestMocks) {
     globals.__anbuTestMocks = {
-      fetchUpdatedUser: vi.fn(),
+      fetchActor: vi.fn(),
+      fetchPendingRequest: vi.fn(),
       fetchUser: vi.fn(),
       fetchRequest: vi.fn(),
       fetchRequests: vi.fn(),
@@ -36,8 +38,6 @@ vi.mock("@/libs/pusher", () => ({
 }));
 
 vi.mock("@/routers/profile", () => ({
-  fetchUpdatedUser: (...args: unknown[]) =>
-    (getAnbuTestMocks().fetchUpdatedUser as (...values: unknown[]) => unknown)(...args),
   fetchUser: (...args: unknown[]) =>
     (getAnbuTestMocks().fetchUser as (...values: unknown[]) => unknown)(...args),
   updateNindo: vi.fn(),
@@ -65,7 +65,8 @@ import {
 } from "@/routers/anbu";
 
 const {
-  fetchUpdatedUser: fetchUpdatedUserMock,
+  fetchActor: fetchActorMock,
+  fetchPendingRequest: fetchPendingRequestMock,
   fetchUser: fetchUserMock,
   fetchRequest: fetchRequestMock,
   fetchRequests: fetchRequestsMock,
@@ -312,7 +313,23 @@ function makeDrizzleMock(
     client: {
       query: {
         anbuSquad: { findFirst: vi.fn().mockResolvedValue(squad) },
-        userData: { findMany: vi.fn().mockResolvedValue(members) },
+        userData: {
+          findFirst: vi.fn(async (args: { columns?: { username?: boolean } }) => {
+            if (!args.columns?.username) {
+              return (fetchUserMock as (...values: unknown[]) => unknown)();
+            }
+            const actor = await (
+              fetchActorMock as (...values: unknown[]) => unknown
+            )(args);
+            return (actor as { user?: unknown } | undefined)?.user ?? actor;
+          }),
+          findMany: vi.fn().mockResolvedValue(members),
+        },
+        userRequest: {
+          findFirst: vi.fn(async (...args: unknown[]) =>
+            (fetchPendingRequestMock as (...values: unknown[]) => unknown)(...args),
+          ),
+        },
       },
       update,
       select,
@@ -354,7 +371,7 @@ describe("ANBU router request permissions and concurrency", () => {
             : []) as never,
     );
 
-    fetchUpdatedUserMock.mockResolvedValueOnce({
+    fetchActorMock.mockResolvedValueOnce({
       user: makeUser({ anbuId: "squad-1" }),
     } as never);
     await expect(
@@ -365,8 +382,16 @@ describe("ANBU router request permissions and concurrency", () => {
         } as never,
       ),
     ).resolves.toEqual([squadRequest]);
+    expect(fetchRequestsMock).toHaveBeenCalledTimes(1);
+    expect(fetchRequestsMock).toHaveBeenLastCalledWith(
+      client,
+      ["ANBU"],
+      3600 * 12,
+      undefined,
+      "squad-1",
+    );
 
-    fetchUpdatedUserMock.mockResolvedValueOnce({
+    fetchActorMock.mockResolvedValueOnce({
       user: makeUser({ userId: "applicant" }),
     } as never);
     await expect(
@@ -377,12 +402,19 @@ describe("ANBU router request permissions and concurrency", () => {
         } as never,
       ),
     ).resolves.toEqual([ownForThisSquad]);
+    expect(fetchRequestsMock).toHaveBeenCalledTimes(2);
+    expect(fetchRequestsMock).toHaveBeenLastCalledWith(
+      client,
+      ["ANBU"],
+      3600 * 12,
+      "applicant",
+    );
   });
 
   it("returns no squad requests to an ordinary member", async () => {
     const squad = makeSquad();
     const { client } = makeDrizzleMock(squad, []);
-    fetchUpdatedUserMock.mockResolvedValue({
+    fetchActorMock.mockResolvedValue({
       user: makeUser({ anbuId: "squad-1" }),
     } as never);
     fetchRequestsMock.mockResolvedValue([] as never);
@@ -395,15 +427,14 @@ describe("ANBU router request permissions and concurrency", () => {
         } as never,
       ),
     ).resolves.toEqual([]);
+    expect(fetchRequestsMock).not.toHaveBeenCalled();
   });
 
   it("blocks duplicate pending requests before insert", async () => {
     const squad = makeSquad();
     const { client } = makeDrizzleMock(squad, []);
-    fetchUpdatedUserMock.mockResolvedValue({ user: makeUser() } as never);
-    fetchRequestsMock.mockResolvedValue([
-      { senderId: "actor", status: "PENDING" },
-    ] as never);
+    fetchActorMock.mockResolvedValue({ user: makeUser() } as never);
+    fetchPendingRequestMock.mockResolvedValue({ id: "request-1" } as never);
 
     await expect(
       createAnbuRequest(
@@ -429,7 +460,7 @@ describe("ANBU router request permissions and concurrency", () => {
       relatedId: "squad-1",
       status: "PENDING",
     } as never);
-    fetchUpdatedUserMock.mockResolvedValue({
+    fetchActorMock.mockResolvedValue({
       user: makeUser({
         villageId: "village-2",
         village: { id: "village-2", kageId: "actor" },
@@ -460,7 +491,7 @@ describe("ANBU router request permissions and concurrency", () => {
       relatedId: "squad-1",
       status: "PENDING",
     } as never);
-    fetchUpdatedUserMock.mockResolvedValue({
+    fetchActorMock.mockResolvedValue({
       user: makeUser({
         villageId: "village-2",
         village: { id: "village-2", kageId: "actor" },
@@ -490,7 +521,7 @@ describe("ANBU router request permissions and concurrency", () => {
       relatedId: "deleted-squad",
       status: "PENDING",
     } as never);
-    fetchUpdatedUserMock.mockResolvedValue({
+    fetchActorMock.mockResolvedValue({
       user: makeUser({ rank: "KAGE" }),
     } as never);
 
@@ -523,7 +554,7 @@ describe("ANBU router request permissions and concurrency", () => {
         relatedId: "squad-1",
         status: "PENDING",
       } as never);
-      fetchUpdatedUserMock.mockResolvedValue({
+      fetchActorMock.mockResolvedValue({
         user: makeUser(actor),
       } as never);
       fetchUserMock.mockResolvedValue(
@@ -555,7 +586,7 @@ describe("ANBU router request permissions and concurrency", () => {
       relatedId: "squad-1",
       status: "PENDING",
     } as never);
-    fetchUpdatedUserMock.mockResolvedValue({
+    fetchActorMock.mockResolvedValue({
       user: makeUser({ anbuId: "squad-1" }),
     } as never);
     fetchUserMock.mockResolvedValue(
@@ -590,7 +621,7 @@ describe("ANBU router request permissions and concurrency", () => {
       relatedId: "squad-1",
       status: "PENDING",
     } as never);
-    fetchUpdatedUserMock.mockResolvedValue({
+    fetchActorMock.mockResolvedValue({
       user: makeUser({ anbuId: "squad-1" }),
     } as never);
     fetchUserMock.mockResolvedValue(
@@ -632,7 +663,7 @@ describe("ANBU router request permissions and concurrency", () => {
       relatedId: "squad-1",
       status: "PENDING",
     } as never);
-    fetchUpdatedUserMock.mockResolvedValue({
+    fetchActorMock.mockResolvedValue({
       user: makeUser({ village: { id: "village-1", kageId: "actor" } }),
     } as never);
     fetchUserMock.mockResolvedValue(

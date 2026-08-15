@@ -1,5 +1,5 @@
 import type { inferRouterOutputs } from "@trpc/server";
-import { and, eq, exists, gt, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, count, eq, exists, gt, gte, isNull, lt, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -20,13 +20,17 @@ import {
   type UserRequestState,
 } from "@/drizzle/constants";
 import type { AnbuSquad } from "@/drizzle/schema";
-import { anbuSquad, historicalAvatar, userData, userRequest } from "@/drizzle/schema";
+import {
+  anbuSquad,
+  clan,
+  historicalAvatar,
+  userData,
+  userRequest,
+} from "@/drizzle/schema";
 import { getServerPusher } from "@/libs/pusher";
 import { hasRequiredRank } from "@/libs/train";
-import { fetchClans } from "@/routers/clan";
 import { createConvo } from "@/routers/comments";
-import type { UserWithRelations } from "@/routers/profile";
-import { fetchUpdatedUser, fetchUser, updateNindo } from "@/routers/profile";
+import { updateNindo } from "@/routers/profile";
 import { fetchRequest, fetchRequests, insertRequest } from "@/routers/sparring";
 import { fetchVillage } from "@/routers/village";
 import {
@@ -54,15 +58,14 @@ export const anbuRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       // Query
-      const [updatedUser, squad] = await Promise.all([
-        fetchUpdatedUser({
+      const [user, squad] = await Promise.all([
+        fetchAnbuActor({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         fetchSquad(ctx.drizzle, input.id),
       ]);
       // Derived
-      const { user } = updatedUser;
       const { isKage, isElder, inSquad } = getConvenienceStatus(user, squad);
       // Hide orders if not kage or elder
       if (squad && !isKage && !isElder && !inSquad) {
@@ -85,7 +88,7 @@ export const anbuRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       // Fetch
       const [user, squads] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchAnbuActor({ client: ctx.drizzle, userId: ctx.userId }),
         fetchSquads(ctx.drizzle, input.villageId),
       ]);
       // Guard
@@ -148,17 +151,16 @@ export const anbuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [updatedUser, leader, village, anbus] = await Promise.all([
-        fetchUpdatedUser({
+      const [user, leader, village, anbuCount] = await Promise.all([
+        fetchAnbuActor({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchUser(ctx.drizzle, input.leaderId),
+        fetchAnbuMember(ctx.drizzle, input.leaderId),
         fetchVillage(ctx.drizzle, input.villageId),
-        fetchSquads(ctx.drizzle, input.villageId),
+        countAnbuSquads(ctx.drizzle, input.villageId),
       ]);
       // Derived
-      const { user } = updatedUser;
       const villageId = village?.id;
       const { isKage, isElder } = getConvenienceStatus(user);
       const structure = village?.structures.find((s) => s.name === "ANBU");
@@ -170,7 +172,7 @@ export const anbuRouter = createTRPCRouter({
       if (!isKage && !isElder) return errorResponse("Not kage or elder");
       if (villageId !== user.villageId) return errorResponse("Wrong user village");
       if (villageId !== leader.villageId) return errorResponse("Wrong leader village");
-      if (anbus.length > getEffectiveStructureLevel(structure))
+      if (anbuCount > getEffectiveStructureLevel(structure))
         return errorResponse("Max squads reached");
       if (leader.anbuId) return errorResponse("Leader already in a squad");
       if (leader.isAi) return errorResponse("AI cannot be leader");
@@ -215,15 +217,14 @@ export const anbuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [updatedUser, squad] = await Promise.all([
-        fetchUpdatedUser({
+      const [user, squad] = await Promise.all([
+        fetchAnbuActor({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchSquad(ctx.drizzle, input.squadId),
+        fetchSquadSummary(ctx.drizzle, input.squadId),
       ]);
       // Derived
-      const { user } = updatedUser;
       const { isKage, isElder } = getConvenienceStatus(user, squad);
       // Guards
       if (!squad) return errorResponse("Squad not found");
@@ -264,8 +265,8 @@ export const anbuRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, squad, image, squadWithName] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchSquad(ctx.drizzle, input.squadId),
+        fetchAnbuMember(ctx.drizzle, ctx.userId),
+        fetchSquadSummary(ctx.drizzle, input.squadId),
         ctx.drizzle.query.historicalAvatar.findFirst({
           where: eq(historicalAvatar.avatar, input.image),
         }),
@@ -315,16 +316,15 @@ export const anbuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [updatedUser, squad, member] = await Promise.all([
-        fetchUpdatedUser({
+      const [user, squad, member] = await Promise.all([
+        fetchAnbuActor({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchSquad(ctx.drizzle, input.squadId),
-        fetchUser(ctx.drizzle, input.memberId),
+        fetchSquadSummary(ctx.drizzle, input.squadId),
+        fetchAnbuMember(ctx.drizzle, input.memberId),
       ]);
       // Derived
-      const { user } = updatedUser;
       const { isKage, isElder } = getConvenienceStatus(user, squad);
       const canStaffEdit = user ? canEditClans(user.role) : false;
       // Guards
@@ -368,16 +368,15 @@ export const anbuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [updatedUser, squad, member] = await Promise.all([
-        fetchUpdatedUser({
+      const [user, squad, member] = await Promise.all([
+        fetchAnbuActor({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchSquad(ctx.drizzle, input.squadId),
-        fetchUser(ctx.drizzle, input.memberId),
+        fetchSquadSummary(ctx.drizzle, input.squadId),
+        fetchAnbuMember(ctx.drizzle, input.memberId),
       ]);
       // Derived
-      const { user } = updatedUser;
       const { isKage, isElder, isLeader } = getConvenienceStatus(user, squad);
       const canStaffEdit = user ? canEditClans(user.role) : false;
       // Guards
@@ -391,7 +390,7 @@ export const anbuRouter = createTRPCRouter({
         return errorResponse("Not allowed");
       }
       if (member.anbuId !== squad.id) return errorResponse("Not in this squad");
-      if (squad.members.length <= 1) {
+      if (squad.memberCount <= 1) {
         return errorResponse("Cannot kick the last member. Use disband squad instead.");
       }
 
@@ -410,8 +409,8 @@ export const anbuRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, squad] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchSquad(ctx.drizzle, input.squadId),
+        fetchAnbuMember(ctx.drizzle, ctx.userId),
+        fetchSquadSummary(ctx.drizzle, input.squadId),
       ]);
       // Guards
       if (!user) return errorResponse("User not found");
@@ -419,7 +418,7 @@ export const anbuRouter = createTRPCRouter({
       if (user.villageId !== squad.villageId) return errorResponse("Wrong village");
       if (!user.anbuId) return errorResponse("Not in a squad");
       if (user.anbuId !== squad.id) return errorResponse("Wrong squad");
-      if (squad.members.length <= 1) {
+      if (squad.memberCount <= 1) {
         return errorResponse("Cannot leave as the last member. Disband squad instead.");
       }
       // Derived
@@ -442,15 +441,14 @@ export const anbuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [updatedUser, squad] = await Promise.all([
-        fetchUpdatedUser({
+      const [user, squad] = await Promise.all([
+        fetchAnbuActor({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchSquad(ctx.drizzle, input.squadId),
+        fetchSquadSummary(ctx.drizzle, input.squadId),
       ]);
       // Derived
-      const { user } = updatedUser;
       const { isKage, isElder, isLeader, village } = getConvenienceStatus(user, squad);
       // Guards
       if (!user) return errorResponse("User not found");
@@ -473,15 +471,14 @@ export const anbuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [updatedUser, squad] = await Promise.all([
-        fetchUpdatedUser({
+      const [user, squad] = await Promise.all([
+        fetchAnbuActor({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchSquad(ctx.drizzle, input.squadId),
+        fetchSquadSummary(ctx.drizzle, input.squadId),
       ]);
       // Derived
-      const { user } = updatedUser;
       const { isLeader } = getConvenienceStatus(user, squad);
       // Guards
       if (!user) return errorResponse("User not found");
@@ -518,15 +515,14 @@ export const anbuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [updatedUser, squad] = await Promise.all([
-        fetchUpdatedUser({
+      const [user, squad] = await Promise.all([
+        fetchAnbuActor({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchSquad(ctx.drizzle, input.squadId),
+        fetchSquadSummary(ctx.drizzle, input.squadId),
       ]);
       // Derived
-      const { user } = updatedUser;
       const { isLeader } = getConvenienceStatus(user, squad);
       // Guards
       if (!user) return errorResponse("User not found");
@@ -563,18 +559,16 @@ export const anbuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [updatedUser, targetVillage, userSquad] = await Promise.all([
-        fetchUpdatedUser({
+      const [user, targetVillage, userSquad] = await Promise.all([
+        fetchAnbuActor({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         fetchVillage(ctx.drizzle, input.villageId),
-        fetchSquad(ctx.drizzle, input.anbuId),
+        fetchEspionageSquad(ctx.drizzle, input.anbuId),
       ]);
 
       // Derived
-      const { user } = updatedUser;
-
       // Guards
       if (!user) return errorResponse("User not found");
       if (!targetVillage) return errorResponse("Target village not found");
@@ -621,9 +615,9 @@ export const anbuRouter = createTRPCRouter({
       }
 
       // Gather intelligence on target village
-      const [anbuSquads, clans] = await Promise.all([
-        fetchSquads(ctx.drizzle, targetVillage.id),
-        fetchClans(ctx.drizzle, targetVillage.id),
+      const [anbuSquadCount, clanCount] = await Promise.all([
+        countAnbuSquads(ctx.drizzle, targetVillage.id),
+        countVillageClans(ctx.drizzle, targetVillage.id),
       ]);
 
       // Create intelligence report
@@ -644,8 +638,8 @@ export const anbuRouter = createTRPCRouter({
     <h3 style="margin-bottom:0.25em;">🏰 <strong>Village Status:</strong></h3>
     <ul style="margin:0 0 0 1em; padding:0;">
       <li>Village Tokens: <strong>${targetVillage.tokens.toLocaleString()}</strong></li>
-      <li>ANBU Squads: <strong>${anbuSquads.length}</strong></li>
-      <li>Active Clans: <strong>${clans.length}</strong></li>
+      <li>ANBU Squads: <strong>${anbuSquadCount}</strong></li>
+      <li>Active Clans: <strong>${clanCount}</strong></li>
     </ul>
   </section>
   <section style="margin-bottom:1em;">
@@ -693,7 +687,6 @@ type AnbuRequestContext = { drizzle: DrizzleClient; userId: string };
  * Managers receive every request linked to the selected squad, applicants
  * receive only their own request for that squad, and ordinary members receive
  * no request data. Without a squad filter, the caller's requests are returned.
- *
  * @param args - Authenticated request context and optional squad filter.
  * @returns The requests the caller is authorized to view.
  */
@@ -704,19 +697,11 @@ export async function getAnbuRequests(args: {
   const { ctx, input } = args;
   if (input?.squadId) {
     const squadId = input.squadId;
-    const [updatedUser, squad, ownRequests, squadRequests] = await Promise.all([
-      fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-      fetchSquad(ctx.drizzle, squadId),
-      fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId),
-      fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, undefined, squadId),
+    const [user, squad] = await Promise.all([
+      fetchAnbuActor({ client: ctx.drizzle, userId: ctx.userId }),
+      fetchSquadSummary(ctx.drizzle, squadId),
     ]);
-    const { user } = updatedUser;
     if (!user || !squad) return [];
-    const ownSquadRequests = ownRequests.filter(
-      (request) =>
-        request.senderId === ctx.userId &&
-        isAnbuRequestForSquad(request, squadId, squad.leaderId),
-    );
     const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
       getConvenienceStatus(user, squad);
     if (
@@ -725,9 +710,20 @@ export async function getAnbuRequests(args: {
       isElderOfSquadVillage ||
       canEditClans(user.role)
     ) {
-      return squadRequests;
+      return fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, undefined, squadId);
     }
-    return user.anbuId ? [] : ownSquadRequests;
+    if (user.anbuId) return [];
+    const ownRequests = await fetchRequests(
+      ctx.drizzle,
+      ["ANBU"],
+      3600 * 12,
+      ctx.userId,
+    );
+    return ownRequests.filter(
+      (request) =>
+        request.senderId === ctx.userId &&
+        isAnbuRequestForSquad(request, squadId, squad.leaderId),
+    );
   }
   return fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId);
 }
@@ -745,23 +741,18 @@ export async function createAnbuRequest(args: {
   input: { squadId: string };
 }) {
   const { ctx, input } = args;
-  const [updatedUser, squad, ownRequests] = await Promise.all([
-    fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-    fetchSquad(ctx.drizzle, input.squadId),
-    fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId),
+  const [user, squad, pendingRequest] = await Promise.all([
+    fetchAnbuActor({ client: ctx.drizzle, userId: ctx.userId }),
+    fetchSquadSummary(ctx.drizzle, input.squadId),
+    fetchRecentPendingAnbuRequest(ctx.drizzle, ctx.userId),
   ]);
-  const { user } = updatedUser;
   const { isKage, isElder } = getConvenienceStatus(user, squad);
   if (!squad) return errorResponse("Squad not found");
   if (!user) return errorResponse("User not found");
   if (user.villageId !== squad.villageId) return errorResponse("Wrong village");
   if (user.anbuId) return errorResponse("Already in a squad");
   if (isKage || isElder) return errorResponse("Kage or elder cannot join");
-  if (
-    ownRequests.some(
-      (request) => request.senderId === user.userId && request.status === "PENDING",
-    )
-  ) {
+  if (pendingRequest) {
     return errorResponse("You already have a pending ANBU request");
   }
   if (!hasRequiredRank(user.rank, ANBU_MEMBER_RANK_REQUIREMENT)) {
@@ -815,15 +806,14 @@ export async function acceptAnbuRequest(args: {
   input: { id: string };
 }) {
   const { ctx, input } = args;
-  const [request, updatedUser] = await Promise.all([
+  const [request, user] = await Promise.all([
     fetchRequest(ctx.drizzle, input.id, "ANBU"),
-    fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+    fetchAnbuActor({ client: ctx.drizzle, userId: ctx.userId }),
   ]);
   const [squad, requester] = await Promise.all([
     fetchSquadForAnbuRequest(ctx.drizzle, request),
-    fetchUser(ctx.drizzle, request.senderId),
+    fetchAnbuMember(ctx.drizzle, request.senderId),
   ]);
-  const { user } = updatedUser;
   const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
     getConvenienceStatus(user, squad);
   const canStaffEdit = user ? canEditClans(user.role) : false;
@@ -905,15 +895,14 @@ export async function rejectAnbuRequest(args: {
   input: { id: string };
 }) {
   const { ctx, input } = args;
-  const [request, updatedUser] = await Promise.all([
+  const [request, user] = await Promise.all([
     fetchRequest(ctx.drizzle, input.id, "ANBU"),
-    fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+    fetchAnbuActor({ client: ctx.drizzle, userId: ctx.userId }),
   ]);
   const squad = await fetchSquadForAnbuRequest(ctx.drizzle, request);
   if (!squad) {
     return errorResponse("Squad not found");
   }
-  const { user } = updatedUser;
   const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
     getConvenienceStatus(user, squad);
   const canStaffEdit = user ? canEditClans(user.role) : false;
@@ -947,7 +936,7 @@ export async function rejectAnbuRequest(args: {
  */
 export const removeFromSquad = async (
   client: DrizzleClient,
-  squad: NonNullable<AnbuRouter["get"]>,
+  squad: { id: string },
   userId: string,
 ) => {
   // Reserve the removal first. Concurrent removals can decrement only to one,
@@ -1111,14 +1100,150 @@ const fetchAnbuRequestNotificationTarget = async (
 };
 
 /**
+ * Loads only the user and village fields used by ANBU authorization and
+ * mutations. This avoids the regeneration, settings, wars, raids, and other
+ * unrelated queries performed by the full profile refresh helper.
+ *
+ * @param client - The Drizzle client used for the focused actor lookup.
+ * @param userId - The authenticated user's ID.
+ * @returns The focused user and village state, or undefined when not found.
+ */
+const fetchAnbuActor = async ({
+  client,
+  userId,
+}: {
+  client: DrizzleClient;
+  userId: string;
+}) => {
+  return client.query.userData.findFirst({
+    columns: {
+      userId: true,
+      username: true,
+      villageId: true,
+      villagePrestige: true,
+      anbuId: true,
+      rank: true,
+      role: true,
+      isBanned: true,
+      isSilenced: true,
+    },
+    with: {
+      village: {
+        columns: { id: true, kageId: true, leaderUpdatedAt: true },
+      },
+    },
+    where: eq(userData.userId, userId),
+  });
+};
+
+type AnbuActor = Awaited<ReturnType<typeof fetchAnbuActor>>;
+
+/**
+ * Loads only the identity, village, rank, and membership fields used when an
+ * ANBU handler validates a leader, member, applicant, or departing user.
+ *
+ * @param client - The Drizzle client used for the focused member lookup.
+ * @param userId - The user whose ANBU eligibility should be checked.
+ * @returns The required user fields, or undefined when the user is missing.
+ */
+const fetchAnbuMember = async (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    columns: {
+      userId: true,
+      villageId: true,
+      anbuId: true,
+      rank: true,
+      isAi: true,
+    },
+    where: eq(userData.userId, userId),
+  });
+
+/**
+ * Checks for a recent pending ANBU application using a single-column result
+ * instead of loading request participants and their village relations.
+ *
+ * @param client - The Drizzle client used for the pending-request lookup.
+ * @param senderId - The applicant whose pending request should be checked.
+ * @returns The matching request ID, or undefined when no recent request exists.
+ */
+const fetchRecentPendingAnbuRequest = async (client: DrizzleClient, senderId: string) =>
+  client.query.userRequest.findFirst({
+    columns: { id: true },
+    where: and(
+      eq(userRequest.pendingAnbuSenderId, senderId),
+      gt(userRequest.createdAt, secondsFromNow(-3600 * 12)),
+    ),
+  });
+
+/**
+ * Fetches a squad's scalar state without hydrating its leader, members, or
+ * order relations. Mutation and authorization paths should use this snapshot
+ * when they do not return the full squad payload.
+ *
+ * @param client - The Drizzle client used for the squad lookup.
+ * @param squadId - The squad ID to load.
+ * @returns The squad's persisted scalar fields, or undefined when not found.
+ */
+const fetchSquadSummary = async (client: DrizzleClient, squadId: string) =>
+  client.query.anbuSquad.findFirst({
+    where: eq(anbuSquad.id, squadId),
+  });
+
+/**
+ * Loads the minimal squad payload needed to charge and report an espionage
+ * mission, including only member IDs for the report recipients.
+ *
+ * @param client - The Drizzle client used for the espionage squad lookup.
+ * @param squadId - The acting squad's ID.
+ * @returns Focused squad state and member IDs, or undefined when not found.
+ */
+const fetchEspionageSquad = async (client: DrizzleClient, squadId: string) =>
+  client.query.anbuSquad.findFirst({
+    columns: { id: true, points: true, espionageLevel: true },
+    with: { members: { columns: { userId: true } } },
+    where: eq(anbuSquad.id, squadId),
+  });
+
+/**
+ * Counts squads in a village without loading their leaders and members.
+ *
+ * @param client - The Drizzle client used for the aggregate query.
+ * @param villageId - The village whose squads should be counted.
+ * @returns The number of ANBU squads assigned to the village.
+ */
+const countAnbuSquads = async (client: DrizzleClient, villageId: string) => {
+  const rows = await client
+    .select({ count: count() })
+    .from(anbuSquad)
+    .where(eq(anbuSquad.villageId, villageId));
+  return rows[0]?.count ?? 0;
+};
+
+/**
+ * Counts clans in a village without hydrating their leaders, founders,
+ * members, or village relation for an espionage report.
+ *
+ * @param client - The Drizzle client used for the aggregate query.
+ * @param villageId - The village whose clans should be counted.
+ * @returns The number of clans assigned to the village.
+ */
+const countVillageClans = async (client: DrizzleClient, villageId: string) => {
+  const rows = await client
+    .select({ count: count() })
+    .from(clan)
+    .where(eq(clan.villageId, villageId));
+  return rows[0]?.count ?? 0;
+};
+
+/**
  * Retrieves the convenience status of a user in an Anbu squad.
  * @param user - The user object with relations.
  * @param squad - The Anbu squad object.
  * @returns An object containing convenience status properties.
  */
 const getConvenienceStatus = (
-  user: UserWithRelations,
-  squad: AnbuSquad | null = null,
+  user: AnbuActor,
+  squad: Pick<AnbuSquad, "id" | "leaderId" | "villageId"> | null = null,
 ) => {
   const isKage = user?.userId === user?.village?.kageId;
   const isElder = user?.rank === "ELDER";
@@ -1245,7 +1370,7 @@ export const fetchSquadForAnbuRequest = async (
   request: { relatedId: string | null; receiverId: string },
 ) => {
   if (request.relatedId) {
-    return await fetchSquad(client, request.relatedId);
+    return await fetchSquadSummary(client, request.relatedId);
   }
   return await fetchSquadByLeader(client, request.receiverId);
 };
@@ -1294,25 +1419,13 @@ export const reassignPendingAnbuRequestsOnPromotion = async (
 };
 
 /**
- * Fetches the squad details by leader ID.
+ * Fetches a squad's scalar state by leader ID without loading relations.
  * @param client - The Drizzle client instance.
  * @param leaderId - The ID of the squad leader.
  * @returns - A promise that resolves to the squad details.
  */
 export const fetchSquadByLeader = async (client: DrizzleClient, leaderId: string) => {
   return await client.query.anbuSquad.findFirst({
-    with: {
-      members: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-          avatarLight: true,
-        },
-      },
-    },
     where: eq(anbuSquad.leaderId, leaderId),
   });
 };
