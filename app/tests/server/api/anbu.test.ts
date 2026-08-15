@@ -435,6 +435,32 @@ describe("ANBU router request permissions and concurrency", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it("reports a missing squad before checking reject permissions", async () => {
+    const { client, update } = makeDrizzleMock(null as never, []);
+    fetchRequestMock.mockResolvedValue({
+      id: "request-1",
+      senderId: "requester",
+      receiverId: "former-leader",
+      relatedId: "deleted-squad",
+      status: "PENDING",
+    } as never);
+    fetchUpdatedUserMock.mockResolvedValue({
+      user: makeUser({ rank: "KAGE" }),
+    } as never);
+
+    await expect(
+      rejectAnbuRequest(
+        {
+          ctx: { drizzle: client, userId: "actor" },
+          input: { id: "request-1" },
+        } as never,
+        requestDependencies,
+      ),
+    ).resolves.toEqual({ success: false, message: "Squad not found" });
+    expect(update).not.toHaveBeenCalled();
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
+
   for (const [label, actor] of [
     ["same-village elder", { rank: "ELDER" }],
     ["staff editor", { villageId: "village-2", role: "CONTENT" }],

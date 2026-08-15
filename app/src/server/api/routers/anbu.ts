@@ -944,6 +944,9 @@ export async function rejectAnbuRequest(
     dependencies.fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
   ]);
   const squad = await fetchSquadForAnbuRequest(ctx.drizzle, request);
+  if (!squad) {
+    return errorResponse("Squad not found");
+  }
   const { user } = updatedUser;
   const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
     getConvenienceStatus(user, squad);
