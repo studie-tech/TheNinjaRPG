@@ -428,6 +428,7 @@ const finalizeTournamentAndPayWinner = async (
   tournamentId: string,
   currentData: TournamentSyncData,
   finalMatch: TournamentMatch,
+  rewardWinner: typeof updateRewards,
 ): Promise<BaseServerResponse> => {
   const winnerId = getWinner(finalMatch);
   if (!winnerId) {
@@ -497,7 +498,7 @@ const finalizeTournamentAndPayWinner = async (
 
   const finalRewards = postProcessRewards(currentData.rewards);
   try {
-    await updateRewards({
+    await rewardWinner({
       client,
       user: winner,
       rewards: finalRewards,
@@ -543,10 +544,12 @@ const finalizeTournamentAndPayWinner = async (
  * 3) updateRewards for the winner.
  * 4) CAS TournamentRecord winnerId from null → winner (exactly one payout path).
  * 5) Cleanup matches + tournament row; notify participants.
+ * @param rewardWinner Reward writer injected by tests to keep module mocks isolated.
  */
 export const syncTournamentState = async (
   client: DrizzleClient,
   tournamentId: string,
+  rewardWinner: typeof updateRewards = updateRewards,
 ): Promise<BaseServerResponse> => {
   let data = await fetchTournamentForSync(client, tournamentId);
   if (!data) {
@@ -605,5 +608,6 @@ export const syncTournamentState = async (
     tournamentId,
     currentData,
     finalMatch,
+    rewardWinner,
   );
 };

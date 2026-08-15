@@ -8,7 +8,7 @@ import { quest } from "@/drizzle/schema";
 import {
   fetchUncompletedQuests,
   questTypeConcurrentBlockMessage,
-} from "@/routers/quests";
+} from "../../src/server/api/routers/quests";
 
 /** Creates a minimal user fixture with unfinished quests of the supplied types. */
 const userWith = (active: { questType: string; endAt?: Date | null }[]) =>

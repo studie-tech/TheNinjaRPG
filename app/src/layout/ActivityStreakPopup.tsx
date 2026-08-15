@@ -15,6 +15,10 @@ import {
 } from "@/components/ui/dialog";
 import { useLocalStorage } from "@/hooks/localstorage";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
+import {
+  isActivityStreakPopupBlocking,
+  resolveActivityStreakPopupOpen,
+} from "@/libs/activityStreak";
 import { cn } from "@/libs/shadui";
 import { getDateKey } from "@/utils/time";
 import { blockingPopupOpenAtom, useUserData } from "@/utils/UserContext";
@@ -61,20 +65,28 @@ const ActivityStreakPopup: React.FC = () => {
   const shouldShowPopup = hasUnclaimedRewards || needsCatchUp || hasRecurringToEnroll;
 
   useEffect(() => {
-    if (!isLoading && shouldShowPopup && !dismissedToday && !userClosed) {
-      setIsModalOpen(true);
-    }
+    setIsModalOpen((isOpen) =>
+      resolveActivityStreakPopupOpen({
+        isOpen,
+        isLoading,
+        shouldShowPopup,
+        dismissedToday,
+        userClosed,
+      }),
+    );
   }, [isLoading, shouldShowPopup, dismissedToday, userClosed]);
 
   // This popup blocks the overworld arrival prompt while it is on screen OR while its
   // show-decision is still loading — the latter closes a fresh-login race where the arrival
   // prompt would otherwise open in the gap before this dialog mounts. Gated on `userClosed`
   // so that once the user closes it, the arrival prompt is free to fire.
-  const isBlocking =
-    !!userData &&
-    !dismissedToday &&
-    !userClosed &&
-    (isLoading || shouldShowPopup || isModalOpen);
+  const isBlocking = isActivityStreakPopupBlocking(!!userData, {
+    isOpen: isModalOpen,
+    isLoading,
+    shouldShowPopup,
+    dismissedToday,
+    userClosed,
+  });
   useEffect(() => {
     setBlockingPopupOpen(isBlocking);
     return () => setBlockingPopupOpen(false);
