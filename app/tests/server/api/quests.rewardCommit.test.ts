@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from "vitest";
-import { commitQuestObjectiveRewards } from "@/routers/quests";
+import { commitQuestObjectiveRewards } from "../../../src/server/api/routers/quests";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 
 const rewards = () => PostProcessedRewardSchema.parse({});

@@ -1,14 +1,11 @@
+import { describe, expect, it } from "vitest";
 import { Texture } from "three";
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("@/libs/threejs/util", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/libs/threejs/util")>()),
-  loadTexture: vi.fn(() => new Texture()),
-}));
 
 import { createUserSprite } from "@/libs/threejs/sector";
 
 const hex = { width: 20, height: 20 } as never;
+/** Returns an unloaded Three.js texture for browser-independent marker tests. */
+const textureForPath = () => new Texture();
 
 /** Minimal sector user fixture for marker-tree compatibility assertions. */
 const user = (patch: Record<string, unknown> = {}) =>
@@ -24,7 +21,7 @@ const user = (patch: Record<string, unknown> = {}) =>
 
 describe("createUserSprite compatibility", () => {
   it("preserves the legacy player marker and hidden action child layout", () => {
-    const group = createUserSprite(user(), hex);
+    const group = createUserSprite(user(), hex, textureForPath);
 
     expect(group.name).toBe("user-1");
     expect(group.userData).toMatchObject({
@@ -43,7 +40,7 @@ describe("createUserSprite compatibility", () => {
   });
 
   it("keeps restricted players non-attackable while retaining heal and info", () => {
-    const group = createUserSprite(user({ rank: "STUDENT" }), hex);
+    const group = createUserSprite(user({ rank: "STUDENT" }), hex, textureForPath);
 
     expect(group.children.map((child) => child.userData.type)).toEqual([
       "userMarker",
@@ -67,6 +64,7 @@ describe("createUserSprite compatibility", () => {
         npcInteractionType: interaction,
       }),
       hex,
+      textureForPath,
     );
 
     expect(group.name).toBe("placement-1");

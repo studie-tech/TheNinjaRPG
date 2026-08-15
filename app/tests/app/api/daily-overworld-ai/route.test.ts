@@ -2,39 +2,65 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  authenticate: vi.fn(),
-  lock: vi.fn(),
-  rollback: vi.fn(),
-  handleError: vi.fn(),
-  findMany: vi.fn(),
-  update: vi.fn(),
-  fetchMaps: vi.fn(),
-  resolve: vi.fn(),
-  snap: vi.fn(),
-  updateSets: [] as Record<string, unknown>[],
-}));
+type DailyOverworldTestMocks = {
+  authenticate: ReturnType<typeof vi.fn>;
+  lock: ReturnType<typeof vi.fn>;
+  rollback: ReturnType<typeof vi.fn>;
+  handleError: ReturnType<typeof vi.fn>;
+  findMany: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  fetchMaps: ReturnType<typeof vi.fn>;
+  resolve: ReturnType<typeof vi.fn>;
+  snap: ReturnType<typeof vi.fn>;
+  updateSets: Record<string, unknown>[];
+};
+
+/** Returns Bun-compatible module mocks shared by the hoisted route factories. */
+function getDailyOverworldTestMocks(): DailyOverworldTestMocks {
+  const globals = globalThis as unknown as {
+    __dailyOverworldTestMocks?: DailyOverworldTestMocks;
+  };
+  globals.__dailyOverworldTestMocks ??= {
+    authenticate: vi.fn(),
+    lock: vi.fn(),
+    rollback: vi.fn(),
+    handleError: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+    fetchMaps: vi.fn(),
+    resolve: vi.fn(),
+    snap: vi.fn(),
+    updateSets: [],
+  };
+  return globals.__dailyOverworldTestMocks;
+}
+
+const mocks = getDailyOverworldTestMocks();
 
 vi.mock("next/headers", () => ({ cookies: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/server/utils/cron", () => ({
-  authenticateCronRequest: mocks.authenticate,
+  authenticateCronRequest: getDailyOverworldTestMocks().authenticate,
 }));
 vi.mock("@/libs/gamesettings", () => ({
-  lockWithDailyTimer: mocks.lock,
-  updateGameSetting: mocks.rollback,
-  handleEndpointError: mocks.handleError,
+  lockWithDailyTimer: getDailyOverworldTestMocks().lock,
+  updateGameSetting: getDailyOverworldTestMocks().rollback,
+  handleEndpointError: getDailyOverworldTestMocks().handleError,
 }));
 vi.mock("@/libs/overworldAi", () => ({
-  resolveOverworldPosition: mocks.resolve,
-  snapOverworldPositionToWalkable: mocks.snap,
+  resolveOverworldPosition: getDailyOverworldTestMocks().resolve,
+  snapOverworldPositionToWalkable: getDailyOverworldTestMocks().snap,
 }));
 vi.mock("@/server/utils/sectorMap", () => ({
-  fetchPublishedSectorMaps: mocks.fetchMaps,
+  fetchPublishedSectorMaps: getDailyOverworldTestMocks().fetchMaps,
 }));
 vi.mock("@/server/db", () => ({
   drizzleDB: {
-    query: { overworldAiPlacement: { findMany: mocks.findMany } },
-    update: mocks.update,
+    query: {
+      overworldAiPlacement: {
+        findMany: getDailyOverworldTestMocks().findMany,
+      },
+    },
+    update: getDailyOverworldTestMocks().update,
   },
 }));
 

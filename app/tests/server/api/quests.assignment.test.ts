@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from "vitest";
-import { assignQuestToUser } from "@/routers/quests";
+import { assignQuestToUser } from "../../../src/server/api/routers/quests";
 
 const quest = {
   id: "mission-1",

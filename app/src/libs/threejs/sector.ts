@@ -758,8 +758,16 @@ export const drawSector = (
  * Creates a sector-map user marker. Players receive the standard portrait pin and
  * hidden PvP/heal/info actions; overworld NPCs receive a full-character sprite and
  * a visible talk or attack action keyed by placement id.
+ * @param userData Player or overworld-NPC data rendered on the sector map.
+ * @param hex Tile geometry used to size and position the marker sprites.
+ * @param textureForPath Texture resolver; injectable so marker structure can be tested
+ * without a browser image loader.
  */
-export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
+export const createUserSprite = (
+  userData: SectorUser,
+  hex: TerrainHex,
+  textureForPath: typeof loadTexture = loadTexture,
+) => {
   // Group is used to group components of the user Marker
   const group = new Group();
   const { height: h, width: w } = hex;
@@ -768,7 +776,7 @@ export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
   // as a free-standing character standing on the tile instead, so they skip the pin entirely.
   if (!userData.isNpc) {
     // Highlight sprite
-    const highlightTexture = loadTexture(IMG_SECTOR_USER_MARKER);
+    const highlightTexture = textureForPath(IMG_SECTOR_USER_MARKER);
     const highlightMaterial = new SpriteMaterial({
       map: highlightTexture,
       alphaMap: highlightTexture,
@@ -788,7 +796,7 @@ export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
     group.add(highlightSprite);
 
     // Marker
-    const marker = loadTexture(IMG_SECTOR_USER_MARKER);
+    const marker = textureForPath(IMG_SECTOR_USER_MARKER);
     const markerMat = new SpriteMaterial({ map: marker, alphaMap: marker });
     const markerSprite = new Sprite(markerMat);
     markerSprite.userData.type = "marker";
@@ -800,14 +808,14 @@ export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
   // Avatar Sprite. Players are cropped to a circular portrait via the sprite mask; NPCs use
   // the avatar's own transparency so the full character shows, sized up to read on the tile.
   const avatar = pickSpriteAvatar(userData);
-  const map = loadTexture(avatar);
+  const map = textureForPath(avatar);
   map.generateMipmaps = false;
   map.minFilter = LinearFilter;
   const material = userData.isNpc
     ? new SpriteMaterial({ map: map, transparent: true })
     : new SpriteMaterial({
         map: map,
-        alphaMap: loadTexture(IMG_SECTOR_USER_SPRITE_MASK),
+        alphaMap: textureForPath(IMG_SECTOR_USER_SPRITE_MASK),
       });
   const sprite = new Sprite(material);
   const avatarScale = userData.isNpc ? h * 1.3 : h * 0.8;
@@ -818,7 +826,7 @@ export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
   if (userData.isNpc) {
     // NPC interaction sprite: "talk" for friendly, "attack" for hostile
     const isHostile = userData.npcInteractionType === "HOSTILE";
-    const npcIcon = loadTexture(isHostile ? IMG_SECTOR_ATTACK : IMG_MAP_QUEST_ICON);
+    const npcIcon = textureForPath(isHostile ? IMG_SECTOR_ATTACK : IMG_MAP_QUEST_ICON);
     const npcMat = new SpriteMaterial({ map: npcIcon, depthTest: false });
     const npcSprite = new Sprite(npcMat);
     npcSprite.visible = true;
@@ -833,7 +841,7 @@ export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
   } else {
     // Attack button
     if (!RANKS_RESTRICTED_FROM_PVP.includes(userData.rank)) {
-      const attack = loadTexture(IMG_SECTOR_ATTACK);
+      const attack = textureForPath(IMG_SECTOR_ATTACK);
       const attackMat = new SpriteMaterial({ map: attack, depthTest: false });
       const attackSprite = new Sprite(attackMat);
       attackSprite.visible = false;
@@ -846,7 +854,7 @@ export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
     }
 
     // Heal button
-    const heal = loadTexture(IMG_ICON_HEAL);
+    const heal = textureForPath(IMG_ICON_HEAL);
     const healMat = new SpriteMaterial({ map: heal, depthTest: false });
     const healSprite = new Sprite(healMat);
     healSprite.visible = false;
@@ -858,7 +866,7 @@ export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
     group.add(healSprite);
 
     // Info button
-    const info = loadTexture(IMG_SECTOR_INFO);
+    const info = textureForPath(IMG_SECTOR_INFO);
     const infoMat = new SpriteMaterial({ map: info, depthTest: false });
     const infoSprite = new Sprite(infoMat);
     infoSprite.visible = false;

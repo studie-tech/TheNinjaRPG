@@ -63,11 +63,6 @@ vi.mock("@/routers/profile", () => ({
     (getTournamentTestMocks().fetchUserMock as (...a: unknown[]) => unknown)(...args),
 }));
 
-vi.mock("@/routers/quests", () => ({
-  updateRewards: (...args: unknown[]) =>
-    (getTournamentTestMocks().updateRewardsMock as (...a: unknown[]) => unknown)(...args),
-}));
-
 import { syncTournamentState } from "@/routers/tournament";
 const FINALIZATION_INCOMPLETE =
   "Tournament finalization incomplete. Staff recovery required.";
@@ -174,6 +169,11 @@ describe("syncTournamentState", () => {
   let pusherTrigger: ReturnType<typeof vi.fn>;
   let fetchUserMock: ReturnType<typeof vi.fn>;
   let updateRewardsMock: ReturnType<typeof vi.fn>;
+  let rewardWinner: typeof import("@/routers/quests").updateRewards;
+
+  /** Runs synchronization with the isolated reward writer configured by each test. */
+  const syncTournament = (client: unknown) =>
+    syncTournamentState(client as never, "tournament-1", rewardWinner);
 
   beforeEach(() => {
     const mocks = getTournamentTestMocks();
@@ -183,6 +183,7 @@ describe("syncTournamentState", () => {
     pusherTrigger = mocks.pusherTrigger;
     fetchUserMock = mocks.fetchUserMock;
     updateRewardsMock = mocks.updateRewardsMock;
+    rewardWinner = updateRewardsMock as unknown as typeof rewardWinner;
 
     fetchUserMock.mockResolvedValue({
       userId: "winner-1",
@@ -194,7 +195,7 @@ describe("syncTournamentState", () => {
   it("finalizes the tournament exactly once when the CAS update wins", async () => {
     const { client, insertValues } = createClient();
 
-    const result = await syncTournamentState(client as never, "tournament-1");
+    const result = await syncTournament(client);
 
     expect(result).toEqual({ success: true, message: "Tournament synchronized." });
     expect(client.insert).toHaveBeenCalledWith(tournamentRecord);
@@ -216,7 +217,7 @@ describe("syncTournamentState", () => {
     const { client } = createClient();
     fetchUserMock.mockResolvedValue(null);
 
-    const result = await syncTournamentState(client as never, "tournament-1");
+    const result = await syncTournament(client);
 
     expect(result).toEqual({ success: false, message: "Tournament winner not found." });
     expect(client.update).not.toHaveBeenCalled();
@@ -230,7 +231,7 @@ describe("syncTournamentState", () => {
     const { client } = createClient();
     updateRewardsMock.mockRejectedValueOnce(new Error("boom"));
 
-    const result = await syncTournamentState(client as never, "tournament-1");
+    const result = await syncTournament(client);
 
     expect(result).toEqual({ success: false, message: FINALIZATION_INCOMPLETE });
     expect(client.insert).toHaveBeenCalledWith(tournamentRecord);
@@ -246,7 +247,7 @@ describe("syncTournamentState", () => {
       recordResponses: [createTournamentRecord({ winnerId: null })],
     });
 
-    const result = await syncTournamentState(client as never, "tournament-1");
+    const result = await syncTournament(client);
 
     expect(result).toEqual({ success: false, message: FINALIZATION_INCOMPLETE });
     expect(updateRewardsMock).not.toHaveBeenCalled();
@@ -260,7 +261,7 @@ describe("syncTournamentState", () => {
       recordResponses: [createTournamentRecord()],
     });
 
-    const result = await syncTournamentState(client as never, "tournament-1");
+    const result = await syncTournament(client);
 
     expect(result).toEqual({ success: true, message: "Tournament synchronized." });
     expect(updateRewardsMock).not.toHaveBeenCalled();
@@ -274,7 +275,7 @@ describe("syncTournamentState", () => {
       updateRowsAffected: [0],
     });
 
-    const result = await syncTournamentState(client as never, "tournament-1");
+    const result = await syncTournament(client);
 
     expect(result).toEqual({ success: true, message: "Tournament synchronized." });
     expect(updateWhere).toHaveBeenCalledTimes(1);
@@ -291,7 +292,7 @@ describe("syncTournamentState", () => {
     });
     insertValues.mockRejectedValueOnce(new Error("ER_DUP_ENTRY"));
 
-    const result = await syncTournamentState(client as never, "tournament-1");
+    const result = await syncTournament(client);
 
     expect(result).toEqual({ success: false, message: FINALIZATION_INCOMPLETE });
     expect(updateRewardsMock).not.toHaveBeenCalled();
@@ -308,7 +309,7 @@ describe("syncTournamentState", () => {
     });
     insertValues.mockRejectedValueOnce(new Error("ER_DUP_ENTRY"));
 
-    const result = await syncTournamentState(client as never, "tournament-1");
+    const result = await syncTournament(client);
 
     expect(result).toEqual({ success: true, message: "Tournament synchronized." });
     expect(updateRewardsMock).not.toHaveBeenCalled();
