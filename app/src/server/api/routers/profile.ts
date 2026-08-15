@@ -706,6 +706,15 @@ export const profileRouter = createTRPCRouter({
           group: "Active boosts",
         });
       }
+      const itemExpBoost = getGameSettingBoost("itemExpMultiplier", settings);
+      if (itemExpBoost) {
+        notifications.push({
+          href: "/items",
+          name: `Global: ${itemExpBoost.value}X item exp | ${itemExpBoost.daysLeft} days`,
+          color: "green",
+          group: "Active boosts",
+        });
+      }
       // User specific
       if (user) {
         // War-time regen boost

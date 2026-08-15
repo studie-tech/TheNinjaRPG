@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import {
   and,
   asc,
@@ -5,6 +6,7 @@ import {
   exists,
   gte,
   inArray,
+  isNotNull,
   isNull,
   like,
   lte,
@@ -28,7 +30,9 @@ import {
 import type { ItemSlot } from "@/drizzle/constants";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
+  EVOLUTION_MAX_CHILDREN,
   IMG_AVATAR_DEFAULT,
+  ITEM_LEVEL_CAP,
   ItemSlots,
   ItemTypes,
   MAX_EXTRA_RESKIN_SLOTS,
@@ -38,6 +42,7 @@ import {
   TUTORIAL_ITEM_ID,
 } from "@/drizzle/constants";
 import type {
+  Item,
   ItemLoadout,
   UserData,
   UserItem,
@@ -61,6 +66,12 @@ import {
 } from "@/drizzle/schema";
 import { filterRollableBloodlines } from "@/libs/bloodline";
 import {
+  filterVisibleEvolutions,
+  isEvolution,
+  meetsEvolutionStatRequirements,
+  validateEvolutionGraph,
+} from "@/libs/evolution";
+import {
   calcItemRepairCost,
   calcItemSellingPrice,
   calcMaxEventItems,
@@ -69,8 +80,8 @@ import {
   canEquipAdditional,
   computeLoadoutAssignments,
   nonCombatConsume,
+  partitionImbuementsForItemTransfer,
 } from "@/libs/item";
-import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
 import {
   buildMissingLoadouts,
   decideRename,
@@ -83,12 +94,14 @@ import {
   objectiveContentIds,
   postProcessRewards,
 } from "@/libs/quest";
+import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
 import {
   fetchSageModeRolls,
   fetchSageModes,
   filterRollableSageModes,
 } from "@/libs/sageMode";
 import { callDiscordContent } from "@/libs/socials";
+import { hasRequiredLevel } from "@/libs/train";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { fetchUserSkills } from "@/routers/skillTree";
@@ -106,7 +119,12 @@ import {
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedItemLoadouts } from "@/utils/paypal";
-import { canAwardReputation, canChangeContent } from "@/utils/permissions";
+import {
+  canAwardReputation,
+  canChangeContent,
+  canEditItems,
+  canOnlyEditSelf,
+} from "@/utils/permissions";
 import { sanitizeVariantText } from "@/utils/sanitize";
 import type { QueryCondition } from "@/utils/typeutils";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
@@ -115,6 +133,8 @@ import type { ZodAllTags } from "@/validators/combat";
 import { HealTag, ItemValidator, NonCombatGainSkill } from "@/validators/combat";
 import type { ItemFilteringSchema } from "@/validators/item";
 import {
+  evolveItemSchema,
+  getItemEvolutionsSchema,
   ItemVariantResponseSchema,
   ItemVariantValidator,
   itemBuySchema,
@@ -284,55 +304,74 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query
       const [user, entry] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchItem(ctx.drizzle, input.id),
       ]);
-      // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Item not found");
       if (entry.id === TUTORIAL_ITEM_ID)
         return errorResponse("Cannot delete tutorial item");
-      if (entry && canChangeContent(user.role)) {
-        // No FK cascades on PlanetScale, so clean variant rows leaf-first (user
-        // unlocks -> variant definitions) before deleting the parent item, mirroring
-        // deleteItemVariant. A partial failure then leaves orphaned children pointing
-        // at a still-present parent rather than dangling references to a missing one.
-        const variants = await ctx.drizzle.query.itemVariant.findMany({
-          where: eq(itemVariant.itemId, input.id),
-          columns: { id: true },
-        });
-        if (variants.length > 0) {
-          await ctx.drizzle.delete(userItemVariant).where(
-            inArray(
-              userItemVariant.variantId,
-              variants.map((v) => v.id),
-            ),
-          );
-          await ctx.drizzle.delete(itemVariant).where(eq(itemVariant.itemId, input.id));
-        }
-        await Promise.all([
-          ctx.drizzle.delete(item).where(eq(item.id, input.id)),
-          ctx.drizzle.delete(userItem).where(eq(userItem.itemId, input.id)),
-          ctx.drizzle
-            .delete(userItemImbuement)
-            .where(eq(userItemImbuement.imbuementItemId, input.id)),
-          ctx.drizzle.insert(actionLog).values({
-            id: nanoid(),
-            userId: ctx.userId,
-            tableName: "item",
-            changes: [`Deleted: ${entry.name}`],
-            relatedId: entry.id,
-            relatedMsg: `Delete: ${entry.name}`,
-            relatedImage: entry.image,
-          }),
-        ]);
-        return { success: true, message: `Item deleted` };
-      } else {
+      if (!canChangeContent(user.role)) {
         return { success: false, message: `Not allowed to delete item` };
       }
+
+      // Write-time guard: only delete if no child evolutions currently point here.
+      // Nested derived table avoids MySQL errno 1093 (can't update/delete target in FROM).
+      const deleteResult = await ctx.drizzle.delete(item).where(
+        and(
+          eq(item.id, input.id),
+          sql`not exists (
+              select 1 from (
+                select \`id\` from \`Item\` where \`parentItemId\` = ${input.id}
+              ) as \`evolutionChildren\`
+            )`,
+        ),
+      );
+      if (deleteResult.rowsAffected === 0) {
+        const childEvolutions = await ctx.drizzle.query.item.findMany({
+          columns: { id: true, name: true },
+          where: eq(item.parentItemId, input.id),
+        });
+        if (childEvolutions.length > 0) {
+          return errorResponse(
+            `Cannot delete item with evolutions: ${childEvolutions.map((e) => e.name).join(", ")}`,
+          );
+        }
+        return errorResponse("Item not found or already deleted");
+      }
+
+      // Clean dependent rows after the guarded parent delete succeeds
+      const variants = await ctx.drizzle.query.itemVariant.findMany({
+        where: eq(itemVariant.itemId, input.id),
+        columns: { id: true },
+      });
+      if (variants.length > 0) {
+        await ctx.drizzle.delete(userItemVariant).where(
+          inArray(
+            userItemVariant.variantId,
+            variants.map((v) => v.id),
+          ),
+        );
+        await ctx.drizzle.delete(itemVariant).where(eq(itemVariant.itemId, input.id));
+      }
+      await Promise.all([
+        ctx.drizzle.delete(userItem).where(eq(userItem.itemId, input.id)),
+        ctx.drizzle
+          .delete(userItemImbuement)
+          .where(eq(userItemImbuement.imbuementItemId, input.id)),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "item",
+          changes: [`Deleted: ${entry.name}`],
+          relatedId: entry.id,
+          relatedMsg: `Delete: ${entry.name}`,
+          relatedImage: entry.image,
+        }),
+      ]);
+      return { success: true, message: `Item deleted` };
     }),
   // Update an item
   update: protectedProcedure
@@ -341,14 +380,30 @@ export const itemRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       setEmptyStringsToNulls(input.data, item);
       // Query
-      const [user, entry, itemWithName] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
-        ctx.drizzle.query.item.findFirst({
-          columns: { name: true, id: true },
-          where: eq(item.name, input.data.name),
-        }),
-      ]);
+      const [user, entry, itemWithName, parent, siblings, evolutionGraph] =
+        await Promise.all([
+          fetchUser(ctx.drizzle, ctx.userId),
+          fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
+          ctx.drizzle.query.item.findFirst({
+            columns: { name: true, id: true },
+            where: eq(item.name, input.data.name),
+          }),
+          input.data.parentItemId
+            ? fetchItem(ctx.drizzle, input.data.parentItemId)
+            : Promise.resolve(null),
+          input.data.parentItemId
+            ? ctx.drizzle.query.item.findMany({
+                columns: { id: true },
+                where: eq(item.parentItemId, input.data.parentItemId),
+              })
+            : Promise.resolve([]),
+          input.data.parentItemId
+            ? ctx.drizzle.query.item.findMany({
+                columns: { id: true, parentItemId: true },
+                where: isNotNull(item.parentItemId),
+              })
+            : Promise.resolve([]),
+        ]);
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
@@ -360,6 +415,22 @@ export const itemRouter = createTRPCRouter({
       }
       if (entry.id === TUTORIAL_ITEM_ID && input?.data?.hidden)
         return errorResponse("Cannot hide tutorial item");
+      // Validate evolution chain constraints
+      if (input.data.parentItemId) {
+        const graphValidation = validateEvolutionGraph({
+          contentId: input.id,
+          parentId: input.data.parentItemId,
+          parentExists: !!parent,
+          parentParentId: parent?.parentItemId ?? null,
+          siblingIds: siblings.map((s) => s.id),
+          graph: evolutionGraph.map((node) => ({
+            id: node.id,
+            parentId: node.parentItemId,
+          })),
+          contentLabel: "item",
+        });
+        if (!graphValidation.ok) return errorResponse(graphValidation.message);
+      }
       // Validate that weapons and battle consumables have at least one effect with both appearAnimation and appearSfx
       const requiresAnimation =
         input.data.itemType === "WEAPON" ||
@@ -434,9 +505,36 @@ export const itemRouter = createTRPCRouter({
         .delete(craftingRequirement)
         .where(eq(craftingRequirement.craftItemId, input.id));
 
-      // Update database
+      // Write-time parent existence + sibling-cap guards when setting an evolution parent.
+      // Nested derived tables avoid MySQL errno 1093 (can't update target table in FROM).
+      const evolutionUpdateGuards = input.data.parentItemId
+        ? [
+            sql`exists (
+              select 1 from (
+                select \`id\` from \`Item\` where \`id\` = ${input.data.parentItemId}
+              ) as \`parentItemForEvo\`
+            )`,
+            sql`(
+              select \`cnt\` from (
+                select count(*) as \`cnt\` from \`Item\` as \`evoSibling\`
+                where \`evoSibling\`.\`parentItemId\` = ${input.data.parentItemId}
+                and \`evoSibling\`.\`id\` != ${input.id}
+              ) as \`evoSiblingCount\`
+            ) < ${EVOLUTION_MAX_CHILDREN}`,
+          ]
+        : [];
+
+      const updateResult = await ctx.drizzle
+        .update(item)
+        .set(input.data)
+        .where(and(eq(item.id, input.id), ...evolutionUpdateGuards));
+      if (updateResult.rowsAffected === 0) {
+        return errorResponse(
+          "Update failed — parent may have been deleted or evolution limits changed. Refresh and try again.",
+        );
+      }
+
       await Promise.all([
-        ctx.drizzle.update(item).set(input.data).where(eq(item.id, input.id)),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
@@ -474,6 +572,177 @@ export const itemRouter = createTRPCRouter({
       }
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
+
+  getEvolutions: publicProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Get all evolution items for a parent item",
+      },
+    })
+    .input(getItemEvolutionsSchema)
+    .query(async ({ ctx, input }) => {
+      const [user, evolutions] = await Promise.all([
+        ctx.userId
+          ? ctx.drizzle.query.userData.findFirst({
+              where: eq(userData.userId, ctx.userId),
+              columns: { role: true },
+            })
+          : Promise.resolve(null),
+        ctx.drizzle.query.item.findMany({
+          where: eq(item.parentItemId, input.itemId),
+          orderBy: (table, { asc: orderAsc }) => [orderAsc(table.requiredLevel)],
+        }),
+      ]);
+      const canViewHidden = !!user && canChangeContent(user.role);
+      return filterVisibleEvolutions(evolutions, canViewHidden);
+    }),
+
+  evolveItem: protectedProcedure
+    .meta({ mcp: { enabled: true, description: "Evolve an item into its evolution" } })
+    .input(evolveItemSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [{ user }, userItems, evolutionItem] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
+        fetchItem(ctx.drizzle, input.evolutionItemId),
+      ]);
+      if (!user) return errorResponse("User not found");
+      if (user.status !== "AWAKE")
+        return errorResponse("Must be awake to evolve an item");
+      if (!evolutionItem) return errorResponse("Evolution item not found");
+      const parentItemId = evolutionItem.parentItemId;
+      if (!parentItemId) return errorResponse("Target item is not an evolution");
+      if (evolutionItem.hidden && !canChangeContent(user.role))
+        return errorResponse("This evolution is not yet available");
+
+      const userItemObj = userItems.find((ui) => ui.id === input.userItemId);
+      if (!userItemObj) return errorResponse("You don't own this item");
+
+      const alreadyEvolved = userItemObj.itemId === input.evolutionItemId;
+      if (!alreadyEvolved && userItemObj.itemId !== parentItemId) {
+        return errorResponse("This item cannot evolve into the target evolution");
+      }
+
+      if (!alreadyEvolved) {
+        if (userItemObj.isInAuction)
+          return errorResponse("Cannot evolve an item that is in an auction");
+        if (userItemObj.quantity !== 1)
+          return errorResponse("Split the stack to a single item before evolving");
+        if (
+          userItemObj.craftingFinishedAt &&
+          userItemObj.craftingFinishedAt > new Date()
+        ) {
+          return errorResponse("Cannot evolve an item that is still crafting");
+        }
+        if (userItemObj.level < ITEM_LEVEL_CAP) {
+          return errorResponse(
+            `Item must be at max level (${ITEM_LEVEL_CAP}) to evolve`,
+          );
+        }
+        if (!hasRequiredLevel(user.level, evolutionItem.requiredLevel))
+          return errorResponse(
+            "You don't meet the level requirement for this evolution",
+          );
+        if (!meetsEvolutionStatRequirements(evolutionItem, user))
+          return errorResponse(
+            "You don't meet the stat requirements for this evolution",
+          );
+        if (
+          evolutionItem.bloodlineId &&
+          evolutionItem.bloodlineId !== user.bloodlineId
+        ) {
+          return errorResponse(
+            "You don't meet the bloodline requirement for this evolution",
+          );
+        }
+      }
+
+      const canKeepEquipped =
+        userItemObj.equipped === "NONE" ||
+        userItemObj.equipped === evolutionItem.slot ||
+        userItemObj.equipped.startsWith(`${evolutionItem.slot}_`);
+
+      let didEvolveThisCall = alreadyEvolved;
+      if (!alreadyEvolved) {
+        const evolveResult = await ctx.drizzle
+          .update(userItem)
+          .set({
+            itemId: input.evolutionItemId,
+            level: 1,
+            experience: 0,
+            activeVariantId: null,
+            durability: sql`LEAST(${userItem.durability}, ${evolutionItem.maxDurability})`,
+            updatedAt: new Date(),
+            ...(canKeepEquipped ? {} : { equipped: "NONE" as const }),
+          })
+          .where(
+            and(
+              eq(userItem.id, input.userItemId),
+              eq(userItem.userId, ctx.userId),
+              eq(userItem.itemId, parentItemId),
+              eq(userItem.level, userItemObj.level),
+              eq(userItem.quantity, 1),
+              eq(userItem.isInAuction, false),
+              or(
+                isNull(userItem.craftingFinishedAt),
+                lte(userItem.craftingFinishedAt, new Date()),
+              ),
+            ),
+          );
+
+        didEvolveThisCall = evolveResult.rowsAffected === 1;
+        if (!didEvolveThisCall) {
+          const evolvedNow = await ctx.drizzle.query.userItem.findFirst({
+            where: and(
+              eq(userItem.id, input.userItemId),
+              eq(userItem.userId, ctx.userId),
+              eq(userItem.itemId, input.evolutionItemId),
+            ),
+            columns: { id: true },
+          });
+          if (!evolvedNow) {
+            return errorResponse(
+              "Evolution failed - item may have already been evolved",
+            );
+          }
+        }
+      }
+
+      // Fresh evolve with incompatible slot strips parent from loadouts; retries remap
+      // any leftover parent refs so cleanup stays recoverable.
+      const remapParentInLoadouts = didEvolveThisCall ? canKeepEquipped : true;
+
+      const finalized = await finalizeItemEvolutionCleanup({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        userItemId: input.userItemId,
+        parentItemId,
+        evolutionItem,
+        remapParentInLoadouts,
+      });
+      if (!finalized) {
+        return errorResponse(
+          "Item evolved but cleanup is incomplete — please try evolving again to finish",
+        );
+      }
+
+      if (didEvolveThisCall && !alreadyEvolved) {
+        await ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "userItem",
+          changes: [`Evolved ${userItemObj.item.name} into ${evolutionItem.name}`],
+          relatedId: input.evolutionItemId,
+          relatedMsg: "ItemEvolution",
+          relatedImage: evolutionItem.image,
+        });
+      }
+
+      return { success: true, message: `Evolved into ${evolutionItem.name}!` };
+    }),
+
   getAll: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get paginated items with filters" } })
     .input(
@@ -533,6 +802,97 @@ export const itemRouter = createTRPCRouter({
     })
     .query(async ({ ctx }) => {
       return await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId);
+    }),
+  // Get items of public user (staff edit)
+  getPublicUserItems: protectedProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canEditItems(user.role)) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Not allowed to edit public user",
+        });
+      }
+      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "You can only view your own items",
+        });
+      }
+      return await fetchUserItems(ctx.drizzle, input.userId, { includeHidden: true });
+    }),
+  // Adjust item level of public user
+  adjustUserItem: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        userItemId: z.string(),
+        level: z.number().int().min(1).max(ITEM_LEVEL_CAP),
+        experience: z.number().int().min(0).optional(),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canEditItems(user.role)) {
+        return errorResponse("Not allowed to edit public user");
+      }
+      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+        return errorResponse("You can only edit your own items");
+      }
+      const userItems = await fetchUserItems(ctx.drizzle, input.userId, {
+        includeHidden: true,
+      });
+      const owned = userItems.find((ui) => ui.id === input.userItemId);
+      if (!owned) {
+        return errorResponse("Item not found for user");
+      }
+
+      const xpToLevel = owned.item.xpToLevel;
+      const nextExperience =
+        input.experience !== undefined
+          ? Math.min(input.experience, Math.max(0, xpToLevel - 1))
+          : undefined;
+
+      const changes: string[] = [
+        `Item ${owned.item.name} lvl ${owned.level} -> ${input.level}`,
+      ];
+      if (nextExperience !== undefined && nextExperience !== owned.experience) {
+        changes.push(
+          `Item ${owned.item.name} XP ${owned.experience} -> ${nextExperience}`,
+        );
+      }
+
+      const updateResult = await ctx.drizzle
+        .update(userItem)
+        .set({
+          level: input.level,
+          ...(nextExperience !== undefined ? { experience: nextExperience } : {}),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(userItem.id, input.userItemId),
+            eq(userItem.userId, input.userId),
+            eq(userItem.level, owned.level),
+            eq(userItem.experience, owned.experience),
+          ),
+        );
+      if (updateResult.rowsAffected === 0) {
+        return errorResponse("Item changed concurrently — refresh and try again");
+      }
+
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "user",
+        changes,
+        relatedId: input.userId,
+        relatedMsg: `Update: ${owned.item.name}`,
+        relatedImage: owned.item.image,
+      });
+      return { success: true, message: "Item updated" };
     }),
   // Get all variants for an item
   getItemVariants: protectedProcedure
@@ -1929,6 +2289,8 @@ export const itemRouter = createTRPCRouter({
       if (input.stack > 1 && input.stack > info.stackSize)
         return errorResponse("You can not buy a stack with this many items");
       if (!info.inShop) return errorResponse("Item is not for sale");
+      if (isEvolution(info.parentItemId))
+        return errorResponse("Evolution items cannot be bought; they must be evolved");
       if (user.isBanned) return errorResponse("You are banned");
       if (info.hidden && !canChangeContent(user.role)) {
         return errorResponse("Item is hidden, cannot be bought");
@@ -2696,6 +3058,82 @@ export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) =
     // batched backfill) keep a stable order across reads.
     orderBy: (table) => [asc(table.createdAt), asc(table.id)],
   });
+};
+
+/**
+ * Idempotent post-evolve cleanup: drop incompatible imbuements and rewrite loadouts
+ * that still reference the parent item. Safe to re-run after a partial failure.
+ */
+const finalizeItemEvolutionCleanup = async (opts: {
+  client: DrizzleClient;
+  userId: string;
+  userItemId: string;
+  parentItemId: string;
+  evolutionItem: Item;
+  remapParentInLoadouts: boolean;
+}): Promise<boolean> => {
+  const {
+    client,
+    userId,
+    userItemId,
+    parentItemId,
+    evolutionItem,
+    remapParentInLoadouts,
+  } = opts;
+
+  const [owned, loadouts] = await Promise.all([
+    client.query.userItem.findFirst({
+      where: and(
+        eq(userItem.id, userItemId),
+        eq(userItem.userId, userId),
+        eq(userItem.itemId, evolutionItem.id),
+      ),
+      with: { imbuements: { with: { item: true } } },
+    }),
+    fetchItemLoadouts(client, userId),
+  ]);
+  if (!owned) return false;
+
+  const { remove: imbuementsToRemove } = partitionImbuementsForItemTransfer(
+    owned.imbuements,
+    evolutionItem,
+  );
+
+  const loadoutsToUpdate = loadouts
+    .filter((loadout) =>
+      loadout.itemData.some((entry) => entry.itemId === parentItemId),
+    )
+    .map((loadout) => ({
+      id: loadout.id,
+      itemData: remapParentInLoadouts
+        ? loadout.itemData.map((entry) =>
+            entry.itemId === parentItemId
+              ? { ...entry, itemId: evolutionItem.id }
+              : entry,
+          )
+        : loadout.itemData.filter((entry) => entry.itemId !== parentItemId),
+    }));
+
+  await Promise.all([
+    ...(imbuementsToRemove.length > 0
+      ? [
+          client.delete(userItemImbuement).where(
+            inArray(
+              userItemImbuement.id,
+              imbuementsToRemove.map((imb) => imb.id),
+            ),
+          ),
+        ]
+      : []),
+    ...loadoutsToUpdate.map((loadout) =>
+      client
+        .update(itemLoadout)
+        .set({ itemData: loadout.itemData })
+        .where(and(eq(itemLoadout.id, loadout.id), eq(itemLoadout.userId, userId))),
+    ),
+  ]);
+
+  return true;
 };
 
 /**

@@ -36,6 +36,7 @@ export type GenericObject = {
   image?: string;
   rarity?: ItemRarity;
   level?: number;
+  experience?: number;
   sector?: number;
   createdAt: Date;
   updatedAt: Date;
@@ -50,7 +51,12 @@ export interface ItemWithEffectsProps {
   item:
     | Bloodline
     | SageMode
-    | (Item & { imbuements?: Item[]; curDurability?: number })
+    | (Item & {
+        imbuements?: Item[];
+        curDurability?: number;
+        level?: number;
+        experience?: number;
+      })
     | Jutsu
     | Quest
     | GameAsset
@@ -113,12 +119,18 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
 
   // Only fetch evolutions when the caller explicitly opts in, to avoid N+1 queries
   // in list views. Pass showEvolutions={true} for single-item detail views (e.g.
-  // the jutsus/traininggrounds modals) where the evolution chain is meaningful.
+  // the jutsus/traininggrounds/items modals) where the evolution chain is meaningful.
   const isJutsuItem = "jutsuType" in item;
-  const { data: evolutionsData } = api.jutsu.getEvolutions.useQuery(
+  const isGameItem = "itemType" in item && !("jutsuType" in item);
+  const { data: jutsuEvolutions } = api.jutsu.getEvolutions.useQuery(
     { jutsuId: item.id },
     { enabled: isJutsuItem && !hideData && !!showEvolutions, staleTime: 5 * 60 * 1000 },
   );
+  const { data: itemEvolutions } = api.item.getEvolutions.useQuery(
+    { itemId: item.id },
+    { enabled: isGameItem && !hideData && !!showEvolutions, staleTime: 5 * 60 * 1000 },
+  );
+  const evolutionsData = isJutsuItem ? jutsuEvolutions : itemEvolutions;
 
   // Setup clone mutations
   const { mutate: cloneQuest } = api.quests.clone.useMutation({
@@ -660,6 +672,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Required Level</b>: {item.requiredLevel}
                 </p>
               )}
+              {"xpToLevel" in item &&
+                typeof item.xpToLevel === "number" &&
+                item.xpToLevel > 0 && (
+                  <p>
+                    <b>XP Per Level</b>: {item.xpToLevel}
+                  </p>
+                )}
               {"bloodlineId" in item && item.bloodlineId && (
                 <p>
                   <b>Required Bloodline</b>:{" "}
@@ -677,6 +696,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {"parentJutsuId" in item && item.parentJutsuId && (
                 <p className="col-span-2">
                   <b>Evolution</b>: Yes (evolves from a parent jutsu)
+                </p>
+              )}
+              {"parentItemId" in item && item.parentItemId && (
+                <p className="col-span-2">
+                  <b>Evolution</b>: Yes (evolves from a parent item)
                 </p>
               )}
               {(

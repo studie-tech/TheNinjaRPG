@@ -41,6 +41,7 @@ import {
   userData,
   userJutsu,
 } from "@/drizzle/schema";
+import { validateEvolutionGraph } from "@/libs/evolution";
 import type { ComputedJutsuLoadout, JutsuCapFlags, JutsuEquipCap } from "@/libs/jutsu";
 import {
   canEquipUnderCaps,
@@ -778,57 +779,21 @@ export const jutsuRouter = createTRPCRouter({
       }
       // Validate evolution chain constraints
       if (input.data.parentJutsuId) {
-        if (input.data.parentJutsuId === input.id)
-          return errorResponse("A jutsu cannot be its own parent");
-        if (!parent) return errorResponse("Parent jutsu not found");
-        if (parent.jutsuType === "AI")
+        if (parent?.jutsuType === "AI")
           return errorResponse("AI jutsus cannot be evolution parents");
-        // Max 3 direct evolutions per parent (exclude self in case of re-save)
-        const siblingCount = siblings.filter((s) => s.id !== input.id).length;
-        if (siblingCount >= 3)
-          return errorResponse("A jutsu can have a maximum of 3 evolutions");
-        // Validate chain depth (max 3 levels: A -> B -> C).
-        const jutsuById = new Map(
-          evolutionGraph.map((node) => [node.id, node] as const),
-        );
-        // Walk upward from parent to get ancestor depth, checking for circular refs.
-        // visitedAncestors guards against pre-existing cycles already in the DB.
-        let ancestorDepth = 1;
-        let ancestorParentId = parent.parentJutsuId;
-        const visitedAncestors = new Set<string>([input.data.parentJutsuId]);
-        while (ancestorParentId) {
-          if (ancestorParentId === input.id)
-            return errorResponse("Cannot create a circular evolution chain");
-          if (visitedAncestors.has(ancestorParentId)) break;
-          visitedAncestors.add(ancestorParentId);
-          const nextAncestor = jutsuById.get(ancestorParentId);
-          ancestorDepth++;
-          if (!nextAncestor) break;
-          ancestorParentId = nextAncestor.parentJutsuId;
-        }
-        // Walk downward from input.id to get the deepest descendant depth.
-        // visitedDescendants guards against pre-existing cycles in the DB.
-        const childrenByParent = new Map<string, string[]>();
-        for (const node of evolutionGraph) {
-          if (!node.parentJutsuId) continue;
-          const children = childrenByParent.get(node.parentJutsuId) ?? [];
-          children.push(node.id);
-          childrenByParent.set(node.parentJutsuId, children);
-        }
-        let descendantDepth = 1;
-        let frontier = [input.id];
-        const visitedDescendants = new Set<string>([input.id]);
-        while (frontier.length > 0) {
-          const nextFrontier = frontier
-            .flatMap((parentId) => childrenByParent.get(parentId) ?? [])
-            .filter((id) => !visitedDescendants.has(id));
-          if (nextFrontier.length === 0) break;
-          for (const id of nextFrontier) visitedDescendants.add(id);
-          frontier = nextFrontier;
-          descendantDepth++;
-        }
-        if (ancestorDepth + descendantDepth > 3)
-          return errorResponse("Maximum evolution chain depth is 3");
+        const graphValidation = validateEvolutionGraph({
+          contentId: input.id,
+          parentId: input.data.parentJutsuId,
+          parentExists: !!parent,
+          parentParentId: parent?.parentJutsuId ?? null,
+          siblingIds: siblings.map((s) => s.id),
+          graph: evolutionGraph.map((node) => ({
+            id: node.id,
+            parentId: node.parentJutsuId,
+          })),
+          contentLabel: "jutsu",
+        });
+        if (!graphValidation.ok) return errorResponse(graphValidation.message);
       }
       // Diff
       const diff = calculateContentDiff(entry, {

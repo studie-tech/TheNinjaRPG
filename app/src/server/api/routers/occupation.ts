@@ -134,6 +134,9 @@ export const occupationRouter = createTRPCRouter({
       if (!itemWithRequirements.canBeCrafted) {
         return errorResponse("This item is not craftable");
       }
+      if (itemWithRequirements.parentItemId) {
+        return errorResponse("Evolution items cannot be crafted; they must be evolved");
+      }
       if (itemWithRequirements.craftingRequirements.length === 0) {
         return errorResponse("This item cannot be crafted (no requirements defined)");
       }
@@ -643,13 +646,13 @@ export const occupationRouter = createTRPCRouter({
       }
 
       // Check if the user owns this item
-      const userItem = userItems.find((ui) => ui.id === imbuement.userItemId);
-      if (!userItem) {
+      const ownedUserItem = userItems.find((ui) => ui.id === imbuement.userItemId);
+      if (!ownedUserItem) {
         return errorResponse("You don't own this item");
       }
 
       // Check if item is equipped
-      if (userItem.equipped !== "NONE") {
+      if (ownedUserItem.equipped !== "NONE") {
         return errorResponse("Cannot remove imbuement from equipped item");
       }
 
@@ -658,14 +661,39 @@ export const occupationRouter = createTRPCRouter({
         return errorResponse("Cannot remove imbuement that is still being crafted");
       }
 
-      // Remove the imbuement
-      await ctx.drizzle
+      // When imbuing is disabled on the item, refund the crystal to inventory
+      const returnsCrystal = !ownedUserItem.item.canBeImbued;
+
+      const deleteResult = await ctx.drizzle
         .delete(userItemImbuement)
-        .where(eq(userItemImbuement.id, input.userItemImbuementId));
+        .where(
+          and(
+            eq(userItemImbuement.id, input.userItemImbuementId),
+            eq(userItemImbuement.userItemId, ownedUserItem.id),
+          ),
+        );
+      if (deleteResult.rowsAffected === 0) {
+        return errorResponse("Imbuement already removed");
+      }
+
+      if (returnsCrystal) {
+        await ctx.drizzle.insert(userItem).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          itemId: imbuement.imbuementItemId,
+          quantity: 1,
+          equipped: "NONE",
+          storedAtHome: false,
+          isInAuction: false,
+          craftingFinishedAt: null,
+        });
+      }
 
       return {
         success: true,
-        message: `Removed ${imbuement.item.name} from ${userItem.item.name}`,
+        message: returnsCrystal
+          ? `Removed ${imbuement.item.name} from ${ownedUserItem.item.name} and returned the crystal to your inventory`
+          : `Removed ${imbuement.item.name} from ${ownedUserItem.item.name}`,
       };
     }),
 });

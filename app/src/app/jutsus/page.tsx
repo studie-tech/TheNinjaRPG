@@ -57,6 +57,7 @@ import {
   checkJutsuVillage,
   hasRequiredLevel,
   hasRequiredRank,
+  remainingXpToLevel,
 } from "@/libs/train";
 import { canReskinFreely, canTransferJutsu } from "@/utils/permissions";
 import { DAY_S, secondsFromDate } from "@/utils/time";
@@ -586,7 +587,10 @@ export default function MyJutsu() {
           >
             <div>
               <p>- You have {userData.money.toLocaleString()} ryo in your pocket</p>
-              <p>- Need {JUTSU_XP_TO_LEVEL - userjutsu.experience} XP more to level</p>
+              <p>
+                - Need {remainingXpToLevel(JUTSU_XP_TO_LEVEL, userjutsu.experience)} XP
+                more to level
+              </p>
             </div>
             {!isPending && (
               <>

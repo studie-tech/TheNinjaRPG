@@ -1,0 +1,18 @@
+ALTER TABLE `Item` ADD `xpToLevel` int DEFAULT 1000 NOT NULL;
+ALTER TABLE `Item` ADD `parentItemId` varchar(191);
+ALTER TABLE `Item` ADD `requiredNinjutsuOffence` int;
+ALTER TABLE `Item` ADD `requiredNinjutsuDefence` int;
+ALTER TABLE `Item` ADD `requiredGenjutsuOffence` int;
+ALTER TABLE `Item` ADD `requiredGenjutsuDefence` int;
+ALTER TABLE `Item` ADD `requiredTaijutsuOffence` int;
+ALTER TABLE `Item` ADD `requiredTaijutsuDefence` int;
+ALTER TABLE `Item` ADD `requiredBukijutsuOffence` int;
+ALTER TABLE `Item` ADD `requiredBukijutsuDefence` int;
+ALTER TABLE `Item` ADD `requiredStrength` int;
+ALTER TABLE `Item` ADD `requiredSpeed` int;
+ALTER TABLE `Item` ADD `requiredIntelligence` int;
+ALTER TABLE `Item` ADD `requiredWillpower` int;
+ALTER TABLE `UserItem` ADD `level` int DEFAULT 1 NOT NULL;
+ALTER TABLE `UserItem` ADD `experience` int DEFAULT 0 NOT NULL;
+CREATE INDEX `Item_parentItemId_idx` ON `Item` (`parentItemId`);
+CREATE INDEX `Item_parentItemId_hidden_idx` ON `Item` (`parentItemId`,`hidden`);

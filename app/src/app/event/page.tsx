@@ -60,6 +60,12 @@ export default function NotifyUsers() {
         subtitle="Modify jutsu experience gains globally"
         initialBreak
       />
+      <EventGainMultiplierPanel
+        setting="itemExpMultiplier"
+        title="Item Experience Multiplier"
+        subtitle="Modify item experience gains globally (PvP)"
+        initialBreak
+      />
       <TestErrorMonitoring />
       <NotificationSystem />
     </>

@@ -32,9 +32,16 @@ import {
 
 describe("weapon action scaling", () => {
   it("does not scale weapon damage power from the user's character level", () => {
-    const battle = makeBattleWithWeapon();
+    const battle = makeBattleWithWeapon({
+      damage: {
+        power: 22,
+        powerPerLevel: 1,
+        statTypes: ["Ninjutsu"],
+        generalTypes: [],
+      },
+    });
     const user = { userId: "attacker", level: 100 } as ReturnedUserState;
-    const userItem = makeBattleUserItem();
+    const userItem = makeBattleUserItem({ level: 1 });
 
     const action = userItemToAction(userItem, user, battle);
     const damageEffect = {
@@ -42,11 +49,33 @@ describe("weapon action scaling", () => {
       level: action.level,
     };
 
-    expect(action.level).toBe(0);
-    expect(getPower(damageEffect).power).toBe(22);
+    expect(action.level).toBe(1);
+    expect(getPower(damageEffect).power).toBe(23);
   });
 
-  it("keeps a 30EP weapon below a comparable 50EP damage jutsu", () => {
+  it("scales weapon damage power from the item ownership level", () => {
+    const battle = makeBattleWithWeapon({
+      damage: {
+        power: 22,
+        powerPerLevel: 1,
+        statTypes: ["Ninjutsu"],
+        generalTypes: [],
+      },
+    });
+    const user = { userId: "attacker", level: 1 } as ReturnedUserState;
+    const userItem = makeBattleUserItem({ level: 10 });
+
+    const action = userItemToAction(userItem, user, battle);
+    const damageEffect = {
+      ...(action.effects[0] as UserEffect),
+      level: action.level,
+    };
+
+    expect(action.level).toBe(10);
+    expect(getPower(damageEffect).power).toBe(32);
+  });
+
+  it("keeps a 30EP weapon below a comparable 50EP damage jutsu at equal levels", () => {
     // Regression test for: https://discord.com/channels/1080832341234159667/1375094434437271572/1518261967616475248
     const battle = makeBattleWithWeapon({
       damage: {
@@ -57,7 +86,7 @@ describe("weapon action scaling", () => {
       },
     });
     const user = { userId: "attacker", level: 100 } as ReturnedUserState;
-    const userItem = makeBattleUserItem();
+    const userItem = makeBattleUserItem({ level: 0 });
     const attacker = makeBattleUser("attacker", { level: 100 });
     const defender = makeBattleUser("defender", { level: 100 });
 

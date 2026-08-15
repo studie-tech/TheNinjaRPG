@@ -22,6 +22,7 @@ import {
   IMG_HOME_EAT,
   IMG_HOME_SLEEP,
   IMG_HOME_TRAIN,
+  ITEM_LEVEL_CAP,
 } from "@/drizzle/constants";
 import type { UserItemWithItem } from "@/drizzle/schema";
 import { useSleepToggle } from "@/hooks/sleep";
@@ -32,10 +33,25 @@ import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
-import { calcMaxHouseMaterials } from "@/libs/item";
+import { calcMaxHouseMaterials, showsItemLevelBadge } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
+import { remainingXpToLevel } from "@/libs/train";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
+
+const userItemActionBadges = (
+  userItems: UserItemWithItem[] | undefined,
+): {
+  counts: { id: string; quantity: number }[] | undefined;
+  levels: { id: string; level: number }[] | undefined;
+} => ({
+  counts: userItems
+    ?.filter((ui) => !showsItemLevelBadge(ui.item) && ui.quantity > 1)
+    .map((ui) => ({ id: ui.id, quantity: ui.quantity })),
+  levels: userItems
+    ?.filter((ui) => showsItemLevelBadge(ui.item))
+    .map((ui) => ({ id: ui.id, level: ui.level })),
+});
 
 export default function HomePage() {
   const { userData, sectorVillage, access, ownVillage } = useRequireInVillage("/home");
@@ -127,6 +143,11 @@ export default function HomePage() {
   const canStoreMoreMaterials =
     storedMaterials.length <
     (userData && homeData ? calcMaxHouseMaterials(userData, homeData.storage) : 0);
+
+  const storedItemBadges = userItemActionBadges(storedItems);
+  const storedMaterialBadges = userItemActionBadges(storedMaterials);
+  const inventoryItemBadges = userItemActionBadges(nonStoredItems);
+  const inventoryMaterialBadges = userItemActionBadges(nonStoredMaterials);
 
   // Calculate total stored items (excluding materials)
   const totalStoredItems =
@@ -399,10 +420,8 @@ export default function HomePage() {
                           ...useritem.item,
                           ...useritem,
                         }))}
-                        counts={storedItems?.map((useritem) => ({
-                          ...useritem.item,
-                          ...useritem,
-                        }))}
+                        counts={storedItemBadges.counts}
+                        levels={storedItemBadges.levels}
                         selectedId={selectedItem?.id}
                         showBgColor={false}
                         showLabels={false}
@@ -438,10 +457,8 @@ export default function HomePage() {
                               ...useritem.item,
                               ...useritem,
                             }))}
-                            counts={storedMaterials?.map((useritem) => ({
-                              ...useritem.item,
-                              ...useritem,
-                            }))}
+                            counts={storedMaterialBadges.counts}
+                            levels={storedMaterialBadges.levels}
                             selectedId={selectedItem?.id}
                             showBgColor={false}
                             showLabels={false}
@@ -481,10 +498,8 @@ export default function HomePage() {
                               ...useritem.item,
                               ...useritem,
                             }))}
-                            counts={nonStoredItems?.map((useritem) => ({
-                              ...useritem.item,
-                              ...useritem,
-                            }))}
+                            counts={inventoryItemBadges.counts}
+                            levels={inventoryItemBadges.levels}
                             selectedId={selectedItem?.id}
                             showBgColor={false}
                             showLabels={false}
@@ -517,10 +532,8 @@ export default function HomePage() {
                               ...useritem.item,
                               ...useritem,
                             }))}
-                            counts={nonStoredMaterials?.map((useritem) => ({
-                              ...useritem.item,
-                              ...useritem,
-                            }))}
+                            counts={inventoryMaterialBadges.counts}
+                            levels={inventoryMaterialBadges.levels}
                             selectedId={selectedItem?.id}
                             showBgColor={false}
                             showLabels={false}
@@ -566,10 +579,23 @@ export default function HomePage() {
                   setSelectedItem(undefined);
                 }}
               >
+                {showsItemLevelBadge(selectedItem.item) &&
+                  selectedItem.level < ITEM_LEVEL_CAP && (
+                    <p>
+                      - Need{" "}
+                      {remainingXpToLevel(
+                        selectedItem.item.xpToLevel,
+                        selectedItem.experience,
+                      )}{" "}
+                      XP more to level
+                    </p>
+                  )}
                 <ItemWithEffects
                   item={{
                     ...selectedItem.item,
                     curDurability: selectedItem.durability,
+                    level: selectedItem.level,
+                    experience: selectedItem.experience,
                   }}
                   key={selectedItem.id}
                   showStatistic="item"

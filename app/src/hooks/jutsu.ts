@@ -16,6 +16,7 @@ import {
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
+import { EVOLUTION_STAT_FORM_FIELDS } from "@/libs/evolution";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
 import type { ZodAllTags, ZodJutsuInput, ZodJutsuType } from "@/validators/combat";
@@ -147,18 +148,14 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
       values: jutsus,
       resetButton: true,
     },
-    { id: "requiredNinjutsuOffence", label: "Req. Nin. Offence", type: "number" },
-    { id: "requiredNinjutsuDefence", label: "Req. Nin. Defence", type: "number" },
-    { id: "requiredGenjutsuOffence", label: "Req. Gen. Offence", type: "number" },
-    { id: "requiredGenjutsuDefence", label: "Req. Gen. Defence", type: "number" },
-    { id: "requiredTaijutsuOffence", label: "Req. Tai. Offence", type: "number" },
-    { id: "requiredTaijutsuDefence", label: "Req. Tai. Defence", type: "number" },
-    { id: "requiredBukijutsuOffence", label: "Req. Buki. Offence", type: "number" },
-    { id: "requiredBukijutsuDefence", label: "Req. Buki. Defence", type: "number" },
-    { id: "requiredStrength", label: "Req. Strength", type: "number" },
-    { id: "requiredSpeed", label: "Req. Speed", type: "number" },
-    { id: "requiredIntelligence", label: "Req. Intelligence", type: "number" },
-    { id: "requiredWillpower", label: "Req. Willpower", type: "number" },
+    ...EVOLUTION_STAT_FORM_FIELDS.map(
+      (field) =>
+        ({
+          id: field.id,
+          label: field.label,
+          type: "number",
+        }) as FormEntry<keyof ZodJutsuType>,
+    ),
   ];
 
   return { jutsu, effects, form, formData, loading, setEffects, handleJutsuSubmit };

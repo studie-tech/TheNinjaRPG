@@ -8,6 +8,7 @@ export const changeSettingSchema = z.object({
     "battleExpMultiplier",
     "missionExpMultiplier",
     "jutsuExpMultiplier",
+    "itemExpMultiplier",
   ]),
   multiplier: z.enum(GAME_SETTING_GAINS_MULTIPLIER),
   days: z.number().min(0).max(31),

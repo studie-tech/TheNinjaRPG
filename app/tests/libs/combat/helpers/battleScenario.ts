@@ -458,6 +458,8 @@ export const makeBattleUserItem = (
   id: "user-item-1",
   itemId: "weapon-1",
   quantity: 1,
+  level: 1,
+  experience: 0,
   equipped: "HAND_1",
   durability: 100,
   dropChancePerc: 0,

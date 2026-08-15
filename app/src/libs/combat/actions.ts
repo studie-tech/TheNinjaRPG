@@ -694,11 +694,13 @@ export const getDefaultBasicActions = (
  */
 export const userItemToAction = (
   useritem: BattleUserItem,
-  user: ReturnedUserState,
+  _user: ReturnedUserState,
   battle: ReturnedBattle | CompleteBattle,
 ) => {
   const item = getItem(battle, useritem.itemId);
   if (!item) throw new Error(`Item not found: ${useritem.itemId}`);
+  // Legacy in-progress battles may lack level/experience on BattleUserItem
+  const level = useritem.level ?? 1;
   return {
     id: item.id,
     name: useritem.variantName ?? item.name,
@@ -712,14 +714,10 @@ export const userItemToAction = (
     cooldown: useritem.originalCooldown,
     originalCooldown: useritem.originalCooldown,
     lastUsedRound: useritem.lastUsedRound,
-    // Items are not trained actions; character level should not scale item effect power.
-    level: 0,
-    healthCost: Math.max(0, item.healthCost - item.healthCostReducePerLvl * user.level),
-    chakraCost: Math.max(0, item.chakraCost - item.chakraCostReducePerLvl * user.level),
-    staminaCost: Math.max(
-      0,
-      item.staminaCost - item.staminaCostReducePerLvl * user.level,
-    ),
+    level,
+    healthCost: Math.max(0, item.healthCost - item.healthCostReducePerLvl * level),
+    chakraCost: Math.max(0, item.chakraCost - item.chakraCostReducePerLvl * level),
+    staminaCost: Math.max(0, item.staminaCost - item.staminaCostReducePerLvl * level),
     actionCostPerc: item.actionCostPerc,
     effects: item.effects,
     quantity: useritem.quantity,

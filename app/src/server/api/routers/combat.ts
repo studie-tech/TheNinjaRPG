@@ -83,6 +83,7 @@ import {
   sector,
   tournamentMatch,
   userData,
+  userItem,
   userJutsu,
   village,
   villageAlliance,
@@ -122,7 +123,6 @@ import {
   consolidatePreBattleDamageModifiers,
   emptyPreBattleGearModifiers,
 } from "@/libs/combat/process";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { realizeTag } from "@/libs/combat/tags";
 import type {
   ActionEffect,
@@ -170,6 +170,7 @@ import {
   controlShownQuestLocationInformation,
   mockAchievementHistoryEntries,
 } from "@/libs/quest";
+import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { toDefenceStat, toOffenceStat } from "@/libs/stats";
 import { rollStealthKeep } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
@@ -1579,6 +1580,7 @@ export const initiateBattle = async (
     previousBattleResults,
     loadoutJutsus,
     loadoutItems,
+    forceLoadoutItemProgression,
     injectableJutsus,
     raidQuest,
     sectorExclusiveRaids,
@@ -1685,6 +1687,36 @@ export const initiateBattle = async (
     itemIds.length > 0
       ? client.query.item.findMany({ where: inArray(item.id, itemIds) })
       : [],
+    // Ownership progression for forced loadouts (includes unequipped copies).
+    // Kept separate from user.items so unequipped rows are not treated as usable battle items.
+    info.forceLoadouts && itemIds.length > 0
+      ? client.query.userItem.findMany({
+          where: and(
+            or(inArray(userItem.userId, userIds), inArray(userItem.userId, targetIds)),
+            inArray(userItem.itemId, itemIds),
+            gt(userItem.quantity, 0),
+            eq(userItem.isInAuction, false),
+            or(
+              isNull(userItem.craftingFinishedAt),
+              lt(userItem.craftingFinishedAt, new Date()),
+            ),
+          ),
+          columns: {
+            userId: true,
+            itemId: true,
+            level: true,
+            experience: true,
+            activeVariantId: true,
+            equipped: true,
+          },
+          with: {
+            item: {
+              columns: { id: true },
+              with: { variants: true },
+            },
+          },
+        })
+      : [],
     // Fetch all jutsus that can be injected in battle
     client.query.jutsu.findMany({ where: eq(jutsu.injectableInBattle, true) }),
     // Fetch raid quest data for boss HP (if applicable)
@@ -1714,17 +1746,30 @@ export const initiateBattle = async (
 
   // If we have forced loadouts, overwrite user items and jutsus appropriately
   if (info.forceLoadouts && info.forceLoadouts.length > 0) {
+    // Prefer equipped copies, then highest level — includes unequipped ownership.
+    const progressionQueues = new Map<
+      string,
+      (typeof forceLoadoutItemProgression)[number][]
+    >();
+    for (const row of forceLoadoutItemProgression) {
+      const key = `${row.userId}:${row.itemId}`;
+      const queue = progressionQueues.get(key) ?? [];
+      queue.push(row);
+      progressionQueues.set(key, queue);
+    }
+    for (const queue of progressionQueues.values()) {
+      queue.sort((a, b) => {
+        const aEquipped = a.equipped !== "NONE" ? 1 : 0;
+        const bEquipped = b.equipped !== "NONE" ? 1 : 0;
+        if (aEquipped !== bEquipped) return bEquipped - aEquipped;
+        if (a.level !== b.level) return b.level - a.level;
+        return b.experience - a.experience;
+      });
+    }
+
     for (const user of fetchedUsers) {
       const userLoadout = info.forceLoadouts.find((l) => l.userId === user.userId);
       if (userLoadout) {
-        // Pre-group user items by itemId into queues so each slot gets its own
-        // UserItem (and thus its own activeVariantId) when duplicates exist.
-        const itemQueues = new Map<string, typeof user.items>();
-        for (const ui of user.items) {
-          const q = itemQueues.get(ui.itemId) ?? [];
-          q.push(ui);
-          itemQueues.set(ui.itemId, q);
-        }
         user.items = loadoutItems
           .filter((item) =>
             [userLoadout.loadout.weaponIds, userLoadout.loadout.consumableIds]
@@ -1732,8 +1777,8 @@ export const initiateBattle = async (
               .includes(item.id),
           )
           .map((item) => {
-            const queue = itemQueues.get(item.id) ?? [];
-            const existingItem = queue.shift();
+            const owned =
+              progressionQueues.get(`${user.userId}:${item.id}`)?.shift() ?? null;
             return {
               id: nanoid(),
               createdAt: new Date(),
@@ -1741,12 +1786,14 @@ export const initiateBattle = async (
               userId: user.userId,
               itemId: item.id,
               quantity: 1,
+              level: owned?.level ?? 1,
+              experience: owned?.experience ?? 0,
               equipped: "ITEM_1" as const,
-              item: { ...item, variants: existingItem?.item?.variants ?? [] },
+              item: { ...item, variants: owned?.item?.variants ?? [] },
               storedAtHome: false,
               craftingFinishedAt: null,
               isInAuction: false,
-              activeVariantId: existingItem?.activeVariantId ?? null,
+              activeVariantId: owned?.activeVariantId ?? null,
               imbuements: [],
               dropChancePerc: 0,
               durability: 100,
@@ -2990,10 +3037,13 @@ export const processUsersForBattle = async (
         return !ui.item.preventBattleUsage || ui.dropChancePerc > 0;
       })
       .forEach((ui) => {
-        // Add any imbuement effects to the item effects
-        const imbuementEffects = ui.imbuements?.flatMap(
-          (imbuement) => imbuement.item.effects as UserEffect[],
-        );
+        // Add imbuement effects only when the item still allows imbuing
+        // (legacy crystals on canBeImbued=false items stay in inventory but not combat)
+        const imbuementEffects = ui.item.canBeImbued
+          ? (ui.imbuements?.flatMap(
+              (imbuement) => imbuement.item.effects as UserEffect[],
+            ) ?? [])
+          : [];
         // Parse item
         const effects = [...(ui.item.effects as UserEffect[]), ...imbuementEffects];
         const itemType = ui.item.itemType;
@@ -3024,7 +3074,7 @@ export const processUsersForBattle = async (
                     user: user,
                     actionId: ui.itemId,
                     target: user,
-                    level: user.level,
+                    level: ui.level,
                   });
                   realized.isNew = false;
                   realized.fromType =
@@ -3365,6 +3415,8 @@ export const processUsersForBattle = async (
         id: ui.id,
         itemId: ui.itemId,
         quantity: ui.quantity,
+        level: ui.level,
+        experience: ui.experience,
         durability: ui.durability,
         equipped: ui.equipped,
         lastUsedRound: ui.lastUsedRound ?? -(ui.item?.cooldown ?? 0),
@@ -3479,7 +3531,12 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
         .select()
         .from(gameSetting)
         .where(
-          inArray(gameSetting.name, ["battleExpMultiplier", "regenGainMultiplier"]),
+          inArray(gameSetting.name, [
+            "battleExpMultiplier",
+            "jutsuExpMultiplier",
+            "itemExpMultiplier",
+            "regenGainMultiplier",
+          ]),
         ),
       // Fetch villages
       client.select().from(village),
