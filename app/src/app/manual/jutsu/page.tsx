@@ -36,6 +36,7 @@ export default function ManualJutsus() {
   const {
     data: jutsus,
     isFetching,
+    isPending,
     refetch,
     fetchNextPage,
     hasNextPage,
@@ -145,7 +146,11 @@ export default function ManualJutsus() {
         {!totalLoading && alljutsus?.length === 0 && (
           <div>No jutsus found given the search criteria.</div>
         )}
-        <ListLoader loading={totalLoading} explanation="Loading data" />
+        <ListLoader
+          initialLoading={isPending}
+          loading={totalLoading}
+          explanation="Loading data"
+        />
       </ContentBox>
     </>
   );

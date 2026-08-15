@@ -30,6 +30,7 @@ export default function ManualQuests() {
   const {
     data: quests,
     isFetching,
+    isPending,
     refetch,
     fetchNextPage,
     hasNextPage,
@@ -151,7 +152,11 @@ export default function ManualQuests() {
             />
           </div>
         ))}
-        <ListLoader loading={totalLoading} explanation="Loading data" />
+        <ListLoader
+          initialLoading={isPending}
+          loading={totalLoading}
+          explanation="Loading data"
+        />
       </ContentBox>
     </>
   );

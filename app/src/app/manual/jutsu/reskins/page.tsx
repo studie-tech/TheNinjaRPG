@@ -18,6 +18,7 @@ export default function ManualJutsuReskins() {
   const {
     data: reskins,
     isFetching,
+    isPending,
     fetchNextPage,
     hasNextPage,
   } = api.jutsu.getAllReskins.useInfiniteQuery(
@@ -86,7 +87,11 @@ export default function ManualJutsuReskins() {
         {!totalLoading && transformedReskins?.length === 0 && (
           <div>No reskins found given the search criteria.</div>
         )}
-        <ListLoader loading={totalLoading} explanation="Loading data" />
+        <ListLoader
+          initialLoading={isPending}
+          loading={totalLoading}
+          explanation="Loading data"
+        />
       </ContentBox>
     </>
   );
