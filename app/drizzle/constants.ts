@@ -2743,7 +2743,9 @@ export const COPYABLE_EFFECT_TYPES: string[] = COPY_PRIORITY_TIERS.flat();
 
 /**
  * Source (`fromType`) origins that copy/mirror never transfer — passive/gear
- * effects are not stealable/reflectable. Shared by both tags.
+ * effects are not stealable/reflectable. Shared by both tags. Keep in step with
+ * the passive/pre-battle sources in `persistentEffectSourceTypes` (tags.ts) and
+ * `getEffectStage` (util.ts): a source those treat as passive belongs here too.
  */
 export const TRANSFER_EXCLUDED_SOURCE_TYPES: string[] = [
   "bloodline",
@@ -2753,6 +2755,7 @@ export const TRANSFER_EXCLUDED_SOURCE_TYPES: string[] = [
   "item",
   "village",
   "skill",
+  "ranked",
 ];
 
 /**
