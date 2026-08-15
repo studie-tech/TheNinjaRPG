@@ -1,4 +1,4 @@
-import sanitize, { htmlToPlainText } from "@/utils/sanitize";
+import sanitize, { htmlToModerationText } from "@/utils/sanitize";
 
 type BadWordsResult =
   | { success: false; message: string }
@@ -13,7 +13,7 @@ type ModeratedUserText =
  * HTML is reduced to visible text first so markup and entities cannot hide a match.
  */
 export const checkForBadWords = async (content: string): Promise<BadWordsResult> => {
-  const visibleText = htmlToPlainText(content);
+  const visibleText = htmlToModerationText(content);
   // Only horizontal whitespace and hyphens may connect phrase tokens. Sentence,
   // clause, and line boundaries start a new run so phrases cannot match across them.
   const tokenRuns =
