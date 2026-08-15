@@ -25,10 +25,8 @@ const getTodayKey = () => {
 };
 
 const ActivityStreakPopup: React.FC = () => {
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-
   // Tracks a same-mount close/dismiss so the arrival-prompt gate can distinguish
-  // "not opened yet" from "closed by the user" (both leave isModalOpen === false).
+  // "not opened yet" from "closed by the user".
   const [userClosed, setUserClosed] = useState<boolean>(false);
 
   // Signals the overworld arrival prompt to hold while this dialog is up or pending.
@@ -59,12 +57,7 @@ const ActivityStreakPopup: React.FC = () => {
   const hasRecurringToEnroll = !!userStreaks?.activeRecurringConfig;
   const shouldShowPopup = hasUnclaimedRewards || needsCatchUp || hasRecurringToEnroll;
 
-  // Show modal when there are unclaimed rewards and user hasn't dismissed today
-  useEffect(() => {
-    if (!isLoading && shouldShowPopup && !dismissedToday) {
-      setIsModalOpen(true);
-    }
-  }, [isLoading, shouldShowPopup, dismissedToday]);
+  const isModalOpen = !isLoading && shouldShowPopup && !dismissedToday && !userClosed;
 
   // This popup blocks the overworld arrival prompt while it is on screen OR while its
   // show-decision is still loading — the latter closes a fresh-login race where the arrival
@@ -80,52 +73,46 @@ const ActivityStreakPopup: React.FC = () => {
   // Handle simple close - just close the dialog, will show again on refresh
   const handleClose = () => {
     setUserClosed(true);
-    setIsModalOpen(false);
   };
 
   // Handle dismiss for today - won't show again until tomorrow
   const handleDismissForToday = () => {
     setUserClosed(true);
     setDismissedToday(true);
-    setIsModalOpen(false);
   };
 
   // Don't render anything if no user, loading, dismissed today, or no rewards
-  if (!userData || isLoading || dismissedToday || !shouldShowPopup) {
+  if (!userData || !isModalOpen) {
     return null;
   }
 
   return (
-    <>
-      {isModalOpen && (
-        <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleClose()}>
-          <DialogContent className={cn("max-w-2xl", "max-h-[90vh] overflow-y-auto")}>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Gift className="h-5 w-5 text-primary" />
-                Daily Activity Rewards
-              </DialogTitle>
-              <DialogDescription className="sr-only">
-                View and claim your daily activity rewards
-              </DialogDescription>
-            </DialogHeader>
+    <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent className={cn("max-w-2xl", "max-h-[90vh] overflow-y-auto")}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Gift className="h-5 w-5 text-primary" />
+            Daily Activity Rewards
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            View and claim your daily activity rewards
+          </DialogDescription>
+        </DialogHeader>
 
-            <ActivityStreakPanel />
+        <ActivityStreakPanel />
 
-            <div className="flex justify-between gap-2 pt-2">
-              <Button variant="ghost" size="sm" onClick={handleDismissForToday}>
-                <BellOff className="mr-2 h-4 w-4" />
-                Dismiss for today
-              </Button>
-              <Button variant="outline" onClick={handleClose}>
-                <X className="mr-2 h-4 w-4" />
-                Close
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-    </>
+        <div className="flex justify-between gap-2 pt-2">
+          <Button variant="ghost" size="sm" onClick={handleDismissForToday}>
+            <BellOff className="mr-2 h-4 w-4" />
+            Dismiss for today
+          </Button>
+          <Button variant="outline" onClick={handleClose}>
+            <X className="mr-2 h-4 w-4" />
+            Close
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

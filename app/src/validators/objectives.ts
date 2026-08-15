@@ -684,7 +684,8 @@ const questSuperRefine = (
 ) => {
   // A real retry period means maxCompletes is a per-period cap, so 0 would
   // block the quest forever (or be silently uncapped). Require >= 1 to make intent
-  // explicit. retryDelay "none"/omitted keeps the lifetime-cap semantics, where 0 is allowed.
+  // explicit. retryDelay "none"/omitted preserves the legacy lifetime-cap validation, where 0
+  // remains accepted for existing content.
   if (val.retryDelay && val.retryDelay !== "none" && val.maxCompletes < 1) {
     ctx.addIssue({
       code: "custom",

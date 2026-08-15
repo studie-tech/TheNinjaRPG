@@ -200,7 +200,6 @@ export const overworldAiPlacement = mysqlTable(
   },
   (table) => {
     return {
-      sectorIdx: index("OverworldAiPlacement_sector_idx").on(table.sector),
       aiTemplateIdx: index("OverworldAiPlacement_aiTemplateUserId_idx").on(
         table.aiTemplateUserId,
       ),
@@ -216,18 +215,14 @@ export type OverworldAiPlacement = InferSelectModel<typeof overworldAiPlacement>
 export const overworldAiPlacementQuest = mysqlTable(
   "OverworldAiPlacementQuest",
   {
-    id: varchar("id", { length: 191 }).primaryKey().notNull(),
     placementId: varchar("placementId", { length: 191 }).notNull(),
     questId: varchar("questId", { length: 191 }).notNull(),
     chance: smallint("chance", { unsigned: true }).default(0).notNull(),
   },
   (table) => {
     return {
-      placementIdx: index("OverworldAiPlacementQuest_placementId_idx").on(table.placementId),
-      placementQuestKey: unique("OverworldAiPlacementQuest_placement_quest_key").on(
-        table.placementId,
-        table.questId,
-      ),
+      placementQuestKey: primaryKey(table.placementId, table.questId),
+      questIdx: index("OverworldAiPlacementQuest_questId_idx").on(table.questId),
     };
   },
 );
@@ -3592,14 +3587,13 @@ export const questHistoryRelations = relations(questHistory, ({ one }) => ({
 export const userQuestAttempt = mysqlTable(
   "UserQuestAttempt",
   {
-    id: varchar("id", { length: 191 }).primaryKey().notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     questId: varchar("questId", { length: 191 }).notNull(),
     lastAttemptAt: datetime("lastAttemptAt", { mode: "date", fsp: 3 }).notNull(),
   },
   (table) => {
     return {
-      userQuestKey: unique("UserQuestAttempt_user_quest_key").on(table.userId, table.questId),
+      userQuestKey: primaryKey(table.userId, table.questId),
       questIdx: index("UserQuestAttempt_questId_idx").on(table.questId),
     };
   },

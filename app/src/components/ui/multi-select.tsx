@@ -59,7 +59,7 @@ function MultiSelect({
     }
   };
 
-  const sortedSelected = selected.sort((a, b) => {
+  const sortedSelected = [...selected].sort((a, b) => {
     const aOption = options.find((o) => o.value === a);
     const bOption = options.find((o) => o.value === b);
     return aOption?.label.localeCompare(bOption?.label ?? "") ?? 0;

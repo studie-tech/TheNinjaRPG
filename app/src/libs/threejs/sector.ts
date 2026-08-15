@@ -146,8 +146,9 @@ export interface WindowNav {
  * cross-border pathfinding (rendering stays per-sector); the center sector
  * occupies unified offset (W, H). Rotated cube-edge-seam neighbors and missing
  * (polar) neighbors are marked impassable (blocked, cost 9999) so paths stop
- * cleanly at those borders, and water tiles carry a +5 cost weighting so
- * routes prefer dry land. Returns null when no center map is provided.
+ * cleanly at those borders. Each authored tile's normalized walk cost remains
+ * authoritative, including equal standard costs for water and ground. Returns
+ * null when no center map is provided.
  */
 export const buildWindowNav = (
   entries: WindowNavEntry[],
@@ -754,7 +755,9 @@ export const drawSector = (
 };
 
 /**
- * User sprite, which loads the avatar image and displays the health bar as a js sprite
+ * Creates a sector-map user marker. Players receive the standard portrait pin and
+ * hidden PvP/heal/info actions; overworld NPCs receive a full-character sprite and
+ * a visible talk or attack action keyed by placement id.
  */
 export const createUserSprite = (userData: SectorUser, hex: TerrainHex) => {
   // Group is used to group components of the user Marker

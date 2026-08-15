@@ -1,57 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { QuestType } from "@/drizzle/constants";
-import {
-  getNewTrackers,
-  isBoundPlacementDeleted,
-  isBoundPlacementFrozen,
-} from "@/libs/quest";
-
-/** Creates the minimal placement-bound dialog objective used by placement-state tests. */
-const obj = (id?: string) =>
-  ({ task: "dialog", overworldPlacementId: id } as never);
-
-describe("isBoundPlacementDeleted", () => {
-  it("returns true when the bound placement is absent from existing (hard-deleted)", () => {
-    expect(isBoundPlacementDeleted(obj("p1"), new Set())).toBe(true);
-    expect(isBoundPlacementDeleted(obj("p1"), new Set(["p2"]))).toBe(true);
-  });
-
-  it("returns false when the bound placement exists (active or not)", () => {
-    expect(isBoundPlacementDeleted(obj("p1"), new Set(["p1"]))).toBe(false);
-  });
-
-  it("returns false for unbound objectives", () => {
-    expect(isBoundPlacementDeleted(obj(), new Set())).toBe(false);
-    expect(isBoundPlacementDeleted({} as never, new Set())).toBe(false);
-  });
-});
-
-describe("isBoundPlacementFrozen", () => {
-  it("returns true when the placement exists but is not active (deactivated)", () => {
-    const existing = new Set(["p1"]);
-    const active = new Set<string>();
-    expect(isBoundPlacementFrozen(obj("p1"), existing, active)).toBe(true);
-  });
-
-  it("returns false when the placement is active", () => {
-    const existing = new Set(["p1"]);
-    const active = new Set(["p1"]);
-    expect(isBoundPlacementFrozen(obj("p1"), existing, active)).toBe(false);
-  });
-
-  it("returns false when the placement is deleted (not in existing)", () => {
-    const existing = new Set<string>();
-    const active = new Set<string>();
-    expect(isBoundPlacementFrozen(obj("p1"), existing, active)).toBe(false);
-  });
-
-  it("returns false for unbound objectives", () => {
-    const existing = new Set(["p1"]);
-    const active = new Set(["p1"]);
-    expect(isBoundPlacementFrozen(obj(), existing, active)).toBe(false);
-    expect(isBoundPlacementFrozen({} as never, existing, active)).toBe(false);
-  });
-});
+import { getNewTrackers } from "@/libs/quest";
 
 // ---------------------------------------------------------------------------
 // getNewTrackers ordering: for a consecutiveObjectives quest, the bound-placement
@@ -156,10 +105,10 @@ describe("getNewTrackers — bound-placement check respects consecutive reachabi
       makeUser(quest, [{ id: "o1", done: false }]),
       [],
       undefined,
-      {
-        existing: new Set(["p1", "p2"]), // p3 hard-deleted
-        active: new Set(["p1", "p2"]),
-      },
+      new Map([
+        ["p1", true],
+        ["p2", true],
+      ]), // p3 hard-deleted
     );
 
     expect(questFailed(result, "q1")).toBe(false);
@@ -178,10 +127,11 @@ describe("getNewTrackers — bound-placement check respects consecutive reachabi
       makeUser(quest, [{ id: "o1", done: false }]),
       [],
       undefined,
-      {
-        existing: new Set(["p1", "p2", "p3"]),
-        active: new Set(["p1", "p2"]), // p3 exists but deactivated → frozen
-      },
+      new Map([
+        ["p1", true],
+        ["p2", true],
+        ["p3", false], // exists but deactivated → frozen
+      ]),
     );
 
     expect(questFailed(result, "q1")).toBe(false);
@@ -199,13 +149,25 @@ describe("getNewTrackers — bound-placement check respects consecutive reachabi
       makeUser(quest, [{ id: "o1", done: false }]),
       [],
       undefined,
-      {
-        existing: new Set(["p2"]), // p1 hard-deleted
-        active: new Set(["p2"]),
-      },
+      new Map([["p2", true]]), // p1 hard-deleted
     );
 
     expect(questFailed(result, "q1")).toBe(true);
+  });
+
+  it("freezes a reachable objective while its placement is deactivated", () => {
+    const quest = makeConsecutiveQuest("q1", [
+      boundObjective("o1", undefined, "p1"),
+    ]);
+    const result = getNewTrackers(
+      makeUser(quest, [{ id: "o1", done: false }]),
+      [],
+      undefined,
+      new Map([["p1", false]]),
+    );
+
+    expect(questFailed(result, "q1")).toBe(false);
+    expect(goalOf(result, "q1", "o1")?.done).toBeFalsy();
   });
 
   it("STILL fails the quest when a reachable mid-chain objective's placement was deleted", () => {
@@ -220,10 +182,10 @@ describe("getNewTrackers — bound-placement check respects consecutive reachabi
       makeUser(quest, [{ id: "o1", done: true, selectedNextObjectiveId: "o2" }]),
       [],
       undefined,
-      {
-        existing: new Set(["p1", "p3"]), // p2 hard-deleted
-        active: new Set(["p1", "p3"]),
-      },
+      new Map([
+        ["p1", true],
+        ["p3", true],
+      ]), // p2 hard-deleted
     );
 
     expect(questFailed(result, "q1")).toBe(true);

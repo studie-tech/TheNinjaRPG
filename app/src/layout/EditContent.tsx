@@ -586,18 +586,6 @@ export const EditContent = <
                                     | readonly string[]
                                     | undefined
                                 }
-                                onChange={
-                                  type === "number"
-                                    ? (e) =>
-                                        // Strip only a leading-zero run before a digit (e.g. "05" -> "5")
-                                        // so a zero-valued field can be typed over. Leaves "0", "0.5",
-                                        // and "" intact, so decimals and clearing still work; zod coerces
-                                        // the stored string to a number on submit.
-                                        field.onChange(
-                                          e.target.value.replace(/^0+(?=\d)/, ""),
-                                        )
-                                    : field.onChange
-                                }
                               />
                             </FormControl>
                             <FormMessage />
@@ -1980,10 +1968,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
 
   const { data: placementNames } = api.overworldAi.getAllPlacementNames.useQuery(
     undefined,
-    // The field renders from objectiveSchema.shape (see `attributes`), but overworldPlacementId
-    // is optional with no prefault, so it's absent from Object.keys(shownTag) until set — gating
-    // on `fields` left the dropdown empty forever. Gate on the schema, matching how it renders.
-    { enabled: "overworldPlacementId" in objectiveSchema.shape },
+    { enabled: isSupportedOverworldBindingTask(objective.task) },
   );
 
   const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined, {
@@ -2001,16 +1986,10 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   });
 
   // A few fields we need to watch
-  const watchTask = useWatch({ control: form.control, name: "task" });
   const watchAll = useWatch({ control: form.control });
-  const watchPlacementId = useWatch({
-    control: form.control,
-    name: "overworldPlacementId",
-  });
-  const watchOpponentAis = useWatch({
-    control: form.control,
-    name: "opponentAIs",
-  });
+  const watchTask = watchAll.task;
+  const watchPlacementId = watchAll.overworldPlacementId;
+  const watchOpponentAis = watchAll.opponentAIs;
 
   // When user changes type, we need to update the effects array to re-render form
   useEffect(() => {

@@ -16,7 +16,6 @@ import {
 import {
   findActionableBoundObjective,
   hasFriendlyBindingToPlacement,
-  npcMissionSlotDecision,
   pickWeightedQuest,
   resolveOverworldPosition,
   snapOverworldPositionToWalkable,
@@ -250,7 +249,6 @@ export const overworldAiRouter = createTRPCRouter({
       if (quests.length > 0) {
         await ctx.drizzle.insert(overworldAiPlacementQuest).values(
           quests.map((q) => ({
-            id: nanoid(),
             placementId: id,
             questId: q.questId,
             chance: q.chance,
@@ -561,7 +559,7 @@ export const overworldAiRouter = createTRPCRouter({
       // Build the eligible pool, keeping each entry's chance. isAvailableUserQuests now
       // includes the per-period cap, so period-capped quests drop out here automatically.
       const eligible = placement.questPool
-        .map((p, poolIndex) => {
+        .map((p) => {
           const q = questsById.get(p.questId);
           if (!q) return null;
           // Skip types the overworld pool can't grant: ones the centralized assigner can't start
@@ -586,15 +584,9 @@ export const overworldAiRouter = createTRPCRouter({
               now,
             );
           if (!available) return null;
-          return { quest: q, chance: p.chance, prev, poolIndex };
+          return { quest: q, chance: p.chance, prev };
         })
-        .filter((e): e is NonNullable<typeof e> => e !== null)
-        // Deterministic order: pool insertion order, tie-break by questId.
-        .sort((a, b) =>
-          a.poolIndex !== b.poolIndex
-            ? a.poolIndex - b.poolIndex
-            : a.quest.id.localeCompare(b.quest.id),
-        );
+        .filter((e): e is NonNullable<typeof e> => e !== null);
 
       // Eligible-empty check BEFORE the daily-roll CAS so an empty pool costs no roll.
       if (eligible.length === 0) {
@@ -604,31 +596,26 @@ export const overworldAiRouter = createTRPCRouter({
         };
       }
 
-      // One NPC mission at a time, tracked by the authoritative activeNpcQuestId slot (the
-      // quest TYPE is not a reliable proxy — it both over-blocks unrelated quests and lets a
-      // mismatched-type active NPC quest be wrongly self-healed away). Block while the slot
-      // points to a still-active quest; release it when the slotted quest has completed/left.
-      const slotDecision = npcMissionSlotDecision(
-        activeUser.activeNpcQuestId,
-        activeUser.userQuests ?? [],
-      );
-      if (slotDecision === "block") {
+      // The slot, rather than quest type, determines whether another NPC mission may start.
+      const activeNpcQuestId = activeUser.activeNpcQuestId;
+      const slottedQuestIsActive =
+        !!activeNpcQuestId &&
+        (activeUser.userQuests ?? []).some(
+          (q) => q.questId === activeNpcQuestId && !q.endAt,
+        );
+      if (slottedQuestIsActive) {
         return { success: true, message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE };
       }
 
-      // Consume one daily roll via CAS BEFORE rolling so a failed roll still costs a slot
-      // (prevents unlimited re-rolling against the per-quest chances). The stale-slot clear is
-      // independent of this CAS — it targets a different questId's slot and the roll's
-      // success/failure doesn't depend on it — so dispatch both writes in parallel to keep this
-      // hot NPC-interaction path to a single round-trip.
-      const clearStale =
-        slotDecision === "clear-stale" && activeUser.activeNpcQuestId
-          ? clearActiveNpcQuest({
-              client: ctx.drizzle,
-              userId: ctx.userId,
-              questId: activeUser.activeNpcQuestId,
-            })
-          : Promise.resolve();
+      // Consume one daily roll via CAS before rolling so a failed roll still costs a slot.
+      // A stale slot belongs to another quest and can be cleared in parallel with this counter.
+      const clearStale = activeNpcQuestId
+        ? clearActiveNpcQuest({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            questId: activeNpcQuestId,
+          })
+        : Promise.resolve();
       const [, claim] = await Promise.all([
         clearStale,
         ctx.drizzle
@@ -647,23 +634,15 @@ export const overworldAiRouter = createTRPCRouter({
         return errorResponse("You've reached your daily mission allowance.");
       }
 
-      // The roll is now committed — record an attempt for every eligible cooldown quest so a
-      // 99% "nothing" still spends today's attempt (mirrors how the completion cap works on grant).
-      // One multi-row upsert rather than a statement per quest: the unique (userId, questId) key
-      // drives ON DUPLICATE KEY UPDATE, and lastAttemptAt is the same `now` for every row, so a
-      // single `set` clause covers all conflicts. Guarded because drizzle rejects empty values().
+      // Record an attempt for every eligible cooldown quest, including a roll that grants nothing.
       const attemptRowsToInsert = eligible
         .filter((e) => e.quest.attemptDelay !== "none")
         .map((e) => ({
-          id: nanoid(),
           userId: ctx.userId,
           questId: e.quest.id,
           lastAttemptAt: now,
         }));
-      // Kick off (don't await yet) the attempt upsert: it's independent of the slot claim below
-      // (different table, different WHERE) and doesn't depend on which quest the roll picks, so
-      // it runs concurrently with the claim on the grant path instead of costing an extra
-      // round-trip. Awaited on both exits below so the write is never left floating.
+      // This write is independent of the selected quest and may run alongside the slot claim.
       const attemptPromise =
         attemptRowsToInsert.length > 0
           ? ctx.drizzle
@@ -672,8 +651,7 @@ export const overworldAiRouter = createTRPCRouter({
               .onDuplicateKeyUpdate({ set: { lastAttemptAt: now } })
           : Promise.resolve();
 
-      // Weighted band-walk: each quest owns [acc, acc+chance); a roll past the summed
-      // chances grants nothing this time.
+      // Each quest owns [acc, acc+chance); a roll past the total grants nothing.
       const chosenId = pickWeightedQuest(
         eligible.map((e) => ({ questId: e.quest.id, chance: e.chance })),
         Math.random() * 100,
@@ -776,8 +754,8 @@ const fetchPlacement = async (client: DrizzleClient, placementId: string) =>
       positionVersion: true,
     },
     with: {
-      questPool: true,
-      aiTemplate: { columns: { userId: true, isAi: true } },
+      questPool: { columns: { questId: true, chance: true } },
+      aiTemplate: { columns: { isAi: true } },
     },
   });
 
