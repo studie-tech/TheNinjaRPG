@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
 
@@ -291,6 +291,7 @@ function makeDrizzleMock(
 ) {
   const queues = new Map(results);
   const updates: UpdateRecord[] = [];
+  const selectedPredicates: unknown[] = [];
   const update = vi.fn((table: unknown) => ({
     set: vi.fn((values: unknown) => ({
       where: vi.fn(async (predicate: unknown) => {
@@ -299,7 +300,14 @@ function makeDrizzleMock(
       }),
     })),
   }));
-  const execute = vi.fn().mockResolvedValue({ rowsAffected: 1 });
+  const select = vi.fn(() => ({
+    from: vi.fn(() => ({
+      where: vi.fn((predicate: unknown) => {
+        selectedPredicates.push(predicate);
+        return { getSQL: () => sql`SELECT 1` };
+      }),
+    })),
+  }));
   return {
     client: {
       query: {
@@ -307,11 +315,12 @@ function makeDrizzleMock(
         userData: { findMany: vi.fn().mockResolvedValue(members) },
       },
       update,
-      execute,
+      select,
     },
     updates,
     update,
-    execute,
+    select,
+    selectedPredicates,
   };
 }
 
@@ -663,7 +672,7 @@ describe("ANBU membership invariants", () => {
 
   it("elects only a live eligible member after the leader leaves", async () => {
     const squad = makeSquad({ leaderId: "leader", memberCount: 2 });
-    const { client, execute } = makeDrizzleMock(
+    const { client, updates } = makeDrizzleMock(
       squad,
       [
         [anbuSquad, [{ rowsAffected: 1 }, { rowsAffected: 1 }]],
@@ -676,18 +685,31 @@ describe("ANBU membership invariants", () => {
     await expect(
       removeFromSquad(client as never, squad as never, "leader"),
     ).resolves.toBe(true);
-    expect(execute).toHaveBeenCalledTimes(1);
+    expect(
+      updates.some(
+        (entry) =>
+          entry.table === anbuSquad &&
+          (entry.values as { leaderId?: string }).leaderId === "successor",
+      ),
+    ).toBe(true);
   });
 
-  it("uses a membership join and outgoing-leader CAS for promotion", async () => {
-    const { client, execute } = makeDrizzleMock(makeSquad(), []);
-    execute.mockResolvedValueOnce({ rowsAffected: 1 });
+  it("uses a membership subquery and outgoing-leader CAS for promotion", async () => {
+    const { client, updates, select, selectedPredicates } = makeDrizzleMock(
+      makeSquad(),
+      [],
+    );
 
     await expect(
       promoteAnbuLeader(client as never, "squad-1", "successor", "leader"),
     ).resolves.toBe(true);
-    expect(execute).toHaveBeenCalledTimes(1);
-    expect(describeSql(execute.mock.calls[0]?.[0])).toContain("member.anbuId");
-    expect(describeSql(execute.mock.calls[0]?.[0])).toContain("leader");
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(describeSql(selectedPredicates[0])).toContain("col(userId)");
+    expect(describeSql(selectedPredicates[0])).toContain("col(anbuId)");
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.table).toBe(anbuSquad);
+    expect(updates[0]?.values).toEqual({ leaderId: "successor" });
+    expect(describeSql(updates[0]?.predicate)).toContain("col(leaderId)");
+    expect(describeSql(updates[0]?.predicate)).toContain('param("leader")');
   });
 });
