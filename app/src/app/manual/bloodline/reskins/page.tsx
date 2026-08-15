@@ -37,6 +37,7 @@ export default function ManualBloodlineReskins() {
   const {
     data: reskins,
     isFetching,
+    isPending,
     fetchNextPage,
     hasNextPage,
   } = api.bloodline.getAllReskins.useInfiniteQuery(
@@ -164,7 +165,11 @@ export default function ManualBloodlineReskins() {
         {!totalLoading && transformedReskins?.length === 0 && (
           <div>No reskins found given the search criteria.</div>
         )}
-        <ListLoader loading={totalLoading} explanation="Loading data" />
+        <ListLoader
+          initialLoading={isPending}
+          loading={totalLoading}
+          explanation="Loading data"
+        />
       </ContentBox>
     </>
   );

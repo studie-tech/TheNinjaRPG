@@ -36,6 +36,7 @@ export default function ManualBloodlines() {
   const {
     data: bloodlines,
     isFetching,
+    isPending,
     refetch,
     fetchNextPage,
     hasNextPage,
@@ -150,7 +151,11 @@ export default function ManualBloodlines() {
             />
           </div>
         ))}
-        <ListLoader loading={totalLoading} explanation="Loading data" />
+        <ListLoader
+          initialLoading={isPending}
+          loading={totalLoading}
+          explanation="Loading data"
+        />
       </ContentBox>
     </>
   );

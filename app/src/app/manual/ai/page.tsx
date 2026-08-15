@@ -34,6 +34,7 @@ export default function ManualAI() {
     refetch,
     hasNextPage,
     isFetching,
+    isPending,
   } = api.profile.getPublicUsers.useInfiniteQuery(
     { ...getFilter(state), limit: 30, orderBy: "Weakest", isAi: true },
     {
@@ -130,7 +131,11 @@ export default function ManualAI() {
             />
           </div>
         ))}
-        <ListLoader loading={totalLoading} explanation="Loading data" />
+        <ListLoader
+          initialLoading={isPending}
+          loading={totalLoading}
+          explanation="Loading data"
+        />
       </ContentBox>
     </>
   );
