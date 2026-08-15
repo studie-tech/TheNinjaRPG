@@ -32,6 +32,7 @@ import {
   ItemSlots,
   ItemTypes,
   MAX_EXTRA_RESKIN_SLOTS,
+  MAX_ITEM_SHOP_PURCHASE_QUANTITY,
   MAX_ITEM_VARIANTS,
   MAX_MARRIAGE_SLOTS,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
@@ -1909,7 +1910,7 @@ export const itemRouter = createTRPCRouter({
     .input(
       z.object({
         itemId: z.string(),
-        stack: z.number().min(1).max(50),
+        stack: z.number().min(1).max(MAX_ITEM_SHOP_PURCHASE_QUANTITY),
         villageId: z.string().nullish(),
       }),
     )

@@ -14,6 +14,8 @@ import {
   JutsuTypes,
   LetterRanks,
   MAX_GENS_CAP,
+  MAX_ITEM_CRAFTING_REQUIREMENT_QUANTITY,
+  MAX_ITEM_STACK_SIZE,
   MAX_STATS_CAP,
   PoolTypes,
   SkillTreeEntryTypes,
@@ -1315,7 +1317,7 @@ export const ItemValidatorRawSchema = z.object({
   image: z.string(),
   description: z.string(),
   battleDescription: z.string(),
-  stackSize: z.coerce.number().int().min(1).max(9999),
+  stackSize: z.coerce.number().int().min(1).max(MAX_ITEM_STACK_SIZE),
   destroyOnUse: z.coerce.boolean().prefault(false),
   chakraCost: z.coerce.number().int().min(0).max(10000),
   healthCost: z.coerce.number().int().min(0).max(10000),
@@ -1362,7 +1364,11 @@ export const ItemValidatorRawSchema = z.object({
     .array(
       z.object({
         ids: z.array(z.string()),
-        number: z.coerce.number().int().min(1).max(9999),
+        number: z.coerce
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_ITEM_CRAFTING_REQUIREMENT_QUANTITY),
       }),
     )
     .prefault([])

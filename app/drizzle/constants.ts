@@ -14,6 +14,9 @@ export const VARIANT_COST_TYPES = [
 export type VariantCostType = (typeof VARIANT_COST_TYPES)[number];
 
 export const MAX_ITEM_VARIANTS = 7;
+export const MAX_ITEM_STACK_SIZE = 9_999;
+export const MAX_ITEM_CRAFTING_REQUIREMENT_QUANTITY = MAX_ITEM_STACK_SIZE;
+export const MAX_ITEM_SHOP_PURCHASE_QUANTITY = 50;
 
 export const ActivityStreakTypes = ["RECURRING", "EVENT_PASS"] as const;
 export type ActivityStreakType = (typeof ActivityStreakTypes)[number];
