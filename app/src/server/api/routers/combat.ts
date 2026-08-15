@@ -2294,14 +2294,16 @@ export const initiateBattle = async (
       })
       .where(
         and(
-          or(
-            inArray(userData.userId, userIds),
-            ...(!AutoBattleTypes.includes(battleType)
-              ? [inArray(userData.userId, targetIds)]
-              : []),
-          ),
+          // Exactly the rows the CAS guard counts (expectedRows), so the
+          // predicate and the expected count derive from one source and cannot
+          // drift apart. The list already excludes AI rows, so the shared AI
+          // row is never even examined (or locked) by this update. Drizzle
+          // compiles an empty list to FALSE, matching expectedRows === 0.
+          inArray(userData.userId, allParticipantIds),
           // Never move an AI into a battle: its row is shared by everyone
           // fighting it, and the battle state clones it under a fresh id anyway.
+          // Redundant with the claim list above, but kept so a drifting AI
+          // classification fails the CAS guard instead of claiming a shared row.
           eq(userData.isAi, false),
           // Ranked participants are claimed straight from the queue, so require
           // QUEUED specifically: a player who just left the queue (now AWAKE)

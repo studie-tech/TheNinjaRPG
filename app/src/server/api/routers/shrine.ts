@@ -1203,9 +1203,9 @@ export const shrineRouter = createTRPCRouter({
           .set({ battleId: result.battleId })
           .where(eq(mpvpBattleQueue.id, input.shrineBattleId));
 
-        // Note: initiateBattle() already sets user statuses appropriately:
-        // - Human players: status="BATTLE"
-        // - AI defenders: status="AWAKE"
+        // Note: initiateBattle() sets human participants to status="BATTLE".
+        // AI defender rows are never claimed or modified — the shared AI row
+        // is cloned into the battle state instead, so it stays untouched.
 
         // Notify participants
         allUserIds.forEach((userId) => {
