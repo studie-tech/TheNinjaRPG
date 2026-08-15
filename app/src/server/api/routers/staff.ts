@@ -1153,19 +1153,19 @@ export const deleteUser = async (client: DrizzleClient, userId: string) => {
  * @param userId - The ID of the user to delete.
  */
 const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
-  // AI templates may own placement rows. Capture their ids before the user row disappears so
-  // the no-FK PlanetScale schema can explicitly remove both placement and pool children.
-  const aiPlacements = await client
-    .select({ id: overworldAiPlacement.id })
-    .from(overworldAiPlacement)
-    .where(eq(overworldAiPlacement.aiTemplateUserId, userId));
+  // Batch 1: AI templates may own placement rows. Their lookup is independent of the
+  // prerequisite sensei-reference cleanup, so run both together before destructive deletes.
+  const [aiPlacements] = await Promise.all([
+    client
+      .select({ id: overworldAiPlacement.id })
+      .from(overworldAiPlacement)
+      .where(eq(overworldAiPlacement.aiTemplateUserId, userId)),
+    client
+      .update(userData)
+      .set({ senseiId: null })
+      .where(eq(userData.senseiId, userId)),
+  ]);
   const aiPlacementIds = aiPlacements.map((placement) => placement.id);
-
-  // Batch 1: Update foreign key references (must run first)
-  await client
-    .update(userData)
-    .set({ senseiId: null })
-    .where(eq(userData.senseiId, userId));
 
   // Batch 2: Communication & social relationships
   await Promise.all([
