@@ -11,9 +11,9 @@ export const parseHexColor = (hex: string): Rgb | null => {
   const cleaned = hex.trim().replace(/^#/, "");
   if (/^[0-9a-fA-F]{3}$/.test(cleaned)) {
     return {
-      r: Number.parseInt(cleaned[0]! + cleaned[0], 16),
-      g: Number.parseInt(cleaned[1]! + cleaned[1], 16),
-      b: Number.parseInt(cleaned[2]! + cleaned[2], 16),
+      r: Number.parseInt(cleaned.slice(0, 1).repeat(2), 16),
+      g: Number.parseInt(cleaned.slice(1, 2).repeat(2), 16),
+      b: Number.parseInt(cleaned.slice(2, 3).repeat(2), 16),
     };
   }
   if (/^[0-9a-fA-F]{6}$/.test(cleaned)) {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   BufferAttribute,
   BufferGeometry,
+  Color,
   DoubleSide,
   Group,
   LinearFilter,
@@ -49,11 +50,7 @@ import {
   setupContextLossHandling,
   setupScene,
 } from "@/libs/threejs/util";
-import {
-  contrastingTextColor,
-  getReadableVillageHexColor,
-  parseHexColor,
-} from "@/utils/color";
+import { contrastingTextColor, getReadableVillageHexColor } from "@/utils/color";
 import { useUserData } from "@/utils/UserContext";
 
 interface MapProps {
@@ -361,8 +358,12 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         }));
         let i = 0;
         for (let k = 0; k < 4; k++) {
-          const a = corner[k]!;
-          const b = corner[(k + 1) % 4]!;
+          const a = corner[k];
+          const b = corner[(k + 1) % 4];
+          if (!a || !b) {
+            hoverOutline.visible = false;
+            return;
+          }
           position[i++] = a.x;
           position[i++] = a.y;
           position[i++] = a.z;
@@ -567,8 +568,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
             z: (Number(p.z) / 3) * EDGE_LIFT,
           }));
           for (let k = 0; k < 4; k++) {
-            const a = corner[k]!;
-            const b = corner[(k + 1) % 4]!;
+            const a = corner[k];
+            const b = corner[(k + 1) % 4];
+            if (!a || !b) continue;
             edgePositions.push(a.x, a.y, a.z, b.x, b.y, b.z);
           }
         }
@@ -708,12 +710,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
 
       // Add tweening highlights
       const questTweenColor = { r: 0.8, g: 0.6, b: 0.0 };
-      const warTornRgb = parseHexColor(MAP_WAR_TORN_BATTLEGROUND_COLOR);
-      const warTweenColor = {
-        r: (warTornRgb?.r ?? 255) / 255,
-        g: (warTornRgb?.g ?? 0) / 255,
-        b: (warTornRgb?.b ?? 0) / 255,
-      };
+      // Three.js stores colors in its linear working color space. Constructing
+      // from the configured CSS hex performs the required sRGB conversion.
+      const warTweenColor = new Color(MAP_WAR_TORN_BATTLEGROUND_COLOR);
       const focusTweenColor = { r: 0.66, g: 0.33, b: 0.97 }; // Purple color for focus sector
       const sectorsToHighlight: {
         sector: number;
@@ -765,7 +764,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         group_highlights.add(userAvatarGroup);
       }
 
-      if (props.userLocation && userData && userData.userQuests && !showOwnership) {
+      if (props.userLocation && userData?.userQuests && !showOwnership) {
         userData.userQuests.forEach((userquest) => {
           userquest.quest.content.objectives.forEach((objective) => {
             const isHidden = "hideLocation" in objective && objective.hideLocation;
