@@ -240,12 +240,14 @@ const cleanupCompletedTournament = async (
   client: DrizzleClient,
   tournamentId: string,
 ) => {
-  await client
-    .delete(tournamentMatch)
-    .where(eq(tournamentMatch.tournamentId, tournamentId));
-  await client
-    .delete(tournament)
-    .where(and(eq(tournament.id, tournamentId), eq(tournament.status, "COMPLETED")));
+  await Promise.all([
+    client
+      .delete(tournamentMatch)
+      .where(eq(tournamentMatch.tournamentId, tournamentId)),
+    client
+      .delete(tournament)
+      .where(and(eq(tournament.id, tournamentId), eq(tournament.status, "COMPLETED"))),
+  ]);
 };
 
 /**

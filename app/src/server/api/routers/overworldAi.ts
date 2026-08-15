@@ -150,6 +150,15 @@ export const overworldAiRouter = createTRPCRouter({
         );
       }
 
+      // Position-map loading is independent of the binding checks below. Start it now so the
+      // successful edit path pays for both DB reads in parallel; normalize failure to null so an
+      // early binding return cannot leave a rejected promise unobserved.
+      const rawPosition = resolveOverworldPosition(cfg);
+      const sectorMapPromise = fetchPublishedSectorMap(
+        ctx.drizzle,
+        rawPosition.sector,
+      ).catch(() => null);
+
       // Referential-safety guards: a bound placement cannot be deactivated, repointed at a
       // different AI, or changed to HOSTILE while it carries a friendly interaction objective.
       const makingHostile = input.data.interactionType === "HOSTILE";
@@ -190,11 +199,8 @@ export const overworldAiRouter = createTRPCRouter({
         }
       }
       // Prepare
-      const rawPosition = resolveOverworldPosition(cfg);
-      let sectorMap: Awaited<ReturnType<typeof fetchPublishedSectorMap>>;
-      try {
-        sectorMap = await fetchPublishedSectorMap(ctx.drizzle, rawPosition.sector);
-      } catch {
+      const sectorMap = await sectorMapPromise;
+      if (!sectorMap) {
         return errorResponse(`Sector ${rawPosition.sector} has no published map`);
       }
       const pos = snapOverworldPositionToWalkable(rawPosition, sectorMap);
@@ -274,13 +280,15 @@ export const overworldAiRouter = createTRPCRouter({
           `Cannot delete: bound to quest(s): ${binding.map((q) => q.name).join(", ")}. Unbind them first.`,
         );
       }
-      // Mutate: delete child pool rows first (no FK cascade in PlanetScale), then the placement
-      await ctx.drizzle
-        .delete(overworldAiPlacementQuest)
-        .where(eq(overworldAiPlacementQuest.placementId, input.id));
-      await ctx.drizzle
-        .delete(overworldAiPlacement)
-        .where(eq(overworldAiPlacement.id, input.id));
+      // No foreign keys link these tables in PlanetScale, so both deletes are independent.
+      await Promise.all([
+        ctx.drizzle
+          .delete(overworldAiPlacementQuest)
+          .where(eq(overworldAiPlacementQuest.placementId, input.id)),
+        ctx.drizzle
+          .delete(overworldAiPlacement)
+          .where(eq(overworldAiPlacement.id, input.id)),
+      ]);
       // Return
       return { success: true, message: "Placement deleted" };
     }),
@@ -525,10 +533,18 @@ export const overworldAiRouter = createTRPCRouter({
         return { success: true, message: "The NPC has nothing for you." };
       }
       const now = new Date();
-      const [pool, prevByQuest, attemptRows] = await Promise.all([
-        ctx.drizzle.query.quest.findMany({
-          where: inArray(quest.id, poolQuestIds),
-        }),
+      const poolPromise = ctx.drizzle.query.quest.findMany({
+        where: inArray(quest.id, poolQuestIds),
+      });
+      // War lookup depends on the pool contents, but chaining it from the pool promise lets it
+      // overlap the independent history and cooldown reads instead of adding another DB round-trip.
+      const activeWarsPromise = poolPromise.then((pool) =>
+        activeUser.villageId && pool.some((q) => q.questType === "war")
+          ? fetchActiveWars(ctx.drizzle, activeUser.villageId)
+          : [],
+      );
+      const [pool, prevByQuest, attemptRows, activeWars] = await Promise.all([
+        poolPromise,
         ctx.drizzle.query.questHistory.findMany({
           where: and(
             eq(questHistory.userId, ctx.userId),
@@ -544,16 +560,13 @@ export const overworldAiRouter = createTRPCRouter({
               inArray(userQuestAttempt.questId, poolQuestIds),
             ),
           ),
+        activeWarsPromise,
       ]);
       const attemptByQuest = new Map(
         attemptRows.map((r) => [r.questId, r.lastAttemptAt]),
       );
       const historyByQuest = new Map(prevByQuest.map((r) => [r.questId, r]));
       const questsById = new Map(pool.map((q) => [q.id, q]));
-      const activeWars =
-        activeUser.villageId && pool.some((q) => q.questType === "war")
-          ? await fetchActiveWars(ctx.drizzle, activeUser.villageId)
-          : [];
       const allowedRanks = availableQuestLetterRanks(activeUser.rank);
 
       // Build the eligible pool, keeping each entry's chance. isAvailableUserQuests now
