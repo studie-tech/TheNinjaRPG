@@ -260,10 +260,7 @@ export default function Profile() {
           <div className="space-y-1 text-sm">
             <p>
               <span className="text-muted-foreground">Rank:</span>{" "}
-              {getRankedRank(
-                userData.rankedLp,
-                topPlayers.map((x) => x.rankedLp),
-              )}
+              {getRankedRank(userData.rankedLp, topPlayers)}
             </p>
             <p>
               <span className="text-muted-foreground">LP:</span> {userData.rankedLp}
