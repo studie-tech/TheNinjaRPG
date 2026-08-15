@@ -2851,10 +2851,11 @@ export const getPreventTypeName = (preventType: string): string => {
  * The returned length is the expected rowsAffected for the compare-and-swap
  * guard, so it has to stay in step with that update's WHERE clause.
  *
- * @param battleType - The type of battle being started
- * @param userIds - The attacking user ids
- * @param targetIds - The defending user ids
- * @param participants - Fetched rows for the battle, used to identify AI
+ * @param info - Battle claim inputs
+ * @param info.battleType - The type of battle being started
+ * @param info.userIds - The attacking user ids
+ * @param info.targetIds - The defending user ids
+ * @param info.participants - Fetched rows for the battle, used to identify AI
  * @returns Deduplicated ids of the non-AI rows the update should claim
  */
 export const getBattleClaimIds = (info: {

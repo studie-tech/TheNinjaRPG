@@ -41,6 +41,31 @@ describe("getBattleClaimIds", () => {
     expect(ids).toEqual(["human-1"]);
   });
 
+  it("claims only the attacker in a clan challenge against a human leader", () => {
+    const leader = { userId: "human-2", isAi: false };
+    const ids = getBattleClaimIds({
+      battleType: "CLAN_CHALLENGE",
+      userIds: ["human-1"],
+      targetIds: ["human-2"],
+      participants: [human, leader],
+    });
+    expect(ids).toEqual(["human-1"]);
+  });
+
+  it("counts an id with no fetched participant row so the CAS guard fails safe", () => {
+    // The database update's own predicates are the authority on what actually
+    // gets claimed; counting an unknown id here keeps the expected row count
+    // high, so the rowsAffected check rolls the battle back instead of starting
+    // it with a missing participant.
+    const ids = getBattleClaimIds({
+      battleType: "COMBAT",
+      userIds: ["human-1"],
+      targetIds: ["ghost-id"],
+      participants: [human],
+    });
+    expect(ids.sort()).toEqual(["ghost-id", "human-1"]);
+  });
+
   it("skips an AI attacker as well as an AI defender", () => {
     const ids = getBattleClaimIds({
       battleType: "COMBAT",
