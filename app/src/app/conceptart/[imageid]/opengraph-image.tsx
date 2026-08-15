@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import { conceptImage } from "@/drizzle/schema";
+import { indexableConceptArt } from "@/libs/conceptart";
 import { drizzleDB } from "@/server/db";
 
 // Route segment config
@@ -58,11 +59,11 @@ export default async function Image({
 
   // Get the image
   const image = await drizzleDB.query.conceptImage.findFirst({
-    where: eq(conceptImage.id, imageid || ""),
+    where: and(eq(conceptImage.id, imageid || ""), indexableConceptArt),
   });
-  // Withdrawn artwork falls back to the logo card rather than rendering the image, so
-  // hiding a piece also removes it from any social preview that links to it.
-  const source = image?.hidden ? undefined : image?.image;
+  // Non-indexable artwork falls back to the logo card rather than exposing incomplete
+  // or withdrawn media through a social preview.
+  const source = image?.image;
   const url = source ? await loadArtwork(source) : null;
 
   return new ImageResponse(

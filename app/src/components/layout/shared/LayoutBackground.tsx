@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { bunnyImageUrl } from "@/layout/Image";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
+import { bunnyImageUrl } from "@/utils/image";
 import {
   getImageSet,
   getPixelWallpaper,
@@ -52,7 +52,6 @@ const Wallpaper: React.FC<WallpaperProps> = ({
       media="(max-width: 1279px)"
       srcSet={bunnyImageUrl(src, WALLPAPER_WIDTHS.tablet)}
     />
-    {/* biome-ignore lint/performance/noImgElement: <picture> art direction is what selects the Bunny rendition here */}
     <img
       className={className}
       src={bunnyImageUrl(src, WALLPAPER_WIDTHS.full)}

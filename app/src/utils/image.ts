@@ -6,6 +6,47 @@ interface ImageResizeOptions {
   outputFormat?: "webp" | "jpeg" | "png" | "original";
 }
 
+/** Bunny pull zones that support the image optimizer query parameters. */
+const BUNNY_CDN_HOSTS = ["uploadthing.b-cdn.net", "tnr-storage-cdn.b-cdn.net"];
+const LEGACY_UPLOADTHING_HOSTS = ["utfs.io", "ui0arpl8sm.ufs.sh"];
+
+export const isBunnyCdnUrl = (url: string) => {
+  try {
+    return BUNNY_CDN_HOSTS.includes(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+};
+
+/** Routes legacy UploadThing hostnames through the Bunny pull zone. */
+export const transformImageUrl = (src: string) => {
+  try {
+    const url = new URL(src);
+    if (LEGACY_UPLOADTHING_HOSTS.includes(url.hostname)) {
+      url.hostname = "uploadthing.b-cdn.net";
+      return url.toString();
+    }
+  } catch {
+    // Relative and otherwise non-URL sources are left unchanged.
+  }
+  return src;
+};
+
+/** Requests a Bunny rendition width, forcing detection for extensionless uploads. */
+export const bunnyImageUrl = (src: string, width: number) => {
+  const transformed = transformImageUrl(src);
+  if (!isBunnyCdnUrl(transformed) || !Number.isFinite(width) || width <= 0) {
+    return transformed;
+  }
+
+  const url = new URL(transformed);
+  url.searchParams.set("width", String(Math.round(width)));
+  if (!/\.[a-z0-9]+$/i.test(url.pathname)) {
+    url.searchParams.set("optimizer", "image");
+  }
+  return url.toString();
+};
+
 export interface ResizedImage {
   file: File;
   /** Final pixel dimensions, so callers can emit width/height and avoid layout shift. */

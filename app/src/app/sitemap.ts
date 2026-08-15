@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import type { MetadataRoute } from "next";
 import {
   bloodline,
@@ -9,6 +9,7 @@ import {
   jutsu,
   userData,
 } from "@/drizzle/schema";
+import { indexableConceptArt } from "@/libs/conceptart";
 import { absoluteUrl } from "@/libs/seo";
 import { drizzleDB } from "@/server/db";
 
@@ -91,24 +92,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .from(forumThread)
         .orderBy(desc(forumThread.updatedAt))
         .limit(MAX_THREADS),
-      // Deliberately not matched on `status`: the pipeline writes two different terminal
-      // values ("succeeded" for images, "success" for the video path) and the public
-      // listing filters on neither, so a status predicate silently drops rows. `done` is
-      // the flag the pipeline actually maintains, and it is set in the same update that
-      // stores the finished output — so a video whose thumbnail exists while the render
-      // is still processing or has failed is excluded. `hidden` keeps anything withdrawn
-      // from the gallery out of the index.
+      // Uses media-specific completion rather than status: image and video pipelines use
+      // different terminal status strings, and failed videos retain their thumbnail.
       drizzleDB
         .select({ id: conceptImage.id, createdAt: conceptImage.createdAt })
         .from(conceptImage)
-        .where(
-          and(
-            eq(conceptImage.done, true),
-            isNotNull(conceptImage.image),
-            isNotNull(conceptImage.userId),
-            eq(conceptImage.hidden, false),
-          ),
-        )
+        .where(indexableConceptArt)
         .orderBy(desc(conceptImage.createdAt))
         .limit(MAX_CONCEPT_ART),
       // Mirrors the visibility filters the public user listing already applies, so AI

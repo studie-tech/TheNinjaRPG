@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { stripBlockquotes } from "@/utils/sanitize";
+import { htmlToPlainText, stripBlockquotes } from "@/utils/sanitize";
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
 
@@ -52,4 +52,18 @@ test("stripBlockquotes preserves non-quote media tags around blockquotes", () =>
   ).toBe(
     '<img src="avatar.png" /><iframe src="https://example.com/embed"></iframe>',
   );
+});
+
+test("htmlToPlainText parses entities and separates block content", () => {
+  expect(
+    htmlToPlainText("<p>Don&apos;t<br>fight</p><p>AT&amp;T &copy; 2026</p>"),
+  ).toBe("Don't fight AT&T © 2026");
+});
+
+test("htmlToPlainText discards script and style contents", () => {
+  expect(
+    htmlToPlainText(
+      "<script>alert('x')</script><style>.hidden{display:none}</style><p>Visible</p>",
+    ),
+  ).toBe("Visible");
 });

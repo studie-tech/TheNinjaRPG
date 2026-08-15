@@ -60,6 +60,10 @@ const config = {
       },
       {
         protocol: "https",
+        hostname: "tnr-storage-cdn.b-cdn.net",
+      },
+      {
+        protocol: "https",
         hostname: "ui0arpl8sm.ufs.sh",
       },
     ],
