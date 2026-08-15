@@ -651,7 +651,11 @@ const Sector: React.FC<SectorProps> = (props) => {
         ) {
           shouldCheckQuest = true;
         }
-        if (objective.task === "dialog" && isOnLocation) {
+        if (
+          objective.task === "dialog" &&
+          !objective.overworldPlacementId &&
+          isOnLocation
+        ) {
           setLogbookModalOpen(true);
           setLogbookModalQuestId(userquest.questId);
         }

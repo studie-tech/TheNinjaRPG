@@ -521,12 +521,19 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                       type="button"
                       title="Copy id"
                       className="hover:text-orange-500"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(p.id);
-                        showMutationToast({
-                          success: true,
-                          message: "Placement id copied",
-                        });
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(p.id);
+                          showMutationToast({
+                            success: true,
+                            message: "Placement id copied",
+                          });
+                        } catch {
+                          showMutationToast({
+                            success: false,
+                            message: "Could not copy placement id",
+                          });
+                        }
                       }}
                     >
                       <Copy className="h-3 w-3" />
