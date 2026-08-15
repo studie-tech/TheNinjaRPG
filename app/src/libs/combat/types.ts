@@ -355,6 +355,8 @@ export type ExtraState = {
   raidStartBattleCount?: Record<string, number>; // userId -> battleCount at battle start
   // Exclusive raids for SHRINE_WAR battles (pre-loaded at initiation)
   sectorExclusiveRaids?: Quest[];
+  // Ranked PvP: top Legend LP values for Sannin determination (loaded at initiation)
+  topPlayersLP?: number[];
 };
 
 // Create type for battle, which contains information on user current state

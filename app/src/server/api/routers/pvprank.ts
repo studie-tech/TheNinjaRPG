@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -38,6 +38,7 @@ import { initiateBattle } from "@/routers/combat";
 import { fetchUser } from "@/routers/profile";
 import { updateRewards } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
+import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { secondsPassed } from "@/utils/time";
@@ -137,18 +138,14 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Get the current season
   getCurrentTopPlayers: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get top ranked players" } })
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Get LP values of the top Legend players used for Sannin rank",
+      },
+    })
     .query(async ({ ctx }) => {
-      const topPlayers = await ctx.drizzle.query.userData.findMany({
-        columns: {
-          userId: true,
-          rankedLp: true,
-        },
-        where: gt(userData.rankedLp, 0),
-        orderBy: [desc(userData.rankedLp)],
-        limit: RANKED_SANNIN_TOP_PLAYERS,
-      });
-      return topPlayers;
+      return await fetchSanninRankedPlayers(ctx.drizzle);
     }),
 
   // Create a new season
@@ -631,6 +628,7 @@ export const pvpRankRouter = createTRPCRouter({
             userEntry.user.rankedLoadout,
             opponentEntry.user.rankedLoadout,
           ],
+          topPlayersLP,
         },
         "RANKED_PVP",
       );
@@ -858,23 +856,4 @@ export const endRankedSeason = async (client: DrizzleClient, seasonId: string) =
     // Insert rewards rows if any
     rewardRows.length > 0 ? client.insert(rankedUserRewards).values(rewardRows) : null,
   ]);
-};
-
-/**
- * Fetch the top players for Sannin rank
- * @param client - The Drizzle client
- * @returns The top players for Sannin rank
- */
-export const fetchSanninRankedPlayers = async (client: DrizzleClient) => {
-  // Sannin is only the top 10 players who have reached Legend rank (900+ LP)
-  const users = await client.query.userData.findMany({
-    columns: {
-      userId: true,
-      rankedLp: true,
-    },
-    orderBy: (userData, { desc }) => [desc(userData.rankedLp)],
-    where: gte(userData.rankedLp, RANKED_LEGEND_LP_REQUIREMENT),
-    limit: RANKED_SANNIN_TOP_PLAYERS,
-  });
-  return users.map((u) => u.rankedLp);
 };

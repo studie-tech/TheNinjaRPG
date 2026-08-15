@@ -55,7 +55,7 @@ import {
 } from "@/drizzle/schema";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { fetchPublicUsers } from "@/routers/profile";
-import { fetchSanninRankedPlayers } from "@/server/api/routers/pvprank";
+import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { type DeviceType, getDeviceType } from "@/utils/hardware";
 import {
   canChangeContent,

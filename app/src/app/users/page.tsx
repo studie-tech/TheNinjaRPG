@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RANKED_SANNIN_TOP_PLAYERS } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
@@ -74,12 +73,14 @@ export default function Users() {
   const { data: onlineStats } = api.profile.countOnlineUsers.useQuery(undefined, {
     enabled: isClerkLoaded,
   });
+  const { data: topPlayersLP } = api.pvpRank.getCurrentTopPlayers.useQuery(undefined, {
+    enabled: isClerkLoaded,
+    staleTime: 1000 * 60 * 5,
+  });
   const userCountNow = onlineStats?.onlineNow || 0;
   const userCountDay = onlineStats?.onlineDay || 0;
   const maxOnline = onlineStats?.maxOnline || 0;
   const flatUsers = users?.pages.flatMap((page) => page.data);
-  const topPlayersLP =
-    flatUsers?.slice(0, RANKED_SANNIN_TOP_PLAYERS).map((u) => u.rankedLp) || [];
   const allUsers = flatUsers?.map((user) => ({
     ...user,
     info: (
@@ -91,7 +92,7 @@ export default function Users() {
         <p>{user.village?.name || "Syndicate"}</p>
       </div>
     ),
-    pvpRank: getRankedRank(user.rankedLp, topPlayersLP),
+    pvpRank: getRankedRank(user.rankedLp, topPlayersLP ?? []),
   }));
   type User = ArrayElement<typeof allUsers>;
 

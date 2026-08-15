@@ -1552,7 +1552,12 @@ export const calcBattleResult = (
           // Both players gain 10 LP for draws
           lpDiff = 10;
         } else {
-          lpDiff = calculateLpEloChange(user, targets[0], didWin, []);
+          lpDiff = calculateLpEloChange(
+            user,
+            targets[0],
+            didWin,
+            battle.extraState.topPlayersLP ?? [],
+          );
         }
       }
 
