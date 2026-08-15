@@ -1248,6 +1248,13 @@ export const RANKS_RESTRICTED_FROM_PVP = ["STUDENT", "GENIN"];
 export const STREAK_LEVEL_DIFF = 10;
 
 /**
+ * Upper bound on the HP a single shield effect may hold. Enforced by ShieldTag.health
+ * and used to clamp shields generated in combat (e.g. by the consume tag) so they can
+ * never exceed what the schema accepts.
+ */
+export const SHIELD_MAX_HEALTH = 100000;
+
+/**
  * Effect types that depend on post-mitigated damage values.
  * These must be processed AFTER damage modifiers and pierce have been applied.
  */

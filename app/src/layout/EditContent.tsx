@@ -1553,9 +1553,14 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         const tagSchema = getTagSchema(watchType);
         const parsedTag = tagSchema.safeParse({ type: watchType });
         const shownTag = parsedTag.success ? parsedTag.data : tag;
+        // Consume locks rounds to 0 and hides the field (shield duration lives on
+        // shieldRounds), so carrying rounds across a switch either way would leave the
+        // new tag with a value its schema rejects on a field the admin cannot see.
+        const skipKeys = ["type", "calculation", "direction"];
+        if (tag.type === "consume" || watchType === "consume") skipKeys.push("rounds");
         // For all typed keys in shownTag, if the key exists in curTag, keep the value, except for type
         objectKeys(shownTag).forEach((key) => {
-          if (!["type", "calculation", "direction"].includes(key) && key in curTag) {
+          if (!skipKeys.includes(key) && key in curTag) {
             // @ts-expect-error - we know this is a key of the object
             shownTag[key] = curTag[key];
           }
