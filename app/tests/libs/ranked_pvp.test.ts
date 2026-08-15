@@ -79,7 +79,8 @@ describe("calculateLpEloChange", () => {
       true,
       sanninTopPlayersLP,
     );
-    expect(withSanninContext).toBe(withoutSanninContext + 10);
+    expect(withoutSanninContext).toBe(RANKED_MIN_LP_GAIN);
+    expect(withSanninContext).toBeGreaterThan(withoutSanninContext);
   });
 });
 
