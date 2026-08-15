@@ -25,29 +25,6 @@ const ARTWORK = { width: 394, height: 525 } as const;
 const FALLBACK_LOGO =
   "https://uploadthing.b-cdn.net/f/10b0df72-5e27-4785-92ad-a63996127c85-hzez4j.png";
 
-/**
- * Concept art is stored as WebP, which satori cannot decode — the artwork silently never
- * appeared on these cards. Bunny's optimizer cannot convert it either, because these
- * uploads have no file extension and the optimizer keys off one. So the bytes are
- * decoded here and handed to satori as a PNG data URI.
- *
- * Returns null on any failure so a broken source degrades to the branded card rather
- * than failing the whole image response.
- */
-const loadArtwork = async (url: string) => {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const png = await sharp(Buffer.from(await res.arrayBuffer()))
-      .resize(ARTWORK.width, ARTWORK.height, { fit: "cover" })
-      .png()
-      .toBuffer();
-    return `data:image/png;base64,${png.toString("base64")}`;
-  } catch {
-    return null;
-  }
-};
-
 // Image generation
 export default async function Image({
   params,
@@ -115,3 +92,25 @@ export default async function Image({
     size,
   );
 }
+
+/**
+ * Concept art is stored as WebP, which satori cannot decode reliably — the artwork
+ * silently never appeared on these cards. Decode the bytes here and hand satori a PNG
+ * data URI regardless of the stored URL's extension or CDN optimizer configuration.
+ *
+ * Returns null on any failure so a broken source degrades to the branded card rather
+ * than failing the whole image response.
+ */
+const loadArtwork = async (url: string) => {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const png = await sharp(Buffer.from(await res.arrayBuffer()))
+      .resize(ARTWORK.width, ARTWORK.height, { fit: "cover" })
+      .png()
+      .toBuffer();
+    return `data:image/png;base64,${png.toString("base64")}`;
+  } catch {
+    return null;
+  }
+};
