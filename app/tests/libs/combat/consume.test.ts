@@ -23,8 +23,8 @@ const makeBattle = (
 
 const makeAttacker = (overrides: Record<string, unknown> = {}) =>
   makeBattleUser("attacker", { curHealth: 1000, maxHealth: 1000, ...overrides });
-const makeDefender = (overrides: Record<string, unknown> = {}) =>
-  makeBattleUser("defender", {
+const makeDefender = (id = "defender", overrides: Record<string, unknown> = {}) =>
+  makeBattleUser(id, {
     curHealth: 100_000_000,
     maxHealth: 100_000_000,
     ...overrides,
@@ -184,6 +184,41 @@ describe("applyEffects — consume", () => {
     expect(healthLost).toBeGreaterThan(0);
     expect(shields).toHaveLength(1);
     expect(shields[0]?.power).toBeCloseTo(Math.floor(healthLost * 0.5), 0);
+  });
+
+  it("grants one aggregated shield when the action hits multiple targets", () => {
+    // collapseConsequences merges by targetId, so a two-target action leaves two
+    // collapsed consequences. The attacker must still end up with a single shield sized
+    // off the combined hit rather than one shield per damaged target.
+    const first = makeDefender("defender-a");
+    const second = makeDefender("defender-b");
+    const { newBattle, actionEffects } = applyEffects(
+      makeBattle(
+        [makeAttacker(), first, second],
+        [
+          makeAttack("damage-a", "attacker", "defender-a"),
+          makeAttack("damage-b", "attacker", "defender-b"),
+          makeConsume(50),
+        ],
+      ),
+      "attacker",
+      makeAction(),
+    );
+    const perDefenderLost = [first, second].map(
+      (defender) =>
+        defender.curHealth -
+        (newBattle.usersState.find((u) => u.userId === defender.userId)?.curHealth ?? 0),
+    );
+    const healthLost = perDefenderLost.reduce((total, lost) => total + lost, 0);
+    const shields = newBattle.usersEffects.filter(
+      (e) => e.type === "shield" && e.targetId === "attacker" && (e.power ?? 0) > 0,
+    );
+
+    // Both targets must actually be hit, else the single-shield assertion is vacuous.
+    perDefenderLost.forEach((lost) => expect(lost).toBeGreaterThan(0));
+    expect(shields).toHaveLength(1);
+    expect(shields[0]?.power).toBeCloseTo(Math.floor(healthLost * 0.5), 0);
+    expect(actionEffects.filter((e) => e.txt.includes("consumes"))).toHaveLength(1);
   });
 
   it("grants a shield that absorbs incoming damage on a later action", () => {

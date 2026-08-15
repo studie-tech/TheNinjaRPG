@@ -16,6 +16,7 @@ import {
   MAX_GENS_CAP,
   MAX_STATS_CAP,
   PoolTypes,
+  SHIELD_MAX_HEALTH,
   SkillTreeEntryTypes,
   SkillTreeTargets,
   StatTypes,
@@ -510,9 +511,16 @@ export const ConsumeTag = z.object({
   ),
   calculation: z.enum(["percentage"]).prefault("percentage"),
   // The tag itself is instant (never lingers); shieldRounds is the duration of the
-  // shield it generates. Keeping rounds locked to 0 avoids a manual reset while the
-  // dedicated shieldRounds field carries the shield duration.
-  rounds: z.coerce.number().int().min(0).max(0).prefault(0),
+  // shield it generates. rounds is normalized to 0 rather than rejected above 0, so
+  // that switching tag types in the admin editor - which copies rounds across - cannot
+  // leave the form permanently invalid on a field that is hidden for this tag.
+  rounds: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .overwrite(() => 0)
+    .prefault(0),
   shieldRounds: z.coerce.number().int().min(1).max(100).prefault(3),
   target: z.enum(BaseTagTargets).optional().prefault("SELF"),
 });
@@ -556,7 +564,7 @@ export const ShieldTag = z.object({
   type: z.literal("shield").prefault("shield"),
   description: msg("Creates a temporary HP bar that lasts for a set amount of rounds"),
   rounds: z.coerce.number().int().min(1).max(100).prefault(3),
-  health: z.coerce.number().int().min(1).max(100000).prefault(100),
+  health: z.coerce.number().int().min(1).max(SHIELD_MAX_HEALTH).prefault(100),
 });
 export type ShieldTagType = z.infer<typeof ShieldTag>;
 
@@ -1186,24 +1194,14 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
           "WoundTag must be used together with a damage or pierce effect on the same action",
         );
       }
-    } else if (e.type === "vamp") {
+    } else if (e.type === "vamp" || e.type === "consume") {
       const hasDamageOrPierce = effects.some(
         (x) => x.type === "damage" || x.type === "pierce",
       );
       if (!hasDamageOrPierce) {
         addIssue(
           ctx,
-          "VampTag must be used together with a damage or pierce effect on the same action",
-        );
-      }
-    } else if (e.type === "consume") {
-      const hasDamageOrPierce = effects.some(
-        (x) => x.type === "damage" || x.type === "pierce",
-      );
-      if (!hasDamageOrPierce) {
-        addIssue(
-          ctx,
-          "ConsumeTag must be used together with a damage or pierce effect on the same action",
+          `${e.type === "vamp" ? "VampTag" : "ConsumeTag"} must be used together with a damage or pierce effect on the same action`,
         );
       }
     } else if (e.type === "rollbloodline" && e.powerPerLevel > 0) {

@@ -10,6 +10,7 @@ import {
   OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,
   OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
   POST_DAMAGE_MODIFIER_TYPES,
+  SHIELD_MAX_HEALTH,
 } from "@/drizzle/constants";
 import type { ShieldTagType } from "@/validators/combat";
 import { ShieldTag, VisualTag } from "@/validators/combat";
@@ -202,53 +203,60 @@ const getVisualOrSound = (
 };
 
 /**
+ * Base shape of the temporary shield granted by the consume tag, parsed once at import.
+ *
+ * Going through ShieldTag keeps the shield contract in a single place: any field later
+ * added to ShieldTag (with a default) flows through here automatically instead of
+ * silently missing this call site. Everything the parse validates is static - rounds,
+ * power and health are overridden per cast below - so the parse never runs on the
+ * per-action combat path.
+ */
+const CONSUME_SHIELD_BASE = ShieldTag.parse({
+  type: "shield",
+  description: "Temporary shield from consume",
+  rounds: 1,
+  power: 1,
+  powerPerLevel: 0,
+  direction: "offence",
+  calculation: "static",
+  health: 1,
+  target: "SELF",
+});
+
+/**
  * Build the temporary shield effect granted by the consume tag.
  *
- * Parsing through ShieldTag keeps the shield contract in a single place: any field
- * later added to ShieldTag (with a default) flows through here automatically instead
- * of silently missing this call site. shieldHp is clamped to the schema's max health
- * so a very large consumed hit can never throw during parsing mid-combat.
+ * shieldHp and rounds are clamped to the bounds ShieldTag accepts, so a very large
+ * consumed hit can never produce a shield outside the schema's range.
  *
  * isNew is intentionally false: shield()'s cast-round branch rolls a
  * `Math.random() < power / 100` primary check to decide whether the shield lands, but
  * here `power` is the raw shield HP (not a 0-100 probability). Marking the effect as
  * not-new skips that roll so the consume shield is applied deterministically.
  */
-const CONSUME_SHIELD_MAX_HP = 100000;
 const createConsumeShieldEffect = (
   user: BattleUserState,
   shieldHp: number,
   rounds: number,
   round: number,
-  targetId: string,
 ): UserEffect => {
-  const cappedHp = Math.min(shieldHp, CONSUME_SHIELD_MAX_HP);
+  const cappedHp = Math.min(shieldHp, SHIELD_MAX_HEALTH);
   return {
-    ...ShieldTag.parse({
-      type: "shield",
-      description: "Temporary shield from consume",
-      rounds,
-      power: cappedHp,
-      powerPerLevel: 0,
-      direction: "offence",
-      calculation: "static",
-      health: cappedHp,
-      target: "SELF",
-    }),
+    ...CONSUME_SHIELD_BASE,
+    rounds: Math.min(rounds, 100),
+    power: cappedHp,
+    health: cappedHp,
     id: nanoid(),
     creatorId: user.userId,
     targetId: user.userId,
     level: 0,
-    // Regular shields are realized via realizeTag() as isNew, so shield() rolls its
-    // cast-round activation. Here power is already the raw HP, so keep isNew false to
-    // skip that roll and apply the shield deterministically.
     isNew: false,
     castThisRound: true,
     createdRound: round,
     longitude: user.longitude,
     latitude: user.latitude,
     barrierAbsorb: 0,
-    actionId: `consume-${user.userId}-${targetId}`,
+    actionId: `consume-${user.userId}-${round}`,
     targetType: "user",
   };
 };
@@ -592,6 +600,11 @@ export const applyEffects = (
     );
   });
 
+  // Consume shields are accumulated per attacker across all collapsed consequences and
+  // pushed once after the loop, so a multi-target action grants a single shield sized
+  // off the whole hit rather than one shield per damaged target.
+  const consumeShieldByUser = new Map<string, { hp: number; rounds: number }>();
+
   // Apply consequences to users
   Array.from(consequences.values())
     // Before collapsing consequences, we process each consequence indicidually
@@ -746,25 +759,6 @@ export const applyEffects = (
               });
             }
           }
-          // Consume: convert a % of pre-shield damage into a temporary shield on the attacker.
-          // Not affected by heal modifiers and does not share the vamp/lifesteal leech budget.
-          const consumeShield = Math.floor(c.consumeShield ?? 0);
-          const consumeRounds = c.consumeRounds ?? 0;
-          if (consumeShield > 0 && consumeRounds > 0 && user.curHealth > 0) {
-            newUsersEffects.push(
-              createConsumeShieldEffect(
-                user,
-                consumeShield,
-                consumeRounds,
-                battle.round,
-                c.targetId,
-              ),
-            );
-            actionEffects.push({
-              txt: `${user.username} consumes ${consumeShield} damage as a shield for ${consumeRounds} rounds`,
-              color: "blue",
-            });
-          }
           // Reduce armor durability by 1 when hit (skip for battles that don't lose durability)
           if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
             const t = newUsersState.find((u) => u.userId === target.userId);
@@ -779,6 +773,21 @@ export const applyEffects = (
               }
             });
           }
+        }
+        // Consume: convert a % of pre-shield damage into a temporary shield on the
+        // attacker. Not affected by heal modifiers and does not share the vamp/lifesteal
+        // leech budget. Accumulated here and granted once after the loop. Sits outside
+        // the damage block because consumeShield is only ever set from a pre-shield hit,
+        // which survives a merge that drops a shield-reduced damage===0 (same reason
+        // lifesteal is applied outside the block below).
+        const consumeShield = c.consumeShield ?? 0;
+        const consumeRounds = c.consumeRounds ?? 0;
+        if (consumeShield > 0 && consumeRounds > 0 && user.curHealth > 0) {
+          const prev = consumeShieldByUser.get(user.userId);
+          consumeShieldByUser.set(user.userId, {
+            hp: (prev?.hp ?? 0) + consumeShield,
+            rounds: Math.max(prev?.rounds ?? 0, consumeRounds),
+          });
         }
         if (c.residual !== undefined && c.residual >= 0) {
           target.curHealth -= c.residual;
@@ -989,6 +998,22 @@ export const applyEffects = (
         }
       }
     });
+
+  // Grant the accumulated consume shields: one effect and one log line per attacker,
+  // sized off the total pre-shield damage the action dealt across every target.
+  consumeShieldByUser.forEach(({ hp, rounds }, userId) => {
+    const user = newUsersState.find((u) => u.userId === userId);
+    if (!user || user.curHealth <= 0) return;
+    const shieldHp = Math.floor(hp);
+    if (shieldHp <= 0) return;
+    newUsersEffects.push(
+      createConsumeShieldEffect(user, shieldHp, rounds, battle.round),
+    );
+    actionEffects.push({
+      txt: `${user.username} consumes ${shieldHp} damage as a shield for ${rounds} rounds`,
+      color: "blue",
+    });
+  });
 
   // Apply pool adjustments to base values for all users with pool effects
   newUsersState.forEach((user) => {
