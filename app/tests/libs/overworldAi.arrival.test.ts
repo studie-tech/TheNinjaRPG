@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { arrivalPromptDecision, isArrivalPromptStale } from "@/libs/overworldAi";
 
+/** Creates the minimal positioned NPC shape required by the arrival-prompt helpers. */
 const npc = (id: string, longitude: number, latitude: number) => ({
   npcPlacementId: id,
   longitude,

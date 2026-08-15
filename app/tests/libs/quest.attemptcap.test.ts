@@ -4,6 +4,7 @@ import { attemptCapReached } from "@/libs/quest";
 const NOW = new Date("2026-06-24T12:00:00Z");
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
+/** Returns a timestamp the requested duration before the test's fixed current time. */
 const ago = (ms: number) => new Date(NOW.getTime() - ms);
 
 describe("attemptCapReached", () => {

@@ -1955,10 +1955,15 @@ export const OVERWORLD_ASSIGNABLE_QUEST_TYPES: string[] = ASSIGNABLE_QUEST_TYPES
   (type) => !OVERWORLD_GATED_QUEST_TYPES.includes(type),
 );
 
+/**
+ * Returns the user-facing reason a quest cannot start because its type has reached its concurrency
+ * limit, or `null` when another quest of that type may be assigned.
+ */
 export const questTypeConcurrentBlockMessage = (
   quest: Pick<Quest, "questType" | "name">,
   user: NonNullable<UserWithRelations>,
 ): string | null => {
+  /** Returns the user's unfinished quests for a specific quest type. */
   const activeOfType = (type: string) =>
     user.userQuests?.filter((q) => q.quest.questType === type && !q.endAt) ?? [];
   switch (quest.questType) {

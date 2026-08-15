@@ -8,6 +8,7 @@ afterEach(() => {
   else process.env.CRON_SECRET = originalCronSecret;
 });
 
+/** Creates a cron request with an optional Authorization header. */
 const request = (authorization?: string) =>
   new Request("https://example.com/api/cron", {
     headers: authorization ? { authorization } : undefined,

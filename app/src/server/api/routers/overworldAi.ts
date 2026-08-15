@@ -701,6 +701,7 @@ export const overworldAiRouter = createTRPCRouter({
       // Release the slot we just claimed on ANY assign failure — a `!success` return or an
       // unexpected throw — so a failed assign never strands the player behind a claim that
       // produced no quest.
+      /** Releases the NPC-mission slot claimed for this quest when assignment does not complete. */
       const releaseClaimedSlot = () =>
         clearActiveNpcQuest({
           client: ctx.drizzle,
