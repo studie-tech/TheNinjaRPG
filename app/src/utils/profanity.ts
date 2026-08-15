@@ -1,11 +1,19 @@
 import sanitize from "@/utils/sanitize";
 
+type BadWordsResult =
+  | { success: false; message: string }
+  | { success: true; message: string };
+
+type ModeratedUserText =
+  | { success: false; message: string }
+  | { success: true; message: string; sanitized: string };
+
 /**
  * Moderates the content of a comment
  * @param content - The content of the comment
  * @returns An error response if the content is flagged, otherwise undefined
  */
-export const checkForBadWords = async (content: string) => {
+export const checkForBadWords = async (content: string): Promise<BadWordsResult> => {
   // Only horizontal whitespace and hyphens may connect phrase tokens. Sentence,
   // clause, and line boundaries start a new run so phrases cannot match across them.
   const tokenRuns =
@@ -41,11 +49,13 @@ export const checkForBadWords = async (content: string) => {
  * bodies that are stored as HTML. Names and titles should call
  * checkForBadWords only.
  */
-export const moderateUserText = async (content: string) => {
+export const moderateUserText = async (
+  content: string,
+): Promise<ModeratedUserText> => {
   const moderationResult = await checkForBadWords(content);
   if (!moderationResult.success) return moderationResult;
   return {
-    success: true as const,
+    success: true,
     message: moderationResult.message,
     sanitized: sanitize(content),
   };
