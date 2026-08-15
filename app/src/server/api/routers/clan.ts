@@ -573,7 +573,7 @@ export const clanRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, villageData, clans, clanWithName, villageWithName] =
+      const [user, villageData, clans, clanWithName, villageWithName, moderationResult] =
         await Promise.all([
           fetchUser(ctx.drizzle, ctx.userId),
           fetchVillage(ctx.drizzle, input.villageId),
@@ -582,6 +582,7 @@ export const clanRouter = createTRPCRouter({
           ctx.drizzle.query.village.findFirst({
             where: eq(village.name, input.name),
           }),
+          checkForBadWords(input.name),
         ]);
       // Derived
       const villageId = villageData?.id;
@@ -615,7 +616,6 @@ export const clanRouter = createTRPCRouter({
       if (!hasRequiredRank(user.rank, CLAN_RANK_REQUIREMENT)) {
         return errorResponse("Rank too low");
       }
-      const moderationResult = await checkForBadWords(input.name);
       if (!moderationResult.success) return moderationResult;
       // Reduce money
       const clanId = nanoid();
@@ -646,14 +646,16 @@ export const clanRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, fetchedClan, clanWithName, image] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchClan(ctx.drizzle, input.clanId),
-        fetchClanByName(ctx.drizzle, input.name),
-        ctx.drizzle.query.historicalAvatar.findFirst({
-          where: eq(historicalAvatar.avatar, input.image),
-        }),
-      ]);
+      const [user, fetchedClan, clanWithName, image, moderationResult] =
+        await Promise.all([
+          fetchUser(ctx.drizzle, ctx.userId),
+          fetchClan(ctx.drizzle, input.clanId),
+          fetchClanByName(ctx.drizzle, input.name),
+          ctx.drizzle.query.historicalAvatar.findFirst({
+            where: eq(historicalAvatar.avatar, input.image),
+          }),
+          checkForBadWords(input.name),
+        ]);
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
       const locationLabel = user?.isOutlaw ? "syndicate" : "village";
       // Guards
@@ -676,7 +678,6 @@ export const clanRouter = createTRPCRouter({
             validated.error.issues[0]?.message ?? "Invalid clan name",
           );
         }
-        const moderationResult = await checkForBadWords(input.name);
         if (!moderationResult.success) return moderationResult;
       }
       // Short-circuit no-op submits so PlanetScale's rowsAffected=0 on

@@ -83,9 +83,6 @@ export const registerRouter = createTRPCRouter({
     .input(registrationSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Check for bad words
-      const moderationResult = await checkForBadWords(input.username);
-      if (!moderationResult.success) return moderationResult;
       // Query
       const [
         villageData,
@@ -94,6 +91,7 @@ export const registerRouter = createTRPCRouter({
         reminder,
         selectedBloodline,
         currentIp,
+        moderationResult,
       ] = await Promise.all([
         ctx.drizzle.query.village.findFirst({
           where: eq(village.name, "Horizon"),
@@ -116,9 +114,11 @@ export const registerRouter = createTRPCRouter({
             eq(historicalIp.userId, ctx.userId),
           ),
         }),
+        checkForBadWords(input.username),
       ]);
 
       // Guard
+      if (!moderationResult.success) return moderationResult;
       if (existingUser)
         return errorResponse("Character already created for this account");
       if (usernameTaken) return errorResponse("Username already taken");

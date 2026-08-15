@@ -71,10 +71,12 @@ export const forumRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       const threadId = nanoid();
-      const [board, user, sender] = await Promise.all([
+      const [board, user, sender, titleCheck, moderated] = await Promise.all([
         fetchBoard(ctx.drizzle, input.board_id),
         fetchUser(ctx.drizzle, ctx.userId),
         input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
+        checkForBadWords(input.title),
+        moderateUserText(input.content),
       ]);
       // Guard
       if (!board) {
@@ -91,9 +93,7 @@ export const forumRouter = createTRPCRouter({
       if (user.level < FORUM_MIN_LEVEL) {
         return errorResponse(forumLevelMessage);
       }
-      const titleCheck = await checkForBadWords(input.title);
       if (!titleCheck.success) return titleCheck;
-      const moderated = await moderateUserText(input.content);
       if (!moderated.success) return moderated;
       // Mutate
       const sanitized = moderated.sanitized;
