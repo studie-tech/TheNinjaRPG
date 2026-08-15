@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   earlierBoundObjectivesComplete,
   findActionableBoundObjective,
+  resolveArrivalPromptCta,
 } from "@/libs/overworldAi";
 
 const quests = [
@@ -163,5 +164,30 @@ describe("earlierBoundObjectivesComplete — bound-objective ordering gate", () 
       { overworldPlacementId: "p3", done: false },
     ];
     expect(earlierBoundObjectivesComplete(objectives, 2)).toBe(false);
+  });
+});
+
+describe("resolveArrivalPromptCta", () => {
+  it.each([
+    ["dialog", "Talk"],
+    ["deliver_item", "Deliver"],
+    ["defeat_opponents", "Fight"],
+    [null, "Request mission"],
+  ])("maps %s to the expected friendly interaction", (task, action) => {
+    expect(
+      resolveArrivalPromptCta(
+        { username: "NPC", npcInteractionType: "FRIENDLY" },
+        task,
+      ).action,
+    ).toBe(action);
+  });
+
+  it("always attacks a hostile NPC even if a friendly task is bound", () => {
+    expect(
+      resolveArrivalPromptCta(
+        { username: "Enemy", npcInteractionType: "HOSTILE" },
+        "dialog",
+      ),
+    ).toMatchObject({ action: "Attack", dismiss: "Leave" });
   });
 });

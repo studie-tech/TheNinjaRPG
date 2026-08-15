@@ -6,7 +6,9 @@ import { describe, expect, it, vi } from "vitest";
 import { userData, userItem } from "@/drizzle/schema";
 import {
   battleClaimRollbackStatus,
+  claimActiveNpcQuest,
   claimUserSnapshot,
+  clearActiveNpcQuest,
   consumeUserItemAtomically,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
@@ -146,5 +148,65 @@ describe("battleClaimRollbackStatus", () => {
     expect(battleClaimRollbackStatus(qb as never, "KAGE_AI", ["challenger-1"])).toBe(
       "AWAKE",
     );
+  });
+});
+
+describe("active NPC quest slot", () => {
+  it("reports success only when the empty-slot compare-and-swap wins", async () => {
+    const where = vi
+      .fn()
+      .mockResolvedValueOnce({ rowsAffected: 1 })
+      .mockResolvedValueOnce({ rowsAffected: 0 });
+    const set = vi.fn().mockReturnValue({ where });
+    const client = { update: vi.fn().mockReturnValue({ set }) };
+
+    await expect(
+      claimActiveNpcQuest({
+        client: client as never,
+        userId: "user-1",
+        questId: "quest-1",
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      claimActiveNpcQuest({
+        client: client as never,
+        userId: "user-1",
+        questId: "quest-2",
+      }),
+    ).resolves.toBe(false);
+
+    expect(set).toHaveBeenNthCalledWith(1, { activeNpcQuestId: "quest-1" });
+    expect(set).toHaveBeenNthCalledWith(2, { activeNpcQuestId: "quest-2" });
+    const claimWhere = where.mock.calls[0]?.[0] as SQL;
+    const rendered = new QueryBuilder()
+      .select()
+      .from(userData)
+      .where(claimWhere)
+      .toSQL();
+    expect(rendered.sql).toMatch(/ActiveNpcQuestId.*is null/i);
+    expect(rendered.params).toContain("user-1");
+  });
+
+  it("clears through a quest-scoped update so another quest's slot is preserved", async () => {
+    const where = vi.fn().mockResolvedValue({ rowsAffected: 0 });
+    const set = vi.fn().mockReturnValue({ where });
+    const client = { update: vi.fn().mockReturnValue({ set }) };
+
+    await clearActiveNpcQuest({
+      client: client as never,
+      userId: "user-1",
+      questId: "quest-1",
+    });
+
+    expect(client.update).toHaveBeenCalledWith(userData);
+    expect(set).toHaveBeenCalledWith({ activeNpcQuestId: null });
+    expect(where).toHaveBeenCalledOnce();
+    const clearWhere = where.mock.calls[0]?.[0] as SQL;
+    const rendered = new QueryBuilder()
+      .select()
+      .from(userData)
+      .where(clearWhere)
+      .toSQL();
+    expect(rendered.params).toEqual(["user-1", "quest-1"]);
   });
 });
