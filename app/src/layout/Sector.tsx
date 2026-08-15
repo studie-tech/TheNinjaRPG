@@ -45,7 +45,7 @@ import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import AvatarImage from "@/layout/Avatar";
 import HealingPopover from "@/layout/HealingPopover";
 import Image from "@/layout/Image";
-import { LogbookEntry } from "@/layout/Logbook";
+import { LogbookEntry, QuestDialogScene } from "@/layout/Logbook";
 import Modal2 from "@/layout/Modal2";
 import RaidBrowser from "@/layout/RaidBrowser";
 import SliderField from "@/layout/SliderField";
@@ -105,7 +105,6 @@ import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
 import { round } from "@/utils/math";
-import { parseHtml } from "@/utils/parse";
 import { sleep } from "@/utils/time";
 import { blockingPopupOpenAtom, useRequiredUserData } from "@/utils/UserContext";
 import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/travel";
@@ -2799,35 +2798,14 @@ const Sector: React.FC<SectorProps> = (props) => {
           title="NPC Dialog"
         >
           <div className="flex flex-col gap-3 p-2">
-            <div className="relative w-full overflow-hidden rounded-md bg-black">
-              {/* biome-ignore lint/performance/noImgElement: dynamic CDN scene background; next/image is impractical for this composited modal */}
-              <img
-                src={dialogBackground}
-                alt="scene"
-                className="h-44 w-full object-cover"
-              />
-              {dialogCharacters.length > 0 && (
-                <div className="absolute inset-x-0 bottom-0 flex items-end justify-center gap-2">
-                  {dialogCharacters.map((image, index) => (
-                    // biome-ignore lint/performance/noImgElement: dynamic CDN character sprite, variable intrinsic size
-                    <img
-                      key={`dlg-char-${index}`}
-                      src={image}
-                      alt=""
-                      className="h-40 object-contain"
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-            {npcDialog.description && (
-              <div className="rounded-md bg-popover p-2 text-popover-foreground text-sm">
-                {parseHtml(npcDialog.description)}
-              </div>
-            )}
-            {npcDialog.branches.map((branch, idx) => (
+            <QuestDialogScene
+              background={dialogBackground}
+              characters={dialogCharacters}
+              description={npcDialog.description}
+            />
+            {npcDialog.branches.map((branch, index) => (
               <Button
-                key={`${idx}-${branch.text}`}
+                key={`${index}-${branch.text}`}
                 type="button"
                 variant="info"
                 disabled={isInteracting}
