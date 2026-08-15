@@ -125,10 +125,7 @@ export default function Profile() {
                 <div className="flex flex-row items-center gap-1">
                   <p>
                     PvP Rank:{" "}
-                    {getRankedRank(
-                      userData.rankedLp,
-                      topPlayers.map((x) => x.rankedLp),
-                    )}
+                    {getRankedRank(userData.rankedLp, topPlayers)}
                   </p>
                   <Tooltip>
                     <TooltipTrigger asChild>

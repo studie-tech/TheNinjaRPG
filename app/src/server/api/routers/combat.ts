@@ -197,6 +197,7 @@ import {
 import { fetchUserSkills } from "@/server/api/routers/skillTree";
 import type { DrizzleClient } from "@/server/db";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
+import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { findRelationship } from "@/utils/alliance";
 import { getRandomElement } from "@/utils/array";
 import { randomInt } from "@/utils/math";
@@ -1511,6 +1512,7 @@ export const initiateBattle = async (
     biome?: CombatBiome;
     forceKeepPools?: boolean;
     raidQuestId?: string;
+    topPlayersLP?: number[];
   },
   battleType: BattleType,
   scaleGains = 1,
@@ -1541,6 +1543,7 @@ export const initiateBattle = async (
     raidQuest,
     sectorExclusiveRaids,
     raidParticipations,
+    rankedTopPlayersLP,
   ] = await Promise.all([
     // Essentials
     fetchBattleEssentials(client),
@@ -1662,6 +1665,9 @@ export const initiateBattle = async (
           where: eq(raidParticipation.questId, info.raidQuestId),
           columns: { userId: true, battleCount: true },
         })
+      : [],
+    battleType === "RANKED_PVP"
+      ? (info.topPlayersLP ?? fetchSanninRankedPlayers(client))
       : [],
   ]);
 
@@ -2249,6 +2255,7 @@ export const initiateBattle = async (
           raidParticipations.map((p) => [p.userId, p.battleCount]),
         ),
         sectorExclusiveRaids: sectorExclusiveRaids,
+        topPlayersLP: rankedTopPlayersLP,
       },
       rewardScaling: rewardScaling,
       createdAt: startTime,

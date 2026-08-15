@@ -1,6 +1,37 @@
 import { describe, it, expect } from "vitest";
-import { calculateLpEloChange, getRankedRadius } from "@/libs/ranked_pvp";
-import { RANKED_MIN_LP_GAIN, RANKED_QUEUE_MAX_WAIT_SECS } from "@/drizzle/constants";
+import {
+  calculateLpEloChange,
+  getRankedRadius,
+  getRankedRank,
+} from "@/libs/ranked_pvp";
+import {
+  RANKED_LEGEND_LP_REQUIREMENT,
+  RANKED_MIN_LP_GAIN,
+  RANKED_QUEUE_MAX_WAIT_SECS,
+  RANKED_SANNIN_TOP_PLAYERS,
+} from "@/drizzle/constants";
+
+const sanninThreshold = 950;
+const sanninTopPlayersLP = [
+  2000, 1800, 1600, 1400, 1300, 1200, 1100, 1050, 1000, sanninThreshold,
+];
+
+describe("getRankedRank", () => {
+  it("requires a full Legend top-10 set before awarding Sannin", () => {
+    expect(getRankedRank(2000, [])).toBe("Legend");
+    expect(
+      getRankedRank(2000, sanninTopPlayersLP.slice(0, RANKED_SANNIN_TOP_PLAYERS - 1)),
+    ).toBe("Legend");
+  });
+
+  it("awards Sannin only to Legends at or above the 10th Legend LP", () => {
+    expect(getRankedRank(sanninThreshold, sanninTopPlayersLP)).toBe("Sannin");
+    expect(getRankedRank(sanninThreshold - 1, sanninTopPlayersLP)).toBe("Legend");
+    expect(getRankedRank(RANKED_LEGEND_LP_REQUIREMENT - 1, sanninTopPlayersLP)).toBe(
+      "Master",
+    );
+  });
+});
 
 describe("calculateLpEloChange", () => {
   it("floors a win to RANKED_MIN_LP_GAIN when the raw Elo gain is below it", () => {
@@ -33,6 +64,22 @@ describe("calculateLpEloChange", () => {
       [],
     );
     expect(lp).toBeLessThan(0);
+  });
+
+  it("applies rank-diff LP when a Legend beats a Sannin", () => {
+    const withoutSanninContext = calculateLpEloChange(
+      { rankedLp: RANKED_LEGEND_LP_REQUIREMENT, rankedStreak: 0 },
+      { rankedLp: 2000 },
+      true,
+      [],
+    );
+    const withSanninContext = calculateLpEloChange(
+      { rankedLp: RANKED_LEGEND_LP_REQUIREMENT, rankedStreak: 0 },
+      { rankedLp: 2000 },
+      true,
+      sanninTopPlayersLP,
+    );
+    expect(withSanninContext).toBe(withoutSanninContext + 10);
   });
 });
 
