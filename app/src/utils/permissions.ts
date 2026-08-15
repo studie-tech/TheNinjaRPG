@@ -320,16 +320,19 @@ export const canModerateReports = (user: UserData, report: UserReport) => {
       (user.role === "JR_MODERATOR" && report.status === "UNVIEWED") ||
       (user.role === "MODERATOR-ADMIN" && report.status === "OFFICIAL_WARNING") ||
       (user.role === "MODERATOR-ADMIN" && report.status === "BAN_ACTIVATED") ||
+      (user.role === "MODERATOR-ADMIN" && report.status === "TRADE_BAN_ACTIVATED") ||
       (user.role === "MODERATOR-ADMIN" && report.status === "BAN_ESCALATED") ||
       (user.role === "MODERATOR-ADMIN" && report.status === "SILENCE_ACTIVATED") ||
       (user.role === "MODERATOR-ADMIN" && report.status === "SILENCE_ESCALATED") ||
       (user.role === "OWNER" && report.status === "OFFICIAL_WARNING") ||
       (user.role === "OWNER" && report.status === "BAN_ACTIVATED") ||
+      (user.role === "OWNER" && report.status === "TRADE_BAN_ACTIVATED") ||
       (user.role === "OWNER" && report.status === "BAN_ESCALATED") ||
       (user.role === "OWNER" && report.status === "SILENCE_ACTIVATED") ||
       (user.role === "OWNER" && report.status === "SILENCE_ESCALATED") ||
       (user.role === "CODING-ADMIN" && report.status === "OFFICIAL_WARNING") ||
       (user.role === "CODING-ADMIN" && report.status === "BAN_ACTIVATED") ||
+      (user.role === "CODING-ADMIN" && report.status === "TRADE_BAN_ACTIVATED") ||
       (user.role === "CODING-ADMIN" && report.status === "BAN_ESCALATED") ||
       (user.role === "CODING-ADMIN" && report.status === "SILENCE_ACTIVATED") ||
       (user.role === "CODING-ADMIN" && report.status === "SILENCE_ESCALATED") ||
@@ -341,6 +344,7 @@ export const canModerateReports = (user: UserData, report: UserReport) => {
       (user.role === "HEAD_MODERATOR" && report.status === "TIMEOUT_ACTIVATED") ||
       (user.role === "MODERATOR" && report.status === "TIMEOUT_ACTIVATED") ||
       (user.role === "HEAD_MODERATOR" && report.status === "BAN_ACTIVATED") ||
+      (user.role === "HEAD_MODERATOR" && report.status === "TRADE_BAN_ACTIVATED") ||
       (user.role === "HEAD_MODERATOR" && report.status === "BAN_ESCALATED") ||
       (user.role === "HEAD_MODERATOR" && report.status === "SILENCE_ACTIVATED") ||
       (user.role === "HEAD_MODERATOR" && report.status === "SILENCE_ESCALATED") ||
