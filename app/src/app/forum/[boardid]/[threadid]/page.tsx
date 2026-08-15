@@ -66,8 +66,9 @@ export default function Thread(props: { params: Promise<{ threadid: string }> })
           const newPage = totalComments % limit === 0 ? totalPages : totalPages - 1;
           if (newPage !== page) {
             setPage(newPage);
+          } else {
+            await refetch();
           }
-          await refetch();
         }
       },
     });

@@ -80,6 +80,7 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
       {...props}
       system="conversation_comment"
       editComment={editComment.mutate}
+      isEditPending={editComment.isPending}
       deleteComment={deleteComment.mutate}
       editing={editing}
       setEditing={setEditing}
@@ -125,6 +126,7 @@ export const CommentOnForum: React.FC<ForumCommentProps> = (props) => {
       {...props}
       system="forum_comment"
       editComment={editComment.mutate}
+      isEditPending={editComment.isPending}
       deleteComment={deleteComment.mutate}
       editing={editing}
       setEditing={setEditing}
@@ -145,6 +147,7 @@ interface BaseCommentProps extends PostProps {
   quoteIds?: string[] | null;
   setEditing: React.Dispatch<React.SetStateAction<boolean>>;
   editComment?: (data: MutateCommentSchema) => void;
+  isEditPending?: boolean;
   deleteComment?: (data: DeleteCommentSchema) => void;
   toggleReaction?: (emoji: string) => void;
   setQuoteId?: (id: string) => void;
@@ -171,8 +174,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
   });
 
   const onSubmit = handleSubmit((data) => {
-    if (props.editComment) props.editComment(data);
-    props.setEditing(false);
+    if (props.editComment && !props.isEditPending) props.editComment(data);
   });
 
   // Derived
@@ -296,6 +298,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
             height="200"
             placeholder={props.comment.content}
             control={control}
+            disabled={props.isEditPending}
             onSubmit={onSubmit}
             error={errors.comment?.message}
           />

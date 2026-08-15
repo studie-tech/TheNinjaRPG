@@ -273,8 +273,8 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     emoji: string,
     username: string,
   ) => {
-    await utils.comments.getConversationComments.cancel();
-    const cached = utils.comments.getConversationComments.getInfiniteData();
+    await utils.comments.getConversationComments.cancel(queryKey);
+    const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
     const comment = cached?.pages
       .flatMap((page) => page.data)
       .find((c) => c.id === commentId);
@@ -403,7 +403,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     }
 
     // Optimistic update
-    await utils.comments.getConversationComments.cancel();
+    await utils.comments.getConversationComments.cancel(queryKey);
 
     const quoteText =
       quoteIds

@@ -4,9 +4,14 @@
  * @returns An error response if the content is flagged, otherwise undefined
  */
 export const checkForBadWords = async (content: string) => {
-  // Tokenize content into words, lowercased. Multi-word / hyphenated list entries
-  // are matched as consecutive token runs (see OFFENSIVE_PHRASES below).
-  const words = content.toLowerCase().match(/\b\w+\b/g) || [];
+  // Only horizontal whitespace and hyphens may connect phrase tokens. Sentence,
+  // clause, and line boundaries start a new run so phrases cannot match across them.
+  const tokenRuns =
+    content
+      .toLowerCase()
+      .match(/\w+(?:(?:[ \t]+|-+)\w+)*/g)
+      ?.map((run) => run.match(/\w+/g) ?? []) ?? [];
+  const words = tokenRuns.flat();
   const foundWord = words.find((word) => OFFENSIVE_SINGLE_WORDS.has(word));
   if (foundWord) {
     return {
@@ -14,13 +19,15 @@ export const checkForBadWords = async (content: string) => {
       message: `Your comment was flagged for inappropriate language and will not be shown to others. Details: ${foundWord}`,
     };
   }
-  for (const phrase of OFFENSIVE_PHRASES) {
-    for (let i = 0; i <= words.length - phrase.length; i++) {
-      if (phrase.every((token, j) => words[i + j] === token)) {
-        return {
-          success: false,
-          message: `Your comment was flagged for inappropriate language and will not be shown to others. Details: ${phrase.join(" ")}`,
-        };
+  for (const run of tokenRuns) {
+    for (const phrase of OFFENSIVE_PHRASES) {
+      for (let i = 0; i <= run.length - phrase.length; i++) {
+        if (phrase.every((token, j) => run[i + j] === token)) {
+          return {
+            success: false,
+            message: `Your comment was flagged for inappropriate language and will not be shown to others. Details: ${phrase.join(" ")}`,
+          };
+        }
       }
     }
   }
@@ -43,7 +50,6 @@ export const OFFENSIVE_WORDS = new Set([
   "africoonia",
   "afro engineering",
   "ah chah",
-  "ali baba",
   "alligator bait",
   "alligatorbait",
   "americoon",
@@ -53,7 +59,6 @@ export const OFFENSIVE_WORDS = new Set([
   "analannie",
   "analsex",
   "anchor-baby",
-  "ang mo",
   "antifaggot",
   "antinigger",
   "aperest",
@@ -144,7 +149,6 @@ export const OFFENSIVE_WORDS = new Set([
   "bootlip",
   "bootycall",
   "bougnoule",
-  "bounty-bar",
   "bountybar",
   "bozgor",
   "brea5t",
@@ -198,7 +202,6 @@ export const OFFENSIVE_WORDS = new Set([
   "chinamen",
   "chink",
   "choad",
-  "choc-ice",
   "chode",
   "chug",
   "ciapaty-or-ciapak",
@@ -309,7 +312,6 @@ export const OFFENSIVE_WORDS = new Set([
   "fuckity-bye",
   "fucktardedly",
   "fucktardedness",
-  "full-blood",
   "fuuck",
   "fux",
   "fuzzy-headed",
@@ -575,6 +577,6 @@ export const OFFENSIVE_WORDS = new Set([
  */
 const normalized = [...OFFENSIVE_WORDS].map((w) => w.split(/\W+/).filter(Boolean));
 const OFFENSIVE_SINGLE_WORDS = new Set(
-  normalized.filter((p) => p.length === 1).map((p) => p[0]!),
+  normalized.flatMap((phrase) => (phrase.length === 1 ? phrase : [])),
 );
 const OFFENSIVE_PHRASES = normalized.filter((p) => p.length > 1);
