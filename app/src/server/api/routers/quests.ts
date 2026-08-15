@@ -114,50 +114,6 @@ import type { QuestCounterFieldName } from "@/validators/user";
 import { getQuestCounterFieldName } from "@/validators/user";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
-/**
- * Resolve and validate all overworld bindings in one place for both update and clone. Defeat
- * objectives derive their opponent AI from the placement; friendly interactions must bind to a
- * FRIENDLY placement. Save-shape validation has already rejected unsupported task bindings.
- */
-const prepareOverworldBindings = async (
-  client: DrizzleClient,
-  objectives: AllObjectivesType[],
-): Promise<
-  | { success: true; objectives: AllObjectivesType[] }
-  | { success: false; message: string }
-> => {
-  const placementIds = [
-    ...new Set(
-      objectives
-        .map((objective) => objective.overworldPlacementId)
-        .filter((id): id is string => !!id),
-    ),
-  ];
-  if (placementIds.length === 0) return { success: true, objectives };
-
-  const placements = await client.query.overworldAiPlacement.findMany({
-    columns: { id: true, aiTemplateUserId: true, interactionType: true },
-    where: inArray(overworldAiPlacement.id, placementIds),
-  });
-  const { objectives: derived, missing } = deriveOverworldOpponents(
-    objectives,
-    new Map(placements.map((placement) => [placement.id, placement.aiTemplateUserId])),
-  );
-  if (missing.length > 0) {
-    return {
-      success: false,
-      message: `Bound overworld placement not found: ${missing.join(", ")}`,
-    };
-  }
-  const friendlyCheck = validateFriendlyPlacementBindings(
-    derived,
-    new Map(placements.map((placement) => [placement.id, placement])),
-  );
-  return friendlyCheck.check
-    ? { success: true, objectives: derived }
-    : { success: false, message: friendlyCheck.message };
-};
-
 export const questsRouter = createTRPCRouter({
   getAllNames: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get all quest names and IDs" } })
@@ -2898,4 +2854,48 @@ export const fetchBoundPlacementStatus = async (
   });
 
   return new Map(rows.map((row) => [row.id, row.isActive]));
+};
+
+/**
+ * Resolve and validate all overworld bindings in one place for both update and clone. Defeat
+ * objectives derive their opponent AI from the placement; friendly interactions must bind to a
+ * FRIENDLY placement. Save-shape validation has already rejected unsupported task bindings.
+ */
+const prepareOverworldBindings = async (
+  client: DrizzleClient,
+  objectives: AllObjectivesType[],
+): Promise<
+  | { success: true; objectives: AllObjectivesType[] }
+  | { success: false; message: string }
+> => {
+  const placementIds = [
+    ...new Set(
+      objectives
+        .map((objective) => objective.overworldPlacementId)
+        .filter((id): id is string => !!id),
+    ),
+  ];
+  if (placementIds.length === 0) return { success: true, objectives };
+
+  const placements = await client.query.overworldAiPlacement.findMany({
+    columns: { id: true, aiTemplateUserId: true, interactionType: true },
+    where: inArray(overworldAiPlacement.id, placementIds),
+  });
+  const { objectives: derived, missing } = deriveOverworldOpponents(
+    objectives,
+    new Map(placements.map((placement) => [placement.id, placement.aiTemplateUserId])),
+  );
+  if (missing.length > 0) {
+    return {
+      success: false,
+      message: `Bound overworld placement not found: ${missing.join(", ")}`,
+    };
+  }
+  const friendlyCheck = validateFriendlyPlacementBindings(
+    derived,
+    new Map(placements.map((placement) => [placement.id, placement])),
+  );
+  return friendlyCheck.check
+    ? { success: true, objectives: derived }
+    : { success: false, message: friendlyCheck.message };
 };
