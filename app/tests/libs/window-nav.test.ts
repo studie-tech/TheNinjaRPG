@@ -4,7 +4,6 @@ import type {
   NormalizedSectorMap,
   NormalizedSectorTile,
 } from "@/libs/sector-map/types";
-import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import { buildWindowNav, type WindowNavEntry } from "@/libs/threejs/sector";
 
 const makeMap = (
@@ -54,7 +53,6 @@ describe("buildWindowNav", () => {
         { dx: 1, dy: 0, map: makeMap(4, 6) },
       ],
       HEXSIZE,
-      mergeTerrainSpecs([]),
     );
     expect(nav).not.toBeNull();
     if (!nav) return;
@@ -79,7 +77,6 @@ describe("buildWindowNav", () => {
         { dx: 1, dy: 0, map: makeMap(4, 4) },
       ],
       HEXSIZE,
-      mergeTerrainSpecs([]),
     );
     if (!nav) throw new Error("no nav");
     const start = nav.toUnified(0, 0, 0, 1);
@@ -105,7 +102,7 @@ describe("buildWindowNav", () => {
 
   it("treats a missing (polar) neighbor as an impassable wall", () => {
     // Only the center sector is present; the east neighbor is absent
-    const nav = buildWindowNav([{ dx: 0, dy: 0, map: makeMap(4, 4) }], HEXSIZE, mergeTerrainSpecs([]));
+    const nav = buildWindowNav([{ dx: 0, dy: 0, map: makeMap(4, 4) }], HEXSIZE);
     if (!nav) throw new Error("no nav");
     const start = nav.toUnified(0, 0, 0, 1);
     const goalInMissing = nav.toUnified(1, 0, 0, 1);
@@ -121,7 +118,6 @@ describe("buildWindowNav", () => {
         { dx: 1, dy: 0, map: makeMap(4, 4) },
       ],
       HEXSIZE,
-      mergeTerrainSpecs([]),
     );
     if (!nav) throw new Error("no nav");
     const start = nav.toUnified(0, 0, 0, 1);
@@ -139,7 +135,6 @@ describe("buildWindowNav", () => {
         { dx: 1, dy: 0, map: makeMap(5, 5, (x, y) => x === 0 && y !== 2) },
       ],
       HEXSIZE,
-      mergeTerrainSpecs([]),
     );
     if (!nav) throw new Error("no nav");
     const start = nav.toUnified(0, 0, 2, 2);
@@ -165,7 +160,6 @@ describe("buildWindowNav", () => {
         { dx: 0, dy: 1, map: makeMap(4, 6) },
       ],
       HEXSIZE,
-      mergeTerrainSpecs([]),
     );
     if (!nav) throw new Error("no nav");
     const start = nav.toUnified(0, 0, 1, 5);
@@ -194,7 +188,6 @@ describe("buildWindowNav", () => {
         { dx: 0, dy: -1, map: makeMap(4, 6) },
       ],
       HEXSIZE,
-      mergeTerrainSpecs([]),
     );
     if (!nav) throw new Error("no nav");
     const start = nav.toUnified(0, 0, 1, 0);
@@ -221,7 +214,7 @@ describe("buildWindowNav", () => {
     // via the bottom row. Equal land/water costs should choose the wet shortcut.
     const isOcean = (x: number, y: number) => (x === 3 || x === 4) && y <= 2;
     const map = makeMap(8, 4, () => false, isOcean);
-    const nav = buildWindowNav([{ dx: 0, dy: 0, map }], HEXSIZE, mergeTerrainSpecs([]));
+    const nav = buildWindowNav([{ dx: 0, dy: 0, map }], HEXSIZE);
     if (!nav) throw new Error("no nav");
     const start = nav.toUnified(0, 0, 1, 1);
     const goal = nav.toUnified(0, 0, 6, 1);
