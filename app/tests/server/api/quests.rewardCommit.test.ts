@@ -89,8 +89,11 @@ const makeClient = (
       return { where: vi.fn().mockResolvedValue(result) };
     },
   }));
+  const deleteWhere = vi.fn().mockResolvedValue({ rowsAffected: 1 });
+  const deleteFrom = vi.fn(() => ({ where: deleteWhere }));
   const client = {
     update,
+    delete: deleteFrom,
     insert: vi.fn(),
     query: {
       questHistory: {
@@ -98,7 +101,7 @@ const makeClient = (
       },
     },
   };
-  return { client: client as never, sets, update };
+  return { client: client as never, sets, update, deleteFrom, deleteWhere };
 };
 
 describe("commitQuestObjectiveRewards compatibility", () => {
@@ -186,5 +189,34 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       periodCompletes: expect.anything(),
       endAt: null,
     });
+  });
+
+  it("consumes the concrete inventory row for a delivered item", async () => {
+    const { user, missionHistory } = makeUser();
+    const hydratedUser = {
+      ...user,
+      items: [{ id: "user-item-1", itemId: "item-1" }],
+    };
+    const { client, deleteFrom, deleteWhere } = makeClient([
+      { rowsAffected: 1 },
+      { rowsAffected: 1 },
+    ]);
+
+    const result = await commitQuestObjectiveRewards({
+      client,
+      userId: hydratedUser.userId,
+      user: hydratedUser as never,
+      rewards: rewards(),
+      trackers: [],
+      userQuest: missionHistory as never,
+      resolved: false,
+      notifications: [],
+      consequences: [{ type: "remove_item", ids: ["item-1"] }],
+      existingHistory: missionHistory,
+    });
+
+    expect(result.outcome).toBe("claimed");
+    expect(deleteFrom).toHaveBeenCalledOnce();
+    expect(deleteWhere).toHaveBeenCalledOnce();
   });
 });

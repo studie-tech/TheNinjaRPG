@@ -366,9 +366,11 @@ export const overworldAiRouter = createTRPCRouter({
         return errorResponse("You are not standing on the NPC's tile");
       }
 
-      // getNewTrackers (called inside getReward) reads useritems for deliver_item
-      // possession checks; attach it to a single typed user object reused below.
-      const userForTrackers = { ...activeUser, useritems };
+      // getNewTrackers reads `useritems` for delivery possession checks, while the shared
+      // consequence handler resolves the concrete row to delete through `items`.
+      // fetchUpdatedUser only hydrates equipped items, so both properties must use the full
+      // inventory fetched above for an unequipped delivery item to be consumed.
+      const userForTrackers = { ...activeUser, items: useritems, useritems };
       const ownedItemIds = useritems.map((i) => i.itemId);
 
       // 1) Bound-objective sub-path (defeat_opponents | dialog | deliver_item).
@@ -459,7 +461,7 @@ export const overworldAiRouter = createTRPCRouter({
         const claim = await commitQuestObjectiveRewards({
           client: ctx.drizzle,
           userId: ctx.userId,
-          user: activeUser,
+          user: userForTrackers,
           rewards,
           trackers,
           userQuest,
