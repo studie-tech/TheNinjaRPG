@@ -75,6 +75,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canEditClans } from "@/utils/permissions";
+import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromDate } from "@/utils/time";
 import { getEffectiveStructureLevel } from "@/utils/village";
 import {
@@ -614,6 +615,8 @@ export const clanRouter = createTRPCRouter({
       if (!hasRequiredRank(user.rank, CLAN_RANK_REQUIREMENT)) {
         return errorResponse("Rank too low");
       }
+      const moderationResult = await checkForBadWords(input.name);
+      if (!moderationResult.success) return moderationResult;
       // Reduce money
       const clanId = nanoid();
       const result = await ctx.drizzle
@@ -673,6 +676,8 @@ export const clanRouter = createTRPCRouter({
             validated.error.issues[0]?.message ?? "Invalid clan name",
           );
         }
+        const moderationResult = await checkForBadWords(input.name);
+        if (!moderationResult.success) return moderationResult;
       }
       // Short-circuit no-op submits so PlanetScale's rowsAffected=0 on
       // unchanged UPDATE isn't misread as a concurrent-rename conflict.

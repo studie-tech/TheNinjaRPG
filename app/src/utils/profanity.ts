@@ -1,3 +1,5 @@
+import sanitize from "@/utils/sanitize";
+
 /**
  * Moderates the content of a comment
  * @param content - The content of the comment
@@ -32,6 +34,21 @@ export const checkForBadWords = async (content: string) => {
     }
   }
   return { success: true, message: "Comment passed moderation" };
+};
+
+/**
+ * Block offensive language, then HTML-sanitize. Use on player-authored
+ * bodies that are stored as HTML. Names and titles should call
+ * checkForBadWords only.
+ */
+export const moderateUserText = async (content: string) => {
+  const moderationResult = await checkForBadWords(content);
+  if (!moderationResult.success) return moderationResult;
+  return {
+    success: true as const,
+    message: moderationResult.message,
+    sanitized: sanitize(content),
+  };
 };
 
 /**

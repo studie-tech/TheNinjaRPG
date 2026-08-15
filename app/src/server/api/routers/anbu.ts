@@ -42,6 +42,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { canEditClans } from "@/utils/permissions";
+import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
 import { getEffectiveStructureLevel } from "@/utils/village";
 import {
@@ -181,6 +182,8 @@ export const anbuRouter = createTRPCRouter({
       if (!hasRequiredRank(leader.rank, ANBU_LEADER_RANK_REQUIREMENT)) {
         return errorResponse("Leader rank too low");
       }
+      const moderationResult = await checkForBadWords(input.name);
+      if (!moderationResult.success) return moderationResult;
       // Mutate
       const anbuId = nanoid();
       const leaderClaim = await ctx.drizzle
@@ -293,6 +296,8 @@ export const anbuRouter = createTRPCRouter({
             validated.error.issues[0]?.message ?? "Invalid squad name",
           );
         }
+        const moderationResult = await checkForBadWords(input.name);
+        if (!moderationResult.success) return moderationResult;
       }
       // Short-circuit no-op submits so PlanetScale's rowsAffected=0 on
       // unchanged UPDATE isn't misread as a concurrent-rename conflict.

@@ -51,7 +51,7 @@ import {
   RESTRICTED_STAFF_CONVERSATION_MESSAGE,
   RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
 } from "@/utils/permissions";
-import { checkForBadWords } from "@/utils/profanity";
+import { checkForBadWords, moderateUserText } from "@/utils/profanity";
 import sanitize, { stripBlockquotes } from "@/utils/sanitize";
 import {
   createConversationSchema,
@@ -224,10 +224,10 @@ export const commentsRouter = createTRPCRouter({
       if (!thread) {
         return errorResponse("Thread not found");
       }
-      const moderationResult = await checkForBadWords(input.comment);
-      if (!moderationResult.success) return moderationResult;
+      const moderated = await moderateUserText(input.comment);
+      if (!moderated.success) return moderated;
       // Mutate
-      const sanitized = sanitize(input.comment);
+      const sanitized = moderated.sanitized;
       const createdId = nanoid();
       await Promise.all([
         moderateContent(ctx.drizzle, {
@@ -270,11 +270,11 @@ export const commentsRouter = createTRPCRouter({
       if (user.isBanned) return errorResponse("You are banned");
       if (user.isSilenced) return errorResponse("You are silenced");
       if (!comment) return errorResponse("Comment not found");
-      const moderationResult = await checkForBadWords(input.comment);
-      if (!moderationResult.success) return moderationResult;
+      const moderated = await moderateUserText(input.comment);
+      if (!moderated.success) return moderated;
       // Mutate
       const postId = input.object_id;
-      const sanitized = sanitize(input.comment);
+      const sanitized = moderated.sanitized;
       await Promise.all([
         moderateContent(ctx.drizzle, {
           content: sanitized,
@@ -392,6 +392,11 @@ export const commentsRouter = createTRPCRouter({
       const messagingRestriction = getMessagingRestriction(user);
       if (messagingRestriction) return errorResponse(messagingRestriction);
       const effectiveUserId = resolveSenderId(user, sender);
+      const titleCheck = await checkForBadWords(input.title);
+      if (!titleCheck.success) return titleCheck;
+      const moderationResult = await checkForBadWords(input.comment);
+      if (!moderationResult.success) return moderationResult;
+      const { processedContent } = processMentions(input.comment);
       // Mutate
       const convoId = await createConvo({
         client: ctx.drizzle,
@@ -399,7 +404,7 @@ export const commentsRouter = createTRPCRouter({
         senderUserId: effectiveUserId,
         receiverUserIds: input.users,
         title: input.title,
-        content: input.comment,
+        content: processedContent,
       });
       return { success: true, message: "Message sent.", conversationId: convoId };
     }),
@@ -920,11 +925,11 @@ export const commentsRouter = createTRPCRouter({
       if (user.isBanned) return errorResponse("You are banned");
       if (user.isSilenced) return errorResponse("You are silenced");
       if (!comment) return errorResponse("Comment not found");
-      const moderationResult = await checkForBadWords(input.comment);
-      if (!moderationResult.success) return moderationResult;
+      const moderated = await moderateUserText(input.comment);
+      if (!moderated.success) return moderated;
       // Mutate
       const commentId = input.object_id;
-      const sanitized = sanitize(input.comment);
+      const sanitized = moderated.sanitized;
       await Promise.all([
         moderateContent(ctx.drizzle, {
           content: sanitized,

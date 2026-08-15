@@ -22,7 +22,7 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import { canCreateNews, canModerate } from "@/utils/permissions";
-import sanitize from "@/utils/sanitize";
+import { checkForBadWords, moderateUserText } from "@/utils/profanity";
 import { forumBoardSchema } from "@/validators/forum";
 import type { DrizzleClient } from "../../db";
 
@@ -91,8 +91,12 @@ export const forumRouter = createTRPCRouter({
       if (user.level < FORUM_MIN_LEVEL) {
         return errorResponse(forumLevelMessage);
       }
+      const titleCheck = await checkForBadWords(input.title);
+      if (!titleCheck.success) return titleCheck;
+      const moderated = await moderateUserText(input.content);
+      if (!moderated.success) return moderated;
       // Mutate
-      const sanitized = sanitize(input.content);
+      const sanitized = moderated.sanitized;
       const postId = nanoid();
       const [, , , boardUpdateResult] = await Promise.all([
         moderateContent(ctx.drizzle, {
