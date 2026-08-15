@@ -2739,7 +2739,9 @@ export const MIRROR_PRIORITY_TIERS: readonly (readonly string[])[] = [
 ];
 
 /** Effect types the `copy` tag may transfer (flattened copy priority tiers). */
-export const COPYABLE_EFFECT_TYPES: string[] = COPY_PRIORITY_TIERS.flat();
+export const COPYABLE_EFFECT_TYPES: ReadonlySet<string> = new Set(
+  COPY_PRIORITY_TIERS.flat(),
+);
 
 /**
  * Source (`fromType`) origins that copy/mirror never transfer — passive/gear
@@ -2747,7 +2749,7 @@ export const COPYABLE_EFFECT_TYPES: string[] = COPY_PRIORITY_TIERS.flat();
  * the passive/pre-battle sources in `persistentEffectSourceTypes` (tags.ts) and
  * `getEffectStage` (util.ts): a source those treat as passive belongs here too.
  */
-export const TRANSFER_EXCLUDED_SOURCE_TYPES: string[] = [
+export const TRANSFER_EXCLUDED_SOURCE_TYPES: ReadonlySet<string> = new Set([
   "bloodline",
   "armor",
   "accessory",
@@ -2756,7 +2758,7 @@ export const TRANSFER_EXCLUDED_SOURCE_TYPES: string[] = [
   "village",
   "skill",
   "ranked",
-];
+]);
 
 /**
  * Negative effect TYPES the `mirror` tag never reflects onto the target (raw damage,
@@ -2765,7 +2767,7 @@ export const TRANSFER_EXCLUDED_SOURCE_TYPES: string[] = [
  * source origin (`e.fromType`); the two lists are not interchangeable.
  * `wound` is intentionally NOT here — it is mirror-eligible.
  */
-export const MIRROR_EXCLUDED_EFFECT_TYPES: string[] = [
+export const MIRROR_EXCLUDED_EFFECT_TYPES: ReadonlySet<string> = new Set([
   "damage",
   "pierce",
   "clear",
@@ -2774,7 +2776,7 @@ export const MIRROR_EXCLUDED_EFFECT_TYPES: string[] = [
   "moveprevent",
   "healprevent",
   "timecompression",
-];
+]);
 
 /** Build a `type -> rank` lookup (lower rank = higher priority) from tier arrays. */
 const buildTagPriorityRank = (

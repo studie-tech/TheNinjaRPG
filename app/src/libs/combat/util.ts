@@ -2890,21 +2890,33 @@ export const getBattleClaimIds = (info: {
 /**
  * From copy/mirror transfer candidates, pick the effects a single cast applies.
  * Two ordered concerns (do NOT collapse into one pass):
- *   1. dedupe by `type`, keeping the highest-power effect per type (unique-per-type);
- *   2. rank survivors by (priority rank asc, power desc, id asc) and take the top `cap`.
+ *   1. dedupe by `type`, keeping the strongest effect per type (unique-per-type);
+ *   2. rank survivors by (priority rank asc, strength desc, id asc) and take the
+ *      top `cap`. Types absent from `rank` fall to a shared tail rank.
  * Step 1 must run before step 2, or one type could consume two capped slots.
  *
- * Magnitude is `getPower(e).power` (the canonical value; percentage results are
- * clamped to 100). Comparing static vs percentage magnitudes within a tier is a
- * coarse heuristic, consistent with the rest of the engine (no cross-calculation
- * normalization exists anywhere) — accepted limitation.
+ * Strength is the MAGNITUDE of `getPower(e).power` (percentage magnitudes clamped
+ * to 100): the damage-modifier pass negates `decrease*` powers in place, so a
+ * signed comparison would rank a strong reduction below a weak boost and keep the
+ * weakest duplicate on dedupe. Comparing static vs percentage magnitudes within a
+ * tier is a coarse heuristic, consistent with the rest of the engine (no
+ * cross-calculation normalization exists anywhere) — accepted limitation.
  */
 export const selectTransferEffects = (
   candidates: UserEffect[],
-  rankOf: (type: string) => number,
+  rank: ReadonlyMap<string, number>,
   cap: number,
 ): UserEffect[] => {
   if (cap <= 0) return [];
+  const magnitudeOf = new Map<string, number>();
+  for (const effect of candidates) {
+    const magnitude = Math.abs(getPower(effect).power);
+    magnitudeOf.set(
+      effect.id,
+      effect.calculation === "percentage" && magnitude > 100 ? 100 : magnitude,
+    );
+  }
+  const rankOf = (type: string) => rank.get(type) ?? Number.MAX_SAFE_INTEGER;
   const strongestByType = new Map<string, UserEffect>();
   for (const effect of candidates) {
     const current = strongestByType.get(effect.type);
@@ -2912,10 +2924,10 @@ export const selectTransferEffects = (
       strongestByType.set(effect.type, effect);
       continue;
     }
-    // Higher power wins; on an exact tie keep the lower id so the surviving
+    // Higher magnitude wins; on an exact tie keep the lower id so the surviving
     // source metadata (fromEffectId provenance) is deterministic, not input-ordered.
-    const power = getPower(effect).power;
-    const currentPower = getPower(current).power;
+    const power = magnitudeOf.get(effect.id) ?? 0;
+    const currentPower = magnitudeOf.get(current.id) ?? 0;
     if (
       power > currentPower ||
       (power === currentPower && effect.id.localeCompare(current.id) < 0)
@@ -2927,7 +2939,7 @@ export const selectTransferEffects = (
     .sort((a, b) => {
       const byRank = rankOf(a.type) - rankOf(b.type);
       if (byRank !== 0) return byRank;
-      const byPower = getPower(b).power - getPower(a).power;
+      const byPower = (magnitudeOf.get(b.id) ?? 0) - (magnitudeOf.get(a.id) ?? 0);
       if (byPower !== 0) return byPower;
       return a.id.localeCompare(b.id);
     })
