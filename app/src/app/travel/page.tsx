@@ -1075,7 +1075,7 @@ export default function Travel() {
                   {calcGlobalTravelTime(userData.sector, targetSector, globe)} seconds.
                 </p>
                 {targetSector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && (
-                  <p className="mb-2 rounded-md border border-red-600/40 bg-red-600/10 p-2 text-sm text-red-700 dark:text-red-400">
+                  <p className="mb-2 rounded-md border border-red-600/40 bg-red-600/10 p-2 text-red-700 text-sm dark:text-red-400">
                     Warning: this is a free-for-all PvP zone. Anyone can attack you
                     regardless of village or XP bracket, and you cannot sleep there.
                   </p>
