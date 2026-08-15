@@ -9,8 +9,9 @@
  * Failed CAS (`success: false` / `false`) means another request mutated the row first — return a
  * safe client error and retry-friendly message.
  */
-import { and, eq, gte, ne, sql } from "drizzle-orm";
-import { bloodlineRolls, userData, userItem } from "@/drizzle/schema";
+import { and, eq, exists, gte, inArray, ne, sql } from "drizzle-orm";
+import type { BattleType } from "@/drizzle/constants";
+import { bloodlineRolls, rankedPvpQueue, userData, userItem } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { QueryCondition } from "@/utils/typeutils";
 
@@ -195,4 +196,36 @@ export const removeBloodlineFromPoolAtomically = async ({
       ),
   ]);
   return deleteResult.rowsAffected + updateResult.rowsAffected > 0;
+};
+
+/**
+ * Status to restore on player rows caught by a failed battle-start claim (the
+ * `initiateBattle` CAS rollback). Rows claimed out of a queue must return to
+ * their queue status rather than AWAKE, so the queue entry they came from stays
+ * usable:
+ * - RANKED_PVP rows were claimed from QUEUED and only return to QUEUED while
+ *   their `rankedPvpQueue` row still exists (the user may have left the queue).
+ * - KAGE_PVP challengers were claimed from KAGE_QUEUED; restoring it keeps the
+ *   still-PENDING challenge request acceptable on a retry, since accepting
+ *   requires the challenger to be KAGE_QUEUED. The kage target was claimed from
+ *   AWAKE and returns there.
+ * - Every other battle type claims AWAKE rows.
+ */
+export const battleClaimRollbackStatus = (
+  client: DrizzleClient,
+  battleType: BattleType,
+  challengerIds: string[],
+) => {
+  if (battleType === "RANKED_PVP") {
+    return sql`CASE WHEN ${exists(
+      client
+        .select({ one: sql`1` })
+        .from(rankedPvpQueue)
+        .where(eq(rankedPvpQueue.userId, userData.userId)),
+    )} THEN "QUEUED" ELSE "AWAKE" END`;
+  }
+  if (battleType === "KAGE_PVP") {
+    return sql`CASE WHEN ${inArray(userData.userId, challengerIds)} THEN "KAGE_QUEUED" ELSE "AWAKE" END`;
+  }
+  return "AWAKE" as const;
 };
