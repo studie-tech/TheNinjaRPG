@@ -40,7 +40,6 @@ import {
   USER_LAYER,
 } from "@/drizzle/constants";
 import type { VillageStructure } from "@/drizzle/schema";
-import { pickSpriteAvatar } from "@/libs/overworldAi";
 import { passesBracketFilter } from "@/libs/profile";
 import { getActiveObjectives } from "@/libs/quest";
 import {
@@ -91,7 +90,12 @@ import {
 } from "@/libs/threejs/hexgrid";
 import { applyWaveShader } from "@/libs/threejs/shaders";
 import type { SectorUser } from "@/libs/threejs/types";
-import { createTexture, loadTexture, profiler } from "@/libs/threejs/util";
+import {
+  createTexture,
+  loadTexture,
+  pickSpriteAvatar,
+  profiler,
+} from "@/libs/threejs/util";
 import { hasRequiredRank } from "@/libs/train";
 import { getBiomeFromTileType } from "@/libs/travel";
 import type { UserWithRelations } from "@/routers/profile";

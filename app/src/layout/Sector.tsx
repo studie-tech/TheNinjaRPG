@@ -56,7 +56,6 @@ import {
   arrivalPromptDecision,
   findActionableBoundObjective,
   isArrivalPromptStale,
-  pickSpriteAvatar,
   resolveArrivalPromptCta,
 } from "@/libs/overworldAi";
 import { calcLevel, getExpBracket, passesBracketFilter } from "@/libs/profile";
@@ -90,6 +89,7 @@ import {
   cleanUp,
   disposeGroupPreservingShared,
   isRendererContextValid,
+  pickSpriteAvatar,
   profiler,
   safeRemoveRendererElement,
   setRaycasterFromMouse,

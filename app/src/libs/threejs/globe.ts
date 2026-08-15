@@ -8,11 +8,14 @@ import {
   SpriteMaterial,
   Vector3,
 } from "three";
-import { IMG_AVATAR_DEFAULT, IMG_SECTOR_USER_SPRITE_MASK } from "@/drizzle/constants";
+import { IMG_SECTOR_USER_SPRITE_MASK } from "@/drizzle/constants";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
-import { pickSpriteAvatar } from "@/libs/overworldAi";
 import type { GlobalMapData, GlobalPoint, GlobalTile } from "@/libs/threejs/types";
-import { createBorderTexture, loadTexture } from "@/libs/threejs/util";
+import {
+  createBorderTexture,
+  loadTexture,
+  pickSpriteAvatar,
+} from "@/libs/threejs/util";
 import { fetchWithRetry } from "@/utils/http";
 
 const MAP_CACHE_KEY = "hexasphere_map_cache";

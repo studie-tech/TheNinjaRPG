@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { pickSpriteAvatar } from "@/libs/overworldAi";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import { pickSpriteAvatar } from "@/libs/threejs/util";
 
 describe("pickSpriteAvatar", () => {
   it("renders an NPC's full avatar even when avatarLight is a placeholder thumbnail", () => {
-    // Overworld AI templates frequently carry a default `avatarLight` while their real
+    // NPC templates frequently carry a default `avatarLight` while their real
     // art lives in `avatar`; the map must show the real art, not the placeholder.
     expect(
       pickSpriteAvatar({
