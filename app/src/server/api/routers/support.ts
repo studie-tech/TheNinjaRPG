@@ -94,7 +94,7 @@ export const supportRouter = createTRPCRouter({
       }
 
       // Sanitize ticket for public view if user is not staff
-      if (!user.role || !["ADMIN", "MODERATOR", "SUPPORTER"].includes(user.role)) {
+      if (!canViewStaffOnlyComments(user.role)) {
         return sanitizeSupportTicketForPublic(ticket, user);
       }
 
