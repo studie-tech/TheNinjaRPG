@@ -756,36 +756,59 @@ export const reportsRouter = createTRPCRouter({
       if (!canClearReport(user, report)) return errorResponse("No permission");
       // If someone was reported
       if (report.reportedUserId) {
-        // Remove ban if no other active bans
-        const bans = await ctx.drizzle.query.userReport.findMany({
-          where: and(
-            eq(userReport.reportedUserId, report.reportedUserId ?? ""),
-            eq(userReport.status, "BAN_ACTIVATED"),
-            gte(userReport.banEnd, new Date()),
-            ne(userReport.id, report.id),
-          ),
-        });
-        if (bans.length === 0) {
-          await ctx.drizzle
-            .update(userData)
-            .set({ isBanned: false })
-            .where(eq(userData.userId, report.reportedUserId));
-        }
-        // Remove silence if no other active silence or timeout reports
-        const activeSilenceOrTimeout = await ctx.drizzle.query.userReport.findMany({
-          where: and(
-            eq(userReport.reportedUserId, report.reportedUserId ?? ""),
-            inArray(userReport.status, ["SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED"]),
-            gte(userReport.banEnd, new Date()),
-            ne(userReport.id, report.id),
-          ),
-        });
-        if (activeSilenceOrTimeout.length === 0) {
-          await ctx.drizzle
-            .update(userData)
-            .set({ isSilenced: false })
-            .where(eq(userData.userId, report.reportedUserId));
-        }
+        const reportedUserId = report.reportedUserId;
+        const [bans, activeSilenceOrTimeout, activeTradeBans] = await Promise.all([
+          ctx.drizzle.query.userReport.findMany({
+            where: and(
+              eq(userReport.reportedUserId, reportedUserId),
+              eq(userReport.status, "BAN_ACTIVATED"),
+              gte(userReport.banEnd, new Date()),
+              ne(userReport.id, report.id),
+            ),
+          }),
+          ctx.drizzle.query.userReport.findMany({
+            where: and(
+              eq(userReport.reportedUserId, reportedUserId),
+              inArray(userReport.status, ["SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED"]),
+              gte(userReport.banEnd, new Date()),
+              ne(userReport.id, report.id),
+            ),
+          }),
+          ctx.drizzle.query.userReport.findMany({
+            where: and(
+              eq(userReport.reportedUserId, reportedUserId),
+              eq(userReport.status, "TRADE_BAN_ACTIVATED"),
+              gte(userReport.banEnd, new Date()),
+              ne(userReport.id, report.id),
+            ),
+          }),
+        ]);
+        await Promise.all([
+          ...(bans.length === 0
+            ? [
+                ctx.drizzle
+                  .update(userData)
+                  .set({ isBanned: false })
+                  .where(eq(userData.userId, reportedUserId)),
+              ]
+            : []),
+          ...(activeSilenceOrTimeout.length === 0
+            ? [
+                ctx.drizzle
+                  .update(userData)
+                  .set({ isSilenced: false })
+                  .where(eq(userData.userId, reportedUserId)),
+              ]
+            : []),
+          ...(activeTradeBans.length === 0
+            ? [
+                ctx.drizzle
+                  .update(userData)
+                  .set({ isTradeBanned: false })
+                  .where(eq(userData.userId, reportedUserId)),
+              ]
+            : []),
+        ]);
       }
       // Update report
       await Promise.all([

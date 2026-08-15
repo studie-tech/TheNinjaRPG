@@ -7,6 +7,7 @@ export const reportCommentColor = (status: ReportAction | null) => {
     case "REPORT_CLEARED":
       return "green";
     case "BAN_ACTIVATED":
+    case "TRADE_BAN_ACTIVATED":
       return "red";
     case "BAN_ESCALATED":
       return "blue";
@@ -23,6 +24,8 @@ export const reportCommentExplain = (status: ReportAction | null) => {
       return "Infraction Cleared";
     case "BAN_ACTIVATED":
       return "User Banned";
+    case "TRADE_BAN_ACTIVATED":
+      return "User Trade Banned";
     case "BAN_ESCALATED":
       return "Ban Escalated to Admin";
     case "SILENCE_ACTIVATED":
