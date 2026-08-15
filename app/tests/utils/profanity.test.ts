@@ -36,6 +36,7 @@ describe("checkForBadWords", () => {
     "alligator? bait",
     "alligator, bait",
     "alligator\nbait",
+    "alligator<br>bait",
   ])("does not flag phrase tokens across unrelated text or boundaries: %s", async (content) => {
     await expectAllowed(content);
   });

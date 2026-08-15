@@ -81,27 +81,33 @@ const PLAIN_TEXT_SEPARATOR_TAGS = new Set([
   "ul",
 ]);
 
-/** Converts stored HTML to normalized text without retaining script/style contents. */
-export const htmlToPlainText = (html: string) => {
-  let needsSpace = false;
-  const plainText = sanitizeHtml(html, {
+const htmlToText = (html: string, breakText: string, collapse: RegExp) => {
+  let needsBreak = false;
+  const text = sanitizeHtml(html, {
     allowedTags: [],
     allowedAttributes: {},
     onOpenTag: (tagName) => {
-      if (PLAIN_TEXT_SEPARATOR_TAGS.has(tagName)) needsSpace = true;
+      if (PLAIN_TEXT_SEPARATOR_TAGS.has(tagName)) needsBreak = true;
     },
     onCloseTag: (tagName) => {
-      if (PLAIN_TEXT_SEPARATOR_TAGS.has(tagName)) needsSpace = true;
+      if (PLAIN_TEXT_SEPARATOR_TAGS.has(tagName)) needsBreak = true;
     },
-    textFilter: (text) => {
-      if (!needsSpace) return text;
-      needsSpace = false;
-      return ` ${text}`;
+    textFilter: (chunk) => {
+      if (!needsBreak) return chunk;
+      needsBreak = false;
+      return `${breakText}${chunk}`;
     },
   });
 
-  return decodeHTML(plainText).replace(/\s+/g, " ").trim();
+  return decodeHTML(text).replace(collapse, " ").trim();
 };
+
+/** Converts stored HTML to normalized text without retaining script/style contents. */
+export const htmlToPlainText = (html: string) => htmlToText(html, " ", /\s+/g);
+
+/** Visible text for moderation: inline tags vanish, block/br stay as line breaks. */
+export const htmlToModerationText = (html: string) =>
+  htmlToText(html, "\n", /[ \t]+/g);
 
 /**
  * Strict sanitizer for variant description/battleDescription fields.
