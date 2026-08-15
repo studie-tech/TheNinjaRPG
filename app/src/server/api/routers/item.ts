@@ -32,7 +32,6 @@ import {
   ItemSlots,
   ItemTypes,
   MAX_EXTRA_RESKIN_SLOTS,
-  MAX_ITEM_SHOP_PURCHASE_QUANTITY,
   MAX_ITEM_VARIANTS,
   MAX_MARRIAGE_SLOTS,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
@@ -108,6 +107,7 @@ import type { ItemFilteringSchema } from "@/validators/item";
 import {
   ItemVariantResponseSchema,
   ItemVariantValidator,
+  itemBuySchema,
   itemFilteringSchema,
   UserUnlockedVariantResponseSchema,
 } from "@/validators/item";
@@ -1907,13 +1907,7 @@ export const itemRouter = createTRPCRouter({
   // Buy user item
   buy: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Buy an item from shop" } })
-    .input(
-      z.object({
-        itemId: z.string(),
-        stack: z.number().min(1).max(MAX_ITEM_SHOP_PURCHASE_QUANTITY),
-        villageId: z.string().nullish(),
-      }),
-    )
+    .input(itemBuySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query

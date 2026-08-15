@@ -6,10 +6,17 @@ import {
   ItemRarities,
   ItemSlotTypes,
   ItemTypes,
+  MAX_ITEM_SHOP_PURCHASE_QUANTITY,
   MAX_ITEM_VARIANTS,
   VARIANT_COST_TYPES,
 } from "@/drizzle/constants";
 import { statFilters } from "@/libs/train";
+
+export const itemBuySchema = z.object({
+  itemId: z.string(),
+  stack: z.number().int().min(1).max(MAX_ITEM_SHOP_PURCHASE_QUANTITY),
+  villageId: z.string().nullish(),
+});
 
 export const itemFilteringSchema = z.object({
   limit: z.number().min(1).max(500),
