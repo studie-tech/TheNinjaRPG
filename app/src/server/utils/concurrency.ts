@@ -11,7 +11,13 @@
  */
 import { and, eq, exists, gte, inArray, ne, sql } from "drizzle-orm";
 import type { BattleType } from "@/drizzle/constants";
-import { bloodlineRolls, rankedPvpQueue, userData, userItem } from "@/drizzle/schema";
+import {
+  bloodlineRolls,
+  rankedPvpQueue,
+  userData,
+  userItem,
+  userRequest,
+} from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { QueryCondition } from "@/utils/typeutils";
 
@@ -205,11 +211,15 @@ export const removeBloodlineFromPoolAtomically = async ({
  * usable:
  * - RANKED_PVP rows were claimed from QUEUED and only return to QUEUED while
  *   their `rankedPvpQueue` row still exists (the user may have left the queue).
- * - KAGE_PVP challengers were claimed from KAGE_QUEUED; restoring it keeps the
- *   still-PENDING challenge request acceptable on a retry, since accepting
- *   requires the challenger to be KAGE_QUEUED. The kage target was claimed from
- *   AWAKE and returns there.
- * - Every other battle type claims AWAKE rows.
+ * - KAGE_PVP challengers were claimed from KAGE_QUEUED and only return to it
+ *   while their kage challenge request is still PENDING, keeping the request
+ *   acceptable on a retry (accepting requires a KAGE_QUEUED challenger). A
+ *   concurrent cancel/reject ends the request but cannot reset a challenger row
+ *   that is mid-claim, so an unconditional restore would strand the challenger
+ *   in KAGE_QUEUED. The kage target was claimed from AWAKE and returns there.
+ * - Every other battle type falls back to AWAKE (pre-existing behavior: e.g.
+ *   CLAN_BATTLE and RAID claim QUEUED rows, but their queue entries are managed
+ *   by their own flows).
  */
 export const battleClaimRollbackStatus = (
   client: DrizzleClient,
@@ -225,7 +235,18 @@ export const battleClaimRollbackStatus = (
     )} THEN "QUEUED" ELSE "AWAKE" END`;
   }
   if (battleType === "KAGE_PVP") {
-    return sql`CASE WHEN ${inArray(userData.userId, challengerIds)} THEN "KAGE_QUEUED" ELSE "AWAKE" END`;
+    return sql`CASE WHEN ${inArray(userData.userId, challengerIds)} AND ${exists(
+      client
+        .select({ one: sql`1` })
+        .from(userRequest)
+        .where(
+          and(
+            eq(userRequest.senderId, userData.userId),
+            eq(userRequest.type, "KAGE"),
+            eq(userRequest.status, "PENDING"),
+          ),
+        ),
+    )} THEN "KAGE_QUEUED" ELSE "AWAKE" END`;
   }
   return "AWAKE" as const;
 };
