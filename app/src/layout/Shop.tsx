@@ -41,6 +41,7 @@ import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
 import { UncontrolledSliderField } from "@/layout/SliderField";
 import { cn } from "@/libs/shadui";
+import { getMaxItemShopPurchaseQuantity } from "@/libs/shop";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { useAwake } from "@/utils/routing";
@@ -448,7 +449,7 @@ const Shop: React.FC<ShopProps> = (props) => {
               label={`How many to buy: ${stacksize}`}
               value={stacksize}
               min={1}
-              max={item.stackSize}
+              max={getMaxItemShopPurchaseQuantity(item.stackSize)}
               setValue={setStacksize}
             />
           ) : undefined}
