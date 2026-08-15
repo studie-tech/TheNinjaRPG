@@ -22,7 +22,21 @@ import {
   Vector2,
   WebGLRenderer,
 } from "three";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { bunnyImageUrl } from "@/utils/image";
+
+/**
+ * Avatar URL for a sector/globe user sprite. Regular players prefer the lightweight
+ * `avatarLight` thumbnail (cheaper to render in crowded sectors); NPCs prefer the full
+ * `avatar`, because AI templates may carry a default placeholder in `avatarLight`.
+ */
+export const pickSpriteAvatar = (user: {
+  isNpc?: boolean | null;
+  avatar?: string | null;
+  avatarLight?: string | null;
+}): string =>
+  (user.isNpc ? user.avatar || user.avatarLight : user.avatarLight || user.avatar) ||
+  IMG_AVATAR_DEFAULT;
 
 // Simple in-memory cache for textures to avoid re-fetching
 let textureLoaderInstance: TextureLoader | null = null;
