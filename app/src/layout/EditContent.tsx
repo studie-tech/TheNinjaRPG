@@ -41,7 +41,6 @@ import RichInput from "@/layout/RichInput";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import Table from "@/layout/Table";
 import {
-  FRIENDLY_INTERACTION_TASKS,
   isSupportedOverworldBindingTask,
   placementsForObjective,
 } from "@/libs/overworldAi";
@@ -74,10 +73,6 @@ import { ObjectiveReward } from "@/validators/rewards";
 
 export type FormDbValue = { id: string; name: string };
 
-// Sentinel value for a "— none —" option in single-select db_values dropdowns,
-// allowing an optional binding (e.g. overworldPlacementId) to be cleared. Selecting
-// it writes an empty string so truthy readers treat the field as unbound.
-const NONE_PLACEMENT_VALUE = "__none__";
 export type FormEntry<K> = {
   id: K;
   label?: string;
@@ -790,20 +785,9 @@ export const EditContent = <
                                                 key={option.value}
                                                 keywords={[option.label]}
                                                 onSelect={() => {
-                                                  // The __none__ sentinel is a placement-picker
-                                                  // concern only; scope the empty-string rewrite to
-                                                  // that field so an unrelated dropdown that happens
-                                                  // to carry a "__none__" option isn't clobbered.
                                                   form.setValue(
                                                     id,
-                                                    (id === "overworldPlacementId" &&
-                                                    option.value ===
-                                                      NONE_PLACEMENT_VALUE
-                                                      ? ""
-                                                      : option.value) as PathValue<
-                                                      S,
-                                                      K
-                                                    >,
+                                                    option.value as PathValue<S, K>,
                                                     { shouldDirty: true },
                                                   );
                                                 }}
@@ -2338,28 +2322,12 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
           task: watchTask,
           selectedAiIds,
         });
-        // Show guidance when a scope is applied (an AI is chosen, or a friendly-interaction
-        // task) yet nothing matches — i.e. the relevant placement hasn't been created yet.
-        const scoped =
-          selectedAiIds.length > 0 ||
-          (FRIENDLY_INTERACTION_TASKS as readonly string[]).includes(watchTask);
-        const noMatchingPlacement =
-          placementNames !== undefined && scoped && matching.length === 0;
         return {
           id: value,
-          values: [
-            {
-              id: NONE_PLACEMENT_VALUE,
-              name: noMatchingPlacement
-                ? selectedAiIds.length > 0
-                  ? "— none — (no placement for this AI; create one on its Overworld Placements page)"
-                  : "— none — (no FRIENDLY placement exists; create one on the Overworld Placements page)"
-                : "— none —",
-            },
-            ...matching.map((p) => ({ id: p.id, name: p.label })),
-          ],
+          values: matching.map((p) => ({ id: p.id, name: p.label })),
           type: "db_values",
           label: FORM_LABEL_MAP[value] ?? value,
+          resetButton: true,
         };
       } else if (["description", "successDescription"].includes(value)) {
         return {
