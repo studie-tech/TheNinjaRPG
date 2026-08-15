@@ -20,6 +20,7 @@ import {
 } from "three";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
@@ -1568,8 +1569,8 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   /**
    * Handles an overworld NPC sprite click by interacting when adjacent or routing toward the NPC.
-   * Returns whether the placement still resolves to a live NPC, allowing stale sprites to fall
-   * through to the normal player-interaction path.
+   * Returns whether the placement still resolves to a live NPC, allowing an attack-icon caller
+   * to fall through to the normal player-interaction path when its sprite is stale.
    */
   const handleNpcTileInteraction = (placementId: string | undefined): boolean => {
     if (!placementId) return false;
@@ -2552,6 +2553,13 @@ const Sector: React.FC<SectorProps> = (props) => {
   const arrivalCta = arrivalNpc
     ? resolveArrivalPromptCta(arrivalNpc, arrivalBound?.objective.task ?? null)
     : null;
+  const dialogBackground =
+    dialogSceneAssets?.find((asset) => asset.type === "SCENE_BACKGROUND")?.image ??
+    IMG_SCENE_BACKGROUND;
+  const dialogCharacters =
+    dialogSceneAssets
+      ?.filter((asset) => asset.type === "SCENE_CHARACTER")
+      .map((asset) => asset.image) ?? [];
 
   return (
     <>
@@ -2752,28 +2760,28 @@ const Sector: React.FC<SectorProps> = (props) => {
             />
             <p className="text-center text-sm">{arrivalCta?.question}</p>
             <div className="flex w-full gap-2">
-              <button
+              <Button
                 type="button"
+                variant={
+                  arrivalNpc.npcInteractionType === "HOSTILE" ? "destructive" : "info"
+                }
                 disabled={isInteracting}
-                className={`flex-1 rounded-md px-4 py-2 text-sm text-white transition-colors disabled:opacity-50 ${
-                  arrivalNpc.npcInteractionType === "HOSTILE"
-                    ? "bg-red-600 hover:bg-red-700"
-                    : "bg-blue-600 hover:bg-blue-700"
-                }`}
+                className="flex-1"
                 onClick={() => {
                   interactWithNpc(arrivalNpc);
                   setArrivalNpc(null);
                 }}
               >
                 {arrivalCta?.action}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="flex-1 rounded-md bg-gray-500 px-4 py-2 text-sm text-white transition-colors hover:bg-gray-600"
+                variant="secondary"
+                className="flex-1"
                 onClick={() => setArrivalNpc(null)}
               >
                 {arrivalCta?.dismiss}
-              </button>
+              </Button>
             </div>
           </div>
         </Modal2>
@@ -2787,49 +2795,39 @@ const Sector: React.FC<SectorProps> = (props) => {
           title="NPC Dialog"
         >
           <div className="flex flex-col gap-3 p-2">
-            {(() => {
-              const background =
-                dialogSceneAssets?.find((a) => a.type === "SCENE_BACKGROUND")?.image ??
-                IMG_SCENE_BACKGROUND;
-              const characters =
-                dialogSceneAssets
-                  ?.filter((a) => a.type === "SCENE_CHARACTER")
-                  .map((a) => a.image) ?? [];
-              return (
-                <div className="relative w-full overflow-hidden rounded-md bg-black">
-                  {/* biome-ignore lint/performance/noImgElement: dynamic CDN scene background; next/image is impractical for this composited modal */}
-                  <img
-                    src={background}
-                    alt="scene"
-                    className="h-44 w-full object-cover"
-                  />
-                  {characters.length > 0 && (
-                    <div className="absolute inset-x-0 bottom-0 flex items-end justify-center gap-2">
-                      {characters.map((img, i) => (
-                        // biome-ignore lint/performance/noImgElement: dynamic CDN character sprite, variable intrinsic size
-                        <img
-                          key={`dlg-char-${i}`}
-                          src={img}
-                          alt=""
-                          className="h-40 object-contain"
-                        />
-                      ))}
-                    </div>
-                  )}
+            <div className="relative w-full overflow-hidden rounded-md bg-black">
+              {/* biome-ignore lint/performance/noImgElement: dynamic CDN scene background; next/image is impractical for this composited modal */}
+              <img
+                src={dialogBackground}
+                alt="scene"
+                className="h-44 w-full object-cover"
+              />
+              {dialogCharacters.length > 0 && (
+                <div className="absolute inset-x-0 bottom-0 flex items-end justify-center gap-2">
+                  {dialogCharacters.map((image, index) => (
+                    // biome-ignore lint/performance/noImgElement: dynamic CDN character sprite, variable intrinsic size
+                    <img
+                      key={`dlg-char-${index}`}
+                      src={image}
+                      alt=""
+                      className="h-40 object-contain"
+                    />
+                  ))}
                 </div>
-              );
-            })()}
+              )}
+            </div>
             {npcDialog.description && (
               <div className="rounded-md bg-popover p-2 text-popover-foreground text-sm">
                 {parseHtml(npcDialog.description)}
               </div>
             )}
             {npcDialog.branches.map((branch, idx) => (
-              <button
+              <Button
                 key={`${idx}-${branch.text}`}
                 type="button"
+                variant="info"
                 disabled={isInteracting}
-                className="rounded-md bg-blue-600 px-4 py-2 text-left text-sm text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                className="h-auto w-full justify-start whitespace-normal text-left"
                 onClick={() => {
                   const ctx = pendingNpcInteractRef.current;
                   if (ctx && !isInteracting) {
@@ -2848,7 +2846,7 @@ const Sector: React.FC<SectorProps> = (props) => {
                 }}
               >
                 {branch.text}
-              </button>
+              </Button>
             ))}
           </div>
         </Modal2>

@@ -38,7 +38,7 @@ describe("QuestValidator — #1348 maxCompletes/retryDelay guard", () => {
     expect(res.success).toBe(true);
   });
 
-  it("allows maxCompletes 0 when retryDelay is 'none' (uncapped is intentional)", () => {
+  it("preserves legacy maxCompletes 0 validation when retryDelay is 'none'", () => {
     const res = QuestValidator.safeParse({
       ...baseQuest,
       retryDelay: "none",

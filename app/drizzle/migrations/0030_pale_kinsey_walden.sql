@@ -16,21 +16,17 @@ CREATE TABLE `OverworldAiPlacement` (
 );
 
 CREATE TABLE `OverworldAiPlacementQuest` (
-	`id` varchar(191) NOT NULL,
 	`placementId` varchar(191) NOT NULL,
 	`questId` varchar(191) NOT NULL,
 	`chance` smallint unsigned NOT NULL DEFAULT 0,
-	CONSTRAINT `OverworldAiPlacementQuest_id` PRIMARY KEY(`id`),
-	CONSTRAINT `OverworldAiPlacementQuest_placement_quest_key` UNIQUE(`placementId`,`questId`)
+	CONSTRAINT `OverworldAiPlacementQuest_placementId_questId_pk` PRIMARY KEY(`placementId`,`questId`)
 );
 
 CREATE TABLE `UserQuestAttempt` (
-	`id` varchar(191) NOT NULL,
 	`userId` varchar(191) NOT NULL,
 	`questId` varchar(191) NOT NULL,
 	`lastAttemptAt` datetime(3) NOT NULL,
-	CONSTRAINT `UserQuestAttempt_id` PRIMARY KEY(`id`),
-	CONSTRAINT `UserQuestAttempt_user_quest_key` UNIQUE(`userId`,`questId`)
+	CONSTRAINT `UserQuestAttempt_userId_questId_pk` PRIMARY KEY(`userId`,`questId`)
 );
 
 ALTER TABLE `Battle` MODIFY COLUMN `battleType` enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD') NOT NULL;
@@ -73,8 +69,7 @@ WHERE
 		WHEN 'monthly' THEN CAST(DATE_FORMAT(UTC_DATE(), '%Y-%m-01') AS DATETIME)
 		ELSE NULL
 	END;
-CREATE INDEX `OverworldAiPlacement_sector_idx` ON `OverworldAiPlacement` (`sector`);
 CREATE INDEX `OverworldAiPlacement_aiTemplateUserId_idx` ON `OverworldAiPlacement` (`aiTemplateUserId`);
 CREATE INDEX `OverworldAiPlacement_isActive_sector_idx` ON `OverworldAiPlacement` (`isActive`,`sector`);
-CREATE INDEX `OverworldAiPlacementQuest_placementId_idx` ON `OverworldAiPlacementQuest` (`placementId`);
+CREATE INDEX `OverworldAiPlacementQuest_questId_idx` ON `OverworldAiPlacementQuest` (`questId`);
 CREATE INDEX `UserQuestAttempt_questId_idx` ON `UserQuestAttempt` (`questId`);

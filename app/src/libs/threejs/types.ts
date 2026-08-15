@@ -74,9 +74,12 @@ export interface SectorUser {
   allianceStatus: AllianceState;
   status: UserStatus;
   battleId: string | null;
-  // Overworld NPC fields (present only for staff-placed AI NPCs)
+  /** Whether this rendered sector entity is a staff-configured overworld NPC. */
   isNpc?: boolean;
+  /** Stable placement identity used for NPC rendering and interaction requests. */
   npcPlacementId?: string;
+  /** Determines whether the NPC exposes a talk or attack interaction. */
   npcInteractionType?: OverworldInteractionType;
+  /** Optimistic concurrency version for interactions with a moving NPC placement. */
   npcPositionVersion?: number;
 }

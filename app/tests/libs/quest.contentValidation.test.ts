@@ -9,8 +9,7 @@ import type { AllObjectivesType } from "@/validators/objectives";
 /** Narrows compact objective fixtures to the validator's full objective type. */
 const objs = (o: unknown[]) => o as unknown as AllObjectivesType[];
 
-// A dialog branch with no nextObjectiveId can never advance the objective, so it
-// soft-locks the player (the overworld dialog handler re-shows the same dialog).
+// New dialog content must route explicitly. Legacy terminal branches remain supported at runtime.
 const terminalDialog = objs([
   { id: "d1", task: "dialog", nextObjectiveId: [{ text: "Goodbye" }] },
 ]);
@@ -74,6 +73,27 @@ describe("verifyQuestContentForSave", () => {
 
   it("applies chain/reachability validation to consecutive quests", () => {
     expect(verifyQuestContentForSave(parallelNonDialog, true).check).toBe(false);
+  });
+});
+
+describe("verifyQuestObjectiveFlow — dialog routing", () => {
+  it("rejects a mix of routed and terminal branches", () => {
+    const mixed = objs([
+      {
+        id: "d1",
+        task: "dialog",
+        nextObjectiveId: [
+          { text: "Continue", nextObjectiveId: "o2" },
+          { text: "Leave" },
+        ],
+      },
+      { id: "o2", task: "collect_item" },
+    ]);
+    expect(verifyQuestObjectiveFlow(mixed).check).toBe(false);
+  });
+
+  it("accepts a routed dialog chain", () => {
+    expect(verifyQuestObjectiveFlow(routedDialog).check).toBe(true);
   });
 });
 

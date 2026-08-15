@@ -227,7 +227,9 @@ export const isObjectiveLocationSatisfied = (
  * list of rewards to award the user
  * @param user - User with questData
  * @param questId - Quest ID
- * @param dialogNextObjectiveId - Requested next objective ID,
+ * @param dialogNextObjectiveId - Requested next objective ID.
+ * @param settings - Game settings used while calculating quest rewards.
+ * @param atPlacementIds - Overworld placement ids the user is interacting with now.
  * @returns Rewards, trackers, userQuest, resolved, successDescriptions
  */
 export const getReward = (
@@ -715,35 +717,6 @@ export const killObjectiveCountsForQuest = (
 };
 
 /**
- * Returns true when an objective is bound to a placement that no longer exists
- * in the database (i.e. the row was hard-deleted). The `existing` set contains
- * every placement id that was returned by the DB query (regardless of isActive).
- */
-export const isBoundPlacementDeleted = (
-  objective: { task: string; overworldPlacementId?: string },
-  existing: Set<string>,
-): boolean =>
-  isSupportedOverworldBindingTask(objective.task) &&
-  !!objective.overworldPlacementId &&
-  !existing.has(objective.overworldPlacementId);
-
-/**
- * Returns true when an objective is bound to a placement that still exists in
- * the database but is currently deactivated (isActive=false). The objective
- * should be frozen — neither failed nor progressed — until the placement is
- * re-activated.
- */
-export const isBoundPlacementFrozen = (
-  objective: { task: string; overworldPlacementId?: string },
-  existing: Set<string>,
-  active: Set<string>,
-): boolean =>
-  isSupportedOverworldBindingTask(objective.task) &&
-  !!objective.overworldPlacementId &&
-  existing.has(objective.overworldPlacementId) &&
-  !active.has(objective.overworldPlacementId);
-
-/**
  * True when a retryDelay != none quest already hit `maxCompletes` completions in the
  * current calendar period. retryDelay "none" is never capped. Invalid persisted content with a
  * real retry delay and maxCompletes <= 0 fails closed so it cannot silently become unlimited.
@@ -779,28 +752,6 @@ export const attemptCapReached = (
   return new Date(args.lastAttemptAt) >= periodStart(args.attemptDelay, now);
 };
 
-/** Period-start for a completion, or {} for retryDelay "none". */
-export const periodCompletionSet = (
-  retryDelay: RetryQuestDelay,
-  now: Date = new Date(),
-): { cps?: Date } =>
-  retryDelay === "none" ? {} : { cps: periodStart(retryDelay, now) };
-
-/**
- * Used to update the quest tracking data for a user. Takes in the user with his questData
- * information, as well as a task to update. The value is the value to update the task with,
- * e.g. if task is 'pvp_kills' and value is 1, then the user has killed 1 player. This function
- * also ensure to remove all questData which is no longer needed, i.e. data relating to quests no longer
- * active for the user
- * @param user  - User with questData
- * @param task - Task to update
- * @param value - Value to update task with
- * @param contentId - If provided, refers to ID of content, e.g. opponentID defeated
- * @param notifications - If provided, is used to set notifications
- * @param boundPlacementStatus - When supplied, objectives bound to a deleted placement
- *   are auto-failed, and objectives bound to a deactivated (frozen) placement are
- *   skipped without failing. Omit to preserve existing behaviour exactly.
- */
 /**
  * For each content-gated task, the objective field holding its id-list (or, for
  * tag_usage_win, the single tagType value). The `satisfies` clause ties every entry to a
@@ -853,11 +804,22 @@ export type ObjectiveTrackerTaskInput = {
   warFoe?: boolean;
 };
 
+/**
+ * Updates active quest trackers for emitted objective tasks and returns any resulting
+ * notifications, consequences, and changed quest ids.
+ *
+ * @param user - Fully hydrated user whose active quest trackers are evaluated.
+ * @param tasks - Objective events to apply; `any` re-evaluates passive objective state.
+ * @param combatContext - Optional battle context used to gate PvP and war kill objectives.
+ * @param boundPlacementStatus - Optional placement state keyed by id (`true` active, `false`
+ * deactivated, absent deleted). Deleted bindings fail while deactivated bindings stay frozen.
+ * @param atPlacementIds - Placement ids the user is authoritatively interacting with now.
+ */
 export const getNewTrackers = (
   user: NonNullable<UserWithRelations> & { useritems?: UserItem[] },
   tasks: ObjectiveTrackerTaskInput[],
   combatContext?: CombatQuestContext,
-  boundPlacementStatus?: { existing: Set<string>; active: Set<string> },
+  boundPlacementStatus?: ReadonlyMap<string, boolean>,
   atPlacementIds?: ReadonlySet<string>,
 ) => {
   const questData = user.questData ?? [];
@@ -1012,11 +974,15 @@ export const getNewTrackers = (
             return status;
           }
 
-          // Three-way bound-placement check — only runs when the caller supplies
-          // boundPlacementStatus; omitting it preserves existing behaviour exactly.
-          if (boundPlacementStatus) {
-            const { existing, active } = boundPlacementStatus;
-            if (isBoundPlacementDeleted(objective, existing)) {
+          // Missing map entry means deleted; false means present but deactivated; true means active.
+          // Omitting the map preserves the pre-overworld behavior for callers that do not load it.
+          const boundPlacementId = objective.overworldPlacementId;
+          if (
+            boundPlacementStatus &&
+            boundPlacementId &&
+            isSupportedOverworldBindingTask(objective.task)
+          ) {
+            if (!boundPlacementStatus.has(boundPlacementId)) {
               // Placement was hard-deleted → auto-fail the objective.
               if ("failObjectiveId" in objective && objective.failObjectiveId) {
                 status.selectedNextObjectiveId = objective.failObjectiveId;
@@ -1029,7 +995,8 @@ export const getNewTrackers = (
               );
               questIdsUpdated.push(quest.id);
               return status;
-            } else if (isBoundPlacementFrozen(objective, existing, active)) {
+            }
+            if (!boundPlacementStatus.get(boundPlacementId)) {
               // Placement exists but is deactivated → freeze: skip without failing.
               return status;
             }
@@ -1598,11 +1565,12 @@ export const controlShownQuestLocationInformation = (
 };
 
 /**
- * Filters out hidden and expired quests based on the user's role.
+ * Checks whether a quest is currently available to a user.
  *
  * @param questAndUserQuestInfo - The quest object to be checked.
- * @param role - The role of the user.
- * @returns A boolean indicating whether the quest is either hidden and the user can play hidden quests, or the quest is not expired.
+ * @param user - User whose permissions, progression, and completed prerequisites are checked.
+ * @param ignorePreviousAttempts - Whether to ignore the lifetime attempt cap.
+ * @returns The combined availability decision and user-facing reasons for failed checks.
  */
 export const isAvailableUserQuests = (
   questAndUserQuestInfo: {
@@ -1610,6 +1578,7 @@ export const isAvailableUserQuests = (
     maxAttempts: number;
     maxCompletes: number;
     questType: QuestType;
+    startsAt?: string | null;
     endsAt?: string | null;
     requiredVillage: string | null;
     requiredBloodlineId?: string | null;
@@ -1653,10 +1622,12 @@ export const isAvailableUserQuests = (
   const userGatherRankIdx = GATHERING_RANKS.indexOf(userGatherRank);
 
   // Checks
+  const now = new Date();
   const hideCheck = !questAndUserQuestInfo.hidden || canPlayHiddenQuests(user.role);
+  const startsCheck =
+    !questAndUserQuestInfo.startsAt || new Date(questAndUserQuestInfo.startsAt) <= now;
   const expiresCheck =
-    !questAndUserQuestInfo.endsAt ||
-    new Date(questAndUserQuestInfo.endsAt) > new Date();
+    !questAndUserQuestInfo.endsAt || new Date(questAndUserQuestInfo.endsAt) > now;
   const villageCheck =
     !questAndUserQuestInfo.requiredVillage ||
     questAndUserQuestInfo.requiredVillage === user.villageId ||
@@ -1715,6 +1686,7 @@ export const isAvailableUserQuests = (
   // Check if quest is available
   const check =
     hideCheck &&
+    startsCheck &&
     expiresCheck &&
     eventCompletedCheck &&
     eventAttemptsCheck &&
@@ -1730,6 +1702,7 @@ export const isAvailableUserQuests = (
   // If quest is not available, return the reason
   let message = "";
   if (!hideCheck) message += "Quest is hidden\n";
+  if (!startsCheck) message += "Quest starts in the future\n";
   if (!expiresCheck) message += "Quest has expired\n";
   if (!eventCompletedCheck) message += "Quest has been completed too many times\n";
   if (!eventAttemptsCheck) message += "Quest has been attempted too many times\n";
@@ -1759,11 +1732,9 @@ export const isAvailableUserQuests = (
 };
 
 /**
- * Validates that every dialog objective routes somewhere valid. A dialog branch with no
- * `nextObjectiveId`, or one pointing to an objective that does not exist, can never advance
- * the objective — `getNewTrackers` only completes a dialog when the chosen branch's
- * `nextObjectiveId` matches a real objective — so it soft-locks the player. This rule
- * applies to ALL quests, independent of `consecutiveObjectives`.
+ * Validates that every newly authored dialog option routes to an existing objective. Legacy
+ * terminal branches still complete through the runtime sentinel, but new content must express
+ * its flow explicitly. This rule applies to every quest, independent of `consecutiveObjectives`.
  */
 export const verifyDialogBranches = (
   objectives: AllObjectivesType[],
@@ -1842,7 +1813,7 @@ export const verifyQuestObjectiveFlow = (
       throw new Error("No objectives provided");
     }
 
-    // Dialog branches must each route to a next objective (a terminal branch soft-locks).
+    // Newly authored dialog branches must each route to a next objective.
     const dialogCheck = verifyDialogBranches(objectives);
     if (!dialogCheck.check) {
       throw new Error(dialogCheck.message);
@@ -1948,8 +1919,7 @@ export const verifyQuestObjectiveFlow = (
 
 /**
  * Validation a quest's objective content must pass before it is persisted (used by both
- * the `update` and `clone` quest mutations). Dialog branches are always validated (a
- * terminal branch soft-locks the player regardless of quest shape); the full
+ * the `update` and `clone` quest mutations). Dialog branches are always validated; the full
  * chain/reachability flow is validated only for consecutive quests, since a
  * non-consecutive quest legitimately has multiple independent objectives that
  * {@link verifyQuestObjectiveFlow} would otherwise reject.
@@ -1959,7 +1929,7 @@ export const verifyQuestObjectiveFlow = (
  * be completed out of narrative order (the runtime overworld gate blocks the interaction, but the
  * intended ordering still can't be expressed). Ordering intent lives in the `nextObjectiveId` chain,
  * which only consecutive quests carry, so reject the save and let the author make the quest
- * consecutive rather than silently coercing the flag onto a chain-less quest (which
+ * consecutive rather than silently coercing the flag onto a chainless quest (which
  * {@link verifyQuestObjectiveFlow} would then reject anyway).
  */
 export const verifyQuestContentForSave = (

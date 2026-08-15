@@ -6844,13 +6844,6 @@
         }
       },
       "indexes": {
-        "OverworldAiPlacement_sector_idx": {
-          "name": "OverworldAiPlacement_sector_idx",
-          "columns": [
-            "sector"
-          ],
-          "isUnique": false
-        },
         "OverworldAiPlacement_aiTemplateUserId_idx": {
           "name": "OverworldAiPlacement_aiTemplateUserId_idx",
           "columns": [
@@ -6882,13 +6875,6 @@
     "OverworldAiPlacementQuest": {
       "name": "OverworldAiPlacementQuest",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "placementId": {
           "name": "placementId",
           "type": "varchar(191)",
@@ -6913,32 +6899,25 @@
         }
       },
       "indexes": {
-        "OverworldAiPlacementQuest_placementId_idx": {
-          "name": "OverworldAiPlacementQuest_placementId_idx",
+        "OverworldAiPlacementQuest_questId_idx": {
+          "name": "OverworldAiPlacementQuest_questId_idx",
           "columns": [
-            "placementId"
+            "questId"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "OverworldAiPlacementQuest_id": {
-          "name": "OverworldAiPlacementQuest_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {
-        "OverworldAiPlacementQuest_placement_quest_key": {
-          "name": "OverworldAiPlacementQuest_placement_quest_key",
+        "OverworldAiPlacementQuest_placementId_questId_pk": {
+          "name": "OverworldAiPlacementQuest_placementId_questId_pk",
           "columns": [
             "placementId",
             "questId"
           ]
         }
       },
+      "uniqueConstraints": {},
       "checkConstraint": {}
     },
     "PaypalSubscription": {
@@ -13062,13 +13041,6 @@
     "UserQuestAttempt": {
       "name": "UserQuestAttempt",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "userId": {
           "name": "userId",
           "type": "varchar(191)",
@@ -13102,22 +13074,15 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "UserQuestAttempt_id": {
-          "name": "UserQuestAttempt_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {
-        "UserQuestAttempt_user_quest_key": {
-          "name": "UserQuestAttempt_user_quest_key",
+        "UserQuestAttempt_userId_questId_pk": {
+          "name": "UserQuestAttempt_userId_questId_pk",
           "columns": [
             "userId",
             "questId"
           ]
         }
       },
+      "uniqueConstraints": {},
       "checkConstraint": {}
     },
     "UserRaidBuff": {

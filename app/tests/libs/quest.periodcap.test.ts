@@ -78,4 +78,37 @@ describe("isAvailableUserQuests — period cap vs lifetime cap", () => {
       ).check,
     ).toBe(false);
   });
+
+  it("does not expose a quest before its configured start date", () => {
+    expect(
+      isAvailableUserQuests(
+        { ...repeatable, startsAt: "2999-01-01T00:00:00.000Z" },
+        user,
+      ),
+    ).toMatchObject({ check: false, message: expect.stringContaining("future") });
+  });
+
+  it("allows a quest after its configured start date", () => {
+    expect(
+      isAvailableUserQuests(
+        { ...repeatable, startsAt: "2000-01-01T00:00:00.000Z" },
+        user,
+      ).check,
+    ).toBe(true);
+  });
+
+  it("allows a quest before its end date and rejects it afterwards", () => {
+    expect(
+      isAvailableUserQuests(
+        { ...repeatable, endsAt: "2999-01-01T00:00:00.000Z" },
+        user,
+      ).check,
+    ).toBe(true);
+    expect(
+      isAvailableUserQuests(
+        { ...repeatable, endsAt: "2000-01-01T00:00:00.000Z" },
+        user,
+      ).check,
+    ).toBe(false);
+  });
 });

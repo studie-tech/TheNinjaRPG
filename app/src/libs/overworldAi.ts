@@ -13,6 +13,7 @@ import {
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestWalkableCoordinate } from "@/libs/sector-map/validation";
 import type { SectorUser } from "@/libs/threejs/types";
+import { isInArray } from "@/utils/array";
 
 const RESERVED_SECTORS = new Set<number>([
   MAP_WAKE_ISLAND_SECTOR,
@@ -60,16 +61,12 @@ export const resolveOverworldPosition = (
     sector = pickPlaceableSector(rng);
   } else if (cfg.sectorType === "from_list") {
     const candidates = cfg.sectorList.filter(isPlaceableSector);
-    const candidate =
-      candidates.length > 0 ? candidates[randInt(candidates.length, rng)] : undefined;
-    // Fall back to cfg.sector only if it is itself placeable; otherwise roll a placeable
-    // sector so an all-reserved list can never resolve to an invalid NPC position.
-    sector =
-      candidates.length > 0
-        ? (candidate ?? cfg.sector)
-        : isPlaceableSector(cfg.sector)
-          ? cfg.sector
-          : pickPlaceableSector(rng);
+    if (candidates.length > 0) {
+      sector = candidates[randInt(candidates.length, rng)] as number;
+    } else {
+      // An all-reserved list falls back to a valid configured sector or a fresh roll.
+      sector = isPlaceableSector(cfg.sector) ? cfg.sector : pickPlaceableSector(rng);
+    }
   } else {
     // "specific": honor the admin-chosen sector, but guard it the same way random/from_list
     // do so a reserved sector (Wake Island / War-Torn Battleground) can never be pinned.
@@ -155,13 +152,8 @@ export const placementToSectorUser = (
 });
 
 /**
- * Decides whether to auto-open the arrival prompt for an overworld NPC and for which one.
- * Fresh-arrival semantics, keyed on `npcPlacementId`:
- *  - NPC on the player's tile that is not the last-prompted one → prompt it (and arm its id).
- *  - The already-prompted NPC is still under the player → no prompt (no nag while standing).
- *  - No NPC on the player's tile → re-arm (clear), so returning later prompts again.
- * Deterministic `find` means two NPCs sharing a tile never double-prompt: the first match wins
- * and stays armed while it remains.
+ * Selects the first NPC under the player that has not already prompted. Finding no NPC clears the
+ * remembered placement so returning to the tile can prompt again.
  */
 export const arrivalPromptDecision = <
   T extends { npcPlacementId?: string | null; longitude: number; latitude: number },
@@ -187,12 +179,8 @@ export const arrivalPromptDecision = <
 };
 
 /**
- * Companion to `arrivalPromptDecision`: an already-open arrival prompt is stale once it no longer
- * describes reality — its NPC left the sector data, or it and the player no longer share a tile
- * (either of them moved). Checked against the NPC's live row, not the captured prompt, so an NPC
- * that walks away closes it too. `arrivalPromptDecision` cannot answer this: it reports `prompt:
- * null` both when no NPC is here AND when the NPC here is already armed, so its result alone cannot
- * distinguish "walked off" from "still standing here, already prompted".
+ * Returns whether an open arrival prompt no longer matches the live NPC and player positions.
+ * Unknown player coordinates suspend only the tile comparison; a despawn still closes the prompt.
  */
 export const isArrivalPromptStale = (args: {
   promptedPlacementId: string | null;
@@ -202,9 +190,6 @@ export const isArrivalPromptStale = (args: {
 }): boolean => {
   if (!args.promptedPlacementId) return false;
   const live = args.npcs.find((n) => n.npcPlacementId === args.promptedPlacementId);
-  // Despawn is decided without the player's position, so an unknown position (a transient
-  // undefined `userData`) still closes a prompt whose NPC is gone, as the despawn check did
-  // before it was folded in here. An unknown position only suspends the tile comparison.
   if (!live) return true;
   if (args.playerLongitude === undefined || args.playerLatitude === undefined)
     return false;
@@ -220,17 +205,14 @@ type BoundObjective = {
   done?: boolean;
   deliverItemIds?: string[];
   /**
-   * `false` = bound to this placement but not yet reachable, so not actionable. Callers set it for
-   * two reasons: the `consecutiveObjectives` tracker chain (an objective not yet reached via
-   * `selectedNextObjectiveId`) and — for non-consecutive quests — the bound-objective ordering gate
-   * (an earlier placement-bound objective on the same quest is still incomplete). Absent/`true` =
-   * actionable; fresh quests with no tracker are treated as available.
+   * `false` marks an objective as unreachable in its consecutive or placement-bound order.
+   * Absent or `true` is actionable, including a fresh quest with no tracker.
    */
   available?: boolean;
 };
 
 /** Objective tasks whose behavior is defined for an overworld placement binding. */
-export const OVERWORLD_BOUND_OBJECTIVE_TASKS = [
+const OVERWORLD_BOUND_OBJECTIVE_TASKS = [
   "defeat_opponents",
   "deliver_item",
   "dialog",
@@ -238,7 +220,7 @@ export const OVERWORLD_BOUND_OBJECTIVE_TASKS = [
 
 /** Returns whether a quest objective type can be bound to an overworld AI placement. */
 export const isSupportedOverworldBindingTask = (task: string): boolean =>
-  (OVERWORLD_BOUND_OBJECTIVE_TASKS as readonly string[]).includes(task);
+  isInArray(task, OVERWORLD_BOUND_OBJECTIVE_TASKS);
 
 /**
  * Absolute-chance band-walk: each quest owns a [acc, acc+chance) band on [0,100).
@@ -257,15 +239,9 @@ export const pickWeightedQuest = (
 };
 
 /**
- * Generic over the caller's objective shape so a projection that carries extra fields (e.g. the
- * un-projected `source` objective) gets them back on the match, instead of every caller re-scanning
- * `getUserQuests` to recover what the projection dropped.
- *
- * `ignoreItemOwnership` skips the `deliver_item` possession check. The server passes the player's
- * full inventory to decide real actionability; the client (which holds only equipped items, so it
- * cannot confirm possession) sets this to *predict* the interaction for CTA copy — treating a
- * reachable delivery as actionable so the prompt reads "Deliver" instead of the generic mission
- * text. The server re-checks possession authoritatively on click.
+ * Finds the first reachable, unfinished objective bound to a placement while preserving the
+ * caller's objective subtype. `ignoreItemOwnership` supports client-side delivery CTA prediction;
+ * the server performs the authoritative inventory check.
  */
 export const findActionableBoundObjective = <T extends BoundObjective>(args: {
   activeQuests: { questId: string; objectives: T[] }[];
@@ -281,10 +257,7 @@ export const findActionableBoundObjective = <T extends BoundObjective>(args: {
       // Ignore malformed legacy content that attached the shared base field to a task with no
       // overworld interaction semantics. Save validation prevents new instances of this shape.
       if (!isSupportedOverworldBindingTask(objective.task)) continue;
-      // Consecutive-ordering gate: an objective bound to this tile but not yet reachable in the
-      // quest's objective chain is not actionable. Without this, a player who walks straight to a
-      // later objective's placement would trigger its dialog / delivery / PvE battle out of
-      // sequence — getNewTrackers refuses to credit it, so they'd fight (and risk HP) for nothing.
+      // A bound objective must also be reachable in its quest's objective chain.
       if (objective.available === false) continue;
       if (
         !args.ignoreItemOwnership &&
@@ -300,13 +273,8 @@ export const findActionableBoundObjective = <T extends BoundObjective>(args: {
 };
 
 /**
- * Objective-order reachability for placement-bound objectives: objective `index` is actionable only
- * once every EARLIER placement-bound objective on the same quest is done. Non-bound objectives never
- * gate. This helper does not read `consecutiveObjectives`; callers apply it only to non-consecutive
- * quests (consecutive quests already order via the tracker chain). Without it a non-consecutive quest
- * that binds several objectives to different NPCs would let a later objective's dialog / battle /
- * delivery fire before an earlier bound objective completed — getNewTrackers refuses to credit it,
- * so the player would act (and risk HP) for nothing.
+ * Returns whether all earlier supported placement-bound objectives are complete. Callers use this
+ * for non-consecutive quests; consecutive quests already enforce tracker-chain ordering.
  */
 export const earlierBoundObjectivesComplete = (
   objectives: {
@@ -335,12 +303,8 @@ export interface ArrivalPromptCta {
 }
 
 /**
- * CTA copy for the overworld arrival modal. The server's `interactWithOverworldAi` dispatches on
- * the NPC's actionable bound objective before falling back to a mission grant, so the prompt must
- * match what the click will actually do: fight a defeat target, talk through a dialog objective,
- * hand over a delivery, or (no bound objective) request a mission. `boundTask` is the task of the
- * actionable bound objective for this NPC's placement (from {@link findActionableBoundObjective}),
- * or null when none applies. HOSTILE NPCs always attack.
+ * Returns arrival-modal copy matching the actionable bound objective. With no bound objective it
+ * offers a mission; hostile NPCs always offer an attack.
  */
 export const resolveArrivalPromptCta = (
   npc: {
@@ -404,61 +368,25 @@ export const deriveOverworldOpponents = <
       missing.push(o.overworldPlacementId);
       return o;
     }
-    // A placement is exactly one NPC on one tile: startOverworldBattle spawns a single target
-    // (that placement's AI) and defeat_opponents completes on the first matching kill, not on a
-    // wave count. So the count is fixed at 1 here rather than carried over from any prior
-    // opponentAIs edit — a higher stored `number` would be dead metadata that contradicts the
-    // one-NPC fight the placement actually starts. Multi-wave doesn't fit the placement model.
+    // One placement represents one NPC and therefore one opponent, never a multi-wave target.
     return { ...o, opponentAIs: [{ ids: [ai], number: 1 }] };
   });
   return { objectives: next, missing };
 };
 
-/**
- * Decision for the single "active NPC mission" slot (`activeNpcQuestId`). The slot — not the
- * quest type — is authoritative: "block" while it points to a still-active quest,
- * "clear-stale" when it points to a completed/absent quest (release it so a new grant can
- * claim it), and "free" when no slot is held.
- */
-export const npcMissionSlotDecision = (
-  activeNpcQuestId: string | null | undefined,
-  activeQuests: { questId: string; endAt?: Date | string | null }[],
-): "free" | "block" | "clear-stale" => {
-  if (!activeNpcQuestId) return "free";
-  const stillActive = activeQuests.some(
-    (q) => q.questId === activeNpcQuestId && !q.endAt,
-  );
-  return stillActive ? "block" : "clear-stale";
-};
-
-/** Placements to offer for an objective's overworld binding: when one or more opponent
- *  AIs are selected, only placements whose AI is among them; otherwise all placements. */
-export const filterPlacementsByAi = <T extends { aiTemplateUserId: string }>(
-  placements: T[],
-  selectedAiIds: string[],
-): T[] =>
-  selectedAiIds.length === 0
-    ? placements
-    : placements.filter((p) => selectedAiIds.includes(p.aiTemplateUserId));
-
 /** Objective tasks completed by interacting with a friendly overworld NPC. */
-export const FRIENDLY_INTERACTION_TASKS = ["deliver_item", "dialog"] as const;
+const FRIENDLY_INTERACTION_TASKS = ["deliver_item", "dialog"] as const;
 
 /**
- * Validates that every deliver_item/dialog objective binds to an EXISTING FRIENDLY overworld
- * placement. The editor scopes its placement dropdown to FRIENDLY, but the save path must
- * enforce it too so a dangling or HOSTILE binding (which the player could never resolve)
- * cannot be persisted. defeat_opponents bindings are validated separately via opponent derivation.
+ * Validates that every delivery or dialog binding resolves to a friendly placement.
+ * Defeat bindings are validated separately while deriving their opponent.
  */
 export const validateFriendlyPlacementBindings = (
   objectives: { task: string; overworldPlacementId?: string }[],
   placementById: Map<string, { interactionType: string }>,
 ): { check: boolean; message: string } => {
   for (const o of objectives) {
-    if (
-      !(FRIENDLY_INTERACTION_TASKS as readonly string[]).includes(o.task) ||
-      !o.overworldPlacementId
-    ) {
+    if (!isInArray(o.task, FRIENDLY_INTERACTION_TASKS) || !o.overworldPlacementId) {
       continue;
     }
     const placement = placementById.get(o.overworldPlacementId);
@@ -489,13 +417,14 @@ export const hasFriendlyBindingToPlacement = (
 ): boolean =>
   objectives.some(
     (o) =>
-      (FRIENDLY_INTERACTION_TASKS as readonly string[]).includes(o.task) &&
+      isInArray(o.task, FRIENDLY_INTERACTION_TASKS) &&
       o.overworldPlacementId === placementId,
   );
 
-/** Placements to offer for an objective's overworld binding, scoped by task:
- *  friendly-interaction tasks (deliver_item/dialog) → only FRIENDLY placements;
- *  otherwise narrow by the selected opponent AI(s) via filterPlacementsByAi. */
+/**
+ * Scopes placement options by objective: friendly tasks require a friendly NPC, while defeat
+ * objectives optionally narrow the list to placements using the selected opponent AIs.
+ */
 export const placementsForObjective = <
   T extends { aiTemplateUserId: string; interactionType: string },
 >(
@@ -504,6 +433,8 @@ export const placementsForObjective = <
 ): T[] =>
   !isSupportedOverworldBindingTask(args.task)
     ? []
-    : (FRIENDLY_INTERACTION_TASKS as readonly string[]).includes(args.task)
+    : isInArray(args.task, FRIENDLY_INTERACTION_TASKS)
       ? placements.filter((p) => p.interactionType === "FRIENDLY")
-      : filterPlacementsByAi(placements, args.selectedAiIds);
+      : args.selectedAiIds.length === 0
+        ? placements
+        : placements.filter((p) => args.selectedAiIds.includes(p.aiTemplateUserId));

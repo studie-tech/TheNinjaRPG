@@ -78,7 +78,6 @@ import {
   getReward,
   getUserQuests,
   isAvailableUserQuests,
-  periodCompletionSet,
   verifyQuestContentForSave,
 } from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
@@ -103,7 +102,7 @@ import {
   canOnlyEditSelf,
   canPlayHiddenQuests,
 } from "@/utils/permissions";
-import { secondsFromNow } from "@/utils/time";
+import { periodStart, secondsFromNow } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { canAccessStructure } from "@/utils/village";
@@ -451,8 +450,8 @@ export const questsRouter = createTRPCRouter({
               eq(quest.questRank, input.rank),
               lte(quest.requiredLevel, input.userLevel),
               gte(quest.maxLevel, input.userLevel),
-              or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
-              or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
+              or(isNull(quest.startsAt), lte(quest.startsAt, new Date().toISOString())),
+              or(isNull(quest.endsAt), gte(quest.endsAt, new Date().toISOString())),
               or(
                 isNull(quest.requiredVillage),
                 eq(quest.requiredVillage, input.userVillageId ?? VILLAGE_SYNDICATE_ID),
@@ -464,8 +463,6 @@ export const questsRouter = createTRPCRouter({
             ),
           ),
       ]);
-      if (!user) return errorResponse("User does not exist");
-
       // For certain quest types, we fallback to lower ranks if the user does not have the required rank
       const { rankInfo } = fallbackQuestsFilter(results, user, input.type);
 
@@ -745,7 +742,7 @@ export const questsRouter = createTRPCRouter({
           return { success: false, message: `Not allowed to edit starter quests` };
         }
         // Validate objective content before updating, keyed off the INCOMING quest (not the
-        // stored row): dialog branches are always checked (a terminal branch soft-locks),
+        // stored row): newly authored dialog branches must always route onward,
         // and full chain/reachability flow is checked when the quest is consecutive.
         const { check, message } = verifyQuestContentForSave(
           input.data.content.objectives,
@@ -1177,7 +1174,7 @@ export const questsRouter = createTRPCRouter({
           userPromise.then(({ user }) =>
             user
               ? fetchBoundPlacementStatus(ctx.drizzle, user)
-              : { existing: new Set<string>(), active: new Set<string>() },
+              : new Map<string, boolean>(),
           ),
         ]);
       // Guard
@@ -1801,6 +1798,7 @@ export const fetchUncompletedQuests = async (
   type: QuestType,
 ) => {
   const availableLetters = availableQuestLetterRanks(user.rank);
+  const now = new Date().toISOString();
   const history = await client
     .select()
     .from(quest)
@@ -1813,8 +1811,8 @@ export const fetchUncompletedQuests = async (
         eq(quest.questType, type),
         gte(quest.maxLevel, user.level),
         lte(quest.requiredLevel, user.level),
-        or(isNull(quest.startsAt), gte(quest.startsAt, new Date().toISOString())),
-        or(isNull(quest.endsAt), lte(quest.endsAt, new Date().toISOString())),
+        or(isNull(quest.startsAt), lte(quest.startsAt, now)),
+        or(isNull(quest.endsAt), gte(quest.endsAt, now)),
         ...(availableLetters.length > 0
           ? [inArray(quest.questRank, availableLetters)]
           : [eq(quest.questRank, "D")]),
@@ -1908,10 +1906,6 @@ export const incrementDailyQuestCounter = async (
   }
 };
 
-/**
- * Returns a human-readable block message if the user has hit the per-type concurrent
- * quest limit, or null if they may proceed. This is a pure function (no DB access).
- */
 /**
  * Quest types that {@link assignQuestToUser} can start. Errand (and meta types like
  * achievement/tier) are intentionally excluded: errands are dispensed only via the
@@ -2015,7 +2009,7 @@ export const questTypeConcurrentBlockMessage = (
 };
 
 /**
- * Structure/occupation/rank guards that only apply when a player starts a quest
+ * Structure and occupation guards that only apply when a player starts a quest
  * through the UI (Mission Hall, Anbu page, etc.). NPC-initiated quests skip these.
  * Returns an errorResponse-shaped object on failure, or null to allow proceeding.
  */
@@ -2395,9 +2389,6 @@ type CommitQuestObjectiveRewardsResult =
       postNotifications: string[];
       /** Same GetRewardResult passed in, mutated with resolved reward names for display. */
       rewards: GetRewardResult;
-      items: { id: string; name: string }[];
-      jutsus: { id: string; name: string }[];
-      bloodlines: { id: string; name: string }[];
       badges: { id: string; name: string; image: string }[];
     }
   /** Resolved completion lost the CAS and the row is already completed (idempotent re-claim). */
@@ -2431,7 +2422,7 @@ export const commitQuestObjectiveRewards = async (info: {
   notifications: string[];
   consequences: QuestConsequence[];
   /** Pre-fetched questHistory row for this quest, if the caller already loaded it. */
-  existingHistory?: { completed: number } | null | undefined;
+  existingHistory?: { completed: number } | null;
   /**
    * Extra userData columns for updateRewards to fold into its single UPDATE on the claim path.
    * Only applied when this commit actually reaches the reward payout (i.e. the completion CAS
@@ -2453,7 +2444,6 @@ export const commitQuestObjectiveRewards = async (info: {
     consequences,
   } = info;
 
-  const fullTrackersForResponse = trackers;
   user.questData = filterQuestTrackersForDbPersist(trackers, user);
 
   // Persist completion before snapshot CAS so we cannot commit questData/updatedAt and then
@@ -2495,7 +2485,8 @@ export const commitQuestObjectiveRewards = async (info: {
 
     const retryDelay = userQuest?.quest?.retryDelay ?? "none";
     completedEndAt = new Date();
-    const { cps } = periodCompletionSet(retryDelay, completedEndAt);
+    const cps =
+      retryDelay === "none" ? undefined : periodStart(retryDelay, completedEndAt);
     periodCounterWritten = !!cps;
 
     const questCompletionResult = await client
@@ -2630,7 +2621,7 @@ export const commitQuestObjectiveRewards = async (info: {
   // Restore the full (response) trackers only AFTER the DB write: updateRewards persists
   // user.questData, so during it user.questData must hold the filtered set, not the
   // in-memory-only mock achievement trackers that filterQuestTrackersForDbPersist strips.
-  user.questData = fullTrackersForResponse;
+  user.questData = trackers;
 
   // Update rewards for readability
   rewards.reward_items = items.map((i) => i.name);
@@ -2642,9 +2633,6 @@ export const commitQuestObjectiveRewards = async (info: {
     outcome: "claimed",
     postNotifications,
     rewards,
-    items,
-    jutsus,
-    bloodlines,
     badges,
   };
 };
@@ -2880,22 +2868,16 @@ export const handleQuestConsequences = async (
 };
 
 /**
- * Returns two sets describing the DB state of all overworld placements that are
- * referenced by the user's active quest objectives:
- *
- * - `existing`: every placement id whose row still exists in the DB (regardless
- *   of isActive). A bound id absent from this set was hard-deleted.
- * - `active`: subset of `existing` where `isActive = true`. A bound id in
- *   `existing` but not in `active` is deactivated/hidden (should be frozen).
- *
- * Callers pass this object as `boundPlacementStatus` to `getNewTrackers`.
+ * Returns the DB state of every overworld placement referenced by the user's active objectives.
+ * Each map value is `true` for an active placement and `false` for a deactivated placement; a
+ * referenced id absent from the map was deleted. Callers pass the map to `getNewTrackers`.
  * Cheap-path: if no active objectives carry a bound placement id the DB is not
- * queried and both sets are returned empty.
+ * queried and an empty map is returned.
  */
 export const fetchBoundPlacementStatus = async (
   client: DrizzleClient,
   user: NonNullable<UserWithRelations>,
-): Promise<{ existing: Set<string>; active: Set<string> }> => {
+): Promise<Map<string, boolean>> => {
   // Collect distinct placement ids referenced by the user's active objectives.
   const boundIds = new Set<string>();
   for (const q of getUserQuests(user)) {
@@ -2907,8 +2889,7 @@ export const fetchBoundPlacementStatus = async (
   }
 
   // Cheap-path: no bound objectives → nothing to verify.
-  if (boundIds.size === 0)
-    return { existing: new Set<string>(), active: new Set<string>() };
+  if (boundIds.size === 0) return new Map();
 
   // One query with NO isActive filter so we can distinguish deleted vs deactivated.
   const rows = await client.query.overworldAiPlacement.findMany({
@@ -2916,7 +2897,5 @@ export const fetchBoundPlacementStatus = async (
     columns: { id: true, isActive: true },
   });
 
-  const existing = new Set(rows.map((r) => r.id));
-  const active = new Set(rows.filter((r) => r.isActive).map((r) => r.id));
-  return { existing, active };
+  return new Map(rows.map((row) => [row.id, row.isActive]));
 };

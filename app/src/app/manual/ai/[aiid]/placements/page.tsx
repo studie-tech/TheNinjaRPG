@@ -16,6 +16,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { MultiSelect } from "@/components/ui/multi-select";
 import {
   Select,
   SelectContent,
@@ -55,10 +56,10 @@ export default function ManualAiPlacements(props: {
 
   // Redirect to profile if not content or admin
   useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
+    if (userData && !canManagePlacements) {
       router.push("/profile");
     }
-  }, [router, userData]);
+  }, [canManagePlacements, router, userData]);
 
   // Prevent unauthorized access
   if (!userData || !canManagePlacements || isPending) {
@@ -93,7 +94,6 @@ const defaultFormValues = (aiId: string): OverworldPlacementInput => ({
 const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements }) => {
   const utils = api.useUtils();
   const [editingId, setEditingId] = useState<string | undefined>(undefined);
-  const [questSearch, setQuestSearch] = useState("");
   const [sectorInput, setSectorInput] = useState("");
 
   // Quest names for the pool selector
@@ -111,7 +111,6 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
   const resetEditor = useCallback(() => {
     setEditingId(undefined);
     form.reset(defaultFormValues(aiId));
-    setQuestSearch("");
     setSectorInput("");
   }, [aiId, form]);
 
@@ -142,34 +141,30 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
     defaultValue: [],
   }) as number[];
 
+  /** Refreshes placement data and resets the editor after a successful mutation. */
+  const handleMutationSuccess = useCallback(
+    async (data: Parameters<typeof showMutationToast>[0]) => {
+      showMutationToast(data);
+      if (data.success) {
+        await utils.overworldAi.getPlacementsForAi.invalidate({
+          aiTemplateUserId: aiId,
+        });
+        resetEditor();
+      }
+    },
+    [aiId, resetEditor, utils.overworldAi.getPlacementsForAi],
+  );
+
   // Upsert mutation
   const { mutate: upsert, isPending: isUpserting } =
     api.overworldAi.upsertPlacement.useMutation({
-      /** Refreshes the placement list and clears the editor after a successful upsert. */
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.overworldAi.getPlacementsForAi.invalidate({
-            aiTemplateUserId: aiId,
-          });
-          resetEditor();
-        }
-      },
+      onSuccess: handleMutationSuccess,
     });
 
   // Delete mutation
   const { mutate: remove, isPending: isRemoving } =
     api.overworldAi.deletePlacement.useMutation({
-      /** Refreshes the placement list and clears the editor after a successful deletion. */
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.overworldAi.getPlacementsForAi.invalidate({
-            aiTemplateUserId: aiId,
-          });
-          resetEditor();
-        }
-      },
+      onSuccess: handleMutationSuccess,
     });
 
   /** Submits the current form as either a new placement or an update to the selected placement. */
@@ -195,27 +190,22 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
       })),
       isActive: placement.isActive,
     });
-    setQuestSearch("");
     setSectorInput("");
   };
 
-  /** Cancels the current edit and restores the blank placement form. */
-  const onCancelEdit = () => {
-    resetEditor();
-  };
+  const selectedQuestIds = watchedQuests.map((quest) => quest.questId);
 
-  /** Adds a quest to the placement pool unless it is empty or already selected. */
-  const addQuestId = (questId: string) => {
-    if (!questId || watchedQuests.some((q) => q.questId === questId)) return;
-    form.setValue("quests", [...watchedQuests, { questId, chance: 0 }]);
-    setQuestSearch("");
-  };
-
-  /** Removes a quest and its configured chance from the placement pool. */
-  const removeQuestId = (questId: string) => {
+  /** Updates selected quests while retaining the configured chance for existing entries. */
+  const setSelectedQuestIds: React.Dispatch<React.SetStateAction<string[]>> = (
+    next,
+  ) => {
+    const questIds = typeof next === "function" ? next(selectedQuestIds) : next;
+    const chances = new Map(
+      watchedQuests.map((quest) => [quest.questId, quest.chance]),
+    );
     form.setValue(
       "quests",
-      watchedQuests.filter((q) => q.questId !== questId),
+      questIds.map((questId) => ({ questId, chance: chances.get(questId) ?? 0 })),
     );
   };
 
@@ -243,14 +233,8 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
     );
   };
 
-  const filteredQuests = (questNames ?? []).filter(
-    (q) =>
-      q.name.toLowerCase().includes(questSearch.toLowerCase()) &&
-      !watchedQuests.some((w) => w.questId === q.id),
-  );
-
   const isLoading = isUpserting || isRemoving;
-  const questChanceSum = watchedQuests.reduce((s, q) => s + (q.chance || 0), 0);
+  const questChanceSum = watchedQuests.reduce((sum, quest) => sum + quest.chance, 0);
 
   return (
     <>
@@ -339,9 +323,9 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                 </div>
                 {watchedSectorList.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {watchedSectorList.map((s, idx) => (
+                    {watchedSectorList.map((s) => (
                       <span
-                        key={`sector-${idx}-${s}`}
+                        key={s}
                         className="flex items-center gap-1 rounded bg-slate-200 px-2 py-0.5 text-sm dark:bg-slate-700"
                       >
                         {String(s)}
@@ -409,27 +393,15 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
             {interactionType === "FRIENDLY" && (
               <FormItem>
                 <FormLabel>Quest Pool</FormLabel>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Search quests…"
-                    value={questSearch}
-                    onChange={(e) => setQuestSearch(e.target.value)}
-                  />
-                </div>
-                {questSearch && filteredQuests.length > 0 && (
-                  <div className="mt-1 max-h-40 overflow-y-auto rounded border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-                    {filteredQuests.slice(0, 20).map((q) => (
-                      <button
-                        key={q.id}
-                        type="button"
-                        className="block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
-                        onClick={() => addQuestId(q.id)}
-                      >
-                        {q.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <MultiSelect
+                  options={(questNames ?? []).map((quest) => ({
+                    value: quest.id,
+                    label: quest.name,
+                  }))}
+                  selected={selectedQuestIds}
+                  onChange={setSelectedQuestIds}
+                  placeholder="Select quests..."
+                />
                 {watchedQuests.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {watchedQuests.map((q) => {
@@ -453,13 +425,6 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                             }
                           />
                           <span className="text-muted-foreground">%</span>
-                          <button
-                            type="button"
-                            className="text-red-500 hover:text-red-700"
-                            onClick={() => removeQuestId(q.questId)}
-                          >
-                            ×
-                          </button>
                         </div>
                       );
                     })}
@@ -504,7 +469,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                 {editingId ? "Update Placement" : "Create Placement"}
               </Button>
               {editingId && (
-                <Button type="button" variant="secondary" onClick={onCancelEdit}>
+                <Button type="button" variant="secondary" onClick={resetEditor}>
                   Cancel
                 </Button>
               )}
@@ -600,8 +565,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
   );
 };
 
-/** Integer coordinate input (sector/longitude/latitude). Stores a parsed number, stripping
- *  the leading zero so a 0-valued field can be typed over; empty clears to "". */
+/** Integer coordinate input for a placement's sector, longitude, or latitude. */
 const IntegerField = ({
   control,
   name,
@@ -620,17 +584,7 @@ const IntegerField = ({
       <FormItem className={className}>
         <FormLabel>{label}</FormLabel>
         <FormControl>
-          <Input
-            type="number"
-            value={field.value as number}
-            onChange={(e) => {
-              const n = Number.parseInt(e.target.value, 10);
-              field.onChange(Number.isNaN(n) ? "" : n);
-            }}
-            onBlur={field.onBlur}
-            name={field.name}
-            ref={field.ref}
-          />
+          <Input type="number" {...field} value={field.value as number} />
         </FormControl>
         <FormMessage />
       </FormItem>
