@@ -1309,7 +1309,6 @@ const Sector: React.FC<SectorProps> = (props) => {
       // Adjacency only depends on grid coordinates, so the hex size is
       // arbitrary here (rendering uses the per-sector grids)
       10,
-      mergedTerrainsRef.current,
     );
   };
 

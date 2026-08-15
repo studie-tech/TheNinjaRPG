@@ -152,7 +152,6 @@ export interface WindowNav {
 export const buildWindowNav = (
   entries: WindowNavEntry[],
   hexsize: number,
-  _terrainRegistry: Map<string, TerrainSpec>,
 ): WindowNav | null => {
   const first = entries[0]?.map;
   if (!first) return null;
