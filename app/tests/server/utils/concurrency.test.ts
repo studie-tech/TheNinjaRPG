@@ -1,8 +1,11 @@
 // @vitest-environment node
 
+import type { SQL } from "drizzle-orm";
+import { QueryBuilder } from "drizzle-orm/mysql-core";
 import { describe, expect, it, vi } from "vitest";
 import { userData, userItem } from "@/drizzle/schema";
 import {
+  battleClaimRollbackStatus,
   claimUserSnapshot,
   consumeUserItemAtomically,
   updateUserItemQuantityAtomically,
@@ -98,5 +101,43 @@ describe("concurrency helpers", () => {
     });
     expect(result).toBe(false);
     expect(client.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("battleClaimRollbackStatus", () => {
+  // A session-less builder is enough: the helper only constructs SQL, and the
+  // RANKED_PVP branch uses the client solely for its exists-subquery select.
+  const qb = new QueryBuilder();
+  const render = (expr: ReturnType<typeof battleClaimRollbackStatus>) => {
+    if (typeof expr === "string") throw new Error("expected a SQL expression");
+    return qb.select({ status: expr as SQL }).from(userData).toSQL();
+  };
+
+  it("restores KAGE_PVP challengers to KAGE_QUEUED with one binding per id", () => {
+    const expr = battleClaimRollbackStatus(qb as never, "KAGE_PVP", [
+      "challenger-1",
+      "challenger-2",
+    ]);
+    const { sql: rendered, params } = render(expr);
+    expect(rendered).toContain('THEN "KAGE_QUEUED" ELSE "AWAKE" END');
+    expect(rendered).toMatch(/in \(\?,\s*\?\)/i);
+    expect(params).toEqual(["challenger-1", "challenger-2"]);
+  });
+
+  it("restores RANKED_PVP rows to QUEUED only while their queue row exists", () => {
+    const expr = battleClaimRollbackStatus(qb as never, "RANKED_PVP", ["challenger-1"]);
+    const { sql: rendered } = render(expr);
+    expect(rendered).toMatch(/exists/i);
+    expect(rendered).toContain("RankedPvpQueue");
+    expect(rendered).toContain('THEN "QUEUED" ELSE "AWAKE" END');
+  });
+
+  it("restores plain AWAKE for battle types claimed from AWAKE", () => {
+    expect(battleClaimRollbackStatus(qb as never, "COMBAT", ["challenger-1"])).toBe(
+      "AWAKE",
+    );
+    expect(battleClaimRollbackStatus(qb as never, "KAGE_AI", ["challenger-1"])).toBe(
+      "AWAKE",
+    );
   });
 });

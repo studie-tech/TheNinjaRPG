@@ -196,6 +196,7 @@ import {
 } from "@/server/api/routers/jutsu";
 import { fetchUserSkills } from "@/server/api/routers/skillTree";
 import type { DrizzleClient } from "@/server/db";
+import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
 import { findRelationship } from "@/utils/alliance";
 import { getRandomElement } from "@/utils/array";
 import { randomInt } from "@/utils/math";
@@ -2382,15 +2383,7 @@ export const initiateBattle = async (
       client
         .update(userData)
         .set({
-          status:
-            battleType === "RANKED_PVP"
-              ? sql`CASE WHEN ${exists(
-                  client
-                    .select({ one: sql`1` })
-                    .from(rankedPvpQueue)
-                    .where(eq(rankedPvpQueue.userId, userData.userId)),
-                )} THEN "QUEUED" ELSE "AWAKE" END`
-              : "AWAKE",
+          status: battleClaimRollbackStatus(client, battleType, userIds),
           battleId: null,
         })
         .where(eq(userData.battleId, battleId)),
