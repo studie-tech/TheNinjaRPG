@@ -146,6 +146,7 @@ import {
   rollInitiative,
 } from "@/libs/combat/util";
 import { fetchDmgConfig } from "@/libs/gamesettings";
+import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
 import {
   calcActiveUserRegen,
   calcCP,
@@ -167,7 +168,12 @@ import {
 import { toDefenceStat, toOffenceStat } from "@/libs/stats";
 import { rollStealthKeep } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
-import { canUseJutsu, checkJutsuBloodlineItem, checkJutsuItems } from "@/libs/train";
+import {
+  calcJutsuEquipLimit,
+  canUseJutsu,
+  checkJutsuBloodlineItem,
+  checkJutsuItems,
+} from "@/libs/train";
 import { calcIsInVillage, getBiomeFromGlobalTile } from "@/libs/travel";
 import {
   extendWarParticipantSql,
@@ -956,13 +962,16 @@ export const combatRouter = createTRPCRouter({
               jutsuLoadouts,
               userjutsus,
               user,
-              (jutsuIds) => {
-                const equipIds = jutsuIds.filter((jutsuId) => {
-                  const owned = userjutsus.find((uj) => uj.jutsuId === jutsuId);
-                  return owned ? checkJutsuBloodlineItem(owned.jutsu, useritems) : true;
-                });
-                return { equipIds, invalidJutsus: [] };
-              },
+              (jutsuIds) =>
+                computeJutsuLoadoutCapAssignments({
+                  jutsuIds,
+                  userjutsus,
+                  maxEquip: calcJutsuEquipLimit(user),
+                  validateJutsu: ({ jutsu }) =>
+                    checkJutsuBloodlineItem(jutsu, useritems)
+                      ? undefined
+                      : `${jutsu.name}: required bloodline item is not equipped`,
+                }),
             );
 
       // When only the item loadout changed, selectJutsuLoadout (and its

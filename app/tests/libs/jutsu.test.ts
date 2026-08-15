@@ -18,7 +18,10 @@ vi.mock("@/libs/train", () => ({
   calcJutsuEquipLimit: vi.fn(() => 100),
 }));
 
-import { computeJutsuLoadoutAssignments } from "@/libs/jutsu";
+import {
+  computeJutsuLoadoutAssignments,
+  computeJutsuLoadoutCapAssignments,
+} from "@/libs/jutsu";
 import type { UserWithRelations } from "@/routers/profile";
 import { calcJutsuEquipLimit } from "@/libs/train";
 
@@ -216,5 +219,39 @@ describe("computeJutsuLoadoutAssignments", () => {
     });
     expect(out.equipIds).toHaveLength(JUTSU_MAX_HEAL_EQUIPPED);
     expect(out.invalidJutsus[0]).toMatch(/heal/);
+  });
+});
+
+describe("computeJutsuLoadoutCapAssignments", () => {
+  it("enforces heal caps for callers without a full profile user", () => {
+    const count = JUTSU_MAX_HEAL_EQUIPPED + 1;
+    const userjutsus = Array.from({ length: count }, (_, i) =>
+      uj({ jutsuId: `combat-heal-${i}`, effectTypes: ["heal"] }),
+    );
+
+    const out = computeJutsuLoadoutCapAssignments({
+      jutsuIds: userjutsus.map((entry) => entry.jutsuId),
+      userjutsus,
+      maxEquip: 100,
+    });
+
+    expect(out.equipIds).toHaveLength(JUTSU_MAX_HEAL_EQUIPPED);
+    expect(out.invalidJutsus).toHaveLength(1);
+    expect(out.invalidJutsus[0]).toMatch(/heal/);
+  });
+
+  it("applies caller eligibility before consuming equip capacity", () => {
+    const userjutsus = [uj({ jutsuId: "blocked" }), uj({ jutsuId: "allowed" })];
+
+    const out = computeJutsuLoadoutCapAssignments({
+      jutsuIds: userjutsus.map((entry) => entry.jutsuId),
+      userjutsus,
+      maxEquip: 1,
+      validateJutsu: (entry) =>
+        entry.jutsuId === "blocked" ? "required item missing" : undefined,
+    });
+
+    expect(out.equipIds).toEqual(["allowed"]);
+    expect(out.invalidJutsus).toEqual(["required item missing"]);
   });
 });
