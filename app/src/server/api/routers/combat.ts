@@ -1791,6 +1791,24 @@ export const initiateBattle = async (
   const now = new Date();
   const nonAiTargets = users.filter((u) => targetIds.includes(u.userId) && !u.isAi);
 
+  // AI rows are excluded from the battle-start claim below (one shared row backs
+  // every fight against a given AI), so the update's location predicate no longer
+  // verifies an AI target's position. Enforce the COMBAT proximity rule against
+  // the fetched snapshot instead, mirroring the SQL predicate applied to players.
+  if (battleType === "COMBAT") {
+    const movedAiTarget = users.find(
+      (u) =>
+        u.isAi &&
+        targetIds.includes(u.userId) &&
+        ((sector !== undefined && u.sector !== sector) ||
+          (longitude !== undefined && u.longitude !== longitude) ||
+          (latitude !== undefined && u.latitude !== latitude)),
+    );
+    if (movedAiTarget) {
+      return { success: false, message: "Attack failed, did the target move?" };
+    }
+  }
+
   // Loop through each user
   for (const i of users.keys()) {
     // Get the user
