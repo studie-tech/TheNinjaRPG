@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isActivityStreakPopupBlocking,
+  resolveActivityStreakDateLatches,
   resolveActivityStreakPopupOpen,
   type ActivityStreakPopupState,
 } from "@/libs/activityStreak";
@@ -39,6 +40,23 @@ describe("activity streak popup compatibility", () => {
         state({ shouldShowPopup: true, dismissedToday: true }),
       ),
     ).toBe(false);
+  });
+
+  it("clears close and dismissal latches when the date rolls over", () => {
+    expect(
+      resolveActivityStreakDateLatches(
+        "2026-08-15",
+        "2026-08-15",
+        "2026-08-15",
+      ),
+    ).toEqual({ dismissedToday: true, userClosed: true });
+    expect(
+      resolveActivityStreakDateLatches(
+        "2026-08-16",
+        "2026-08-15",
+        "2026-08-15",
+      ),
+    ).toEqual({ dismissedToday: false, userClosed: false });
   });
 
   it("blocks competing popups during loading and until an explicit close", () => {

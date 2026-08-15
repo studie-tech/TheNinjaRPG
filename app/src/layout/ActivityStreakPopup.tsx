@@ -17,32 +17,33 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import {
   isActivityStreakPopupBlocking,
+  resolveActivityStreakDateLatches,
   resolveActivityStreakPopupOpen,
 } from "@/libs/activityStreak";
 import { cn } from "@/libs/shadui";
 import { getDateKey } from "@/utils/time";
 import { blockingPopupOpenAtom, useUserData } from "@/utils/UserContext";
 
-/** Get today's date as a string for localStorage key */
-const getTodayKey = () => {
-  return `streakPopupDismissedX-${getDateKey(new Date())}`;
-};
-
 const ActivityStreakPopup: React.FC = () => {
+  const currentDateKey = getDateKey(new Date());
   // Preserve the pre-overworld behavior: once opened, the popup stays mounted through reward
   // refetches so the user can see the claimed state until they explicitly close it.
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  // Tracks a same-mount close/dismiss so the arrival-prompt gate can distinguish
-  // "not opened yet" from "closed by the user".
-  const [userClosed, setUserClosed] = useState<boolean>(false);
+  // A plain boolean would remain latched if this tab stays mounted across midnight.
+  const [userClosedDateKey, setUserClosedDateKey] = useState<string | null>(null);
 
   // Signals the overworld arrival prompt to hold while this dialog is up or pending.
   const setBlockingPopupOpen = useSetAtom(blockingPopupOpenAtom);
 
-  // Track if user has explicitly dismissed the popup for today
-  const [dismissedToday, setDismissedToday] = useLocalStorage<boolean>(
-    getTodayKey(),
-    false,
+  // Persist the dismissed date under a stable key so tomorrow starts eligible again.
+  const [dismissedDateKey, setDismissedDateKey] = useLocalStorage<string | null>(
+    "streakPopupDismissedDateX",
+    null,
+  );
+  const { dismissedToday, userClosed } = resolveActivityStreakDateLatches(
+    currentDateKey,
+    dismissedDateKey,
+    userClosedDateKey,
   );
 
   // Query
@@ -94,14 +95,14 @@ const ActivityStreakPopup: React.FC = () => {
 
   // Handle simple close - just close the dialog, will show again on refresh
   const handleClose = () => {
-    setUserClosed(true);
+    setUserClosedDateKey(currentDateKey);
     setIsModalOpen(false);
   };
 
   // Handle dismiss for today - won't show again until tomorrow
   const handleDismissForToday = () => {
-    setUserClosed(true);
-    setDismissedToday(true);
+    setUserClosedDateKey(currentDateKey);
+    setDismissedDateKey(currentDateKey);
     setIsModalOpen(false);
   };
 

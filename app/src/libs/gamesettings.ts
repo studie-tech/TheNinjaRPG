@@ -80,11 +80,11 @@ export const lockWithGameTimer = async (
 };
 
 /**
- * Locks the game with a hourly timer.
+ * Locks the named game setting for one rolling hour.
  *
- * @param client - Database client used for the compare-and-swap update.
- * @param name - Stable game-setting name identifying the daily timer.
- * @returns
+ * @param client - Database client used to read and update the timer.
+ * @param name - Stable game-setting name identifying the hourly timer.
+ * @returns Whether a new hour began, the prior timestamp, and a wait response.
  */
 export const lockWithHourlyTimer = async (client: DrizzleClient, name: string) => {
   const timer = await getGameSetting(client, name);
