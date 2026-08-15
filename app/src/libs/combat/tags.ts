@@ -227,11 +227,25 @@ export const buffPrevent = (
 
 /** Type-axis predicate for the effects the `copy` tag may transfer and produce. */
 const isCopyableEffect = (e: UserEffect): boolean =>
-  isPositiveUserEffect(e) && COPYABLE_EFFECT_TYPES.includes(e.type);
+  isPositiveUserEffect(e) && COPYABLE_EFFECT_TYPES.has(e.type);
 
 /** Type-axis predicate for the effects the `mirror` tag may transfer and produce. */
 const isMirrorableEffect = (e: UserEffect): boolean =>
-  isNegativeUserEffect(e) && !MIRROR_EXCLUDED_EFFECT_TYPES.includes(e.type);
+  isNegativeUserEffect(e) && !MIRROR_EXCLUDED_EFFECT_TYPES.has(e.type);
+
+/**
+ * Shared candidate gate for a transfer source effect: not from a passive/gear
+ * origin, not ground-derived (the carry-forward pass drops `fromGround` effects at
+ * end of round, so a clone would vanish while still consuming a capped slot), not
+ * a type already held, still active, and not depleted (a fully absorbed shield
+ * keeps rounds > 0 at power 0 — transferring it would burn a slot for nothing).
+ */
+const isTransferCandidate = (e: UserEffect, heldTypes: Set<string>): boolean =>
+  !TRANSFER_EXCLUDED_SOURCE_TYPES.has(e.fromType || "") &&
+  !e.fromGround &&
+  !heldTypes.has(e.type) &&
+  isEffectActive(e) &&
+  Math.abs(getPower(e).power) > 0;
 
 /**
  * Shared budget accounting for the copy/mirror transfer tags. Counts the caster's
@@ -286,8 +300,7 @@ const applyTransferClones = (
     clone.castThisRound = true;
     clone.createdRound = tagEffect.createdRound;
     usersEffects.push(clone);
-    const effectPower = source.power + source.level * source.powerPerLevel;
-    return `${source.type} (${effectPower}${source.calculation === "percentage" ? "%" : ""})`;
+    return `${source.type} (${getPower(source).qualifier})`;
   });
 
 /** Copy positive effects from opponent to self (priority-ranked, capped, unique per type) */
@@ -300,8 +313,13 @@ export const copy = (
   // Self-targeting is a degenerate no-op (copying your own buffs onto yourself).
   // It also keeps the copy/mirror budgets isolated: when caster === target the two
   // tags' clones share the same identity and would cross-count against each other's
-  // ceiling, so skip it at the source.
-  if (user.userId === target.userId) return undefined;
+  // ceiling, so skip it at the source — but tell the player, since the action was spent.
+  if (user.userId === target.userId) {
+    return {
+      txt: `${user.username} cannot copy effects from themselves.`,
+      color: "blue",
+    };
+  }
 
   // Check if copy is prevented
   const { pass } = preventCheck(usersEffects, "buffprevent", user, effect);
@@ -335,16 +353,10 @@ export const copy = (
         (e) =>
           e.targetId === target.userId &&
           isCopyableEffect(e) &&
-          !TRANSFER_EXCLUDED_SOURCE_TYPES.includes(e.fromType || "") &&
-          !heldTypes.has(e.type) &&
-          (e.rounds === undefined || e.rounds > 0),
+          isTransferCandidate(e, heldTypes),
       );
 
-      const selected = selectTransferEffects(
-        candidates,
-        (type) => COPY_PRIORITY_RANK.get(type) ?? Number.MAX_SAFE_INTEGER,
-        remaining,
-      );
+      const selected = selectTransferEffects(candidates, COPY_PRIORITY_RANK, remaining);
 
       if (selected.length === 0) {
         return {
@@ -363,7 +375,7 @@ export const copy = (
 
       const effectsList = copiedEffects.join(", ");
       return {
-        txt: `${user.username} copies ${selected.length} positive effects from ${target.username}: ${effectsList}`,
+        txt: `${user.username} copies ${selected.length} positive effect${selected.length === 1 ? "" : "s"} from ${target.username}: ${effectsList}`,
         color: "blue",
       };
     } else {
@@ -385,8 +397,13 @@ export const mirror = (
   // Self-targeting is a degenerate no-op (reflecting your own debuffs onto yourself).
   // It also keeps the copy/mirror budgets isolated: when caster === target the two
   // tags' clones share the same identity and would cross-count against each other's
-  // ceiling, so skip it at the source.
-  if (user.userId === target.userId) return undefined;
+  // ceiling, so skip it at the source — but tell the player, since the action was spent.
+  if (user.userId === target.userId) {
+    return {
+      txt: `${user.username} cannot mirror effects onto themselves.`,
+      color: "blue",
+    };
+  }
 
   // Check if mirror is prevented
   const { pass } = preventCheck(usersEffects, "debuffprevent", target, effect);
@@ -418,14 +435,17 @@ export const mirror = (
 
       // A mirrored drain is delivered at power / mirror-duration, so scale it
       // BEFORE selection: it must compete for a capped slot at the power it
-      // actually delivers, not its source power. The scaled stand-in keeps the
-      // source id, so the clone's fromEffectId still points at the original.
+      // actually delivers, not its source power. The level contribution is baked
+      // into the scaled base power (flooring powerPerLevel separately would crush
+      // fractional per-level scaling to 0). The shallow stand-in keeps the source
+      // id — the clone's fromEffectId still points at the original — and is
+      // deep-cloned by applyTransferClones before entering the battle state.
       const scaleDrainForMirror = (e: UserEffect): UserEffect => {
         if (e.type !== "drain") return e;
-        const scaled = structuredClone(e);
-        scaled.power = Math.floor(scaled.power / (effect.rounds || 1));
-        scaled.powerPerLevel = Math.floor(scaled.powerPerLevel / (effect.rounds || 1));
-        return scaled;
+        const deliveredPower = Math.floor(
+          (e.power + e.level * e.powerPerLevel) / (effect.rounds || 1),
+        );
+        return { ...e, power: deliveredPower, powerPerLevel: 0 };
       };
 
       const candidates = usersEffects
@@ -433,15 +453,13 @@ export const mirror = (
           (e) =>
             e.targetId === user.userId &&
             isMirrorableEffect(e) &&
-            !TRANSFER_EXCLUDED_SOURCE_TYPES.includes(e.fromType || "") &&
-            !heldTypes.has(e.type) &&
-            (e.rounds === undefined || e.rounds > 0),
+            isTransferCandidate(e, heldTypes),
         )
         .map(scaleDrainForMirror);
 
       const selected = selectTransferEffects(
         candidates,
-        (type) => MIRROR_PRIORITY_RANK.get(type) ?? Number.MAX_SAFE_INTEGER,
+        MIRROR_PRIORITY_RANK,
         remaining,
       );
 
@@ -462,7 +480,7 @@ export const mirror = (
 
       const effectsList = mirroredEffects.join(", ");
       return {
-        txt: `${user.username} mirrors ${selected.length} negative effects onto ${target.username}: ${effectsList}`,
+        txt: `${user.username} mirrors ${selected.length} negative effect${selected.length === 1 ? "" : "s"} onto ${target.username}: ${effectsList}`,
         color: "blue",
       };
     } else {
@@ -1784,19 +1802,24 @@ export const wound = (
   target: BattleUserState,
 ) => {
   if (effect.isNew && effect.castThisRound) {
-    let original = 0;
-    consequences.forEach((c) => {
-      if (
-        c.userId === effect.creatorId &&
-        c.targetId === effect.targetId &&
-        typeof c.damage === "number" &&
-        c.damage > 0
-      ) {
-        original += c.damage;
-      }
-    });
-    if (!effect.timeTracker) effect.timeTracker = {};
-    effect.timeTracker.originalDamage = original;
+    // A transferred clone (mirror) arrives with the source wound's recorded damage
+    // in its timeTracker; recomputing from this action's consequences would zero it
+    // out (a pure utility mirror deals no damage) and leave the clone inert.
+    if (!effect.timeTracker?.originalDamage) {
+      let original = 0;
+      consequences.forEach((c) => {
+        if (
+          c.userId === effect.creatorId &&
+          c.targetId === effect.targetId &&
+          typeof c.damage === "number" &&
+          c.damage > 0
+        ) {
+          original += c.damage;
+        }
+      });
+      if (!effect.timeTracker) effect.timeTracker = {};
+      effect.timeTracker.originalDamage = original;
+    }
   }
 
   const shouldApply =
