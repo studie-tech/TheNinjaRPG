@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkForBadWords } from "@/utils/profanity";
+import { checkForBadWords, moderateUserText } from "@/utils/profanity";
 
 const expectFlagged = async (content: string, detail: string) => {
   await expect(checkForBadWords(content)).resolves.toEqual({
@@ -46,4 +46,23 @@ describe("checkForBadWords", () => {
       await expectAllowed(content);
     },
   );
+});
+
+describe("moderateUserText", () => {
+  it("returns sanitized HTML when the text is clean", async () => {
+    const result = await moderateUserText("<script>alert(1)</script><p>Hello</p>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.sanitized).toContain("Hello");
+      expect(result.sanitized).not.toContain("script");
+    }
+  });
+
+  it("blocks the same offensive words as checkForBadWords", async () => {
+    const result = await moderateUserText("That was FuCkEd.");
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.message).toContain("Details: fucked");
+    }
+  });
 });

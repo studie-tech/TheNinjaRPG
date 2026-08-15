@@ -148,6 +148,7 @@ import {
   canSeeSecretData,
   getApprovalGroup,
 } from "@/utils/permissions";
+import { checkForBadWords } from "@/utils/profanity";
 import sanitize from "@/utils/sanitize";
 import {
   getTimeOfLastReset,
@@ -1418,6 +1419,8 @@ export const profileRouter = createTRPCRouter({
       if (user.username === input.username) {
         return errorResponse("Username is the same");
       }
+      const moderationResult = await checkForBadWords(input.username);
+      if (!moderationResult.success) return moderationResult;
       if (user.reputationPoints < COST_CHANGE_USERNAME) {
         return errorResponse("Not enough reputation points");
       }
