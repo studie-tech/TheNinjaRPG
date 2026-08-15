@@ -3,6 +3,55 @@
 import { and, eq, isNull, or } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
+
+type AnbuTestMocks = {
+  fetchUpdatedUser: ReturnType<typeof vi.fn>;
+  fetchUser: ReturnType<typeof vi.fn>;
+  fetchRequest: ReturnType<typeof vi.fn>;
+  fetchRequests: ReturnType<typeof vi.fn>;
+  insertRequest: ReturnType<typeof vi.fn>;
+  notify: ReturnType<typeof vi.fn>;
+};
+
+function getAnbuTestMocks(): AnbuTestMocks {
+  const globals = globalThis as unknown as { __anbuTestMocks?: AnbuTestMocks };
+  if (!globals.__anbuTestMocks) {
+    globals.__anbuTestMocks = {
+      fetchUpdatedUser: vi.fn(),
+      fetchUser: vi.fn(),
+      fetchRequest: vi.fn(),
+      fetchRequests: vi.fn(),
+      insertRequest: vi.fn(),
+      notify: vi.fn(),
+    };
+  }
+  return globals.__anbuTestMocks;
+}
+
+vi.mock("@/libs/pusher", () => ({
+  getServerPusher: () => ({
+    trigger: (...args: unknown[]) =>
+      (getAnbuTestMocks().notify as (...values: unknown[]) => unknown)(...args),
+  }),
+}));
+
+vi.mock("@/routers/profile", () => ({
+  fetchUpdatedUser: (...args: unknown[]) =>
+    (getAnbuTestMocks().fetchUpdatedUser as (...values: unknown[]) => unknown)(...args),
+  fetchUser: (...args: unknown[]) =>
+    (getAnbuTestMocks().fetchUser as (...values: unknown[]) => unknown)(...args),
+  updateNindo: vi.fn(),
+}));
+
+vi.mock("@/routers/sparring", () => ({
+  fetchRequest: (...args: unknown[]) =>
+    (getAnbuTestMocks().fetchRequest as (...values: unknown[]) => unknown)(...args),
+  fetchRequests: (...args: unknown[]) =>
+    (getAnbuTestMocks().fetchRequests as (...values: unknown[]) => unknown)(...args),
+  insertRequest: (...args: unknown[]) =>
+    (getAnbuTestMocks().insertRequest as (...values: unknown[]) => unknown)(...args),
+}));
+
 import {
   acceptAnbuRequest,
   createAnbuRequest,
@@ -15,20 +64,14 @@ import {
   removeFromSquad,
 } from "@/routers/anbu";
 
-const fetchUpdatedUserMock = vi.fn();
-const fetchUserMock = vi.fn();
-const fetchRequestMock = vi.fn();
-const fetchRequestsMock = vi.fn();
-const insertRequestMock = vi.fn();
-const notifyMock = vi.fn();
-const requestDependencies = {
+const {
   fetchUpdatedUser: fetchUpdatedUserMock,
   fetchUser: fetchUserMock,
   fetchRequest: fetchRequestMock,
   fetchRequests: fetchRequestsMock,
   insertRequest: insertRequestMock,
   notify: notifyMock,
-} as never;
+} = getAnbuTestMocks();
 
 /** Stable string form of a drizzle SQL predicate for assertion (cols + params). */
 function describeSql(node: unknown): string {
@@ -311,7 +354,6 @@ describe("ANBU router request permissions and concurrency", () => {
           ctx: { drizzle: client, userId: "actor" },
           input: { squadId: "squad-1" },
         } as never,
-        requestDependencies,
       ),
     ).resolves.toEqual([squadRequest]);
 
@@ -324,7 +366,6 @@ describe("ANBU router request permissions and concurrency", () => {
           ctx: { drizzle: client, userId: "applicant" },
           input: { squadId: "squad-1" },
         } as never,
-        requestDependencies,
       ),
     ).resolves.toEqual([ownForThisSquad]);
   });
@@ -343,7 +384,6 @@ describe("ANBU router request permissions and concurrency", () => {
           ctx: { drizzle: client, userId: "actor" },
           input: { squadId: "squad-1" },
         } as never,
-        requestDependencies,
       ),
     ).resolves.toEqual([]);
   });
@@ -362,7 +402,6 @@ describe("ANBU router request permissions and concurrency", () => {
           ctx: { drizzle: client, userId: "actor" },
           input: { squadId: "squad-1" },
         } as never,
-        requestDependencies,
       ),
     ).resolves.toEqual({
       success: false,
@@ -397,7 +436,6 @@ describe("ANBU router request permissions and concurrency", () => {
           ctx: { drizzle: client, userId: "actor" },
           input: { id: "request-1" },
         } as never,
-        requestDependencies,
       ),
     ).resolves.toEqual({ success: false, message: "Not allowed" });
     expect(update).not.toHaveBeenCalled();
@@ -426,7 +464,6 @@ describe("ANBU router request permissions and concurrency", () => {
           ctx: { drizzle: client, userId: "actor" },
           input: { id: "request-1" },
         } as never,
-        requestDependencies,
       ),
     ).resolves.toEqual({
       success: false,
@@ -454,7 +491,6 @@ describe("ANBU router request permissions and concurrency", () => {
           ctx: { drizzle: client, userId: "actor" },
           input: { id: "request-1" },
         } as never,
-        requestDependencies,
       ),
     ).resolves.toEqual({ success: false, message: "Squad not found" });
     expect(update).not.toHaveBeenCalled();
@@ -491,7 +527,6 @@ describe("ANBU router request permissions and concurrency", () => {
             ctx: { drizzle: client, userId: "actor" },
             input: { id: "request-1" },
           } as never,
-          requestDependencies,
         ),
       ).resolves.toEqual({ success: false, message: "Squad is full" });
       expect(updates.some((entry) => entry.table === userRequest)).toBe(true);
@@ -524,7 +559,6 @@ describe("ANBU router request permissions and concurrency", () => {
           ctx: { drizzle: client, userId: "actor" },
           input: { id: "request-1" },
         } as never,
-        requestDependencies,
       ),
     ).resolves.toEqual({ success: false, message: "Squad is full" });
     expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(
@@ -560,7 +594,6 @@ describe("ANBU router request permissions and concurrency", () => {
           ctx: { drizzle: client, userId: "actor" },
           input: { id: "request-1" },
         } as never,
-        requestDependencies,
       ),
     ).resolves.toEqual({
       success: false,
@@ -603,7 +636,6 @@ describe("ANBU router request permissions and concurrency", () => {
           ctx: { drizzle: client, userId: "actor" },
           input: { id: "request-1" },
         } as never,
-        requestDependencies,
       ),
     ).resolves.toEqual({ success: true, message: "Request accepted" });
     expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(

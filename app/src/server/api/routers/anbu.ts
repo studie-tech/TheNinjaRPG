@@ -688,33 +688,6 @@ export const anbuRouter = createTRPCRouter({
 
 type AnbuRequestContext = { drizzle: DrizzleClient; userId: string };
 
-type AnbuRequestDependencies = {
-  fetchRequest: typeof fetchRequest;
-  fetchRequests: typeof fetchRequests;
-  fetchUpdatedUser: typeof fetchUpdatedUser;
-  fetchUser: typeof fetchUser;
-  insertRequest: typeof insertRequest;
-  notify: (userId: string) => void;
-};
-
-/**
- * Builds the production dependency set used by the ANBU request handlers.
- * Keeping these collaborators in one object lets tests exercise the real
- * authorization and concurrency logic without replacing shared modules.
- *
- * @returns The database helpers and notification callback used by request handlers.
- */
-const getAnbuRequestDependencies = (): AnbuRequestDependencies => ({
-  fetchRequest,
-  fetchRequests,
-  fetchUpdatedUser,
-  fetchUser,
-  insertRequest,
-  notify: (userId) => {
-    void pusher.trigger(userId, "event", { type: "anbu" });
-  },
-});
-
 /**
  * Returns the ANBU join requests visible to the current user.
  * Managers receive every request linked to the selected squad, applicants
@@ -722,24 +695,20 @@ const getAnbuRequestDependencies = (): AnbuRequestDependencies => ({
  * no request data. Without a squad filter, the caller's requests are returned.
  *
  * @param args - Authenticated request context and optional squad filter.
- * @param dependencies - Injectable data-access helpers; production defaults are used normally.
  * @returns The requests the caller is authorized to view.
  */
-export async function getAnbuRequests(
-  args: {
-    ctx: AnbuRequestContext;
-    input?: { squadId?: string };
-  },
-  dependencies = getAnbuRequestDependencies(),
-) {
+export async function getAnbuRequests(args: {
+  ctx: AnbuRequestContext;
+  input?: { squadId?: string };
+}) {
   const { ctx, input } = args;
   if (input?.squadId) {
     const squadId = input.squadId;
     const [updatedUser, squad, ownRequests, squadRequests] = await Promise.all([
-      dependencies.fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+      fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
       fetchSquad(ctx.drizzle, squadId),
-      dependencies.fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId),
-      dependencies.fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, undefined, squadId),
+      fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId),
+      fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, undefined, squadId),
     ]);
     const { user } = updatedUser;
     if (!user || !squad) return [];
@@ -760,7 +729,7 @@ export async function getAnbuRequests(
     }
     return user.anbuId ? [] : ownSquadRequests;
   }
-  return dependencies.fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId);
+  return fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId);
 }
 
 /**
@@ -769,18 +738,17 @@ export async function getAnbuRequests(
  * while the database uniqueness constraint closes concurrent duplicate sends.
  *
  * @param args - Authenticated request context and target squad ID.
- * @param dependencies - Injectable data-access helpers; production defaults are used normally.
  * @returns A success response or a user-facing validation failure.
  */
-export async function createAnbuRequest(
-  args: { ctx: AnbuRequestContext; input: { squadId: string } },
-  dependencies = getAnbuRequestDependencies(),
-) {
+export async function createAnbuRequest(args: {
+  ctx: AnbuRequestContext;
+  input: { squadId: string };
+}) {
   const { ctx, input } = args;
   const [updatedUser, squad, ownRequests] = await Promise.all([
-    dependencies.fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+    fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
     fetchSquad(ctx.drizzle, input.squadId),
-    dependencies.fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId),
+    fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId),
   ]);
   const { user } = updatedUser;
   const { isKage, isElder } = getConvenienceStatus(user, squad);
@@ -815,7 +783,7 @@ export async function createAnbuRequest(
       ),
     );
   try {
-    await dependencies.insertRequest(
+    await insertRequest(
       ctx.drizzle,
       user.userId,
       receiverId,
@@ -829,7 +797,7 @@ export async function createAnbuRequest(
     }
     throw error;
   }
-  dependencies.notify(receiverId);
+  void pusher.trigger(receiverId, "event", { type: "anbu" });
   return { success: true, message: "Request to join squad sent" };
 }
 
@@ -840,21 +808,20 @@ export async function createAnbuRequest(
  * Eligible members may atomically claim leadership of a leaderless squad.
  *
  * @param args - Authenticated request context and request ID to accept.
- * @param dependencies - Injectable data-access helpers; production defaults are used normally.
  * @returns A success response or the reason the request could not be accepted.
  */
-export async function acceptAnbuRequest(
-  args: { ctx: AnbuRequestContext; input: { id: string } },
-  dependencies = getAnbuRequestDependencies(),
-) {
+export async function acceptAnbuRequest(args: {
+  ctx: AnbuRequestContext;
+  input: { id: string };
+}) {
   const { ctx, input } = args;
   const [request, updatedUser] = await Promise.all([
-    dependencies.fetchRequest(ctx.drizzle, input.id, "ANBU"),
-    dependencies.fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+    fetchRequest(ctx.drizzle, input.id, "ANBU"),
+    fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
   ]);
   const [squad, requester] = await Promise.all([
     fetchSquadForAnbuRequest(ctx.drizzle, request),
-    dependencies.fetchUser(ctx.drizzle, request.senderId),
+    fetchUser(ctx.drizzle, request.senderId),
   ]);
   const { user } = updatedUser;
   const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
@@ -921,7 +888,7 @@ export async function acceptAnbuRequest(
       );
     }
   }
-  dependencies.notify(request.senderId);
+  void pusher.trigger(request.senderId, "event", { type: "anbu" });
   return { success: true, message: "Request accepted" };
 }
 
@@ -931,17 +898,16 @@ export async function acceptAnbuRequest(
  * concurrent accept, reject, or cancellation cannot be overwritten.
  *
  * @param args - Authenticated request context and request ID to reject.
- * @param dependencies - Injectable data-access helpers; production defaults are used normally.
  * @returns A success response or the reason the request could not be rejected.
  */
-export async function rejectAnbuRequest(
-  args: { ctx: AnbuRequestContext; input: { id: string } },
-  dependencies = getAnbuRequestDependencies(),
-) {
+export async function rejectAnbuRequest(args: {
+  ctx: AnbuRequestContext;
+  input: { id: string };
+}) {
   const { ctx, input } = args;
   const [request, updatedUser] = await Promise.all([
-    dependencies.fetchRequest(ctx.drizzle, input.id, "ANBU"),
-    dependencies.fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+    fetchRequest(ctx.drizzle, input.id, "ANBU"),
+    fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
   ]);
   const squad = await fetchSquadForAnbuRequest(ctx.drizzle, request);
   if (!squad) {
@@ -966,7 +932,7 @@ export async function rejectAnbuRequest(
   if (!rejected) {
     return errorResponse("You can only reject pending requests");
   }
-  dependencies.notify(request.senderId);
+  void pusher.trigger(request.senderId, "event", { type: "anbu" });
   return { success: true, message: "Request rejected" };
 }
 
