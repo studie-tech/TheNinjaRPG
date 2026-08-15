@@ -345,7 +345,12 @@ export const calcJutsuTrainCost = (
   return cost;
 };
 
-export const calcJutsuEquipLimit = (userdata: UserData) => {
+type JutsuEquipLimitUser = Pick<
+  UserData,
+  "rank" | "staffAccount" | "extraJutsuSlots" | "federalStatus"
+>;
+
+export const calcJutsuEquipLimit = (userdata: JutsuEquipLimitUser) => {
   const rankContrib = (rank: UserRank) => {
     switch (rank) {
       case "GENIN":
@@ -361,7 +366,7 @@ export const calcJutsuEquipLimit = (userdata: UserData) => {
     }
     return 4 + 2;
   };
-  const fedContrib = (userdata: UserData) => {
+  const fedContrib = (userdata: JutsuEquipLimitUser) => {
     const status = getUserFederalStatus(userdata);
     switch (status) {
       case "NORMAL":

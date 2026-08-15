@@ -269,6 +269,65 @@ export const findExceededJutsuEquipCap = (
   return { ...cap, label: getJutsuCategoryDef(cap.key).label };
 };
 
+type JutsuLoadoutValidationInput = Pick<UserJutsuWithRelations, "jutsuId" | "jutsu">;
+
+/**
+ * Apply ownership, caller-specific eligibility, total-slot, and category-cap
+ * validation to an ordered list of saved jutsu IDs. Keeping the cap pass here
+ * ensures every loadout-selection surface, including the combat lobby, uses
+ * the same rules as manual equip.
+ */
+export const computeJutsuLoadoutCapAssignments = (args: {
+  jutsuIds: string[];
+  userjutsus: JutsuLoadoutValidationInput[];
+  maxEquip: number;
+  validateJutsu?: (userJutsu: JutsuLoadoutValidationInput) => string | undefined;
+}): ComputedJutsuLoadout => {
+  const { jutsuIds, userjutsus, maxEquip, validateJutsu } = args;
+  const equipIds: string[] = [];
+  const invalidJutsus: string[] = [];
+  const counts = emptyCapCounts();
+
+  // A jutsu is equipped or not (no quantity), and the equip CASE matches by
+  // jutsuId, so duplicates must not consume slots or category capacity.
+  const uniqueJutsuIds = [...new Set(jutsuIds)];
+
+  jutsuLoop: for (const jutsuId of uniqueJutsuIds) {
+    const userJutsu = userjutsus.find((entry) => entry.jutsuId === jutsuId);
+    if (!userJutsu) {
+      invalidJutsus.push("Jutsu not found");
+      continue;
+    }
+
+    const validationError = validateJutsu?.(userJutsu);
+    if (validationError) {
+      invalidJutsus.push(validationError);
+      continue;
+    }
+
+    const flags = getJutsuCapFlags(userJutsu.jutsu);
+    if (equipIds.length >= maxEquip) {
+      invalidJutsus.push(`${userJutsu.jutsu.name}: equip limit reached`);
+      continue;
+    }
+    for (const cap of JUTSU_EQUIP_CAPS) {
+      if (flags[cap.key] && counts[cap.key] >= cap.max) {
+        invalidJutsus.push(
+          `${userJutsu.jutsu.name}: ${getJutsuCategoryDef(cap.key).label} jutsu limit reached`,
+        );
+        continue jutsuLoop;
+      }
+    }
+
+    equipIds.push(jutsuId);
+    for (const cap of JUTSU_EQUIP_CAPS) {
+      if (flags[cap.key]) counts[cap.key] += 1;
+    }
+  }
+
+  return { equipIds, invalidJutsus };
+};
+
 /**
  * Pure decision logic for applying a jutsu loadout. Validates every saved
  * jutsuId against the user's ownership, the hidden-content gate, usability
@@ -286,54 +345,20 @@ export const computeJutsuLoadoutAssignments = (args: {
   user: NonNullable<UserWithRelations>;
 }): ComputedJutsuLoadout => {
   const { jutsuIds, userjutsus, user } = args;
-  const equipIds: string[] = [];
-  const invalidJutsus: string[] = [];
-  const maxEquip = calcJutsuEquipLimit(user);
-  let total = 0;
-  const counts = emptyCapCounts();
-
-  // A jutsu is equipped or not (no quantity), and the equip CASE matches by
-  // jutsuId, so a duplicate id in a stale loadout equips the same row once.
-  // Dedupe up front so duplicates cannot double-count toward the caps and
-  // falsely reject a later jutsu.
-  const uniqueJutsuIds = [...new Set(jutsuIds)];
-
-  jutsuLoop: for (const jutsuId of uniqueJutsuIds) {
-    const uj = userjutsus.find((j) => j.jutsuId === jutsuId);
-    if (!uj) {
-      invalidJutsus.push("Jutsu not found");
-      continue;
-    }
-    const jutsu = uj.jutsu;
-    if (jutsu.hidden && !canChangeContent(user.role)) {
-      invalidJutsus.push(`${jutsu.name} is hidden`);
-      continue;
-    }
-    if (!canUseJutsu(jutsu, user)) {
-      invalidJutsus.push(`${jutsu.name}: missing requirements`);
-      continue;
-    }
-    const flags = getJutsuCapFlags(jutsu);
-    if (total >= maxEquip) {
-      invalidJutsus.push(`${jutsu.name}: equip limit reached`);
-      continue;
-    }
-    for (const cap of JUTSU_EQUIP_CAPS) {
-      if (flags[cap.key] && counts[cap.key] >= cap.max) {
-        invalidJutsus.push(
-          `${jutsu.name}: ${getJutsuCategoryDef(cap.key).label} jutsu limit reached`,
-        );
-        continue jutsuLoop;
+  return computeJutsuLoadoutCapAssignments({
+    jutsuIds,
+    userjutsus,
+    maxEquip: calcJutsuEquipLimit(user),
+    validateJutsu: ({ jutsu }) => {
+      if (jutsu.hidden && !canChangeContent(user.role)) {
+        return `${jutsu.name} is hidden`;
       }
-    }
-    equipIds.push(jutsuId);
-    total += 1;
-    for (const cap of JUTSU_EQUIP_CAPS) {
-      if (flags[cap.key]) counts[cap.key] += 1;
-    }
-  }
-
-  return { equipIds, invalidJutsus };
+      if (!canUseJutsu(jutsu, user)) {
+        return `${jutsu.name}: missing requirements`;
+      }
+      return undefined;
+    },
+  });
 };
 
 /**

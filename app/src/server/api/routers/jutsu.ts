@@ -1079,19 +1079,13 @@ export const jutsuRouter = createTRPCRouter({
         questDataFull = trackers;
       }
       const questDataForDb = filterQuestTrackersForDbPersist(questDataFull, user);
-      // Pre-mutation snapshot for refund if the new-jutsu insert fails after deduct.
-      const questDataBeforeTrain = filterQuestTrackersForDbPersist(
-        user.questData ?? [],
-        user,
-      );
 
-      // Deduct money
+      // Deduct money first, but persist new-jutsu quest progress only after the
+      // ownership insert is confirmed. A duplicate request can then refund its
+      // own money without restoring a stale questData snapshot over the winner.
       const moneyUpdate = await ctx.drizzle
         .update(userData)
-        .set({
-          money: sql`${userData.money} - ${trainCost}`,
-          questData: questDataForDb,
-        })
+        .set({ money: sql`${userData.money} - ${trainCost}` })
         .where(and(eq(userData.userId, ctx.userId), gte(userData.money, trainCost)));
       if (moneyUpdate.rowsAffected !== 1) {
         return errorResponse("You don't have enough money");
@@ -1123,17 +1117,15 @@ export const jutsuRouter = createTRPCRouter({
         const newUserJutsuId = nanoid();
         // onDuplicateKeyUpdate no-op (`id = id`) absorbs unique-index races. PlanetScale
         // reports changed rows, so a duplicate yields rowsAffected === 0 (not 2). Deduct
-        // already happened above — refund money + quest snapshot when this request did
-        // not insert (otherwise jutsus_mastered / train_specific_jutsu stay incremented).
+        // already happened above, so refund it when this request definitively did not
+        // insert. Quest progress has not been persisted yet and needs no compensation.
         const refundTrainCost = () =>
           ctx.drizzle
             .update(userData)
-            .set({
-              money: sql`${userData.money} + ${trainCost}`,
-              questData: questDataBeforeTrain,
-            })
+            .set({ money: sql`${userData.money} + ${trainCost}` })
             .where(eq(userData.userId, ctx.userId));
 
+        let insertedByThisRequest = false;
         try {
           const insertResult = await ctx.drizzle
             .insert(userJutsu)
@@ -1145,27 +1137,61 @@ export const jutsuRouter = createTRPCRouter({
               equipped: canAutoEquip,
             })
             .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-
-          if (insertResult.rowsAffected !== 1) {
-            await refundTrainCost();
+          insertedByThisRequest = insertResult.rowsAffected === 1;
+        } catch {
+          // A transport error can arrive after MySQL committed the insert. Re-read
+          // the unique ownership row before compensating so a committed training
+          // session is never refunded and granted for free.
+          let persisted: { id: string } | undefined;
+          try {
+            [persisted] = await ctx.drizzle
+              .select({ id: userJutsu.id })
+              .from(userJutsu)
+              .where(
+                and(
+                  eq(userJutsu.userId, ctx.userId),
+                  eq(userJutsu.jutsuId, input.jutsuId),
+                ),
+              )
+              .limit(1);
+          } catch {
             return errorResponse(
-              "You already own this jutsu — please refresh and try again",
+              "Training status could not be confirmed — please refresh before retrying",
             );
           }
-        } catch {
-          await refundTrainCost();
-          return errorResponse("Failed to start training — please try again");
+          insertedByThisRequest = persisted?.id === newUserJutsuId;
+          if (!insertedByThisRequest) {
+            await refundTrainCost();
+            return errorResponse(
+              persisted
+                ? "You already own this jutsu — please refresh and try again"
+                : "Failed to start training — please try again",
+            );
+          }
         }
 
-        if (canAutoEquip) {
-          await rollbackEquipIfOverCap({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            userJutsuId: newUserJutsuId,
-            maxEquip,
-            flags: capFlags,
-          });
+        if (!insertedByThisRequest) {
+          await refundTrainCost();
+          return errorResponse(
+            "You already own this jutsu — please refresh and try again",
+          );
         }
+
+        await Promise.all([
+          ctx.drizzle
+            .update(userData)
+            .set({ questData: questDataForDb })
+            .where(eq(userData.userId, ctx.userId)),
+          canAutoEquip
+            ? rollbackEquipIfOverCap({
+                client: ctx.drizzle,
+                userId: ctx.userId,
+                userJutsuId: newUserJutsuId,
+                maxEquip,
+                flags: capFlags,
+              })
+            : undefined,
+        ]);
       }
 
       return {
@@ -1337,16 +1363,7 @@ export const jutsuRouter = createTRPCRouter({
                   eq(userJutsu.id, input.userJutsuId),
                   eq(userJutsu.userId, ctx.userId),
                   eq(userJutsu.equipped, true),
-                  sql`NOT EXISTS (
-                    SELECT 1 FROM (
-                      SELECT ${jutsuLoadout.jutsuIds} AS ids
-                      FROM ${userData}
-                      INNER JOIN ${jutsuLoadout} ON ${jutsuLoadout.id} = ${userData.jutsuLoadout}
-                      WHERE ${userData.userId} = ${ctx.userId}
-                        AND ${jutsuLoadout.userId} = ${ctx.userId}
-                    ) AS active_loadout
-                    WHERE JSON_CONTAINS(active_loadout.ids, JSON_QUOTE(${userjutsuObj.jutsuId}))
-                  )`,
+                  activeJutsuLoadoutLacksJutsuSql(ctx.userId, userjutsuObj.jutsuId),
                 ),
               );
             if (rolledBack.rowsAffected === 1) {
@@ -1386,7 +1403,7 @@ export const jutsuRouter = createTRPCRouter({
           }
         }
         try {
-          await ctx.drizzle
+          const unequipped = await ctx.drizzle
             .update(userJutsu)
             .set({ equipped: false })
             .where(
@@ -1394,8 +1411,38 @@ export const jutsuRouter = createTRPCRouter({
                 eq(userJutsu.id, input.userJutsuId),
                 eq(userJutsu.userId, ctx.userId),
                 eq(userJutsu.equipped, true),
+                // If a concurrent selectJutsuLoadout activated another loadout
+                // containing this jutsu after the removal above, leave the row
+                // equipped so the newly active loadout remains consistent.
+                activeJutsuLoadoutLacksJutsuSql(ctx.userId, userjutsuObj.jutsuId),
               ),
             );
+          if (unequipped.rowsAffected !== 1) {
+            const [row, activeIds] = await Promise.all([
+              ctx.drizzle
+                .select({ equipped: userJutsu.equipped })
+                .from(userJutsu)
+                .where(
+                  and(
+                    eq(userJutsu.id, input.userJutsuId),
+                    eq(userJutsu.userId, ctx.userId),
+                  ),
+                )
+                .limit(1)
+                .then((rows) => rows[0]),
+              fetchActiveLoadoutJutsuIds(ctx.drizzle, ctx.userId),
+            ]);
+            if (row && !row.equipped && !activeIds?.includes(userjutsuObj.jutsuId)) {
+              return {
+                success: true,
+                message: "Jutsu unequipped",
+                data: { equipped: false, jutsuId: userjutsuObj.jutsuId },
+              };
+            }
+            return errorResponse(
+              "Active loadout changed while unequipping — please refresh and retry",
+            );
+          }
         } catch {
           const [row] = await ctx.drizzle
             .select({ equipped: userJutsu.equipped })
@@ -2323,22 +2370,21 @@ export const selectJutsuLoadout = async (
     ? validateLoadout(loadout.jutsuIds)
     : { equipIds: loadout.jutsuIds, invalidJutsus: [] as string[] };
 
-  // Equip first, then advance the pointer (mirrors selectItemLoadout). The equip
-  // is one atomic statement, so serializing keeps the jutsuLoadout pointer from
-  // racing ahead and pointing at a loadout whose jutsus were not equipped.
-  await client
-    .update(userJutsu)
-    .set({
-      equipped:
-        equipIds.length > 0
-          ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equipIds)} THEN 1 ELSE 0 END`
-          : false,
-    })
-    .where(eq(userJutsu.userId, user.userId));
-  await client
-    .update(userData)
-    .set({ jutsuLoadout: loadout.id })
-    .where(eq(userData.userId, user.userId));
+  // Update the active pointer and every equipped row in one multi-table UPDATE.
+  // Keeping these writes in a single statement closes the window where
+  // toggleEquip could observe the old pointer after the new loadout's equipped
+  // rows were already applied (or vice versa).
+  const equippedAssignment =
+    equipIds.length > 0
+      ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equipIds)} THEN 1 ELSE 0 END`
+      : sql`0`;
+  await client.execute(sql`
+    UPDATE ${userData}
+    LEFT JOIN ${userJutsu} ON ${userJutsu.userId} = ${userData.userId}
+    SET ${userData.jutsuLoadout} = ${loadout.id},
+        ${userJutsu.equipped} = ${equippedAssignment}
+    WHERE ${userData.userId} = ${user.userId}
+  `);
 
   const message =
     invalidJutsus.length > 0
@@ -2555,6 +2601,19 @@ const isActiveJutsuLoadoutSql = (userId: string, loadoutId: string) => sql`EXIST
     AND ${userData.jutsuLoadout} = ${loadoutId}
 )`;
 
+/** True when the user's active loadout does not currently contain `jutsuId`. */
+const activeJutsuLoadoutLacksJutsuSql = (userId: string, jutsuId: string) =>
+  sql`NOT EXISTS (
+    SELECT 1 FROM (
+      SELECT ${jutsuLoadout.jutsuIds} AS ids
+      FROM ${userData}
+      INNER JOIN ${jutsuLoadout} ON ${jutsuLoadout.id} = ${userData.jutsuLoadout}
+      WHERE ${userData.userId} = ${userId}
+        AND ${jutsuLoadout.userId} = ${userId}
+    ) AS active_loadout
+    WHERE JSON_CONTAINS(active_loadout.ids, JSON_QUOTE(${jutsuId}))
+  )`;
+
 /** Active loadout's jutsuIds, or null when the user has no pointer / join miss. */
 const fetchActiveLoadoutJutsuIds = async (
   client: DrizzleClient,
@@ -2648,7 +2707,7 @@ const removeJutsuIdFromLoadoutAtomically = async (args: {
     if (result.rowsAffected === 1) return true;
     // Pointer moved or already absent — only the active loadout must lack this id.
     const ids = await fetchActiveLoadoutJutsuIds(client, userId);
-    return !ids || !ids.includes(jutsuId);
+    return !ids?.includes(jutsuId);
   } catch {
     return false;
   }
