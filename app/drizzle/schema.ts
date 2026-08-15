@@ -3600,7 +3600,7 @@ export const userQuestAttempt = mysqlTable(
   (table) => {
     return {
       userQuestKey: unique("UserQuestAttempt_user_quest_key").on(table.userId, table.questId),
-      userIdx: index("UserQuestAttempt_userId_idx").on(table.userId),
+      questIdx: index("UserQuestAttempt_questId_idx").on(table.questId),
     };
   },
 );

@@ -77,4 +77,4 @@ CREATE INDEX `OverworldAiPlacement_sector_idx` ON `OverworldAiPlacement` (`secto
 CREATE INDEX `OverworldAiPlacement_aiTemplateUserId_idx` ON `OverworldAiPlacement` (`aiTemplateUserId`);
 CREATE INDEX `OverworldAiPlacement_isActive_sector_idx` ON `OverworldAiPlacement` (`isActive`,`sector`);
 CREATE INDEX `OverworldAiPlacementQuest_placementId_idx` ON `OverworldAiPlacementQuest` (`placementId`);
-CREATE INDEX `UserQuestAttempt_userId_idx` ON `UserQuestAttempt` (`userId`);
+CREATE INDEX `UserQuestAttempt_questId_idx` ON `UserQuestAttempt` (`questId`);

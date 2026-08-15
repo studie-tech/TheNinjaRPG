@@ -13092,10 +13092,10 @@
         }
       },
       "indexes": {
-        "UserQuestAttempt_userId_idx": {
-          "name": "UserQuestAttempt_userId_idx",
+        "UserQuestAttempt_questId_idx": {
+          "name": "UserQuestAttempt_questId_idx",
           "columns": [
-            "userId"
+            "questId"
           ],
           "isUnique": false
         }
