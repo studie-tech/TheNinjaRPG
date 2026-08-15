@@ -190,6 +190,20 @@
       "when": 1786785600765,
       "tag": "0026_blushing_gauntlet",
       "breakpoints": false
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1786788386411,
+      "tag": "0027_backfill_anbu_request_related_id",
+      "breakpoints": false
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1786788840147,
+      "tag": "0028_anbu_membership_invariants",
+      "breakpoints": false
     }
   ]
 }
