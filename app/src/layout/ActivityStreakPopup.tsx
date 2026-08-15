@@ -25,6 +25,9 @@ const getTodayKey = () => {
 };
 
 const ActivityStreakPopup: React.FC = () => {
+  // Preserve the pre-overworld behavior: once opened, the popup stays mounted through reward
+  // refetches so the user can see the claimed state until they explicitly close it.
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   // Tracks a same-mount close/dismiss so the arrival-prompt gate can distinguish
   // "not opened yet" from "closed by the user".
   const [userClosed, setUserClosed] = useState<boolean>(false);
@@ -57,14 +60,21 @@ const ActivityStreakPopup: React.FC = () => {
   const hasRecurringToEnroll = !!userStreaks?.activeRecurringConfig;
   const shouldShowPopup = hasUnclaimedRewards || needsCatchUp || hasRecurringToEnroll;
 
-  const isModalOpen = !isLoading && shouldShowPopup && !dismissedToday && !userClosed;
+  useEffect(() => {
+    if (!isLoading && shouldShowPopup && !dismissedToday && !userClosed) {
+      setIsModalOpen(true);
+    }
+  }, [isLoading, shouldShowPopup, dismissedToday, userClosed]);
 
   // This popup blocks the overworld arrival prompt while it is on screen OR while its
   // show-decision is still loading — the latter closes a fresh-login race where the arrival
   // prompt would otherwise open in the gap before this dialog mounts. Gated on `userClosed`
   // so that once the user closes it, the arrival prompt is free to fire.
   const isBlocking =
-    !!userData && !dismissedToday && !userClosed && (isLoading || shouldShowPopup);
+    !!userData &&
+    !dismissedToday &&
+    !userClosed &&
+    (isLoading || shouldShowPopup || isModalOpen);
   useEffect(() => {
     setBlockingPopupOpen(isBlocking);
     return () => setBlockingPopupOpen(false);
@@ -73,12 +83,14 @@ const ActivityStreakPopup: React.FC = () => {
   // Handle simple close - just close the dialog, will show again on refresh
   const handleClose = () => {
     setUserClosed(true);
+    setIsModalOpen(false);
   };
 
   // Handle dismiss for today - won't show again until tomorrow
   const handleDismissForToday = () => {
     setUserClosed(true);
     setDismissedToday(true);
+    setIsModalOpen(false);
   };
 
   // Don't render anything if no user, loading, dismissed today, or no rewards
