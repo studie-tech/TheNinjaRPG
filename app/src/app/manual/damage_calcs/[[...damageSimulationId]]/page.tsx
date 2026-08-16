@@ -359,7 +359,7 @@ export default function Simulator(props: {
             <hr />
             <UserInput
               id="u1"
-              ignoreContains={showAll ? "Defence" : "None"}
+              ignoreContains={showAll ? "defence" : "None"}
               selectForm={attForm}
             />
           </div>
@@ -378,7 +378,7 @@ export default function Simulator(props: {
             <hr />
             <UserInput
               id="u2"
-              ignoreContains={showAll ? "Offence" : "None"}
+              ignoreContains={showAll ? "offence" : "None"}
               selectForm={defForm}
             />
           </div>

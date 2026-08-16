@@ -35,6 +35,17 @@ describe("hasMasteryRequirements", () => {
       }),
     ).toBe(false);
   });
+
+  it("treats missing masteries as met so masked opponent state does not hide actions", () => {
+    expect(
+      hasMasteryRequirements(
+        {},
+        {
+          requiredNinjutsuMastery: 500,
+        },
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("getSoftCappedExperience", () => {

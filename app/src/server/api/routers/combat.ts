@@ -148,6 +148,7 @@ import {
   isEffectActive,
   maskBattle,
   maskBattleDynamic,
+  normalizeBattleUsersState,
   rollInitiative,
 } from "@/libs/combat/util";
 import { fetchDmgConfig } from "@/libs/gamesettings";
@@ -208,7 +209,7 @@ import { getRandomElement } from "@/utils/array";
 import { randomInt } from "@/utils/math";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
-import type { StatSchemaType } from "@/validators/combat";
+import type { AssignableUserStats } from "@/validators/combat";
 import { BarrierTag, performActionSchema, statSchema } from "@/validators/combat";
 import { sectorIdSchema } from "@/validators/travel";
 import { fetchUpdatedUser, fetchUser } from "./profile";
@@ -1534,6 +1535,7 @@ export const fetchBattle = async (client: DrizzleClient, battleId: string) => {
   if (!result) {
     return null;
   }
+  normalizeBattleUsersState(result.usersState);
   return result as CompleteBattle;
 };
 
@@ -1545,8 +1547,8 @@ export const initiateBattle = async (
     userIds: string[];
     targetIds: string[];
     client: DrizzleClient;
-    userStatDistribution?: StatSchemaType;
-    targetStatDistribution?: StatSchemaType;
+    userStatDistribution?: AssignableUserStats;
+    targetStatDistribution?: AssignableUserStats;
     scaleTarget?: boolean;
     forceLoadouts?: RankedLoadout[];
     forceDefenderVillageId?: string;

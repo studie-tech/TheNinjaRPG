@@ -1592,6 +1592,15 @@ export const createStatSchema = (min = 10, start = 10, user?: UserData) => {
 export const { schema: statSchema, maxValues: defaultStatMaxValues } =
   createStatSchema();
 export type StatSchemaType = z.infer<typeof statSchema>;
+export type AssignableUserStats = StatSchemaType &
+  Partial<{
+    ninjutsuMastery: number;
+    genjutsuMastery: number;
+    taijutsuMastery: number;
+    bukijutsuMastery: number;
+    bloodlineMastery: number;
+    sageMastery: number;
+  }>;
 
 export const actSchema = z.object({
   power: z.coerce.number().min(1).max(100).prefault(1),

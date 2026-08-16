@@ -627,7 +627,7 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
       <Form {...form}>
         <form className="grid grid-cols-2 gap-2" onSubmit={onSubmit}>
           {statNames
-            .filter((x) => !x.includes("Offence"))
+            .filter((x) => x !== "offence")
             .map((stat, i) => {
               const maxValue = maxValues[stat];
               if (maxValue && maxValue > 0) {

@@ -76,10 +76,22 @@ ALTER TABLE `TrainingLog` MODIFY COLUMN `stat` enum('offence','defence','intelli
 ALTER TABLE `UserData` MODIFY COLUMN `currentlyTraining` enum('offence','defence','intelligence','speed','willpower','strength');
 UPDATE `Jutsu`
 SET
-	`requiredNinjutsuMastery` = `requiredNinjutsuOffence`,
-	`requiredGenjutsuMastery` = `requiredGenjutsuOffence`,
-	`requiredTaijutsuMastery` = `requiredTaijutsuOffence`,
-	`requiredBukijutsuMastery` = `requiredBukijutsuOffence`;
+	`requiredNinjutsuMastery` = CASE
+		WHEN `requiredNinjutsuOffence` IS NULL AND `requiredNinjutsuDefence` IS NULL THEN NULL
+		ELSE GREATEST(COALESCE(`requiredNinjutsuOffence`, 0), COALESCE(`requiredNinjutsuDefence`, 0))
+	END,
+	`requiredGenjutsuMastery` = CASE
+		WHEN `requiredGenjutsuOffence` IS NULL AND `requiredGenjutsuDefence` IS NULL THEN NULL
+		ELSE GREATEST(COALESCE(`requiredGenjutsuOffence`, 0), COALESCE(`requiredGenjutsuDefence`, 0))
+	END,
+	`requiredTaijutsuMastery` = CASE
+		WHEN `requiredTaijutsuOffence` IS NULL AND `requiredTaijutsuDefence` IS NULL THEN NULL
+		ELSE GREATEST(COALESCE(`requiredTaijutsuOffence`, 0), COALESCE(`requiredTaijutsuDefence`, 0))
+	END,
+	`requiredBukijutsuMastery` = CASE
+		WHEN `requiredBukijutsuOffence` IS NULL AND `requiredBukijutsuDefence` IS NULL THEN NULL
+		ELSE GREATEST(COALESCE(`requiredBukijutsuOffence`, 0), COALESCE(`requiredBukijutsuDefence`, 0))
+	END;
 ALTER TABLE `Jutsu` DROP COLUMN `requiredNinjutsuOffence`;
 ALTER TABLE `Jutsu` DROP COLUMN `requiredNinjutsuDefence`;
 ALTER TABLE `Jutsu` DROP COLUMN `requiredGenjutsuOffence`;
@@ -110,3 +122,7 @@ ALTER TABLE `UserData` DROP COLUMN `taijutsuOffence`;
 ALTER TABLE `UserData` DROP COLUMN `taijutsuDefence`;
 ALTER TABLE `UserData` DROP COLUMN `bukijutsuDefence`;
 ALTER TABLE `UserData` DROP COLUMN `bukijutsuOffence`;
+UPDATE `UserData`
+SET `battleId` = NULL, `status` = 'AWAKE', `travelFinishAt` = NULL
+WHERE `battleId` IS NOT NULL;
+DELETE FROM `Battle`;

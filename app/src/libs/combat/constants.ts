@@ -103,6 +103,7 @@ export const privateState = [
   "defence",
   "highestDefence",
   "highestGenerals",
+  "highestMasteryType",
   "highestOffence",
   "intelligence",
   "itemLoadout",

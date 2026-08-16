@@ -1036,6 +1036,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                               {parsedEffect.statTypes.join(", ")}
                             </span>
                           )}
+                        {"masteryTypes" in parsedEffect &&
+                          parsedEffect.masteryTypes &&
+                          parsedEffect.masteryTypes.length > 0 && (
+                            <span>
+                              <b>Masteries: </b>
+                              {parsedEffect.masteryTypes.join(", ")}
+                            </span>
+                          )}
                         {"elements" in parsedEffect &&
                           parsedEffect.elements &&
                           parsedEffect.elements.length > 0 && (

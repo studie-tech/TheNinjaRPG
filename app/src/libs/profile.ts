@@ -22,7 +22,7 @@ import { getGameSettingBoost } from "@/libs/gamesettings";
 import { getReducedGainsDays } from "@/libs/train";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { getStrucBoost } from "@/utils/village";
-import type { StatSchemaType } from "@/validators/combat";
+import type { AssignableUserStats } from "@/validators/combat";
 
 /**
  * Calculate the experience requirements for a given level
@@ -205,6 +205,7 @@ export function scaleUserStats(
     user.speed ?? 0,
   ].reduce((a, b) => a + b, 0);
   const calcCombatStat = (stat: keyof CombatStatDistribution) => {
+    if (combatSum <= 0) return 10;
     return 10 + Math.floor(((user[stat] ?? 0) / combatSum) * exp * 100) / 100;
   };
   user.offence = calcCombatStat("offence") * statMod;
@@ -234,15 +235,34 @@ export function scaleUserStats(
   user.sageMastery = calcMastery("sageMastery") * statMod;
 }
 
-/** Assign stats of user, meant for the training dummy */
-export function manuallyAssignUserStats(user: UserData, stats: StatSchemaType) {
-  // Stats
+/** Sum of the six redistributable combat stats (offence, defence, generals). */
+export const getAssignedCombatStatTotal = (
+  user: Pick<
+    UserData,
+    "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower"
+  >,
+) =>
+  user.offence +
+  user.defence +
+  user.strength +
+  user.speed +
+  user.intelligence +
+  user.willpower;
+
+/** Assign stats of user, meant for the training dummy and ranked equalization */
+export function manuallyAssignUserStats(user: UserData, stats: AssignableUserStats) {
   user.offence = stats.offence;
   user.defence = stats.defence;
   user.strength = stats.strength;
   user.intelligence = stats.intelligence;
   user.willpower = stats.willpower;
   user.speed = stats.speed;
+  if (stats.ninjutsuMastery != null) user.ninjutsuMastery = stats.ninjutsuMastery;
+  if (stats.genjutsuMastery != null) user.genjutsuMastery = stats.genjutsuMastery;
+  if (stats.taijutsuMastery != null) user.taijutsuMastery = stats.taijutsuMastery;
+  if (stats.bukijutsuMastery != null) user.bukijutsuMastery = stats.bukijutsuMastery;
+  if (stats.bloodlineMastery != null) user.bloodlineMastery = stats.bloodlineMastery;
+  if (stats.sageMastery != null) user.sageMastery = stats.sageMastery;
 }
 
 export const activityStreakRewards = (streak: number) => {

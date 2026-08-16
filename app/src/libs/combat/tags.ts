@@ -1248,12 +1248,6 @@ export const clone = (
     // Set stats
     newAi.offence = newAi.offence * perc;
     newAi.defence = newAi.defence * perc;
-    newAi.ninjutsuMastery = newAi.ninjutsuMastery * perc;
-    newAi.genjutsuMastery = newAi.genjutsuMastery * perc;
-    newAi.taijutsuMastery = newAi.taijutsuMastery * perc;
-    newAi.bukijutsuMastery = newAi.bukijutsuMastery * perc;
-    newAi.bloodlineMastery = newAi.bloodlineMastery * perc;
-    newAi.sageMastery = newAi.sageMastery * perc;
     newAi.strength = newAi.strength * perc;
     newAi.intelligence = newAi.intelligence * perc;
     newAi.willpower = newAi.willpower * perc;
@@ -1290,7 +1284,10 @@ export const updateStatUsage = (
   inverse = false,
 ) => {
   if ("statTypes" in effect && "direction" in effect && effect.statTypes?.length) {
-    if (
+    if (effect.direction === "both") {
+      user.usedStats.offence += 1;
+      user.usedStats.defence += 1;
+    } else if (
       (effect.direction === "offence" && !inverse) ||
       (effect.direction === "defence" && inverse)
     ) {
@@ -3029,12 +3026,6 @@ export const summon = (
         // Set stats
         newAi.offence = newAi.offence * perc;
         newAi.defence = newAi.defence * perc;
-        newAi.ninjutsuMastery = newAi.ninjutsuMastery * perc;
-        newAi.genjutsuMastery = newAi.genjutsuMastery * perc;
-        newAi.taijutsuMastery = newAi.taijutsuMastery * perc;
-        newAi.bukijutsuMastery = newAi.bukijutsuMastery * perc;
-        newAi.bloodlineMastery = newAi.bloodlineMastery * perc;
-        newAi.sageMastery = newAi.sageMastery * perc;
         newAi.strength = newAi.strength * perc;
         newAi.intelligence = newAi.intelligence * perc;
         newAi.willpower = newAi.willpower * perc;

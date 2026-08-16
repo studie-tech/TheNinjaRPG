@@ -37,13 +37,18 @@ export const emptyMasteries = (value = 0): Record<MasteryName, number> =>
   >;
 
 export const hasMasteryRequirements = (
-  user: MasteryStatSource,
+  user: Partial<MasteryStatSource>,
   requirements?: MasteryRequirementFields | null,
 ): boolean => {
   if (!requirements) return true;
   return MASTERY_REQUIREMENT_FIELDS.every(([reqKey, statKey]) => {
     const required = requirements[reqKey];
-    return required == null || user[statKey] >= required;
+    if (required == null) return true;
+    const current = user[statKey];
+    // Masked / unknown masteries are treated as met so client-side action lists
+    // for opponents (privateState stripped) do not hide gated jutsu and items.
+    if (current == null) return true;
+    return current >= required;
   });
 };
 

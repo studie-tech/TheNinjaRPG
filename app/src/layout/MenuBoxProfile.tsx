@@ -491,7 +491,7 @@ const MenuBoxProfile: React.FC = () => {
               <Tooltip>
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center hover:text-orange-500">
-                    <Dumbbell className="mr-2 h-6 w-6" />
+                    <Swords className="mr-2 h-6 w-6" />
                     <Link href="/traininggrounds">
                       <Countdown
                         targetDate={secondsFromDate(

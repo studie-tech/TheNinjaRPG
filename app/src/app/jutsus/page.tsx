@@ -44,6 +44,7 @@ import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
 import { getFreeTransfers } from "@/libs/jutsu";
+import { hasMasteryRequirements } from "@/libs/mastery";
 import { showUserRank } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import {
@@ -363,6 +364,9 @@ export default function MyJutsu() {
           }
           if (!checkJutsuBloodlineItem(uj.jutsu, userItems)) {
             warning = "You do not have the required bloodline item equipped.";
+          }
+          if (!hasMasteryRequirements(userData, uj.jutsu)) {
+            warning = "You do not have the required mastery to use this jutsu.";
           }
         }
         return {

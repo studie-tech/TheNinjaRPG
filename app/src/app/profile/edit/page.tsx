@@ -101,6 +101,7 @@ import {
   normalizeMobileNavConfig,
 } from "@/libs/mobileNavConfig";
 import { useInfinitePagination } from "@/libs/pagination";
+import { getAssignedCombatStatTotal } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import type { BaseServerResponse } from "@/server/api/trpc";
@@ -278,7 +279,7 @@ export default function EditProfile() {
           selectedTitle={activeElement}
           unselectedSubtitle="Redistribute your experience points"
           selectedSubtitle={`You can redistribute your stats for ${COST_RESET_STATS} reputation points. You
-          have ${userData.reputationPoints} reputation points. You have ${userData.experience + 120} experience points to distribute.`}
+          have ${userData.reputationPoints} reputation points. You have ${round(getAssignedCombatStatTotal(userData))} combat stat points to distribute.`}
           icon={BarChart3}
           onClick={setActiveElement}
         >
@@ -1304,13 +1305,7 @@ const ResetStats: React.FC = () => {
   if (!userData) return <Loader explanation="Loading user" />;
 
   // Calculate total stats available for redistribution
-  const totalStats =
-    userData.offence +
-    userData.defence +
-    userData.strength +
-    userData.speed +
-    userData.intelligence +
-    userData.willpower;
+  const totalStats = getAssignedCombatStatTotal(userData);
 
   const cost = canChangeContent(userData.role) ? 0 : COST_RESET_STATS;
   const canAfford = userData.reputationPoints >= cost;
@@ -1331,7 +1326,7 @@ const ResetStats: React.FC = () => {
       {canAfford && (
         <DistributeStatsForm
           userData={userData}
-          availableStats={round(userData.experience + 120)}
+          availableStats={round(totalStats)}
           onAccept={(data) => {
             if (!isPending) {
               updateStats(data);
