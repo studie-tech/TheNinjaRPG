@@ -55,7 +55,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const [rightSideBarOpen, setRightSideBarOpen] = useState(false);
   const rightSideBarRef = React.useRef<HTMLDivElement | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [lightLayout, setLightLayout] = useState<boolean>(false);
+  const [lightLayout, setLightLayout] = useLocalStorage<boolean>("lightLayout", false);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -65,11 +65,6 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       const savedTheme = safeLocalStorageGetItem("theme");
       if (savedTheme === "dark" || savedTheme === "light") {
         setTheme(savedTheme);
-      }
-
-      const savedLayout = safeLocalStorageGetItem("lightLayout");
-      if (savedLayout !== null) {
-        setLightLayout(JSON.parse(savedLayout) as boolean);
       }
     }
 
@@ -101,11 +96,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   }, [theme, isMounted, variant]);
 
   const toggleLightLayout = () => {
-    setLightLayout((prev) => {
-      const newState = !prev;
-      safeLocalStorageSetItem("lightLayout", JSON.stringify(newState));
-      return newState;
-    });
+    setLightLayout(!lightLayout);
   };
 
   const toggleTheme = () => {
