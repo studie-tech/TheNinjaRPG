@@ -701,9 +701,12 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               {profile.bloodline ? (
                 <Popover>
                   <PopoverTrigger asChild>
-                    <span className="cursor-pointer font-bold hover:text-orange-500">
+                    <button
+                      type="button"
+                      className="cursor-pointer font-bold hover:text-orange-500"
+                    >
                       {profile.bloodline.name}
-                    </span>
+                    </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[500px] max-w-[90vw]">
                     <ItemWithEffects item={profile.bloodline} />
@@ -718,9 +721,12 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               {profile.sageMode ? (
                 <Popover>
                   <PopoverTrigger asChild>
-                    <span className="cursor-pointer font-bold hover:text-orange-500">
+                    <button
+                      type="button"
+                      className="cursor-pointer font-bold hover:text-orange-500"
+                    >
                       {profile.sageMode.name}
-                    </span>
+                    </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[500px] max-w-[90vw]">
                     <ItemWithEffects item={profile.sageMode} />

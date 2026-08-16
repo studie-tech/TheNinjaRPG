@@ -10,6 +10,7 @@ import {
   OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,
   OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
   POST_DAMAGE_MODIFIER_TYPES,
+  SAGE_MODE_ACTIVATION_JUTSU_ID,
   SAGE_MODE_DISABLED_BATTLES,
   SAGE_MODE_MAX_LEVEL,
   SHIELD_MAX_HEALTH,
@@ -1943,6 +1944,12 @@ function applyActivateSageMode(
   action: CombatAction | undefined,
   newTarget: BattleUserState,
 ): ActionEffect | undefined {
+  if (effect.actionId !== SAGE_MODE_ACTIVATION_JUTSU_ID) {
+    return {
+      txt: "Sage mode can only be activated through the Activation action",
+      color: "gray",
+    };
+  }
   if (effect.targetId !== actorId) {
     return { txt: "Sage mode can only be activated on yourself", color: "gray" };
   }
@@ -2072,17 +2079,24 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
     const afterRounds = sageMode?.afterEffectRounds ?? 0;
 
     if (afterRounds > 0 && sageMode?.afterEffects?.length) {
-      battle.usersEffects.push(
-        ...realizeSageTags({
-          tags: sageMode.afterEffects,
-          user: u,
-          fromType: "sageModeAfter",
-          rounds: afterRounds,
-          actionId: "sageModeAfter",
-          level: getActiveSageLevel(u.sageMasteryExperience, sageMode),
-          battle,
-        }),
-      );
+      const realized = realizeSageTags({
+        tags: sageMode.afterEffects,
+        user: u,
+        fromType: "sageModeAfter",
+        rounds: afterRounds,
+        actionId: "sageModeAfter",
+        level: getActiveSageLevel(u.sageMasteryExperience, sageMode),
+        battle,
+      });
+      // Lasting tags stay queued for the normal apply pipeline. Instant tags
+      // (rounds === 0) must resolve now: the next applyEffects actor is often
+      // not the sage, and isNew=false + isTargetOrNew would drop them.
+      const lasting = realized.filter((tag) => tag.rounds !== 0);
+      const instant = realized.filter((tag) => tag.rounds === 0);
+      battle.usersEffects.push(...lasting);
+      if (instant.length > 0) {
+        applyInstantSageAfterEffects(battle, u.userId, instant);
+      }
     }
 
     // Sage mode is spent for the rest of the battle. `u` is a live element of
@@ -2099,5 +2113,58 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
       (e) =>
         !(e.type === "visual" && e.fromType === "sageMode" && e.targetId === u.userId),
     );
+  });
+}
+
+/** Resolve one-shot sage after-effects in the transition so they cannot be dropped. */
+function applyInstantSageAfterEffects(
+  battle: CompleteBattle,
+  sageUserId: string,
+  instant: UserEffect[],
+) {
+  const consequences = new Map<string, Consequence>();
+  const newUsersEffects: UserEffect[] = [];
+  const newGroundEffects: GroundEffect[] = [];
+  const actionEffects: ActionEffect[] = [];
+  const appliedEffects = new Set<string>();
+  for (const tag of instant) {
+    applySingleEffect(
+      consequences,
+      battle.usersState,
+      newUsersEffects,
+      newGroundEffects,
+      actionEffects,
+      appliedEffects,
+      battle,
+      sageUserId,
+      tag,
+    );
+  }
+  battle.usersEffects.push(...newUsersEffects);
+  battle.groundEffects.push(...newGroundEffects);
+  consequences.forEach((c) => {
+    const target = battle.usersState.find((user) => user.userId === c.targetId);
+    if (!target) return;
+    if (c.heal_hp !== undefined && c.heal_hp >= 0 && target.curHealth > 0) {
+      target.curHealth = Math.min(target.maxHealth, target.curHealth + c.heal_hp);
+    }
+    if (c.heal_sp !== undefined && c.heal_sp >= 0) {
+      target.curStamina = Math.min(target.maxStamina, target.curStamina + c.heal_sp);
+    }
+    if (c.heal_cp !== undefined && c.heal_cp >= 0) {
+      target.curChakra = Math.min(target.maxChakra, target.curChakra + c.heal_cp);
+    }
+    if (c.damage !== undefined && c.damage >= 0) {
+      target.curHealth = Math.max(0, target.curHealth - c.damage);
+    }
+    if (c.drain_hp !== undefined && c.drain_hp >= 0) {
+      target.curHealth = Math.max(0, target.curHealth - c.drain_hp);
+    }
+    if (c.drain_cp !== undefined && c.drain_cp >= 0) {
+      target.curChakra = Math.max(0, target.curChakra - c.drain_cp);
+    }
+    if (c.drain_sp !== undefined && c.drain_sp >= 0) {
+      target.curStamina = Math.max(0, target.curStamina - c.drain_sp);
+    }
   });
 }

@@ -14,7 +14,7 @@ import {
   REMOVAL_COST,
   SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
 } from "@/drizzle/constants";
-import type { SageMode, UserData } from "@/drizzle/schema";
+import type { UserData } from "@/drizzle/schema";
 import { actionLog, sageMode, userData } from "@/drizzle/schema";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUser } from "@/routers/profile";
@@ -38,9 +38,16 @@ const persistSageTagDuration = (effect: ZodAllTags) => {
 
 export const sageModeRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
+    const user = ctx.userId
+      ? await ctx.drizzle.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+          columns: { role: true },
+        })
+      : null;
+    const allowHidden = user ? canChangeContent(user.role) : false;
     return await ctx.drizzle.query.sageMode.findMany({
       columns: { id: true, name: true, image: true },
-      where: eq(sageMode.hidden, false),
+      where: allowHidden ? undefined : eq(sageMode.hidden, false),
       orderBy: (table, { asc }) => [asc(table.name)],
     });
   }),
@@ -96,13 +103,8 @@ export const sageModeRouter = createTRPCRouter({
   get: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const [result, user] = await Promise.all([
-        fetchSageMode(ctx.drizzle, input.id),
-        ctx.userId ? fetchUser(ctx.drizzle, ctx.userId) : Promise.resolve(null),
-      ]);
-      // Hidden modes are staff-only, mirroring the getAll visibility gate; keep them
-      // loadable for the staff edit page (create() marks new modes hidden).
-      if (!result || (result.hidden && !(user && canChangeContent(user.role)))) {
+      const result = await fetchSageMode(ctx.drizzle, input.id);
+      if (!result) {
         throw serverError("NOT_FOUND", "Sage Mode not found");
       }
       return result as Omit<
@@ -202,7 +204,10 @@ export const sageModeRouter = createTRPCRouter({
       if (sageModeWithName && sageModeWithName.id !== entry.id)
         return errorResponse("Sage Mode name already exists");
       if (canChangeContent(user.role)) {
-        setEmptyStringsToNulls(input.data as unknown as Record<string, unknown>);
+        setEmptyStringsToNulls(
+          input.data as unknown as Record<string, unknown>,
+          sageMode,
+        );
         const newData = {
           ...input.data,
           effects: input.data.effects.map(persistSageTagDuration),
@@ -252,25 +257,24 @@ export const sageModeRouter = createTRPCRouter({
       if (user.reputationPoints < REMOVAL_COST) {
         return errorResponse("You do not have enough reputation points");
       }
-      await updateSageMode(ctx.drizzle, user, null, REMOVAL_COST, "SageMode Removed");
+      await updateSageMode(ctx.drizzle, user, REMOVAL_COST, "SageMode Removed");
       return { success: true, message: `Sage Mode removed for ${REMOVAL_COST} reps` };
     }),
 });
 
 /**
- * Update sage mode of user
+ * Paid removal of the user's equipped sage mode.
  */
 export const updateSageMode = async (
   client: DrizzleClient,
   user: UserData,
-  mode: SageMode | null,
   repCost: number,
   logMsg: string,
 ) => {
   const updateResult = await client
     .update(userData)
     .set({
-      sageModeId: mode?.id || null,
+      sageModeId: null,
       reputationPoints: sql`${userData.reputationPoints} - ${repCost}`,
       // Advance the whole-user version so a concurrent claimUserSnapshot CAS detects this write.
       updatedAt: new Date(),
@@ -278,10 +282,10 @@ export const updateSageMode = async (
     .where(
       and(
         eq(userData.userId, user.userId),
+        eq(userData.status, "AWAKE"),
         gte(userData.reputationPoints, repCost),
         // Compare-and-swap on the current mode: if another request already changed
-        // it (concurrent swap/purchase/remove), rowsAffected is 0 and we abort rather
-        // than double-debit reputation or clobber the other write.
+        // it, rowsAffected is 0 and we abort rather than double-debit reputation.
         user.sageModeId
           ? eq(userData.sageModeId, user.sageModeId)
           : isNull(userData.sageModeId),

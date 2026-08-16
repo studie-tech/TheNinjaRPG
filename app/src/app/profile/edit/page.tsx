@@ -402,7 +402,7 @@ export default function EditProfile() {
           onClick={setActiveElement}
         >
           {userData.sageModeId ? (
-            <CurrentSageMode sageModeId={userData.sageModeId} />
+            <CurrentSageMode sageModeId={userData.sageModeId} embedded />
           ) : (
             <p className="p-3 italic">You have not awakened a sage mode yet.</p>
           )}

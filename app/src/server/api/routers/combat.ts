@@ -961,6 +961,9 @@ export const combatRouter = createTRPCRouter({
       if (userBattle.battleType !== "COMBAT") {
         return errorResponse("You can only update loadouts in combat");
       }
+      if (new Date() > userBattle.roundStartAt) {
+        return errorResponse("You can only update loadouts in the combat lobby");
+      }
       if (!jId && !iId) {
         return errorResponse("No loadout IDs provided");
       }
@@ -1058,6 +1061,11 @@ export const combatRouter = createTRPCRouter({
       // Split out user from current usersState & usersEffects
       const otherUserState = userBattle.usersState.filter(
         (u) => u.controllerId !== ctx.userId,
+      );
+      const preservedSageEffects = userBattle.usersEffects.filter(
+        (e) =>
+          e.creatorId === ctx.userId &&
+          (e.fromType === "sageMode" || e.fromType === "sageModeAfter"),
       );
       const otherUserEffects = userBattle.usersEffects.filter(
         (e) => e.creatorId !== ctx.userId,
@@ -1177,7 +1185,11 @@ export const combatRouter = createTRPCRouter({
 
       // Merge the user's state with the other user's state
       userBattle.usersState = [...otherUserState, ...usersState];
-      userBattle.usersEffects = [...otherUserEffects, ...userEffects];
+      userBattle.usersEffects = [
+        ...otherUserEffects,
+        ...preservedSageEffects,
+        ...userEffects,
+      ];
 
       // Merge extraState: add new jutsus/items from the updated loadout to existing extraState
       // This ensures new jutsus/items can be looked up by ID during battle

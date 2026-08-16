@@ -14,6 +14,7 @@ import {
   MIRROR_EXCLUDED_EFFECT_TYPES,
   MIRROR_MAX_TAGS,
   MIRROR_PRIORITY_RANK,
+  SAGE_MODE_ACTIVATION_JUTSU_ID,
   TRANSFER_EXCLUDED_SOURCE_TYPES,
 } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
@@ -1266,6 +1267,14 @@ export const clone = (
     newAi.isOriginal = false;
     newAi.isAi = true;
     newAi.hidden = undefined;
+    newAi.sageModeId = null;
+    newAi.sageModeActivated = false;
+    newAi.sageModeActivatedRound = null;
+    newAi.sageModeExpiresRound = null;
+    newAi.sageModeUsedThisBattle = true;
+    newAi.jutsus = newAi.jutsus.filter(
+      (j) => j.jutsuId !== SAGE_MODE_ACTIVATION_JUTSU_ID,
+    );
     newAi.longitude = effect.longitude;
     newAi.latitude = effect.latitude;
     newAi.villageId = user.villageId;

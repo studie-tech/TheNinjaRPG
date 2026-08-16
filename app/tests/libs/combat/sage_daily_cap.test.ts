@@ -68,7 +68,7 @@ const activateEffect = (): UserEffect =>
   makeEffect(
     "activatesagemode",
     {},
-    { id: "act-1", creatorId: "sage", targetId: "sage", targetType: "user", isNew: true, castThisRound: true, createdRound: 1, actionId: "act" },
+    { id: "act-1", creatorId: "sage", targetId: "sage", targetType: "user", isNew: true, castThisRound: true, createdRound: 1, actionId: SAGE_MODE_ACTIVATION_JUTSU_ID },
   );
 
 const runActivate = (user: ReturnType<typeof makeBattleUser>) => {
