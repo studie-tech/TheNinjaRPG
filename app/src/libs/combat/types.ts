@@ -108,6 +108,11 @@ export type CombatQueryUser = UserData & {
   bloodline: Bloodline | null;
   activeReskin?: BloodlineReskin | null; // For bloodline reskinning
   sageMode?: SageMode | null; // Sage mode (must be manually activated)
+  // Present when processUsersForBattle is re-run from live BattleUserState
+  sageModeActivated?: boolean;
+  sageModeActivatedRound?: number | null;
+  sageModeExpiresRound?: number | null;
+  sageModeUsedThisBattle?: boolean;
   village: CombatQueryVillage | null;
   loadout?: { jutsuIds: string[] } | null;
   clan?: Clan | null;

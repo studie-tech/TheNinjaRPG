@@ -189,7 +189,7 @@ describe("applySageModeAfterRoundTransition", () => {
           },
         },
       },
-    } as CompleteBattle;
+    } as unknown as CompleteBattle;
 
     applySageModeAfterRoundTransition(battle);
 
@@ -545,7 +545,7 @@ describe("sage mode instant tags", () => {
           },
         },
       },
-    } as CompleteBattle;
+    } as unknown as CompleteBattle;
 
     applySageModeAfterRoundTransition(battle);
 
