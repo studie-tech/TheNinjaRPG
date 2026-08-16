@@ -83,7 +83,7 @@ import {
   isAvailableUserQuests,
   verifyQuestContentForSave,
 } from "@/libs/quest";
-import { getSageMasteryDisplayRank, sageRanksAtOrBelow } from "@/libs/sageMode";
+import { sageQuestFilters } from "@/libs/sageMode";
 import { callDiscordContent } from "@/libs/socials";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
 import { extendWarParticipantSql } from "@/libs/war";
@@ -421,22 +421,7 @@ export const questsRouter = createTRPCRouter({
                 isNull(quest.requiredBloodlineId),
                 eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
               ),
-              or(
-                isNull(quest.requiredSageModeId),
-                eq(quest.requiredSageModeId, user.sageModeId ?? ""),
-              ),
-              or(
-                isNull(quest.requiredSageRank),
-                inArray(
-                  quest.requiredSageRank,
-                  sageRanksAtOrBelow(
-                    getSageMasteryDisplayRank(
-                      user.sageMasteryExperience,
-                      !!user.sageModeId,
-                    ),
-                  ),
-                ),
-              ),
+              ...sageQuestFilters(user),
             ),
           ),
       ]);
@@ -1441,7 +1426,7 @@ export const updateRewards = async (info: {
       ? fetchActiveWars(client, user.villageId)
       : undefined,
     // Fetch not-yet-owned candidate sage modes for reward_sage_modes (dedup at fetch)
-    (rewards.reward_sage_modes?.length ?? 0) > 0 && !user.sageModeId
+    (rewards.reward_sage_modes?.length ?? 0) > 0
       ? client
           .select({ id: sageMode.id })
           .from(sageMode)
@@ -1845,19 +1830,7 @@ export const fetchUncompletedQuests = async (
           isNull(quest.requiredBloodlineId),
           eq(quest.requiredBloodlineId, user.bloodlineId ?? ""),
         ),
-        or(
-          isNull(quest.requiredSageModeId),
-          eq(quest.requiredSageModeId, user.sageModeId ?? ""),
-        ),
-        or(
-          isNull(quest.requiredSageRank),
-          inArray(
-            quest.requiredSageRank,
-            sageRanksAtOrBelow(
-              getSageMasteryDisplayRank(user.sageMasteryExperience, !!user.sageModeId),
-            ),
-          ),
-        ),
+        ...sageQuestFilters(user),
       ),
     )
     .orderBy((table) => [asc(table.Quest.requiredLevel), asc(table.Quest.tierLevel)]);

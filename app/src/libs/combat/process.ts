@@ -1885,6 +1885,49 @@ export const applyDamageModifierPipelineToConsequences = ({
 };
 
 /**
+ * Realize sage tags for activation or exhaustion. Duration comes from the SageMode
+ * row except `rounds === 0`, which stays a one-shot.
+ */
+function realizeSageTags(props: {
+  tags: unknown[];
+  user: BattleUserState;
+  fromType: "sageMode" | "sageModeAfter";
+  rounds: number;
+  actionId: string;
+  level: number;
+  battle: CompleteBattle;
+}): UserEffect[] {
+  const { tags, user, fromType, rounds, actionId, level, battle } = props;
+  const sorted = [...tags].sort((a, b) =>
+    sortEffects(a as UserEffect, b as UserEffect),
+  );
+  return sorted.map((raw) => {
+    const tag = structuredClone(raw) as UserEffect;
+    const realized = realizeTag({
+      tag,
+      user,
+      actionId,
+      target: user,
+      level,
+      round: battle.round,
+      battle,
+    });
+    realized.longitude = user.longitude;
+    realized.latitude = user.latitude;
+    realized.fromType = fromType;
+    realized.targetId = user.userId;
+    if (realized.rounds !== 0) {
+      realized.rounds = rounds;
+      realized.timeTracker = {};
+      realized.createdRound = Math.max(0, battle.round - 1);
+    }
+    realized.isNew = false;
+    realized.castThisRound = false;
+    return realized;
+  });
+}
+
+/**
  * Pays sage mode activation costs and applies `SageMode.effects` from extra state.
  */
 function applyActivateSageMode(
@@ -1963,44 +2006,15 @@ function applyActivateSageMode(
     activeLevel >= SAGE_MODE_MAX_LEVEL
       ? [...sageMode.effects, ...(sageMode.level2Effects ?? [])]
       : sageMode.effects;
-  const sorted = [...activeEffects].sort((a, b) =>
-    sortEffects(a as UserEffect, b as UserEffect),
-  );
-  for (const raw of sorted) {
-    const tag = structuredClone(raw) as UserEffect;
-    const realized = realizeTag({
-      tag,
-      user: newTarget,
-      actionId: effect.actionId,
-      target: newTarget,
-      level: activeLevel,
-      round: battle.round,
-      battle,
-    });
-    realized.longitude = newTarget.longitude;
-    realized.latitude = newTarget.latitude;
-    realized.fromType = "sageMode";
-    realized.targetId = newTarget.userId;
-    // Ignore per-effect `rounds` in the JSON for duration; use only `activationRounds` above.
-    // Exception: `rounds === 0` means an instant / one-shot tag — leave unchanged.
-    if (realized.rounds !== 0) {
-      realized.rounds = activeDurationRounds;
-      // The sage router strips `rounds` before storage, so `realizeTag`'s own
-      // (`"rounds" in tag`) initialisation never fires for these tags. Seed the tracker here
-      // alongside the duration, otherwise the per-round dedup in `calcApplyRatio` — which is
-      // gated on `timeTracker` being present — silently no-ops and every non-`alwaysApply` tag
-      // stacks multiple times within a single round.
-      realized.timeTracker = {};
-      // `applySingleEffect` recomputes castThisRound from (createdRound === battle.round), which
-      // would skip modifier tags (`!castThisRound` in tags.ts) on the activation round. Backdate
-      // one round so persistent activation modifiers apply the same round the mode is entered
-      // (mirrors the after-effect transition below). Instant tags (rounds === 0) are left with
-      // createdRound = battle.round so they still resolve as cast-this-round and fire immediately.
-      realized.createdRound = Math.max(0, battle.round - 1);
-    }
-    // Tick duration on every round boundary like bloodline passives (not the cast-this-round skip).
-    realized.isNew = false;
-    realized.castThisRound = false;
+  for (const realized of realizeSageTags({
+    tags: activeEffects,
+    user: newTarget,
+    fromType: "sageMode",
+    rounds: activeDurationRounds,
+    actionId: effect.actionId,
+    level: activeLevel,
+    battle,
+  })) {
     applySingleEffect(
       consequences,
       newUsersState,
@@ -2057,48 +2071,18 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
 
     const afterRounds = sageMode?.afterEffectRounds ?? 0;
 
-    if (sageMode?.afterEffects?.length) {
-      const sorted = [...sageMode.afterEffects].sort((a, b) =>
-        sortEffects(a as UserEffect, b as UserEffect),
-      );
-      for (const raw of sorted) {
-        const tag = structuredClone(raw) as UserEffect;
-        const realized = realizeTag({
-          tag,
+    if (afterRounds > 0 && sageMode?.afterEffects?.length) {
+      battle.usersEffects.push(
+        ...realizeSageTags({
+          tags: sageMode.afterEffects,
           user: u,
+          fromType: "sageModeAfter",
+          rounds: afterRounds,
           actionId: "sageModeAfter",
-          target: u,
           level: getActiveSageLevel(u.sageMasteryExperience, sageMode),
-          round: battle.round,
           battle,
-        });
-        realized.longitude = u.longitude;
-        realized.latitude = u.latitude;
-        realized.fromType = "sageModeAfter";
-        realized.targetId = u.userId;
-        // Duration from Sage Mode "After-Effect Duration (rounds)" — not per-tag rounds.
-        // The round pipeline recomputes castThisRound from (createdRound === battle.round).
-        // Backdate persistent tags one round so they resolve as residual modifiers and apply
-        // the same round exhaustion begins (a same-round tag would skip `!castThisRound`
-        // modifier tags in tags.ts). Instant tags (rounds === 0) keep createdRound =
-        // battle.round so they stay cast-this-round and fire immediately (mirrors the
-        // activation path above).
-        if (realized.rounds !== 0) {
-          realized.rounds = afterRounds;
-          // Same reason as the activation path: stored after-effects carry no `rounds`, so
-          // `realizeTag` skips the tracker init and the per-round dedup would be bypassed.
-          realized.timeTracker = {};
-          realized.createdRound = Math.max(0, battle.round - 1);
-        }
-        realized.isNew = false;
-        realized.castThisRound = false;
-        // Queue onto the battle's effect pool so the normal round pipeline (the applyEffects
-        // call that runs immediately after this transition) ticks these alongside every other
-        // active effect. Running a separate isolated applyEffects here would fire its global
-        // pool post-pass over every combatant while only these effects are visible, wrongly
-        // reverting other users' active max-pool adjustments.
-        battle.usersEffects.push(realized);
-      }
+        }),
+      );
     }
 
     // Sage mode is spent for the rest of the battle. `u` is a live element of
