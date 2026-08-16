@@ -181,7 +181,7 @@ export default function MyItems() {
   );
   const repairKits = getRepairKits(userItems);
 
-  // Calculate which kits will be used (same algorithm as backend)
+  // Calculate which kits will be used (shared with item.useRepairAll)
   const repairKitCalculation = calculateKitsToUse(
     itemsNeedingRepair,
     repairKits,

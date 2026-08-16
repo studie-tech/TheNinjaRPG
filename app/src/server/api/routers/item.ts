@@ -69,6 +69,7 @@ import {
   computeLoadoutAssignments,
   nonCombatConsume,
 } from "@/libs/item";
+import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
 import {
   buildMissingLoadouts,
   decideRename,
@@ -87,7 +88,10 @@ import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { fetchUserSkills } from "@/routers/skillTree";
 import { fetchStructures } from "@/routers/village";
 import type { DrizzleClient } from "@/server/db";
-import { consumeUserItemAtomically } from "@/server/utils/concurrency";
+import {
+  consumeUserItemAtomically,
+  updateUserItemQuantityAtomically,
+} from "@/server/utils/concurrency";
 import {
   applyLoadoutRename,
   backfillLoadouts,
@@ -1738,161 +1742,56 @@ export const itemRouter = createTRPCRouter({
       if (itemsNeedingRepair.length === 0) {
         return errorResponse("No items need repair");
       }
-      // Get all available repair kits (excluding items being crafted)
-      const repairKits = useritems
-        .filter(
-          (userItem) =>
-            userItem.item?.effects?.some(
-              (e: { type: string }) => e.type === "repair",
-            ) &&
-            userItem.quantity > 0 &&
-            (!userItem.craftingFinishedAt || userItem.craftingFinishedAt < new Date()),
-        )
-        .map((userItem) => {
-          const repairEffect = userItem.item.effects.find(
-            (e: { type: string }) => e.type === "repair",
-          );
-          return {
-            userItem,
-            repairAmount: Math.floor(repairEffect?.power || 0),
-            repairEffect,
-          };
-        })
-        .filter((kit) => kit.repairAmount > 0)
-        .sort((a, b) => a.repairAmount - b.repairAmount); // Sort by repair power (smallest first) to minimize waste
-
+      // Shared kit selection with the inventory preview (lowest power first)
+      const repairKits = getRepairKits(useritems);
       if (repairKits.length === 0) {
         return errorResponse("You don't have any repair items in your inventory");
       }
-
-      // Calculate total durability needed (pool all together)
-      const totalDurabilityNeeded = itemsNeedingRepair.reduce(
-        (total, useritem) =>
-          total + (useritem.item.maxDurability - useritem.durability),
-        0,
+      const { kitsToUse, totalDurabilityNeeded, canRepairAll } = calculateKitsToUse(
+        itemsNeedingRepair,
+        repairKits,
+        useritems,
       );
-
-      // Track kit usage and available quantities
-      const kitUsage: Map<string, number> = new Map(); // Map of userItemId -> quantity used
-      const kitAvailability: Map<string, number> = new Map(); // Map of userItemId -> available quantity
-      for (const kit of repairKits) {
-        kitAvailability.set(kit.userItem.id, kit.userItem.quantity);
-      }
-
-      // Group kits by power level and aggregate quantities
-      const kitsByPower = new Map<
-        number,
-        Array<{ kitId: string; available: number; power: number }>
-      >();
-      for (const kit of repairKits) {
-        const available = kitAvailability.get(kit.userItem.id) || 0;
-        if (available <= 0) continue;
-
-        if (!kitsByPower.has(kit.repairAmount)) {
-          kitsByPower.set(kit.repairAmount, []);
-        }
-        kitsByPower.get(kit.repairAmount)?.push({
-          kitId: kit.userItem.id,
-          available,
-          power: kit.repairAmount,
-        });
-      }
-
-      // Sort by power (smallest first)
-      const sortedPowers = Array.from(kitsByPower.keys()).sort((a, b) => a - b);
-
-      // Use kits starting with lowest power first until all durability is covered
-      let remainingDurability = totalDurabilityNeeded;
-      for (const power of sortedPowers) {
-        if (remainingDurability <= 0) break;
-
-        const kitsWithThisPower = kitsByPower.get(power);
-        if (!kitsWithThisPower) continue;
-        const totalAvailable = kitsWithThisPower.reduce(
-          (sum, k) => sum + k.available,
-          0,
-        );
-
-        if (totalAvailable <= 0) continue;
-
-        const kitsNeeded = Math.ceil(remainingDurability / power);
-        let kitsToUse = Math.min(kitsNeeded, totalAvailable);
-
-        // Distribute across all stacks of this power level
-        for (const { kitId, available } of kitsWithThisPower) {
-          if (kitsToUse <= 0) break;
-          const useFromThisStack = Math.min(kitsToUse, available);
-          if (useFromThisStack > 0) {
-            const currentUsage = kitUsage.get(kitId) || 0;
-            kitUsage.set(kitId, currentUsage + useFromThisStack);
-            const currentAvailable = kitAvailability.get(kitId) || 0;
-            kitAvailability.set(kitId, currentAvailable - useFromThisStack);
-            kitsToUse -= useFromThisStack;
-            remainingDurability -= useFromThisStack * power;
-          }
-        }
-      }
-
-      if (remainingDurability > 0) {
+      if (!canRepairAll) {
+        const coveredDurability = kitsToUse.reduce((sum, kit) => {
+          const power =
+            repairKits.find((k) => k.userItem.id === kit.repairItemId)?.repairAmount ??
+            0;
+          return sum + kit.quantityUsed * power;
+        }, 0);
         return errorResponse(
-          `Insufficient repair kits. Need ${totalDurabilityNeeded} durability total, but only have enough for ${totalDurabilityNeeded - remainingDurability} durability`,
+          `Insufficient repair kits. Need ${totalDurabilityNeeded} durability total, but only have enough for ${coveredDurability} durability`,
         );
       }
 
-      // All items will be repaired to full durability
-      const itemRepairs: Array<{ userItemId: string; newDurability: number }> =
-        itemsNeedingRepair.map((useritem) => ({
-          userItemId: useritem.id,
-          newDurability: useritem.item.maxDurability,
-        }));
-
-      // Build kits used summary
-      const kitsToUse: Array<{
-        repairItemId: string;
-        repairItemName: string;
-        quantityUsed: number;
-      }> = [];
-      for (const [repairItemId, quantityUsed] of kitUsage.entries()) {
-        const repairUserItem = useritems.find((ui) => ui.id === repairItemId);
-        if (repairUserItem && quantityUsed > 0) {
-          kitsToUse.push({
-            repairItemId,
-            repairItemName: repairUserItem.item.name,
-            quantityUsed,
+      // Consume destroyOnUse kits first (multi-unit CAS), then apply repairs
+      const consumeResults = await Promise.all(
+        kitsToUse.map((kit) => {
+          const repairUserItem = useritems.find((ui) => ui.id === kit.repairItemId);
+          if (!repairUserItem?.item.destroyOnUse) return Promise.resolve(true);
+          return updateUserItemQuantityAtomically({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            userItemId: kit.repairItemId,
+            expectedQuantity: repairUserItem.quantity,
+            nextQuantity: repairUserItem.quantity - kit.quantityUsed,
           });
-        }
-      }
-
-      // Apply repairs to all items
-      const repairPromises: Promise<any>[] = itemRepairs.map((repair) =>
-        ctx.drizzle
-          .update(userItem)
-          .set({ durability: repair.newDurability })
-          .where(eq(userItem.id, repair.userItemId)),
+        }),
       );
-
-      // Consume repair kits
-      for (const [repairItemId, quantityUsed] of kitUsage.entries()) {
-        const repairUserItem = useritems.find((ui) => ui.id === repairItemId);
-        if (!repairUserItem) continue;
-
-        if (repairUserItem.item.destroyOnUse) {
-          if (repairUserItem.quantity <= quantityUsed) {
-            repairPromises.push(
-              ctx.drizzle.delete(userItem).where(eq(userItem.id, repairItemId)),
-            );
-          } else {
-            repairPromises.push(
-              ctx.drizzle
-                .update(userItem)
-                .set({ quantity: sql`${userItem.quantity} - ${quantityUsed}` })
-                .where(eq(userItem.id, repairItemId)),
-            );
-          }
-        }
+      if (!consumeResults.every(Boolean)) {
+        return errorResponse(
+          "Could not consume repair kits — inventory changed, please try again",
+        );
       }
 
-      await Promise.all(repairPromises);
+      await Promise.all(
+        itemsNeedingRepair.map((useritem) =>
+          ctx.drizzle
+            .update(userItem)
+            .set({ durability: useritem.item.maxDurability })
+            .where(eq(userItem.id, useritem.id)),
+        ),
+      );
 
       const kitsUsedSummary = kitsToUse
         .map((kit) => `${kit.quantityUsed}x ${kit.repairItemName}`)
