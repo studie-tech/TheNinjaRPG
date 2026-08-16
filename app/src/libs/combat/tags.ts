@@ -1221,6 +1221,7 @@ export const clone = (
   }
   if (effect.isNew) {
     const newAi = structuredClone(user);
+    delete newAi.baseStatsForModifiers;
     // Place on battlefield
     newAi.userId = nanoid();
     effect.creatorId = newAi.userId;
@@ -3008,6 +3009,7 @@ export const summon = (
       );
       if (ai && !obj) {
         const newAi = structuredClone(ai);
+        delete newAi.baseStatsForModifiers;
         // Place on battlefield
         newAi.userId = nanoid();
         effect.aiId = newAi.userId;

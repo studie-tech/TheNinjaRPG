@@ -235,6 +235,8 @@ export function scaleUserStats(
   user.sageMastery = calcMastery("sageMastery") * statMod;
 }
 
+const roundCombatStat = (stat: number) => Math.round(stat * 100) / 100;
+
 /** Sum of the six redistributable combat stats (offence, defence, generals). */
 export const getAssignedCombatStatTotal = (
   user: Pick<
@@ -242,12 +244,12 @@ export const getAssignedCombatStatTotal = (
     "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower"
   >,
 ) =>
-  user.offence +
-  user.defence +
-  user.strength +
-  user.speed +
-  user.intelligence +
-  user.willpower;
+  roundCombatStat(user.offence) +
+  roundCombatStat(user.defence) +
+  roundCombatStat(user.strength) +
+  roundCombatStat(user.speed) +
+  roundCombatStat(user.intelligence) +
+  roundCombatStat(user.willpower);
 
 /** Assign stats of user, meant for the training dummy and ranked equalization */
 export function manuallyAssignUserStats(user: UserData, stats: AssignableUserStats) {

@@ -11,7 +11,6 @@ import {
 import type { BattleType, PoolType } from "@/drizzle/constants";
 import {
   AutoBattleTypes,
-  MasteryNames,
   CLAN_BATTLE_REWARD_POINTS,
   FRIENDLY_PRESTIGE_COST,
   getUserCaps,
@@ -20,6 +19,7 @@ import {
   KAGE_PRESTIGE_COST,
   KILLING_NOTORIETY_GAIN,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MasteryNames,
   PVP_KILL_ANBU_POINTS_REWARD,
   PVP_KILL_PRESTIGE_REWARD,
   PVP_KILL_PRESTIGE_REWARD_ANBU,
@@ -2972,16 +2972,10 @@ const LEGACY_OFFENCE_TO_MASTERY = {
 export const normalizeBattleUserCombatStats = (user: BattleUserState) => {
   const legacy = user as BattleUserState & Record<string, number | undefined>;
   if (user.offence == null) {
-    user.offence = Math.max(
-      ...LEGACY_OFFENCE_KEYS.map((key) => legacy[key] ?? 0),
-      10,
-    );
+    user.offence = Math.max(...LEGACY_OFFENCE_KEYS.map((key) => legacy[key] ?? 0), 10);
   }
   if (user.defence == null) {
-    user.defence = Math.max(
-      ...LEGACY_DEFENCE_KEYS.map((key) => legacy[key] ?? 0),
-      10,
-    );
+    user.defence = Math.max(...LEGACY_DEFENCE_KEYS.map((key) => legacy[key] ?? 0), 10);
   }
   for (const [legacyKey, masteryKey] of Object.entries(LEGACY_OFFENCE_TO_MASTERY)) {
     if (legacy[masteryKey] == null) {

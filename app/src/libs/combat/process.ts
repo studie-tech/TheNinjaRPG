@@ -122,7 +122,6 @@ import type {
 import {
   applyPoolAdjustmentsToBase,
   calcApplyRatio,
-  resetMasteriesToBase,
   calcEffectRoundInfo,
   collapseConsequences,
   creditDamageDealt,
@@ -132,6 +131,7 @@ import {
   getItem,
   isEffectActive,
   recordUsedTag,
+  resetMasteriesToBase,
   resolveDamageCreditUser,
   sortEffects,
 } from "./util";

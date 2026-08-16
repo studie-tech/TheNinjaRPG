@@ -90,6 +90,19 @@ test("getAssignedCombatStatTotal sums only combat stats", () => {
   ).toBe(200);
 });
 
+test("getAssignedCombatStatTotal rounds each combat stat before summing", () => {
+  expect(
+    getAssignedCombatStatTotal({
+      offence: 10.006,
+      defence: 10.006,
+      strength: 10.006,
+      speed: 10.006,
+      intelligence: 10.006,
+      willpower: 10.006,
+    }),
+  ).toBeCloseTo(60.06, 2);
+});
+
 test("manuallyAssignUserStats applies ranked mastery caps", () => {
   const user = {
     offence: 10,
