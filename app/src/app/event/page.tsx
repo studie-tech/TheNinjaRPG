@@ -22,7 +22,7 @@ import {
   canSubmitNotification,
   canUseMonitoringTests,
 } from "@/utils/permissions";
-import { secondsPassed } from "@/utils/time";
+import { DAY_S, secondsPassed } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { type MutateContentSchema, mutateContentSchema } from "@/validators/comments";
 import { type ChangeSettingSchema, changeSettingSchema } from "@/validators/misc";
@@ -31,16 +31,125 @@ import { getSearchValidator } from "@/validators/register";
 export default function NotifyUsers() {
   return (
     <>
-      <RegenGainSystem />
-      <TrainingGainSystem />
-      <BattleArenaExpSystem />
-      <MissionExpSystem />
-      <JutsuExpSystem />
+      <EventGainMultiplierPanel
+        setting="regenGainMultiplier"
+        title="Regen Multiplier"
+        subtitle="Modify regen gains globally"
+      />
+      <EventGainMultiplierPanel
+        setting="trainingGainMultiplier"
+        title="Training Multiplier"
+        subtitle="Modify training gains globally"
+        initialBreak
+      />
+      <EventGainMultiplierPanel
+        setting="battleExpMultiplier"
+        title="Battle Experience Multiplier"
+        subtitle="Modify battle experience gains globally (Arena & PvP)"
+        initialBreak
+      />
+      <EventGainMultiplierPanel
+        setting="missionExpMultiplier"
+        title="Mission Experience Multiplier"
+        subtitle="Modify mission/quest experience gains globally"
+        initialBreak
+      />
+      <EventGainMultiplierPanel
+        setting="jutsuExpMultiplier"
+        title="Jutsu Experience Multiplier"
+        subtitle="Modify jutsu experience gains globally"
+        initialBreak
+      />
       <TestErrorMonitoring />
       <NotificationSystem />
     </>
   );
 }
+
+export const EventGainMultiplierPanel: React.FC<{
+  setting: ChangeSettingSchema["setting"];
+  title: string;
+  subtitle: string;
+  initialBreak?: boolean;
+}> = ({ setting, title, subtitle, initialBreak }) => {
+  const utils = api.useUtils();
+  const { data: userData, timeDiff } = useRequiredUserData();
+  const { data: settingData } = api.misc.getSetting.useQuery(
+    { name: setting },
+    { enabled: !!userData },
+  );
+
+  const { mutate: setEventGameSetting, isPending } =
+    api.misc.setEventGameSetting.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await Promise.all([
+          utils.misc.getSetting.invalidate(),
+          utils.profile.getUser.invalidate(),
+        ]);
+      },
+    });
+
+  const form = useForm<ChangeSettingSchema>({
+    resolver: zodResolver(changeSettingSchema),
+    defaultValues: { setting, multiplier: "2", days: 0 },
+  });
+  const watchedDays = useWatch({
+    control: form.control,
+    name: "days",
+    defaultValue: 2,
+  });
+
+  useEffect(() => {
+    if (settingData) {
+      const daysLeft = remainingEventDays(settingData.time, timeDiff);
+      if (daysLeft < 0) form.setValue("days", -daysLeft);
+    }
+  }, [settingData, timeDiff, form]);
+
+  if (!userData) return null;
+  if (!canModifyEventGains(userData.role)) return null;
+
+  return (
+    <ContentBox title={title} subtitle={subtitle} initialBreak={initialBreak}>
+      {isPending && <Loader explanation="Changing setting" />}
+      {!isPending && (
+        <div className="grid grid-cols-1">
+          <SliderField
+            id="days"
+            default={0}
+            min={0}
+            max={31}
+            unit="days"
+            label="Select duration in days"
+            register={form.register}
+            setValue={form.setValue}
+            watchedValue={watchedDays}
+            error={form.formState.errors.days?.message}
+          />
+          <div className="flex flex-row gap-2">
+            {GAME_SETTING_GAINS_MULTIPLIER.map((multiplier) => (
+              <Button
+                id={`multiply-${setting}-${multiplier}`}
+                className={`w-full ${settingData?.value === parseInt(multiplier, 10) ? "bg-green-700" : ""}`}
+                key={`${setting}-${multiplier}`}
+                onClick={() =>
+                  setEventGameSetting({
+                    setting,
+                    multiplier,
+                    days: watchedDays,
+                  })
+                }
+              >
+                {multiplier}X
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+    </ContentBox>
+  );
+};
 
 const TestErrorMonitoring: React.FC = () => {
   // Invalid state
@@ -87,467 +196,6 @@ const TestErrorMonitoring: React.FC = () => {
           </Button>
         </div>
       </div>
-    </ContentBox>
-  );
-};
-
-/**
- * Regen Gain System for setting regen multiplier for all users
- */
-const RegenGainSystem: React.FC = () => {
-  // utils
-  const utils = api.useUtils();
-
-  // Query data
-  const { data: userData, timeDiff } = useRequiredUserData();
-  const { data: setting } = api.misc.getSetting.useQuery(
-    { name: "regenGainMultiplier" },
-    { enabled: !!userData },
-  );
-
-  // Mutate
-  const { mutate: setEventGameSetting, isPending } =
-    api.misc.setEventGameSetting.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        await utils.misc.getSetting.invalidate();
-        await utils.profile.getUser.invalidate();
-      },
-    });
-
-  // Form control
-  const regenForm = useForm<ChangeSettingSchema>({
-    resolver: zodResolver(changeSettingSchema),
-    defaultValues: { setting: "regenGainMultiplier", multiplier: "2", days: 0 },
-  });
-  const watchedDays = useWatch({
-    control: regenForm.control,
-    name: "days",
-    defaultValue: 2,
-  });
-
-  // When setting loaded, update the slider value
-  useEffect(() => {
-    if (setting) {
-      const daysLeft = Math.round(secondsPassed(setting.time, timeDiff) / (24 * 3600));
-      if (daysLeft < 0) regenForm.setValue("days", -daysLeft);
-    }
-  }, [setting, timeDiff, regenForm]);
-
-  // Guard
-  if (!userData) return null;
-  const canChange = canModifyEventGains(userData.role);
-  if (!canChange) return null;
-
-  return (
-    <ContentBox title="Regen Multiplier" subtitle="Modify regen gains globally">
-      {isPending && <Loader explanation="Changing setting" />}
-      {!isPending && (
-        <div className="grid grid-cols-1">
-          <SliderField
-            id="days"
-            default={0}
-            min={0}
-            max={31}
-            unit="days"
-            label="Select duration in days"
-            register={regenForm.register}
-            setValue={regenForm.setValue}
-            watchedValue={watchedDays}
-            error={regenForm.formState.errors.days?.message}
-          />
-          <div className="flex flex-row gap-2">
-            {GAME_SETTING_GAINS_MULTIPLIER.map((multiplier) => (
-              <Button
-                id={`multiply-${multiplier}`}
-                className={`w-full ${setting?.value === parseInt(multiplier, 10) ? "bg-green-700" : ""}`}
-                key={`${multiplier}-multiplier-button`}
-                onClick={() =>
-                  setEventGameSetting({
-                    setting: "regenGainMultiplier",
-                    multiplier,
-                    days: watchedDays,
-                  })
-                }
-              >
-                {multiplier}X
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-    </ContentBox>
-  );
-};
-
-/**
- * Training Gain System for setting training gains for all users
- */
-const TrainingGainSystem: React.FC = () => {
-  // utils
-  const utils = api.useUtils();
-
-  // Query data
-  const { data: userData, timeDiff } = useRequiredUserData();
-  const { data: setting } = api.misc.getSetting.useQuery(
-    { name: "trainingGainMultiplier" },
-    { enabled: !!userData },
-  );
-
-  // Mutate
-  const { mutate: setEventGameSetting, isPending } =
-    api.misc.setEventGameSetting.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        await utils.misc.getSetting.invalidate();
-        await utils.profile.getUser.invalidate();
-      },
-    });
-
-  // Form control
-  const trainingForm = useForm<ChangeSettingSchema>({
-    resolver: zodResolver(changeSettingSchema),
-    defaultValues: { setting: "trainingGainMultiplier", multiplier: "2", days: 0 },
-  });
-  const watchedDays = useWatch({
-    control: trainingForm.control,
-    name: "days",
-    defaultValue: 2,
-  });
-
-  // When setting loaded, update the slider value
-  useEffect(() => {
-    if (setting) {
-      const daysLeft = secondsPassed(setting.time, timeDiff) / (24 * 3600);
-      if (daysLeft < 0) trainingForm.setValue("days", -daysLeft);
-    }
-  }, [setting, timeDiff, trainingForm]);
-
-  // Guard
-  if (!userData) return null;
-  const canChange = canModifyEventGains(userData.role);
-  if (!canChange) return null;
-
-  return (
-    <ContentBox
-      title="Training Multiplier"
-      subtitle="Modify training gains globally"
-      initialBreak={true}
-    >
-      {isPending && <Loader explanation="Changing setting" />}
-      {!isPending && (
-        <div className="grid grid-cols-1">
-          <SliderField
-            id="days"
-            default={0}
-            min={0}
-            max={31}
-            unit="days"
-            label="Select duration in days"
-            register={trainingForm.register}
-            setValue={trainingForm.setValue}
-            watchedValue={watchedDays}
-            error={trainingForm.formState.errors.days?.message}
-          />
-          <div className="flex flex-row gap-2">
-            {GAME_SETTING_GAINS_MULTIPLIER.map((multiplier) => (
-              <Button
-                id={`multiply-${multiplier}`}
-                className={`w-full ${setting?.value === parseInt(multiplier, 10) ? "bg-green-700" : ""}`}
-                key={multiplier}
-                onClick={() =>
-                  setEventGameSetting({
-                    setting: "trainingGainMultiplier",
-                    multiplier,
-                    days: watchedDays,
-                  })
-                }
-              >
-                {multiplier}X
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-    </ContentBox>
-  );
-};
-
-/**
- * Battle Arena Experience System for setting battle arena exp multiplier for all users
- */
-const BattleArenaExpSystem: React.FC = () => {
-  // utils
-  const utils = api.useUtils();
-
-  // Query data
-  const { data: userData, timeDiff } = useRequiredUserData();
-  const { data: setting } = api.misc.getSetting.useQuery(
-    { name: "battleExpMultiplier" },
-    { enabled: !!userData },
-  );
-
-  // Mutate
-  const { mutate: setEventGameSetting, isPending } =
-    api.misc.setEventGameSetting.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        await utils.misc.getSetting.invalidate();
-        await utils.profile.getUser.invalidate();
-      },
-    });
-
-  // Form control
-  const battleArenaForm = useForm<ChangeSettingSchema>({
-    resolver: zodResolver(changeSettingSchema),
-    defaultValues: { setting: "battleExpMultiplier", multiplier: "2", days: 0 },
-  });
-  const watchedDays = useWatch({
-    control: battleArenaForm.control,
-    name: "days",
-    defaultValue: 2,
-  });
-
-  // When setting loaded, update the slider value
-  useEffect(() => {
-    if (setting) {
-      const daysLeft = secondsPassed(setting.time, timeDiff) / (24 * 3600);
-      if (daysLeft < 0) battleArenaForm.setValue("days", -daysLeft);
-    }
-  }, [setting, timeDiff, battleArenaForm]);
-
-  // Guard
-  if (!userData) return null;
-  const canChange = canModifyEventGains(userData.role);
-  if (!canChange) return null;
-
-  return (
-    <ContentBox
-      title="Battle Experience Multiplier"
-      subtitle="Modify battle experience gains globally (Arena & PvP)"
-      initialBreak={true}
-    >
-      {isPending && <Loader explanation="Changing setting" />}
-      {!isPending && (
-        <div className="grid grid-cols-1">
-          <SliderField
-            id="days"
-            default={0}
-            min={0}
-            max={31}
-            unit="days"
-            label="Select duration in days"
-            register={battleArenaForm.register}
-            setValue={battleArenaForm.setValue}
-            watchedValue={watchedDays}
-            error={battleArenaForm.formState.errors.days?.message}
-          />
-          <div className="flex flex-row gap-2">
-            {GAME_SETTING_GAINS_MULTIPLIER.map((multiplier) => (
-              <Button
-                id={`multiply-${multiplier}`}
-                className={`w-full ${setting?.value === parseInt(multiplier, 10) ? "bg-green-700" : ""}`}
-                key={multiplier}
-                onClick={() =>
-                  setEventGameSetting({
-                    setting: "battleExpMultiplier",
-                    multiplier,
-                    days: watchedDays,
-                  })
-                }
-              >
-                {multiplier}X
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-    </ContentBox>
-  );
-};
-
-/**
- * Mission Experience System for setting mission/quest experience multiplier for all users
- */
-const MissionExpSystem: React.FC = () => {
-  // utils
-  const utils = api.useUtils();
-
-  // Query data
-  const { data: userData, timeDiff } = useRequiredUserData();
-  const { data: setting } = api.misc.getSetting.useQuery(
-    { name: "missionExpMultiplier" },
-    { enabled: !!userData },
-  );
-
-  // Mutate
-  const { mutate: setEventGameSetting, isPending } =
-    api.misc.setEventGameSetting.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        await utils.misc.getSetting.invalidate();
-        await utils.profile.getUser.invalidate();
-      },
-    });
-
-  // Form control
-  const missionForm = useForm<ChangeSettingSchema>({
-    resolver: zodResolver(changeSettingSchema),
-    defaultValues: { setting: "missionExpMultiplier", multiplier: "2", days: 0 },
-  });
-  const watchedDays = useWatch({
-    control: missionForm.control,
-    name: "days",
-    defaultValue: 2,
-  });
-
-  // When setting loaded, update the slider value
-  useEffect(() => {
-    if (setting) {
-      const daysLeft = secondsPassed(setting.time, timeDiff) / (24 * 3600);
-      if (daysLeft < 0) missionForm.setValue("days", -daysLeft);
-    }
-  }, [setting, timeDiff, missionForm]);
-
-  // Guard
-  if (!userData) return null;
-  const canChange = canModifyEventGains(userData.role);
-  if (!canChange) return null;
-
-  return (
-    <ContentBox
-      title="Mission Experience Multiplier"
-      subtitle="Modify mission/quest experience gains globally"
-      initialBreak={true}
-    >
-      {isPending && <Loader explanation="Changing setting" />}
-      {!isPending && (
-        <div className="grid grid-cols-1">
-          <SliderField
-            id="days"
-            default={0}
-            min={0}
-            max={31}
-            unit="days"
-            label="Select duration in days"
-            register={missionForm.register}
-            setValue={missionForm.setValue}
-            watchedValue={watchedDays}
-            error={missionForm.formState.errors.days?.message}
-          />
-          <div className="flex flex-row gap-2">
-            {GAME_SETTING_GAINS_MULTIPLIER.map((multiplier) => (
-              <Button
-                id={`multiply-${multiplier}`}
-                className={`w-full ${setting?.value === parseInt(multiplier, 10) ? "bg-green-700" : ""}`}
-                key={multiplier}
-                onClick={() =>
-                  setEventGameSetting({
-                    setting: "missionExpMultiplier",
-                    multiplier,
-                    days: watchedDays,
-                  })
-                }
-              >
-                {multiplier}X
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-    </ContentBox>
-  );
-};
-
-/**
- * Jutsu Experience System for setting jutsu experience multiplier for all users
- */
-const JutsuExpSystem: React.FC = () => {
-  // utils
-  const utils = api.useUtils();
-
-  // Query data
-  const { data: userData, timeDiff } = useRequiredUserData();
-  const { data: setting } = api.misc.getSetting.useQuery(
-    { name: "jutsuExpMultiplier" },
-    { enabled: !!userData },
-  );
-
-  // Mutate
-  const { mutate: setEventGameSetting, isPending } =
-    api.misc.setEventGameSetting.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        await utils.misc.getSetting.invalidate();
-        await utils.profile.getUser.invalidate();
-      },
-    });
-
-  // Form control
-  const jutsuForm = useForm<ChangeSettingSchema>({
-    resolver: zodResolver(changeSettingSchema),
-    defaultValues: { setting: "jutsuExpMultiplier", multiplier: "2", days: 0 },
-  });
-  const watchedDays = useWatch({
-    control: jutsuForm.control,
-    name: "days",
-    defaultValue: 2,
-  });
-
-  // When setting loaded, update the slider value
-  useEffect(() => {
-    if (setting) {
-      const daysLeft = secondsPassed(setting.time, timeDiff) / (24 * 3600);
-      if (daysLeft < 0) jutsuForm.setValue("days", -daysLeft);
-    }
-  }, [setting, timeDiff, jutsuForm]);
-
-  // Guard
-  if (!userData) return null;
-  const canChange = canModifyEventGains(userData.role);
-  if (!canChange) return null;
-
-  return (
-    <ContentBox
-      title="Jutsu Experience Multiplier"
-      subtitle="Modify jutsu experience gains globally"
-      initialBreak={true}
-    >
-      {isPending && <Loader explanation="Changing setting" />}
-      {!isPending && (
-        <div className="grid grid-cols-1">
-          <SliderField
-            id="days"
-            default={0}
-            min={0}
-            max={31}
-            unit="days"
-            label="Select duration in days"
-            register={jutsuForm.register}
-            setValue={jutsuForm.setValue}
-            watchedValue={watchedDays}
-            error={jutsuForm.formState.errors.days?.message}
-          />
-          <div className="flex flex-row gap-2">
-            {GAME_SETTING_GAINS_MULTIPLIER.map((multiplier) => (
-              <Button
-                id={`multiply-${multiplier}`}
-                className={`w-full ${setting?.value === parseInt(multiplier, 10) ? "bg-green-700" : ""}`}
-                key={multiplier}
-                onClick={() =>
-                  setEventGameSetting({
-                    setting: "jutsuExpMultiplier",
-                    multiplier,
-                    days: watchedDays,
-                  })
-                }
-              >
-                {multiplier}X
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
     </ContentBox>
   );
 };
@@ -717,3 +365,6 @@ const NotificationSystem: React.FC = () => {
     </>
   );
 };
+
+const remainingEventDays = (settingTime: Date, timeDiff?: number) =>
+  Math.round(secondsPassed(settingTime, timeDiff) / DAY_S);
