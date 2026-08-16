@@ -2465,18 +2465,23 @@ export const initiateBattle = async (
   // Push websockets message to target
   const pusher = getServerPusher();
 
-  // Keep fighters on the sector map as combat markers so nearby players can
-  // see who is fighting. Auto-battles stay off this broadcast.
+  // Keep human fighters on the sector map as combat markers so nearby players
+  // can see who is fighting. AI templates are not sector-map entities and must
+  // not be broadcast. Auto-battles stay off this broadcast.
   if (!AutoBattleTypes.includes(battleType)) {
     await Promise.all(
       users.map(async (user) => {
         await Promise.all([
           pusher.trigger(user.userId, "event", { type: "battle", battleId }),
-          updateUserOnMap(pusher, user.sector, {
-            ...user,
-            status: "BATTLE",
-            battleId,
-          }),
+          ...(!user.isAi
+            ? [
+                updateUserOnMap(pusher, user.sector, {
+                  ...user,
+                  status: "BATTLE",
+                  battleId,
+                }),
+              ]
+            : []),
         ]);
       }),
     );
