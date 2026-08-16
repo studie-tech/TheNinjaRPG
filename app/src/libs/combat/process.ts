@@ -52,6 +52,7 @@ import {
   decreaseDamageGiven,
   decreaseDamageTaken,
   decreaseHealGiven,
+  decreaseMastery,
   decreaseMaxPools,
   decreasepoolcost,
   decreaseStats,
@@ -71,6 +72,7 @@ import {
   increaseDamageGiven,
   increaseDamageTaken,
   increaseHealGiven,
+  increaseMastery,
   increaseMaxPools,
   increasepoolcost,
   increaseRange,
@@ -1207,6 +1209,10 @@ export const applySingleEffect = (
           info = absorb(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "increasestat") {
           info = increaseStats(effect, newUsersEffects, curTarget);
+        } else if (effect.type === "increasemastery") {
+          info = increaseMastery(effect, newUsersEffects, curTarget);
+        } else if (effect.type === "decreasemastery") {
+          info = decreaseMastery(effect, newUsersEffects, curTarget);
         } else if (effect.type === "increasemaxpools") {
           info = increaseMaxPools(effect, newUsersEffects, newTarget);
         } else if (effect.type === "decreasemaxpools") {

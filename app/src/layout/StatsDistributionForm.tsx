@@ -175,33 +175,28 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
       name: "Ninjutsu",
       image: IMG_TRAIN_NIN_OFF,
       description: "Master chakra manipulation",
-      stats: [
-        "willpower",
-        "intelligence",
-        "ninjutsuOffence",
-        "ninjutsuDefence",
-      ] as const,
+      stats: ["willpower", "intelligence", "offence", "defence"] as const,
     },
     {
       id: "taijutsu",
       name: "Taijutsu",
       image: IMG_TRAIN_TAI_OFF,
       description: "Master of martial arts",
-      stats: ["strength", "speed", "taijutsuOffence", "taijutsuDefence"] as const,
+      stats: ["strength", "speed", "offence", "defence"] as const,
     },
     {
       id: "genjutsu",
       name: "Genjutsu",
       image: IMG_TRAIN_GEN_OFF,
       description: "Master of illusions",
-      stats: ["willpower", "speed", "genjutsuOffence", "genjutsuDefence"] as const,
+      stats: ["willpower", "speed", "offence", "defence"] as const,
     },
     {
       id: "bukijutsu",
       name: "Bukijutsu",
       image: IMG_TRAIN_BUKI_OFF,
       description: "Weapons mastery",
-      stats: ["intelligence", "speed", "bukijutsuOffence", "bukijutsuDefence"] as const,
+      stats: ["intelligence", "speed", "offence", "defence"] as const,
     },
   ];
 

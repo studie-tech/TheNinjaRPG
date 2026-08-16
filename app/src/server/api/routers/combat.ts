@@ -152,6 +152,7 @@ import {
 } from "@/libs/combat/util";
 import { fetchDmgConfig } from "@/libs/gamesettings";
 import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
+import { hasMasteryRequirements } from "@/libs/mastery";
 import {
   calcActiveUserRegen,
   calcCP,
@@ -171,7 +172,6 @@ import {
   mockAchievementHistoryEntries,
 } from "@/libs/quest";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
-import { toDefenceStat, toOffenceStat } from "@/libs/stats";
 import { rollStealthKeep } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
 import {
@@ -2611,8 +2611,9 @@ export const processUsersForBattle = async (
       // Set all users to not be agressors by default
       isAggressor: false,
       // Initialize processing-specific fields (will be set below)
-      highestOffence: "ninjutsuOffence",
-      highestDefence: "ninjutsuDefence",
+      highestOffence: "offence",
+      highestDefence: "defence",
+      highestMasteryType: "Ninjutsu",
       highestGenerals: [],
       round: 0,
       iAmHere: false,
@@ -2625,14 +2626,8 @@ export const processUsersForBattle = async (
       isSummon: info.isSummon,
       usedGenerals: { strength: 0, intelligence: 0, willpower: 0, speed: 0 },
       usedStats: {
-        ninjutsuOffence: 0,
-        genjutsuOffence: 0,
-        taijutsuOffence: 0,
-        bukijutsuOffence: 0,
-        ninjutsuDefence: 0,
-        genjutsuDefence: 0,
-        taijutsuDefence: 0,
-        bukijutsuDefence: 0,
+        offence: 0,
+        defence: 0,
       },
       leftBattle: false,
       fledBattle: false,
@@ -2718,38 +2713,20 @@ export const processUsersForBattle = async (
       user.medicalExperience = 100000;
     }
 
-    // Add highest offence name to user
-    const offences = {
-      ninjutsuOffence: user.ninjutsuOffence,
-      genjutsuOffence: user.genjutsuOffence,
-      taijutsuOffence: user.taijutsuOffence,
-      bukijutsuOffence: user.bukijutsuOffence,
-    };
-    type offenceKey = keyof typeof offences;
-    // If preferredStat is "Highest" or not set, calculate the actual highest stat
+    user.highestOffence = "offence";
+    user.highestDefence = "defence";
+    const masteries = {
+      Ninjutsu: user.ninjutsuMastery,
+      Genjutsu: user.genjutsuMastery,
+      Taijutsu: user.taijutsuMastery,
+      Bukijutsu: user.bukijutsuMastery,
+    } as const;
     if (!user.preferredStat || user.preferredStat === "Highest") {
-      user.highestOffence = Object.keys(offences).reduce((prev, cur) =>
-        offences[prev as offenceKey] > offences[cur as offenceKey] ? prev : cur,
-      ) as offenceKey;
+      user.highestMasteryType = (
+        Object.keys(masteries) as (keyof typeof masteries)[]
+      ).reduce((prev, cur) => (masteries[prev] > masteries[cur] ? prev : cur));
     } else {
-      user.highestOffence = toOffenceStat(user.preferredStat);
-    }
-
-    // Add highest defence name to user
-    const defences = {
-      ninjutsuDefence: user.ninjutsuDefence,
-      genjutsuDefence: user.genjutsuDefence,
-      taijutsuDefence: user.taijutsuDefence,
-      bukijutsuDefence: user.bukijutsuDefence,
-    };
-    type defenceKey = keyof typeof defences;
-    // If preferredStat is "Highest" or not set, calculate the actual highest stat
-    if (!user.preferredStat || user.preferredStat === "Highest") {
-      user.highestDefence = Object.keys(defences).reduce((prev, cur) =>
-        defences[prev as defenceKey] > defences[cur as defenceKey] ? prev : cur,
-      ) as defenceKey;
-    } else {
-      user.highestDefence = toDefenceStat(user.preferredStat);
+      user.highestMasteryType = user.preferredStat;
     }
 
     // Add highest generals to user
@@ -3081,7 +3058,10 @@ export const processUsersForBattle = async (
               ui.equipped = "NONE" as const;
             } else {
               // Add item effects to user (only if user has required bloodline)
-              if (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId) {
+              if (
+                (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId) &&
+                hasMasteryRequirements(user, ui.item)
+              ) {
                 effects.forEach((effect) => {
                   const realized = realizeTag({
                     tag: effect,

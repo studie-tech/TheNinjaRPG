@@ -4,6 +4,8 @@
  */
 
 import { EVOLUTION_MAX_CHILDREN, EVOLUTION_MAX_DEPTH } from "@/drizzle/constants";
+import type { MasteryRequirementFields, MasteryStatSource } from "@/libs/mastery";
+import { hasMasteryRequirements } from "@/libs/mastery";
 
 /** Minimal node for validating parent/child evolution graphs. */
 export type EvolutionNode = {
@@ -12,30 +14,14 @@ export type EvolutionNode = {
 };
 
 /** Nullable per-stat gates used when evolving owned content. */
-export type EvolutionStatRequirements = {
-  requiredNinjutsuOffence?: number | null;
-  requiredNinjutsuDefence?: number | null;
-  requiredGenjutsuOffence?: number | null;
-  requiredGenjutsuDefence?: number | null;
-  requiredTaijutsuOffence?: number | null;
-  requiredTaijutsuDefence?: number | null;
-  requiredBukijutsuOffence?: number | null;
-  requiredBukijutsuDefence?: number | null;
+export type EvolutionStatRequirements = MasteryRequirementFields & {
   requiredStrength?: number | null;
   requiredSpeed?: number | null;
   requiredIntelligence?: number | null;
   requiredWillpower?: number | null;
 };
 
-export type EvolutionUserStats = {
-  ninjutsuOffence: number;
-  ninjutsuDefence: number;
-  genjutsuOffence: number;
-  genjutsuDefence: number;
-  taijutsuOffence: number;
-  taijutsuDefence: number;
-  bukijutsuOffence: number;
-  bukijutsuDefence: number;
+export type EvolutionUserStats = MasteryStatSource & {
   strength: number;
   speed: number;
   intelligence: number;
@@ -49,21 +35,14 @@ export const meetsEvolutionStatRequirements = (
   stats: EvolutionUserStats,
 ): boolean => {
   const checks: { req: number | null | undefined; val: number }[] = [
-    { req: requirements.requiredNinjutsuOffence, val: stats.ninjutsuOffence },
-    { req: requirements.requiredNinjutsuDefence, val: stats.ninjutsuDefence },
-    { req: requirements.requiredGenjutsuOffence, val: stats.genjutsuOffence },
-    { req: requirements.requiredGenjutsuDefence, val: stats.genjutsuDefence },
-    { req: requirements.requiredTaijutsuOffence, val: stats.taijutsuOffence },
-    { req: requirements.requiredTaijutsuDefence, val: stats.taijutsuDefence },
-    { req: requirements.requiredBukijutsuOffence, val: stats.bukijutsuOffence },
-    { req: requirements.requiredBukijutsuDefence, val: stats.bukijutsuDefence },
     { req: requirements.requiredStrength, val: stats.strength },
     { req: requirements.requiredSpeed, val: stats.speed },
     { req: requirements.requiredIntelligence, val: stats.intelligence },
     { req: requirements.requiredWillpower, val: stats.willpower },
   ];
-  return checks.every(
-    ({ req, val }) => req === null || req === undefined || val >= req,
+  return (
+    hasMasteryRequirements(stats, requirements) &&
+    checks.every(({ req, val }) => req === null || req === undefined || val >= req)
   );
 };
 
@@ -158,14 +137,12 @@ export const filterVisibleEvolutions = <T extends { hidden: boolean }>(
 
 /** Labels for evolution stat requirement UI (shared across content editors). */
 export const EVOLUTION_STAT_FORM_FIELDS = [
-  { id: "requiredNinjutsuOffence", label: "Req. Nin. Offence" },
-  { id: "requiredNinjutsuDefence", label: "Req. Nin. Defence" },
-  { id: "requiredGenjutsuOffence", label: "Req. Gen. Offence" },
-  { id: "requiredGenjutsuDefence", label: "Req. Gen. Defence" },
-  { id: "requiredTaijutsuOffence", label: "Req. Tai. Offence" },
-  { id: "requiredTaijutsuDefence", label: "Req. Tai. Defence" },
-  { id: "requiredBukijutsuOffence", label: "Req. Buki. Offence" },
-  { id: "requiredBukijutsuDefence", label: "Req. Buki. Defence" },
+  { id: "requiredNinjutsuMastery", label: "Req. Ninjutsu Mastery" },
+  { id: "requiredGenjutsuMastery", label: "Req. Genjutsu Mastery" },
+  { id: "requiredTaijutsuMastery", label: "Req. Taijutsu Mastery" },
+  { id: "requiredBukijutsuMastery", label: "Req. Bukijutsu Mastery" },
+  { id: "requiredBloodlineMastery", label: "Req. Bloodline Mastery" },
+  { id: "requiredSageMastery", label: "Req. Sage Mastery" },
   { id: "requiredStrength", label: "Req. Strength" },
   { id: "requiredSpeed", label: "Req. Speed" },
   { id: "requiredIntelligence", label: "Req. Intelligence" },

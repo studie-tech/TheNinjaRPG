@@ -987,6 +987,8 @@ export const calcApplyRatio = (
     "increaseheal",
     "increasepoolcost",
     "increasestat",
+    "increasemastery",
+    "decreasemastery",
     "lifesteal",
     "moveprevent",
     "onehitkillprevent",
@@ -1125,8 +1127,10 @@ export const sortEffects = (
     "clear",
     "decreasepoolcost",
     "decreasestat",
+    "decreasemastery",
     "increasepoolcost",
     "increasestat",
+    "increasemastery",
     // Mid-modifiers
     "barrier",
     "shield",
@@ -2184,14 +2188,8 @@ export const calcBattleResult = (
         intelligence: 0,
         willpower: 0,
         speed: 0,
-        ninjutsuOffence: 0,
-        genjutsuOffence: 0,
-        taijutsuOffence: 0,
-        bukijutsuOffence: 0,
-        ninjutsuDefence: 0,
-        genjutsuDefence: 0,
-        taijutsuDefence: 0,
-        bukijutsuDefence: 0,
+        offence: 0,
+        defence: 0,
         money: 0,
         seichiSilver: 0,
         villagePrestige: deltaPrestige,
@@ -2229,14 +2227,8 @@ export const calcBattleResult = (
         let total = statsTotal + gensTotal;
         if (total === 0) {
           user.usedStats = {
-            ninjutsuOffence: 1,
-            genjutsuOffence: 1,
-            taijutsuOffence: 1,
-            bukijutsuOffence: 1,
-            ninjutsuDefence: 1,
-            genjutsuDefence: 1,
-            taijutsuDefence: 1,
-            bukijutsuDefence: 1,
+            offence: 1,
+            defence: 1,
           };
           user.usedGenerals = {
             strength: 1,
@@ -2244,7 +2236,7 @@ export const calcBattleResult = (
             willpower: 1,
             speed: 1,
           };
-          total = 12;
+          total = 6;
         }
         let assignedExp = 0;
         const { stats_cap, gens_cap } = getUserCaps(user.rank);

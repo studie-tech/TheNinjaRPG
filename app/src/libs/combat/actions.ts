@@ -67,6 +67,7 @@ import {
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
 import { calcCombatHealPercentage } from "@/libs/hospital";
+import { hasMasteryRequirements } from "@/libs/mastery";
 import { getSageDailyCap, getSageModeActivationCost } from "@/libs/sageMode";
 import {
   CleanseTag,
@@ -180,6 +181,9 @@ export const availableUserActions = (
             if (isDisarmed && jutsu.jutsuWeapon !== "NONE") {
               return false;
             }
+            if (!hasMasteryRequirements(user, jutsu)) {
+              return false;
+            }
             // Filter out movement jutsu when immobilized
             if (isImmobilized) {
               const hasMoveTag = jutsu.effects.some(
@@ -234,6 +238,7 @@ export const availableUserActions = (
             }
             if (NonActionItemTypes.includes(item.itemType)) return false;
             if (ui.equipped === "NONE") return false;
+            if (!hasMasteryRequirements(user, item)) return false;
             if (item.itemType === "WEAPON") {
               // Hide weapons when disarmed
               if (isDisarmed) return false;

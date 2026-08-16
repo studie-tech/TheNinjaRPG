@@ -72,16 +72,16 @@ const StrengthWeaknesses: React.FC = () => {
           </ul>
           <ul>
             <li>
-              <b>Ninjutsu:</b> Ninja techniques infused with chakra
+              <b>Offence:</b> how hard your attacks hit
             </li>
             <li>
-              <b>Genjutsu:</b> Illusions and mental techniques
+              <b>Defence:</b> how well you resist incoming damage
             </li>
+          </ul>
+          <ul>
             <li>
-              <b>Taijutsu:</b> Physical combat techniques
-            </li>
-            <li>
-              <b>Bukijutsu:</b> Proficiency with weapons
+              <b>Masteries:</b> unlock jutsu, items, and armor. They do not deal damage
+              or grant experience.
             </li>
           </ul>
         </div>
@@ -129,50 +129,46 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
     <>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <b>Offences</b>
+          <b>Combat</b>
           <div className="flex flex-row items-center">
-            <ElementImage element="Ninjutsu" className="mr-1 mb-1 h-6 w-6" />
-            Ninjutsu offence:{" "}
-            {Number((userData.ninjutsuOffence ?? 0).toFixed(2)).toLocaleString()}
+            <ElementImage element="offensiveStance" className="mr-1 mb-1 h-6 w-6" />
+            Offence: {Number((userData.offence ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
-            <ElementImage element="Genjutsu" className="mr-1 mb-1 h-6 w-6" />
-            Genjutsu offence:{" "}
-            {Number((userData.genjutsuOffence ?? 0).toFixed(2)).toLocaleString()}
-          </div>
-          <div className="flex flex-row items-center">
-            <ElementImage element="Taijutsu" className="mr-1 mb-1 h-6 w-6" />
-            Taijutsu offence:{" "}
-            {Number((userData.taijutsuOffence ?? 0).toFixed(2)).toLocaleString()}
-          </div>
-          <div className="flex flex-row items-center">
-            <ElementImage element="Bukijutsu" className="mr-1 mb-1 h-6 w-6" />
-            Bukijutsu offence:{" "}
-            {Number((userData.bukijutsuOffence ?? 0).toFixed(2)).toLocaleString()}
+            <ElementImage element="defensiveStance" className="mr-1 mb-1 h-6 w-6" />
+            Defence: {Number((userData.defence ?? 0).toFixed(2)).toLocaleString()}
           </div>
         </div>
-
         <div>
-          <b>Defences</b>
+          <b>Masteries</b>
           <div className="flex flex-row items-center">
             <ElementImage element="Ninjutsu" className="mr-1 mb-1 h-6 w-6" />
-            Ninjutsu defence:{" "}
-            {Number((userData.ninjutsuDefence ?? 0).toFixed(2)).toLocaleString()}
+            Ninjutsu:{" "}
+            {Number((userData.ninjutsuMastery ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Genjutsu" className="mr-1 mb-1 h-6 w-6" />
-            Genjutsu defence:{" "}
-            {Number((userData.genjutsuDefence ?? 0).toFixed(2)).toLocaleString()}
+            Genjutsu:{" "}
+            {Number((userData.genjutsuMastery ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Taijutsu" className="mr-1 mb-1 h-6 w-6" />
-            Taijutsu defence:{" "}
-            {Number((userData.taijutsuDefence ?? 0).toFixed(2)).toLocaleString()}
+            Taijutsu:{" "}
+            {Number((userData.taijutsuMastery ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Bukijutsu" className="mr-1 mb-1 h-6 w-6" />
-            Bukijutsu defence:{" "}
-            {Number((userData.bukijutsuDefence ?? 0).toFixed(2)).toLocaleString()}
+            Bukijutsu:{" "}
+            {Number((userData.bukijutsuMastery ?? 0).toFixed(2)).toLocaleString()}
+          </div>
+          <div className="flex flex-row items-center">
+            <ElementImage element="Bloodline" className="mr-1 mb-1 h-6 w-6" />
+            Bloodline:{" "}
+            {Number((userData.bloodlineMastery ?? 0).toFixed(2)).toLocaleString()}
+          </div>
+          <div className="flex flex-row items-center">
+            <ElementImage element="Sage" className="mr-1 mb-1 h-6 w-6" />
+            Sage: {Number((userData.sageMastery ?? 0).toFixed(2)).toLocaleString()}
           </div>
         </div>
       </div>
@@ -282,28 +278,17 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
           },
         },
         data: {
-          labels: [
-            "Nin Off",
-            "Gen Off",
-            "Tai Off",
-            "Buki Off",
-            "Nin Def",
-            "Gen Def",
-            "Tai Def",
-            "Buki Def",
-          ],
+          labels: ["Nin", "Gen", "Tai", "Buki", "Bloodline", "Sage"],
           datasets: [
             {
               label: "Value",
               data: [
-                userData.ninjutsuOffence ?? 0,
-                userData.genjutsuOffence ?? 0,
-                userData.taijutsuOffence ?? 0,
-                userData.bukijutsuOffence ?? 0,
-                userData.ninjutsuDefence ?? 0,
-                userData.genjutsuDefence ?? 0,
-                userData.taijutsuDefence ?? 0,
-                userData.bukijutsuDefence ?? 0,
+                userData.ninjutsuMastery ?? 0,
+                userData.genjutsuMastery ?? 0,
+                userData.taijutsuMastery ?? 0,
+                userData.bukijutsuMastery ?? 0,
+                userData.bloodlineMastery ?? 0,
+                userData.sageMastery ?? 0,
               ],
               fill: true,
               backgroundColor: "rgba(255, 99, 132, 0.2)",
@@ -384,7 +369,7 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
         </div>
       </div>
       <div>
-        <p className="font-bold">Strengths</p>
+        <p className="font-bold">Masteries</p>
         <div className="relative w-[99%]">
           <canvas ref={statsChartRef} id="statsChartRef"></canvas>
         </div>

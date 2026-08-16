@@ -1172,30 +1172,8 @@ const Combat: React.FC<CombatProps> = (props) => {
               {result.earnedExperience > 0 && (
                 <p>Unassigned Experience: {result.earnedExperience.toFixed(2)}</p>
               )}
-              {result.ninjutsuOffence > 0 && (
-                <p>Offensive Ninjutsu: {result.ninjutsuOffence.toFixed(2)}</p>
-              )}
-              {result.ninjutsuDefence > 0 && (
-                <p>Defensive Ninjutsu: {result.ninjutsuDefence.toFixed(2)}</p>
-              )}
-              {result.taijutsuOffence > 0 && (
-                <p>Offensive Taijutsu: {result.taijutsuOffence.toFixed(2)}</p>
-              )}
-              {result.taijutsuDefence > 0 && (
-                <p>Defensive Taijutsu: {result.taijutsuDefence.toFixed(2)}</p>
-              )}
-              {result.genjutsuOffence > 0 && (
-                <p>Offensive Genjutsu: {result.genjutsuOffence.toFixed(2)}</p>
-              )}
-              {result.genjutsuDefence > 0 && (
-                <p>Defensive Genjutsu: {result.genjutsuDefence.toFixed(2)}</p>
-              )}
-              {result.bukijutsuOffence > 0 && (
-                <p>Offensive Bukijutsu: {result.bukijutsuOffence.toFixed(2)}</p>
-              )}
-              {result.bukijutsuDefence > 0 && (
-                <p>Defensive Bukijutsu: {result.bukijutsuDefence.toFixed(2)}</p>
-              )}
+              {result.offence > 0 && <p>Offence: {result.offence.toFixed(2)}</p>}
+              {result.defence > 0 && <p>Defence: {result.defence.toFixed(2)}</p>}
               {result.intelligence > 0 && (
                 <p>Intelligence: {result.intelligence.toFixed(2)}</p>
               )}

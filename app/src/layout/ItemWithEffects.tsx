@@ -479,16 +479,18 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {"level" in item &&
                 item.level !== undefined &&
                 item.level > 0 &&
-                !("requiredSageMastery" in item) && (
+                !("activationRounds" in item) && (
                   <p>
                     <b>Level</b>: {item.level}
                   </p>
                 )}
-              {"requiredSageMastery" in item && item.requiredSageMastery > 0 && (
-                <p>
-                  <b>Lvl 2 Mastery</b>: {item.requiredSageMastery.toLocaleString()}
-                </p>
-              )}
+              {"activationRounds" in item &&
+                "requiredSageMastery" in item &&
+                item.requiredSageMastery > 0 && (
+                  <p>
+                    <b>Lvl 2 Mastery</b>: {item.requiredSageMastery.toLocaleString()}
+                  </p>
+                )}
               {"activationRounds" in item && item.activationRounds > 0 && (
                 <p>
                   <b>Active Duration</b>: {item.activationRounds} rounds
@@ -705,14 +707,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {(
                 [
-                  ["requiredNinjutsuOffence", "Req. Nin. Offence"],
-                  ["requiredNinjutsuDefence", "Req. Nin. Defence"],
-                  ["requiredGenjutsuOffence", "Req. Gen. Offence"],
-                  ["requiredGenjutsuDefence", "Req. Gen. Defence"],
-                  ["requiredTaijutsuOffence", "Req. Tai. Offence"],
-                  ["requiredTaijutsuDefence", "Req. Tai. Defence"],
-                  ["requiredBukijutsuOffence", "Req. Buki. Offence"],
-                  ["requiredBukijutsuDefence", "Req. Buki. Defence"],
+                  ["requiredNinjutsuMastery", "Req. Ninjutsu Mastery"],
+                  ["requiredGenjutsuMastery", "Req. Genjutsu Mastery"],
+                  ["requiredTaijutsuMastery", "Req. Taijutsu Mastery"],
+                  ["requiredBukijutsuMastery", "Req. Bukijutsu Mastery"],
+                  ["requiredBloodlineMastery", "Req. Bloodline Mastery"],
+                  ["requiredSageMastery", "Req. Sage Mastery"],
                   ["requiredStrength", "Req. Strength"],
                   ["requiredSpeed", "Req. Speed"],
                   ["requiredIntelligence", "Req. Intelligence"],
@@ -720,6 +720,9 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 ] as const
               )
                 .filter(([key]) => {
+                  if (key === "requiredSageMastery" && "activationRounds" in item) {
+                    return false;
+                  }
                   const value = (item as unknown as Record<string, unknown>)[key];
                   return value != null;
                 })

@@ -816,14 +816,12 @@ export default function MyJutsu() {
                           )}
                           {(
                             [
-                              ["requiredNinjutsuOffence", "Ninjutsu Offence"],
-                              ["requiredNinjutsuDefence", "Ninjutsu Defence"],
-                              ["requiredTaijutsuOffence", "Taijutsu Offence"],
-                              ["requiredTaijutsuDefence", "Taijutsu Defence"],
-                              ["requiredGenjutsuOffence", "Genjutsu Offence"],
-                              ["requiredGenjutsuDefence", "Genjutsu Defence"],
-                              ["requiredBukijutsuOffence", "Bukijutsu Offence"],
-                              ["requiredBukijutsuDefence", "Bukijutsu Defence"],
+                              ["requiredNinjutsuMastery", "Ninjutsu Mastery"],
+                              ["requiredGenjutsuMastery", "Genjutsu Mastery"],
+                              ["requiredTaijutsuMastery", "Taijutsu Mastery"],
+                              ["requiredBukijutsuMastery", "Bukijutsu Mastery"],
+                              ["requiredBloodlineMastery", "Bloodline Mastery"],
+                              ["requiredSageMastery", "Sage Mastery"],
                               ["requiredStrength", "Strength"],
                               ["requiredSpeed", "Speed"],
                               ["requiredIntelligence", "Intelligence"],

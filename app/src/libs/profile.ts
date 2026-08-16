@@ -106,19 +106,22 @@ export const calcCP = (level: number) => {
   return 100 + CP_PER_LVL * (level - 1);
 };
 
-type StatDistribution = {
-  ninjutsuOffence: number;
-  ninjutsuDefence: number;
-  genjutsuOffence: number;
-  genjutsuDefence: number;
-  taijutsuOffence: number;
-  taijutsuDefence: number;
-  bukijutsuOffence: number;
-  bukijutsuDefence: number;
+type CombatStatDistribution = {
+  offence: number;
+  defence: number;
   strength: number;
   intelligence: number;
   willpower: number;
   speed: number;
+};
+
+type MasteryDistribution = {
+  ninjutsuMastery: number;
+  genjutsuMastery: number;
+  taijutsuMastery: number;
+  bukijutsuMastery: number;
+  bloodlineMastery: number;
+  sageMastery: number;
 };
 
 /**
@@ -127,30 +130,28 @@ type StatDistribution = {
  * @returns void
  */
 export function capUserStats(user: UserData) {
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
-  if (user.ninjutsuOffence > stats_cap) user.ninjutsuOffence = stats_cap;
-  if (user.genjutsuOffence > stats_cap) user.genjutsuOffence = stats_cap;
-  if (user.taijutsuOffence > stats_cap) user.taijutsuOffence = stats_cap;
-  if (user.bukijutsuOffence > stats_cap) user.bukijutsuOffence = stats_cap;
-  if (user.ninjutsuDefence > stats_cap) user.ninjutsuDefence = stats_cap;
-  if (user.genjutsuDefence > stats_cap) user.genjutsuDefence = stats_cap;
-  if (user.taijutsuDefence > stats_cap) user.taijutsuDefence = stats_cap;
-  if (user.bukijutsuDefence > stats_cap) user.bukijutsuDefence = stats_cap;
+  const { stats_cap, gens_cap, mastery_cap } = getUserCaps(user.rank);
+  if (user.offence > stats_cap) user.offence = stats_cap;
+  if (user.defence > stats_cap) user.defence = stats_cap;
   if (user.strength > gens_cap) user.strength = gens_cap;
   if (user.speed > gens_cap) user.speed = gens_cap;
   if (user.intelligence > gens_cap) user.intelligence = gens_cap;
   if (user.willpower > gens_cap) user.willpower = gens_cap;
+  if (user.ninjutsuMastery > mastery_cap) user.ninjutsuMastery = mastery_cap;
+  if (user.genjutsuMastery > mastery_cap) user.genjutsuMastery = mastery_cap;
+  if (user.taijutsuMastery > mastery_cap) user.taijutsuMastery = mastery_cap;
+  if (user.bukijutsuMastery > mastery_cap) user.bukijutsuMastery = mastery_cap;
+  if (user.bloodlineMastery > mastery_cap) user.bloodlineMastery = mastery_cap;
+  if (user.sageMastery > mastery_cap) user.sageMastery = mastery_cap;
 }
 
 /**
- * The purpose of this function is to calculate the user experience, capped at the soft experience cap
- * i.e. the point where the user has one full offence, all 4 defences, and all 4 generals.
- * @param user
- * @returns
+ * Soft experience cap: one full offence, one full defence, and all 4 generals.
+ * Masteries do not count toward experience.
  */
 export function getSoftCappedExperience(user: UserData) {
   const { stats_cap, gens_cap } = getUserCaps(user.rank);
-  return 5 * stats_cap + 4 * gens_cap;
+  return 2 * stats_cap + 4 * gens_cap;
 }
 
 /** Scale stats of user, and return total number of experience / stat points */
@@ -167,14 +168,14 @@ export function scaleUserStats(
     | "curChakra"
     | "maxChakra"
     | "experience"
-    | "ninjutsuOffence"
-    | "ninjutsuDefence"
-    | "genjutsuOffence"
-    | "genjutsuDefence"
-    | "taijutsuOffence"
-    | "taijutsuDefence"
-    | "bukijutsuOffence"
-    | "bukijutsuDefence"
+    | "offence"
+    | "defence"
+    | "ninjutsuMastery"
+    | "genjutsuMastery"
+    | "taijutsuMastery"
+    | "bukijutsuMastery"
+    | "bloodlineMastery"
+    | "sageMastery"
     | "strength"
     | "intelligence"
     | "willpower"
@@ -191,51 +192,53 @@ export function scaleUserStats(
   user.maxStamina = calcSP(user.level) * poolMod;
   user.curChakra = calcCP(user.level) * poolMod;
   user.maxChakra = calcCP(user.level) * poolMod;
-  // Stats
+  // Combat stats + generals scale from experience. Masteries are scaled separately
+  // so AI can use gated content, but they never contribute to experience.
   const exp = calcLevelRequirements(user.level) - 500;
   user.experience = exp;
-  const sum = [
-    user.ninjutsuOffence ?? 0,
-    user.ninjutsuDefence ?? 0,
-    user.genjutsuOffence ?? 0,
-    user.genjutsuDefence ?? 0,
-    user.taijutsuOffence ?? 0,
-    user.taijutsuDefence ?? 0,
-    user.bukijutsuOffence ?? 0,
-    user.bukijutsuDefence ?? 0,
+  const combatSum = [
+    user.offence ?? 0,
+    user.defence ?? 0,
     user.strength ?? 0,
     user.intelligence ?? 0,
     user.willpower ?? 0,
     user.speed ?? 0,
   ].reduce((a, b) => a + b, 0);
-  const calcStat = (stat: keyof StatDistribution) => {
-    return 10 + Math.floor(((user[stat] ?? 0) / sum) * exp * 100) / 100;
+  const calcCombatStat = (stat: keyof CombatStatDistribution) => {
+    return 10 + Math.floor(((user[stat] ?? 0) / combatSum) * exp * 100) / 100;
   };
-  user.ninjutsuOffence = calcStat("ninjutsuOffence") * statMod;
-  user.ninjutsuDefence = calcStat("ninjutsuDefence") * statMod;
-  user.genjutsuOffence = calcStat("genjutsuOffence") * statMod;
-  user.genjutsuDefence = calcStat("genjutsuDefence") * statMod;
-  user.taijutsuOffence = calcStat("taijutsuOffence") * statMod;
-  user.taijutsuDefence = calcStat("taijutsuDefence") * statMod;
-  user.bukijutsuOffence = calcStat("bukijutsuOffence") * statMod;
-  user.bukijutsuDefence = calcStat("bukijutsuDefence") * statMod;
-  user.strength = calcStat("strength") * statMod;
-  user.intelligence = calcStat("intelligence") * statMod;
-  user.willpower = calcStat("willpower") * statMod;
-  user.speed = calcStat("speed") * statMod;
+  user.offence = calcCombatStat("offence") * statMod;
+  user.defence = calcCombatStat("defence") * statMod;
+  user.strength = calcCombatStat("strength") * statMod;
+  user.intelligence = calcCombatStat("intelligence") * statMod;
+  user.willpower = calcCombatStat("willpower") * statMod;
+  user.speed = calcCombatStat("speed") * statMod;
+
+  const masterySum = [
+    user.ninjutsuMastery ?? 0,
+    user.genjutsuMastery ?? 0,
+    user.taijutsuMastery ?? 0,
+    user.bukijutsuMastery ?? 0,
+    user.bloodlineMastery ?? 0,
+    user.sageMastery ?? 0,
+  ].reduce((a, b) => a + b, 0);
+  const calcMastery = (stat: keyof MasteryDistribution) => {
+    if (masterySum <= 0) return 10;
+    return 10 + Math.floor(((user[stat] ?? 0) / masterySum) * exp * 100) / 100;
+  };
+  user.ninjutsuMastery = calcMastery("ninjutsuMastery") * statMod;
+  user.genjutsuMastery = calcMastery("genjutsuMastery") * statMod;
+  user.taijutsuMastery = calcMastery("taijutsuMastery") * statMod;
+  user.bukijutsuMastery = calcMastery("bukijutsuMastery") * statMod;
+  user.bloodlineMastery = calcMastery("bloodlineMastery") * statMod;
+  user.sageMastery = calcMastery("sageMastery") * statMod;
 }
 
 /** Assign stats of user, meant for the training dummy */
 export function manuallyAssignUserStats(user: UserData, stats: StatSchemaType) {
   // Stats
-  user.ninjutsuOffence = stats.ninjutsuOffence;
-  user.ninjutsuDefence = stats.ninjutsuDefence;
-  user.genjutsuOffence = stats.genjutsuOffence;
-  user.genjutsuDefence = stats.genjutsuDefence;
-  user.taijutsuOffence = stats.taijutsuOffence;
-  user.taijutsuDefence = stats.taijutsuDefence;
-  user.bukijutsuOffence = stats.bukijutsuOffence;
-  user.bukijutsuDefence = stats.bukijutsuDefence;
+  user.offence = stats.offence;
+  user.defence = stats.defence;
   user.strength = stats.strength;
   user.intelligence = stats.intelligence;
   user.willpower = stats.willpower;

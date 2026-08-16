@@ -51,8 +51,9 @@ const makeActor = () => ({
   curChakra: 1000,
   curStamina: 1000,
   actionPoints: 100,
-  highestOffence: "ninjutsuOffence",
-  highestDefence: "ninjutsuDefence",
+  highestOffence: "offence",
+  highestDefence: "defence",
+  highestMasteryType: "Ninjutsu",
   highestGenerals: ["strength"],
   fledBattle: false,
   leftBattle: false,
@@ -60,14 +61,8 @@ const makeActor = () => ({
   items: [],
   usedGenerals: { strength: 0, intelligence: 0, willpower: 0, speed: 0 },
   usedStats: {
-    ninjutsuOffence: 0,
-    genjutsuOffence: 0,
-    taijutsuOffence: 0,
-    bukijutsuOffence: 0,
-    ninjutsuDefence: 0,
-    genjutsuDefence: 0,
-    taijutsuDefence: 0,
-    bukijutsuDefence: 0,
+    offence: 0,
+    defence: 0,
   },
 });
 

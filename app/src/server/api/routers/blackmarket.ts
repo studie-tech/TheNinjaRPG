@@ -617,14 +617,8 @@ export const blackMarketRouter = createTRPCRouter({
       const result = await ctx.drizzle
         .update(userData)
         .set({
-          ninjutsuOffence: input.ninjutsuOffence,
-          taijutsuOffence: input.taijutsuOffence,
-          genjutsuOffence: input.genjutsuOffence,
-          bukijutsuOffence: input.bukijutsuOffence,
-          ninjutsuDefence: input.ninjutsuDefence,
-          taijutsuDefence: input.taijutsuDefence,
-          genjutsuDefence: input.genjutsuDefence,
-          bukijutsuDefence: input.bukijutsuDefence,
+          offence: input.offence,
+          defence: input.defence,
           strength: input.strength,
           speed: input.speed,
           intelligence: input.intelligence,

@@ -1305,14 +1305,8 @@ const ResetStats: React.FC = () => {
 
   // Calculate total stats available for redistribution
   const totalStats =
-    userData.ninjutsuOffence +
-    userData.taijutsuOffence +
-    userData.genjutsuOffence +
-    userData.bukijutsuOffence +
-    userData.ninjutsuDefence +
-    userData.taijutsuDefence +
-    userData.genjutsuDefence +
-    userData.bukijutsuDefence +
+    userData.offence +
+    userData.defence +
     userData.strength +
     userData.speed +
     userData.intelligence +

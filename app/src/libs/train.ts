@@ -36,20 +36,21 @@ import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
 
 type UserStatData = Pick<
   UserData,
-  | "ninjutsuOffence"
-  | "ninjutsuDefence"
-  | "genjutsuOffence"
-  | "genjutsuDefence"
-  | "taijutsuOffence"
-  | "taijutsuDefence"
-  | "bukijutsuOffence"
-  | "bukijutsuDefence"
+  | "offence"
+  | "defence"
+  | "ninjutsuMastery"
+  | "genjutsuMastery"
+  | "taijutsuMastery"
+  | "bukijutsuMastery"
+  | "bloodlineMastery"
+  | "sageMastery"
   | "strength"
   | "speed"
   | "intelligence"
   | "willpower"
 >;
 
+import { hasMasteryRequirements } from "@/libs/mastery";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
@@ -279,6 +280,7 @@ export const canUseJutsu = (
     checkJutsuRank(jutsu.jutsuRank, userdata.rank) &&
     checkJutsuVillage(jutsu, userdata) &&
     checkJutsuBloodline(jutsu, userdata) &&
+    hasMasteryRequirements(userdata, jutsu) &&
     !!checkJutsuElements(jutsu, userElements) &&
     (ignoreBloodlineItem || checkJutsuBloodlineItem(jutsu, userdata.items))
   );

@@ -482,7 +482,28 @@ const MenuBoxProfile: React.FC = () => {
                     </Link>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent>Current training activity</TooltipContent>
+                <TooltipContent>Combat stat training</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {userData?.masteryTrainingStartedAt && userData?.currentlyTrainingMastery && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger className="w-full">
+                  <div className="flex flex-row items-center hover:text-orange-500">
+                    <Dumbbell className="mr-2 h-6 w-6" />
+                    <Link href="/traininggrounds">
+                      <Countdown
+                        targetDate={secondsFromDate(
+                          trainingSpeedSeconds(userData?.trainingSpeed),
+                          userData?.masteryTrainingStartedAt,
+                        )}
+                        timeDiff={timeDiff}
+                      />
+                    </Link>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>Mastery training</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
