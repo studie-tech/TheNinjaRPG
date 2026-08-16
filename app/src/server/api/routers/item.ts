@@ -1764,34 +1764,30 @@ export const itemRouter = createTRPCRouter({
         );
       }
 
-      // Consume destroyOnUse kits first (multi-unit CAS), then apply repairs
-      const consumeResults = await Promise.all(
-        kitsToUse.map((kit) => {
-          const repairUserItem = useritems.find((ui) => ui.id === kit.repairItemId);
-          if (!repairUserItem?.item.destroyOnUse) return Promise.resolve(true);
-          return updateUserItemQuantityAtomically({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            userItemId: kit.repairItemId,
-            expectedQuantity: repairUserItem.quantity,
-            nextQuantity: repairUserItem.quantity - kit.quantityUsed,
-          });
-        }),
-      );
-      if (!consumeResults.every(Boolean)) {
-        return errorResponse(
-          "Could not consume repair kits — inventory changed, please try again",
-        );
-      }
-
-      await Promise.all(
-        itemsNeedingRepair.map((useritem) =>
+      // Apply repairs and consume destroyOnUse kits together. PlanetScale cannot
+      // roll back a committed stack update, so pairing the writes avoids the
+      // consume-then-abort path that can spend kits without repairing.
+      await Promise.all([
+        ...itemsNeedingRepair.map((useritem) =>
           ctx.drizzle
             .update(userItem)
             .set({ durability: useritem.item.maxDurability })
             .where(eq(userItem.id, useritem.id)),
         ),
-      );
+        ...kitsToUse.flatMap((kit) => {
+          const repairUserItem = useritems.find((ui) => ui.id === kit.repairItemId);
+          if (!repairUserItem?.item.destroyOnUse) return [];
+          return [
+            updateUserItemQuantityAtomically({
+              client: ctx.drizzle,
+              userId: ctx.userId,
+              userItemId: kit.repairItemId,
+              expectedQuantity: repairUserItem.quantity,
+              nextQuantity: repairUserItem.quantity - kit.quantityUsed,
+            }),
+          ];
+        }),
+      ]);
 
       const kitsUsedSummary = kitsToUse
         .map((kit) => `${kit.quantityUsed}x ${kit.repairItemName}`)
