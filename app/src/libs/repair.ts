@@ -22,17 +22,8 @@ export interface RepairKitCalculationResult {
 }
 
 /**
- * Calculates which repair kits to use for repairing all items needing repair.
- * Uses a pooled durability approach, prioritizing lowest power kits first to minimize waste.
- * This mirrors the backend algorithm in @/server/api/routers/item.ts
- *
- * @param itemsNeedingRepair - Items that need repair
- * @param repairKits - Available repair kits with their repair amounts
- * @param userItems - All user items (used to look up kit names)
- * @returns Calculation result with kits to use, total durability needed, and whether all items can be repaired
- */
-/**
- * Gets all repair kits from user items
+ * Gets all repair kits from user items. Shared by the inventory UI and
+ * `item.useRepairAll` so preview and mutation pick the same stacks.
  */
 export const getRepairKits = (
   userItems: UserItemWithRelations[] | undefined,
@@ -58,7 +49,7 @@ export const getRepairKits = (
 /**
  * Calculates which repair kits to use for repairing all items needing repair.
  * Uses a pooled durability approach, prioritizing lowest power kits first to minimize waste.
- * This mirrors the backend algorithm in @/server/api/routers/item.ts
+ * Shared by the inventory UI and `item.useRepairAll`.
  *
  * @param itemsNeedingRepair - Items that need repair
  * @param repairKits - Available repair kits with their repair amounts
