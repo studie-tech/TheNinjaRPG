@@ -203,7 +203,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     rightSideBar,
     leftSideBarMainMenu,
     handleRightSidebarClick,
-    lightLayout,
+    lightLayout: isMounted ? lightLayout : false,
     toggleLightLayout,
     imageset,
     variantClasses,
