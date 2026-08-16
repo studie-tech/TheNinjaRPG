@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/server/db", () => ({ drizzleDB: {} }));
 
 import { availableUserActions } from "@/libs/combat/actions";
+import { applyEffects } from "@/libs/combat/process";
 import { decreaseMastery, increaseMastery, updateStatUsage } from "@/libs/combat/tags";
 import { damageCalc } from "@/libs/combat/tags";
 import { dmgConfig } from "@/libs/combat/constants";
@@ -121,6 +122,55 @@ describe("normalizeBattleUserCombatStats", () => {
     expect(user.taijutsuMastery).toBe(800);
     expect(user.highestMasteryType).toBe("Taijutsu");
     expect(user.usedStats).toEqual({ offence: 2, defence: 0 });
+  });
+});
+
+describe("applyEffects mastery persistence", () => {
+  it("persists increasemastery onto the returned usersState without stacking", () => {
+    const user = makeUser({
+      userId: "actor",
+      ninjutsuMastery: 1000,
+    });
+    const effect = makeEffect(
+      "increasemastery",
+      {
+        masteryTypes: ["Ninjutsu"],
+        calculation: "static",
+        power: 250,
+        powerPerLevel: 0,
+        rounds: 5,
+      },
+      {
+        creatorId: "actor",
+        targetId: "actor",
+        targetType: "user",
+        isNew: false,
+        castThisRound: false,
+        createdRound: 0,
+      },
+    );
+    const battle = {
+      id: "battle-1",
+      battleType: "COMBAT",
+      width: 5,
+      height: 5,
+      round: 2,
+      createdAt: new Date("2020-01-01T00:00:00Z"),
+      updatedAt: new Date("2020-01-01T00:00:00Z"),
+      roundStartAt: new Date("2020-01-01T00:00:00Z"),
+      usersState: [user],
+      usersEffects: [effect],
+      groundEffects: [],
+      extraState: { dmgConfig },
+    } as unknown as CompleteBattle;
+
+    const first = applyEffects(battle, "actor");
+    const firstUser = first.newBattle.usersState[0];
+    expect(firstUser?.ninjutsuMastery).toBe(1250);
+
+    const second = applyEffects(first.newBattle, "actor");
+    const secondUser = second.newBattle.usersState[0];
+    expect(secondUser?.ninjutsuMastery).toBe(1250);
   });
 });
 

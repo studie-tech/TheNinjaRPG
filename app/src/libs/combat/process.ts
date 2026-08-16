@@ -122,6 +122,7 @@ import type {
 import {
   applyPoolAdjustmentsToBase,
   calcApplyRatio,
+  resetMasteriesToBase,
   calcEffectRoundInfo,
   collapseConsequences,
   creditDamageDealt,
@@ -290,6 +291,7 @@ export const applyEffects = (
 
   // Things we wish to return
   const newUsersState = structuredClone(usersState);
+  newUsersState.forEach(resetMasteriesToBase);
   const newGroundEffects: GroundEffect[] = [];
   const newUsersEffects: UserEffect[] = [];
   const actionEffects: ActionEffect[] = [];
@@ -1210,9 +1212,9 @@ export const applySingleEffect = (
         } else if (effect.type === "increasestat") {
           info = increaseStats(effect, newUsersEffects, curTarget);
         } else if (effect.type === "increasemastery") {
-          info = increaseMastery(effect, newUsersEffects, curTarget);
+          info = increaseMastery(effect, newUsersEffects, newTarget);
         } else if (effect.type === "decreasemastery") {
-          info = decreaseMastery(effect, newUsersEffects, curTarget);
+          info = decreaseMastery(effect, newUsersEffects, newTarget);
         } else if (effect.type === "increasemaxpools") {
           info = increaseMaxPools(effect, newUsersEffects, newTarget);
         } else if (effect.type === "decreasemaxpools") {

@@ -26,6 +26,7 @@ import {
   getPreventTypeName,
   isEffectActive,
   selectTransferEffects,
+  storeMasteryBases,
 } from "@/libs/combat/util";
 import { MASTERY_TYPE_TO_STAT } from "@/libs/mastery";
 import { calcHP, scaleUserStats } from "@/libs/profile";
@@ -796,6 +797,7 @@ const adjustMasteries = (effect: UserEffect, target: BattleUserState) => {
   const affected = getAffected(effect);
   if ("masteryTypes" in effect && effect.masteryTypes) {
     if (!effect.isNew && !effect.castThisRound) {
+      storeMasteryBases(target);
       effect.masteryTypes.forEach((mastery: MasteryType) => {
         const stat = MASTERY_TYPE_TO_STAT[mastery];
         if (effect.calculation === "static") {

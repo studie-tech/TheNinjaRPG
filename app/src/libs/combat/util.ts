@@ -11,6 +11,7 @@ import {
 import type { BattleType, PoolType } from "@/drizzle/constants";
 import {
   AutoBattleTypes,
+  MasteryNames,
   CLAN_BATTLE_REWARD_POINTS,
   FRIENDLY_PRESTIGE_COST,
   getUserCaps,
@@ -3020,5 +3021,29 @@ export const normalizeBattleUserCombatStats = (user: BattleUserState) => {
 export const normalizeBattleUsersState = (usersState: BattleUserState[]) => {
   for (const user of usersState) {
     normalizeBattleUserCombatStats(user);
+  }
+};
+
+/** Remember unbuffed masteries so residual mastery tags can be reapplied without stacking. */
+export const storeMasteryBases = (user: BattleUserState) => {
+  if (!user.baseStatsForModifiers) {
+    user.baseStatsForModifiers = {};
+  }
+  for (const key of MasteryNames) {
+    if (user.baseStatsForModifiers[key] === undefined) {
+      user.baseStatsForModifiers[key] = user[key];
+    }
+  }
+};
+
+/** Restore masteries to the values stored before residual mastery tags were applied. */
+export const resetMasteriesToBase = (user: BattleUserState) => {
+  const base = user.baseStatsForModifiers;
+  if (!base) return;
+  for (const key of MasteryNames) {
+    const stored = base[key];
+    if (stored !== undefined) {
+      user[key] = stored;
+    }
   }
 };

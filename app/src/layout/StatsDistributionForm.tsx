@@ -200,9 +200,11 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
     },
   ];
 
-  // Check if any stat in the specialization is capped
+  // Disable a specialization only when every one of its stats is already at cap.
+  // All presets share offence/defence, so treating a single capped combat stat as
+  // "maxed" would hide every Simple option.
   const isSpecializationDisabled = (option: (typeof specializationOptions)[number]) => {
-    return option.stats.some((stat) => {
+    return option.stats.every((stat) => {
       const maxValue = maxValues[stat];
       const currentValue = defaultValues[stat] ?? 0;
       return maxValue !== undefined && maxValue !== null && currentValue >= maxValue;
@@ -228,13 +230,22 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
     const pointsPerStat = Math.floor(availableStats / 4);
     const leftoverPoints = availableStats - pointsPerStat * 4;
 
+    let unusedPoints = 0;
     option.stats.forEach((stat, index) => {
-      // Add base points to each stat
-      const basePoints = pointsPerStat;
-      // Add 1 extra point to the first N stats where N is the number of leftover points
-      const extraPoint = index < leftoverPoints ? 1 : 0;
-      distribution[stat] = (defaultValues[stat] ?? 0) + basePoints + extraPoint;
+      const room = maxValues[stat] ?? 0;
+      const wanted = pointsPerStat + (index < leftoverPoints ? 1 : 0);
+      const add = Math.min(room, wanted);
+      unusedPoints += wanted - add;
+      distribution[stat] = (defaultValues[stat] ?? 0) + add;
     });
+    for (const stat of option.stats) {
+      if (unusedPoints <= 0) break;
+      const current = distribution[stat] ?? 0;
+      const room = (maxValues[stat] ?? 0) - (current - (defaultValues[stat] ?? 0));
+      const add = Math.min(room, unusedPoints);
+      distribution[stat] = current + add;
+      unusedPoints -= add;
+    }
 
     onAccept(distribution as StatSchemaType);
   };

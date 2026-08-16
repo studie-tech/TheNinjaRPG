@@ -562,7 +562,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                   name="preferredStat"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Offense</FormLabel>
+                      <FormLabel>Preferred Mastery</FormLabel>
                       <Select
                         onValueChange={(value) =>
                           field.onChange(value === "__highest__" ? null : value)
