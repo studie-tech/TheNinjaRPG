@@ -907,7 +907,8 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     <>
                       <div className="pb-1">
                         <b>
-                          {"sourceLabel" in effect && effect.sourceLabel
+                          {"sourceLabel" in effect &&
+                          typeof effect.sourceLabel === "string"
                             ? effect.sourceLabel
                             : `Effect ${i + 1}`}
                           :{" "}
