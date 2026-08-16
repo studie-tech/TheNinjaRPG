@@ -682,6 +682,7 @@ export const RollRandomBloodline = z.object({
   calculation: z.enum(["percentage"]).prefault("percentage"),
 });
 
+/** Item-only consumable: probabilistic roll of a level-1 catalog mode. */
 export const RollRandomSageMode = z.object({
   ...BaseAttributes,
   description: msg("Receive a random sage mode"),
@@ -1360,7 +1361,9 @@ export type ZodBloodlineType = z.output<typeof BloodlineValidator>;
 export type ZodBloodlineInput = z.input<typeof BloodlineValidator>;
 
 /**
- * SageMode Type. Used for validating a sage mode object is set up properly
+ * Staff-editor shape of a `SageMode` catalog row. `level` is the roll-pool gate;
+ * `requiredSageMastery` unlocks `level2Effects` (must be > 0 if that array is non-empty).
+ * Tag `rounds` are stripped on persist except `0` (instant).
  */
 export const SageModeValidator = z.object({
   name: z.string().trim(),

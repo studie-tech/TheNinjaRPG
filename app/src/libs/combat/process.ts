@@ -1886,8 +1886,18 @@ export const applyDamageModifierPipelineToConsequences = ({
 };
 
 /**
- * Realize sage tags for activation or exhaustion. Duration comes from the SageMode
- * row except `rounds === 0`, which stays a one-shot.
+ * Realize authored sage tags for activation (`sageMode`) or exhaustion
+ * (`sageModeAfter`). Lasting tags take `rounds` from the SageMode row and are
+ * backdated one round so they tick on the current apply pass. `rounds === 0`
+ * stays a one-shot and is not overwritten.
+ *
+ * @param props.tags - Catalog `effects`, `level2Effects`, or `afterEffects`.
+ * @param props.user - Actor who owns the mode (also the tag target).
+ * @param props.fromType - Source used by clear/copy/mirror exclusions.
+ * @param props.rounds - `activationRounds` or `afterEffectRounds`.
+ * @param props.actionId - Activation jutsu id, or `"sageModeAfter"`.
+ * @param props.level - Combat level from `getActiveSageLevel` (scales `powerPerLevel`).
+ * @param props.battle - Current battle (round + extra state).
  */
 function realizeSageTags(props: {
   tags: unknown[];
@@ -1929,7 +1939,12 @@ function realizeSageTags(props: {
 }
 
 /**
- * Pays sage mode activation costs and applies `SageMode.effects` from extra state.
+ * Charge activation pools and apply the equipped mode's `effects` (plus
+ * `level2Effects` at combat level 2). Only the injected Activation jutsu
+ * (`SAGE_MODE_ACTIVATION_JUTSU_ID`) may call this; authored jutsu/items are
+ * rejected by `SuperRefineEffects` and again here.
+ *
+ * @returns Combat-log line, or a gray refusal if a guard fails.
  */
 function applyActivateSageMode(
   consequences: Map<string, Consequence>,
@@ -2043,9 +2058,15 @@ function applyActivateSageMode(
 }
 
 /**
- * After a round advances: once the active window (`sageModeExpiresRound`, = activation round +
- * `activationRounds`) has elapsed, apply `SageMode.afterEffects` for `afterEffectRounds`
- * (After-Effect Duration on the row). Falls back to buff-presence when the expiry round is unset.
+ * After a round advances: once `sageModeExpiresRound` (activation round +
+ * `activationRounds`) has elapsed, queue lasting `afterEffects` and resolve
+ * instant ones immediately. Falls back to "any lasting sage buff still active"
+ * when expiry was never tracked. Also prunes spent active/exhaustion auras.
+ *
+ * Instant after-effects cannot wait for the next `applyEffects` actor — they
+ * are queued with `isNew=false` and would be dropped if that actor is not the sage.
+ *
+ * @param battle - Live battle mutated in place.
  */
 export function applySageModeAfterRoundTransition(battle: CompleteBattle): void {
   // Prune exhaustion-phase auras whose rounds have run out (visuals otherwise persist).
@@ -2116,7 +2137,15 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
   });
 }
 
-/** Resolve one-shot sage after-effects in the transition so they cannot be dropped. */
+/**
+ * Run one-shot (`rounds === 0`) exhaustion tags through `applySingleEffect` with
+ * the sage as actor, then fold heal/damage/drain onto pools. Lasting tags must
+ * not be passed here — they stay queued on `usersEffects`.
+ *
+ * @param battle - Live battle mutated in place.
+ * @param sageUserId - Actor/target for the after-effects.
+ * @param instant - Realized tags whose `rounds === 0`.
+ */
 function applyInstantSageAfterEffects(
   battle: CompleteBattle,
   sageUserId: string,

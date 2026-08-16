@@ -11,7 +11,13 @@ import { quest, sageMode, sageModeRolls } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 /**
- * Filter sage modes eligible for rolling from items.
+ * Item-roll pool: visible, village-compatible, level-1 modes the user has never rolled.
+ * Catalog `level` is a roll-pool gate only; combat level 2 is `requiredSageMastery`.
+ *
+ * @param props.sageModes - Catalog rows to filter (typically all non-hidden modes).
+ * @param props.user - Village and identity used for village-locked modes.
+ * @param props.previousRolls - `SageModeRolls` history; any prior id is excluded.
+ * @returns Modes that may be granted by a `rollsagemode` item.
  */
 export const filterRollableSageModes = (props: {
   sageModes: SageMode[];
@@ -32,9 +38,12 @@ export const filterRollableSageModes = (props: {
 };
 
 /**
- * Maps accumulated sage mastery experience to a mastery rank, using the shared
- * SAGE_MASTERY_REQUIRED_EXP thresholds. Floor is INITIATE (NONE is reserved for
- * "no sage mode" and shares the same cap).
+ * Maps accumulated sage mastery experience to a mastery rank via
+ * `SAGE_MASTERY_REQUIRED_EXP`. Floor is INITIATE — NONE is reserved for
+ * "no sage mode equipped" and shares INITIATE's daily cap.
+ *
+ * @param exp - `userData.sageMasteryExperience`.
+ * @returns Rank used for daily-cap lookup; never `NONE`.
  */
 export const getSageMasteryRank = (exp: number): SAGE_MASTERY_RANK => {
   if (exp >= SAGE_MASTERY_REQUIRED_EXP.LEGENDARY) return "LEGENDARY";
@@ -43,33 +52,55 @@ export const getSageMasteryRank = (exp: number): SAGE_MASTERY_RANK => {
   return "INITIATE";
 };
 
-/** Index of a mastery rank within SAGE_MASTERY_RANKS (higher = more mastery). */
+/**
+ * Ordinal of a mastery rank in `SAGE_MASTERY_RANKS` (higher = more mastery).
+ *
+ * @param rank - Rank to locate.
+ * @returns Index, or `-1` if the rank is unknown.
+ */
 export const getSageRankIndex = (rank: SAGE_MASTERY_RANK): number =>
   SAGE_MASTERY_RANKS.indexOf(rank);
 
-/** True when userRank meets or exceeds requiredRank by SAGE_MASTERY_RANKS order. */
+/**
+ * Whether `userRank` meets or exceeds `requiredRank` on the mastery ladder.
+ *
+ * @param userRank - Player's current display or computed rank.
+ * @param requiredRank - Quest or content minimum.
+ */
 export const isSageRankAtLeast = (
   userRank: SAGE_MASTERY_RANK,
   requiredRank: SAGE_MASTERY_RANK,
 ): boolean => getSageRankIndex(userRank) >= getSageRankIndex(requiredRank);
 
-/** All ranks at or below userRank — used for SQL `inArray` availability filtering. */
+/**
+ * Inclusive rank prefix for SQL `inArray` quest availability
+ * (`requiredSageRank` is a minimum, so every rank at or below the user qualifies).
+ *
+ * @param userRank - Player's current display rank.
+ */
 export const sageRanksAtOrBelow = (userRank: SAGE_MASTERY_RANK): SAGE_MASTERY_RANK[] =>
   SAGE_MASTERY_RANKS.slice(0, getSageRankIndex(userRank) + 1);
 
 /**
- * Display-facing mastery rank. A ninja who has not yet attained a sage mode has no
- * mastery at all (NONE); INITIATE and above only apply once a mode is equipped. This
- * realizes the NONE tier that getSageMasteryRank reserves but never returns. Combat
- * gating (getSageDailyCap) intentionally stays on the raw experience mapping — NONE and
- * INITIATE share the same daily cap, and activation already requires an equipped mode.
+ * Profile / quest display rank. Unequipped players are `NONE`; INITIATE+ only apply
+ * once a mode is worn. Combat daily-cap (`getSageDailyCap`) stays on the raw
+ * experience mapping because NONE and INITIATE share a cap and activation already
+ * requires an equipped mode.
+ *
+ * @param exp - `userData.sageMasteryExperience`.
+ * @param hasSageMode - Whether `userData.sageModeId` is set.
  */
 export const getSageMasteryDisplayRank = (
   exp: number,
   hasSageMode: boolean,
 ): SAGE_MASTERY_RANK => (hasSageMode ? getSageMasteryRank(exp) : "NONE");
 
-/** Quest availability predicates shared by mission-hall and uncompleted-quest fetches. */
+/**
+ * SQL predicates shared by mission-hall and uncompleted-quest fetches: exact
+ * `requiredSageModeId` (or unset) and minimum `requiredSageRank` (or unset).
+ *
+ * @param user - Equipped mode and mastery experience from the questing player.
+ */
 export const sageQuestFilters = (
   user: Pick<UserData, "sageModeId" | "sageMasteryExperience">,
 ) => [
@@ -89,16 +120,23 @@ export const sageQuestFilters = (
 ];
 
 /**
- * The number of sage mode activations allowed per day at the user's mastery rank.
+ * Daily activation allowance at the user's experience-mapped rank
+ * (`SAGE_MASTERY_DAILY_ACTIVATIONS`). NONE and INITIATE share the same cap.
+ *
+ * @param exp - `userData.sageMasteryExperience` (or the battle-state copy).
  */
 export const getSageDailyCap = (exp: number): number =>
   SAGE_MASTERY_DAILY_ACTIVATIONS[getSageMasteryRank(exp)];
 
 /**
- * The chakra/stamina cost of activating a sage mode, as a flat amount derived from
- * the user's max pools and the mode's percentage costs. Shared by the combat
- * availability gate (so an unaffordable Activation is never offered) and the
- * activation processor (which charges the pools), so the two never disagree.
+ * Flat chakra/stamina cost of activating a mode, from max pools and the mode's
+ * percentage costs. Shared by the offer gate (`handleInjectedJutsus`) and
+ * `applyActivateSageMode` so an unaffordable Activation is never offered and
+ * the charge never disagrees with that gate.
+ *
+ * @param sageMode - Equipped mode's `chakraCostPerc` / `staminaCostPerc`.
+ * @param maxChakra - Actor's current max chakra.
+ * @param maxStamina - Actor's current max stamina.
  */
 export const getSageModeActivationCost = (
   sageMode: Pick<SageMode, "chakraCostPerc" | "staminaCostPerc">,
@@ -110,10 +148,13 @@ export const getSageModeActivationCost = (
 });
 
 /**
- * A mode's ACTIVE level is computed, not stored: the catalog `level` column only
- * gates the roll pool. A user unlocks level 2 once their sage mastery experience
- * reaches the equipped mode's `requiredSageMastery` threshold (0 means no level-2
- * variant is defined, so it stays level 1 regardless of experience).
+ * Combat level of the equipped mode. Catalog `level` only gates the roll pool;
+ * level 2 unlocks when mastery experience meets `requiredSageMastery` (0 = no
+ * Tier 2, stays 1 regardless of experience).
+ *
+ * @param exp - Actor's `sageMasteryExperience`.
+ * @param sageMode - Equipped catalog row (threshold only).
+ * @returns `1` or `SAGE_MODE_MAX_LEVEL` (2).
  */
 export const getActiveSageLevel = (
   exp: number,
@@ -124,7 +165,10 @@ export const getActiveSageLevel = (
     : 1;
 
 /**
- * Fetch all sage mode rolls for a user so item and quest acquisition share one history.
+ * Item and quest acquisition share this history so a mode cannot be rolled twice.
+ *
+ * @param client - Drizzle client.
+ * @param userId - Player whose `SageModeRolls` rows to load.
  */
 export const fetchSageModeRolls = async (client: DrizzleClient, userId: string) => {
   return await client.query.sageModeRolls.findMany({
@@ -133,6 +177,12 @@ export const fetchSageModeRolls = async (client: DrizzleClient, userId: string) 
   });
 };
 
+/**
+ * Visible catalog rows for item-roll pooling. Hidden modes are staff-only and
+ * are never granted by `rollsagemode`.
+ *
+ * @param client - Drizzle client.
+ */
 export const fetchSageModes = async (client: DrizzleClient) => {
   return await client.query.sageMode.findMany({ where: eq(sageMode.hidden, false) });
 };

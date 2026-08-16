@@ -32,6 +32,7 @@ const effects: ZodAllTags[] = [
   },
 ];
 
+/** Injected into `extraState.jutsus` at battle start; not a seeded `Jutsu` row. */
 export const SAGE_MODE_ACTIVATION_JUTSU_FALLBACK: Jutsu = {
   id: SAGE_MODE_ACTIVATION_JUTSU_ID,
   name: "Activation",

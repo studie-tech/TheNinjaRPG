@@ -14,6 +14,7 @@ import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { DamageTag, SageModeValidator, tagTypes } from "@/validators/combat";
 
+/** Staff editor route for one `SageMode` catalog row. */
 export default function SageModeEdit(props: {
   params: Promise<{ sagemodeid: string }>;
 }) {
@@ -58,6 +59,7 @@ interface SingleEditSageModeProps {
   refetch: () => void;
 }
 
+/** Form + the three effect panels (active, after, level 2) for one catalog row. */
 const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
   const {
     loading,
@@ -73,6 +75,7 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
     handleSageModeSubmit,
   } = useSageModeEditForm(props.sageMode, props.refetch);
 
+  /** Append a placeholder damage tag to the active-phase `effects` array. */
   const addEffect = () => {
     setEffects([
       ...effects,
@@ -83,12 +86,14 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
     ]);
   };
 
+  /** Drop the active-phase effect at index `i`. */
   const removeEffect = (i: number) => {
     const newEffects = [...effects];
     newEffects.splice(i, 1);
     setEffects(newEffects);
   };
 
+  /** Append a placeholder damage tag to `afterEffects` (exhaustion phase). */
   const addAfterEffect = () => {
     setAfterEffects([
       ...afterEffects,
@@ -99,12 +104,14 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
     ]);
   };
 
+  /** Drop the after-effect at index `i`. */
   const removeAfterEffect = (i: number) => {
     const newEffects = [...afterEffects];
     newEffects.splice(i, 1);
     setAfterEffects(newEffects);
   };
 
+  /** Append a placeholder damage tag to `level2Effects` (merged at combat level 2). */
   const addLevel2Effect = () => {
     setLevel2Effects([
       ...level2Effects,
@@ -115,6 +122,7 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
     ]);
   };
 
+  /** Drop the level-2-only effect at index `i`. */
   const removeLevel2Effect = (i: number) => {
     const newEffects = [...level2Effects];
     newEffects.splice(i, 1);

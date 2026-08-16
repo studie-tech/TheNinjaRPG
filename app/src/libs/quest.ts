@@ -1601,7 +1601,8 @@ export const controlShownQuestLocationInformation = (
 };
 
 /**
- * Checks whether a quest is currently available to a user.
+ * Checks whether a quest is currently available to a user, including sage mode
+ * (`requiredSageModeId`) and minimum sage mastery rank (`requiredSageRank`).
  *
  * @param questAndUserQuestInfo - The quest object to be checked.
  * @param user - User whose permissions, progression, and completed prerequisites are checked.

@@ -972,11 +972,12 @@ export const BLOODLINE_SWAP_FREE_NORMAL = 0;
 export const BLOODLINE_SWAP_FREE_SILVER = 0;
 export const BLOODLINE_SWAP_FREE_GOLD = 1;
 
-// Sage Mode config
+/** Provenance stored on `SageModeRolls.type`. There is no pity or swap path. */
 export const SAGE_MODE_ROLL_TYPES = ["ITEM", "QUEST"] as const;
+/** Combat levels a mode can apply. Catalog `level` is a roll-pool gate, not this. */
 export const SAGE_MODE_MAX_LEVEL = 2;
 
-// Sage Mastery ranks
+/** Mastery ladder. `NONE` means no mode equipped; INITIATE+ require `sageModeId`. */
 export const SAGE_MASTERY_RANKS = [
   "NONE",
   "INITIATE",
@@ -986,6 +987,7 @@ export const SAGE_MASTERY_RANKS = [
 ] as const;
 export type SAGE_MASTERY_RANK = (typeof SAGE_MASTERY_RANKS)[number];
 
+/** Experience thresholds for `getSageMasteryRank`. INITIATE and NONE both start at 0. */
 export const SAGE_MASTERY_REQUIRED_EXP: Record<SAGE_MASTERY_RANK, number> = {
   NONE: 0,
   INITIATE: 0,
@@ -993,8 +995,10 @@ export const SAGE_MASTERY_REQUIRED_EXP: Record<SAGE_MASTERY_RANK, number> = {
   MASTER: 250000,
   LEGENDARY: 450000,
 };
-export const SAGE_MASTERY_EXP_CAP = 450_000; // matches the LEGENDARY threshold / stat maximum
+/** Hard cap on `userData.sageMasteryExperience` (Legendary threshold). */
+export const SAGE_MASTERY_EXP_CAP = 450_000;
 
+/** Daily Activation uses allowed at each mastery rank. NONE and INITIATE share 10. */
 export const SAGE_MASTERY_DAILY_ACTIVATIONS: Record<SAGE_MASTERY_RANK, number> = {
   NONE: 10,
   INITIATE: 10,
@@ -1003,12 +1007,13 @@ export const SAGE_MASTERY_DAILY_ACTIVATIONS: Record<SAGE_MASTERY_RANK, number> =
   LEGENDARY: 20,
 };
 
-// Battle types where sage mode is NOT allowed
+/** Battle types that never offer or accept sage Activation. */
 export const SAGE_MODE_DISABLED_BATTLES: BattleType[] = ["RANKED_PVP", "RANKED_SPARRING"];
 
 /** Injectable jutsu that runs sage-mode activation (costs + effects come from `SageMode` row). */
 export const SAGE_MODE_ACTIVATION_JUTSU_ID = "cmj8sagemodeactivatejutsu000000";
 
+/** Combat-log line when a mode has no `battleDescription`. `%user` is templated. */
 export const SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE = "%user enters sage mode!";
 
 /** AP cost % of the Activation action when a mode defines no value of its own. */

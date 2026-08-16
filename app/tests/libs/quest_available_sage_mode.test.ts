@@ -7,6 +7,7 @@ import { isAvailableUserQuests } from "@/libs/quest";
 // fields exercised by the requiredSageModeId check matter at runtime.
 // ---------------------------------------------------------------------------
 
+/** Quest fixture exercising only sage mode / rank availability gates. */
 const makeQuest = (
   requiredSageModeId: string | null,
   requiredSageRank: string | null = null,
@@ -32,6 +33,7 @@ const makeQuest = (
     maxLevel: null,
   }) as unknown as Parameters<typeof isAvailableUserQuests>[0];
 
+/** User fixture with an optional equipped mode and mastery experience. */
 const makeUser = (sageModeId: string | null, sageMasteryExperience = 0) =>
   ({
     role: "USER",

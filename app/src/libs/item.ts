@@ -28,6 +28,8 @@ import { getStrucBoost } from "@/utils/village";
 
 /**
  * Checks if an item is consumable outside of combat.
+ * `rollsagemode` counts only when the user has no equipped sage mode (same as the
+ * consume endpoint, which skips the roll if a mode is already worn).
  * @param item - The item to check.
  * @param userData - The user data.
  * @returns True if the item is consumable outside of combat, false otherwise.

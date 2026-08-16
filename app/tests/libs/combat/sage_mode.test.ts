@@ -33,6 +33,7 @@ const makeSageMode = (): SageMode =>
     ],
   }) as unknown as SageMode;
 
+/** Minimal COMBAT battle whose `extraState.sageModes` holds `makeSageMode()`. */
 const makeSageBattle = (
   usersState: ReturnType<typeof makeBattleUser>[],
   usersEffects: UserEffect[] = [],

@@ -11,7 +11,9 @@ import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /**
- * Show the user's current sage mode and let them remove it.
+ * Equipped sage mode card plus paid removal. Hidden modes still load via
+ * `sageMode.get`. Set `embedded` when the parent already provides a titled box
+ * (profile edit accordion) so this does not wrap a second `ContentBox`.
  */
 interface CurrentSageModeProps {
   sageModeId: string;
@@ -20,6 +22,7 @@ interface CurrentSageModeProps {
   embedded?: boolean;
 }
 
+/** Equipped-mode viewer and reputation-paid removal control. */
 export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
   const { data: userData } = useRequiredUserData();
   const utils = api.useUtils();

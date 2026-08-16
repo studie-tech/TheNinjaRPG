@@ -13,6 +13,7 @@ import type {
   UserEffect,
 } from "@/libs/combat/types";
 
+/** COMBAT battle with only the injected Activation jutsu in extra state. */
 const makeInjectBattle = (
   user: ReturnType<typeof makeBattleUser>,
 ): CompleteBattle =>
@@ -27,6 +28,7 @@ const makeInjectBattle = (
     },
   }) as unknown as CompleteBattle;
 
+/** Equipped sage at INITIATE daily cap (10), with the given activations used today. */
 const sageUser = (dailySageActivations: number) =>
   makeBattleUser("sage", {
     sageModeId: "sage-1",
@@ -49,9 +51,11 @@ describe("sage activation daily-cap gating", () => {
   });
 });
 
+/** Zero-cost catalog fixture so activation tests isolate the daily-cap guard. */
 const makeSageMode = (): SageMode =>
   ({ id: "sage-1", level: 1, activationRounds: 3, chakraCostPerc: 0, staminaCostPerc: 0, effects: [] }) as unknown as SageMode;
 
+/** Battle whose extra state holds `makeSageMode()` for `applySingleEffect`. */
 const makeActivateBattle = (
   user: ReturnType<typeof makeBattleUser>,
 ): CompleteBattle =>
@@ -64,6 +68,7 @@ const makeActivateBattle = (
     extraState: { sageModes: { "sage-1": makeSageMode() } },
   }) as unknown as CompleteBattle;
 
+/** `activatesagemode` tag stamped with the real Activation jutsu id. */
 const activateEffect = (): UserEffect =>
   makeEffect(
     "activatesagemode",
@@ -71,6 +76,7 @@ const activateEffect = (): UserEffect =>
     { id: "act-1", creatorId: "sage", targetId: "sage", targetType: "user", isNew: true, castThisRound: true, createdRound: 1, actionId: SAGE_MODE_ACTIVATION_JUTSU_ID },
   );
 
+/** Run one Activation through `applySingleEffect` against `user`. */
 const runActivate = (user: ReturnType<typeof makeBattleUser>) => {
   const battle = makeActivateBattle(user);
   applySingleEffect(

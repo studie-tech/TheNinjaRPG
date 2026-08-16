@@ -9,6 +9,7 @@ import { SAGE_MODE_ACTIVATION_JUTSU_FALLBACK } from "@/libs/combat/sageModeActiv
 import { makeBattleUser } from "./helpers/battleScenario";
 import type { CompleteBattle } from "@/libs/combat/types";
 
+/** Catalog fixture for AP-cost tests. Override `actionCostPerc` per case. */
 const makeSageMode = (overrides: Partial<SageMode> = {}): SageMode =>
   ({
     id: "sage-1",
@@ -22,6 +23,7 @@ const makeSageMode = (overrides: Partial<SageMode> = {}): SageMode =>
     ...overrides,
   }) as unknown as SageMode;
 
+/** COMBAT battle with the injected Activation jutsu and the given catalog map. */
 const makeBattle = (
   user: ReturnType<typeof makeBattleUser>,
   sageModes: Record<string, SageMode>,
@@ -38,6 +40,7 @@ const makeBattle = (
     },
   }) as unknown as CompleteBattle;
 
+/** Actor with an equipped mode, unused this battle, and full pools. */
 const sageUser = () =>
   makeBattleUser("sage", {
     sageModeId: "sage-1",
@@ -50,6 +53,7 @@ const sageUser = () =>
     maxStamina: 5000,
   });
 
+/** AP cost of the Activation action after `availableUserActions` builds it. */
 const activationCost = (sageModes: Record<string, SageMode>) => {
   const user = sageUser();
   const actions = availableUserActions(makeBattle(user, sageModes), "sage");
