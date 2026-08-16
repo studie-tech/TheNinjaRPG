@@ -29,6 +29,11 @@ export const updateSupportTicketSchema = z.object({
   isPublic: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
   assignedToUserId: z.string().optional(),
+  description: z
+    .string()
+    .min(50, "Description must be at least 50 characters")
+    .max(5000, "Description cannot exceed 5000 characters")
+    .optional(),
 });
 
 // Escalate to GitHub Schema
