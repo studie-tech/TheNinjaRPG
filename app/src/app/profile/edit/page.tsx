@@ -1314,7 +1314,8 @@ const ResetStats: React.FC = () => {
   return (
     <div className="flex flex-col gap-3">
       <p>
-        Redistribute all your stats ({totalStats} total points). This will cost {cost}{" "}
+        Redistribute all your stats ({round(totalStats)} total points). This will cost{" "}
+        {cost}{" "}
         reputation points.
       </p>
       {!canAfford && (
