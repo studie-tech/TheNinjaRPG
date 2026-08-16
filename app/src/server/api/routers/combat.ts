@@ -122,7 +122,7 @@ import {
   consolidatePreBattleDamageModifiers,
   emptyPreBattleGearModifiers,
 } from "@/libs/combat/process";
-import { SAGE_MODE_ACTIVATION_JUTSU_FALLBACK } from "@/libs/combat/sageModeActivationJutsu";
+import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { realizeTag } from "@/libs/combat/tags";
 import type {
   ActionEffect,
@@ -2304,9 +2304,7 @@ export const initiateBattle = async (
         jutsus: {
           ...extraState.jutsus,
           ...Object.fromEntries(injectableJutsus.map((j) => [j.id, j])),
-          [SAGE_MODE_ACTIVATION_JUTSU_ID]:
-            injectableJutsus.find((j) => j.id === SAGE_MODE_ACTIVATION_JUTSU_ID) ??
-            SAGE_MODE_ACTIVATION_JUTSU_FALLBACK,
+          [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU,
         },
         dmgConfig: dmgConfig,
         settings: settings,
