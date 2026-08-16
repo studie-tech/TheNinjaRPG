@@ -1,26 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
 import { applySageModeAfterRoundTransition, applySingleEffect } from "@/libs/combat/process";
 import { cleanse, getPower } from "@/libs/combat/tags";
 import { isEffectActive } from "@/libs/combat/util";
-import { makeBattleUser, makeEffect, makeTag } from "./helpers/battleScenario";
+import {
+  makeBattleUser,
+  makeCompleteBattle,
+  makeEffect,
+  makeTag,
+} from "./helpers/battleScenario";
+import { makeActivateSageEffect, makeSageMode } from "./helpers/sageMode";
 import type {
   ActionEffect,
-  CompleteBattle,
   Consequence,
   GroundEffect,
   UserEffect,
 } from "@/libs/combat/types";
-import type { SageMode } from "@/drizzle/schema";
 
-/**
- * Minimal SageMode fixture whose after-effect is a simple stat-reduction
- * "exhaustion" tag. Only the fields read by the transition are populated.
- */
-const makeSageMode = (): SageMode =>
-  ({
-    id: "sage-1",
-    level: 1,
+/** Exhaustion fixture: a simple stat-reduction after-effect. */
+const exhaustionSageMode = () =>
+  makeSageMode({
     afterEffectRounds: 2,
     afterEffects: [
       makeTag("decreasestat", {
@@ -31,22 +29,19 @@ const makeSageMode = (): SageMode =>
         generalTypes: [],
       }),
     ],
-  }) as unknown as SageMode;
+  });
 
-/** Minimal COMBAT battle whose `extraState.sageModes` holds `makeSageMode()`. */
+/** COMBAT battle at round 5 whose catalog holds the exhaustion fixture. */
 const makeSageBattle = (
   usersState: ReturnType<typeof makeBattleUser>[],
   usersEffects: UserEffect[] = [],
-): CompleteBattle =>
-  ({
-    id: "battle-1",
-    battleType: "COMBAT",
-    round: 5,
+) =>
+  makeCompleteBattle({
     usersState,
     usersEffects,
-    groundEffects: [],
-    extraState: { sageModes: { "sage-1": makeSageMode() } },
-  }) as unknown as CompleteBattle;
+    round: 5,
+    extraState: { sageModes: { "sage-1": exhaustionSageMode() } },
+  });
 
 describe("applySageModeAfterRoundTransition", () => {
   it("does not strip a bystander's max-pool buff when sage after-effects apply", () => {
@@ -180,18 +175,18 @@ describe("applySageModeAfterRoundTransition", () => {
       sageModeId: "sage-zero",
       sageModeExpiresRound: 5,
     });
-    const battle = {
-      ...makeSageBattle([sage]),
+    const battle = makeCompleteBattle({
+      usersState: [sage],
+      round: 5,
       extraState: {
         sageModes: {
-          "sage-zero": {
-            ...makeSageMode(),
+          "sage-zero": makeSageMode({
             id: "sage-zero",
             afterEffectRounds: 0,
-          },
+          }),
         },
       },
-    } as unknown as CompleteBattle;
+    });
 
     applySageModeAfterRoundTransition(battle);
 
@@ -229,15 +224,11 @@ describe("sage mode active-phase aura teardown at expiry", () => {
   // `... || effect.type === "visual"` branch). That means an active-phase sage aura
   // outlives its `activationRounds` and lingers for the rest of the battle unless
   // something explicitly tears it down once `sageModeActivated` flips back to false.
-  const makeAuraSageMode = (): SageMode =>
-    ({
+  const makeAuraSageMode = () =>
+    makeSageMode({
       id: "sage-aura",
-      level: 1,
       activationRounds: 2,
-      chakraCostPerc: 0,
-      staminaCostPerc: 0,
       afterEffectRounds: 0,
-      afterEffects: [],
       effects: [
         makeTag("increasestat", {
           power: 10,
@@ -247,34 +238,14 @@ describe("sage mode active-phase aura teardown at expiry", () => {
         }),
         makeTag("visual", { staticAssetPath: "aura.webp" }),
       ],
-    }) as unknown as SageMode;
+    });
 
-  const makeAuraBattle = (user: ReturnType<typeof makeBattleUser>): CompleteBattle =>
-    ({
+  const makeAuraBattle = (user: ReturnType<typeof makeBattleUser>) =>
+    makeCompleteBattle({
       id: "battle-aura",
-      battleType: "COMBAT",
-      round: 1,
       usersState: [user],
-      usersEffects: [],
-      groundEffects: [],
       extraState: { sageModes: { "sage-aura": makeAuraSageMode() } },
-    }) as unknown as CompleteBattle;
-
-  const activateEffect = (): UserEffect =>
-    makeEffect(
-      "activatesagemode",
-      {},
-      {
-        id: "act-aura",
-        creatorId: "sage",
-        targetId: "sage",
-        targetType: "user",
-        isNew: true,
-        castThisRound: true,
-        createdRound: 1,
-        actionId: SAGE_MODE_ACTIVATION_JUTSU_ID,
-      },
-    );
+    });
 
   it("removes the active-phase visual aura once activationRounds elapse", () => {
     const user = makeBattleUser("sage", {
@@ -298,7 +269,7 @@ describe("sage mode active-phase aura teardown at expiry", () => {
       new Set<string>(),
       battle,
       "sage",
-      activateEffect(),
+      makeActivateSageEffect("sage", { id: "act-aura" }),
     );
     battle.usersEffects = newUsersEffects;
     expect(user.sageModeActivated).toBe(true);
@@ -339,14 +310,10 @@ describe("sage mode activation level scaling", () => {
   // sage mastery experience (see getActiveSageLevel in @/libs/sageMode).
   const requiredSageMastery = 50_000;
 
-  const makeScalingSageMode = (): SageMode =>
-    ({
+  const makeScalingSageMode = () =>
+    makeSageMode({
       id: "sage-scaling",
-      level: 1,
       requiredSageMastery,
-      activationRounds: 3,
-      chakraCostPerc: 0,
-      staminaCostPerc: 0,
       effects: [
         makeTag("increasestat", {
           power: 10,
@@ -357,35 +324,7 @@ describe("sage mode activation level scaling", () => {
           generalTypes: [],
         }),
       ],
-    }) as unknown as SageMode;
-
-  const makeScalingBattle = (
-    user: ReturnType<typeof makeBattleUser>,
-  ): CompleteBattle =>
-    ({
-      battleType: "COMBAT",
-      round: 1,
-      usersState: [user],
-      usersEffects: [],
-      groundEffects: [],
-      extraState: { sageModes: { "sage-scaling": makeScalingSageMode() } },
-    }) as unknown as CompleteBattle;
-
-  const activateEffect = (): UserEffect =>
-    makeEffect(
-      "activatesagemode",
-      {},
-      {
-        id: "act-scaling",
-        creatorId: "sage",
-        targetId: "sage",
-        targetType: "user",
-        isNew: true,
-        castThisRound: true,
-        createdRound: 1,
-        actionId: SAGE_MODE_ACTIVATION_JUTSU_ID,
-      },
-    );
+    });
 
   const runScalingActivation = (sageMasteryExperience: number) => {
     const user = makeBattleUser("sage", {
@@ -396,7 +335,10 @@ describe("sage mode activation level scaling", () => {
       curStamina: 5000,
       maxStamina: 5000,
     });
-    const battle = makeScalingBattle(user);
+    const battle = makeCompleteBattle({
+      usersState: [user],
+      extraState: { sageModes: { "sage-scaling": makeScalingSageMode() } },
+    });
     const newUsersEffects: UserEffect[] = [];
     applySingleEffect(
       new Map<string, Consequence>(),
@@ -407,7 +349,7 @@ describe("sage mode activation level scaling", () => {
       new Set<string>(),
       battle,
       "sage",
-      activateEffect(),
+      makeActivateSageEffect("sage", { id: "act-scaling" }),
     );
     return newUsersEffects.find(
       (e) => e.fromType === "sageMode" && e.type === "increasestat",
@@ -430,14 +372,10 @@ describe("sage mode activation level scaling", () => {
 describe("sage mode level2Effects activation", () => {
   const requiredSageMastery = 100;
 
-  const makeLevel2SageMode = (): SageMode =>
-    ({
+  const makeLevel2SageMode = () =>
+    makeSageMode({
       id: "sage-level2",
-      level: 1,
       requiredSageMastery,
-      activationRounds: 3,
-      chakraCostPerc: 0,
-      staminaCostPerc: 0,
       effects: [
         makeTag("increasestat", {
           power: 10,
@@ -456,35 +394,7 @@ describe("sage mode level2Effects activation", () => {
           generalTypes: [],
         }),
       ],
-    }) as unknown as SageMode;
-
-  const makeLevel2Battle = (
-    user: ReturnType<typeof makeBattleUser>,
-  ): CompleteBattle =>
-    ({
-      battleType: "COMBAT",
-      round: 1,
-      usersState: [user],
-      usersEffects: [],
-      groundEffects: [],
-      extraState: { sageModes: { "sage-level2": makeLevel2SageMode() } },
-    }) as unknown as CompleteBattle;
-
-  const activateEffect = (): UserEffect =>
-    makeEffect(
-      "activatesagemode",
-      {},
-      {
-        id: "act-level2",
-        creatorId: "sage",
-        targetId: "sage",
-        targetType: "user",
-        isNew: true,
-        castThisRound: true,
-        createdRound: 1,
-        actionId: SAGE_MODE_ACTIVATION_JUTSU_ID,
-      },
-    );
+    });
 
   const runLevel2Activation = (sageMasteryExperience: number) => {
     const user = makeBattleUser("sage", {
@@ -495,7 +405,10 @@ describe("sage mode level2Effects activation", () => {
       curStamina: 5000,
       maxStamina: 5000,
     });
-    const battle = makeLevel2Battle(user);
+    const battle = makeCompleteBattle({
+      usersState: [user],
+      extraState: { sageModes: { "sage-level2": makeLevel2SageMode() } },
+    });
     const newUsersEffects: UserEffect[] = [];
     applySingleEffect(
       new Map<string, Consequence>(),
@@ -506,7 +419,7 @@ describe("sage mode level2Effects activation", () => {
       new Set<string>(),
       battle,
       "sage",
-      activateEffect(),
+      makeActivateSageEffect("sage", { id: "act-level2" }),
     );
     return newUsersEffects
       .filter((e) => e.fromType === "sageMode" && e.type === "increasestat")
@@ -536,20 +449,21 @@ describe("sage mode instant tags", () => {
       curHealth: 4000,
       maxHealth: 5000,
     });
-    const battle = {
-      ...makeSageBattle([sage]),
+    const battle = makeCompleteBattle({
+      usersState: [sage],
+      round: 5,
       extraState: {
         sageModes: {
-          "sage-instant-after": {
+          "sage-instant-after": makeSageMode({
             id: "sage-instant-after",
             afterEffectRounds: 3,
             afterEffects: [
               makeTag("heal", { power: 10, rounds: 0, calculation: "static" }),
             ],
-          },
+          }),
         },
       },
-    } as unknown as CompleteBattle;
+    });
 
     applySageModeAfterRoundTransition(battle);
 

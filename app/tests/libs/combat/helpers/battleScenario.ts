@@ -8,6 +8,9 @@ import type {
   BattleUserItem,
   BattleUserJutsu,
   BattleUserState,
+  CompleteBattle,
+  ExtraState,
+  GroundEffect,
   PreBattleGearModifiers,
   ReturnedBattle,
   UserEffect,
@@ -394,6 +397,57 @@ export const makeBattleWithWeapon = (params: {
     },
   } as unknown as ReturnedBattle;
 };
+
+type MakeCompleteBattleInput = {
+  usersState?: BattleUserState[];
+  usersEffects?: UserEffect[];
+  groundEffects?: GroundEffect[];
+  extraState?: Partial<ExtraState>;
+} & Partial<
+  Omit<CompleteBattle, "usersState" | "usersEffects" | "groundEffects" | "extraState">
+>;
+
+/**
+ * Minimal `CompleteBattle` for unit tests. Combat helpers only read a handful of
+ * fields; the rest are filled with COMBAT defaults and cast through, matching the
+ * per-suite `makeBattle` fixtures this replaces.
+ */
+export const makeCompleteBattle = (
+  overrides: MakeCompleteBattleInput = {},
+): CompleteBattle => {
+  const { extraState, ...rest } = overrides;
+  return {
+    id: "battle-1",
+    battleType: "COMBAT",
+    round: 1,
+    usersState: [],
+    usersEffects: [],
+    groundEffects: [],
+    extraState: extraState ?? {},
+    ...rest,
+  } as unknown as CompleteBattle;
+};
+
+/**
+ * COMBAT battle for injected-jutsu tests (`handleInjectedJutsus`,
+ * `availableUserActions`). Pass any injectable jutsu map on `extraState.jutsus`;
+ * this is not tied to a single feature catalog.
+ *
+ * @param users - One user or the full `usersState` array.
+ * @param extraState - Typically `{ jutsus: { [id]: jutsu } }`, plus any other
+ *   static catalogs the action builder looks up (items, sage modes, …).
+ * @param overrides - Round, effects, battle type, etc.
+ */
+export const makeInjectBattle = (
+  users: BattleUserState | BattleUserState[],
+  extraState: Partial<ExtraState> = {},
+  overrides: Omit<MakeCompleteBattleInput, "usersState" | "extraState"> = {},
+): CompleteBattle =>
+  makeCompleteBattle({
+    usersState: Array.isArray(users) ? users : [users],
+    extraState,
+    ...overrides,
+  });
 
 /**
  * Creates the dynamic user-item reference for the default weapon fixture.
