@@ -375,7 +375,13 @@ const Sector: React.FC<SectorProps> = (props) => {
   const { data: userData, pusher, timeDiff, updateUser } = useRequiredUserData();
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },
-    { enabled: sector !== undefined, placeholderData: (previous) => previous },
+    {
+      enabled: sector !== undefined,
+      placeholderData: (previous) => previous,
+      // Presence and fights change while the tab is open; pusher events can be
+      // missed, so poll the sector snapshot on a short interval.
+      refetchInterval: 10_000,
+    },
   );
   const villageData = data?.village;
   /** Combines player records and overworld AIs for the shared sector-user rendering path. */
@@ -1886,7 +1892,11 @@ const Sector: React.FC<SectorProps> = (props) => {
               isOutlaw: user.isOutlaw || false,
             };
           })
-          .filter((u) => u?.userId) || [];
+          .filter(
+            (u) =>
+              u?.userId &&
+              (u.userId === userData.userId || u.sector === sectorRef.current),
+          ) || [];
       // Keep the live client-side position for the own marker: a stale
       // in-flight snapshot must not move it
       setSorrounding(enrichedData);

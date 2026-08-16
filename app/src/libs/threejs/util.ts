@@ -61,6 +61,35 @@ const textureCache = new Map<string, Texture>();
 const materialCache = new Map<string, SpriteMaterial>();
 const pendingLoads = new Map<string, Promise<Texture>>();
 
+let whitePixelPlaceholder: HTMLCanvasElement | undefined;
+
+/**
+ * 1x1 white image used while a TextureLoader request is in flight (or after it
+ * fails). Three.js samples an empty map as black, which turns water tiles and
+ * masked portraits invisible; a white placeholder keeps material color visible.
+ */
+const getWhitePixelPlaceholder = () => {
+  if (typeof document === "undefined") return undefined;
+  if (whitePixelPlaceholder) return whitePixelPlaceholder;
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 1, 1);
+  }
+  whitePixelPlaceholder = canvas;
+  return canvas;
+};
+
+const applyWhitePlaceholder = (texture: Texture) => {
+  const placeholder = getWhitePixelPlaceholder();
+  if (!placeholder || texture.image) return;
+  texture.image = placeholder;
+  texture.needsUpdate = true;
+};
+
 /**
  * Load texture from file
  */
@@ -70,6 +99,7 @@ export const loadTexture = (path: string, width = 50) => {
     // Return a new empty texture to prevent crashes, but this shouldn't happen
     const fallback = new Texture();
     fallback.colorSpace = SRGBColorSpace;
+    applyWhitePlaceholder(fallback);
     return fallback;
   }
 
@@ -82,6 +112,7 @@ export const loadTexture = (path: string, width = 50) => {
   // Start load immediately and cache the Texture instance
   const texture = getTextureLoader().load(transformedPath);
   texture.colorSpace = SRGBColorSpace;
+  applyWhitePlaceholder(texture);
   textureCache.set(transformedPath, texture);
   return texture;
 };

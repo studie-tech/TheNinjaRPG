@@ -1041,6 +1041,43 @@ describe("standard terrain palette", () => {
     expect(registry.get("ocean")?.defaultWalkCost).toBe(1);
     expect(registry.get("ground")?.defaultWalkCost).toBe(1);
   });
+
+  it("keeps the built-in ocean texture when a database row leaves it blank", () => {
+    const builtin = mergeTerrainSpecs([]).get("ocean");
+    const registry = mergeTerrainSpecs([
+      {
+        key: "ocean",
+        name: "Broken Ocean",
+        colors: ["#184695", "#1c54b5", "#2767d7"],
+        textureUrl: "",
+        swatchColor: "#1c54b5",
+        battleBiome: "ocean",
+        isWater: true,
+        depression: 0.5,
+        defaultWalkCost: 1,
+      },
+    ]);
+    expect(registry.get("ocean")?.textureUrl).toBe(builtin?.textureUrl);
+    expect(registry.get("ocean")?.textureUrl).toBeTruthy();
+  });
+
+  it("keeps built-in ocean colors when a database row sends an invalid palette", () => {
+    const builtin = mergeTerrainSpecs([]).get("ocean");
+    const registry = mergeTerrainSpecs([
+      {
+        key: "ocean",
+        name: "Broken Ocean",
+        colors: ["not-a-color", "#000000", "#000000"] as never,
+        textureUrl: builtin?.textureUrl ?? null,
+        swatchColor: "#1c54b5",
+        battleBiome: "ocean",
+        isWater: true,
+        depression: 0.5,
+        defaultWalkCost: 1,
+      },
+    ]);
+    expect(registry.get("ocean")?.colors).toEqual(builtin?.colors);
+  });
 });
 
 describe("validateNormalizedSectorMap rejections", () => {

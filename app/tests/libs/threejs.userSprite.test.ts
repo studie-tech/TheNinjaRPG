@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Texture } from "three";
 
-import { createUserSprite } from "@/libs/threejs/sector";
+import { createCombatSprite, createUserSprite } from "@/libs/threejs/sector";
 
 const hex = { width: 20, height: 20 } as never;
 /** Returns an unloaded Three.js texture for browser-independent marker tests. */
@@ -77,5 +77,49 @@ describe("createUserSprite compatibility", () => {
       npcPlacementId: "placement-1",
       npcPositionVersion: 4,
     });
+  });
+});
+
+describe("createCombatSprite compatibility", () => {
+  it("renders a VS marker for a solo fighter so PvE battles stay visible", () => {
+    const group = createCombatSprite(
+      user({ battleId: "battle-1" }),
+      undefined,
+      "battle-1",
+      hex,
+      textureForPath,
+    );
+
+    expect(group.name).toBe("battle-1");
+    expect(group.userData).toMatchObject({
+      type: "user",
+      battleId: "battle-1",
+    });
+    expect(group.children.some((child) => child.userData.type === "battleMarker")).toBe(
+      true,
+    );
+  });
+
+  it("renders both portraits when two fighters share a battle", () => {
+    const group = createCombatSprite(
+      user({ userId: "user-1", battleId: "battle-2" }),
+      user({ userId: "user-2", battleId: "battle-2" }),
+      "battle-2",
+      hex,
+      textureForPath,
+    );
+
+    expect(group.children.filter((child) => child.userData.type === "marker").length).toBe(
+      1,
+    );
+    expect(group.children.length).toBeGreaterThan(
+      createCombatSprite(
+        user({ battleId: "battle-2" }),
+        undefined,
+        "battle-2",
+        hex,
+        textureForPath,
+      ).children.length,
+    );
   });
 });
