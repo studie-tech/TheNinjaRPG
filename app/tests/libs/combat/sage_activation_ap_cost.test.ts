@@ -6,39 +6,8 @@ import {
 import type { SageMode } from "@/drizzle/schema";
 import { availableUserActions } from "@/libs/combat/actions";
 import { SAGE_MODE_ACTIVATION_JUTSU_FALLBACK } from "@/libs/combat/sageModeActivationJutsu";
-import { makeBattleUser } from "./helpers/battleScenario";
-import type { CompleteBattle } from "@/libs/combat/types";
-
-/** Catalog fixture for AP-cost tests. Override `actionCostPerc` per case. */
-const makeSageMode = (overrides: Partial<SageMode> = {}): SageMode =>
-  ({
-    id: "sage-1",
-    image: "mode.webp",
-    level: 1,
-    activationRounds: 3,
-    chakraCostPerc: 0,
-    staminaCostPerc: 0,
-    actionCostPerc: SAGE_MODE_DEFAULT_ACTION_COST_PERC,
-    effects: [],
-    ...overrides,
-  }) as unknown as SageMode;
-
-/** COMBAT battle with the injected Activation jutsu and the given catalog map. */
-const makeBattle = (
-  user: ReturnType<typeof makeBattleUser>,
-  sageModes: Record<string, SageMode>,
-): CompleteBattle =>
-  ({
-    battleType: "COMBAT",
-    round: 1,
-    usersState: [user],
-    usersEffects: [],
-    groundEffects: [],
-    extraState: {
-      jutsus: { [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU_FALLBACK },
-      sageModes,
-    },
-  }) as unknown as CompleteBattle;
+import { makeBattleUser, makeInjectBattle } from "./helpers/battleScenario";
+import { makeSageMode } from "./helpers/sageMode";
 
 /** Actor with an equipped mode, unused this battle, and full pools. */
 const sageUser = () =>
@@ -56,7 +25,13 @@ const sageUser = () =>
 /** AP cost of the Activation action after `availableUserActions` builds it. */
 const activationCost = (sageModes: Record<string, SageMode>) => {
   const user = sageUser();
-  const actions = availableUserActions(makeBattle(user, sageModes), "sage");
+  const actions = availableUserActions(
+    makeInjectBattle(user, {
+      jutsus: { [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU_FALLBACK },
+      sageModes,
+    }),
+    "sage",
+  );
   return actions.find((a) => a.id === SAGE_MODE_ACTIVATION_JUTSU_ID)?.actionCostPerc;
 };
 
