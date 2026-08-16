@@ -96,6 +96,8 @@ export const BUILTIN_TERRAINS_BY_KEY = new Map(
 
 /** The terrain every unknown key falls back to; guaranteed built-in */
 export const FALLBACK_TERRAIN_KEY = "ground";
+const FALLBACK_TERRAIN_COLORS = BUILTIN_TERRAINS_BY_KEY.get(FALLBACK_TERRAIN_KEY)
+  ?.colors ?? ["#48bd48", "#37aa37", "#239623"];
 
 /**
  * The land terrain drawn under structures per sector biome, overriding the
@@ -113,17 +115,35 @@ export const STRUCTURE_GROUND_TERRAIN: Record<CombatBiome, string> = {
   default: "ground",
 };
 
+const isHexColor = (value: unknown): value is string =>
+  typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
+
 /**
  * Built-ins overlaid with the database terrain library: DB rows win on key
  * collision (so edits to the built-in looks take effect), creator-added kinds
- * extend the map.
+ * extend the map. Invalid colors or a blank texture URL fall back to the
+ * matching built-in so a bad production row cannot paint water black.
  */
 export const mergeTerrainSpecs = (
   dbTerrains: TerrainSpec[],
 ): Map<string, TerrainSpec> => {
   const merged = new Map<string, TerrainSpec>(BUILTIN_TERRAINS_BY_KEY);
   dbTerrains.forEach((row) => {
-    merged.set(row.key, { ...row });
+    const builtin = BUILTIN_TERRAINS_BY_KEY.get(row.key);
+    const colors =
+      Array.isArray(row.colors) && row.colors.length === 3 && row.colors.every(isHexColor)
+        ? row.colors
+        : (builtin?.colors ?? FALLBACK_TERRAIN_COLORS);
+    const textureUrl =
+      typeof row.textureUrl === "string" && row.textureUrl.trim() !== ""
+        ? row.textureUrl
+        : (builtin?.textureUrl ?? null);
+    merged.set(row.key, {
+      ...builtin,
+      ...row,
+      colors: colors as TerrainSpec["colors"],
+      textureUrl,
+    });
   });
   return merged;
 };

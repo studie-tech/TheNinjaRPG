@@ -27,7 +27,10 @@ const decorationFilepath = (key: string) => {
 };
 
 /** Parse a "#rrggbb" registry color into a three.js color int */
-const hexToInt = (hex: string) => Number.parseInt(hex.replace("#", ""), 16);
+const hexToInt = (hex: string, fallback = 0x37aa37) => {
+  const parsed = Number.parseInt(hex.replace("#", ""), 16);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
 
 /**
  * Helper function to create textured materials from colors and texture URL

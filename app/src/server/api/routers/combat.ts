@@ -2465,13 +2465,18 @@ export const initiateBattle = async (
   // Push websockets message to target
   const pusher = getServerPusher();
 
-  // Hide users on map when in combat
+  // Keep fighters on the sector map as combat markers so nearby players can
+  // see who is fighting. Auto-battles stay off this broadcast.
   if (!AutoBattleTypes.includes(battleType)) {
     await Promise.all(
       users.map(async (user) => {
         await Promise.all([
           pusher.trigger(user.userId, "event", { type: "battle", battleId }),
-          updateUserOnMap(pusher, user.sector, { ...user, sector: -1 }),
+          updateUserOnMap(pusher, user.sector, {
+            ...user,
+            status: "BATTLE",
+            battleId,
+          }),
         ]);
       }),
     );

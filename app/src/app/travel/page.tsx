@@ -110,8 +110,8 @@ type WindowLayoutEntry =
 export default function Travel() {
   // What is shown on this page
   const [showActive, setShowActive] = useLocalStorage<boolean>(
-    "showActiveOnMap3",
-    false,
+    "showActiveOnMap4",
+    true,
   );
   const [showOwnership, setShowOwnership] = useLocalStorage<boolean>(
     "showOwnership",
@@ -824,17 +824,24 @@ export default function Travel() {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                {showActive ? (
-                  <Eye
-                    className={`mr-2 h-7 w-7 text-orange-500`}
-                    onClick={() => setShowActive(false)}
-                  />
-                ) : (
-                  <EyeOff
-                    className={`mr-2 h-7 w-7`}
-                    onClick={() => setShowActive(true)}
-                  />
-                )}
+                <TooltipProvider delayDuration={50}>
+                  <Tooltip>
+                    <TooltipTrigger
+                      onClick={() => setShowActive(!showActive)}
+                    >
+                      {showActive ? (
+                        <Eye className={`mr-2 h-7 w-7 text-orange-500`} />
+                      ) : (
+                        <EyeOff className={`mr-2 h-7 w-7`} />
+                      )}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {showActive
+                        ? "Hide other players on the map"
+                        : "Show other players on the map"}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <UserRoundSearch
                   className={`mr-2 h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
                   onClick={() => setShowSorrounding((prev) => !prev)}

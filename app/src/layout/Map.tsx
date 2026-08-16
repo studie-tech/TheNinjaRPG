@@ -112,7 +112,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   const actionExplanation =
     props.actionExplanation ||
     (props.markerOnlyInteraction
-      ? "Click marker to fast travel"
+      ? "Click a village label to travel"
       : "Double click tile to move there");
 
   // Get sector ownerships if needed
@@ -1189,7 +1189,12 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         </ul>
       </div>
       <div className="absolute top-0 right-0 m-5">
-        <ul>
+        <ul className="flex flex-col items-end gap-2">
+          {props.markerOnlyInteraction && (
+            <li className="pointer-events-none max-w-56 rounded-lg border border-white/20 bg-black/75 px-3 py-2 text-right text-sm text-white shadow-lg backdrop-blur-sm">
+              Click a village label to travel
+            </li>
+          )}
           {hoverSector !== null && (
             <>
               <li>- Highlighting sector {hoverSector}</li>
