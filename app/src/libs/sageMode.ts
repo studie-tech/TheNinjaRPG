@@ -1,14 +1,19 @@
 import { eq, inArray, isNull, or } from "drizzle-orm";
 import type { SAGE_MASTERY_RANK } from "@/drizzle/constants";
 import {
+  IMG_MANUAL_SAGE_MODE,
   SAGE_MASTERY_DAILY_ACTIVATIONS,
   SAGE_MASTERY_RANKS,
   SAGE_MASTERY_REQUIRED_EXP,
+  SAGE_MODE_ACTIVATION_JUTSU_ID,
+  SAGE_MODE_DEFAULT_ACTION_COST_PERC,
+  SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
   SAGE_MODE_MAX_LEVEL,
 } from "@/drizzle/constants";
-import type { SageMode, UserData } from "@/drizzle/schema";
+import type { Jutsu, SageMode, UserData } from "@/drizzle/schema";
 import { quest, sageMode, sageModeRolls } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import type { ZodAllTags } from "@/validators/combat";
 
 /**
  * Item-roll pool: visible, village-compatible, level-1 modes the user has never rolled.
@@ -185,4 +190,80 @@ export const fetchSageModeRolls = async (client: DrizzleClient, userId: string) 
  */
 export const fetchSageModes = async (client: DrizzleClient) => {
   return await client.query.sageMode.findMany({ where: eq(sageMode.hidden, false) });
+};
+
+/**
+ * Synthetic jutsu stuffed into `extraState.jutsus` at battle start. Combat only
+ * knows how to offer jutsu/item/basic actions, so Activation is a jutsu-shaped
+ * trigger whose sole effect is `activatesagemode`. No `Jutsu` row is seeded —
+ * staff cannot author that tag, and the real costs/effects live on `SageMode`.
+ *
+ * Image, AP cost, and battle description are overwritten from the equipped mode
+ * when the action list is built. Pool costs on this object stay 0; CP/SP are
+ * charged from the mode in `applyActivateSageMode`.
+ */
+export const SAGE_MODE_ACTIVATION_JUTSU: Jutsu = {
+  id: SAGE_MODE_ACTIVATION_JUTSU_ID,
+  name: "Activation",
+  description:
+    "Channel natural energy to enter sage mode. Activation costs and combat effects are defined on your sage mode.",
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+  extraBaseCost: 0,
+  effects: [
+    {
+      type: "activatesagemode",
+      description: "Enter sage mode",
+      target: "SELF",
+      direction: "offence",
+      calculation: "static",
+      power: 1,
+      powerPerLevel: 0,
+      rounds: 0,
+      staticAssetPath: "",
+      staticAnimation: "",
+      appearAnimation: "",
+      disappearAnimation: "",
+      appearSfx: "",
+      disappearSfx: "",
+    } satisfies ZodAllTags,
+  ],
+  target: "SELF",
+  range: 0,
+  cooldown: 0,
+  bloodlineId: null,
+  requiredLevel: 1,
+  requiredRank: "STUDENT",
+  jutsuType: "SPECIAL",
+  image: IMG_MANUAL_SAGE_MODE,
+  jutsuWeapon: "NONE",
+  statClassification: "Ninjutsu",
+  battleDescription: SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
+  jutsuRank: "D",
+  actionCostPerc: SAGE_MODE_DEFAULT_ACTION_COST_PERC,
+  staminaCost: 0,
+  chakraCost: 0,
+  staminaCostReducePerLvl: 0,
+  chakraCostReducePerLvl: 0,
+  healthCostReducePerLvl: 0,
+  healthCost: 0,
+  villageId: null,
+  method: "SINGLE",
+  hidden: true,
+  injectableInBattle: true,
+  battleUsageType: "BOTH",
+  parentJutsuId: null,
+  requiredNinjutsuOffence: null,
+  requiredNinjutsuDefence: null,
+  requiredGenjutsuOffence: null,
+  requiredGenjutsuDefence: null,
+  requiredTaijutsuOffence: null,
+  requiredTaijutsuDefence: null,
+  requiredBukijutsuOffence: null,
+  requiredBukijutsuDefence: null,
+  requiredStrength: null,
+  requiredSpeed: null,
+  requiredIntelligence: null,
+  requiredWillpower: null,
+  requiredBloodlineItemId: null,
 };

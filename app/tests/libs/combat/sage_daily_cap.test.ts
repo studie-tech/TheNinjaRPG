@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
 import { handleInjectedJutsus } from "@/libs/combat/actions";
 import { applySingleEffect } from "@/libs/combat/process";
-import { SAGE_MODE_ACTIVATION_JUTSU_FALLBACK } from "@/libs/combat/sageModeActivationJutsu";
+import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { makeBattleUser, makeInjectBattle } from "./helpers/battleScenario";
 import { makeActivateSageEffect, makeSageMode } from "./helpers/sageMode";
 import type {
@@ -13,7 +13,7 @@ import type {
 } from "@/libs/combat/types";
 
 const activationJutsus = {
-  [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU_FALLBACK,
+  [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU,
 };
 
 /** Equipped sage at INITIATE daily cap (10), with the given activations used today. */

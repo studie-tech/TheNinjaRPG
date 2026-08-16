@@ -5,7 +5,7 @@ import {
 } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
 import { availableUserActions } from "@/libs/combat/actions";
-import { SAGE_MODE_ACTIVATION_JUTSU_FALLBACK } from "@/libs/combat/sageModeActivationJutsu";
+import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { makeBattleUser, makeInjectBattle } from "./helpers/battleScenario";
 import { makeSageMode } from "./helpers/sageMode";
 
@@ -27,7 +27,7 @@ const activationCost = (sageModes: Record<string, SageMode>) => {
   const user = sageUser();
   const actions = availableUserActions(
     makeInjectBattle(user, {
-      jutsus: { [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU_FALLBACK },
+      jutsus: { [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU },
       sageModes,
     }),
     "sage",
