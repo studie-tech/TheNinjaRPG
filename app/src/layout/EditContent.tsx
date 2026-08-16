@@ -1627,8 +1627,11 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
 
   // Parse how to present the tag form
   const ignore = ["timeTracker", "type"];
-  if (props.type === "bloodline" || props.type === "sageMode") {
+  if (props.type === "bloodline") {
     ignore.push(...["rounds", "friendlyFire"]);
+  }
+  if (props.type === "sageMode") {
+    ignore.push("friendlyFire");
   }
   // Consume is instant; shield duration lives on shieldRounds (rounds is locked to 0).
   if (tag.type === "consume") {
@@ -1848,7 +1851,10 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           String(value) === "reward_reputation";
         return {
           id: value,
-          label: FORM_LABEL_MAP[value] ?? value,
+          label:
+            props.type === "sageMode" && String(value) === "rounds"
+              ? "Instant (0) or mode duration"
+              : (FORM_LABEL_MAP[value] ?? value),
           type: "number",
           readonly: isReputationField && !hasReputationPermission,
         };

@@ -27,6 +27,15 @@ import { SageModeValidator } from "@/validators/combat";
 import type { SageModeFilteringSchema } from "@/validators/sageMode";
 import { sageModeFilteringSchema } from "@/validators/sageMode";
 
+/** Duration lives on the SageMode row. Keep `rounds: 0` so one-shot tags stay instant. */
+const persistSageTagDuration = (effect: ZodAllTags) => {
+  if (effect.rounds !== 0) {
+    delete effect.rounds;
+  }
+  delete effect.friendlyFire;
+  return effect;
+};
+
 export const sageModeRouter = createTRPCRouter({
   getAllNames: publicProcedure.query(async ({ ctx }) => {
     return await ctx.drizzle.query.sageMode.findMany({
@@ -61,7 +70,12 @@ export const sageModeRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const currentCursor = input.cursor ? input.cursor : 0;
       const skip = currentCursor * input.limit;
-      const user = ctx.userId ? await fetchUser(ctx.drizzle, ctx.userId) : null;
+      const user = ctx.userId
+        ? await ctx.drizzle.query.userData.findFirst({
+            where: eq(userData.userId, ctx.userId),
+            columns: { role: true },
+          })
+        : null;
       const allowHiddenFilter = user ? canChangeContent(user.role) : false;
       const baseFilters = sageModeDatabaseFilter(input, allowHiddenFilter);
       const results = await ctx.drizzle.query.sageMode.findMany({
@@ -134,7 +148,9 @@ export const sageModeRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchSageMode(ctx.drizzle, input.id),
         ctx.drizzle.query.userData.findMany({
+          columns: { username: true },
           where: and(eq(userData.sageModeId, input.id), eq(userData.isAi, false)),
+          limit: 10,
         }),
       ]);
       const usernames = usersWithSageMode.map((u) => u.username).join(", ");
@@ -189,21 +205,9 @@ export const sageModeRouter = createTRPCRouter({
         setEmptyStringsToNulls(input.data as unknown as Record<string, unknown>);
         const newData = {
           ...input.data,
-          effects: input.data.effects.map((e) => {
-            delete e.rounds;
-            delete e.friendlyFire;
-            return e;
-          }),
-          afterEffects: input.data.afterEffects.map((e) => {
-            delete e.rounds;
-            delete e.friendlyFire;
-            return e;
-          }),
-          level2Effects: input.data.level2Effects.map((e) => {
-            delete e.rounds;
-            delete e.friendlyFire;
-            return e;
-          }),
+          effects: input.data.effects.map(persistSageTagDuration),
+          afterEffects: input.data.afterEffects.map(persistSageTagDuration),
+          level2Effects: input.data.level2Effects.map(persistSageTagDuration),
         };
         const diff = calculateContentDiff(entry, {
           id: entry.id,
@@ -239,6 +243,11 @@ export const sageModeRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!user.sageModeId) {
         throw serverError("PRECONDITION_FAILED", "You do not have a sage mode");
+      }
+      if (user.status !== "AWAKE") {
+        return errorResponse(
+          `Cannot remove sage mode while ${user.status.toLowerCase()}`,
+        );
       }
       if (user.reputationPoints < REMOVAL_COST) {
         return errorResponse("You do not have enough reputation points");

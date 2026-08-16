@@ -171,6 +171,33 @@ describe("applySageModeAfterRoundTransition", () => {
     expect(sageAfter?.sageModeActivated).toBe(false);
     expect(battle.usersEffects.some((e) => e.fromType === "sageModeAfter")).toBe(true);
   });
+
+  it("does not queue after-effects when afterEffectRounds is 0", () => {
+    const sage = makeBattleUser("sage", {
+      sageModeActivated: true,
+      sageModeId: "sage-zero",
+      sageModeExpiresRound: 5,
+    });
+    const battle = {
+      ...makeSageBattle([sage]),
+      extraState: {
+        sageModes: {
+          "sage-zero": {
+            ...makeSageMode(),
+            id: "sage-zero",
+            afterEffectRounds: 0,
+          },
+        },
+      },
+    } as CompleteBattle;
+
+    applySageModeAfterRoundTransition(battle);
+
+    expect(battle.usersEffects.some((e) => e.fromType === "sageModeAfter")).toBe(false);
+    expect(battle.usersState.find((u) => u.userId === "sage")?.sageModeActivated).toBe(
+      false,
+    );
+  });
 });
 
 describe("sageModeAfter protection", () => {
@@ -495,5 +522,35 @@ describe("sage mode level2Effects activation", () => {
     const powers = runLevel2Activation(requiredSageMastery);
     expect(powers).toHaveLength(2);
     expect(powers).toEqual(expect.arrayContaining([10, 20]));
+  });
+});
+
+describe("sage mode instant tags", () => {
+  it("keeps rounds === 0 on authored one-shot after-effects", () => {
+    const sage = makeBattleUser("sage", {
+      sageModeActivated: true,
+      sageModeId: "sage-instant-after",
+      sageModeExpiresRound: 5,
+    });
+    const battle = {
+      ...makeSageBattle([sage]),
+      extraState: {
+        sageModes: {
+          "sage-instant-after": {
+            id: "sage-instant-after",
+            afterEffectRounds: 3,
+            afterEffects: [
+              makeTag("heal", { power: 10, rounds: 0, calculation: "static" }),
+            ],
+          },
+        },
+      },
+    } as CompleteBattle;
+
+    applySageModeAfterRoundTransition(battle);
+
+    const queued = battle.usersEffects.find((e) => e.fromType === "sageModeAfter");
+    expect(queued?.rounds).toBe(0);
+    expect(queued?.type).toBe("heal");
   });
 });

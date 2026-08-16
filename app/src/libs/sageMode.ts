@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq, inArray, isNull, or } from "drizzle-orm";
 import type { SAGE_MASTERY_RANK } from "@/drizzle/constants";
 import {
   SAGE_MASTERY_DAILY_ACTIVATIONS,
@@ -7,7 +7,7 @@ import {
   SAGE_MODE_MAX_LEVEL,
 } from "@/drizzle/constants";
 import type { SageMode, UserData } from "@/drizzle/schema";
-import { sageMode, sageModeRolls } from "@/drizzle/schema";
+import { quest, sageMode, sageModeRolls } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 /**
@@ -69,6 +69,25 @@ export const getSageMasteryDisplayRank = (
   hasSageMode: boolean,
 ): SAGE_MASTERY_RANK => (hasSageMode ? getSageMasteryRank(exp) : "NONE");
 
+/** Quest availability predicates shared by mission-hall and uncompleted-quest fetches. */
+export const sageQuestFilters = (
+  user: Pick<UserData, "sageModeId" | "sageMasteryExperience">,
+) => [
+  or(
+    isNull(quest.requiredSageModeId),
+    eq(quest.requiredSageModeId, user.sageModeId ?? ""),
+  ),
+  or(
+    isNull(quest.requiredSageRank),
+    inArray(
+      quest.requiredSageRank,
+      sageRanksAtOrBelow(
+        getSageMasteryDisplayRank(user.sageMasteryExperience, !!user.sageModeId),
+      ),
+    ),
+  ),
+];
+
 /**
  * The number of sage mode activations allowed per day at the user's mastery rank.
  */
@@ -105,11 +124,11 @@ export const getActiveSageLevel = (
     : 1;
 
 /**
- * Fetch item-based sage mode rolls (used to dedup previously-rolled modes from the pool).
+ * Fetch all sage mode rolls for a user so item and quest acquisition share one history.
  */
-export const fetchItemSageModeRolls = async (client: DrizzleClient, userId: string) => {
+export const fetchSageModeRolls = async (client: DrizzleClient, userId: string) => {
   return await client.query.sageModeRolls.findMany({
-    where: and(eq(sageModeRolls.userId, userId), eq(sageModeRolls.type, "ITEM")),
+    where: eq(sageModeRolls.userId, userId),
     with: { sageMode: true },
   });
 };

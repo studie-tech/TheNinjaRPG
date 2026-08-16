@@ -33,6 +33,8 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
       },
     });
 
+  const canRemove = userData?.status === "AWAKE";
+
   return (
     <ContentBox
       title="Sage Mode"
@@ -46,9 +48,10 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
           <Confirm2
             title="Sage Mode Removal"
             proceed_label="Remove Sage Mode"
-            isValid={!isFetching}
+            isValid={!isFetching && canRemove}
+            disabled={!canRemove}
             button={
-              <Button id="check" className="w-full">
+              <Button id="check" className="w-full" disabled={!canRemove}>
                 <Scissors className="mr-2 h-6 w-6" />
                 Remove Sage Mode
               </Button>
@@ -59,8 +62,14 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
             }}
           >
             <p>
-              Abandon your current sage mode. This costs{" "}
-              <b>{REMOVAL_COST} reputation points</b>.
+              {canRemove ? (
+                <>
+                  Abandon your current sage mode. This costs{" "}
+                  <b>{REMOVAL_COST} reputation points</b>.
+                </>
+              ) : (
+                <>You cannot remove sage mode while {userData.status.toLowerCase()}.</>
+              )}
             </p>
           </Confirm2>
         </>

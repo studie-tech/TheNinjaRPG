@@ -84,7 +84,7 @@ import {
   postProcessRewards,
 } from "@/libs/quest";
 import {
-  fetchItemSageModeRolls,
+  fetchSageModeRolls,
   fetchSageModes,
   filterRollableSageModes,
 } from "@/libs/sageMode";
@@ -1292,7 +1292,7 @@ export const itemRouter = createTRPCRouter({
         fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
         fetchBloodlines(ctx.drizzle),
         fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
-        fetchItemSageModeRolls(ctx.drizzle, ctx.userId),
+        fetchSageModeRolls(ctx.drizzle, ctx.userId),
         fetchSageModes(ctx.drizzle),
         fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
@@ -1366,10 +1366,7 @@ export const itemRouter = createTRPCRouter({
           data.push(bloodlinePool);
           const randomBloodline = getRandomElement(bloodlinePool);
           if (!randomBloodline) {
-            messages.push(
-              "You search your blood for a dormant bloodline, but none stirs. ",
-            );
-            return;
+            throw serverError("NOT_FOUND", "No bloodline found");
           }
           // Success?
           const roll = Math.random() * 100;
