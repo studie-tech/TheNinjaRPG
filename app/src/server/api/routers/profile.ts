@@ -2171,12 +2171,12 @@ export const updateNindo = async (
     nindo
       ? client
           .update(userNindo)
-          .set({ content: content })
+          .set({ content: sanitized })
           .where(eq(userNindo.userId, userId))
       : client.insert(userNindo).values({
           id: nanoid(),
           userId: userId,
-          content: content,
+          content: sanitized,
         }),
   ]);
   return { success: true, message: "Content updated" };

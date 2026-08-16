@@ -26,6 +26,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { reduceByKey } from "@/utils/grouping";
+import sanitize from "@/utils/sanitize";
 import {
   canAssignSupportTicket,
   canDeleteSupportTicket,
@@ -123,11 +124,12 @@ export const supportRouter = createTRPCRouter({
       // Mutate
       const ticketId = nanoid(10);
       const convoId = nanoid();
+      const sanitizedDescription = sanitize(input.description);
       await Promise.all([
         ctx.drizzle.insert(supportTicket).values({
           id: ticketId,
           title: input.title,
-          description: input.description,
+          description: sanitizedDescription,
           category: input.category,
           priority: input.priority,
           isPublic: input.isPublic,
@@ -141,7 +143,7 @@ export const supportRouter = createTRPCRouter({
           senderUserId: ctx.userId,
           receiverUserIds: [],
           title: input.title,
-          content: input.description,
+          content: sanitizedDescription,
           isStaffAvailable: true,
           convoId,
           isPublic: input.isPublic,
@@ -230,11 +232,15 @@ export const supportRouter = createTRPCRouter({
         });
       }
       // Update ticket
+      const { description: nextDescription, ...ticketUpdate } = updateData;
       await Promise.all([
         ctx.drizzle
           .update(supportTicket)
           .set({
-            ...updateData,
+            ...ticketUpdate,
+            ...(nextDescription !== undefined
+              ? { description: sanitize(nextDescription) }
+              : {}),
             updatedAt: new Date(),
             closedAt: updateData.status === "RESOLVED" ? new Date() : ticket.closedAt,
           })
