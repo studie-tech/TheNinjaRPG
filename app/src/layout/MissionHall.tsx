@@ -14,10 +14,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  ADDITIONAL_MISSION_REWARD_MULTIPLIER,
   ERRANDS_PER_DAY,
   IMG_BUILDING_MISSIONHALL,
   IMG_MISSION_WAR,
   MEDICAL_MISSIONS_PER_DAY,
+  MISSIONS_FULL_REWARD_COUNT,
   MISSIONS_PER_DAY,
   PVP_MISSIONS_PER_DAY,
   VILLAGE_SYNDICATE_ID,
@@ -27,7 +29,11 @@ import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
 import MissionPicker from "@/layout/MissionPicker";
-import { fallbackQuestsFilter, getMissionHallSettings } from "@/libs/quest";
+import {
+  fallbackQuestsFilter,
+  getMissionHallSettings,
+  isReducedMissionReward,
+} from "@/libs/quest";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { availableQuestLetterRanks } from "@/libs/train";
@@ -224,7 +230,9 @@ export default function MissionHall({ userData }: MissionHallProps) {
                 !isErrand &&
                 !isMedical &&
                 !isPvp &&
-                userData.dailyMissions >= 9 &&
+                isReducedMissionReward(userData.dailyMissions, {
+                  phase: "pre-start",
+                }) &&
                 userData.dailyMissions < MISSIONS_PER_DAY;
 
               const keyPrefix = isPvp ? "pvp" : isMedical ? "medical" : "mission";
@@ -258,8 +266,11 @@ export default function MissionHall({ userData }: MissionHallProps) {
                             <br />
                             <br />
                             <span className="text-yellow-500">
-                              Note: You have completed more than 9 missions today. This
-                              mission will only give 40% of its normal rewards.
+                              Note: You have completed more than{" "}
+                              {MISSIONS_FULL_REWARD_COUNT} missions today. This mission
+                              will only give{" "}
+                              {ADDITIONAL_MISSION_REWARD_MULTIPLIER * 100}% of its
+                              normal rewards.
                             </span>
                           </>
                         )}
@@ -273,7 +284,9 @@ export default function MissionHall({ userData }: MissionHallProps) {
                   additionalContent={() => (
                     <>
                       {isReducedRewards && (
-                        <p className="text-sm text-yellow-500">40% Rewards</p>
+                        <p className="text-sm text-yellow-500">
+                          {ADDITIONAL_MISSION_REWARD_MULTIPLIER * 100}% Rewards
+                        </p>
                       )}
                       {isDailyLimitReached && (
                         <p className="text-red-500 text-sm">Daily Limit Reached</p>
@@ -283,6 +296,13 @@ export default function MissionHall({ userData }: MissionHallProps) {
                 />
               );
             } else {
+              const isReducedRewards =
+                !isErrand &&
+                !isMedical &&
+                !isPvp &&
+                isReducedMissionReward(userData.dailyMissions, {
+                  phase: "pre-start",
+                });
               return (
                 <Fragment key={setting.name}>
                   <AlertDialog>
@@ -307,12 +327,11 @@ export default function MissionHall({ userData }: MissionHallProps) {
                             <span className="text-yellow-500"> {rankInfo}</span>
                           )}
                         </p>
-                        {!isErrand &&
-                          !isMedical &&
-                          !isPvp &&
-                          userData.dailyMissions >= 9 &&
+                        {isReducedRewards &&
                           userData.dailyMissions < MISSIONS_PER_DAY && (
-                            <p className="text-sm text-yellow-500">40% Rewards</p>
+                            <p className="text-sm text-yellow-500">
+                              {ADDITIONAL_MISSION_REWARD_MULTIPLIER * 100}% Rewards
+                            </p>
                           )}
                         {!isErrand &&
                           !isPvp &&
@@ -357,20 +376,19 @@ export default function MissionHall({ userData }: MissionHallProps) {
                                   ? "PvP mission"
                                   : `${setting.rank}-rank ${setting.type}`}
                               ? You can only have one active {classifier} at a time.
-                              {!isErrand &&
-                                !isMedical &&
-                                !isPvp &&
-                                userData.dailyMissions >= 9 && (
-                                  <>
-                                    <br />
-                                    <br />
-                                    <span className="text-yellow-500">
-                                      Note: You have already completed 9 missions today.
-                                      This mission will only give 40% of its normal
-                                      rewards.
-                                    </span>
-                                  </>
-                                )}
+                              {isReducedRewards && (
+                                <>
+                                  <br />
+                                  <br />
+                                  <span className="text-yellow-500">
+                                    Note: You have already completed{" "}
+                                    {MISSIONS_FULL_REWARD_COUNT} missions today. This
+                                    mission will only give{" "}
+                                    {ADDITIONAL_MISSION_REWARD_MULTIPLIER * 100}% of its
+                                    normal rewards.
+                                  </span>
+                                </>
+                              )}
                             </>
                           )}
                         </AlertDialogDescription>

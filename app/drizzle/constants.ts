@@ -1350,6 +1350,8 @@ export type OverworldLocationType = (typeof OverworldLocationTypes)[number];
 
 export const MEDICAL_MISSIONS_PER_DAY = 9;
 export const PVP_MISSIONS_PER_DAY = 12;
+/** Last daily mission that still pays full rewards. The 10th+ pay the reduced multiplier. */
+export const MISSIONS_FULL_REWARD_COUNT = 9;
 export const ADDITIONAL_MISSION_REWARD_MULTIPLIER = 0.4;
 
 // War config

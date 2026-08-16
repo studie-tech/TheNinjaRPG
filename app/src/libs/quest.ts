@@ -17,6 +17,7 @@ import {
   MAP_SECTOR_ID_MIN,
   type MEDNIN_RANK,
   MEDNIN_RANKS,
+  MISSIONS_FULL_REWARD_COUNT,
   type QuestType,
   QuestTypesWithMaxAttempts,
   type RetryQuestDelay,
@@ -223,6 +224,19 @@ export const isObjectiveLocationSatisfied = (
 };
 
 /**
+ * Whether the current daily-mission count pays the reduced reward multiplier.
+ * `pre-start` is the Mission Hall picker (counter not yet incremented).
+ * `in-progress` is claim / Logbook (counter already incremented at start).
+ */
+export const isReducedMissionReward = (
+  dailyMissions: number,
+  { phase }: { phase: "pre-start" | "in-progress" },
+) =>
+  phase === "pre-start"
+    ? dailyMissions >= MISSIONS_FULL_REWARD_COUNT
+    : dailyMissions > MISSIONS_FULL_REWARD_COUNT;
+
+/**
  * Go through current user quests, and return updated list of questData &
  * list of rewards to award the user
  * @param user - User with questData
@@ -361,8 +375,11 @@ export const getReward = (
     const missionLike = ["mission", "crime"].includes(userQuest.quest.questType);
     let factor = boostFactor; // Start with shrine boost factor
 
-    // Apply daily mission limit penalty if applicable (after 9 missions), but keep shrine boost
-    if (missionLike && user.dailyMissions > 9) {
+    // Apply daily mission limit penalty if applicable, but keep shrine boost
+    if (
+      missionLike &&
+      isReducedMissionReward(user.dailyMissions, { phase: "in-progress" })
+    ) {
       factor = ADDITIONAL_MISSION_REWARD_MULTIPLIER * boostFactor;
     }
 
