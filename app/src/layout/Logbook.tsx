@@ -9,7 +9,6 @@ import {
   IMG_SCENE_BACKGROUND,
   IMG_URL_ASSISTANT,
   IMG_URL_ASSISTANT_2,
-  MISSIONS_PER_DAY,
   TERMINAL_DIALOG_PREFIX,
 } from "@/drizzle/constants";
 import type { UserQuest } from "@/drizzle/schema";
@@ -29,6 +28,7 @@ import {
   isQuestObjectiveAvailable,
 } from "@/libs/objectives";
 import { useInfinitePagination } from "@/libs/pagination";
+import { isReducedMissionReward } from "@/libs/quest";
 import { cn } from "@/libs/shadui";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
@@ -348,7 +348,9 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const missionOrCrime = ["mission", "crime"].includes(quest.questType);
   const isStarterQuest = quest.questType === "starter";
   const rewardMultiplier =
-    userData && missionOrCrime && userData.dailyMissions > MISSIONS_PER_DAY
+    userData &&
+    missionOrCrime &&
+    isReducedMissionReward(userData.dailyMissions, { phase: "in-progress" })
       ? ADDITIONAL_MISSION_REWARD_MULTIPLIER
       : 1;
   const allDone = isQuestComplete(quest, tracker);
