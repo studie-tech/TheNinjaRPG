@@ -131,7 +131,6 @@ import type {
   BattleUserState,
   BattleWar,
   CombatQueryUser,
-  CombatUserFields,
   CompleteBattle,
   ExtraState,
   GroundEffect,
@@ -2573,13 +2572,10 @@ export const processUsersForBattle = async (
       damageDealt: 0,
       initiative: 0,
       basicActions: [],
-      sageModeActivated: (inputUser as CombatUserFields).sageModeActivated ?? false,
-      sageModeActivatedRound:
-        (inputUser as CombatUserFields).sageModeActivatedRound ?? null,
-      sageModeExpiresRound:
-        (inputUser as CombatUserFields).sageModeExpiresRound ?? null,
-      sageModeUsedThisBattle:
-        (inputUser as CombatUserFields).sageModeUsedThisBattle ?? false,
+      sageModeActivated: inputUser.sageModeActivated ?? false,
+      sageModeActivatedRound: inputUser.sageModeActivatedRound ?? null,
+      sageModeExpiresRound: inputUser.sageModeExpiresRound ?? null,
+      sageModeUsedThisBattle: inputUser.sageModeUsedThisBattle ?? false,
       // Add default AI profile if not set
       aiProfile: inputUser.aiProfile ?? info.defaultProfile,
       // Compatibility fields for ReturnedUserState (populated later during conversion)
