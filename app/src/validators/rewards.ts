@@ -43,12 +43,14 @@ export const rewardFields = {
   reward_items: idsWithNumberField,
   reward_jutsus: z.array(z.string()).prefault([]),
   reward_bloodlines: z.array(z.string()).prefault([]),
+  /** Catalog ids granted by quests; skipped at claim if the player already has a mode. */
   reward_sage_modes: z.array(z.string()).prefault([]),
   reward_badges: z.array(z.string()).prefault([]),
   reward_medical_experience: z.coerce.number().prefault(0),
   reward_hunting_experience: z.coerce.number().prefault(0),
   reward_crafting_experience: z.coerce.number().prefault(0),
   reward_gathering_experience: z.coerce.number().prefault(0),
+  /** Added to `userData.sageMasteryExperience`, capped at `SAGE_MASTERY_EXP_CAP`. */
   reward_sage_mastery_experience: z.coerce.number().prefault(0),
   reward_war_damage: z.coerce.number().prefault(0), // Damage to enemy war health
   reward_war_healing: z.coerce.number().prefault(0), // Heal own war health
@@ -80,6 +82,7 @@ export const PostProcessedRewardSchema = z.object({
 /** Type for post-processed rewards - single source of truth */
 export type PostProcessedRewards = z.infer<typeof PostProcessedRewardSchema>;
 
+/** True when any reward field is non-empty, including sage modes and sage mastery XP. */
 export const hasReward = (reward: ObjectiveRewardType) => {
   const parsedReward = ObjectiveReward.parse(reward);
   return (

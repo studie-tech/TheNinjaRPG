@@ -27,7 +27,14 @@ import { SageModeValidator } from "@/validators/combat";
 import type { SageModeFilteringSchema } from "@/validators/sageMode";
 import { sageModeFilteringSchema } from "@/validators/sageMode";
 
-/** Duration lives on the SageMode row. Keep `rounds: 0` so one-shot tags stay instant. */
+/**
+ * Strip per-tag duration before writing a SageMode row. Duration lives on
+ * `activationRounds` / `afterEffectRounds`; `rounds === 0` is kept so one-shot
+ * tags stay instant through `realizeSageTags`.
+ *
+ * @param effect - Authored tag from the staff editor.
+ * @returns The same object, mutated for persist.
+ */
 const persistSageTagDuration = (effect: ZodAllTags) => {
   if (effect.rounds !== 0) {
     delete effect.rounds;
@@ -37,6 +44,10 @@ const persistSageTagDuration = (effect: ZodAllTags) => {
 };
 
 export const sageModeRouter = createTRPCRouter({
+  /**
+   * Name/image list for quest and objective pickers. Hidden modes are included
+   * only for content staff (`canChangeContent`); everyone else sees visible rows.
+   */
   getAllNames: publicProcedure.query(async ({ ctx }) => {
     const user = ctx.userId
       ? await ctx.drizzle.query.userData.findFirst({
@@ -52,7 +63,10 @@ export const sageModeRouter = createTRPCRouter({
     });
   }),
 
-  /** All sage modes (including hidden) for staff editing user data — same permission as bloodline edit. */
+  /**
+   * Full name/image list including hidden modes, for staff user-edit. Same
+   * permission as assigning a bloodline (`canEditBloodline`).
+   */
   getAllNamesForEdit: protectedProcedure.query(async ({ ctx }) => {
     const [user, results] = await Promise.all([
       fetchUser(ctx.drizzle, ctx.userId),
@@ -67,6 +81,10 @@ export const sageModeRouter = createTRPCRouter({
     return results;
   }),
 
+  /**
+   * Paginated catalog for the manual list. Non-staff always have `hidden=false`
+   * forced; staff may filter by the tri-state visibility control.
+   */
   getAll: publicProcedure
     .input(
       sageModeFilteringSchema.extend({
@@ -99,7 +117,10 @@ export const sageModeRouter = createTRPCRouter({
       };
     }),
 
-  // Get a specific sage mode
+  /**
+   * Single catalog row by id, including hidden. Matches bloodline `get` so the
+   * equipped-mode removal UI can still load a hidden mode the player already wears.
+   */
   get: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -117,7 +138,7 @@ export const sageModeRouter = createTRPCRouter({
       };
     }),
 
-  // Create new sage mode
+  /** Create a hidden placeholder row and return its id for the staff editor. */
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
     if (user.isBanned)
@@ -141,7 +162,10 @@ export const sageModeRouter = createTRPCRouter({
     }
   }),
 
-  // Delete a sage mode
+  /**
+   * Delete a catalog row. Refuses if any non-AI player still has it equipped
+   * (up to 10 usernames are listed in the error).
+   */
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .output(baseServerResponse)
@@ -185,7 +209,11 @@ export const sageModeRouter = createTRPCRouter({
       return { success: true, message: `Sage Mode deleted` };
     }),
 
-  // Update a sage mode
+  /**
+   * Staff save of a catalog row. Empty strings become nulls via the Drizzle
+   * table so nullable columns stay valid; tag `rounds` are persisted through
+   * `persistSageTagDuration`.
+   */
   update: protectedProcedure
     .input(z.object({ id: z.string(), data: SageModeValidator }))
     .output(baseServerResponse)
@@ -241,7 +269,10 @@ export const sageModeRouter = createTRPCRouter({
       }
     }),
 
-  // Remove a sage mode from session user
+  /**
+   * Paid unequip for the session user. Requires AWAKE and `REMOVAL_COST` reps;
+   * the write is compare-and-swapped in `updateSageMode`.
+   */
   removeSageMode: protectedProcedure
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
@@ -263,7 +294,14 @@ export const sageModeRouter = createTRPCRouter({
 });
 
 /**
- * Paid removal of the user's equipped sage mode.
+ * Compare-and-swap unequip: clears `sageModeId` and debits reputation only while
+ * the player is AWAKE, still wears the snapshotted mode, and can afford `repCost`.
+ * `rowsAffected === 0` means a concurrent change already won — do not retry the debit.
+ *
+ * @param client - Drizzle client.
+ * @param user - Snapshot used for the CAS predicates.
+ * @param repCost - Reputation to subtract (`REMOVAL_COST` from the public mutation).
+ * @param logMsg - Action-log line written after a successful write.
  */
 export const updateSageMode = async (
   client: DrizzleClient,
@@ -307,6 +345,12 @@ export const updateSageMode = async (
   });
 };
 
+/**
+ * Load one catalog row by id, including hidden. Used by `get` / `update` / `delete`.
+ *
+ * @param client - Drizzle client.
+ * @param sageModeId - `SageMode.id`.
+ */
 export const fetchSageMode = async (client: DrizzleClient, sageModeId: string) => {
   return await client.query.sageMode.findFirst({
     where: eq(sageMode.id, sageModeId),
@@ -314,10 +358,12 @@ export const fetchSageMode = async (client: DrizzleClient, sageModeId: string) =
 };
 
 /**
- * Build database filters for sage mode queries.
- * @param allowHiddenFilter - When false (public / non–content staff), `hidden` is always
- *   treated as false so clients cannot list hidden sage modes. When true, `input.hidden`
- *   is applied for manual / admin UIs.
+ * Drizzle `where` clauses for the paginated catalog.
+ *
+ * @param input - Optional name / village / level / hidden filters from the UI.
+ * @param allowHiddenFilter - When false, `hidden` is forced to false so public
+ *   clients cannot list hidden modes. When true, `input.hidden` is applied
+ *   (unset = staff "All Visibility").
  */
 export const sageModeDatabaseFilter = (
   input?: SageModeFilteringSchema,

@@ -11,7 +11,12 @@ import type { ZodAllTags, ZodSageModeType } from "@/validators/combat";
 import { SageModeValidator } from "@/validators/combat";
 
 /**
- * Hook used when creating frontend forms for editing sage modes
+ * Staff editor form for a single `SageMode` row: react-hook-form + the three
+ * effect arrays (`effects`, `afterEffects`, `level2Effects`). Tier 2 unlock is
+ * shown as mastery-rank labels but stored as `requiredSageMastery` (0 = none).
+ *
+ * @param data - Catalog row from `sageMode.get`.
+ * @param refetch - Called after a successful `sageMode.update`.
  */
 export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
   const sageMode = {

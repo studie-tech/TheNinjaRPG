@@ -10,6 +10,7 @@ import {
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
+/** Manual-list filter schema: name, roll-pool level, village, and staff visibility. */
 const makeSageModeFilteringSchema = () =>
   defineFilteringSchema({
     fields: [
@@ -59,6 +60,7 @@ interface SageModeFilteringProps {
   state: SageModeFilteringState;
 }
 
+/** Filter popover for the sage mode manual list. Visibility is staff-only. */
 const SageModeFiltering: React.FC<SageModeFilteringProps> = (props) => {
   const { data: userData } = useUserData();
   const schema = makeSageModeFilteringSchema();
@@ -76,6 +78,7 @@ const SageModeFiltering: React.FC<SageModeFilteringProps> = (props) => {
 
 export default SageModeFiltering;
 
+/** tRPC filter for `api.sageMode.getAll` (coerces level from the select string). */
 export const getFilter = (state: SageModeFilteringState) => {
   const filter = buildFilter(state.cf, makeSageModeFilteringSchema());
   // Convert level from string to number if present
@@ -85,6 +88,7 @@ export const getFilter = (state: SageModeFilteringState) => {
   return filter;
 };
 
+/** State for the Sage Mode Filtering component. */
 export const useFiltering = () => {
   const schema = makeSageModeFilteringSchema();
   const cf = useContentFiltering(schema);
@@ -98,4 +102,5 @@ export const useFiltering = () => {
   };
 };
 
+/** State type returned by `useFiltering`. */
 export type SageModeFilteringState = ReturnType<typeof useFiltering>;

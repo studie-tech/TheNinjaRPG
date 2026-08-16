@@ -1294,6 +1294,10 @@ export const questsRouter = createTRPCRouter({
  *
  * Money/XP-style scalars use SQL increments on `userData` columns so parallel grants compose;
  * village tokens and clan points already used this pattern.
+ *
+ * Sage: `reward_sage_modes` rolls and records a not-yet-owned mode only when the
+ * player has no equipped `sageModeId`. Already-equipped players skip the grant so
+ * a mode is not burned into history they can never wear.
  */
 export const updateRewards = async (info: {
   client: DrizzleClient;

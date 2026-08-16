@@ -1211,6 +1211,7 @@ const removeEffects = (
   return { txt: text, color: "blue" } as ActionEffect;
 };
 
+/** Sources that `clear` / `cleanse` must not strip. Sage buffs and exhaustion are both protected. */
 const persistentEffectSourceTypes = new Set<UserEffect["fromType"]>([
   "bloodline",
   "armor",
@@ -1243,7 +1244,11 @@ export const cleanse = (
   return removeEffects(effect, usersEffects, target, "negative");
 };
 
-/** Clone user on the battlefield */
+/**
+ * Clone the caster onto the battlefield. The clone does not inherit sage mode
+ * (no `sageModeId`, Activation jutsu stripped, `sageModeUsedThisBattle` set) so
+ * it cannot activate or continue the original's sage window.
+ */
 export const clone = (
   usersState: BattleUserState[],
   effect: GroundEffect,

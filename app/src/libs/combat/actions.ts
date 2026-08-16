@@ -781,10 +781,12 @@ export const userJutsuToAction = (
 };
 
 /**
- * Handle injected jutsus from all active inject effects.
- * - Union of jutsus from ALL active inject effects (multiple injects stack, Bug 1).
- * - Remove only jutsus that are no longer in any active effect (expiry, Bug 3).
- * - Preserve existing injected jutsu objects so lastUsedRound/cooldown is kept (Bug 2).
+ * Handle injected jutsus from all active inject effects, plus the sage Activation
+ * jutsu when the user has an equipped mode, is under the daily cap, can afford
+ * the mode's CP/SP cost, and the battle type allows sage mode.
+ * - Union of jutsus from ALL active inject effects (multiple injects stack).
+ * - Remove only jutsus that are no longer in any active effect (expiry).
+ * - Preserve existing injected jutsu objects so lastUsedRound/cooldown is kept.
  */
 export const handleInjectedJutsus = (
   battle: ReturnedBattle,

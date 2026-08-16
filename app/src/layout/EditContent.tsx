@@ -73,6 +73,10 @@ import { ObjectiveReward } from "@/validators/rewards";
 
 export type FormDbValue = { id: string; name: string };
 
+/**
+ * Whether a combobox field has a selected value. `0` is a real choice (e.g. sage
+ * Tier 2 "None"); only `undefined` / `null` / `""` count as empty.
+ */
 const hasComboboxValue = (value: unknown) =>
   value !== undefined && value !== null && value !== "";
 

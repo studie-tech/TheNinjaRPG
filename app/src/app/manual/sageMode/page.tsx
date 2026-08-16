@@ -14,6 +14,7 @@ import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
+/** Public catalog of sage modes, with staff create/delete on the list. */
 export default function ManualSageModes() {
   const { data: userData } = useUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);

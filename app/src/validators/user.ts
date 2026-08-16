@@ -16,6 +16,7 @@ export const updateUserSchema = z.object({
   customTitle: z.string().min(0).max(199).optional(),
   bloodlineId: z.string().nullable(),
   bloodlineReskinId: z.string().nullable().optional(),
+  /** Staff-assigned equipped mode. Empty / "None" become null (unequip). */
   sageModeId: z.preprocess(
     (val) => (val === "" || val === "None" ? null : val),
     z.string().nullable(),

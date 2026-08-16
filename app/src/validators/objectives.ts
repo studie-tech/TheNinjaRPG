@@ -660,7 +660,9 @@ export const QuestValidatorRawSchema = z.object({
   maxCompletes: z.coerce.number().min(0).max(100).prefault(1),
   requiredVillage: z.string().min(0).max(30).optional().nullish(),
   requiredBloodlineId: z.string().min(0).max(191).optional().nullish(),
+  /** Exact equipped sage mode required to take the quest; unset = no mode gate. */
   requiredSageModeId: z.string().min(0).max(191).optional().nullish(),
+  /** Minimum mastery rank (`NONE`…`LEGENDARY`); unset / empty = no rank gate. */
   requiredSageRank: z.preprocess(
     (v) => (v === "" ? null : v),
     z.enum(SAGE_MASTERY_RANKS).nullish(),

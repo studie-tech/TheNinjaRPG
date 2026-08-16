@@ -17,6 +17,7 @@ export const questFilteringSchema = z.object({
   userLevel: z.coerce.number().min(0).max(150).optional(),
   village: z.string().optional(),
   bloodline: z.string().optional(),
+  /** Filter quests that require this equipped sage mode id. */
   sageMode: z.string().optional(),
   hidden: z.boolean().optional(),
 });
