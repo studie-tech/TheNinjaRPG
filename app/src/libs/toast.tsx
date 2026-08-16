@@ -273,6 +273,16 @@ export const showRewardToast = (
               <b>Swappable Bloodlines: </b> {rewards.reward_bloodlines.join(", ")}
             </span>
           )}
+          {rewards.reward_sage_modes.length > 0 && (
+            <span className="whitespace-nowrap">
+              <b>Sage Modes: </b> {rewards.reward_sage_modes.join(", ")}
+            </span>
+          )}
+          {rewards.reward_sage_mastery_experience > 0 && (
+            <span className="whitespace-nowrap">
+              <b>Sage mastery experience:</b> {rewards.reward_sage_mastery_experience}
+            </span>
+          )}
           {rewards.reward_items.length > 0 && (
             <span className="whitespace-nowrap">
               <b>Items: </b>

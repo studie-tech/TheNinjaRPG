@@ -107,8 +107,9 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   const { data: userData } = useUserData();
   const router = useRouter();
 
-  // Get bloodline names for displaying bloodline requirements
+  // Get bloodline / sage-mode names for requirement labels
   const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
+  const { data: sageModesData } = api.sageMode.getAllNames.useQuery();
 
   // Only fetch evolutions when the caller explicitly opts in, to avoid N+1 queries
   // in list views. Pass showEvolutions={true} for single-item detail views (e.g.
@@ -160,6 +161,24 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               ...effect,
               color: "bg-purple-400",
             })) ?? [],
+        )
+      : []),
+    ...("afterEffects" in props.item && props.item.afterEffects
+      ? (props.item.afterEffects as Omit<ZodAllTags, "description">[]).map(
+          (effect, idx) => ({
+            ...effect,
+            color: "bg-orange-200",
+            sourceLabel: `After Effect ${idx + 1}`,
+          }),
+        )
+      : []),
+    ...("level2Effects" in props.item && props.item.level2Effects
+      ? (props.item.level2Effects as Omit<ZodAllTags, "description">[]).map(
+          (effect, idx) => ({
+            ...effect,
+            color: "bg-amber-200",
+            sourceLabel: `Level 2 Effect ${idx + 1}`,
+          }),
         )
       : []),
   ].filter(Boolean);
@@ -458,6 +477,26 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Lvl 2 Mastery</b>: {item.requiredSageMastery.toLocaleString()}
                 </p>
               )}
+              {"activationRounds" in item && item.activationRounds > 0 && (
+                <p>
+                  <b>Active Duration</b>: {item.activationRounds} rounds
+                </p>
+              )}
+              {"afterEffectRounds" in item && item.afterEffectRounds > 0 && (
+                <p>
+                  <b>After-Effect Duration</b>: {item.afterEffectRounds} rounds
+                </p>
+              )}
+              {"chakraCostPerc" in item && item.chakraCostPerc > 0 && (
+                <p>
+                  <b>Chakra Cost</b>: {item.chakraCostPerc}%
+                </p>
+              )}
+              {"staminaCostPerc" in item && item.staminaCostPerc > 0 && (
+                <p>
+                  <b>Stamina Cost</b>: {item.staminaCostPerc}%
+                </p>
+              )}
               {"regenIncrease" in item && item.regenIncrease > 0 && (
                 <p>
                   <b>Regen</b>: +{item.regenIncrease}
@@ -628,6 +667,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     item.bloodlineId}
                 </p>
               )}
+              {"requiredSageModeId" in item && item.requiredSageModeId && (
+                <p>
+                  <b>Required Sage Mode</b>:{" "}
+                  {sageModesData?.find((s) => s.id === item.requiredSageModeId)?.name ||
+                    item.requiredSageModeId}
+                </p>
+              )}
               {"parentJutsuId" in item && item.parentJutsuId && (
                 <p className="col-span-2">
                   <b>Evolution</b>: Yes (evolves from a parent jutsu)
@@ -787,6 +833,15 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 </p>
               </div>
             )}
+          {"requiredSageRank" in item &&
+            item.requiredSageRank &&
+            item.requiredSageRank !== "NONE" && (
+              <div className="my-2 rounded-lg bg-poppopover p-2">
+                <p>
+                  <b>Sage Rank Requirement</b>: {item.requiredSageRank}
+                </p>
+              </div>
+            )}
           {/* {objectives.length > 0 && (
             <div className={`my-2 rounded-lg bg-poppopover p-2`}>
               <p className="font-bold">Objectives</p>
@@ -851,7 +906,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   {parsedEffect && (
                     <>
                       <div className="pb-1">
-                        <b>Effect {i + 1}: </b> <i>{getEffectDescription()}</i>
+                        <b>
+                          {"sourceLabel" in effect && effect.sourceLabel
+                            ? effect.sourceLabel
+                            : `Effect ${i + 1}`}
+                          :{" "}
+                        </b>{" "}
+                        <i>{getEffectDescription()}</i>
                       </div>
                       <div className="grid grid-cols-2">
                         {"rounds" in parsedEffect &&
@@ -985,6 +1046,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                               {parsedEffect.reward_bloodlines.length}
                             </p>
                           )}
+                        {"reward_sage_modes" in parsedEffect &&
+                          parsedEffect.reward_sage_modes &&
+                          parsedEffect.reward_sage_modes.length > 0 && (
+                            <p>
+                              <b>Reward Sage Modes</b>:{" "}
+                              {parsedEffect.reward_sage_modes.length}
+                            </p>
+                          )}
                         {"reward_badges" in parsedEffect &&
                           parsedEffect.reward_badges &&
                           parsedEffect.reward_badges.length > 0 && (
@@ -1057,6 +1126,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                           parsedEffect.reward_exp > 0 && (
                             <p>
                               <b>Reward Exp</b>: {parsedEffect.reward_exp}
+                            </p>
+                          )}
+                        {"reward_sage_mastery_experience" in parsedEffect &&
+                          parsedEffect.reward_sage_mastery_experience &&
+                          parsedEffect.reward_sage_mastery_experience > 0 && (
+                            <p>
+                              <b>Reward Sage Mastery</b>:{" "}
+                              {parsedEffect.reward_sage_mastery_experience}
                             </p>
                           )}
                         {"reward_seichi_silver" in parsedEffect &&

@@ -1428,7 +1428,7 @@ export const updateRewards = async (info: {
     // Fetch not-yet-owned candidate sage modes for reward_sage_modes (dedup at fetch)
     (rewards.reward_sage_modes?.length ?? 0) > 0
       ? client
-          .select({ id: sageMode.id })
+          .select({ id: sageMode.id, name: sageMode.name })
           .from(sageMode)
           .leftJoin(
             sageModeRolls,
@@ -1513,11 +1513,13 @@ export const updateRewards = async (info: {
   // Cap medical experience at 4 million (atomic increment + cap in SQL so parallel reward grants stack).
   // Skillpoints and sage mastery similarly capped in SQL.
 
-  // Roll ONE not-yet-owned candidate sage mode (if any). It is recorded into the player's
-  // history below; additionally auto-equip it only when the player currently has no sage
-  // mode. COALESCE is atomic per-row, so a concurrent grant cannot double-equip or clobber,
-  // and it cannot throw and abort the rest of this reward grant.
-  const rolledSageMode = sageModes.length > 0 ? getRandomElement(sageModes) : undefined;
+  // Roll ONE not-yet-owned candidate only when the player has no equipped mode.
+  // Recording history without equipping would permanently burn that id (no swap path).
+  // COALESCE still protects an empty-slot race from double-equipping.
+  const rolledSageMode =
+    !user.sageModeId && sageModes.length > 0
+      ? getRandomElement(sageModes)
+      : undefined;
 
   const updatedUserData: Record<string, unknown> = {
     questData: user.questData,
@@ -1761,7 +1763,14 @@ export const updateRewards = async (info: {
   // Update rewards for readability. `droppedGatheringItems` is surfaced so the quest
   // claim caller (the only updateRewards caller with hydrated userQuests) can credit
   // the herbs_gathered tracker by the number of gathered drops.
-  return { items: itemsToInsert, jutsus, bloodlines, badges, droppedGatheringItems };
+  return {
+    items: itemsToInsert,
+    jutsus,
+    bloodlines,
+    badges,
+    droppedGatheringItems,
+    sageModes: rolledSageMode ? [rolledSageMode] : [],
+  };
 };
 
 /**
@@ -2592,7 +2601,7 @@ export const commitQuestObjectiveRewards = async (info: {
       : undefined;
 
   // Update database
-  const [{ items, jutsus, bloodlines, badges }] = await Promise.all([
+  const [{ items, jutsus, bloodlines, badges, sageModes }] = await Promise.all([
     // Update rewards
     updateRewards({
       client,
@@ -2633,6 +2642,7 @@ export const commitQuestObjectiveRewards = async (info: {
   rewards.reward_items = items.map((i) => i.name);
   rewards.reward_jutsus = jutsus.map((i) => i.name);
   rewards.reward_bloodlines = bloodlines.map((i) => i.name);
+  rewards.reward_sage_modes = sageModes.map((i) => i.name);
   rewards.reward_badges = badges.map((i) => i.name);
 
   return {

@@ -1804,6 +1804,14 @@ export const profileRouter = createTRPCRouter({
       if (user.bloodline && user.activeReskin) {
         user.bloodline = getReskinnedBloodline(user.bloodline, user.activeReskin);
       }
+      if (
+        user.sageMode?.hidden &&
+        !isSelf &&
+        !(requester && canChangeContent(requester.role))
+      ) {
+        user.sageMode = null;
+        user.sageModeId = null;
+      }
       // Filter off entries that do not exist
       user.jutsus = user.jutsus.filter((j) => j.jutsu);
       user.items = user.items.filter((i) => i.item);

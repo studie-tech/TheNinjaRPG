@@ -30,4 +30,33 @@ describe("SageModeValidator battleDescription", () => {
   it("treats the activation message as optional", () => {
     expect(() => SageModeValidator.parse(base)).not.toThrow();
   });
+
+  it("rejects level 2 effects when Tier 2 is disabled", () => {
+    expect(() =>
+      SageModeValidator.parse({
+        ...base,
+        requiredSageMastery: 0,
+        level2Effects: [
+          {
+            type: "increasestat",
+            description: "placeholder",
+            target: "SELF",
+            direction: "offence",
+            calculation: "static",
+            power: 1,
+            powerPerLevel: 0,
+            rounds: 1,
+            statTypes: ["Ninjutsu"],
+            generalTypes: [],
+            staticAssetPath: "",
+            staticAnimation: "",
+            appearAnimation: "",
+            disappearAnimation: "",
+            appearSfx: "",
+            disappearSfx: "",
+          },
+        ],
+      }),
+    ).toThrow();
+  });
 });

@@ -7,7 +7,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import Loader from "@/layout/Loader";
+import ListLoader from "@/layout/ListLoader";
 import SageModeFiltering, { getFilter, useFiltering } from "@/layout/SageModeFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
@@ -23,6 +23,7 @@ export default function ManualSageModes() {
   const {
     data: sageModes,
     isFetching,
+    isPending,
     refetch,
     fetchNextPage,
     hasNextPage,
@@ -91,7 +92,6 @@ export default function ManualSageModes() {
           </div>
         }
       >
-        {totalLoading && <Loader explanation="Loading data" />}
         {allSageModes?.map((sageMode, i) => (
           <div
             key={sageMode.id}
@@ -105,6 +105,11 @@ export default function ManualSageModes() {
             />
           </div>
         ))}
+        <ListLoader
+          initialLoading={isPending}
+          loading={totalLoading}
+          explanation="Loading data"
+        />
       </ContentBox>
     </>
   );

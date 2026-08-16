@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
 import { applySageModeAfterRoundTransition, applySingleEffect } from "@/libs/combat/process";
 import { cleanse, getPower } from "@/libs/combat/tags";
 import { isEffectActive } from "@/libs/combat/util";
@@ -270,7 +271,7 @@ describe("sage mode active-phase aura teardown at expiry", () => {
         isNew: true,
         castThisRound: true,
         createdRound: 1,
-        actionId: "act-aura",
+        actionId: SAGE_MODE_ACTIVATION_JUTSU_ID,
       },
     );
 
@@ -381,7 +382,7 @@ describe("sage mode activation level scaling", () => {
         isNew: true,
         castThisRound: true,
         createdRound: 1,
-        actionId: "act-scaling",
+        actionId: SAGE_MODE_ACTIVATION_JUTSU_ID,
       },
     );
 
@@ -480,7 +481,7 @@ describe("sage mode level2Effects activation", () => {
         isNew: true,
         castThisRound: true,
         createdRound: 1,
-        actionId: "act-level2",
+        actionId: SAGE_MODE_ACTIVATION_JUTSU_ID,
       },
     );
 
@@ -526,11 +527,13 @@ describe("sage mode level2Effects activation", () => {
 });
 
 describe("sage mode instant tags", () => {
-  it("keeps rounds === 0 on authored one-shot after-effects", () => {
+  it("applies one-shot after-effects immediately even if the next actor is not the sage", () => {
     const sage = makeBattleUser("sage", {
       sageModeActivated: true,
       sageModeId: "sage-instant-after",
       sageModeExpiresRound: 5,
+      curHealth: 4000,
+      maxHealth: 5000,
     });
     const battle = {
       ...makeSageBattle([sage]),
@@ -549,8 +552,12 @@ describe("sage mode instant tags", () => {
 
     applySageModeAfterRoundTransition(battle);
 
-    const queued = battle.usersEffects.find((e) => e.fromType === "sageModeAfter");
-    expect(queued?.rounds).toBe(0);
-    expect(queued?.type).toBe("heal");
+    const sageAfter = battle.usersState.find((u) => u.userId === "sage");
+    expect(sageAfter?.curHealth).toBeGreaterThan(4000);
+    expect(
+      battle.usersEffects.some(
+        (e) => e.fromType === "sageModeAfter" && e.rounds === 0,
+      ),
+    ).toBe(false);
   });
 });

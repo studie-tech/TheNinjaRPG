@@ -688,7 +688,7 @@ export const bloodlineRolls = mysqlTable(
     userId: varchar("userId", { length: 191 }).notNull(),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
     used: smallint("used").default(0).notNull(),
-    pityRolls: smallint("pityRolls").default(0).notNull(),
+    pityRolls: tinyint("pityRolls").default(0).notNull(),
     type: mysqlEnum("type", consts.BLOODLINE_ROLL_TYPES).default("NATURAL").notNull(),
     goal: mysqlEnum("rank", consts.LetterRanks),
     // Stored generated column: userId when type is NATURAL, NULL otherwise.
@@ -744,8 +744,9 @@ export const sageMode = mysqlTable(
     actionCostPerc: tinyint("actionCostPerc")
       .default(consts.SAGE_MODE_DEFAULT_ACTION_COST_PERC)
       .notNull(),
-    // Two-level system (level 2 unlocks automatically at higher mastery)
+    // Roll-pool gate only (1 = rollable). Combat level 2 is requiredSageMastery.
     level: tinyint("level").default(1).notNull(),
+    // Mastery-experience threshold that unlocks level2Effects (0 = no Tier 2).
     requiredSageMastery: int("requiredSageMastery").default(0).notNull(),
     // General settings
     hidden: boolean("hidden").default(false).notNull(),

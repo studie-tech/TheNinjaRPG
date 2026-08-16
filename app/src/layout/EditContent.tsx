@@ -73,6 +73,9 @@ import { ObjectiveReward } from "@/validators/rewards";
 
 export type FormDbValue = { id: string; name: string };
 
+const hasComboboxValue = (value: unknown) =>
+  value !== undefined && value !== null && value !== "";
+
 export type FormEntry<K> = {
   id: K;
   label?: string;
@@ -739,14 +742,16 @@ export const EditContent = <
                                           role="combobox"
                                           className={cn(
                                             "w-full justify-between",
-                                            !field.value && "text-muted-foreground",
+                                            !hasComboboxValue(field.value) &&
+                                              "text-muted-foreground",
                                             fieldState.isDirty && "border-orange-300",
                                           )}
                                         >
-                                          {field.value
+                                          {hasComboboxValue(field.value)
                                             ? dynamicOptions.find(
                                                 (option) =>
-                                                  option.value === field.value,
+                                                  String(option.value) ===
+                                                  String(field.value),
                                               )?.label
                                             : "Select option"}
                                           <ChevronsUpDown className="opacity-50" />
@@ -784,7 +789,8 @@ export const EditContent = <
                                                 <Check
                                                   className={cn(
                                                     "ml-auto",
-                                                    option.value === field.value
+                                                    String(option.value) ===
+                                                    String(field.value)
                                                       ? "opacity-100"
                                                       : "opacity-0",
                                                   )}
@@ -1632,6 +1638,12 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   }
   if (props.type === "sageMode") {
     ignore.push("friendlyFire");
+    const roundsSchema = tagSchema.shape.rounds
+      ? getInner(tagSchema.shape.rounds)
+      : undefined;
+    if (roundsSchema instanceof z.ZodNumber && !roundsSchema.safeParse(0).success) {
+      ignore.push("rounds");
+    }
   }
   // Consume is instant; shield duration lives on shieldRounds (rounds is locked to 0).
   if (tag.type === "consume") {

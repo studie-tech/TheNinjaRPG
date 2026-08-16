@@ -20,6 +20,7 @@ import NavTabs from "@/layout/NavTabs";
 import SkillTreeFolderGrid from "@/layout/SkillTreeFolderGrid";
 import SkillTreeFolderModal from "@/layout/SkillTreeFolderModal";
 import { capUserStats } from "@/libs/profile";
+import { getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { getStealthStatus } from "@/libs/stealth";
 import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
@@ -201,7 +202,12 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
             <b>Mastery</b>
             <div className="flex flex-row items-center">
               <Sparkles className="mr-1 mb-1 h-6 w-6" />
-              Sage Mastery: {(userData.sageMasteryExperience ?? 0).toLocaleString()}
+              Sage Mastery:{" "}
+              {getSageMasteryDisplayRank(
+                userData.sageMasteryExperience ?? 0,
+                !!userData.sageModeId,
+              )}{" "}
+              ({(userData.sageMasteryExperience ?? 0).toLocaleString()} XP)
             </div>
             <div className="pt-2">
               <b>Elemental Proficiency</b>

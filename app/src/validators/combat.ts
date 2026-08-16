@@ -1245,8 +1245,11 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
       addIssue(ctx, "powerPerLevel must be 0 for rollbloodline effect");
     } else if (e.type === "rollsagemode" && e.powerPerLevel > 0) {
       addIssue(ctx, "powerPerLevel must be 0 for rollsagemode effect");
-    } else if (e.type === "activatesagemode" && e.powerPerLevel > 0) {
-      addIssue(ctx, "powerPerLevel must be 0 for activatesagemode effect");
+    } else if (e.type === "activatesagemode") {
+      addIssue(
+        ctx,
+        "Cannot have sage mode activation effect; it is injected automatically in battle",
+      );
     } else if (e.type === "removebloodline" && e.powerPerLevel > 0) {
       addIssue(ctx, "powerPerLevel must be 0 for removebloodline effect");
     } else if (e.type === "noncombatconsumereward" && e.powerPerLevel > 0) {
@@ -1377,6 +1380,14 @@ export const SageModeValidator = z.object({
   /** Applied when active sage buffs end; uses the full combat effect pipeline (instant damage/heal/drain resolve immediately). */
   afterEffects: z.array(AllTags).superRefine(SuperRefineEffects),
   level2Effects: z.array(AllTags).superRefine(SuperRefineEffects),
+}).superRefine((data, ctx) => {
+  if (data.level2Effects.length > 0 && data.requiredSageMastery <= 0) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Level 2 effects require a Tier 2 mastery threshold above 0",
+      path: ["level2Effects"],
+    });
+  }
 });
 export type ZodSageModeType = z.infer<typeof SageModeValidator>;
 

@@ -1311,6 +1311,18 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("Not consumable");
       }
 
+      const hasSageRoll = useritem.item.effects.some((e) => e.type === "rollsagemode");
+      if (hasSageRoll && !user.sageModeId) {
+        const sageModePool = filterRollableSageModes({
+          sageModes: allSageModes,
+          user,
+          previousRolls: previousSageRolls,
+        });
+        if (sageModePool.length === 0) {
+          return errorResponse("No sage mode is available to roll");
+        }
+      }
+
       const consumeResult = await consumeUserItemAtomically({
         client: ctx.drizzle,
         userId: ctx.userId,
@@ -1542,7 +1554,7 @@ export const itemRouter = createTRPCRouter({
         processedRewards = postProcessRewards(collapsedRewards);
       }
       // Mutate
-      const [{ items, jutsus, bloodlines, badges }] = await Promise.all([
+      const [{ items, jutsus, bloodlines, badges, sageModes }] = await Promise.all([
         processedRewards
           ? updateRewards({
               client: ctx.drizzle,
@@ -1550,7 +1562,7 @@ export const itemRouter = createTRPCRouter({
               rewards: processedRewards,
               reason: "ITEM/CONSUME",
             })
-          : { items: [], jutsus: [], bloodlines: [], badges: [] },
+          : { items: [], jutsus: [], bloodlines: [], badges: [], sageModes: [] },
         ctx.drizzle
           .update(userData)
           // Grant the sage mode atomically. The COALESCE keeps the DB's current value when it is
@@ -1575,6 +1587,7 @@ export const itemRouter = createTRPCRouter({
         processedRewards.reward_items = items.map((i) => i.name);
         processedRewards.reward_jutsus = jutsus.map((i) => i.name);
         processedRewards.reward_bloodlines = bloodlines.map((i) => i.name);
+        processedRewards.reward_sage_modes = sageModes.map((i) => i.name);
         processedRewards.reward_badges = badges.map((i) => i.name);
       }
       // Return

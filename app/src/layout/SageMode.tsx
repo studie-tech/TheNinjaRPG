@@ -16,6 +16,8 @@ import { useRequiredUserData } from "@/utils/UserContext";
 interface CurrentSageModeProps {
   sageModeId: string;
   initialBreak?: boolean;
+  /** Render without ContentBox chrome (e.g. inside a titled accordion). */
+  embedded?: boolean;
 }
 
 export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
@@ -33,7 +35,61 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
       },
     });
 
+  const canAfford = (userData?.reputationPoints ?? 0) >= REMOVAL_COST;
   const canRemove = userData?.status === "AWAKE";
+  const canProceed = canAfford && canRemove;
+  const repsNeeded = Math.max(0, REMOVAL_COST - (userData?.reputationPoints ?? 0));
+
+  const body = (
+    <>
+      {(isFetching || isRemoving) && <Loader explanation="Loading sage mode" />}
+      {!isFetching && data && userData && (
+        <>
+          <ItemWithEffects item={data} key={data.id} />
+          <Confirm2
+            title="Sage Mode Removal"
+            proceed_label={
+              canAfford
+                ? `Remove for ${REMOVAL_COST} reps`
+                : `Need ${repsNeeded} more reps`
+            }
+            isValid={!isFetching && canProceed}
+            disabled={!canProceed}
+            button={
+              <Button id="check" className="w-full" disabled={!canProceed}>
+                <Scissors className="mr-2 h-6 w-6" />
+                Remove Sage Mode
+              </Button>
+            }
+            onAccept={(e) => {
+              e.preventDefault();
+              if (canProceed) remove();
+            }}
+          >
+            <p>
+              {!canRemove ? (
+                <>You cannot remove sage mode while {userData.status.toLowerCase()}.</>
+              ) : canAfford ? (
+                <>
+                  Abandon your current sage mode. This costs{" "}
+                  <b>{REMOVAL_COST} reputation points</b>.
+                </>
+              ) : (
+                <>
+                  You need <b>{repsNeeded} more reputation points</b> to abandon your
+                  sage mode ({REMOVAL_COST} required).
+                </>
+              )}
+            </p>
+          </Confirm2>
+        </>
+      )}
+    </>
+  );
+
+  if (props.embedded) {
+    return body;
+  }
 
   return (
     <ContentBox
@@ -41,39 +97,7 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
       subtitle="Your awakened sage mode"
       initialBreak={props.initialBreak}
     >
-      {(isFetching || isRemoving) && <Loader explanation="Loading sage mode" />}
-      {!isFetching && data && userData && (
-        <>
-          <ItemWithEffects item={data} key={data.id} />
-          <Confirm2
-            title="Sage Mode Removal"
-            proceed_label="Remove Sage Mode"
-            isValid={!isFetching && canRemove}
-            disabled={!canRemove}
-            button={
-              <Button id="check" className="w-full" disabled={!canRemove}>
-                <Scissors className="mr-2 h-6 w-6" />
-                Remove Sage Mode
-              </Button>
-            }
-            onAccept={(e) => {
-              e.preventDefault();
-              remove();
-            }}
-          >
-            <p>
-              {canRemove ? (
-                <>
-                  Abandon your current sage mode. This costs{" "}
-                  <b>{REMOVAL_COST} reputation points</b>.
-                </>
-              ) : (
-                <>You cannot remove sage mode while {userData.status.toLowerCase()}.</>
-              )}
-            </p>
-          </Confirm2>
-        </>
-      )}
+      {body}
     </ContentBox>
   );
 };

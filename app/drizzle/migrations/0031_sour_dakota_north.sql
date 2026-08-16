@@ -32,7 +32,6 @@ CREATE TABLE `SageModeRolls` (
 	CONSTRAINT `SageModeRolls_id` PRIMARY KEY(`id`)
 );
 
-ALTER TABLE `BloodlineRolls` MODIFY COLUMN `pityRolls` smallint NOT NULL DEFAULT 0;
 ALTER TABLE `Quest` ADD `requiredSageModeId` varchar(191);
 ALTER TABLE `Quest` ADD `requiredSageRank` enum('NONE','INITIATE','ADEPT','MASTER','LEGENDARY');
 ALTER TABLE `UserData` ADD `sageModeId` varchar(191);

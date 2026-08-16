@@ -1949,7 +1949,7 @@
         },
         "pityRolls": {
           "name": "pityRolls",
-          "type": "smallint",
+          "type": "tinyint",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
