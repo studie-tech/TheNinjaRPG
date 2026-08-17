@@ -1,4 +1,5 @@
-import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { BattleDataEntryType, BattleTypes } from "@/drizzle/constants";
 import {
@@ -1145,6 +1146,26 @@ export const updateRaidProgress = async (
 };
 
 /**
+ * Single-statement battle XP grant shared by jutsu and item ownership leveling:
+ * rows at/over the level-up threshold gain a level and reset XP to 0, all other
+ * rows gain `gain` XP. One atomic UPDATE per table — PlanetScale has no
+ * transactions, and two separate guarded statements would race each other.
+ * MySQL applies SET assignments left to right, so `level` must be assigned
+ * before `experience` to read the pre-update XP value.
+ */
+const xpGainOrLevelUpSet = (
+  table: { level: AnyMySqlColumn; experience: AnyMySqlColumn },
+  xpToLevel: number,
+  gain: number,
+) => {
+  const threshold = xpToLevel - gain;
+  return {
+    level: sql`${table.level} + (${table.experience} >= ${threshold})`,
+    experience: sql`IF(${table.experience} >= ${threshold}, 0, ${table.experience} + ${gain})`,
+  };
+};
+
+/**
  * Update the user with battle result using raw queries for speed
  */
 export const updateUser = async (
@@ -1343,15 +1364,18 @@ export const updateUser = async (
       result.didWin > 0,
       curBattle.extraState.settings,
     );
-    // Group equipped items by their definition's xpToLevel for batched CAS updates
-    const equippedXpGroups = new Map<number, string[]>();
+    // Group equipped items by their definition's xpToLevel for batched updates.
+    // Forced-loadout entries are synthetic rows; XP is credited to the real
+    // UserItem row they were seeded from (progressionRowId).
+    const equippedXpGroups = new Map<number, Set<string>>();
     if (iExp > 0) {
       for (const ui of user.items) {
         if (ui.equipped === "NONE" || ui.quantity <= 0) continue;
+        const rowId = ui.progressionRowId ?? ui.id;
         const def = getItem(curBattle, ui.itemId);
         const xpToLevel = def?.xpToLevel ?? ITEM_XP_TO_LEVEL;
-        const ids = equippedXpGroups.get(xpToLevel) ?? [];
-        ids.push(ui.id);
+        const ids = equippedXpGroups.get(xpToLevel) ?? new Set<string>();
+        ids.add(rowId);
         equippedXpGroups.set(xpToLevel, ids);
       }
     }
@@ -1425,23 +1449,11 @@ export const updateUser = async (
         ? [
             client
               .update(userJutsu)
-              .set({ experience: sql`${userJutsu.experience} + ${jExp}` })
-              .where(
-                and(
-                  eq(userJutsu.userId, user.userId),
-                  lt(userJutsu.experience, JUTSU_XP_TO_LEVEL - jExp),
-                  lt(userJutsu.level, JUTSU_TRAIN_LEVEL_CAP),
-                  inArray(userJutsu.jutsuId, jUnique),
-                ),
-              ),
-            client
-              .update(userJutsu)
-              .set({ level: sql`${userJutsu.level} + 1`, experience: 0 })
+              .set(xpGainOrLevelUpSet(userJutsu, JUTSU_XP_TO_LEVEL, jExp))
               .where(
                 and(
                   eq(userJutsu.userId, user.userId),
                   lt(userJutsu.level, JUTSU_TRAIN_LEVEL_CAP),
-                  gte(userJutsu.experience, JUTSU_XP_TO_LEVEL - jExp),
                   inArray(userJutsu.jutsuId, jUnique),
                 ),
               ),
@@ -1449,30 +1461,18 @@ export const updateUser = async (
         : []),
       // Item experience & level from PvP (equipped items only; per-item xpToLevel)
       ...(iExp > 0
-        ? [...equippedXpGroups.entries()].flatMap(([xpToLevel, ids]) => [
+        ? [...equippedXpGroups.entries()].map(([xpToLevel, ids]) =>
             client
               .update(userItem)
-              .set({ experience: sql`${userItem.experience} + ${iExp}` })
-              .where(
-                and(
-                  eq(userItem.userId, user.userId),
-                  lt(userItem.experience, xpToLevel - iExp),
-                  lt(userItem.level, ITEM_LEVEL_CAP),
-                  inArray(userItem.id, ids),
-                ),
-              ),
-            client
-              .update(userItem)
-              .set({ level: sql`${userItem.level} + 1`, experience: 0 })
+              .set(xpGainOrLevelUpSet(userItem, xpToLevel, iExp))
               .where(
                 and(
                   eq(userItem.userId, user.userId),
                   lt(userItem.level, ITEM_LEVEL_CAP),
-                  gte(userItem.experience, xpToLevel - iExp),
-                  inArray(userItem.id, ids),
+                  inArray(userItem.id, [...ids]),
                 ),
               ),
-          ])
+          )
         : []),
       // Update user data
       client

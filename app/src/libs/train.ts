@@ -522,24 +522,11 @@ export const battleJutsuExp = (
   }
 
   // Apply battle arena exp multiplier if available
-  if (settings) {
-    const arenaSetting = settings.find((s) => s.name === "battleExpMultiplier");
-    if (arenaSetting && (battleType === "ARENA" || battleType === "COMBAT")) {
-      const secondsLeft = -secondsPassed(arenaSetting.time);
-      if (secondsLeft > 0 && arenaSetting.value > 0) {
-        baseExp *= arenaSetting.value;
-      }
-    }
-
-    // Apply jutsu exp multiplier if available
-    const jutsuSetting = settings.find((s) => s.name === "jutsuExpMultiplier");
-    if (jutsuSetting) {
-      const secondsLeft = -secondsPassed(jutsuSetting.time);
-      if (secondsLeft > 0 && jutsuSetting.value > 0) {
-        baseExp *= jutsuSetting.value;
-      }
-    }
+  if (battleType === "ARENA" || battleType === "COMBAT") {
+    baseExp = applyExpMultiplierSetting(baseExp, "battleExpMultiplier", settings);
   }
+  // Apply jutsu exp multiplier if available
+  baseExp = applyExpMultiplierSetting(baseExp, "jutsuExpMultiplier", settings);
 
   return Math.floor(baseExp);
 };
@@ -553,17 +540,26 @@ export const battleItemExp = (
   if (!(ITEM_XP_BATTLE_TYPES as readonly BattleType[]).includes(battleType)) {
     return 0;
   }
-  let baseExp = didWin ? ITEM_XP_ON_WIN : ITEM_XP_ON_LOSS;
+  const baseExp = didWin ? ITEM_XP_ON_WIN : ITEM_XP_ON_LOSS;
+  return Math.floor(applyExpMultiplierSetting(baseExp, "itemExpMultiplier", settings));
+};
 
-  if (settings) {
-    const itemSetting = settings.find((s) => s.name === "itemExpMultiplier");
-    if (itemSetting) {
-      const secondsLeft = -secondsPassed(itemSetting.time);
-      if (secondsLeft > 0 && itemSetting.value > 0) {
-        baseExp *= itemSetting.value;
-      }
+/**
+ * Multiply exp by an active gain-multiplier game setting. Mirrors the activity
+ * window used by getGameSettingBoost (which lives in the server-side
+ * gamesettings lib and cannot be imported into this client-shared module).
+ */
+const applyExpMultiplierSetting = (
+  baseExp: number,
+  settingName: string,
+  settings?: GameSetting[],
+): number => {
+  const setting = settings?.find((s) => s.name === settingName);
+  if (setting) {
+    const secondsLeft = -secondsPassed(setting.time);
+    if (secondsLeft > 0 && setting.value > 0) {
+      return baseExp * setting.value;
     }
   }
-
-  return Math.floor(baseExp);
+  return baseExp;
 };

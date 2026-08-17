@@ -75,6 +75,25 @@ describe("weapon action scaling", () => {
     expect(getPower(damageEffect).power).toBe(32);
   });
 
+  it("keeps character-level scaling for AI users' items", () => {
+    // AI users never earn item XP, so their gear scales from character level
+    // instead of being pinned to item level 1.
+    const battle = makeBattleWithWeapon({
+      damage: {
+        power: 22,
+        powerPerLevel: 1,
+        statTypes: ["Ninjutsu"],
+        generalTypes: [],
+      },
+    });
+    const user = { userId: "attacker", level: 100, isAi: true } as ReturnedUserState;
+    const userItem = makeBattleUserItem({ level: 1 });
+
+    const action = userItemToAction(userItem, user, battle);
+
+    expect(action.level).toBe(100);
+  });
+
   it("keeps a 30EP weapon below a comparable 50EP damage jutsu at equal levels", () => {
     // Regression test for: https://discord.com/channels/1080832341234159667/1375094434437271572/1518261967616475248
     const battle = makeBattleWithWeapon({
@@ -86,7 +105,8 @@ describe("weapon action scaling", () => {
       },
     });
     const user = { userId: "attacker", level: 100 } as ReturnedUserState;
-    const userItem = makeBattleUserItem({ level: 0 });
+    // Level 1 is the minimum ownership level a real item can have
+    const userItem = makeBattleUserItem({ level: 1 });
     const attacker = makeBattleUser("attacker", { level: 100 });
     const defender = makeBattleUser("defender", { level: 100 });
 
@@ -99,7 +119,7 @@ describe("weapon action scaling", () => {
       power: 50,
       statTypes: ["Ninjutsu"],
       generalTypes: [],
-      level: 0,
+      level: 1,
     });
 
     const weaponDamage = damageCalc(
@@ -110,8 +130,8 @@ describe("weapon action scaling", () => {
     );
     const jutsuDamage = damageCalc(jutsuDamageEffect, attacker, defender, dmgConfig);
 
-    expect(getPower(weaponDamageEffect).power).toBe(30);
+    expect(getPower(weaponDamageEffect).power).toBe(31);
     expect(jutsuDamage).toBeGreaterThan(weaponDamage);
-    expect(jutsuDamage / weaponDamage).toBeCloseTo(50 / 30, 2);
+    expect(jutsuDamage / weaponDamage).toBeCloseTo(50 / 31, 2);
   });
 });

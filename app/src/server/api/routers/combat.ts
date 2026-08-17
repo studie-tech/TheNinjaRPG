@@ -1702,6 +1702,7 @@ export const initiateBattle = async (
             ),
           ),
           columns: {
+            id: true,
             userId: true,
             itemId: true,
             level: true,
@@ -1780,7 +1781,10 @@ export const initiateBattle = async (
             const owned =
               progressionQueues.get(`${user.userId}:${item.id}`)?.shift() ?? null;
             return {
+              // Synthetic id so battle-end quantity/durability writes never touch
+              // real inventory rows; XP is credited via progressionRowId instead.
               id: nanoid(),
+              progressionRowId: owned?.id ?? null,
               createdAt: new Date(),
               updatedAt: new Date(),
               userId: user.userId,
@@ -3074,7 +3078,9 @@ export const processUsersForBattle = async (
                     user: user,
                     actionId: ui.itemId,
                     target: user,
-                    level: ui.level,
+                    // AI gear can never earn item XP; keep character-level scaling
+                    // for AI so boss/raid content is not silently nerfed to level 1.
+                    level: user.isAi ? user.level : ui.level,
                   });
                   realized.isNew = false;
                   realized.fromType =
@@ -3414,6 +3420,7 @@ export const processUsersForBattle = async (
       return {
         id: ui.id,
         itemId: ui.itemId,
+        progressionRowId: ui.progressionRowId ?? null,
         quantity: ui.quantity,
         level: ui.level,
         experience: ui.experience,

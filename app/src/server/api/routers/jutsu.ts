@@ -41,7 +41,7 @@ import {
   userData,
   userJutsu,
 } from "@/drizzle/schema";
-import { validateEvolutionGraph } from "@/libs/evolution";
+import { filterVisibleEvolutions, validateEvolutionGraph } from "@/libs/evolution";
 import type { ComputedJutsuLoadout, JutsuCapFlags, JutsuEquipCap } from "@/libs/jutsu";
 import {
   canEquipUnderCaps,
@@ -512,7 +512,7 @@ export const jutsuRouter = createTRPCRouter({
         }),
       ]);
       const canViewHidden = !!user && canChangeContent(user.role);
-      return evolutions.filter((evolution) => !evolution.hidden || canViewHidden);
+      return filterVisibleEvolutions(evolutions, canViewHidden);
     }),
 
   evolveJutsu: protectedProcedure

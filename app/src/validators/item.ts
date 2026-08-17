@@ -3,6 +3,7 @@ import {
   AttackMethods,
   AttackTargets,
   BattleUsageTypes,
+  ITEM_LEVEL_CAP,
   ItemRarities,
   ItemSlotTypes,
   ItemTypes,
@@ -25,6 +26,16 @@ export const getItemEvolutionsSchema = z.object({
 export const evolveItemSchema = z.object({
   userItemId: z.string(),
   evolutionItemId: z.string(),
+});
+
+export const getPublicUserItemsSchema = z.object({
+  userId: z.string(),
+});
+
+export const adjustUserItemSchema = z.object({
+  userId: z.string(),
+  userItemId: z.string(),
+  level: z.number().int().min(1).max(ITEM_LEVEL_CAP),
 });
 
 export const itemFilteringSchema = z.object({
