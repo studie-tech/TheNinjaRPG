@@ -3147,6 +3147,8 @@ export const summon = (
         newAi.controllerId = user.userId;
         newAi.isPiloted = shouldPilotSummon(user, effect.playerControlled);
         newAi.isSummonTemplate = false; // never inherit the template's flag
+        // Record which creature this effect spawned so teardown is exact.
+        effect.summonedUserId = newAi.userId;
         newAi.hidden = undefined;
         newAi.leftBattle = false;
         newAi.longitude = effect.longitude;
@@ -3238,23 +3240,28 @@ export const summon = (
       color: "red",
     } as ActionEffect;
   } else if (effect?.rounds === 0) {
-    // The spawned summon is tracked by controllerId (creatorId), since aiId now
-    // stays pointed at the template. Prefer removing a non-live (dead/expired)
-    // summon: a re-cast inserts the new live summon ahead of an older dead one,
-    // so a plain first-match could remove the live one instead.
-    // Exclude clones: they share isSummon + the same controllerId, so an
-    // un-summon must never target the controller's clone instead of the summon.
-    let idx = usersState.findIndex(
-      (u) =>
-        u.isSummon &&
-        !isClone(u) &&
-        u.controllerId === effect.creatorId &&
-        !isLiveSummon(u, usersState, userEffects),
-    );
-    if (idx === -1) {
+    // Remove exactly the creature this effect spawned. aiId stays pointed at the
+    // clone-source template (so re-cast works), so the spawned id is carried on
+    // summonedUserId instead.
+    let idx = usersState.findIndex((u) => u.userId === effect.summonedUserId);
+    if (idx === -1 && effect.summonedUserId === undefined) {
+      // Battles already in flight when summonedUserId was introduced. Match on
+      // controllerId and prefer a non-live summon: a re-cast inserts the new
+      // live summon ahead of an older dead one, so a plain first-match could
+      // remove the live one. Clones share isSummon and controllerId, so they are
+      // excluded here too. Safe to delete once no pre-upgrade battles remain.
       idx = usersState.findIndex(
-        (u) => u.isSummon && !isClone(u) && u.controllerId === effect.creatorId,
+        (u) =>
+          u.isSummon &&
+          !isClone(u) &&
+          u.controllerId === effect.creatorId &&
+          !isLiveSummon(u, usersState, userEffects),
       );
+      if (idx === -1) {
+        idx = usersState.findIndex(
+          (u) => u.isSummon && !isClone(u) && u.controllerId === effect.creatorId,
+        );
+      }
     }
     if (idx > -1) {
       const removed = usersState[idx];
