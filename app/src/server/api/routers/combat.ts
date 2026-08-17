@@ -123,7 +123,6 @@ import {
   consolidatePreBattleDamageModifiers,
   emptyPreBattleGearModifiers,
 } from "@/libs/combat/process";
-import { spliceOrphanedSummons } from "@/libs/combat/summon";
 import { realizeTag } from "@/libs/combat/tags";
 import type {
   ActionEffect,
@@ -685,17 +684,8 @@ export const combatRouter = createTRPCRouter({
             return { updateClient: false, notification: "No battle description" };
           }
 
-          // Mid-round orphan cleanup BEFORE picking the next actor: a controller
-          // may have died/fled/left on an earlier actor's turn (e.g. the enemy's).
-          // Removing its now-masterless summon here guarantees alignBattle selects
-          // a valid actor (never a summon about to be spliced) and that the "It is
-          // now X's turn" line below never names a removed summon. alignBattle also
-          // splices on round-progress, but only AFTER actor selection and only for
-          // callers without this pre-splice; the two cover the immediate pick vs.
-          // future rounds, so the brief overlap (a no-op rescan) is intentional.
-          spliceOrphanedSummons(newBattle.usersState, newBattle.usersEffects);
-
           // Check if everybody finished their action, and if so, fast-forward the battle
+          // (alignBattle removes masterless summons before it picks the next actor)
           const { actor: newActor, progressRound } = alignBattle(
             newBattle,
             actionRounds,

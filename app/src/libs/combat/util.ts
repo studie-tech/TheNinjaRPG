@@ -2438,6 +2438,12 @@ export const alignBattle = (
   userId?: string, // Session user ID
 ) => {
   const now = new Date();
+  // Orphan cleanup runs BEFORE actor selection: a summon whose controller has
+  // died/fled/left must be gone from usersState by the time calcActiveUser walks
+  // the turn ring, or it can be picked as the actor and then removed underneath
+  // the caller -- leaving battle.activeUserId pointing at a user that no longer
+  // exists and naming a ghost in the "It is now X's turn" line.
+  spliceOrphanedSummons(battle.usersState, battle.usersEffects);
   const precomputedActions = userId
     ? availableUserActions(battle as unknown as ReturnedBattle, userId)
     : undefined;
@@ -2458,9 +2464,6 @@ export const alignBattle = (
   // 4. update all updatedAt fields on items & jutsus
   if (progressRound) {
     refillActionPoints(battle);
-    // Orphan cleanup: drop any summon whose controller has died/fled/left
-    // before the next round's actors are picked.
-    spliceOrphanedSummons(battle.usersState, battle.usersEffects);
     battle.round = actionRound;
     // console.log("Action round: ", actionRound);
     battle.usersEffects.forEach((e) => {
