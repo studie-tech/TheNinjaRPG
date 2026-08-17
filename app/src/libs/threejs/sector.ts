@@ -92,12 +92,9 @@ import { applyWaveShader } from "@/libs/threejs/shaders";
 import type { SectorUser } from "@/libs/threejs/types";
 import {
   createTexture,
-  loadPortraitTexture,
   loadTexture,
   pickSpriteAvatar,
   profiler,
-  revealSpriteWhenTextureReady,
-  whenPortraitReady,
 } from "@/libs/threejs/util";
 import { hasRequiredRank } from "@/libs/train";
 import { getBiomeFromTileType } from "@/libs/travel";
@@ -757,16 +754,6 @@ export const drawSector = (
   };
 };
 
-/** Keep portraits in the transparent pass so the pin cannot occlude the avatar. */
-const MAP_SPRITE_DEPTH = {
-  transparent: true,
-  depthWrite: false,
-  depthTest: true,
-} as const;
-
-/** Sit the portrait slightly closer to the camera than the pin it sits in. */
-const AVATAR_LAYER = USER_LAYER + 0.15;
-
 /**
  * Creates a sector-map user marker. Players receive the standard portrait pin and
  * hidden PvP/heal/info actions; overworld NPCs receive a full-character sprite and
@@ -785,7 +772,6 @@ export const createUserSprite = (
   const group = new Group();
   const { height: h, width: w } = hex;
 
-  let pinFace: Sprite | undefined;
   // Players render as an alliance-coloured portrait inside a map pin. Overworld NPCs render
   // as a free-standing character standing on the tile instead, so they skip the pin entirely.
   if (!userData.isNpc) {
@@ -794,7 +780,6 @@ export const createUserSprite = (
     const highlightMaterial = new SpriteMaterial({
       map: highlightTexture,
       alphaMap: highlightTexture,
-      ...MAP_SPRITE_DEPTH,
     });
     const highlightColor =
       userData.allianceStatus === "ALLY"
@@ -808,60 +793,36 @@ export const createUserSprite = (
     highlightSprite.userData.type = "userMarker";
     highlightSprite.userData.userId = userData.userId;
     highlightSprite.material.color.setHex(highlightColor);
-    highlightSprite.renderOrder = 0;
     group.add(highlightSprite);
 
     // Marker
     const marker = textureForPath(IMG_SECTOR_USER_MARKER);
-    const markerMat = new SpriteMaterial({
-      map: marker,
-      alphaMap: marker,
-      ...MAP_SPRITE_DEPTH,
-    });
-    pinFace = new Sprite(markerMat);
-    pinFace.userData.type = "marker";
-    pinFace.renderOrder = 0;
-    pinFace.material.color.setHex(highlightColor);
-    Object.assign(pinFace.scale, new Vector3(h, h * 1.2, 1));
-    Object.assign(pinFace.position, new Vector3(w / 2, h * 0.9, USER_LAYER));
-    group.add(pinFace);
+    const markerMat = new SpriteMaterial({ map: marker, alphaMap: marker });
+    const markerSprite = new Sprite(markerMat);
+    markerSprite.userData.type = "marker";
+    Object.assign(markerSprite.scale, new Vector3(h, h * 1.2, 1));
+    Object.assign(markerSprite.position, new Vector3(w / 2, h * 0.9, USER_LAYER));
+    group.add(markerSprite);
   }
 
-  // Avatar Sprite. Players are cropped to a circular portrait; NPCs use the
-  // avatar's own transparency so the full character shows on the tile.
-  // Users with no portrait keep the coloured pin only.
+  // Avatar Sprite. Players are cropped to a circular portrait via the sprite mask; NPCs use
+  // the avatar's own transparency so the full character shows, sized up to read on the tile.
   const avatar = pickSpriteAvatar(userData);
-  if (avatar) {
-    const useCanvasPortrait = !userData.isNpc && textureForPath === loadTexture;
-    const map = useCanvasPortrait
-      ? loadPortraitTexture(avatar)
-      : textureForPath(avatar);
-    map.generateMipmaps = false;
-    map.minFilter = LinearFilter;
-    const material =
-      userData.isNpc || useCanvasPortrait
-        ? new SpriteMaterial({ map: map, ...MAP_SPRITE_DEPTH })
-        : new SpriteMaterial({
-            map: map,
-            alphaMap: textureForPath(IMG_SECTOR_USER_SPRITE_MASK),
-            ...MAP_SPRITE_DEPTH,
-          });
-    const sprite = new Sprite(material);
-    sprite.userData.type = "avatar";
-    sprite.renderOrder = 1;
-    const avatarScale = userData.isNpc ? h * 1.3 : h * 0.8;
-    Object.assign(sprite.scale, new Vector3(avatarScale, avatarScale, 1));
-    Object.assign(sprite.position, new Vector3(w / 2, h * 1.0, AVATAR_LAYER));
-    group.add(sprite);
-    if (useCanvasPortrait) {
-      sprite.visible = false;
-      whenPortraitReady(map, () => {
-        sprite.visible = true;
+  const map = textureForPath(avatar);
+  map.generateMipmaps = false;
+  map.minFilter = LinearFilter;
+  const material = userData.isNpc
+    ? new SpriteMaterial({ map: map, transparent: true })
+    : new SpriteMaterial({
+        map: map,
+        alphaMap: textureForPath(IMG_SECTOR_USER_SPRITE_MASK),
       });
-    } else {
-      revealSpriteWhenTextureReady(sprite, map);
-    }
-  }
+  const sprite = new Sprite(material);
+  sprite.userData.type = "avatar";
+  const avatarScale = userData.isNpc ? h * 1.3 : h * 0.8;
+  Object.assign(sprite.scale, new Vector3(avatarScale, avatarScale, 1));
+  Object.assign(sprite.position, new Vector3(w / 2, h * 1.0, USER_LAYER));
+  group.add(sprite);
 
   if (userData.isNpc) {
     // NPC interaction sprite: "talk" for friendly, "attack" for hostile
@@ -953,7 +914,6 @@ export const createCombatSprite = (
   const highlightMaterial = new SpriteMaterial({
     map: highlightTexture,
     alphaMap: highlightTexture,
-    ...MAP_SPRITE_DEPTH,
   });
   const highlightColor = 0xff0000;
   const highlightSprite = new Sprite(highlightMaterial);
@@ -967,11 +927,7 @@ export const createCombatSprite = (
 
   // Marker
   const marker = textureForPath(IMG_SECTOR_USER_MARKER);
-  const markerMat = new SpriteMaterial({
-    map: marker,
-    alphaMap: marker,
-    ...MAP_SPRITE_DEPTH,
-  });
+  const markerMat = new SpriteMaterial({ map: marker, alphaMap: marker });
   const markerSprite = new Sprite(markerMat);
   markerSprite.userData.type = "marker";
   Object.assign(markerSprite.scale, new Vector3(h, h * 1.2, 1));
@@ -979,48 +935,36 @@ export const createCombatSprite = (
   group.add(markerSprite);
 
   const firstPortrait = pickSpriteAvatar(firstUser);
-  if (firstPortrait) {
-    const alphaMap1 = textureForPath(IMG_SECTOR_USERSPRITE_LEFT);
-    const map1 = textureForPath(firstPortrait);
-    map1.generateMipmaps = false;
-    map1.minFilter = LinearFilter;
-    const material1 = new SpriteMaterial({
-      map: map1,
-      alphaMap: alphaMap1,
-      ...MAP_SPRITE_DEPTH,
-    });
-    const sprite1 = new Sprite(material1);
-    Object.assign(sprite1.scale, new Vector3(h * 0.8, h * 0.8, 1));
-    Object.assign(sprite1.position, new Vector3(w / 2, h * 1.0, AVATAR_LAYER));
-    group.add(sprite1);
-    revealSpriteWhenTextureReady(sprite1, map1);
-  }
+  const alphaMap1 = textureForPath(IMG_SECTOR_USERSPRITE_LEFT);
+  const map1 = textureForPath(firstPortrait);
+  map1.generateMipmaps = false;
+  map1.minFilter = LinearFilter;
+  const material1 = new SpriteMaterial({ map: map1, alphaMap: alphaMap1 });
+  const sprite1 = new Sprite(material1);
+  Object.assign(sprite1.scale, new Vector3(h * 0.8, h * 0.8, 1));
+  Object.assign(sprite1.position, new Vector3(w / 2, h * 1.0, USER_LAYER));
+  group.add(sprite1);
 
-  const secondPortrait = secondUser ? pickSpriteAvatar(secondUser) : null;
-  if (secondUser && secondPortrait) {
+  if (secondUser) {
+    const secondPortrait = pickSpriteAvatar(secondUser);
     const alphaMap2 = textureForPath(IMG_SECTOR_USERSPRITE_RIGHT);
     const map2 = textureForPath(secondPortrait);
     map2.generateMipmaps = false;
     map2.minFilter = LinearFilter;
-    const material2 = new SpriteMaterial({
-      map: map2,
-      alphaMap: alphaMap2,
-      ...MAP_SPRITE_DEPTH,
-    });
+    const material2 = new SpriteMaterial({ map: map2, alphaMap: alphaMap2 });
     const sprite2 = new Sprite(material2);
     Object.assign(sprite2.scale, new Vector3(h * 0.8, h * 0.8, 1));
-    Object.assign(sprite2.position, new Vector3(w / 2, h * 1.0, AVATAR_LAYER));
+    Object.assign(sprite2.position, new Vector3(w / 2, h * 1.0, USER_LAYER));
     group.add(sprite2);
-    revealSpriteWhenTextureReady(sprite2, map2);
   }
 
   const map = textureForPath(IMG_SECTOR_VS_ICON);
   map.generateMipmaps = false;
   map.minFilter = LinearFilter;
-  const material = new SpriteMaterial({ map: map, ...MAP_SPRITE_DEPTH });
+  const material = new SpriteMaterial({ map: map });
   const sprite = new Sprite(material);
   Object.assign(sprite.scale, new Vector3(h * 0.6, h * 0.6, 1));
-  Object.assign(sprite.position, new Vector3(w / 2, h * 0.5, AVATAR_LAYER));
+  Object.assign(sprite.position, new Vector3(w / 2, h * 0.5, USER_LAYER));
   group.add(sprite);
 
   // Name
@@ -1417,10 +1361,7 @@ export const drawUsers = (info: {
             if (userMesh && userMesh.parent !== info.group_users) {
               userMesh = undefined;
             }
-            const expectedChildren =
-              3 +
-              (pickSpriteAvatar(firstUser) ? 1 : 0) +
-              (secondUser && pickSpriteAvatar(secondUser) ? 1 : 0);
+            const expectedChildren = 4 + (secondUser ? 1 : 0);
             if (userMesh && userMesh.children.length !== expectedChildren) {
               info.group_users.remove(userMesh);
               userMeshCache.delete(battleId);

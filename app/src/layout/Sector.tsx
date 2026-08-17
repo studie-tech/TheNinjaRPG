@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import {
   HEX_ASPECT_RATIO,
   HEX_STACKING_DISPLACEMENT,
+  IMG_AVATAR_DEFAULT,
   IMG_ICON_MOVE,
   IMG_SCENE_BACKGROUND,
   IMG_SECTOR_ATTACK,
@@ -89,7 +90,6 @@ import {
   cleanUp,
   disposeGroupPreservingShared,
   isRendererContextValid,
-  isUsablePortraitUrl,
   pickSpriteAvatar,
   profiler,
   safeRemoveRendererElement,
@@ -553,17 +553,10 @@ const Sector: React.FC<SectorProps> = (props) => {
           .findIndex((u) => u.userId === data.userId);
         if (idx !== -1 && usersRef.current[idx]) {
           if (instantMove) {
-            // User exists - instant movement. Keep a real portrait if the
-            // broadcast only carried the landscape default.
+            // User exists - instant movement
             usersRef.current[idx] = {
               ...usersRef.current[idx],
               ...data,
-              avatar: isUsablePortraitUrl(data.avatar)
-                ? data.avatar
-                : usersRef.current[idx].avatar,
-              avatarLight: isUsablePortraitUrl(data.avatarLight)
-                ? data.avatarLight
-                : usersRef.current[idx].avatarLight,
               allianceStatus,
               experience: data.experience ?? usersRef.current[idx].experience,
               rank: data.rank ?? usersRef.current[idx].rank,
@@ -863,8 +856,8 @@ const Sector: React.FC<SectorProps> = (props) => {
   /**
    * Assemble the travel.moveInSector input for a single step from `from` to
    * `dest` within `sectorId`, including the avatar/identity fields the server
-   * broadcasts to other clients. Avatar fields stay null when the user has
-   * no portrait so nearby pins are not given a fake hoodie.
+   * broadcasts to other clients. The avatar falls back to IMG_AVATAR_DEFAULT
+   * so users without a custom avatar can still move.
    */
   const buildStepPayload = (
     from: SectorPoint,
@@ -876,8 +869,8 @@ const Sector: React.FC<SectorProps> = (props) => {
     longitude: dest.x,
     latitude: dest.y,
     sector: sectorId,
-    avatar: userData?.avatar ?? null,
-    avatarLight: userData?.avatarLight ?? null,
+    avatar: userData?.avatar || IMG_AVATAR_DEFAULT,
+    avatarLight: userData?.avatarLight || userData?.avatar || IMG_AVATAR_DEFAULT,
     villageId: userData?.villageId ?? null,
     battleId: userData?.battleId ?? null,
     username: userData?.username ?? "",
@@ -1850,7 +1843,8 @@ const Sector: React.FC<SectorProps> = (props) => {
     // A journey animation is authoritative while it runs: its own pipeline
     // issues every needed move, so the effect must not double-request
     if (walkAnimatingRef.current) return;
-    // Avatar fields are optional; a missing portrait must not block movement.
+    // The move payload falls back to IMG_AVATAR_DEFAULT, so a missing custom
+    // avatar must not block movement (default-avatar users could not move).
     if (target && originRef.current && pathFinderRef.current && userData) {
       // Check user status
       if (userData.status !== "AWAKE") {
@@ -2572,7 +2566,6 @@ const Sector: React.FC<SectorProps> = (props) => {
   const arrivalCta = arrivalNpc
     ? resolveArrivalPromptCta(arrivalNpc, arrivalBound?.objective.task ?? null)
     : null;
-  const arrivalPortrait = arrivalNpc ? pickSpriteAvatar(arrivalNpc) : null;
   const dialogBackground =
     dialogSceneAssets?.find((asset) => asset.type === "SCENE_BACKGROUND")?.image ??
     IMG_SCENE_BACKGROUND;
@@ -2772,14 +2765,12 @@ const Sector: React.FC<SectorProps> = (props) => {
           title={arrivalNpc.username}
         >
           <div className="flex flex-col items-center gap-4 p-2">
-            {arrivalPortrait ? (
-              // biome-ignore lint/performance/noImgElement: dynamic CDN avatar, variable intrinsic size
-              <img
-                src={arrivalPortrait}
-                alt={arrivalNpc.username}
-                className="h-28 w-28 rounded-md object-contain"
-              />
-            ) : null}
+            {/* biome-ignore lint/performance/noImgElement: dynamic CDN avatar, variable intrinsic size */}
+            <img
+              src={pickSpriteAvatar(arrivalNpc)}
+              alt={arrivalNpc.username}
+              className="h-28 w-28 rounded-md object-contain"
+            />
             <p className="text-center text-sm">{arrivalCta?.question}</p>
             <div className="flex w-full gap-2">
               <Button

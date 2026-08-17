@@ -22,72 +22,21 @@ import {
   Vector2,
   WebGLRenderer,
 } from "three";
-import { IMG_AVATAR_DEFAULT, IMG_DEFAULT_PROFILE_PICTURE } from "@/drizzle/constants";
-import { bunnyImageUrl } from "@/utils/image";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import { textureImageUrl } from "@/utils/image";
 
 /**
- * `IMG_AVATAR_DEFAULT` is a landscape (bright sun). Cropped to the pin's circular
- * mask it reads as a blank white marker, so it is treated as "no portrait" even
- * when the URL has optimizer query params appended.
- */
-const LANDSCAPE_DEFAULT_ID = "630cf6e7-c152-4dea-a3ff-821de76d7f5a_default";
-
-export const isUsablePortraitUrl = (url?: string | null): url is string =>
-  !!url && !url.includes(LANDSCAPE_DEFAULT_ID) && url !== IMG_AVATAR_DEFAULT;
-
-const HOODIE_FILE_ID = "Hzww9EQvYURJ19UqON6bo95WClq4K0wxZUmJcvThgdVenO3P";
-
-export const isDefaultProfilePicture = (url?: string | null) =>
-  !!url &&
-  (url === IMG_DEFAULT_PROFILE_PICTURE ||
-    url.startsWith(`${IMG_DEFAULT_PROFILE_PICTURE}?`) ||
-    url.includes(HOODIE_FILE_ID));
-
-/**
- * Avatar URL for a sector/globe user sprite, or null when the user has no
- * portrait. Regular players prefer the lightweight `avatarLight` thumbnail
- * unless that thumbnail is a generated copy of the registration hoodie —
- * those often fail to load and paint as a black disc. NPCs prefer the full
- * `avatar`, because AI templates may carry a placeholder in `avatarLight`.
- *
- * Users with no avatar are left without a portrait (colored pin only).
- * Do not invent the hoodie for them; that swaps them with hoodie-default
- * players whose generated thumbnail is what actually looks blank.
+ * Avatar URL for a sector/globe user sprite. Regular players prefer the lightweight
+ * `avatarLight` thumbnail (cheaper to render in crowded sectors); NPCs prefer the full
+ * `avatar`, because AI templates may carry a default placeholder in `avatarLight`.
  */
 export const pickSpriteAvatar = (user: {
   isNpc?: boolean | null;
   avatar?: string | null;
   avatarLight?: string | null;
-}): string | null => {
-  if (user.isNpc) {
-    if (isUsablePortraitUrl(user.avatar) && !isDefaultProfilePicture(user.avatar)) {
-      return user.avatar;
-    }
-    if (
-      isUsablePortraitUrl(user.avatarLight) &&
-      !isDefaultProfilePicture(user.avatarLight)
-    ) {
-      return user.avatarLight;
-    }
-    if (
-      isDefaultProfilePicture(user.avatar) ||
-      isDefaultProfilePicture(user.avatarLight)
-    ) {
-      return IMG_DEFAULT_PROFILE_PICTURE;
-    }
-    return null;
-  }
-  // Generated thumbnails of the registration hoodie often fail to load.
-  if (
-    isDefaultProfilePicture(user.avatar) ||
-    isDefaultProfilePicture(user.avatarLight)
-  ) {
-    return IMG_DEFAULT_PROFILE_PICTURE;
-  }
-  if (isUsablePortraitUrl(user.avatarLight)) return user.avatarLight;
-  if (isUsablePortraitUrl(user.avatar)) return user.avatar;
-  return null;
-};
+}): string =>
+  (user.isNpc ? user.avatar || user.avatarLight : user.avatarLight || user.avatar) ||
+  IMG_AVATAR_DEFAULT;
 
 // Simple in-memory cache for textures to avoid re-fetching
 let textureLoaderInstance: TextureLoader | null = null;
@@ -121,6 +70,11 @@ const pendingLoads = new Map<string, Promise<Texture>>();
  * even after TextureLoader replaces `texture.image`. Leave the image null
  * until the real file arrives — empty maps sample black for a frame, then
  * the first upload is the correct size.
+ *
+ * Texture URLs go through `textureImageUrl`, not `bunnyImageUrl`. The latter
+ * adds `optimizer=image` on extensionless UploadThing keys (PR 1427); Bunny
+ * then caches a processed rendition instead of the original file, which is
+ * what broke travel-map portraits.
  */
 export const loadTexture = (path: string, width = 50) => {
   // Guard against empty or invalid paths - callers should provide fallback URLs
@@ -130,7 +84,7 @@ export const loadTexture = (path: string, width = 50) => {
     return fallback;
   }
 
-  const transformedPath = bunnyImageUrl(path, width);
+  const transformedPath = textureImageUrl(path, width);
 
   // Return cached texture if available
   const cached = textureCache.get(transformedPath);
@@ -140,132 +94,6 @@ export const loadTexture = (path: string, width = 50) => {
   texture.colorSpace = SRGBColorSpace;
   textureCache.set(transformedPath, texture);
   return texture;
-};
-
-const PORTRAIT_SIZE = 128;
-const portraitCacheKey = (path: string) => `portrait:${path}`;
-
-const notifyPortraitReady = (texture: Texture) => {
-  texture.userData.portraitReady = true;
-  const listeners = texture.userData.portraitListeners as (() => void)[] | undefined;
-  listeners?.forEach((fn) => {
-    fn();
-  });
-  texture.userData.portraitListeners = [];
-};
-
-export const whenPortraitReady = (texture: Texture, onReady: () => void) => {
-  if (texture.userData.portraitReady) {
-    onReady();
-    return;
-  }
-  const listeners =
-    (texture.userData.portraitListeners as (() => void)[] | undefined) ?? [];
-  listeners.push(onReady);
-  texture.userData.portraitListeners = listeners;
-};
-
-/**
- * Circular player-pin portrait. First GPU upload is a 128x128 transparent
- * canvas so WebGL2 storage is allocated at the final size; the photo is
- * drawn onto that same canvas when it arrives. The sprite stays hidden
- * until then — a dark backing reads as a black pin.
- */
-export const loadPortraitTexture = (path: string) => {
-  if (typeof document === "undefined") {
-    const texture = new Texture();
-    texture.colorSpace = SRGBColorSpace;
-    return texture;
-  }
-
-  const transformedPath =
-    path && path.trim() !== "" ? bunnyImageUrl(path, PORTRAIT_SIZE) : "";
-  const cacheKey = portraitCacheKey(transformedPath || "empty");
-  const cached = textureCache.get(cacheKey);
-  if (cached) return cached;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = PORTRAIT_SIZE;
-  canvas.height = PORTRAIT_SIZE;
-  const ctx = canvas.getContext("2d");
-  ctx?.clearRect(0, 0, PORTRAIT_SIZE, PORTRAIT_SIZE);
-
-  const texture = new Texture(canvas);
-  texture.colorSpace = SRGBColorSpace;
-  texture.generateMipmaps = false;
-  texture.minFilter = LinearFilter;
-  texture.needsUpdate = true;
-  textureCache.set(cacheKey, texture);
-
-  if (!transformedPath || !ctx) return texture;
-
-  const image = new Image();
-  image.crossOrigin = "anonymous";
-  image.onload = () => {
-    ctx.clearRect(0, 0, PORTRAIT_SIZE, PORTRAIT_SIZE);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(PORTRAIT_SIZE / 2, PORTRAIT_SIZE / 2, PORTRAIT_SIZE / 2, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(image, 0, 0, PORTRAIT_SIZE, PORTRAIT_SIZE);
-    ctx.restore();
-    texture.needsUpdate = true;
-    notifyPortraitReady(texture);
-  };
-  image.src = transformedPath;
-  return texture;
-};
-
-const isTextureImageReady = (texture: Texture) => {
-  const image = texture.image as
-    | HTMLImageElement
-    | HTMLCanvasElement
-    | ImageBitmap
-    | undefined;
-  if (!image) return false;
-  if (typeof HTMLImageElement !== "undefined" && image instanceof HTMLImageElement) {
-    return image.complete && image.naturalWidth > 0;
-  }
-  if (typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap) {
-    return image.width > 0;
-  }
-  if (typeof HTMLCanvasElement !== "undefined" && image instanceof HTMLCanvasElement) {
-    return image.width > 0;
-  }
-  return false;
-};
-
-/**
- * Keep a sprite hidden until its color map has a real image. An unloaded
- * Three.js Texture samples as white; with the circular pin mask that becomes
- * a solid white portrait.
- */
-export const revealSpriteWhenTextureReady = (
-  sprite: Sprite,
-  texture: Texture,
-  onReady?: () => void,
-) => {
-  const reveal = () => {
-    sprite.visible = true;
-    onReady?.();
-  };
-  if (isTextureImageReady(texture)) {
-    reveal();
-    return;
-  }
-  sprite.visible = false;
-  if (typeof window === "undefined") return;
-
-  const started = Date.now();
-  const tick = () => {
-    if (isTextureImageReady(texture)) {
-      reveal();
-      return;
-    }
-    if (Date.now() - started > 15_000) return;
-    window.setTimeout(tick, 50);
-  };
-  window.setTimeout(tick, 50);
 };
 
 /**
@@ -362,7 +190,9 @@ export const clearTextureCaches = () => {
  */
 export const preloadTextures = async (paths: string[]) => {
   const uniquePaths = [
-    ...new Set(paths.filter((p) => Boolean(p)).map((path) => bunnyImageUrl(path, 50))),
+    ...new Set(
+      paths.filter((p) => Boolean(p)).map((path) => textureImageUrl(path, 50)),
+    ),
   ];
   const results = await Promise.allSettled(
     uniquePaths.map((path) => {

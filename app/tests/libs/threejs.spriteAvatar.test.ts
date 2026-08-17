@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { IMG_AVATAR_DEFAULT, IMG_DEFAULT_PROFILE_PICTURE } from "@/drizzle/constants";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { pickSpriteAvatar } from "@/libs/threejs/util";
 
 describe("pickSpriteAvatar", () => {
@@ -40,32 +40,10 @@ describe("pickSpriteAvatar", () => {
     ).toBe("https://cdn/thumb.webp");
   });
 
-  it("returns no portrait when the user has no avatar", () => {
-    expect(pickSpriteAvatar({ isNpc: true, avatar: null, avatarLight: null })).toBeNull();
-    expect(pickSpriteAvatar({ avatar: null, avatarLight: null })).toBeNull();
-  });
-
-  it("uses the canonical hoodie when that is the user's stored avatar", () => {
-    expect(
-      pickSpriteAvatar({
-        avatar: IMG_DEFAULT_PROFILE_PICTURE,
-        avatarLight: "https://cdn/thumbnail-broken.png",
-      }),
-    ).toBe(IMG_DEFAULT_PROFILE_PICTURE);
-  });
-
-  it("does not use the landscape default as a circular pin portrait", () => {
-    expect(
-      pickSpriteAvatar({
-        avatar: IMG_DEFAULT_PROFILE_PICTURE,
-        avatarLight: IMG_AVATAR_DEFAULT,
-      }),
-    ).toBe(IMG_DEFAULT_PROFILE_PICTURE);
-    expect(
-      pickSpriteAvatar({
-        avatar: null,
-        avatarLight: `${IMG_AVATAR_DEFAULT}?width=50`,
-      }),
-    ).toBeNull();
+  it("falls back to the default avatar when nothing is set", () => {
+    expect(pickSpriteAvatar({ isNpc: true, avatar: null, avatarLight: null })).toBe(
+      IMG_AVATAR_DEFAULT,
+    );
+    expect(pickSpriteAvatar({ avatar: null, avatarLight: null })).toBe(IMG_AVATAR_DEFAULT);
   });
 });
