@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { emptyMasteries, hasMasteryRequirements } from "@/libs/mastery";
-import { getSoftCappedExperience } from "@/libs/profile";
-import { getUserCaps } from "@/drizzle/constants";
+import type { MasteryName } from "@/drizzle/constants";
+import { getUserCaps, MasteryNames } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
+import { hasMasteryRequirements } from "@/libs/mastery";
+import { getSoftCappedExperience } from "@/libs/profile";
+
+const emptyMasteries = (value = 0): Record<MasteryName, number> =>
+  Object.fromEntries(MasteryNames.map((name) => [name, value])) as Record<
+    MasteryName,
+    number
+  >;
 
 describe("hasMasteryRequirements", () => {
   it("allows use when no mastery requirements are set", () => {

@@ -122,6 +122,10 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   // the jutsus/traininggrounds/items modals) where the evolution chain is meaningful.
   const isJutsuItem = "jutsuType" in item;
   const isGameItem = "itemType" in item && !("jutsuType" in item);
+  // SageMode rows carry a `requiredSageMastery` that gates their level-2 effects behind
+  // `userData.sageMasteryExperience`, which is a different thing from the Sage Mastery
+  // stat requirement of the same name on Item/Jutsu. Discriminate before rendering either.
+  const isSageMode = "activationRounds" in item;
   const { data: jutsuEvolutions } = api.jutsu.getEvolutions.useQuery(
     { jutsuId: item.id },
     { enabled: isJutsuItem && !hideData && !!showEvolutions, staleTime: 5 * 60 * 1000 },
@@ -479,12 +483,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {"level" in item &&
                 item.level !== undefined &&
                 item.level > 0 &&
-                !("activationRounds" in item) && (
+                !isSageMode && (
                   <p>
                     <b>Level</b>: {item.level}
                   </p>
                 )}
-              {"activationRounds" in item &&
+              {isSageMode &&
                 "requiredSageMastery" in item &&
                 item.requiredSageMastery > 0 && (
                   <p>
@@ -720,9 +724,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 ] as const
               )
                 .filter(([key]) => {
-                  if (key === "requiredSageMastery" && "activationRounds" in item) {
-                    return false;
-                  }
+                  if (key === "requiredSageMastery" && isSageMode) return false;
                   const value = (item as unknown as Record<string, unknown>)[key];
                   return value != null;
                 })

@@ -4,10 +4,14 @@ vi.mock("@/server/db", () => ({ drizzleDB: {} }));
 
 import { availableUserActions } from "@/libs/combat/actions";
 import { applyEffects } from "@/libs/combat/process";
-import { decreaseMastery, increaseMastery, updateStatUsage } from "@/libs/combat/tags";
+import {
+  decreaseMastery,
+  increaseMastery,
+  increaseStats,
+  updateStatUsage,
+} from "@/libs/combat/tags";
 import { damageCalc } from "@/libs/combat/tags";
 import { dmgConfig } from "@/libs/combat/constants";
-import { normalizeBattleUserCombatStats } from "@/libs/combat/util";
 import type { CompleteBattle } from "@/libs/combat/types";
 import {
   makeDamageEffect,
@@ -92,36 +96,26 @@ describe("updateStatUsage", () => {
   });
 });
 
-describe("normalizeBattleUserCombatStats", () => {
-  it("maps legacy type-specific stats onto unified offence, defence, and masteries", () => {
-    const user = makeUser({ userId: "user" });
-    const legacy = user as typeof user & {
-      ninjutsuOffence?: number;
-      taijutsuOffence?: number;
-      ninjutsuDefence?: number;
-      genjutsuDefence?: number;
-    };
-    delete (legacy as { offence?: number }).offence;
-    delete (legacy as { defence?: number }).defence;
-    delete (legacy as { ninjutsuMastery?: number }).ninjutsuMastery;
-    delete (legacy as { genjutsuMastery?: number }).genjutsuMastery;
-    delete (legacy as { taijutsuMastery?: number }).taijutsuMastery;
-    delete (legacy as { bukijutsuMastery?: number }).bukijutsuMastery;
-    delete (legacy as { highestMasteryType?: string }).highestMasteryType;
-    legacy.ninjutsuOffence = 400;
-    legacy.taijutsuOffence = 800;
-    legacy.ninjutsuDefence = 200;
-    legacy.genjutsuDefence = 350;
-    legacy.usedStats = { ninjutsuOffence: 2 } as unknown as typeof user.usedStats;
+describe("increaseStats", () => {
+  it("reports the unified combat stats it changed, not the jutsu types listed", () => {
+    const target = makeUser({ userId: "user", username: "Naruto", offence: 1000 });
+    const effect = makeEffect(
+      "increasestat",
+      {
+        statTypes: ["Ninjutsu"],
+        direction: "offence",
+        calculation: "static",
+        power: 250,
+        powerPerLevel: 0,
+        rounds: 5,
+      },
+      { targetId: "user", isNew: true, castThisRound: false },
+    );
 
-    normalizeBattleUserCombatStats(user);
+    const info = increaseStats(effect, [], target);
 
-    expect(user.offence).toBe(800);
-    expect(user.defence).toBe(350);
-    expect(user.ninjutsuMastery).toBe(400);
-    expect(user.taijutsuMastery).toBe(800);
-    expect(user.highestMasteryType).toBe("Taijutsu");
-    expect(user.usedStats).toEqual({ offence: 2, defence: 0 });
+    expect(info?.txt).toContain("Offence");
+    expect(info?.txt).not.toContain("Ninjutsu");
   });
 });
 

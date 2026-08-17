@@ -148,7 +148,6 @@ import {
   isEffectActive,
   maskBattle,
   maskBattleDynamic,
-  normalizeBattleUsersState,
   rollInitiative,
 } from "@/libs/combat/util";
 import { fetchDmgConfig } from "@/libs/gamesettings";
@@ -1535,7 +1534,6 @@ export const fetchBattle = async (client: DrizzleClient, battleId: string) => {
   if (!result) {
     return null;
   }
-  normalizeBattleUsersState(result.usersState);
   return result as CompleteBattle;
 };
 
@@ -2613,8 +2611,6 @@ export const processUsersForBattle = async (
       // Set all users to not be agressors by default
       isAggressor: false,
       // Initialize processing-specific fields (will be set below)
-      highestOffence: "offence",
-      highestDefence: "defence",
       highestMasteryType: "Ninjutsu",
       highestGenerals: [],
       round: 0,
@@ -2715,8 +2711,7 @@ export const processUsersForBattle = async (
       user.medicalExperience = 100000;
     }
 
-    user.highestOffence = "offence";
-    user.highestDefence = "defence";
+    // Add preferred (or highest) mastery type to user, used for tag efficiency matching
     const masteries = {
       Ninjutsu: user.ninjutsuMastery,
       Genjutsu: user.genjutsuMastery,

@@ -674,7 +674,6 @@ describe("computeDamagePacket", () => {
       statTypes: ["Highest"],
       generalTypes: ["Highest"],
       elements: ["Fire"],
-      highestOffence: "offence",
       highestMasteryType: "Bukijutsu",
       highestGenerals: ["strength", "speed"],
     });
@@ -691,7 +690,6 @@ describe("computeDamagePacket", () => {
           isNew: false,
           castThisRound: false,
           createdRound: 1,
-          highestOffence: "offence",
           highestMasteryType: "Bukijutsu",
           highestGenerals: ["strength", "speed"],
           ...params.runtime,

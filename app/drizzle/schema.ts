@@ -1431,6 +1431,9 @@ export const item = mysqlTable(
     xpToLevel: int("xpToLevel").default(consts.ITEM_XP_TO_LEVEL).notNull(),
     // Evolution fields (shared pattern with jutsu — see libs/evolution.ts)
     parentItemId: varchar("parentItemId", { length: 191 }),
+    // Mastery gates, checked against the UserData mastery stats of the same name. Note
+    // that SageMode.requiredSageMastery is unrelated: it gates level-2 sage effects on
+    // UserData.sageMasteryExperience.
     requiredNinjutsuMastery: int("requiredNinjutsuMastery"),
     requiredGenjutsuMastery: int("requiredGenjutsuMastery"),
     requiredTaijutsuMastery: int("requiredTaijutsuMastery"),
@@ -1654,6 +1657,9 @@ export const jutsu = mysqlTable(
       .notNull(),
     // Evolution fields
     parentJutsuId: varchar("parentJutsuId", { length: 191 }),
+    // Mastery gates, checked against the UserData mastery stats of the same name. Note
+    // that SageMode.requiredSageMastery is unrelated: it gates level-2 sage effects on
+    // UserData.sageMasteryExperience.
     requiredNinjutsuMastery: int("requiredNinjutsuMastery"),
     requiredGenjutsuMastery: int("requiredGenjutsuMastery"),
     requiredTaijutsuMastery: int("requiredTaijutsuMastery"),

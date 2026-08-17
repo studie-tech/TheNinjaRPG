@@ -24,51 +24,6 @@ import {
   serverError,
 } from "../trpc";
 
-const calcTrainingAmount = (
-  user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
-  settings: Awaited<ReturnType<typeof fetchUpdatedUser>>["settings"],
-  startedAt: Date,
-) => {
-  const sectors = user?.village?.sectors.length ?? 0;
-  const shrineBoost = getShrineBoost(sectors, "Training", user.village);
-  const trainSetting = getGameSettingBoost("trainingGainMultiplier", settings);
-  const warSetting = getGameSettingBoost(`war-${user.villageId}-train`, settings);
-  const gameFactor = trainSetting?.value ?? 1;
-  const warFactor = (100 + (warSetting?.value ?? 0)) / 100;
-  const boost = getStrucBoost("trainBoostPerLvl", user.village?.structures) / 100;
-  const clanBoost = user?.isOutlaw ? 0 : (user?.clan?.trainingBoost ?? 0) / 100;
-  const factor = gameFactor * (1 + boost + clanBoost + shrineBoost) * warFactor;
-  const seconds = (Date.now() - startedAt.getTime()) / 1000;
-  const minutes = seconds / 60;
-  const energySpent = Math.min(
-    Math.floor(energyPerSecond(user.trainingSpeed) * seconds),
-    100,
-  );
-  const trainingAmount =
-    factor * energySpent * trainEfficiency(user) * trainingMultiplier(user);
-  return { trainingAmount, minutes };
-};
-
-const assertCanStartTraining = (
-  user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
-) => {
-  const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
-  if (user.status !== "AWAKE") return errorResponse("Must be awake to train");
-  if (!user.isOutlaw) {
-    if (!inVillage) return errorResponse("Must be in your own village");
-    if (user.sector !== user.village?.sector) return errorResponse("Wrong sector");
-  }
-  if (user.trainingSpeed !== "8hrs" && user.isBanned) {
-    return errorResponse("Only 8hrs training interval allowed when banned");
-  }
-  if (user.dailyTrainings >= MAX_DAILY_TRAININGS) {
-    return errorResponse(
-      `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`,
-    );
-  }
-  return null;
-};
-
 export const trainRouter = createTRPCRouter({
   startTraining: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Start training a combat stat" } })
@@ -428,3 +383,50 @@ export const trainRouter = createTRPCRouter({
       });
     }),
 });
+
+/** Training gains from village/clan/game boosts and time spent in a training slot */
+const calcTrainingAmount = (
+  user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
+  settings: Awaited<ReturnType<typeof fetchUpdatedUser>>["settings"],
+  startedAt: Date,
+) => {
+  const sectors = user?.village?.sectors.length ?? 0;
+  const shrineBoost = getShrineBoost(sectors, "Training", user.village);
+  const trainSetting = getGameSettingBoost("trainingGainMultiplier", settings);
+  const warSetting = getGameSettingBoost(`war-${user.villageId}-train`, settings);
+  const gameFactor = trainSetting?.value ?? 1;
+  const warFactor = (100 + (warSetting?.value ?? 0)) / 100;
+  const boost = getStrucBoost("trainBoostPerLvl", user.village?.structures) / 100;
+  const clanBoost = user?.isOutlaw ? 0 : (user?.clan?.trainingBoost ?? 0) / 100;
+  const factor = gameFactor * (1 + boost + clanBoost + shrineBoost) * warFactor;
+  const seconds = (Date.now() - startedAt.getTime()) / 1000;
+  const minutes = seconds / 60;
+  const energySpent = Math.min(
+    Math.floor(energyPerSecond(user.trainingSpeed) * seconds),
+    100,
+  );
+  const trainingAmount =
+    factor * energySpent * trainEfficiency(user) * trainingMultiplier(user);
+  return { trainingAmount, minutes };
+};
+
+/** Shared guards for starting either training slot. Returns an error response, or null */
+const assertCanStartTraining = (
+  user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
+) => {
+  const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
+  if (user.status !== "AWAKE") return errorResponse("Must be awake to train");
+  if (!user.isOutlaw) {
+    if (!inVillage) return errorResponse("Must be in your own village");
+    if (user.sector !== user.village?.sector) return errorResponse("Wrong sector");
+  }
+  if (user.trainingSpeed !== "8hrs" && user.isBanned) {
+    return errorResponse("Only 8hrs training interval allowed when banned");
+  }
+  if (user.dailyTrainings >= MAX_DAILY_TRAININGS) {
+    return errorResponse(
+      `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`,
+    );
+  }
+  return null;
+};

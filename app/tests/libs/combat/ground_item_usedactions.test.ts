@@ -38,8 +38,6 @@ const makeActor = () => ({
   curChakra: 1000,
   curStamina: 1000,
   actionPoints: 100,
-  highestOffence: "offence",
-  highestDefence: "defence",
   highestMasteryType: "Ninjutsu",
   highestGenerals: ["strength"],
   fledBattle: false,

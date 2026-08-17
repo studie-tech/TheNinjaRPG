@@ -33,6 +33,11 @@ import type {
   UserRank,
 } from "@/drizzle/schema";
 import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
+import { hasMasteryRequirements } from "@/libs/mastery";
+import type { UserWithRelations } from "@/routers/profile";
+import { getUserFederalStatus } from "@/utils/paypal";
+import { secondsPassed } from "@/utils/time";
+import { getUserElements } from "@/validators/user";
 
 type UserStatData = Pick<
   UserData,
@@ -49,12 +54,6 @@ type UserStatData = Pick<
   | "intelligence"
   | "willpower"
 >;
-
-import { hasMasteryRequirements } from "@/libs/mastery";
-import type { UserWithRelations } from "@/routers/profile";
-import { getUserFederalStatus } from "@/utils/paypal";
-import { secondsPassed } from "@/utils/time";
-import { getUserElements } from "@/validators/user";
 
 export type JutsuBloodlineItemUserItems = NonNullable<UserWithRelations>["items"];
 

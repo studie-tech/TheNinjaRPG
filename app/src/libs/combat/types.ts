@@ -153,8 +153,6 @@ export type CombatUserFields = {
   controllerId: string;
   direction: "left" | "right";
   isAggressor: boolean;
-  highestOffence: (typeof StatNames)[number];
-  highestDefence: (typeof StatNames)[number];
   highestMasteryType: Exclude<StatType, "Highest">;
   highestGenerals: (typeof GenNames)[number][];
   round: number;
@@ -562,13 +560,8 @@ export type BattleEffect = ZodAllTags & {
   villageId?: string | null;
   targetType?: "user" | "barrier";
   power?: number;
-  highestOffence?: (typeof StatNames)[number];
-  highestDefence?: (typeof StatNames)[number];
   highestMasteryType?: Exclude<StatType, "Highest">;
   highestGenerals?: (typeof GenNames)[number][];
-  targetHighestOffence?: (typeof StatNames)[number];
-  targetHighestDefence?: (typeof StatNames)[number];
-  targetHighestMasteryType?: Exclude<StatType, "Highest">;
   targetHighestGenerals?: (typeof GenNames)[number][];
   longitude: number;
   latitude: number;

@@ -137,8 +137,6 @@ export const battleUserSchema = z
     gender: str("Male"),
     villageId: str("village-1"),
     direction: z.enum(["left", "right"]).prefault("left"),
-    highestOffence: statNameSchema.prefault("offence"),
-    highestDefence: statNameSchema.prefault("defence"),
     highestMasteryType: z
       .enum(["Ninjutsu", "Genjutsu", "Taijutsu", "Bukijutsu"])
       .prefault("Ninjutsu"),

@@ -44,7 +44,7 @@ import {
   isNegativeUserEffect,
   isPositiveUserEffect,
 } from "@/validators/combat";
-import type { DmgConfig, GenName, GenNames, StatNames } from "./constants";
+import type { DmgConfig, GenName, GenNames } from "./constants";
 import type {
   ActionEffect,
   BattleEffect,
@@ -61,12 +61,7 @@ import type {
  */
 type RealizeTagUser = Pick<
   ReturnedUserState,
-  | "userId"
-  | "villageId"
-  | "highestOffence"
-  | "highestDefence"
-  | "highestMasteryType"
-  | "highestGenerals"
+  "userId" | "villageId" | "highestMasteryType" | "highestGenerals"
 >;
 
 /**
@@ -94,8 +89,6 @@ export const realizeTag = <T extends BattleEffect>(props: {
   tag.level = level ?? 0;
   tag.isNew = true;
   tag.castThisRound = true;
-  tag.highestOffence = user.highestOffence;
-  tag.highestDefence = user.highestDefence;
   tag.highestMasteryType = user.highestMasteryType;
   tag.highestGenerals = user.highestGenerals;
   tag.barrierAbsorb = barrierAbsorb || 0;
@@ -106,9 +99,6 @@ export const realizeTag = <T extends BattleEffect>(props: {
     }
   }
   if (target) {
-    tag.targetHighestOffence = target.highestOffence;
-    tag.targetHighestDefence = target.highestDefence;
-    tag.targetHighestMasteryType = target.highestMasteryType;
     tag.targetHighestGenerals = target.highestGenerals;
   }
   if (battle && "rounds" in tag) {
@@ -537,17 +527,25 @@ export const debuffPrevent = (
   }
 };
 
+/**
+ * Human-readable summary of what an effect affects.
+ * @param effect - the effect to describe
+ * @param type - set by damage modifiers, where `statTypes` still selects which damage
+ *   the modifier applies to. When unset the effect adjusts the unified combat stats, so
+ *   `statTypes` are reported as Offence/Defence rather than as jutsu types.
+ */
 export const getAffected = (effect: UserEffect, type?: "offence" | "defence") => {
   const stats: string[] = [];
-  if ("statTypes" in effect && effect.statTypes) {
-    effect.statTypes.forEach((stat: StatType) => {
-      if (stat === "Highest") {
-        if (!type || type === "offence") stats.push("Offence");
-        if (!type || type === "defence") stats.push("Defence");
-      } else {
-        stats.push(stat);
-      }
-    });
+  if ("statTypes" in effect && effect.statTypes?.length) {
+    if (type) {
+      effect.statTypes.forEach((stat: StatType) => {
+        stats.push(stat === "Highest" ? capitalizeFirstLetter(type) : stat);
+      });
+    } else {
+      const direction = "direction" in effect ? effect.direction : "both";
+      if (direction === "offence" || direction === "both") stats.push("Offence");
+      if (direction === "defence" || direction === "both") stats.push("Defence");
+    }
   }
   if ("masteryTypes" in effect && effect.masteryTypes) {
     stats.push(...effect.masteryTypes);
@@ -3228,14 +3226,6 @@ export const getPower = (effect: UserEffect | GroundEffect) => {
   return { power, adverb, qualifier };
 };
 
-/** Convert from e.g. offence -> Offence, or use the user's highest mastery type */
-export const getStatTypeFromStat = (
-  stat: (typeof StatNames)[number] | Exclude<StatType, "Highest">,
-) => {
-  if (stat === "offence") return "Offence";
-  if (stat === "defence") return "Defence";
-  return stat;
-};
 /**
  * Calculate ratio of user stats & elements between one user effect to another
  * Returns a ratio between 0 to 1, 0 indicating e.g. that none of the stats in LHS are

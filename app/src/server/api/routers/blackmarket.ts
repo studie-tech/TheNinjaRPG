@@ -612,7 +612,7 @@ export const blackMarketRouter = createTRPCRouter({
       const inputSum = round(Object.values(input).reduce((a, b) => a + b, 0));
       const availableStats = round(getAssignedCombatStatTotal(user));
       if (inputSum !== availableStats) {
-        const message = `Requested points ${inputSum} for not match experience points ${availableStats}`;
+        const message = `Requested points ${inputSum} do not match your ${availableStats} assigned combat stat points`;
         return { success: false, message };
       }
       const result = await ctx.drizzle
