@@ -792,6 +792,11 @@ export const SummonTag = z.object({
   rounds: z.coerce.number().int().min(2).max(100).prefault(2),
   aiId: z.string().prefault(""),
   aiHp: z.coerce.number().min(100).max(100000).prefault(100),
+  // When true, a human summoner drives this creature themselves on its turn
+  // (its jutsu, items, AP and targeting); default false keeps it AI-driven.
+  // Plain boolean (not z.coerce.boolean): the editor Switch always writes a real
+  // boolean, and coercion would turn a stray string "false" into true.
+  playerControlled: z.boolean().prefault(false),
   calculation: z.enum(["percentage"]).prefault("percentage"),
 });
 
@@ -1366,33 +1371,35 @@ export type ZodBloodlineInput = z.input<typeof BloodlineValidator>;
  * `requiredSageMastery` unlocks `level2Effects` (must be > 0 if that array is non-empty).
  * Tag `rounds` are stripped on persist except `0` (instant).
  */
-export const SageModeValidator = z.object({
-  name: z.string().trim(),
-  image: z.string(),
-  description: z.string(),
-  battleDescription: z.string().nullish(),
-  level: z.coerce.number().int().min(1).max(SAGE_MODE_MAX_LEVEL),
-  requiredSageMastery: z.coerce.number().int().min(0).max(SAGE_MASTERY_EXP_CAP),
-  activationRounds: z.coerce.number().int().min(1).max(20),
-  afterEffectRounds: z.coerce.number().int().min(0).max(20),
-  chakraCostPerc: z.coerce.number().int().min(0).max(100),
-  staminaCostPerc: z.coerce.number().int().min(0).max(100),
-  actionCostPerc: z.coerce.number().int().min(10).max(100),
-  villageId: z.string().nullable(),
-  hidden: z.coerce.boolean().optional(),
-  effects: z.array(AllTags).superRefine(SuperRefineEffects),
-  /** Applied when active sage buffs end; uses the full combat effect pipeline (instant damage/heal/drain resolve immediately). */
-  afterEffects: z.array(AllTags).superRefine(SuperRefineEffects),
-  level2Effects: z.array(AllTags).superRefine(SuperRefineEffects),
-}).superRefine((data, ctx) => {
-  if (data.level2Effects.length > 0 && data.requiredSageMastery <= 0) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Level 2 effects require a Tier 2 mastery threshold above 0",
-      path: ["level2Effects"],
-    });
-  }
-});
+export const SageModeValidator = z
+  .object({
+    name: z.string().trim(),
+    image: z.string(),
+    description: z.string(),
+    battleDescription: z.string().nullish(),
+    level: z.coerce.number().int().min(1).max(SAGE_MODE_MAX_LEVEL),
+    requiredSageMastery: z.coerce.number().int().min(0).max(SAGE_MASTERY_EXP_CAP),
+    activationRounds: z.coerce.number().int().min(1).max(20),
+    afterEffectRounds: z.coerce.number().int().min(0).max(20),
+    chakraCostPerc: z.coerce.number().int().min(0).max(100),
+    staminaCostPerc: z.coerce.number().int().min(0).max(100),
+    actionCostPerc: z.coerce.number().int().min(10).max(100),
+    villageId: z.string().nullable(),
+    hidden: z.coerce.boolean().optional(),
+    effects: z.array(AllTags).superRefine(SuperRefineEffects),
+    /** Applied when active sage buffs end; uses the full combat effect pipeline (instant damage/heal/drain resolve immediately). */
+    afterEffects: z.array(AllTags).superRefine(SuperRefineEffects),
+    level2Effects: z.array(AllTags).superRefine(SuperRefineEffects),
+  })
+  .superRefine((data, ctx) => {
+    if (data.level2Effects.length > 0 && data.requiredSageMastery <= 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Level 2 effects require a Tier 2 mastery threshold above 0",
+        path: ["level2Effects"],
+      });
+    }
+  });
 export type ZodSageModeType = z.infer<typeof SageModeValidator>;
 
 /**

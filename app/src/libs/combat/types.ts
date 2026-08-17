@@ -180,6 +180,16 @@ export type CombatUserFields = {
   hex?: TerrainHex;
   hidden?: boolean;
   keystoneName?: string | null;
+  /**
+   * Transient: true only while a human player is piloting this summon (set in summon()).
+   * isAi deliberately stays true so reward attribution, drop tables, and AI-path action
+   * processing keep working — isPiloted is strictly a turn-routing / UI signal, never an
+   * accounting/identity reclassification.
+   */
+  isPiloted?: boolean;
+  /** Transient: true only for the hidden clone-source summon template. Set at
+   *  load, cleared on spawn/clone. Server-internal — not in publicState. */
+  isSummonTemplate?: boolean;
   // Reference IDs to static data in extraState
   relationIds: string[];
   warIds: string[];

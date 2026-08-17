@@ -123,6 +123,7 @@ import {
   consolidatePreBattleDamageModifiers,
   emptyPreBattleGearModifiers,
 } from "@/libs/combat/process";
+import { spliceOrphanedSummons } from "@/libs/combat/summon";
 import { realizeTag } from "@/libs/combat/tags";
 import type {
   ActionEffect,
@@ -145,6 +146,7 @@ import {
   getBattleClaimIds,
   getBattleGrid,
   getDefaultBattleSizes,
+  getTurnControl,
   isEffectActive,
   maskBattle,
   maskBattleDynamic,
@@ -609,9 +611,8 @@ export const combatRouter = createTRPCRouter({
             actionRounds.push(actionRound);
           }
 
-          // Only allow action if it is the users turn
-          const isUserTurn = !actor.isAi && actor.controllerId === suid;
-          const isAITurn = actor.isAi;
+          // Only allow action if it is the users turn (a piloted summon is human-driven)
+          const { isUserTurn, isAITurn } = getTurnControl(actor, suid);
           if (!isUserTurn && !isAITurn) {
             return { notification: `Not your turn. Wait for ${actor.username}` };
           }
@@ -629,7 +630,10 @@ export const combatRouter = createTRPCRouter({
             input.actionId
           ) {
             /* PERFORM USER ACTION */
-            const actions = availableUserActions(newBattle, suid, true, true);
+            // Build the action list for the acting entity: on a piloted-summon turn
+            // that is the summon's own jutsu set; on the player's own turn actor.userId
+            // equals suid, so behaviour is unchanged.
+            const actions = availableUserActions(newBattle, actor.userId, true, true);
             const action = actions.find((a) => a.id === input.actionId);
             if (!action)
               return { notification: `Action not valid anymore. Try something else` };
@@ -681,6 +685,16 @@ export const combatRouter = createTRPCRouter({
             return { updateClient: false, notification: "No battle description" };
           }
 
+          // Mid-round orphan cleanup BEFORE picking the next actor: a controller
+          // may have died/fled/left on an earlier actor's turn (e.g. the enemy's).
+          // Removing its now-masterless summon here guarantees alignBattle selects
+          // a valid actor (never a summon about to be spliced) and that the "It is
+          // now X's turn" line below never names a removed summon. alignBattle also
+          // splices on round-progress, but only AFTER actor selection and only for
+          // callers without this pre-splice; the two cover the immediate pick vs.
+          // future rounds, so the brief overlap (a no-op rescan) is intentional.
+          spliceOrphanedSummons(newBattle.usersState, newBattle.usersEffects);
+
           // Check if everybody finished their action, and if so, fast-forward the battle
           const { actor: newActor, progressRound } = alignBattle(
             newBattle,
@@ -718,6 +732,7 @@ export const combatRouter = createTRPCRouter({
           // Check if we should let the inner-loop continue
           if (
             newActor.isAi && // Continue new loop if it's an AI
+            !newActor.isPiloted && // but never auto-drive a human-piloted summon
             nActions < maxActions && // and we haven't performed 5 actions yet
             !result && // and the battle is not over for the user
             (newActor.userId !== actor.userId || description) // and new actor, or successful attack
@@ -3158,7 +3173,7 @@ export const processUsersForBattle = async (
       }
     }
 
-    if (AutoBattleTypes.includes(info.battleType)) {
+    if (!user.isSummon && AutoBattleTypes.includes(info.battleType)) {
       user.curHealth = user.maxHealth;
       user.curChakra = user.maxChakra;
       user.curStamina = user.maxStamina;
@@ -3173,9 +3188,12 @@ export const processUsersForBattle = async (
   let summonUsersState: BattleUserState[] = [];
   let summonExtraState: ExtraState | null = null;
 
-  // If there are any summonAIs defined, then add them to usersState, but disable them
+  // If there are any summonAIs defined, then add them to usersState, but disable them.
+  // Match on controllerId: processed users carry their DB userId in controllerId
+  // (userId becomes a nanoid for AI), and allSummons holds DB aiIds — so this
+  // skips templates already present instead of always re-fetching them.
   const summonsToProcess = [
-    ...new Set(allSummons.filter((s) => !usersState.find((u) => u.userId === s))),
+    ...new Set(allSummons.filter((s) => !usersState.find((u) => u.controllerId === s))),
   ];
   if (summonsToProcess.length > 0) {
     const summons = await client.query.userData.findMany({
@@ -3224,6 +3242,7 @@ export const processUsersForBattle = async (
       });
       summonState.forEach((u) => {
         u.iAmHere = true;
+        u.isSummonTemplate = true; // mark hidden clone-source templates
       });
       userEffects.push(...summonEffects);
       summonUsersState = summonState;

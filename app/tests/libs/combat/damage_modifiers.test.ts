@@ -1086,6 +1086,9 @@ describe("computeDamagePacket", () => {
         round3Increase,
         round3Reduction,
       ],
+      // The pipeline only reads extraState.preBattleGearModifiers, so the test
+      // supplies just that slice; route through unknown since the partial does
+      // not satisfy the full ExtraState shape.
       extraState: {
         preBattleGearModifiers: {
           attacker: gearMods(),

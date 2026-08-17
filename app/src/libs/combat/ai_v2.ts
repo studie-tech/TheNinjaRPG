@@ -6,6 +6,7 @@ import {
   performBattleAction,
   stillInBattle,
 } from "@/libs/combat/actions";
+import { isClone, isLiveSummon } from "@/libs/combat/summon";
 import type {
   ActionEffect,
   BattleUserState,
@@ -261,11 +262,14 @@ export const performAIaction = (
           case "round_lower_than":
             return nextBattle.round < condition.value;
           case "does_not_have_summon":
-            return !nextBattle.usersState.find(
+            // A summon that has died/fled/left is no longer live, so the AI
+            // should re-summon. isLiveSummon centralizes that liveness rule;
+            // isClone excludes the AI's clones, which are not its summon.
+            return !nextBattle.usersState.some(
               (u) =>
-                u.controllerId === user.userId &&
-                u.isSummon &&
-                stillInBattle(u, effects),
+                isLiveSummon(u, nextBattle.usersState, effects) &&
+                !isClone(u) &&
+                u.controllerId === user.userId,
             );
           case "has_effect": {
             if (condition.threshold === 0) return true;
@@ -428,7 +432,7 @@ export const performAIaction = (
     /** ******************************* */
     /** If not final action, end the AI */
     /** ******************************* */
-    if (!nextAction) {
+    if (!nextAction && !user.isPiloted) {
       aiDescriptions.push(`${user.username} is exhausted and has to give up`);
       user.curHealth = 0;
     }
