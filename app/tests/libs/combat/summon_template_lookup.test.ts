@@ -275,10 +275,63 @@ describe("summon teardown after a re-cast", () => {
       castThisRound: false,
     } as unknown as GroundEffect;
 
+    // No summonedUserId -> legacy branch, which prefers the non-live summon.
     summon(usersState, expireEffect, userEffects, mkBattle());
 
     expect(usersState.find((u) => u.userId === "s2")).toBeDefined(); // live kept
     expect(usersState.find((u) => u.userId === "s1")).toBeUndefined(); // dead removed
+  });
+
+  it("removes the summon the effect actually spawned, even if it is the live one", () => {
+    // The legacy heuristic always prefers the non-live summon, so it removes the
+    // dead one no matter which effect expired. With summonedUserId the effect
+    // that spawned the LIVE summon correctly tears down that one instead.
+    const liveS2 = {
+      userId: "s2",
+      controllerId: PLAYER_ID,
+      username: "Live",
+      isSummon: true,
+      curHealth: 500,
+      fledBattle: false,
+      leftBattle: false,
+    } as unknown as BattleUserState;
+    const deadS1 = {
+      userId: "s1",
+      controllerId: PLAYER_ID,
+      username: "Dead",
+      isSummon: true,
+      curHealth: 0,
+      fledBattle: false,
+      leftBattle: false,
+    } as unknown as BattleUserState;
+    const usersState = [mkPlayer(), liveS2, deadS1];
+    const expireEffect = {
+      type: "summon",
+      aiId: AI_DB_ID,
+      creatorId: PLAYER_ID,
+      summonedUserId: "s2",
+      rounds: 0,
+      isNew: false,
+      castThisRound: false,
+    } as unknown as GroundEffect;
+
+    summon(usersState, expireEffect, [], mkBattle());
+
+    expect(usersState.find((u) => u.userId === "s2")).toBeUndefined(); // its own summon
+    expect(usersState.find((u) => u.userId === "s1")).toBeDefined(); // other one kept
+  });
+
+  it("records summonedUserId on the effect at spawn", () => {
+    const usersState = [mkPlayer(), mkTemplate()];
+    const effect = mkSummonEffect();
+
+    const res = summon(usersState, effect, [], mkBattle());
+    expect(res?.color).toBe("blue");
+
+    const spawned = usersState.find(
+      (u) => u.isSummon && u.controllerId === PLAYER_ID,
+    );
+    expect(effect.summonedUserId).toBe(spawned?.userId);
   });
 });
 

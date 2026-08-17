@@ -587,6 +587,13 @@ export type BattleEffect = ZodAllTags & {
   latitude: number;
   barrierAbsorb: number;
   actionId: string;
+  /**
+   * Summon effects only: the in-battle userId of the creature this effect
+   * spawned, recorded at spawn so teardown removes exactly that summon. Runtime
+   * state, not part of SummonTag — aiId stays pointed at the clone-source
+   * template so a re-cast can still find it.
+   */
+  summonedUserId?: string;
 };
 
 export type GroundEffect = BattleEffect;
