@@ -94,10 +94,8 @@ export const BUILTIN_TERRAINS_BY_KEY = new Map(
   BUILTIN_TERRAINS.map((spec) => [spec.key, spec]),
 );
 
-/** The terrain every unknown key falls back to; guaranteed built-in */
+/** Unknown authored keys resolve to this built-in at render / Tiled import */
 export const FALLBACK_TERRAIN_KEY = "ground";
-const FALLBACK_TERRAIN_COLORS = BUILTIN_TERRAINS_BY_KEY.get(FALLBACK_TERRAIN_KEY)
-  ?.colors ?? ["#48bd48", "#37aa37", "#239623"];
 
 /**
  * The land terrain drawn under structures per sector biome, overriding the
@@ -121,8 +119,11 @@ const isHexColor = (value: unknown): value is string =>
 /**
  * Built-ins overlaid with the database terrain library: DB rows win on key
  * collision (so edits to the built-in looks take effect), creator-added kinds
- * extend the map. Invalid colors or a blank texture URL fall back to the
- * matching built-in so a bad production row cannot paint water black.
+ * extend the map.
+ *
+ * A broken built-in row keeps the seed look (ocean must not lose its palette
+ * or waves). A broken *custom* row is dropped — it is not secretly grassland.
+ * Writes already reject invalid palettes via `mapTerrainValidator`.
  */
 export const mergeTerrainSpecs = (
   dbTerrains: TerrainSpec[],
@@ -130,10 +131,16 @@ export const mergeTerrainSpecs = (
   const merged = new Map<string, TerrainSpec>(BUILTIN_TERRAINS_BY_KEY);
   dbTerrains.forEach((row) => {
     const builtin = BUILTIN_TERRAINS_BY_KEY.get(row.key);
-    const colors =
-      Array.isArray(row.colors) && row.colors.length === 3 && row.colors.every(isHexColor)
-        ? row.colors
-        : (builtin?.colors ?? FALLBACK_TERRAIN_COLORS);
+    const hasValidColors =
+      Array.isArray(row.colors) &&
+      row.colors.length === 3 &&
+      row.colors.every(isHexColor);
+    if (!hasValidColors && !builtin) {
+      console.warn(`mapTerrain "${row.key}" has an invalid palette and was not merged`);
+      return;
+    }
+    const colors = hasValidColors ? row.colors : builtin?.colors;
+    if (!colors) return;
     const textureUrl =
       typeof row.textureUrl === "string" && row.textureUrl.trim() !== ""
         ? row.textureUrl

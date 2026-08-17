@@ -31,12 +31,28 @@ describe("createUserSprite compatibility", () => {
     expect(group.children.map((child) => child.userData.type)).toEqual([
       "userMarker",
       "marker",
-      undefined,
+      "avatar",
       "attack",
       "heal",
       "info",
     ]);
     expect(group.children.slice(3).every((child) => !child.visible)).toBe(true);
+  });
+
+  it("omits the portrait sprite when the player has no avatar", () => {
+    const group = createUserSprite(
+      user({ avatar: null, avatarLight: null }),
+      hex,
+      textureForPath,
+    );
+
+    expect(group.children.map((child) => child.userData.type)).toEqual([
+      "userMarker",
+      "marker",
+      "attack",
+      "heal",
+      "info",
+    ]);
   });
 
   it("keeps restricted players non-attackable while retaining heal and info", () => {
@@ -45,7 +61,7 @@ describe("createUserSprite compatibility", () => {
     expect(group.children.map((child) => child.userData.type)).toEqual([
       "userMarker",
       "marker",
-      undefined,
+      "avatar",
       "heal",
       "info",
     ]);
@@ -69,7 +85,7 @@ describe("createUserSprite compatibility", () => {
 
     expect(group.name).toBe("placement-1");
     expect(group.children.map((child) => child.userData.type)).toEqual([
-      undefined,
+      "avatar",
       action,
     ]);
     expect(group.children[1]?.visible).toBe(true);

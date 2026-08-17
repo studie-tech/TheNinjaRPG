@@ -1078,6 +1078,26 @@ describe("standard terrain palette", () => {
     ]);
     expect(registry.get("ocean")?.colors).toEqual(builtin?.colors);
   });
+
+  it("does not register a custom terrain whose palette is invalid", () => {
+    const registry = mergeTerrainSpecs([
+      {
+        key: "lava.field",
+        name: "Broken Lava",
+        colors: ["not-a-color", "#000000", "#000000"] as never,
+        textureUrl: null,
+        swatchColor: "#ff0000",
+        battleBiome: "ground",
+        isWater: false,
+        depression: 0,
+        defaultWalkCost: 1,
+      },
+    ]);
+    expect(registry.has("lava.field")).toBe(false);
+    expect(registry.get("ground")?.colors).toEqual(
+      mergeTerrainSpecs([]).get("ground")?.colors,
+    );
+  });
 });
 
 describe("validateNormalizedSectorMap rejections", () => {
