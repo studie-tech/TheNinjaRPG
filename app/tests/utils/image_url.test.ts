@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bunnyImageUrl,
   isBunnyCdnUrl,
+  textureImageUrl,
   transformImageUrl,
 } from "@/utils/image";
 
@@ -35,9 +36,24 @@ describe("image URL utilities", () => {
     ).toBe("https://uploadthing.b-cdn.net/f/example.png?quality=70&width=200");
   });
 
+  it("skips the optimizer when width is not positive", () => {
+    expect(bunnyImageUrl("https://uploadthing.b-cdn.net/f/example.png", 0)).toBe(
+      "https://uploadthing.b-cdn.net/f/example.png",
+    );
+  });
+
   it("forces Bunny image detection for extensionless UploadThing files", () => {
     expect(bunnyImageUrl("https://utfs.io/f/extensionless-key", 100)).toBe(
       "https://uploadthing.b-cdn.net/f/extensionless-key?width=100&optimizer=image",
+    );
+  });
+
+  it("does not force optimizer detection on Three.js texture URLs", () => {
+    expect(textureImageUrl("https://utfs.io/f/extensionless-key", 50)).toBe(
+      "https://uploadthing.b-cdn.net/f/extensionless-key?width=50",
+    );
+    expect(textureImageUrl("https://uploadthing.b-cdn.net/f/example.webp", 50)).toBe(
+      "https://uploadthing.b-cdn.net/f/example.webp?width=50",
     );
   });
 

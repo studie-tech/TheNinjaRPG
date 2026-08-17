@@ -47,6 +47,23 @@ export const bunnyImageUrl = (src: string, width: number) => {
   return url.toString();
 };
 
+/**
+ * Three.js texture URL: host rewrite plus an optional Bunny width.
+ * Never sends `optimizer=image`. That hint was added in PR 1427 for HTML
+ * `<img>` tags; on extensionless UploadThing keys it makes Bunny process a
+ * file it previously passed through as the original, and those cached
+ * renditions are what broke travel-map portraits.
+ */
+export const textureImageUrl = (src: string, width = 50) => {
+  const transformed = transformImageUrl(src);
+  if (!isBunnyCdnUrl(transformed) || !Number.isFinite(width) || width <= 0) {
+    return transformed;
+  }
+  const url = new URL(transformed);
+  url.searchParams.set("width", String(Math.round(width)));
+  return url.toString();
+};
+
 export interface ResizedImage {
   file: File;
   /** Final pixel dimensions, so callers can emit width/height and avoid layout shift. */
