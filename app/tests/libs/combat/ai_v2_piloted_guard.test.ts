@@ -3,31 +3,14 @@ import { Grid, rectangle } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import type { CompleteBattle, BattleUserState } from "@/libs/combat/types";
 
-// Provide a concrete PathCalculator stub so this test is not poisoned by
-// actions.test.ts, which mocks @/libs/hexgrid with PathCalculator: vi.fn()
-// (Bun shares the module cache across files run in the same process).
-// We re-export everything else from the real module; only PathCalculator
-// is replaced with a minimal implementation that returns an empty path,
-// which is enough to drive a piloted/non-piloted summon to the no-action branch.
-// Self-contained SYNC mock (Bun's vi.mock shares one registry across files and
-// provides neither importOriginal nor a safe async dynamic import). We supply a
-// real honeycomb Hex for grid construction, stub the pathfinder, and return no
-// hex from findHex so ai_v2's pathfinding short-circuits to the no-action branch.
-vi.mock("@/libs/hexgrid", () => {
-  const { defineHex } = require("honeycomb-grid") as typeof import("honeycomb-grid");
-  class StubPathCalculator {
-    constructor(_grid: unknown) {}
-    getShortestPath(_origin: unknown, _target: unknown) {
-      return [];
-    }
-  }
-  return {
-    TerrainHex: defineHex({ dimensions: 1 }),
-    findHex: () => undefined,
-    getPossibleActionTiles: () => new Set(),
-    PathCalculator: StubPathCalculator,
-  };
-});
+/**
+ * Do NOT mock @/libs/hexgrid here. Under `bun test` vi.mock replaces the module
+ * process-globally, so a lossy stub (e.g. getPossibleActionTiles returning a Set
+ * instead of a Grid) leaks into sibling suites that need the real thing --
+ * barrier_aoe.test.ts calls restrictGrid.getHex and crashes. The real module
+ * works fine here: the summons below have no jutsu/item and empty pools, so
+ * performAIaction reaches the no-action branch without any pathfinding stub.
+ */
 
 // Avoid loading the real DB/env when transitive imports touch @/server/db.
 vi.mock("@/server/db", () => ({ drizzleDB: {} }));
