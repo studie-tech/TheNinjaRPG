@@ -55,6 +55,8 @@ export type BattleWar = War & {
 export type CombatQueryUserItem = UserItem & {
   item: Item & { variants?: ItemVariant[] };
   imbuements: (UserItemImbuement & { item: Item })[];
+  /** Real UserItem row backing a synthetic forced-loadout entry (XP is credited to it). */
+  progressionRowId?: string | null;
 };
 
 /**
@@ -259,8 +261,10 @@ export type BattleUserJutsu = {
  * Use lookup functions to get full item data.
  */
 export type BattleUserItem = {
-  id: string; // userItem.id
+  id: string; // userItem.id (synthetic for forced loadouts)
   itemId: string; // Reference to extraState.items[itemId]
+  /** Real UserItem row for forced-loadout entries; XP grants target this id. */
+  progressionRowId?: string | null;
   quantity: number;
   level: number;
   experience: number;

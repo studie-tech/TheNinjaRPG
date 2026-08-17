@@ -454,6 +454,31 @@ export const showsItemLevelBadge = (item: {
   item.itemType !== "CRYSTAL" &&
   item.slot !== "THROWN";
 
+/**
+ * ActionSelector badge lists for user items: amber stack quantity (bottom-right)
+ * for non-leveling stacks, red ownership level (bottom-left) for leveling gear.
+ */
+export const userItemActionBadges = <
+  T extends {
+    id: string;
+    quantity: number;
+    level: number;
+    item: { itemType: string; slot: string };
+  },
+>(
+  userItems: T[] | undefined,
+): {
+  counts: { id: string; quantity: number }[] | undefined;
+  levels: { id: string; level: number }[] | undefined;
+} => ({
+  counts: userItems
+    ?.filter((ui) => !showsItemLevelBadge(ui.item) && ui.quantity > 1)
+    .map((ui) => ({ id: ui.id, quantity: ui.quantity })),
+  levels: userItems
+    ?.filter((ui) => showsItemLevelBadge(ui.item))
+    .map((ui) => ({ id: ui.id, level: ui.level })),
+});
+
 /** Crystal fields needed to decide if an imbuement can move onto another item. */
 export type ImbuementTransferCrystal = {
   name: string;
@@ -475,15 +500,15 @@ export type ImbuementTransferTarget = {
  * Split imbuements into those that can stay on a target item vs those that must be removed
  * (target cannot be imbued, crystal type mismatch, or over maxImbueNumber).
  */
-export const partitionImbuementsForItemTransfer = (
-  imbuements: ImbuementForTransfer[],
+export const partitionImbuementsForItemTransfer = <T extends ImbuementForTransfer>(
+  imbuements: T[],
   target: ImbuementTransferTarget,
-): { keep: ImbuementForTransfer[]; remove: ImbuementForTransfer[] } => {
+): { keep: T[]; remove: T[] } => {
   if (!target.canBeImbued || target.maxImbueNumber <= 0) {
     return { keep: [], remove: [...imbuements] };
   }
-  const keep: ImbuementForTransfer[] = [];
-  const remove: ImbuementForTransfer[] = [];
+  const keep: T[] = [];
+  const remove: T[] = [];
   for (const imb of imbuements) {
     const restrictedType = imb.item?.crystalTargetTypes;
     const isCompatible =

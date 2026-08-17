@@ -33,25 +33,15 @@ import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
-import { calcMaxHouseMaterials, showsItemLevelBadge } from "@/libs/item";
+import {
+  calcMaxHouseMaterials,
+  showsItemLevelBadge,
+  userItemActionBadges,
+} from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { remainingXpToLevel } from "@/libs/train";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
-
-const userItemActionBadges = (
-  userItems: UserItemWithItem[] | undefined,
-): {
-  counts: { id: string; quantity: number }[] | undefined;
-  levels: { id: string; level: number }[] | undefined;
-} => ({
-  counts: userItems
-    ?.filter((ui) => !showsItemLevelBadge(ui.item) && ui.quantity > 1)
-    .map((ui) => ({ id: ui.id, quantity: ui.quantity })),
-  levels: userItems
-    ?.filter((ui) => showsItemLevelBadge(ui.item))
-    .map((ui) => ({ id: ui.id, level: ui.level })),
-});
 
 export default function HomePage() {
   const { userData, sectorVillage, access, ownVillage } = useRequireInVillage("/home");

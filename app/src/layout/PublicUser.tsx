@@ -1310,9 +1310,9 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
           ? `${ui.item.name} [${ui.equipped}]`
           : ui.item.name,
   }));
-  const userItemCounts = userItems?.map((ui) => ({
+  const userItemLevels = userItems?.map((ui) => ({
     id: ui.id,
-    quantity: ui.level,
+    level: ui.level,
   }));
   const hasItems = perms.canEditItems && userItems && userItems.length > 0;
 
@@ -1465,9 +1465,8 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
           <div className="mt-5">
             <ActionSelector
               items={allOwnedItems}
-              counts={userItemCounts}
+              levels={userItemLevels}
               selectedId={selectedUserItemId}
-              labelSingles={true}
               emptyText="No items assigned to this user"
               gridClassNameOverwrite="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12"
               onClick={(id) => {

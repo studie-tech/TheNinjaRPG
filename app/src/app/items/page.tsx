@@ -60,6 +60,7 @@ import {
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
   showsItemLevelBadge,
+  userItemActionBadges,
 } from "@/libs/item";
 import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
@@ -721,13 +722,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     ...applyActiveVariant(useritem as UserItemWithVariants),
     ...useritem,
   }));
-  // Badges: red-bordered ownership level (bottom-left); amber stack quantity (bottom-right)
-  const itemStackCounts = items
-    ?.filter((ui) => !showsItemLevelBadge(ui) && ui.quantity > 1)
-    .map((ui) => ({ id: ui.id, quantity: ui.quantity }));
-  const itemLevels = items
-    ?.filter((ui) => showsItemLevelBadge(ui))
-    .map((ui) => ({ id: ui.id, level: ui.level }));
+  const itemBadges = userItemActionBadges(useritems);
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
   const repairItems = (useritems || []).filter(
     (userItem: UserItemWithRelations) =>
@@ -756,8 +751,8 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       <ActionSelector
         className="grid-cols-6 pt-3 sm:grid-cols-4 md:grid-cols-4"
         items={items}
-        counts={itemStackCounts}
-        levels={itemLevels}
+        counts={itemBadges.counts}
+        levels={itemBadges.levels}
         selectedId={useritem?.id}
         showBgColor={false}
         showLabels={false}
@@ -1144,13 +1139,7 @@ const Character: React.FC<CharacterProps> = (props) => {
     ...applyActiveVariant(useritem as UserItemWithVariants),
     ...useritem,
   }));
-  // Badges: red-bordered ownership level (bottom-left); amber stack quantity (bottom-right)
-  const itemStackCounts = items
-    ?.filter((ui) => !showsItemLevelBadge(ui) && ui.quantity > 1)
-    .map((ui) => ({ id: ui.id, quantity: ui.quantity }));
-  const itemLevels = items
-    ?.filter((ui) => showsItemLevelBadge(ui))
-    .map((ui) => ({ id: ui.id, level: ui.level }));
+  const itemBadges = userItemActionBadges(useritems);
   const equipped = items?.find((item) => item.equipped === slot);
   const repairItems = (useritems || []).filter(
     (userItem: UserItemWithRelations) =>
@@ -1255,8 +1244,8 @@ const Character: React.FC<CharacterProps> = (props) => {
                 items={items?.filter(
                   (item) => slot?.includes(item.slot) && isEquippableUserItem(item),
                 )}
-                counts={itemStackCounts}
-                levels={itemLevels}
+                counts={itemBadges.counts}
+                levels={itemBadges.levels}
                 showBgColor={false}
                 showLabels={false}
                 greyedIds={items

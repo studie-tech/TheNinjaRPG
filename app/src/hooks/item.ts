@@ -102,12 +102,8 @@ export const useItemEditForm = (
     name: "itemType",
   });
 
-  // Query for items if this item is canBeCrafted
-  const { data: itemsData } = api.item.getAllNames.useQuery(undefined, {
-    enabled: canBeCrafted as boolean | undefined,
-  });
-
-  // All item names for evolution parent picker
+  // All item names, shared by the crafting-requirement and evolution parent pickers
+  // (the evolution picker always needs them, so a conditional query would be dead)
   const { data: allItemNames } = api.item.getAllNames.useQuery();
 
   // Query for bloodlines for bloodline requirement dropdown
@@ -186,7 +182,7 @@ export const useItemEditForm = (
       doubleWidth: true,
       label: "Crafting Requirements [and quantity]",
       type: "db_values_with_number",
-      values: itemsData?.filter((i) => i.id !== item.id) || [],
+      values: allItemNames?.filter((i) => i.id !== item.id) || [],
     });
   }
 
