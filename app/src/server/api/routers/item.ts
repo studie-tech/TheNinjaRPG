@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import {
   and,
   asc,
+  count,
   eq,
   exists,
   gte,
@@ -9,8 +10,10 @@ import {
   isNotNull,
   isNull,
   like,
+  lt,
   lte,
   ne,
+  notExists,
   or,
   type SQL,
   sql,
@@ -352,17 +355,21 @@ export const itemRouter = createTRPCRouter({
       ]);
 
       // Write-time guard: only delete if no child evolutions appeared concurrently.
-      // Nested derived table avoids MySQL errno 1093 (can't update/delete target in FROM).
-      const deleteResult = await ctx.drizzle.delete(item).where(
-        and(
-          eq(item.id, input.id),
-          sql`not exists (
-              select 1 from (
-                select \`id\` from \`Item\` where \`parentItemId\` = ${input.id}
-              ) as \`evolutionChildren\`
-            )`,
-        ),
-      );
+      // The subquery alias materializes a derived table, avoiding MySQL errno 1093
+      // (a DELETE cannot otherwise read its own target table in a subquery).
+      const evolutionChildGuard = ctx.drizzle
+        .select({ id: item.id })
+        .from(item)
+        .where(eq(item.parentItemId, input.id))
+        .as("evolutionChildren");
+      const deleteResult = await ctx.drizzle
+        .delete(item)
+        .where(
+          and(
+            eq(item.id, input.id),
+            notExists(ctx.drizzle.select({ one: sql`1` }).from(evolutionChildGuard)),
+          ),
+        );
       if (deleteResult.rowsAffected === 0) {
         return errorResponse(
           "Delete incomplete — an evolution now points at this item. Remove it and retry.",
@@ -506,23 +513,30 @@ export const itemRouter = createTRPCRouter({
         ...input.data,
       });
       // Write-time parent existence + sibling-cap guards when setting an evolution parent.
-      // Nested derived tables avoid MySQL errno 1093 (can't update target table in FROM).
-      const evolutionUpdateGuards = input.data.parentItemId
-        ? [
-            sql`exists (
-              select 1 from (
-                select \`id\` from \`Item\` where \`id\` = ${input.data.parentItemId}
-              ) as \`parentItemForEvo\`
-            )`,
-            sql`(
-              select \`cnt\` from (
-                select count(*) as \`cnt\` from \`Item\` as \`evoSibling\`
-                where \`evoSibling\`.\`parentItemId\` = ${input.data.parentItemId}
-                and \`evoSibling\`.\`id\` != ${input.id}
-              ) as \`evoSiblingCount\`
-            ) < ${EVOLUTION_MAX_CHILDREN}`,
-          ]
-        : [];
+      // The subquery aliases materialize derived tables, avoiding MySQL errno 1093
+      // (an UPDATE cannot otherwise read its own target table in a subquery).
+      const evolutionUpdateGuards: SQL[] = [];
+      if (input.data.parentItemId) {
+        const parentItemForEvo = ctx.drizzle
+          .select({ id: item.id })
+          .from(item)
+          .where(eq(item.id, input.data.parentItemId))
+          .as("parentItemForEvo");
+        const evoSiblingCount = ctx.drizzle
+          .select({ cnt: count().as("cnt") })
+          .from(item)
+          .where(
+            and(eq(item.parentItemId, input.data.parentItemId), ne(item.id, input.id)),
+          )
+          .as("evoSiblingCount");
+        evolutionUpdateGuards.push(
+          exists(ctx.drizzle.select({ one: sql`1` }).from(parentItemForEvo)),
+          lt(
+            ctx.drizzle.select({ cnt: evoSiblingCount.cnt }).from(evoSiblingCount),
+            EVOLUTION_MAX_CHILDREN,
+          ),
+        );
+      }
 
       // Setting updatedAt explicitly makes rowsAffected reliable: MySQL reports
       // changed rows, so a no-change re-save would otherwise read as a failed guard.
