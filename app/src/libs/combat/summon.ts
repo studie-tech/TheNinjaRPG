@@ -91,13 +91,20 @@ export const summonsAllowedInBattle = (battle: Pick<Battle, "battleType">): bool
 /** An ACTIVE summon whose controller can no longer act (dead/fled/left/absent).
  *  Templates are excluded by isActiveSummon; the stillInBattle(summon) guard
  *  excludes dead summons; the tri-condition keeps the absent-controller branch
- *  that shipped tests depend on. */
+ *  that shipped tests depend on.
+ *
+ *  Clones are excluded, matching hasLiveSummon, the un-summon lookup in tags.ts
+ *  and the AI does_not_have_summon gate. Removing a clone here would also strand
+ *  its ground effect: clone() rebinds effect.creatorId to the spawned clone, so
+ *  once the clone leaves usersState the effect can never be expired by its own
+ *  tag function. Clones are torn down by that tag function instead. */
 export const isOrphanedSummon = (
   summon: BattleUserState,
   usersState: BattleUserState[],
   effects: UserEffect[],
 ): boolean => {
   if (!isActiveSummon(summon, usersState)) return false;
+  if (isClone(summon)) return false;
   if (!stillInBattle(summon, effects)) return false;
   const controller = summonController(summon, usersState);
   return !controller || !stillInBattle(controller, effects) || !!controller.leftBattle;
