@@ -1503,31 +1503,6 @@ export const stillInBattle = (
 };
 
 /**
- * The actor `myUserId` controls right now: themselves on their turn, or their
- * piloted summon on the summon's turn (control is sequential, so exactly one).
- * Shared by Combat.tsx (reads battleRef) and combat/page.tsx (reads the reactive
- * battle) so the action menu and the action submit/validate can never disagree
- * about whose turn it is. Returns myUserId when no piloted summon of theirs is
- * the active actor.
- */
-export const resolveControlledActorId = (
-  battle:
-    | {
-        activeUserId: string | null;
-        usersState: { userId: string; isPiloted?: boolean; controllerId: string }[];
-      }
-    | null
-    | undefined,
-  myUserId: string | undefined,
-): string | undefined => {
-  if (!battle) return myUserId;
-  const active = battle.usersState.find((u) => u.userId === battle.activeUserId);
-  return active?.isPiloted && active.controllerId === myUserId
-    ? active.userId
-    : myUserId;
-};
-
-/**
  * Calculate (based on current time), which user is currently the one to perform a move
  */
 export const calcActiveUser = (

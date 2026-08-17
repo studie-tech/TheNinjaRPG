@@ -109,7 +109,7 @@ describe("spliceOrphanedSummons determinism", () => {
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
       mk({ userId: "enemy", controllerId: "enemy", curHealth: 100 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects);
+    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
     expect(removed).toEqual(["s1"]);
     expect(state.map((u) => u.userId)).toEqual(["u1", "enemy"]);
   });

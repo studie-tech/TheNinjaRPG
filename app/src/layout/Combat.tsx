@@ -26,11 +26,7 @@ import { LogbookEntry } from "@/layout/Logbook";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
 import Modal2 from "@/layout/Modal2";
 import WebGlError from "@/layout/WebGLError";
-import {
-  availableUserActions,
-  calcActiveUser,
-  resolveControlledActorId,
-} from "@/libs/combat/actions";
+import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import type {
   BattleState,
@@ -38,7 +34,7 @@ import type {
   CombatAction,
   ReturnedBattle,
 } from "@/libs/combat/types";
-import { getTurnControl } from "@/libs/combat/util";
+import { getTurnControl, resolveControlledActorId } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import {
@@ -149,12 +145,9 @@ const Combat: React.FC<CombatProps> = (props) => {
   );
   const suid = userData?.userId;
   // The actor the human drives right now: themselves on their turn, or their
-  // piloted summon on the summon's turn (control is sequential, so exactly one).
-  // Read the reactive battleState.battle (not battleRef.current): the ref is
-  // synced in a post-render effect, so on a props-driven update it still holds
-  // the previous battle and would name the player after control hands to the
-  // summon. page.tsx derives this the same way.
-  const controlledActorId = resolveControlledActorId(battleState.battle, suid);
+  // piloted summon on the summon's turn. Resolved by page.tsx from the same
+  // battle object and handed down, so there is one derivation, not two.
+  const controlledActorId = props.userId;
   // Precompute available actions for the actor the human currently controls;
   // recompute on version change or when control hands off to/from the summon.
   const precomputedActions = useMemo(() => {
@@ -170,13 +163,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   useEffect(() => {
     precomputedActionsRef.current = precomputedActions;
   }, [precomputedActions]);
-
-  // Keep the controlled-actor ref in sync with whoever the human drives this
-  // turn (self, or a piloted summon on its turn). Read inside the render loop
-  // and imperative click handler, both of which run outside React render.
-  useEffect(() => {
-    if (controlledActorId) userIdRef.current = controlledActorId;
-  }, [controlledActorId]);
 
   // Precompute maps for ground effects, user effects, and user positions
   const battleMaps = useBattleMaps(battleState.battle ?? null);
@@ -436,18 +422,22 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Handle key-presses
   const onDocumentKeyDown = (event: KeyboardEvent) => {
-    if (battleRef.current) {
-      // Recompute the actor here rather than capturing render-scope
-      // controlledActorId/precomputedActions: this listener only re-registers on
-      // [suid, timeDiff], so those would be stale. calcActiveUser selects the actor
-      // from battle.activeUserId, which is all the "w" (wait) path needs.
-      const { actor } = calcActiveUser(battleRef.current, suid, timeDiff);
+    if (battleRef.current && suid) {
+      // Read the refs rather than render-scope state: this listener only
+      // re-registers on [suid, timeDiff], so a captured value would go stale.
+      // Both refs are kept current, which also lets the precompute be reused on
+      // the summon's turn (the old precomputedUserId: suid only ever hit on the
+      // player's own turn, and dropping it recomputed actions on every keypress).
+      const { actor } = calcActiveUser(battleRef.current, suid, timeDiff, {
+        precomputedUserId: userIdRef.current,
+        precomputedActions: precomputedActionsRef.current,
+      });
       switch (event.key) {
         case "w":
-          // Controller-based: true on my own turn AND on my piloted summon's
-          // turn (actor.controllerId === suid). userId carries the acting
-          // entity's id (the summon's, on its turn).
-          if (actor.controllerId === suid) {
+          // Same predicate the server authorizes with, so "w" fires on my own
+          // turn and on my piloted summon's turn, but not on my AI summon's
+          // (that one is auto-driven). actor.userId is the acting entity.
+          if (getTurnControl(actor, suid).isUserTurn) {
             document.body.style.cursor = "wait";
             if (canPerformAction()) {
               performAction({
@@ -561,9 +551,9 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   useEffect(() => {
     actionRef.current = props.action;
-    // Do NOT force userIdRef back to the session user here; the controlled-actor
-    // sync effect (Task: derive controlledActorId) owns userIdRef so it can
-    // follow a piloted summon on its turn.
+    // props.userId IS the controlled actor (page.tsx resolves it), so this keeps
+    // the ref following a piloted summon on its turn.
+    userIdRef.current = props.userId;
     battleRef.current = props.battleState.battle;
     if (props.battleState.result) {
       void Promise.all([

@@ -2421,6 +2421,27 @@ export const getTurnControl = (
 };
 
 /**
+ * The actor `myUserId` drives right now: themselves on their turn, or their
+ * piloted summon on the summon's turn (control is sequential, so exactly one).
+ * Falls back to `myUserId` whenever the active actor is not theirs to drive.
+ *
+ * Deliberately a projection of getTurnControl rather than its own predicate:
+ * the client picks the actor for the action menu with exactly the rule the
+ * server authorizes the action with, so the two cannot disagree about whose
+ * turn it is. Accepts both ReturnedBattle and the extraState-less dynamic
+ * update returned by performAction.
+ */
+export const resolveControlledActorId = (
+  battle: Pick<ReturnedBattle, "activeUserId" | "usersState"> | null | undefined,
+  myUserId: string | undefined,
+): string | undefined => {
+  if (!battle || !myUserId) return myUserId;
+  const actor = battle.usersState.find((u) => u.userId === battle.activeUserId);
+  if (!actor) return myUserId;
+  return getTurnControl(actor, myUserId).isUserTurn ? actor.userId : myUserId;
+};
+
+/**
  * Refill action points for all users in the battle
  */
 export const refillActionPoints = (battle: ReturnedBattle) => {
@@ -2443,7 +2464,10 @@ export const alignBattle = (
   // the turn ring, or it can be picked as the actor and then removed underneath
   // the caller -- leaving battle.activeUserId pointing at a user that no longer
   // exists and naming a ghost in the "It is now X's turn" line.
-  spliceOrphanedSummons(battle.usersState, battle.usersEffects);
+  const orphanedSummons = spliceOrphanedSummons(
+    battle.usersState,
+    battle.usersEffects,
+  ).map((u) => u.username);
   const precomputedActions = userId
     ? availableUserActions(battle as unknown as ReturnedBattle, userId)
     : undefined;
@@ -2512,7 +2536,7 @@ export const alignBattle = (
   battle.updatedAt = now;
   // TOOD: Debug
   // console.log("New Actor: ", actor.username, battle.round, battle.version, Date.now());
-  return { actor, progressRound, changedActor, actionRound };
+  return { actor, progressRound, changedActor, actionRound, orphanedSummons };
 };
 
 export const calcApReduction = (
