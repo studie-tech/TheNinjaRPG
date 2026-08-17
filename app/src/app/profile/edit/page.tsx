@@ -277,7 +277,7 @@ export default function EditProfile() {
         <Accordion
           title="Reset Stats"
           selectedTitle={activeElement}
-          unselectedSubtitle="Redistribute your experience points"
+          unselectedSubtitle="Redistribute your combat stat points"
           selectedSubtitle={`You can redistribute your stats for ${COST_RESET_STATS} reputation points. You
           have ${userData.reputationPoints} reputation points. You have ${round(getAssignedCombatStatTotal(userData))} combat stat points to distribute.`}
           icon={BarChart3}
@@ -1315,8 +1315,7 @@ const ResetStats: React.FC = () => {
     <div className="flex flex-col gap-3">
       <p>
         Redistribute all your stats ({round(totalStats)} total points). This will cost{" "}
-        {cost}{" "}
-        reputation points.
+        {cost} reputation points.
       </p>
       {!canAfford && (
         <p className="font-bold text-red-500">
