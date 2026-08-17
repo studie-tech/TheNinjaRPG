@@ -8,13 +8,13 @@ import {
   SpriteMaterial,
   Vector3,
 } from "three";
-import { IMG_SECTOR_USER_SPRITE_MASK } from "@/drizzle/constants";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import type { GlobalMapData, GlobalPoint, GlobalTile } from "@/libs/threejs/types";
 import {
   createBorderTexture,
-  loadTexture,
+  loadPortraitTexture,
   pickSpriteAvatar,
+  whenPortraitReady,
 } from "@/libs/threejs/util";
 import { fetchWithRetry } from "@/utils/http";
 
@@ -130,25 +130,26 @@ export const createUserAvatarSprite = (info: {
   borderSprite.position.set(sector.x / d, sector.y / d, sector.z / d);
   group.add(borderSprite);
 
-  // User avatar sprite
-  const alphaMap = loadTexture(IMG_SECTOR_USER_SPRITE_MASK);
   const avatar = pickSpriteAvatar(userData);
-  const avatarTexture = loadTexture(avatar);
-  avatarTexture.generateMipmaps = false;
-  avatarTexture.minFilter = LinearFilter;
-  const avatarMaterial = new SpriteMaterial({
-    map: avatarTexture,
-    alphaMap: alphaMap,
-    // Required for the circular alphaMap mask to blend at all, and to keep the
-    // sprite out of the opaque pass (see borderMaterial above)
-    transparent: true,
-    depthWrite: false,
-    depthTest: true,
-  });
-  const avatarSprite = new Sprite(avatarMaterial);
-  avatarSprite.scale.set(1, 1, 1);
-  avatarSprite.position.set(sector.x / d, sector.y / d, sector.z / d);
-  group.add(avatarSprite);
+  if (avatar) {
+    const avatarTexture = loadPortraitTexture(avatar);
+    avatarTexture.generateMipmaps = false;
+    avatarTexture.minFilter = LinearFilter;
+    const avatarMaterial = new SpriteMaterial({
+      map: avatarTexture,
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+    });
+    const avatarSprite = new Sprite(avatarMaterial);
+    avatarSprite.visible = false;
+    avatarSprite.scale.set(1, 1, 1);
+    avatarSprite.position.set(sector.x / d, sector.y / d, sector.z / d);
+    group.add(avatarSprite);
+    whenPortraitReady(avatarTexture, () => {
+      avatarSprite.visible = true;
+    });
+  }
 
   return group;
 };
