@@ -14,7 +14,7 @@ import CombatHistory from "@/layout/CombatHistory";
 import CombatTimeline from "@/layout/CombatTimeline";
 import Loader from "@/layout/Loader";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
-import { availableUserActions } from "@/libs/combat/actions";
+import { availableUserActions, resolveControlledActorId } from "@/libs/combat/actions";
 import type { BattleState } from "@/libs/combat/types";
 import {
   combatActionIdAtom,
@@ -46,7 +46,10 @@ export default function CombatPage() {
   const results = battleState?.result;
   const battle = battleState?.battle;
   const versionId = battle?.version;
-  const user = battle?.usersState.find((u) => u.userId === userId);
+  // The actor the human controls right now: themselves, or their piloted summon
+  // on the summon's turn (control is sequential -> exactly one).
+  const controlledActorId = resolveControlledActorId(battle, userId);
+  const user = battle?.usersState.find((u) => u.userId === controlledActorId);
   const actionGridClass = config.useSmallActions
     ? "grid grid-cols-7 md:grid-cols-9 gap-1"
     : undefined;
@@ -107,12 +110,15 @@ export default function CombatPage() {
     }
   }, [data]);
 
-  // Collect all possible actions for action selector
+  // Collect all possible actions for the controlled actor (self, or piloted
+  // summon on its turn) so the action panel shows the summon's jutsu/pools.
   const actions = useMemo(() => {
-    return availableUserActions(battleState?.battle, userData?.userId);
-  }, [versionId]);
+    return availableUserActions(battleState?.battle, controlledActorId);
+  }, [versionId, controlledActorId]);
 
-  // Battle scene
+  // Battle scene. Pass the SESSION user id (Combat derives its own controlled
+  // actor internally for piloting); the selected action is resolved from the
+  // controlled actor's action list so the summon's jutsu can be chosen.
   const combat = useMemo(() => {
     return (
       battleState &&
@@ -126,7 +132,7 @@ export default function CombatPage() {
         />
       )
     );
-  }, [versionId, actionId, userId, results, config.showGridNumbers]);
+  }, [versionId, actionId, userId, results, config.showGridNumbers, actions]);
 
   // Handle key-presses
   useEffect(() => {
@@ -169,7 +175,10 @@ export default function CombatPage() {
       >
         <ActionTimer
           action={actions.find((a) => a.id === actionId)}
-          user={{ userId: userId, actionPoints: user?.actionPoints ?? 0 }}
+          user={{
+            userId: controlledActorId,
+            actionPoints: user?.actionPoints ?? 0,
+          }}
           battle={battle}
           isPending={battleState.isPending}
           options={<UserCombatSettings config={config} userData={userData} />}
@@ -184,6 +193,7 @@ export default function CombatPage() {
     actions,
     actionId,
     userId,
+    controlledActorId,
     config,
     userData,
   ]);
@@ -215,7 +225,7 @@ export default function CombatPage() {
         combatMode={true}
         userActionPoints={user?.actionPoints}
         battle={battle}
-        userId={userId}
+        userId={controlledActorId}
         gridClassNameOverwrite={actionGridClass}
         aspectRatioClass={actionAspect}
         onClick={handleActionClick}
@@ -228,6 +238,7 @@ export default function CombatPage() {
     showActionLabels,
     actionId,
     user?.actionPoints,
+    controlledActorId,
     actionGridClass,
     actionAspect,
     handleActionClick,

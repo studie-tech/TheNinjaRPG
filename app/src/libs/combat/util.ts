@@ -55,6 +55,7 @@ import type {
   VillageAlliance,
 } from "@/drizzle/schema";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
+import { spliceOrphanedSummons } from "@/libs/combat/summon";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
 import type { ObjectiveTrackerTaskInput as ObjectiveTrackerTask } from "@/libs/quest";
 import { calculateLpEloChange } from "@/libs/ranked_pvp";
@@ -1372,7 +1373,7 @@ export const collapseConsequences = (acc: Consequence[], val: Consequence) => {
  * Masks user state to hide private information from other players.
  * Returns public state for opponents and full state for the session user.
  */
-const maskUsersState = (
+export const maskUsersState = (
   usersState: BattleUserState[],
   userId: string,
 ): ReturnedUserState[] => {
@@ -2365,6 +2366,15 @@ const calcEloChange = (user: number, opponent: number, kFactor = 32, won: boolea
 };
 
 /**
+ * Returns true when the actor should receive the human (basic-move-inclusive)
+ * action set. A piloted summon is isAi=true for accounting purposes but must
+ * be evaluated against the human set so its turn is never falsely skipped.
+ */
+export const wantsHumanActionSet = (
+  actor: Pick<BattleUserState, "isAi" | "isPiloted">,
+): boolean => !actor.isAi || !!actor.isPiloted;
+
+/**
  * Evaluate whether we should forward battle to next round
  */
 export const hasNoAvailableActions = (
@@ -2379,7 +2389,7 @@ export const hasNoAvailableActions = (
       const actions =
         precomputedActions && precomputedActions.length > 0
           ? precomputedActions
-          : availableUserActions(battle, actorId, !actor.isAi);
+          : availableUserActions(battle, actorId, wantsHumanActionSet(actor));
       for (const j of actions.keys()) {
         const action = actions[j];
         if (action) {
@@ -2393,6 +2403,21 @@ export const hasNoAvailableActions = (
     }
   }
   return true;
+};
+
+/**
+ * Determine whose turn the dispatch loop should treat this actor as.
+ * A piloted summon (isPiloted) is human-driven on its turn even though it
+ * keeps isAi=true for accounting; only its controller may act for it.
+ */
+export const getTurnControl = (
+  actor: Pick<BattleUserState, "isAi" | "isPiloted" | "controllerId">,
+  sessionUserId: string,
+): { isUserTurn: boolean; isAITurn: boolean } => {
+  const isMyActor = actor.controllerId === sessionUserId;
+  const isUserTurn = isMyActor && wantsHumanActionSet(actor);
+  const isAITurn = actor.isAi && !actor.isPiloted;
+  return { isUserTurn, isAITurn };
 };
 
 /**
@@ -2433,6 +2458,9 @@ export const alignBattle = (
   // 4. update all updatedAt fields on items & jutsus
   if (progressRound) {
     refillActionPoints(battle);
+    // Orphan cleanup: drop any summon whose controller has died/fled/left
+    // before the next round's actors are picked.
+    spliceOrphanedSummons(battle.usersState, battle.usersEffects);
     battle.round = actionRound;
     // console.log("Action round: ", actionRound);
     battle.usersEffects.forEach((e) => {

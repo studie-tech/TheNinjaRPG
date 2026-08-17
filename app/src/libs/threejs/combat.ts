@@ -141,7 +141,10 @@ export const validateActionTarget = (info: {
   const origin = grid.getHex({ col: user.longitude, row: user.latitude });
   if (!origin) return { isValid: false };
 
-  // Check if user is the active actor
+  // Check if user is the active actor. `user` here is the actor the human
+  // controls (self, or piloted summon on its turn — callers pass the controlled
+  // actor), and precomputedUserId is keyed to that same actor, so this correctly
+  // permits a piloted summon to target on its own turn.
   const { actor } = calcActiveUser(battle, user.userId, timeDiff, {
     precomputedUserId: info.precomputedUserId,
     precomputedActions: info.precomputedActions,
@@ -1476,7 +1479,10 @@ export const highlightTiles = (info: {
   const origin = user && grid.getHex({ col: user.longitude, row: user.latitude });
   const highlights = getPossibleActionTiles(action, origin, grid);
 
-  // Check if user can use tiles (actor check + action points)
+  // Check if user can use tiles (actor check + action points). `user` is the
+  // actor the human controls (self, or piloted summon on its turn — Combat.tsx
+  // passes the controlled actor), so keying the precompute to user.userId and
+  // comparing actor.userId === user.userId works for both cases.
   const { actor } = calcActiveUser(battle, user.userId, timeDiff, {
     precomputedUserId: user.userId,
     precomputedActions: info.precomputedActions,

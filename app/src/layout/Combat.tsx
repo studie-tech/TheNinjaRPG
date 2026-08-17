@@ -26,7 +26,11 @@ import { LogbookEntry } from "@/layout/Logbook";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
 import Modal2 from "@/layout/Modal2";
 import WebGlError from "@/layout/WebGLError";
-import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
+import {
+  availableUserActions,
+  calcActiveUser,
+  resolveControlledActorId,
+} from "@/libs/combat/actions";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import type {
   BattleState,
@@ -34,6 +38,7 @@ import type {
   CombatAction,
   ReturnedBattle,
 } from "@/libs/combat/types";
+import { getTurnControl } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import {
@@ -61,7 +66,11 @@ import {
 import { showMutationToast } from "@/libs/toast";
 import { preloadAudioBuffers } from "@/utils/audio";
 import { secondsFromNow } from "@/utils/time";
-import { useRequiredUserData, userBattleAtom } from "@/utils/UserContext";
+import {
+  combatActionIdAtom,
+  useRequiredUserData,
+  userBattleAtom,
+} from "@/utils/UserContext";
 import type { StatSchemaType } from "@/validators/combat";
 import Countdown from "./Countdown";
 
@@ -105,6 +114,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   const battleRef = useRef<ReturnedBattle | null | undefined>(battleState.battle);
   const actionRef = useRef<CombatAction | undefined>(props.action);
   const userIdRef = useRef<string>(props.userId);
+  const precomputedActionsRef = useRef<CombatAction[]>([]);
   const mountRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const mouse = new Vector2();
@@ -131,22 +141,45 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Data from the DB
   const setBattleAtom = useSetAtom(userBattleAtom);
+  const setCombatActionId = useSetAtom(combatActionIdAtom);
   const { data: userData, pusher, timeDiff, updateUser } = useRequiredUserData();
   const [statDistribution] = useLocalStorage<StatSchemaType | undefined>(
     "statDistribution",
     undefined,
   );
   const suid = userData?.userId;
-  // Precompute available actions for the session user; recompute on version change
+  // The actor the human drives right now: themselves on their turn, or their
+  // piloted summon on the summon's turn (control is sequential, so exactly one).
+  // Read the reactive battleState.battle (not battleRef.current): the ref is
+  // synced in a post-render effect, so on a props-driven update it still holds
+  // the previous battle and would name the player after control hands to the
+  // summon. page.tsx derives this the same way.
+  const controlledActorId = resolveControlledActorId(battleState.battle, suid);
+  // Precompute available actions for the actor the human currently controls;
+  // recompute on version change or when control hands off to/from the summon.
   const precomputedActions = useMemo(() => {
-    if (battleRef.current && suid) {
-      return availableUserActions(battleRef.current, suid);
+    if (battleState.battle && controlledActorId) {
+      return availableUserActions(battleState.battle, controlledActorId);
     }
     return [] as CombatAction[];
-  }, [battleRef.current?.version, suid]);
+  }, [battleState.battle?.version, controlledActorId]);
+
+  // Mirror precomputedActions into a ref so the long-lived interval, click, and
+  // highlight handlers (which run outside React render and don't re-register on
+  // every version change) read current actions instead of a stale snapshot.
+  useEffect(() => {
+    precomputedActionsRef.current = precomputedActions;
+  }, [precomputedActions]);
+
+  // Keep the controlled-actor ref in sync with whoever the human drives this
+  // turn (self, or a piloted summon on its turn). Read inside the render loop
+  // and imperative click handler, both of which run outside React render.
+  useEffect(() => {
+    if (controlledActorId) userIdRef.current = controlledActorId;
+  }, [controlledActorId]);
 
   // Precompute maps for ground effects, user effects, and user positions
-  const battleMaps = useBattleMaps(battleRef.current ?? null);
+  const battleMaps = useBattleMaps(battleState.battle ?? null);
 
   // Get effects for hovered element (can include both user and ground effects)
   const hoveredEffects = useMemo(() => {
@@ -178,7 +211,8 @@ const Combat: React.FC<CombatProps> = (props) => {
     setHoveredEffectRef.current = setHoveredEffect;
   }, [battleMaps, setHoveredEffect]);
 
-  // Session battle user state
+  // Session battle user state (the human's own account — used for lobby/ready
+  // UI and loadout selection, NOT for piloting; piloting reads userIdRef).
   const battleSessionUser = battleRef.current?.usersState.find(
     (u) => u.userId === userData?.userId,
   );
@@ -277,6 +311,20 @@ const Combat: React.FC<CombatProps> = (props) => {
       setBattleState({ battle: battleRef.current, result: null, isPending: true });
     },
     onSuccess: async (data) => {
+      // Clear the selected action only when control actually hands off to (or
+      // away from) another actor — e.g. to/from a piloted summon. On the
+      // player's own consecutive actions the controlled actor is unchanged, so
+      // the highlight persists and the same jutsu/item can be chained across AP
+      // spends (matching pre-pilot behaviour). No-op responses (e.g. "Not your
+      // turn") omit battleUpdate and so never clear it. Reset here in onSuccess
+      // rather than a useEffect (React Compiler lints the effect form).
+      if (data.updateClient && data.battleUpdate) {
+        const prevControlled = resolveControlledActorId(battleRef.current, suid);
+        const nextControlled = resolveControlledActorId(data.battleUpdate, suid);
+        if (prevControlled !== nextControlled) {
+          setCombatActionId(undefined);
+        }
+      }
       // Notifications (if any)
       if (data.notification) {
         showMutationToast({ success: true, message: data.notification });
@@ -389,18 +437,22 @@ const Combat: React.FC<CombatProps> = (props) => {
   // Handle key-presses
   const onDocumentKeyDown = (event: KeyboardEvent) => {
     if (battleRef.current) {
-      const { actor } = calcActiveUser(battleRef.current, suid, timeDiff, {
-        precomputedUserId: suid,
-        precomputedActions,
-      });
+      // Recompute the actor here rather than capturing render-scope
+      // controlledActorId/precomputedActions: this listener only re-registers on
+      // [suid, timeDiff], so those would be stale. calcActiveUser selects the actor
+      // from battle.activeUserId, which is all the "w" (wait) path needs.
+      const { actor } = calcActiveUser(battleRef.current, suid, timeDiff);
       switch (event.key) {
         case "w":
-          if (actor.userId === suid) {
+          // Controller-based: true on my own turn AND on my piloted summon's
+          // turn (actor.controllerId === suid). userId carries the acting
+          // entity's id (the summon's, on its turn).
+          if (actor.controllerId === suid) {
             document.body.style.cursor = "wait";
             if (canPerformAction()) {
               performAction({
                 battleId: battleRef.current.id,
-                userId: userIdRef.current,
+                userId: actor.userId,
                 actionId: "wait",
                 longitude: actor.longitude,
                 latitude: actor.latitude,
@@ -412,12 +464,17 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
     }
   };
+  // Re-register on [suid, timeDiff] (mirrors the auto-drive interval) so the
+  // handler never reads a stale session id or clock offset — including the case
+  // where suid is still undefined at mount and resolves later. Battle data stays
+  // live via battleRef.current, and the actor is recomputed from
+  // battle.activeUserId, so no render-scope state is captured.
   useEffect(() => {
     document.addEventListener("keydown", onDocumentKeyDown);
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
-  }, []);
+  }, [suid, timeDiff]);
 
   // Update mouse position on mouse move
   const onDocumentMouseMove = (event: MouseEvent) => {
@@ -465,12 +522,19 @@ const Combat: React.FC<CombatProps> = (props) => {
           suid,
           timeDiff,
           {
-            precomputedUserId: suid,
-            precomputedActions,
+            precomputedUserId: controlledActorId,
+            precomputedActions: precomputedActionsRef.current,
           },
         );
-        // Scenario 1: it is now AIs turn, perform action
-        if (actor.isAi && !isPending) {
+        // Scenario 1: a pure AI's turn -> auto-act. Gate on the SAME predicate the
+        // server authorizes with (getTurnControl.isAITurn = isAi && !isPiloted), so
+        // we never auto-fire for a piloted summon — mine (I drive it via the action
+        // menu) or another player's (they drive it on their own client). Otherwise
+        // every non-controller observer would spam performAction once a second and
+        // the server would reject each with "Not your turn". Clones keep isPiloted
+        // falsy, so they stay AI-driven.
+        const { isAITurn } = getTurnControl(actor, suid);
+        if (isAITurn && !isPending) {
           if (canPerformAction()) {
             performAction({
               battleId: battleRef.current.id,
@@ -493,11 +557,13 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [isPending, timeDiff, result, suid]);
+  }, [isPending, timeDiff, result, suid, controlledActorId]);
 
   useEffect(() => {
     actionRef.current = props.action;
-    userIdRef.current = props.userId;
+    // Do NOT force userIdRef back to the session user here; the controlled-actor
+    // sync effect (Task: derive controlledActorId) owns userIdRef so it can
+    // follow a piloted summon on its turn.
     battleRef.current = props.battleState.battle;
     if (props.battleState.result) {
       void Promise.all([
@@ -692,7 +758,10 @@ const Combat: React.FC<CombatProps> = (props) => {
               );
               if (!user) return true;
 
-              // Validate using shared function (same logic as highlightTiles)
+              // Validate using shared function (same logic as highlightTiles).
+              // precomputedUserId reads userIdRef.current (the controlled actor,
+              // kept current by the sync effect) to avoid a stale closure inside
+              // this long-lived handler.
               const { isValid } = validateActionTarget({
                 user,
                 battle: battleRef.current,
@@ -700,8 +769,8 @@ const Combat: React.FC<CombatProps> = (props) => {
                 grid: gridRef.current,
                 target,
                 timeDiff,
-                precomputedUserId: suid,
-                precomputedActions,
+                precomputedUserId: userIdRef.current,
+                precomputedActions: precomputedActionsRef.current,
               });
 
               if (!isValid) return true;
@@ -774,7 +843,8 @@ const Combat: React.FC<CombatProps> = (props) => {
 
         // Assume we have battle and a grid
         if (userData && battleRef.current && gridRef.current) {
-          // Get the selected user
+          // Get the actor the human currently controls (self, or piloted summon
+          // on its turn) — drives camera follow, tile highlights and selection.
           const user = battleRef.current.usersState.find(
             (u) => u.userId === userIdRef.current,
           );
@@ -859,7 +929,7 @@ const Combat: React.FC<CombatProps> = (props) => {
               battle: battleRef.current,
               grid: gridRef.current,
               currentHighlights: highlights,
-              precomputedActions,
+              precomputedActions: precomputedActionsRef.current,
             });
             endHighlightTiles();
           }

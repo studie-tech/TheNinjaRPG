@@ -69,6 +69,7 @@ export const publicState = [
   "iAmHere",
   "initiative",
   "isAi",
+  "isPiloted",
   "isSummon",
   "isOriginal",
   "items",

@@ -18,6 +18,13 @@ import {
   TRANSFER_EXCLUDED_SOURCE_TYPES,
 } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
+import {
+  hasLiveSummon,
+  isClone,
+  isLiveSummon,
+  shouldPilotSummon,
+  summonsAllowedInBattle,
+} from "@/libs/combat/summon";
 import type { CombatAction } from "@/libs/combat/types";
 import {
   getBaseDamageForModifier,
@@ -1270,6 +1277,8 @@ export const clone = (
     newAi.username = `${user.username} clone`;
     newAi.controllerId = user.userId;
     newAi.isOriginal = false;
+    newAi.isSummonTemplate = false; // a clone is an active entity, not a template
+    newAi.isPiloted = undefined; // a clone is AI-driven, never piloted
     newAi.isAi = true;
     newAi.hidden = undefined;
     newAi.sageModeId = null;
@@ -3077,7 +3086,7 @@ export const stunPrevent = (
   }
 };
 
-/** Clone user on the battlefield */
+/** summon()/clone() live here; summon predicates and lifecycle helpers are in summon.ts */
 export const summon = (
   usersState: BattleUserState[],
   effect: GroundEffect,
@@ -3093,18 +3102,45 @@ export const summon = (
 
   if (effect.isNew && effect.castThisRound) {
     effect.isNew = false;
+    // No summons in auto-resolved battle types (KAGE_AI / CLAN_CHALLENGE), where
+    // there are no human turns — not even AI-cast ones.
+    if (!summonsAllowedInBattle(battle)) {
+      effect.rounds = 0;
+      return;
+    }
     if (user && "aiHp" in effect) {
+      // Template AI to clone: match on controllerId, because
+      // processUsersForBattle loads AI templates with controllerId = their DB
+      // userId (=== effect.aiId) and a fresh nanoid as their in-battle userId.
+      // We no longer rebind effect.aiId to the spawned summon, so it keeps
+      // pointing at the template and re-cast works.
       const ai = usersState.find((u) => u.controllerId === effect.aiId);
-      const obj = usersState.find(
-        (u) =>
-          u.username === ai?.username && u.curHealth && u.controllerId === user.userId,
-      );
-      if (ai && !obj) {
+      // One-summon-per-controller cap, keyed consistently on
+      // (controllerId === user.userId && isSummon). Allows re-summon once the
+      // prior summon is no longer live (so the AI does_not_have_summon gate
+      // and the player re-cast both work).
+      const alreadyHasSummon = hasLiveSummon(usersState, user.userId, userEffects);
+      if (alreadyHasSummon) {
+        effect.rounds = 0;
+        return {
+          txt: `${user.username} already has a summon!`,
+          color: "red",
+        } as ActionEffect;
+      }
+      if (ai) {
         const newAi = structuredClone(ai);
         // Place on battlefield
         newAi.userId = nanoid();
-        effect.aiId = newAi.userId;
+        // Explicitly set identity/control flags (mirror clone(), do not rely on
+        // structuredClone inheritance from the template).
+        newAi.isSummon = true;
+        newAi.isAi = true;
+        // An original creature, not a clone. Set explicitly (clones set
+        // isOriginal=false) so the isClone discriminator never misreads a summon.
+        newAi.isOriginal = true;
         newAi.controllerId = user.userId;
+        newAi.isPiloted = shouldPilotSummon(user, battle, effect.playerControlled);
+        newAi.isSummonTemplate = false; // never inherit the template's flag
         newAi.hidden = undefined;
         newAi.leftBattle = false;
         newAi.longitude = effect.longitude;
@@ -3173,8 +3209,15 @@ export const summon = (
           userEffects.push(realizedEffect);
           return realizedEffect;
         });
-        // Push to userState
-        usersState.push(newAi);
+        // Insert the summon immediately after its summoner so it takes its turn
+        // right after them (turn order follows usersState array order). Falls
+        // back to appending if the summoner can't be located.
+        const summonerIdx = usersState.findIndex((u) => u.userId === user.userId);
+        if (summonerIdx >= 0) {
+          usersState.splice(summonerIdx + 1, 0, newAi);
+        } else {
+          usersState.push(newAi);
+        }
         // ActionEffect to be shown
         return {
           txt: `${newAi.username} was summoned for ${effect.rounds} rounds!`,
@@ -3182,16 +3225,36 @@ export const summon = (
         } as ActionEffect;
       }
     }
-    // If return from here, summon failed
+    // Reaching here means the template AI could not be resolved.
     effect.rounds = 0;
-    return { txt: `Failed to create summon!`, color: "red" } as ActionEffect;
+    return {
+      txt: `${user?.username ?? "Summoner"}'s summon creature could not be found.`,
+      color: "red",
+    } as ActionEffect;
   } else if (effect?.rounds === 0) {
-    const ai = usersState.find((u) => u.userId === effect.aiId);
-    const idx = usersState.findIndex((u) => u.userId === effect.aiId);
-    if (ai && idx > -1) {
+    // The spawned summon is tracked by controllerId (creatorId), since aiId now
+    // stays pointed at the template. Prefer removing a non-live (dead/expired)
+    // summon: a re-cast inserts the new live summon ahead of an older dead one,
+    // so a plain first-match could remove the live one instead.
+    // Exclude clones: they share isSummon + the same controllerId, so an
+    // un-summon must never target the controller's clone instead of the summon.
+    let idx = usersState.findIndex(
+      (u) =>
+        u.isSummon &&
+        !isClone(u) &&
+        u.controllerId === effect.creatorId &&
+        !isLiveSummon(u, usersState, userEffects),
+    );
+    if (idx === -1) {
+      idx = usersState.findIndex(
+        (u) => u.isSummon && !isClone(u) && u.controllerId === effect.creatorId,
+      );
+    }
+    if (idx > -1) {
+      const removed = usersState[idx];
       usersState.splice(idx, 1);
       return {
-        txt: `${ai.username} was unsummoned!`,
+        txt: `${removed?.username} was unsummoned!`,
         color: "red",
       } as ActionEffect;
     }
