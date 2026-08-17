@@ -232,6 +232,13 @@
       "when": 1786884912515,
       "tag": "0032_brief_maximus",
       "breakpoints": false
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1786971312515,
+      "tag": "0033_fearless_sauron",
+      "breakpoints": false
     }
   ]
 }
