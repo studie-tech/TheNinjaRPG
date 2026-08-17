@@ -249,6 +249,8 @@ const Sector: React.FC<SectorProps> = (props) => {
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const usersRef = useRef<SectorUser[]>([]);
   const showUsersRef = useRef<boolean>(showActive);
+  const showSorroundingRef = useRef<boolean>(props.showSorrounding);
+  const ignoreMapClicksUntilRef = useRef<number>(0);
   const minBracketDrawRef = useRef<number>(storedBracket);
   const hoveredStructureIdRef = useRef<string | null>(null);
   const structuresRef = useRef<VillageStructure[]>([]);
@@ -1647,6 +1649,32 @@ const Sector: React.FC<SectorProps> = (props) => {
     showUsersRef.current = showActive;
   }, [showActive]);
 
+  // The canvas click listener lives in the long-lived scene effect, so it
+  // reads this from a ref. After the menu closes, keep ignoring clicks long
+  // enough to swallow the mobile ghost-click on the map.
+  useEffect(() => {
+    const wasOpen = showSorroundingRef.current;
+    showSorroundingRef.current = props.showSorrounding;
+    const mount = mountRef.current;
+    if (props.showSorrounding) {
+      if (mount) mount.style.pointerEvents = "none";
+      if (controlsRef.current) controlsRef.current.enabled = false;
+      return;
+    }
+    if (wasOpen) {
+      ignoreMapClicksUntilRef.current =
+        performance.now() + MAP_CLICK_BLOCK_AFTER_MODAL_MS;
+    }
+    const timeout = window.setTimeout(
+      () => {
+        if (mount) mount.style.pointerEvents = "";
+        if (controlsRef.current) controlsRef.current.enabled = true;
+      },
+      wasOpen ? MAP_CLICK_BLOCK_AFTER_MODAL_MS : 0,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [props.showSorrounding]);
+
   useEffect(() => {
     isAttackingRef.current = isAttacking;
   }, [isAttacking]);
@@ -2109,6 +2137,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       controls.zoomSpeed = 1.0;
       controls.minZoom = 0.8;
       controls.maxZoom = 3;
+      controls.enabled = !showSorroundingRef.current;
       controlsRef.current = controls;
 
       // Save zoom level to localStorage when it changes (debounced to avoid excessive updates)
@@ -2155,6 +2184,12 @@ const Sector: React.FC<SectorProps> = (props) => {
 
       // Capture clicks to update move direction
       const onClick = (e: MouseEvent) => {
+        if (
+          showSorroundingRef.current ||
+          performance.now() < ignoreMapClicksUntilRef.current
+        ) {
+          return;
+        }
         // Find intersects with the scene
         setRaycasterFromMouse(raycaster, sceneRef, e, camera);
         // Sticky-select a structure under the pointer so touch / click can
@@ -2856,6 +2891,13 @@ export default Sector;
  * for database-backed buildings.
  */
 const SECTOR_SHRINE_ID = "sector-shrine";
+
+/**
+ * Mobile browsers synthesize a click on whatever sits under a dialog after the
+ * overlay unmounts from the same tap. Keep the sector canvas deaf for that
+ * window so closing scouting cannot also walk to a tile.
+ */
+const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
 
 const createShrineStructure = (map: NormalizedSectorMap, globalTileType: number) => {
   const shrineAnchor = map.anchors.find((anchor) => anchor.key === "shrine.default");
