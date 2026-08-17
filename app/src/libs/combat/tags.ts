@@ -1265,7 +1265,13 @@ export const clone = (
   const perc = power / 100;
   const user = usersState.find((u) => u.userId === effect.creatorId);
   if (!user) {
-    throw new Error("Summoner not found");
+    // creatorId points at the caster on the first pass and at the spawned clone
+    // afterwards, so either can be missing if that combatant left usersState.
+    // Throwing would break every later action in the battle: alignBattle keeps
+    // clone effects alive past rounds<=0 so this tag function can expire them,
+    // and it never gets the chance. Expire the effect here instead.
+    effect.rounds = 0;
+    return;
   }
   if (effect.isNew) {
     const newAi = structuredClone(user);

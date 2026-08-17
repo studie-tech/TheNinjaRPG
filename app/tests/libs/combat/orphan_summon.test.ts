@@ -51,6 +51,21 @@ describe("isOrphanedSummon", () => {
     const notSummon = mk({ userId: "p2", controllerId: "missing", isSummon: false });
     expect(isOrphanedSummon(notSummon, [notSummon], noEffects)).toBe(false);
   });
+
+  it("never orphans a clone, even when its creator is gone", () => {
+    // Clones share isSummon with real summons but are torn down by clone()'s own
+    // tag function. Splicing one here would strand its ground effect, whose
+    // creatorId was rebound to the clone -- see the clone() regression test.
+    const clone = mk({
+      userId: "c1",
+      controllerId: "p1",
+      isSummon: true,
+      isOriginal: false,
+    });
+    const deadCreator = mk({ userId: "p1", controllerId: "p1", curHealth: 0 });
+    expect(isOrphanedSummon(clone, [clone, deadCreator], noEffects)).toBe(false);
+    expect(isOrphanedSummon(clone, [clone], noEffects)).toBe(false);
+  });
 });
 
 describe("spliceOrphanedSummons", () => {
