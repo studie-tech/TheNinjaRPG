@@ -686,14 +686,22 @@ export const combatRouter = createTRPCRouter({
 
           // Check if everybody finished their action, and if so, fast-forward the battle
           // (alignBattle removes masterless summons before it picks the next actor)
-          const { actor: newActor, progressRound } = alignBattle(
-            newBattle,
-            actionRounds,
-            suid,
-          );
+          const {
+            actor: newActor,
+            progressRound,
+            orphanedSummons,
+          } = alignBattle(newBattle, actionRounds, suid);
           if (progressRound) {
             applySageModeAfterRoundTransition(newBattle);
           }
+          // Tell players why a summon left the field, rather than having it
+          // silently disappear once its summoner is dead/fled/gone.
+          orphanedSummons.forEach((username) => {
+            actionEffects.push({
+              txt: `${username} vanishes without its summoner!`,
+              color: "red",
+            });
+          });
           if (actionPerformed && progressRound) {
             const dot = description.endsWith(".");
             description += `${dot ? "" : ". "} It is now ${newActor.username}'s turn.`;
@@ -719,10 +727,13 @@ export const combatRouter = createTRPCRouter({
             newBattle.extraState.settings,
           );
 
-          // Check if we should let the inner-loop continue
+          // Check if we should let the inner-loop continue. Reuse getTurnControl
+          // so "who acts autonomously" stays defined in exactly one place -- a
+          // piloted summon is never auto-driven here for the same reason it is
+          // not authorized as an AI turn at the top of the block.
+          const { isAITurn: newIsAITurn } = getTurnControl(newActor, suid);
           if (
-            newActor.isAi && // Continue new loop if it's an AI
-            !newActor.isPiloted && // but never auto-drive a human-piloted summon
+            newIsAITurn && // Continue new loop if the next actor acts autonomously
             nActions < maxActions && // and we haven't performed 5 actions yet
             !result && // and the battle is not over for the user
             (newActor.userId !== actor.userId || description) // and new actor, or successful attack

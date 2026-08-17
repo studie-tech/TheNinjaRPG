@@ -1,12 +1,13 @@
 import type { Grid } from "honeycomb-grid";
 import { spiral } from "honeycomb-grid";
+import { AutoBattleTypes } from "@/drizzle/constants";
 import {
   actionPointsAfterAction,
   availableUserActions,
   performBattleAction,
   stillInBattle,
 } from "@/libs/combat/actions";
-import { isClone, isLiveSummon } from "@/libs/combat/summon";
+import { hasLiveSummon } from "@/libs/combat/summon";
 import type {
   ActionEffect,
   BattleUserState,
@@ -77,6 +78,16 @@ export const performAIaction = (
         if (user.curHealth < costs.hpCost) return false;
         if (user.curChakra < costs.cpCost) return false;
         if (user.curStamina < costs.spCost) return false;
+        // summon() refuses to spawn in auto-resolved battle types, so keep those
+        // actions out of the candidate list rather than letting the AI pay the
+        // cost for a no-op. does_not_have_summon would stay true afterwards, so
+        // the AI would otherwise re-cast it every single round.
+        if (
+          AutoBattleTypes.includes(nextBattle.battleType) &&
+          action.effects.some((e) => "type" in e && e.type === "summon")
+        ) {
+          return false;
+        }
         if (isUser && action.id !== "move") {
           if (
             action.effects.some((e) => "type" in e && e.type === "move") ||
@@ -262,15 +273,9 @@ export const performAIaction = (
           case "round_lower_than":
             return nextBattle.round < condition.value;
           case "does_not_have_summon":
-            // A summon that has died/fled/left is no longer live, so the AI
-            // should re-summon. isLiveSummon centralizes that liveness rule;
-            // isClone excludes the AI's clones, which are not its summon.
-            return !nextBattle.usersState.some(
-              (u) =>
-                isLiveSummon(u, nextBattle.usersState, effects) &&
-                !isClone(u) &&
-                u.controllerId === user.userId,
-            );
+            // Same predicate as the one-per-controller cap in summon(), so the
+            // AI's re-summon gate can never drift from what blocks the cast.
+            return !hasLiveSummon(nextBattle.usersState, user.userId, effects);
           case "has_effect": {
             if (condition.threshold === 0) return true;
             const userEffects = nextBattle.usersEffects.filter(

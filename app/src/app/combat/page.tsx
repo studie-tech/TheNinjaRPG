@@ -14,8 +14,9 @@ import CombatHistory from "@/layout/CombatHistory";
 import CombatTimeline from "@/layout/CombatTimeline";
 import Loader from "@/layout/Loader";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
-import { availableUserActions, resolveControlledActorId } from "@/libs/combat/actions";
+import { availableUserActions } from "@/libs/combat/actions";
 import type { BattleState } from "@/libs/combat/types";
+import { resolveControlledActorId } from "@/libs/combat/util";
 import {
   combatActionIdAtom,
   useRequiredUserData,
@@ -116,23 +117,29 @@ export default function CombatPage() {
     return availableUserActions(battleState?.battle, controlledActorId);
   }, [versionId, controlledActorId]);
 
-  // Battle scene. Pass the SESSION user id (Combat derives its own controlled
-  // actor internally for piloting); the selected action is resolved from the
-  // controlled actor's action list so the summon's jutsu can be chosen.
+  // Battle scene. Pass the CONTROLLED actor (self, or the piloted summon on its
+  // turn) so Combat does not have to re-derive it from the same battle object.
   const combat = useMemo(() => {
     return (
       battleState &&
-      userId && (
+      controlledActorId && (
         <Combat
           battleState={battleState}
           action={actions.find((a) => a.id === actionId)}
-          userId={userId}
+          userId={controlledActorId}
           setBattleState={setBattleState}
           config={config}
         />
       )
     );
-  }, [versionId, actionId, userId, results, config.showGridNumbers, actions]);
+  }, [
+    versionId,
+    actionId,
+    controlledActorId,
+    results,
+    config.showGridNumbers,
+    actions,
+  ]);
 
   // Handle key-presses
   useEffect(() => {

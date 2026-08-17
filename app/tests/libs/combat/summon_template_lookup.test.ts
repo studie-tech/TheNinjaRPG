@@ -151,7 +151,7 @@ describe("spliceOrphanedSummons vs the clone-source template", () => {
     } as unknown as BattleUserState;
     const usersState = [mkPlayer(), liveOrphan];
 
-    const removed = spliceOrphanedSummons(usersState, []);
+    const removed = spliceOrphanedSummons(usersState, []).map((u) => u.userId);
 
     expect(removed).toContain("s9");
     expect(usersState).not.toContain(liveOrphan);

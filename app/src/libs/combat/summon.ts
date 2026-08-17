@@ -70,17 +70,16 @@ export const hasLiveSummon = (
   );
 
 /** Whether a summon should be human-piloted: the jutsu opts in via
- *  `playerControlled`, the controller is a human (non-AI), and the battle type
- *  has human turns. With the flag off (the default) the summon stays AI-driven. */
+ *  `playerControlled` and the controller is a human (non-AI). With the flag off
+ *  (the default) the summon stays AI-driven.
+ *
+ *  No AutoBattleTypes check here: summon() already refuses to spawn anything in
+ *  those battle types before this is reached, so a second check would be dead
+ *  code that tests could only pin by lying about the call order. */
 export const shouldPilotSummon = (
   controller: Pick<BattleUserState, "isAi"> | undefined,
-  battle: Pick<Battle, "battleType">,
   playerControlled: boolean | undefined,
-): boolean =>
-  !!playerControlled &&
-  !!controller &&
-  !controller.isAi &&
-  !AutoBattleTypes.includes(battle.battleType);
+): boolean => !!playerControlled && !!controller && !controller.isAi;
 
 /** Whether summons may be created at all in this battle. Auto-resolved battle
  *  types (KAGE_AI / CLAN_CHALLENGE) have no human turns and must not spawn
@@ -110,26 +109,21 @@ export const isOrphanedSummon = (
   return !controller || !stillInBattle(controller, effects) || !!controller.leftBattle;
 };
 
-/** Splice out orphaned summons. Classifies against a pre-mutation snapshot so
- *  removing one controller's summon cannot flip another's classification
- *  mid-pass. Returns removed userIds in natural (front-to-back) order. */
+/** Splice out orphaned summons, in place. Classifies against a pre-mutation
+ *  snapshot so removing one controller's summon cannot flip another's
+ *  classification mid-pass. Returns the removed combatants (not just their ids)
+ *  in array order, so callers can name them in the battle log without looking
+ *  up entries that are no longer in usersState. */
 export const spliceOrphanedSummons = (
   usersState: BattleUserState[],
   effects: UserEffect[],
-): string[] => {
+): BattleUserState[] => {
   const snapshot = [...usersState];
-  const orphanIds = new Set(
-    snapshot.filter((u) => isOrphanedSummon(u, snapshot, effects)).map((u) => u.userId),
-  );
-  if (orphanIds.size === 0) return [];
-  const removed: string[] = [];
-  for (let i = usersState.length - 1; i >= 0; i--) {
-    const u = usersState[i];
-    if (u && orphanIds.has(u.userId)) {
-      removed.push(u.userId);
-      usersState.splice(i, 1);
-    }
-  }
-  removed.reverse();
-  return removed;
+  const orphans = snapshot.filter((u) => isOrphanedSummon(u, snapshot, effects));
+  if (orphans.length === 0) return [];
+  const orphanIds = new Set(orphans.map((u) => u.userId));
+  const survivors = snapshot.filter((u) => !orphanIds.has(u.userId));
+  usersState.length = 0;
+  usersState.push(...survivors);
+  return orphans;
 };

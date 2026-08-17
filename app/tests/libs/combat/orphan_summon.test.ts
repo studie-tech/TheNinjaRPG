@@ -74,7 +74,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "u1", controllerId: "u1", curHealth: 100 }),
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects);
+    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
     expect(removed).toEqual([]);
     expect(state).toHaveLength(2);
   });
@@ -84,7 +84,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "u1", controllerId: "u1", curHealth: 0 }),
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects);
+    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
     expect(removed).toEqual(["s1"]);
     expect(state.map((u) => u.userId)).toEqual(["u1"]);
   });
@@ -94,7 +94,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "u1", controllerId: "u1", fledBattle: true }),
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects);
+    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
     expect(removed).toEqual(["s1"]);
     expect(state.map((u) => u.userId)).toEqual(["u1"]);
   });
@@ -104,7 +104,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "u1", controllerId: "u1", curHealth: 100, leftBattle: true }),
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects);
+    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
     expect(removed).toEqual(["s1"]);
     expect(state.map((u) => u.userId)).toEqual(["u1"]);
   });
@@ -114,7 +114,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "enemy", controllerId: "enemy", curHealth: 100 }),
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects);
+    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
     expect(removed).toEqual(["s1"]);
     expect(state.map((u) => u.userId)).toEqual(["enemy"]);
   });
@@ -134,7 +134,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "u1", controllerId: "u1", curHealth: 0 }),
       mk({ userId: "u2", controllerId: "u1", isSummon: false, curHealth: 100 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects);
+    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
     expect(removed).toEqual([]);
     expect(state).toHaveLength(2);
   });
