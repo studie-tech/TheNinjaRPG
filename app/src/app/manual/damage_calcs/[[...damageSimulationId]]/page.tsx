@@ -154,14 +154,12 @@ export default function Simulator(props: {
 
   const isPending = isSaving || isUpdating || isDeleting;
 
-  // Calculate experience from stats
+  // Calculate experience from stats. Every stat starts at 10, so the starting total is not
+  // earned experience — derive the baseline from the schema instead of hardcoding it, or the
+  // number goes negative whenever the number of stats changes.
   const calcExperience = (values: StatSchemaOutput) => {
-    return (
-      statNames
-        .map((k) => values[k])
-        .map((v) => Number(v))
-        .reduce((a, b) => a + b, 0) - 120
-    );
+    const assigned = statNames.map((k) => Number(values[k])).reduce((a, b) => a + b, 0);
+    return assigned - statNames.length * 10;
   };
 
   // Extract information from schema to use for showing forms

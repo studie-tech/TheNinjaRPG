@@ -4,8 +4,12 @@
  */
 
 import { EVOLUTION_MAX_CHILDREN, EVOLUTION_MAX_DEPTH } from "@/drizzle/constants";
-import type { MasteryRequirementFields, MasteryStatSource } from "@/libs/mastery";
-import { hasMasteryRequirements } from "@/libs/mastery";
+import type {
+  MasteryRequirementField,
+  MasteryRequirementFields,
+  MasteryStatSource,
+} from "@/libs/mastery";
+import { hasMasteryRequirements, MASTERY_REQUIREMENT_FIELDS } from "@/libs/mastery";
 
 /** Minimal node for validating parent/child evolution graphs. */
 export type EvolutionNode = {
@@ -13,12 +17,19 @@ export type EvolutionNode = {
   parentId: string | null;
 };
 
+/** Requirement column paired with the general it gates against, and its display name. */
+const GENERAL_REQUIREMENT_FIELDS = [
+  ["requiredStrength", "strength", "Strength"],
+  ["requiredSpeed", "speed", "Speed"],
+  ["requiredIntelligence", "intelligence", "Intelligence"],
+  ["requiredWillpower", "willpower", "Willpower"],
+] as const;
+
+type GeneralRequirementField = (typeof GENERAL_REQUIREMENT_FIELDS)[number][0];
+
 /** Nullable per-stat gates used when evolving owned content. */
 export type EvolutionStatRequirements = MasteryRequirementFields & {
-  requiredStrength?: number | null;
-  requiredSpeed?: number | null;
-  requiredIntelligence?: number | null;
-  requiredWillpower?: number | null;
+  [K in GeneralRequirementField]?: number | null;
 };
 
 export type EvolutionUserStats = MasteryStatSource & {
@@ -33,18 +44,25 @@ export const isEvolution = (parentId: string | null | undefined): boolean => !!p
 export const meetsEvolutionStatRequirements = (
   requirements: EvolutionStatRequirements,
   stats: EvolutionUserStats,
-): boolean => {
-  const checks: { req: number | null | undefined; val: number }[] = [
-    { req: requirements.requiredStrength, val: stats.strength },
-    { req: requirements.requiredSpeed, val: stats.speed },
-    { req: requirements.requiredIntelligence, val: stats.intelligence },
-    { req: requirements.requiredWillpower, val: stats.willpower },
-  ];
-  return (
-    hasMasteryRequirements(stats, requirements) &&
-    checks.every(({ req, val }) => req === null || req === undefined || val >= req)
-  );
-};
+): boolean =>
+  hasMasteryRequirements(stats, requirements) &&
+  GENERAL_REQUIREMENT_FIELDS.every(([reqKey, statKey]) => {
+    const required = requirements[reqKey];
+    return required == null || stats[statKey] >= required;
+  });
+
+/**
+ * Every stat gate a jutsu/item can carry, with a bare display name. The single source for
+ * the content editors and for the requirement lists on the jutsu and item detail views;
+ * callers add their own prefix ("Req. ", "Required ").
+ */
+export const EVOLUTION_STAT_FIELDS: {
+  id: MasteryRequirementField | GeneralRequirementField;
+  label: string;
+}[] = [
+  ...MASTERY_REQUIREMENT_FIELDS.map(([id, , label]) => ({ id, label })),
+  ...GENERAL_REQUIREMENT_FIELDS.map(([id, , label]) => ({ id, label })),
+];
 
 export type EvolutionGraphValidation = { ok: true } | { ok: false; message: string };
 
@@ -136,15 +154,6 @@ export const filterVisibleEvolutions = <T extends { hidden: boolean }>(
 ): T[] => evolutions.filter((evolution) => !evolution.hidden || canViewHidden);
 
 /** Labels for evolution stat requirement UI (shared across content editors). */
-export const EVOLUTION_STAT_FORM_FIELDS = [
-  { id: "requiredNinjutsuMastery", label: "Req. Ninjutsu Mastery" },
-  { id: "requiredGenjutsuMastery", label: "Req. Genjutsu Mastery" },
-  { id: "requiredTaijutsuMastery", label: "Req. Taijutsu Mastery" },
-  { id: "requiredBukijutsuMastery", label: "Req. Bukijutsu Mastery" },
-  { id: "requiredBloodlineMastery", label: "Req. Bloodline Mastery" },
-  { id: "requiredSageMastery", label: "Req. Sage Mastery" },
-  { id: "requiredStrength", label: "Req. Strength" },
-  { id: "requiredSpeed", label: "Req. Speed" },
-  { id: "requiredIntelligence", label: "Req. Intelligence" },
-  { id: "requiredWillpower", label: "Req. Willpower" },
-] as const;
+export const EVOLUTION_STAT_FORM_FIELDS = EVOLUTION_STAT_FIELDS.map(
+  ({ id, label }) => ({ id, label: `Req. ${label}` }),
+);

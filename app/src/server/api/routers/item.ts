@@ -89,6 +89,7 @@ import {
   decideRename,
   resolveSelectableLoadout,
 } from "@/libs/loadout";
+import { missingMasteryRequirement } from "@/libs/mastery";
 import {
   collapseRewards,
   filterQuestTrackersForDbPersist,
@@ -3011,6 +3012,14 @@ export const toggleEquipItem = async (
     }
     if (useritem.item.bloodlineId && useritem.item.bloodlineId !== user.bloodlineId) {
       return errorResponse(`This item requires a specific bloodline to equip`);
+    }
+    // Without this the item equips fine but processUsersForBattle skips its effects,
+    // leaving the player wearing gear that does nothing while still losing durability.
+    const missingMastery = missingMasteryRequirement(user, useritem.item);
+    if (missingMastery) {
+      return errorResponse(
+        `This item requires ${missingMastery.required.toLocaleString()} ${missingMastery.label} to equip`,
+      );
     }
     if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
       return errorResponse("Cannot equip crafting item");

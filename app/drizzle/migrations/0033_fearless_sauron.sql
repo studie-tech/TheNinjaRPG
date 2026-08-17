@@ -24,10 +24,10 @@ UPDATE `UserData`
 SET
 	`offence` = GREATEST(`ninjutsuOffence`, `genjutsuOffence`, `taijutsuOffence`, `bukijutsuOffence`),
 	`defence` = GREATEST(`ninjutsuDefence`, `genjutsuDefence`, `taijutsuDefence`, `bukijutsuDefence`),
-	`ninjutsuMastery` = `ninjutsuOffence`,
-	`genjutsuMastery` = `genjutsuOffence`,
-	`taijutsuMastery` = `taijutsuOffence`,
-	`bukijutsuMastery` = `bukijutsuOffence`,
+	`ninjutsuMastery` = GREATEST(`ninjutsuOffence`, `ninjutsuDefence`),
+	`genjutsuMastery` = GREATEST(`genjutsuOffence`, `genjutsuDefence`),
+	`taijutsuMastery` = GREATEST(`taijutsuOffence`, `taijutsuDefence`),
+	`bukijutsuMastery` = GREATEST(`bukijutsuOffence`, `bukijutsuDefence`),
 	`bloodlineMastery` = 10,
 	`sageMastery` = 10;
 ALTER TABLE `UserData` MODIFY COLUMN `currentlyTraining` enum('ninjutsuOffence','taijutsuOffence','genjutsuOffence','bukijutsuOffence','ninjutsuDefence','taijutsuDefence','genjutsuDefence','bukijutsuDefence','intelligence','speed','willpower','strength','offence','defence');
@@ -102,10 +102,22 @@ ALTER TABLE `Jutsu` DROP COLUMN `requiredBukijutsuOffence`;
 ALTER TABLE `Jutsu` DROP COLUMN `requiredBukijutsuDefence`;
 UPDATE `Item`
 SET
-	`requiredNinjutsuMastery` = `requiredNinjutsuOffence`,
-	`requiredGenjutsuMastery` = `requiredGenjutsuOffence`,
-	`requiredTaijutsuMastery` = `requiredTaijutsuOffence`,
-	`requiredBukijutsuMastery` = `requiredBukijutsuOffence`;
+	`requiredNinjutsuMastery` = CASE
+		WHEN `requiredNinjutsuOffence` IS NULL AND `requiredNinjutsuDefence` IS NULL THEN NULL
+		ELSE GREATEST(COALESCE(`requiredNinjutsuOffence`, 0), COALESCE(`requiredNinjutsuDefence`, 0))
+	END,
+	`requiredGenjutsuMastery` = CASE
+		WHEN `requiredGenjutsuOffence` IS NULL AND `requiredGenjutsuDefence` IS NULL THEN NULL
+		ELSE GREATEST(COALESCE(`requiredGenjutsuOffence`, 0), COALESCE(`requiredGenjutsuDefence`, 0))
+	END,
+	`requiredTaijutsuMastery` = CASE
+		WHEN `requiredTaijutsuOffence` IS NULL AND `requiredTaijutsuDefence` IS NULL THEN NULL
+		ELSE GREATEST(COALESCE(`requiredTaijutsuOffence`, 0), COALESCE(`requiredTaijutsuDefence`, 0))
+	END,
+	`requiredBukijutsuMastery` = CASE
+		WHEN `requiredBukijutsuOffence` IS NULL AND `requiredBukijutsuDefence` IS NULL THEN NULL
+		ELSE GREATEST(COALESCE(`requiredBukijutsuOffence`, 0), COALESCE(`requiredBukijutsuDefence`, 0))
+	END;
 ALTER TABLE `Item` DROP COLUMN `requiredNinjutsuOffence`;
 ALTER TABLE `Item` DROP COLUMN `requiredNinjutsuDefence`;
 ALTER TABLE `Item` DROP COLUMN `requiredGenjutsuOffence`;
@@ -126,3 +138,7 @@ UPDATE `UserData`
 SET `battleId` = NULL, `status` = 'AWAKE', `travelFinishAt` = NULL
 WHERE `battleId` IS NOT NULL;
 DELETE FROM `Battle`;
+-- Saved simulator state is a JSON blob keyed by the old per-type stat names. Nothing maps
+-- it onto offence/defence, so stale rows would render as NaN damage and silently reload
+-- with default stats. Drop them like the in-flight battles above.
+DELETE FROM `DamageCalculation`;

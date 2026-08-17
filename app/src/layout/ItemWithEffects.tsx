@@ -18,6 +18,7 @@ import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
 import Model3d from "@/layout/Model3d";
 import { getPreventTypeName } from "@/libs/combat/util";
+import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getRewardArray } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -709,30 +710,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Evolution</b>: Yes (evolves from a parent item)
                 </p>
               )}
-              {(
-                [
-                  ["requiredNinjutsuMastery", "Req. Ninjutsu Mastery"],
-                  ["requiredGenjutsuMastery", "Req. Genjutsu Mastery"],
-                  ["requiredTaijutsuMastery", "Req. Taijutsu Mastery"],
-                  ["requiredBukijutsuMastery", "Req. Bukijutsu Mastery"],
-                  ["requiredBloodlineMastery", "Req. Bloodline Mastery"],
-                  ["requiredSageMastery", "Req. Sage Mastery"],
-                  ["requiredStrength", "Req. Strength"],
-                  ["requiredSpeed", "Req. Speed"],
-                  ["requiredIntelligence", "Req. Intelligence"],
-                  ["requiredWillpower", "Req. Willpower"],
-                ] as const
-              )
-                .filter(([key]) => {
-                  if (key === "requiredSageMastery" && isSageMode) return false;
-                  const value = (item as unknown as Record<string, unknown>)[key];
-                  return value != null;
-                })
-                .map(([key, label]) => (
-                  <p key={key}>
-                    <b>{label}</b>: {(item as unknown as Record<string, number>)[key]}
-                  </p>
-                ))}
+              {EVOLUTION_STAT_FIELDS.filter(({ id }) => {
+                if (id === "requiredSageMastery" && isSageMode) return false;
+                return (item as unknown as Record<string, unknown>)[id] != null;
+              }).map(({ id, label }) => (
+                <p key={id}>
+                  <b>Req. {label}</b>: {(item as unknown as Record<string, number>)[id]}
+                </p>
+              ))}
               {"maxLevel" in item && item.maxLevel && (
                 <p>
                   <b>Max Level</b>: {item.maxLevel}

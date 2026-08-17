@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MasteryName } from "@/drizzle/constants";
-import { getUserCaps, MasteryNames } from "@/drizzle/constants";
-import type { UserData } from "@/drizzle/schema";
-import { hasMasteryRequirements } from "@/libs/mastery";
-import { getSoftCappedExperience } from "@/libs/profile";
+import { MasteryNames } from "@/drizzle/constants";
+import { hasMasteryRequirements, missingMasteryRequirement } from "@/libs/mastery";
 
 const emptyMasteries = (value = 0): Record<MasteryName, number> =>
   Object.fromEntries(MasteryNames.map((name) => [name, value])) as Record<
@@ -55,17 +53,27 @@ describe("hasMasteryRequirements", () => {
   });
 });
 
-describe("getSoftCappedExperience", () => {
-  it("counts only offence, defence, and the four generals", () => {
-    const { stats_cap, gens_cap } = getUserCaps("JONIN");
-    expect(getSoftCappedExperience({ rank: "JONIN" } as UserData)).toBe(
-      2 * stats_cap + 4 * gens_cap,
-    );
+describe("missingMasteryRequirement", () => {
+  it("names the unmet mastery so equip errors can quote it", () => {
+    const user = { ...emptyMasteries(10), bukijutsuMastery: 100 };
+    expect(missingMasteryRequirement(user, { requiredBukijutsuMastery: 500 })).toEqual({
+      label: "Bukijutsu Mastery",
+      required: 500,
+      current: 100,
+    });
   });
 
-  it("does not include mastery caps in the experience ceiling", () => {
-    const { stats_cap, gens_cap, mastery_cap } = getUserCaps("JONIN");
-    const softCap = getSoftCappedExperience({ rank: "JONIN" } as UserData);
-    expect(softCap).toBeLessThan(2 * stats_cap + 4 * gens_cap + mastery_cap);
+  it("returns null when every requirement is met", () => {
+    expect(
+      missingMasteryRequirement(emptyMasteries(500), { requiredSageMastery: 500 }),
+    ).toBeNull();
+  });
+
+  it("agrees with hasMasteryRequirements", () => {
+    const user = { ...emptyMasteries(10), ninjutsuMastery: 499 };
+    const reqs = { requiredNinjutsuMastery: 500 };
+    expect(hasMasteryRequirements(user, reqs)).toBe(
+      missingMasteryRequirement(user, reqs) === null,
+    );
   });
 });

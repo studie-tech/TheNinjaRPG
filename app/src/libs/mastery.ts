@@ -9,23 +9,24 @@ export const MASTERY_TYPE_TO_STAT: Record<MasteryType, MasteryName> = {
   Sage: "sageMastery",
 };
 
-/** Requirement column on Jutsu/Item paired with the user stat it gates against */
-const MASTERY_REQUIREMENT_FIELDS = [
-  ["requiredNinjutsuMastery", "ninjutsuMastery"],
-  ["requiredGenjutsuMastery", "genjutsuMastery"],
-  ["requiredTaijutsuMastery", "taijutsuMastery"],
-  ["requiredBukijutsuMastery", "bukijutsuMastery"],
-  ["requiredBloodlineMastery", "bloodlineMastery"],
-  ["requiredSageMastery", "sageMastery"],
+/**
+ * Requirement column on Jutsu/Item, the user stat it gates against, and its display name.
+ * Single source of truth: the gating check, the content editors and every requirement list
+ * in the UI derive from this, so adding a mastery is a one-line change.
+ */
+export const MASTERY_REQUIREMENT_FIELDS = [
+  ["requiredNinjutsuMastery", "ninjutsuMastery", "Ninjutsu Mastery"],
+  ["requiredGenjutsuMastery", "genjutsuMastery", "Genjutsu Mastery"],
+  ["requiredTaijutsuMastery", "taijutsuMastery", "Taijutsu Mastery"],
+  ["requiredBukijutsuMastery", "bukijutsuMastery", "Bukijutsu Mastery"],
+  ["requiredBloodlineMastery", "bloodlineMastery", "Bloodline Mastery"],
+  ["requiredSageMastery", "sageMastery", "Sage Mastery"],
 ] as const;
 
+export type MasteryRequirementField = (typeof MASTERY_REQUIREMENT_FIELDS)[number][0];
+
 export type MasteryRequirementFields = {
-  requiredNinjutsuMastery?: number | null;
-  requiredGenjutsuMastery?: number | null;
-  requiredTaijutsuMastery?: number | null;
-  requiredBukijutsuMastery?: number | null;
-  requiredBloodlineMastery?: number | null;
-  requiredSageMastery?: number | null;
+  [K in MasteryRequirementField]?: number | null;
 };
 
 export type MasteryStatSource = Record<MasteryName, number>;
@@ -38,15 +39,27 @@ export type MasteryStatSource = Record<MasteryName, number>;
 export const hasMasteryRequirements = (
   user: Partial<MasteryStatSource>,
   requirements?: MasteryRequirementFields | null,
-): boolean => {
-  if (!requirements) return true;
-  return MASTERY_REQUIREMENT_FIELDS.every(([reqKey, statKey]) => {
+): boolean => !missingMasteryRequirement(user, requirements);
+
+/**
+ * The first unmet mastery requirement, or null when the user meets all of them. Drives both
+ * the boolean gate and the "why can't I equip this" messages, so they cannot disagree.
+ * @param user - masteries of the user, may be partial for masked battle state
+ * @param requirements - the jutsu/item being gated
+ */
+export const missingMasteryRequirement = (
+  user: Partial<MasteryStatSource>,
+  requirements?: MasteryRequirementFields | null,
+): { label: string; required: number; current: number } | null => {
+  if (!requirements) return null;
+  for (const [reqKey, statKey, label] of MASTERY_REQUIREMENT_FIELDS) {
     const required = requirements[reqKey];
-    if (required == null) return true;
+    if (required == null) continue;
     const current = user[statKey];
     // Masked / unknown masteries are treated as met so client-side action lists
     // for opponents (privateState stripped) do not hide gated jutsu and items.
-    if (current == null) return true;
-    return current >= required;
-  });
+    if (current == null) continue;
+    if (current < required) return { label, required, current };
+  }
+  return null;
 };

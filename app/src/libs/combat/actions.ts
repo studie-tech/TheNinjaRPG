@@ -181,7 +181,11 @@ export const availableUserActions = (
             if (isDisarmed && jutsu.jutsuWeapon !== "NONE") {
               return false;
             }
-            if (!hasMasteryRequirements(user, jutsu)) {
+            // AI are exempt, matching canUseJutsu and the loadout filter in
+            // processUsersForBattle. scaleUserStats redistributes an AI's masteries against
+            // the level it is scaled to, so a scaled-down AI would otherwise lose the gated
+            // jutsu its profile is built around and fall back to basic actions.
+            if (!user.isAi && !hasMasteryRequirements(user, jutsu)) {
               return false;
             }
             // Filter out movement jutsu when immobilized
@@ -238,7 +242,7 @@ export const availableUserActions = (
             }
             if (NonActionItemTypes.includes(item.itemType)) return false;
             if (ui.equipped === "NONE") return false;
-            if (!hasMasteryRequirements(user, item)) return false;
+            if (!user.isAi && !hasMasteryRequirements(user, item)) return false;
             if (item.itemType === "WEAPON") {
               // Hide weapons when disarmed
               if (isDisarmed) return false;

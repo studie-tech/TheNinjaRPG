@@ -266,24 +266,91 @@ export const isJutsuTrainToLearnRestricted = (jutsuType: Jutsu["jutsuType"]) =>
     jutsuType,
   );
 
+/**
+ * Every requirement for using a jutsu, paired with the message shown when it fails. Single
+ * source of truth for `canUseJutsu` and for the requirement labels and section grouping on
+ * /jutsus, so a new requirement is one row here rather than three lists that can drift.
+ */
+const jutsuRequirementChecks = (
+  jutsu: Jutsu,
+  userdata: NonNullable<UserWithRelations>,
+  opts?: {
+    /**
+     * Full user items. Required to evaluate the weapon requirement, because
+     * `userdata.items` carries a narrowed `item` without `weaponType`. When omitted the
+     * weapon check is skipped rather than silently failing.
+     */
+    userItems?: UserItemWithItem[];
+    ignoreBloodlineItem?: boolean;
+  },
+): { ok: boolean; warning: string }[] => {
+  const bloodlineItems = opts?.userItems ?? userdata.items;
+  const userElements = new Set(getUserElements(userdata));
+  return [
+    {
+      ok: hasRequiredRank(userdata.rank, jutsu.requiredRank),
+      warning: "You do not have the required rank to use this jutsu.",
+    },
+    {
+      ok: hasRequiredLevel(userdata.level, jutsu.requiredLevel),
+      warning: "You do not have the required level to use this jutsu.",
+    },
+    {
+      ok: checkJutsuRank(jutsu.jutsuRank, userdata.rank),
+      warning: "You do not have the required rank to use this jutsu.",
+    },
+    {
+      ok: checkJutsuVillage(jutsu, userdata),
+      warning: "You do not have the required village to use this jutsu.",
+    },
+    {
+      ok: checkJutsuBloodline(jutsu, userdata),
+      warning: "You do not have the required bloodline to use this jutsu.",
+    },
+    {
+      ok: hasMasteryRequirements(userdata, jutsu),
+      warning: "You do not have the required mastery to use this jutsu.",
+    },
+    {
+      ok: !!checkJutsuElements(jutsu, userElements),
+      warning: "You do not have the required elements to use this jutsu.",
+    },
+    {
+      ok: !opts?.userItems || checkJutsuItems(jutsu, opts.userItems),
+      warning: `No ${jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`,
+    },
+    {
+      ok: !!opts?.ignoreBloodlineItem || checkJutsuBloodlineItem(jutsu, bloodlineItems),
+      warning: "You do not have the required bloodline item equipped.",
+    },
+  ];
+};
+
 export const canUseJutsu = (
   jutsu: Jutsu,
   userdata: NonNullable<UserWithRelations>,
   ignoreBloodlineItem = false,
 ): boolean => {
-  const userElements = new Set(getUserElements(userdata));
   if (userdata.isAi) return true;
-  return (
-    hasRequiredRank(userdata.rank, jutsu.requiredRank) &&
-    hasRequiredLevel(userdata.level, jutsu.requiredLevel) &&
-    checkJutsuRank(jutsu.jutsuRank, userdata.rank) &&
-    checkJutsuVillage(jutsu, userdata) &&
-    checkJutsuBloodline(jutsu, userdata) &&
-    hasMasteryRequirements(userdata, jutsu) &&
-    !!checkJutsuElements(jutsu, userElements) &&
-    (ignoreBloodlineItem || checkJutsuBloodlineItem(jutsu, userdata.items))
+  // No userItems passed, so the weapon requirement is left to the callers that have them
+  // (equipping via jutsuRequirementWarning, combat via checkJutsuItems).
+  return jutsuRequirementChecks(jutsu, userdata, { ignoreBloodlineItem }).every(
+    ({ ok }) => ok,
   );
 };
+
+/**
+ * The first unmet requirement as a user-facing message, or "" when the jutsu is usable.
+ * Passing `userItems` also evaluates the weapon requirement, making this the
+ * "can this be equipped" predicate for the jutsu management page.
+ */
+export const jutsuRequirementWarning = (
+  jutsu: Jutsu,
+  userdata: NonNullable<UserWithRelations>,
+  userItems?: UserItemWithItem[],
+): string =>
+  jutsuRequirementChecks(jutsu, userdata, { userItems }).find(({ ok }) => !ok)
+    ?.warning ?? "";
 
 export const SENSEI_JUTSU_TRAINING_BOOST_PERC = 5;
 

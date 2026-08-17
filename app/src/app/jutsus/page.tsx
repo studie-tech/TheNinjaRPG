@@ -43,23 +43,17 @@ import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
+import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getFreeTransfers } from "@/libs/jutsu";
-import { hasMasteryRequirements } from "@/libs/mastery";
 import { showUserRank } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import {
   calcJutsuEquipLimit,
   canEvolveJutsu,
-  checkJutsuBloodline,
-  checkJutsuBloodlineItem,
-  checkJutsuElements,
-  checkJutsuItems,
-  checkJutsuRank,
-  checkJutsuVillage,
-  hasRequiredLevel,
-  hasRequiredRank,
+  jutsuRequirementWarning,
   remainingXpToLevel,
 } from "@/libs/train";
+import type { UserWithRelations } from "@/routers/profile";
 import { canReskinFreely, canTransferJutsu } from "@/utils/permissions";
 import { DAY_S, secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -332,43 +326,16 @@ export default function MyJutsu() {
   // Categorize jutsu for organized display
   const categorizedJutsus = useMemo(() => {
     if (!userData) return null;
-    return categorizeJutsus(userJutsus, userData, userItems, userElements);
-  }, [userJutsus, userData, userItems, userElements]);
+    return categorizeJutsus(userJutsus, userData, userItems);
+  }, [userJutsus, userData, userItems]);
 
   // Transform jutsu to action items with warnings
   const transformToActionItems = useCallback(
     (jutsus: UserJutsuWithRelations[]) => {
       return jutsus.map((uj) => {
-        let warning = "";
-        if (userData) {
-          if (!checkJutsuItems(uj.jutsu, userItems)) {
-            warning = `No ${uj.jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`;
-          }
-          if (!checkJutsuElements(uj.jutsu, userElements)) {
-            warning = "You do not have the required elements to use this jutsu.";
-          }
-          if (!hasRequiredRank(userData.rank, uj.jutsu.requiredRank)) {
-            warning = "You do not have the required rank to use this jutsu.";
-          }
-          if (!hasRequiredLevel(userData.level, uj.jutsu.requiredLevel)) {
-            warning = "You do not have the required level to use this jutsu.";
-          }
-          if (!checkJutsuRank(uj.jutsu.jutsuRank, userData.rank)) {
-            warning = "You do not have the required rank to use this jutsu.";
-          }
-          if (!checkJutsuVillage(uj.jutsu, userData)) {
-            warning = "You do not have the required village to use this jutsu.";
-          }
-          if (!checkJutsuBloodline(uj.jutsu, userData)) {
-            warning = "You do not have the required bloodline to use this jutsu.";
-          }
-          if (!checkJutsuBloodlineItem(uj.jutsu, userItems)) {
-            warning = "You do not have the required bloodline item equipped.";
-          }
-          if (!hasMasteryRequirements(userData, uj.jutsu)) {
-            warning = "You do not have the required mastery to use this jutsu.";
-          }
-        }
+        const warning = userData
+          ? jutsuRequirementWarning(uj.jutsu, userData, userItems)
+          : "";
         return {
           ...uj.jutsu,
           ...uj,
@@ -756,13 +723,7 @@ export default function MyJutsu() {
                         !!userData &&
                         effectiveLevel >= JUTSU_TRAIN_LEVEL_CAP &&
                         canEvolveJutsu(evo, userData) &&
-                        hasRequiredRank(userData.rank, evo.requiredRank) &&
-                        hasRequiredLevel(userData.level, evo.requiredLevel) &&
-                        checkJutsuRank(evo.jutsuRank, userData.rank) &&
-                        checkJutsuVillage(evo, userData) &&
-                        checkJutsuBloodline(evo, userData) &&
-                        checkJutsuBloodlineItem(evo, userItems) &&
-                        checkJutsuElements(evo, userElements);
+                        !jutsuRequirementWarning(evo, userData, userItems);
                       return (
                         <Confirm2
                           key={evo.id}
@@ -818,26 +779,13 @@ export default function MyJutsu() {
                               Required Level: <b>{evo.requiredLevel}</b>
                             </p>
                           )}
-                          {(
-                            [
-                              ["requiredNinjutsuMastery", "Ninjutsu Mastery"],
-                              ["requiredGenjutsuMastery", "Genjutsu Mastery"],
-                              ["requiredTaijutsuMastery", "Taijutsu Mastery"],
-                              ["requiredBukijutsuMastery", "Bukijutsu Mastery"],
-                              ["requiredBloodlineMastery", "Bloodline Mastery"],
-                              ["requiredSageMastery", "Sage Mastery"],
-                              ["requiredStrength", "Strength"],
-                              ["requiredSpeed", "Speed"],
-                              ["requiredIntelligence", "Intelligence"],
-                              ["requiredWillpower", "Willpower"],
-                            ] as const
-                          )
-                            .filter(([key]) => evo[key] != null)
-                            .map(([key, label]) => (
-                              <p key={key} className="text-sm">
-                                Required {label}: <b>{evo[key]}</b>
-                              </p>
-                            ))}
+                          {EVOLUTION_STAT_FIELDS.filter(
+                            ({ id }) => evo[id] != null,
+                          ).map(({ id, label }) => (
+                            <p key={id} className="text-sm">
+                              Required {label}: <b>{evo[id]}</b>
+                            </p>
+                          ))}
                         </Confirm2>
                       );
                     })}
@@ -1241,15 +1189,8 @@ interface CategorizedJutsus {
 // Categorizes user jutsu into sections based on equipped status, bloodline, and battle usage type
 const categorizeJutsus = (
   userJutsus: UserJutsuWithRelations[] | undefined,
-  userData: {
-    rank: string;
-    level: number;
-    villageId: string | null;
-    bloodlineId: string | null;
-    isOutlaw: boolean;
-  },
+  userData: NonNullable<UserWithRelations>,
   userItems: UserItemWithItem[] | undefined,
-  userElements: Set<ElementName>,
 ): CategorizedJutsus => {
   const result: CategorizedJutsus = {
     equipped: [],
@@ -1269,30 +1210,8 @@ const categorizeJutsus = (
       continue;
     }
 
-    // Check if user can equip this jutsu
-    const canEquipJutsu =
-      checkJutsuItems(uj.jutsu, userItems) &&
-      checkJutsuBloodlineItem(uj.jutsu, userItems) &&
-      checkJutsuElements(uj.jutsu, userElements) &&
-      hasRequiredRank(
-        userData.rank as Parameters<typeof hasRequiredRank>[0],
-        uj.jutsu.requiredRank,
-      ) &&
-      hasRequiredLevel(userData.level, uj.jutsu.requiredLevel) &&
-      checkJutsuRank(
-        uj.jutsu.jutsuRank,
-        userData.rank as Parameters<typeof checkJutsuRank>[1],
-      ) &&
-      checkJutsuVillage(
-        uj.jutsu,
-        userData as Parameters<typeof checkJutsuVillage>[1],
-      ) &&
-      checkJutsuBloodline(
-        uj.jutsu,
-        userData as Parameters<typeof checkJutsuBloodline>[1],
-      );
-
-    if (!canEquipJutsu) {
+    // Same predicate the equip mutation and the per-jutsu warning label use
+    if (jutsuRequirementWarning(uj.jutsu, userData, userItems)) {
       result.unavailable.push(uj);
       continue;
     }

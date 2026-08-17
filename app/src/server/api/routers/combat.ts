@@ -3051,14 +3051,18 @@ export const processUsersForBattle = async (
         ) {
           if (ui.item.effects && ui.equipped !== "NONE") {
             const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
-            if (currentDurability <= DURABILITY_USABILITY_THR) {
+            // Unequip rather than merely skipping the effects: gear left equipped keeps
+            // taking durability damage every round while granting nothing. Mastery gates
+            // are enforced on equip too, so this only catches gear equipped before the
+            // requirement was added or before the wearer's masteries were reset.
+            if (
+              currentDurability <= DURABILITY_USABILITY_THR ||
+              !hasMasteryRequirements(user, ui.item)
+            ) {
               ui.equipped = "NONE" as const;
             } else {
               // Add item effects to user (only if user has required bloodline)
-              if (
-                (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId) &&
-                hasMasteryRequirements(user, ui.item)
-              ) {
+              if (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId) {
                 effects.forEach((effect) => {
                   const realized = realizeTag({
                     tag: effect,

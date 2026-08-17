@@ -145,15 +145,6 @@ export function capUserStats(user: UserData) {
   if (user.sageMastery > mastery_cap) user.sageMastery = mastery_cap;
 }
 
-/**
- * Soft experience cap: one full offence, one full defence, and all 4 generals.
- * Masteries do not count toward experience.
- */
-export function getSoftCappedExperience(user: UserData) {
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
-  return 2 * stats_cap + 4 * gens_cap;
-}
-
 /** Scale stats of user, and return total number of experience / stat points */
 export function scaleUserStats(
   user: Pick<

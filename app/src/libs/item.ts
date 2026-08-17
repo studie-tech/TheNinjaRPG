@@ -23,6 +23,8 @@ import type {
   UserItemWithRelations,
   VillageStructure,
 } from "@/drizzle/schema";
+import type { MasteryStatSource } from "@/libs/mastery";
+import { missingMasteryRequirement } from "@/libs/mastery";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { getStrucBoost } from "@/utils/village";
 
@@ -343,7 +345,7 @@ export interface ComputedLoadout {
 export const computeLoadoutAssignments = (
   itemData: Array<{ itemId: string; slot: ItemSlot }>,
   useritems: UserItemWithRelations[],
-  user: { level: number; bloodlineId: string | null },
+  user: { level: number; bloodlineId: string | null } & Partial<MasteryStatSource>,
   now: Date = new Date(),
 ): ComputedLoadout => {
   const assignments: LoadoutAssignment[] = [];
@@ -385,6 +387,13 @@ export const computeLoadoutAssignments = (
     }
     if (item.bloodlineId && item.bloodlineId !== user.bloodlineId) {
       invalidItems.push(`${item.name} requires a specific bloodline to equip`);
+      continue;
+    }
+    const missingMastery = missingMasteryRequirement(user, item);
+    if (missingMastery) {
+      invalidItems.push(
+        `${item.name} requires ${missingMastery.required.toLocaleString()} ${missingMastery.label}`,
+      );
       continue;
     }
     if (isImbuing(useritem, now)) {

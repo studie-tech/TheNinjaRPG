@@ -2,6 +2,7 @@ import { and, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   CombatStatNames,
+  getUserCaps,
   MAX_DAILY_TRAININGS,
   MasteryNames,
   TrainingSpeeds,
@@ -260,14 +261,15 @@ export const trainRouter = createTRPCRouter({
           return errorResponse("Invalid captcha");
         }
       }
-      const { trainingAmount, minutes } = calcTrainingAmount(
+      const { trainingAmount } = calcTrainingAmount(
         user,
         settings,
         user.masteryTrainingStartedAt,
       );
-      const { trackers } = getNewTrackers(user, [
-        { task: "minutes_training", increment: minutes },
-      ]);
+      const { mastery_cap } = getUserCaps(user.rank);
+      // No minutes_training credit here: both slots run over the same wall clock, so
+      // crediting each would count every minute twice. The combat slot owns that tracker.
+      const { trackers } = getNewTrackers(user, []);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       const trained = user.currentlyTrainingMastery;
       const [result] = await Promise.all([
@@ -279,30 +281,11 @@ export const trainRouter = createTRPCRouter({
             ...(trainingAmount > 0
               ? {
                   dailyTrainings: sql`dailyTrainings + 1`,
-                  ninjutsuMastery:
-                    trained === "ninjutsuMastery"
-                      ? sql`ninjutsuMastery + ${trainingAmount}`
-                      : sql`ninjutsuMastery`,
-                  genjutsuMastery:
-                    trained === "genjutsuMastery"
-                      ? sql`genjutsuMastery + ${trainingAmount}`
-                      : sql`genjutsuMastery`,
-                  taijutsuMastery:
-                    trained === "taijutsuMastery"
-                      ? sql`taijutsuMastery + ${trainingAmount}`
-                      : sql`taijutsuMastery`,
-                  bukijutsuMastery:
-                    trained === "bukijutsuMastery"
-                      ? sql`bukijutsuMastery + ${trainingAmount}`
-                      : sql`bukijutsuMastery`,
-                  bloodlineMastery:
-                    trained === "bloodlineMastery"
-                      ? sql`bloodlineMastery + ${trainingAmount}`
-                      : sql`bloodlineMastery`,
-                  sageMastery:
-                    trained === "sageMastery"
-                      ? sql`sageMastery + ${trainingAmount}`
-                      : sql`sageMastery`,
+                  // LEAST keeps the gain inside the rank cap in the same statement, the way
+                  // covert training does. Nothing else ever clamps masteries: capUserStats
+                  // only touches the in-memory battle copy, and assignStats does not write
+                  // mastery columns back.
+                  [trained]: sql`LEAST(${userData[trained]} + ${trainingAmount}, ${mastery_cap})`,
                   questData: questDataForDb,
                 }
               : {}),
