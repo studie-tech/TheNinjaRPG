@@ -55,19 +55,62 @@ export const isLiveSummon = (
 export const isClone = (u: Pick<BattleUserState, "isSummon" | "isOriginal">): boolean =>
   !!u.isSummon && u.isOriginal === false;
 
-/** One-summon-per-controller cap predicate. Clones are excluded (see isClone)
- *  so they neither block summoning nor are blocked by a summon. */
-export const hasLiveSummon = (
+/** The controller's live summons. Clones are excluded (see isClone) so they
+ *  neither block summoning nor are blocked by a summon. */
+export const liveSummonsOf = (
   usersState: BattleUserState[],
   controllerId: string,
   effects: UserEffect[],
-): boolean =>
-  usersState.some(
+): BattleUserState[] =>
+  usersState.filter(
     (u) =>
       isLiveSummon(u, usersState, effects) &&
       !isClone(u) &&
       u.controllerId === controllerId,
   );
+
+/** Whether the controller has any live summon. Backs the AI's
+ *  `does_not_have_summon` rule condition, which asks about summons in general
+ *  rather than about one particular creature. */
+export const hasLiveSummon = (
+  usersState: BattleUserState[],
+  controllerId: string,
+  effects: UserEffect[],
+): boolean => liveSummonsOf(usersState, controllerId, effects).length > 0;
+
+/** Why a summon cast must be refused, or null when it may proceed.
+ *
+ *  Two independent caps:
+ *   - **One of each creature.** Preserves the pre-PR rule, so a player with two
+ *     different summon jutsus can still have both creatures out at once.
+ *   - **One piloted summon overall.** Each piloted summon hands its owner an
+ *     extra turn per round, so a second one is a turn-economy problem no matter
+ *     which creature it is. Non-piloted summons are unaffected.
+ *
+ *  Returns a player-facing sentence: callers surface it as a notification. */
+export const summonCastBlockedReason = (
+  usersState: BattleUserState[],
+  controllerId: string,
+  sourceAiId: string,
+  wantsPilot: boolean,
+  effects: UserEffect[],
+): string | null => {
+  const live = liveSummonsOf(usersState, controllerId, effects);
+  // Legacy fallback for battles that started before summonSourceId existed:
+  // compare against the template's username, which is what the pre-PR rule used
+  // and which a spawned summon still inherits.
+  const template = usersState.find((u) => u.controllerId === sourceAiId);
+  const duplicate = live.find((u) =>
+    u.summonSourceId
+      ? u.summonSourceId === sourceAiId
+      : !!template && u.username === template.username,
+  );
+  if (duplicate) return `${duplicate.username} is already summoned`;
+  if (wantsPilot && live.some((u) => u.isPiloted)) {
+    return "You can only control one summon at a time";
+  }
+  return null;
+};
 
 /** Whether a summon should be human-piloted: the jutsu opts in via
  *  `playerControlled` and the controller is a human (non-AI). With the flag off

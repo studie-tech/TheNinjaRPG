@@ -19,10 +19,10 @@ import {
 } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
 import {
-  hasLiveSummon,
   isClone,
   isLiveSummon,
   shouldPilotSummon,
+  summonCastBlockedReason,
   summonsAllowedInBattle,
 } from "@/libs/combat/summon";
 import type { CombatAction } from "@/libs/combat/types";
@@ -3121,17 +3121,20 @@ export const summon = (
       // We no longer rebind effect.aiId to the spawned summon, so it keeps
       // pointing at the template and re-cast works.
       const ai = usersState.find((u) => u.controllerId === effect.aiId);
-      // One-summon-per-controller cap, keyed consistently on
-      // (controllerId === user.userId && isSummon). Allows re-summon once the
-      // prior summon is no longer live (so the AI does_not_have_summon gate
-      // and the player re-cast both work).
-      const alreadyHasSummon = hasLiveSummon(usersState, user.userId, userEffects);
-      if (alreadyHasSummon) {
+      // Cap backstop. The router refuses a blocked cast before any pools are
+      // spent, so a human never reaches this; it still guards AI casts and any
+      // other path that reaches applyEffects directly.
+      const wantsPilot = shouldPilotSummon(user, effect.playerControlled);
+      const blocked = summonCastBlockedReason(
+        usersState,
+        user.userId,
+        effect.aiId,
+        wantsPilot,
+        userEffects,
+      );
+      if (blocked) {
         effect.rounds = 0;
-        return {
-          txt: `${user.username} already has a summon!`,
-          color: "red",
-        } as ActionEffect;
+        return { txt: blocked, color: "red" } as ActionEffect;
       }
       if (ai) {
         const newAi = structuredClone(ai);
@@ -3145,7 +3148,10 @@ export const summon = (
         // isOriginal=false) so the isClone discriminator never misreads a summon.
         newAi.isOriginal = true;
         newAi.controllerId = user.userId;
-        newAi.isPiloted = shouldPilotSummon(user, effect.playerControlled);
+        newAi.isPiloted = wantsPilot;
+        // Remember which creature this is: controllerId is about to be rebound
+        // to the summoner, so this is the only surviving link to the template.
+        newAi.summonSourceId = effect.aiId;
         newAi.isSummonTemplate = false; // never inherit the template's flag
         // Record which creature this effect spawned so teardown is exact.
         effect.summonedUserId = newAi.userId;

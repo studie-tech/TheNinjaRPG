@@ -190,6 +190,10 @@ export type CombatUserFields = {
   /** Transient: true only for the hidden clone-source summon template. Set at
    *  load, cleared on spawn/clone. Server-internal — not in publicState. */
   isSummonTemplate?: boolean;
+  /** Transient: the aiId of the creature this summon was spawned from. Set at
+   *  spawn, because the spawn rebinds controllerId to its summoner and would
+   *  otherwise lose all trace of which creature it is. Server-internal. */
+  summonSourceId?: string;
   // Reference IDs to static data in extraState
   relationIds: string[];
   warIds: string[];
