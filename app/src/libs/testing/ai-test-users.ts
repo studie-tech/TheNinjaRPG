@@ -9,9 +9,14 @@
  * run ID and profile key, so repeated runs reuse/reset the same accounts.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { UserRank, UserRole } from "@/drizzle/constants";
-import { userData, village } from "@/drizzle/schema";
+import {
+  activityStreakConfig,
+  userData,
+  userStreakProgress,
+  village,
+} from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
 import { drizzleDB } from "@/server/db";
 import type { AiTestUserProfile } from "@/validators/ai-test-user";
@@ -188,6 +193,77 @@ const upsertClerkUser = async (
   }
 };
 
+/**
+ * Settings that keep a provisioned account out of an agent's way: no tutorial
+ * walkthrough and no background music. Applied on both create and reset so a
+ * reused account behaves identically to a fresh one.
+ *
+ * These are ordinary user preferences, so this changes nothing for real players
+ * -- it only picks non-default values at provisioning time.
+ */
+const AGENT_FRIENDLY_SETTINGS = {
+  tutorialOn: false,
+  tutorialStep: 100,
+  musicOn: false,
+} as const;
+
+/**
+ * Pre-claim today's activity streaks so the "Daily Activity Rewards" dialog does
+ * not open over the UI on first load.
+ *
+ * Done by seeding progress rows rather than by special-casing the popup, so no
+ * gameplay code has to know test users exist. Each of the three popup triggers
+ * is covered: `currentDay: 0` keeps `isBehind` false (no catch-up prompt), a
+ * `lastClaimDate` of now makes `alreadyClaimedToday` true (nothing claimable),
+ * and having a row at all clears `activeRecurringConfig` (no enrolment prompt).
+ */
+const suppressActivityStreakPopup = async (userId: string) => {
+  const configs = await drizzleDB
+    .select({ id: activityStreakConfig.id })
+    .from(activityStreakConfig)
+    .where(eq(activityStreakConfig.isActive, true));
+  if (configs.length === 0) return;
+
+  const existing = await drizzleDB
+    .select({ configId: userStreakProgress.configId })
+    .from(userStreakProgress)
+    .where(
+      and(
+        eq(userStreakProgress.userId, userId),
+        inArray(
+          userStreakProgress.configId,
+          configs.map((c) => c.id),
+        ),
+      ),
+    );
+  const seeded = new Set(existing.map((e) => e.configId));
+  const now = new Date();
+  const missing = configs.filter((c) => !seeded.has(c.id));
+  if (missing.length > 0) {
+    await drizzleDB.insert(userStreakProgress).values(
+      missing.map((c) => ({
+        id: `agentstreak-${userId}-${c.id}`.slice(0, 191),
+        userId,
+        configId: c.id,
+        currentDay: 0,
+        lastClaimDate: now,
+        startedAt: now,
+      })),
+    );
+  }
+  if (seeded.size > 0) {
+    await drizzleDB
+      .update(userStreakProgress)
+      .set({ currentDay: 0, lastClaimDate: now })
+      .where(
+        and(
+          eq(userStreakProgress.userId, userId),
+          inArray(userStreakProgress.configId, [...seeded]),
+        ),
+      );
+  }
+};
+
 /** Sync the Clerk user into the app's `userData` table (insert or reset). */
 const upsertUserData = async ({
   userId,
@@ -225,7 +301,9 @@ const upsertUserData = async ({
       sector,
       status: "AWAKE",
       isBanned,
+      ...AGENT_FRIENDLY_SETTINGS,
     });
+    await suppressActivityStreakPopup(userId);
     return;
   }
 
@@ -244,8 +322,10 @@ const upsertUserData = async ({
       inShrines: false,
       isOutlaw: false,
       isBanned,
+      ...AGENT_FRIENDLY_SETTINGS,
     })
     .where(eq(userData.userId, userId));
+  await suppressActivityStreakPopup(userId);
 };
 
 /** Request a Clerk testing token (used by Clerk's testing mode, not required). */
