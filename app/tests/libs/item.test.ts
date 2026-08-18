@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  buildItemLoadoutData,
   canEquipAdditional,
   checkEquipConstraints,
   computeLoadoutAssignments,
@@ -193,6 +194,15 @@ const ui = (over: {
 const USER = { level: 50, bloodlineId: "bl1" };
 
 describe("computeLoadoutAssignments", () => {
+  it("serializes the unique inventory row id into new loadouts", () => {
+    expect(
+      buildItemLoadoutData([
+        { id: "r1", itemId: "i1", equipped: "HEAD" },
+        { id: "r2", itemId: "i1", equipped: "NONE" },
+      ]),
+    ).toEqual([{ userItemId: "r1", itemId: "i1", slot: "HEAD" }]);
+  });
+
   it("assigns a simple valid loadout", () => {
     const items = [ui({ id: "r1", itemId: "i1", slotType: "HEAD" })];
     const out = computeLoadoutAssignments(
@@ -201,6 +211,45 @@ describe("computeLoadoutAssignments", () => {
       USER,
     );
     expect(out.assignments).toEqual([{ userItemId: "r1", slot: "HEAD" }]);
+    expect(out.invalidItems).toEqual([]);
+  });
+
+  it("selects the exact saved inventory copy when duplicates exist", () => {
+    const items = [
+      ui({ id: "r2", itemId: "i1", slotType: "HEAD" }),
+      ui({ id: "r1", itemId: "i1", slotType: "HEAD" }),
+    ];
+    const out = computeLoadoutAssignments(
+      [{ userItemId: "r1", itemId: "i1", slot: "HEAD" }],
+      items,
+      USER,
+    );
+    expect(out.assignments).toEqual([{ userItemId: "r1", slot: "HEAD" }]);
+    expect(out.invalidItems).toEqual([]);
+  });
+
+  it("substitutes a duplicate when the saved copy is unavailable", () => {
+    const items = [
+      ui({ id: "r2", itemId: "i1", slotType: "HEAD" }),
+      ui({ id: "r1", itemId: "i1", slotType: "HEAD", storedAtHome: true }),
+    ];
+    const out = computeLoadoutAssignments(
+      [{ userItemId: "r1", itemId: "i1", slot: "HEAD" }],
+      items,
+      USER,
+    );
+    expect(out.assignments).toEqual([{ userItemId: "r2", slot: "HEAD" }]);
+    expect(out.invalidItems).toEqual([]);
+  });
+
+  it("falls back by item id when the saved inventory row no longer exists", () => {
+    const items = [ui({ id: "r2", itemId: "i1", slotType: "HEAD" })];
+    const out = computeLoadoutAssignments(
+      [{ userItemId: "deleted", itemId: "i1", slot: "HEAD" }],
+      items,
+      USER,
+    );
+    expect(out.assignments).toEqual([{ userItemId: "r2", slot: "HEAD" }]);
     expect(out.invalidItems).toEqual([]);
   });
 
