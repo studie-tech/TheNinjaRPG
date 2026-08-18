@@ -74,6 +74,7 @@ import {
   validateEvolutionGraph,
 } from "@/libs/evolution";
 import {
+  buildItemLoadoutData,
   calcItemRepairCost,
   calcItemSellingPrice,
   calcMaxEventItems,
@@ -764,39 +765,35 @@ export const itemRouter = createTRPCRouter({
         );
       }
 
-      // Loadouts are keyed by itemId, so parent references may only be remapped or
-      // stripped once the user owns no other copy of the parent item; otherwise the
-      // entries still belong to those remaining copies.
+      // Copy-specific entries can be updated directly. Legacy entries only have
+      // itemId, so they can be remapped or stripped when no other parent copy exists.
       const ownsOtherParentCopy = userItems.some(
         (ui) =>
           ui.id !== input.userItemId && ui.itemId === parentItemId && ui.quantity > 0,
       );
-      if (!ownsOtherParentCopy) {
-        loadouts
-          .filter((loadout) =>
-            loadout.itemData.some((entry) => entry.itemId === parentItemId),
-          )
-          .forEach((loadout) => {
-            const itemData = canKeepEquipped
-              ? loadout.itemData.map((entry) =>
-                  entry.itemId === parentItemId
-                    ? { ...entry, itemId: evolutionItem.id }
-                    : entry,
-                )
-              : loadout.itemData.filter((entry) => entry.itemId !== parentItemId);
-            cleanupWrites.push(
-              ctx.drizzle
-                .update(itemLoadout)
-                .set({ itemData })
-                .where(
-                  and(
-                    eq(itemLoadout.id, loadout.id),
-                    eq(itemLoadout.userId, ctx.userId),
-                  ),
-                ),
-            );
-          });
-      }
+      const referencesEvolvedCopy = (entry: ItemLoadout["itemData"][number]) =>
+        entry.userItemId
+          ? entry.userItemId === input.userItemId
+          : !ownsOtherParentCopy && entry.itemId === parentItemId;
+      loadouts
+        .filter((loadout) => loadout.itemData.some(referencesEvolvedCopy))
+        .forEach((loadout) => {
+          const itemData = canKeepEquipped
+            ? loadout.itemData.map((entry) =>
+                referencesEvolvedCopy(entry)
+                  ? { ...entry, itemId: evolutionItem.id }
+                  : entry,
+              )
+            : loadout.itemData.filter((entry) => !referencesEvolvedCopy(entry));
+          cleanupWrites.push(
+            ctx.drizzle
+              .update(itemLoadout)
+              .set({ itemData })
+              .where(
+                and(eq(itemLoadout.id, loadout.id), eq(itemLoadout.userId, ctx.userId)),
+              ),
+          );
+        });
 
       await Promise.all([
         ...cleanupWrites,
@@ -1590,9 +1587,7 @@ export const itemRouter = createTRPCRouter({
         if (user.itemLoadout) {
           const currentLoadout = loadouts.find((l) => l.id === user.itemLoadout);
           if (currentLoadout) {
-            const newItemData = result.newUserItems
-              .filter((ui) => ui.equipped !== "NONE")
-              .map((ui) => ({ itemId: ui.itemId, slot: ui.equipped }));
+            const newItemData = buildItemLoadoutData(result.newUserItems);
             result.promises.push(
               ctx.drizzle
                 .update(itemLoadout)

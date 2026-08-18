@@ -1780,7 +1780,7 @@ export const itemLoadout = mysqlTable(
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     itemData: json("itemData")
-      .$type<Array<{ itemId: string; slot: ItemSlot }>>()
+      .$type<Array<{ userItemId?: string; itemId: string; slot: ItemSlot }>>()
       .notNull(),
     name: varchar("name", { length: consts.LOADOUT_NAME_MAX_LENGTH })
       .default("")
