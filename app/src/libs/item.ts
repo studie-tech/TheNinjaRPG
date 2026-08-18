@@ -18,6 +18,7 @@ import {
 } from "@/drizzle/constants";
 import type {
   Item,
+  ItemLoadout,
   UserData,
   UserItemWithItem,
   UserItemWithRelations,
@@ -353,7 +354,7 @@ export const buildItemLoadoutData = (
  * `invalidItems`. No database access — fully unit-testable.
  */
 export const computeLoadoutAssignments = (
-  itemData: Array<{ userItemId?: string; itemId: string; slot: ItemSlot }>,
+  itemData: ItemLoadout["itemData"],
   useritems: UserItemWithRelations[],
   user: { level: number; bloodlineId: string | null },
   now: Date = new Date(),
@@ -363,19 +364,21 @@ export const computeLoadoutAssignments = (
   const usedSlots = new Set<ItemSlot>();
   const consumedRowIds = new Set<string>();
   const current: EquippedAssignment[] = [];
+  const isFree = (it: UserItemWithRelations) => !consumedRowIds.has(it.id);
 
   for (const entry of itemData) {
-    const unconsumed = useritems.filter((it) => !consumedRowIds.has(it.id));
+    // Prefer the exact saved inventory row, then fall back to other copies of
+    // the same catalog item if it was removed or is currently unavailable.
+    // Entries saved before userItemId was introduced use only the catalog-id path.
     const savedUserItem = entry.userItemId
-      ? unconsumed.find((it) => it.id === entry.userItemId)
+      ? useritems.find((it) => it.id === entry.userItemId && isFree(it))
       : undefined;
-    // Prefer the exact saved inventory row, then try other copies of the same
-    // catalog item if it was removed or is currently unavailable. Entries saved
-    // before userItemId was introduced use only the catalog-id path.
-    const catalogMatches = unconsumed.filter((it) => it.itemId === entry.itemId);
-    const owned = savedUserItem
-      ? [savedUserItem, ...catalogMatches.filter((it) => it.id !== savedUserItem.id)]
-      : catalogMatches;
+    const owned = [
+      ...(savedUserItem ? [savedUserItem] : []),
+      ...useritems.filter(
+        (it) => it.itemId === entry.itemId && isFree(it) && it.id !== savedUserItem?.id,
+      ),
+    ];
     const useritem =
       owned.find(
         (it) => getEquipBlockReason(it, now) === null && !isImbuing(it, now),
