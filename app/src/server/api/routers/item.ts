@@ -765,23 +765,29 @@ export const itemRouter = createTRPCRouter({
         );
       }
 
-      // Copy-specific entries can be updated directly. Legacy entries only have
-      // itemId, so they can be remapped or stripped when no other parent copy exists.
+      // Copy-specific entries can be updated directly. Legacy entries — and
+      // entries whose saved inventory row no longer exists — only identify the
+      // parent by itemId, so they may be remapped or stripped only when no other
+      // parent copy remains to which they could still belong.
       const ownsOtherParentCopy = userItems.some(
         (ui) =>
           ui.id !== input.userItemId && ui.itemId === parentItemId && ui.quantity > 0,
       );
+      const ownsSavedRow = (id?: string) =>
+        !!id && userItems.some((ui) => ui.id === id);
       const referencesEvolvedCopy = (entry: ItemLoadout["itemData"][number]) =>
-        entry.userItemId
+        ownsSavedRow(entry.userItemId)
           ? entry.userItemId === input.userItemId
           : !ownsOtherParentCopy && entry.itemId === parentItemId;
       loadouts
         .filter((loadout) => loadout.itemData.some(referencesEvolvedCopy))
         .forEach((loadout) => {
+          // Remapped entries also adopt the evolved row's id, upgrading legacy
+          // and dangling references to copy-specific ones.
           const itemData = canKeepEquipped
             ? loadout.itemData.map((entry) =>
                 referencesEvolvedCopy(entry)
-                  ? { ...entry, itemId: evolutionItem.id }
+                  ? { ...entry, userItemId: input.userItemId, itemId: evolutionItem.id }
                   : entry,
               )
             : loadout.itemData.filter((entry) => !referencesEvolvedCopy(entry));

@@ -193,8 +193,8 @@ const ui = (over: {
 
 const USER = { level: 50, bloodlineId: "bl1" };
 
-describe("computeLoadoutAssignments", () => {
-  it("serializes the unique inventory row id into new loadouts", () => {
+describe("buildItemLoadoutData", () => {
+  it("serializes the unique inventory row id for equipped rows only", () => {
     expect(
       buildItemLoadoutData([
         { id: "r1", itemId: "i1", equipped: "HEAD" },
@@ -202,7 +202,9 @@ describe("computeLoadoutAssignments", () => {
       ]),
     ).toEqual([{ userItemId: "r1", itemId: "i1", slot: "HEAD" }]);
   });
+});
 
+describe("computeLoadoutAssignments", () => {
   it("assigns a simple valid loadout", () => {
     const items = [ui({ id: "r1", itemId: "i1", slotType: "HEAD" })];
     const out = computeLoadoutAssignments(
@@ -250,6 +252,26 @@ describe("computeLoadoutAssignments", () => {
       USER,
     );
     expect(out.assignments).toEqual([{ userItemId: "r2", slot: "HEAD" }]);
+    expect(out.invalidItems).toEqual([]);
+  });
+
+  it("falls back to another copy when an earlier entry consumed the saved row", () => {
+    const items = [
+      ui({ id: "r1", itemId: "i1", slotType: "ITEM", maxEquips: 2 }),
+      ui({ id: "r2", itemId: "i1", slotType: "ITEM", maxEquips: 2 }),
+    ];
+    const out = computeLoadoutAssignments(
+      [
+        { userItemId: "r1", itemId: "i1", slot: "ITEM_1" },
+        { userItemId: "r1", itemId: "i1", slot: "ITEM_2" },
+      ],
+      items,
+      USER,
+    );
+    expect(out.assignments).toEqual([
+      { userItemId: "r1", slot: "ITEM_1" },
+      { userItemId: "r2", slot: "ITEM_2" },
+    ]);
     expect(out.invalidItems).toEqual([]);
   });
 
