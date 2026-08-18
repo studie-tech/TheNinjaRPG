@@ -123,6 +123,7 @@ import {
   consolidatePreBattleDamageModifiers,
   emptyPreBattleGearModifiers,
 } from "@/libs/combat/process";
+import { shouldPilotSummon, summonCastBlockedReason } from "@/libs/combat/summon";
 import { realizeTag } from "@/libs/combat/tags";
 import type {
   ActionEffect,
@@ -640,6 +641,28 @@ export const combatRouter = createTRPCRouter({
             performedByUserId = actor.userId;
             if (AutoBattleTypes.includes(battle.battleType)) {
               throw serverError("FORBIDDEN", `Cheater`);
+            }
+            // Refuse a capped summon BEFORE performBattleAction, which spends
+            // chakra/stamina/AP inside insertAction. Checking here rather than in
+            // availableUserActions keeps the jutsu visible in the action bar
+            // (players can see what they own) while making a blocked cast free
+            // and self-explaining instead of silently eating the cost.
+            const summonBlocked = action.effects.reduce<string | null>(
+              (found, tag) =>
+                found ??
+                (tag.type === "summon"
+                  ? summonCastBlockedReason(
+                      newBattle.usersState,
+                      actor.userId,
+                      tag.aiId,
+                      shouldPilotSummon(actor, tag.playerControlled),
+                      newBattle.usersEffects,
+                    )
+                  : null),
+              null,
+            );
+            if (summonBlocked) {
+              return { updateClient: false, notification: summonBlocked };
             }
             try {
               const newState = performBattleAction({

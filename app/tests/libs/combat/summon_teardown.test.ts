@@ -98,6 +98,7 @@ const mkLiveSummon = (): BattleUserState =>
     isSummon: true,
     isOriginal: true,
     isSummonTemplate: false,
+    summonSourceId: AI_DB_ID,
     level: 10,
     longitude: 2,
     latitude: 2,
@@ -178,7 +179,7 @@ describe("blocked summon re-cast does NOT remove the existing live summon", () =
     );
 
     const pass1 = applyEffects(battle, PLAYER_ID).newBattle;
-    // Block returns "already has a summon" without tearing down anything.
+    // Block returns "already summoned" without tearing down anything.
     expect(liveSummonsOf(pass1.usersState)).toHaveLength(1);
     // The blocked effect (rounds set to 0) is swept out in this same pass, so no
     // later alignBattle can retain it to drive the rounds===0 teardown.
