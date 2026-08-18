@@ -185,37 +185,74 @@ describe("summon failure message", () => {
 });
 
 describe("summon turn-order placement", () => {
-  const mkEnemy = (): BattleUserState =>
+  // Turn order IS the usersState array order (calcActiveUser walks it as a ring),
+  // and initiateBattle establishes that array as initiative-sorted descending.
+  // The summon inherits its summoner's initiative and is inserted at the matching
+  // sorted position, so the invariant holds and the pair still acts back to back.
+  const mkCombatant = (userId: string, initiative: number): BattleUserState =>
     ({
-      userId: "enemy1",
-      controllerId: "enemy1",
-      username: "Enemy",
+      userId,
+      controllerId: userId,
+      username: userId,
       isAi: true,
       isSummon: false,
+      initiative,
       curHealth: 100,
       fledBattle: false,
       leftBattle: false,
     }) as unknown as BattleUserState;
 
-  it("inserts the spawned summon immediately after the summoner (not at the end)", () => {
-    // Turn order is the usersState array order (calcActiveUser walks it as a ring).
-    // Order the array player-first so "append to end" and "after summoner" differ.
-    const usersState = [mkPlayer(), mkEnemy(), mkTemplate()];
-    const userEffects: UserEffect[] = [];
+  const summonOf = (usersState: BattleUserState[]) =>
+    usersState.findIndex((u) => u.isSummon && u.controllerId === PLAYER_ID);
 
-    const res = summon(usersState, mkSummonEffect(), userEffects, mkBattle());
-    expect(res?.color).toBe("blue");
+  it("gives the summon its summoner's initiative", () => {
+    const player = { ...mkPlayer(), initiative: 15 } as BattleUserState;
+    const usersState = [player, mkCombatant("enemy1", 5), mkTemplate()];
+
+    expect(summon(usersState, mkSummonEffect(), [], mkBattle())?.color).toBe("blue");
+    expect(usersState[summonOf(usersState)]?.initiative).toBe(15);
+  });
+
+  it("lands directly after the summoner when nobody shares their initiative", () => {
+    const player = { ...mkPlayer(), initiative: 15 } as BattleUserState;
+    const usersState = [player, mkCombatant("enemy1", 5), mkTemplate()];
+
+    summon(usersState, mkSummonEffect(), [], mkBattle());
 
     const playerIdx = usersState.findIndex((u) => u.userId === PLAYER_ID);
-    const summonIdx = usersState.findIndex(
-      (u) => u.isSummon && u.controllerId === PLAYER_ID,
-    );
     const enemyIdx = usersState.findIndex((u) => u.userId === "enemy1");
+    expect(summonOf(usersState)).toBe(playerIdx + 1);
+    expect(summonOf(usersState)).toBeLessThan(enemyIdx);
+  });
 
-    // Sits right after the summoner so it acts immediately after them...
-    expect(summonIdx).toBe(playerIdx + 1);
-    // ...and ahead of the enemy, not appended at the tail.
-    expect(summonIdx).toBeLessThan(enemyIdx);
+  it("keeps the array initiative-sorted when a faster enemy exists", () => {
+    // A summoner slower than one enemy must NOT jump its summon ahead of them.
+    const fast = mkCombatant("fast", 20);
+    const player = { ...mkPlayer(), initiative: 10 } as BattleUserState;
+    const slow = mkCombatant("slow", 3);
+    const usersState = [fast, player, slow, mkTemplate()];
+
+    summon(usersState, mkSummonEffect(), [], mkBattle());
+
+    const order = usersState
+      .filter((u) => !u.isSummonTemplate)
+      .map((u) => u.initiative as number);
+    expect(order).toEqual([...order].sort((a, b) => b - a));
+    expect(summonOf(usersState)).toBeGreaterThan(
+      usersState.findIndex((u) => u.userId === "fast"),
+    );
+  });
+
+  it("appends when the summoner is the slowest combatant", () => {
+    const player = { ...mkPlayer(), initiative: 1 } as BattleUserState;
+    const usersState = [mkCombatant("enemy1", 9), player, mkTemplate()];
+
+    summon(usersState, mkSummonEffect(), [], mkBattle());
+
+    const order = usersState
+      .filter((u) => !u.isSummonTemplate)
+      .map((u) => u.initiative as number);
+    expect(order).toEqual([...order].sort((a, b) => b - a));
   });
 });
 

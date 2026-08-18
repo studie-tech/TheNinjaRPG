@@ -3223,14 +3223,18 @@ export const summon = (
           userEffects.push(realizedEffect);
           return realizedEffect;
         });
-        // Insert the summon immediately after its summoner so it takes its turn
-        // right after them (turn order follows usersState array order). Falls
-        // back to appending if the summoner can't be located.
-        const summonerIdx = usersState.findIndex((u) => u.userId === user.userId);
-        if (summonerIdx >= 0) {
-          usersState.splice(summonerIdx + 1, 0, newAi);
-        } else {
+        // Turn order is usersState order, and initiateBattle establishes that
+        // array as initiative-sorted (descending). Give the summon its
+        // summoner's initiative and insert it at the matching sorted position,
+        // which keeps that invariant intact instead of splicing blind. With no
+        // other combatant on the summoner's initiative this lands the summon
+        // directly after them, so a piloted pair still acts back to back.
+        newAi.initiative = user.initiative;
+        const insertAt = usersState.findIndex((u) => u.initiative < newAi.initiative);
+        if (insertAt === -1) {
           usersState.push(newAi);
+        } else {
+          usersState.splice(insertAt, 0, newAi);
         }
         // ActionEffect to be shown
         return {
