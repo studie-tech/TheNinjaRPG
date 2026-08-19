@@ -88,6 +88,7 @@ import {
   ItemRarities,
   TRADEABLE_CURRENCY_TYPES,
 } from "@/drizzle/constants";
+import { useAvatarRenditionWidth } from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import { getRarityBackground } from "@/layout/ContentImage";
 import Countdown from "@/layout/Countdown";
@@ -514,6 +515,7 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
     listing.listingType === "AUCTION" &&
     (bidderMinLevel > AUCTION_BIDDER_LEVEL_MIN ||
       bidderMaxLevel < AUCTION_BIDDER_LEVEL_MAX);
+  const avatarWidth = useAvatarRenditionWidth(26);
 
   return (
     <button
@@ -602,8 +604,8 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
                 <Image
                   src={listing.seller?.avatar ?? IMG_AVATAR_DEFAULT}
                   alt={`${listing.seller?.username ?? "Seller"} avatar`}
-                  width={26}
-                  height={26}
+                  width={avatarWidth}
+                  height={avatarWidth}
                   className="size-[26px] shrink-0 rounded-full border border-border object-cover"
                   unoptimized
                 />
@@ -628,8 +630,8 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
                       <Image
                         src={listing.targetUser.avatar ?? IMG_AVATAR_DEFAULT}
                         alt={`${listing.targetUser.username} avatar`}
-                        width={26}
-                        height={26}
+                        width={avatarWidth}
+                        height={avatarWidth}
                         className="size-[26px] shrink-0 rounded-full border border-border object-cover"
                         unoptimized
                       />
@@ -734,6 +736,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   const [showBuyoutConfirmation, setShowBuyoutConfirmation] = useState(false);
   const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
   const [pendingBidAmount, setPendingBidAmount] = useState<number | null>(null);
+  const avatarWidth = useAvatarRenditionWidth(24);
 
   // Utils
   const utils = api.useUtils();
@@ -955,8 +958,8 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                   <Image
                     src={listing.seller?.avatar ?? IMG_AVATAR_DEFAULT}
                     alt=""
-                    width={24}
-                    height={24}
+                    width={avatarWidth}
+                    height={avatarWidth}
                     className="size-6 shrink-0 rounded-full border object-cover"
                     unoptimized
                   />
@@ -972,8 +975,8 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                     <Image
                       src={listing.targetUser.avatar ?? IMG_AVATAR_DEFAULT}
                       alt=""
-                      width={24}
-                      height={24}
+                      width={avatarWidth}
+                      height={avatarWidth}
                       className="size-6 shrink-0 rounded-full border object-cover"
                       unoptimized
                     />
