@@ -5,6 +5,7 @@ import {
   count,
   eq,
   exists,
+  gt,
   gte,
   inArray,
   isNotNull,
@@ -113,6 +114,8 @@ import type { DrizzleClient } from "@/server/db";
 import {
   consumeUserItemAtomically,
   refundUserItemQuantityAtomically,
+  restoreStaleUserItemMergeClaims,
+  userItemMergePublishQuantity,
 } from "@/server/utils/concurrency";
 import {
   applyLoadoutRename,
@@ -864,6 +867,7 @@ export const itemRouter = createTRPCRouter({
   getUserItemCounts: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get user item counts by item ID" } })
     .query(async ({ ctx }) => {
+      await restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId);
       const counts = await ctx.drizzle
         .select({
           count: sql<number>`count(${userItem.id})`,
@@ -871,7 +875,7 @@ export const itemRouter = createTRPCRouter({
           quantity: sql<number>`sum(${userItem.quantity})`,
         })
         .from(userItem)
-        .where(eq(userItem.userId, ctx.userId))
+        .where(and(eq(userItem.userId, ctx.userId), gt(userItem.quantity, 0)))
         .groupBy(userItem.itemId);
       return counts.map((c) => ({ id: c.itemId, quantity: c.quantity ?? 0 }));
     }),
@@ -879,6 +883,7 @@ export const itemRouter = createTRPCRouter({
   getUserItems: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get all user items" } })
     .query(async ({ ctx }) => {
+      await restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId);
       return await fetchUserItems(ctx.drizzle, ctx.userId);
     }),
   getUserItemsWithVariants: protectedProcedure
@@ -886,16 +891,14 @@ export const itemRouter = createTRPCRouter({
       mcp: { enabled: true, description: "Get all user items including variant data" },
     })
     .query(async ({ ctx }) => {
+      await restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId);
       return await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId);
     }),
   // Get items of public user (staff edit)
   getPublicUserItems: protectedProcedure
     .input(getPublicUserItemsSchema)
     .query(async ({ ctx, input }) => {
-      const [user, userItems] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, input.userId, { includeHidden: true }),
-      ]);
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!canEditItems(user.role)) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
@@ -908,7 +911,10 @@ export const itemRouter = createTRPCRouter({
           message: "You can only view your own items",
         });
       }
-      return userItems;
+      await restoreStaleMergeStackClaims(ctx.drizzle, input.userId);
+      return await fetchUserItems(ctx.drizzle, input.userId, {
+        includeHidden: true,
+      });
     }),
   // Adjust item level of public user
   adjustUserItem: protectedProcedure
@@ -921,6 +927,7 @@ export const itemRouter = createTRPCRouter({
           where: and(
             eq(userItem.id, input.userItemId),
             eq(userItem.userId, input.userId),
+            gt(userItem.quantity, 0),
           ),
           with: { item: true },
         }),
@@ -947,6 +954,7 @@ export const itemRouter = createTRPCRouter({
             eq(userItem.userId, input.userId),
             eq(userItem.level, owned.level),
             eq(userItem.experience, owned.experience),
+            gt(userItem.quantity, 0),
           ),
         );
       if (updateResult.rowsAffected === 0) {
@@ -1240,6 +1248,7 @@ export const itemRouter = createTRPCRouter({
           and(
             eq(userItem.id, input.userItemId),
             eq(userItem.userId, ctx.userId),
+            gt(userItem.quantity, 0),
             ...(input.variantId
               ? [
                   exists(
@@ -1423,9 +1432,11 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const storedAtHome = input?.storedAtHome ?? false;
+      await restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId);
       const userItemsAll = await ctx.drizzle.query.userItem.findMany({
         where: and(
           eq(userItem.userId, ctx.userId),
+          gt(userItem.quantity, 0),
           eq(userItem.storedAtHome, storedAtHome),
           eq(userItem.isInAuction, false),
           or(
@@ -1537,9 +1548,25 @@ export const itemRouter = createTRPCRouter({
       }
       // Derived
       const cost = calcItemSellingPrice(user, useritem, structures);
-      // Mutate
+      // Claim the positive stack before granting proceeds. A merge claim negates quantity, so the
+      // CAS cannot delete or pay for a row while it belongs to an in-flight merge.
+      const deleteResult = await ctx.drizzle
+        .delete(userItem)
+        .where(
+          and(
+            eq(userItem.id, input.userItemId),
+            eq(userItem.userId, ctx.userId),
+            eq(userItem.quantity, useritem.quantity),
+            gt(userItem.quantity, 0),
+            eq(userItem.isInAuction, false),
+          ),
+        );
+      if (deleteResult.rowsAffected !== 1) {
+        return errorResponse("Inventory changed, please refresh and try again");
+      }
+
+      // Mutate dependent state only after the inventory CAS succeeds.
       await Promise.all([
-        ctx.drizzle.delete(userItem).where(eq(userItem.id, input.userItemId)),
         ctx.drizzle
           .delete(userItemImbuement)
           .where(eq(userItemImbuement.userItemId, input.userItemId)),
@@ -1632,6 +1659,7 @@ export const itemRouter = createTRPCRouter({
             eq(userItem.userId, ctx.userId),
             ne(userItem.equipped, "NONE"),
             eq(userItem.isInAuction, false),
+            gt(userItem.quantity, 0),
           ),
         }),
       ]);
@@ -1669,6 +1697,7 @@ export const itemRouter = createTRPCRouter({
                 eq(userItem.userId, ctx.userId),
                 ne(userItem.equipped, "NONE"),
                 eq(userItem.isInAuction, false),
+                gt(userItem.quantity, 0),
               ),
             ),
         );
@@ -2190,6 +2219,12 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("Not your target item");
       if (user.status !== "AWAKE") {
         return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
+      }
+      if (repairUserItem.storedAtHome) {
+        return errorResponse("Fetch the repair item from home storage first");
+      }
+      if (repairUserItem.isInAuction) {
+        return errorResponse("Cannot use a repair item listed in an auction");
       }
       if (
         repairUserItem.craftingFinishedAt &&
@@ -3026,13 +3061,24 @@ export const fetchItemWithCraftingRequirements = async (
   });
 };
 
+// Merge claims normally live for only a few database round trips. After this timeout a negative
+// quantity is considered abandoned and can be restored from its encoded original value.
+const MERGE_STACK_CLAIM_TIMEOUT_MS = 30_000;
+
+const restoreStaleMergeStackClaims = async (client: DrizzleClient, userId: string) =>
+  restoreStaleUserItemMergeClaims({
+    client,
+    userId,
+    staleBefore: new Date(Date.now() - MERGE_STACK_CLAIM_TIMEOUT_MS),
+  });
+
 export const fetchUserItems = async (
   client: DrizzleClient,
   userId: string,
   options?: { includeHidden?: boolean },
 ) => {
   const useritems = await client.query.userItem.findMany({
-    where: and(eq(userItem.userId, userId)),
+    where: and(eq(userItem.userId, userId), gt(userItem.quantity, 0)),
     with: {
       item: true,
       imbuements: { with: { item: true } },
@@ -3048,7 +3094,7 @@ export const fetchUserItemsWithVariants = async (
   userId: string,
 ) => {
   const useritems = await client.query.userItem.findMany({
-    where: and(eq(userItem.userId, userId)),
+    where: and(eq(userItem.userId, userId), gt(userItem.quantity, 0)),
     with: {
       item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } },
       imbuements: { with: { item: true } },
@@ -3063,7 +3109,11 @@ export const fetchUserItem = async (
   userItemId: string,
 ) => {
   return await client.query.userItem.findFirst({
-    where: and(eq(userItem.userId, userId), eq(userItem.id, userItemId)),
+    where: and(
+      eq(userItem.userId, userId),
+      eq(userItem.id, userItemId),
+      gt(userItem.quantity, 0),
+    ),
     with: { item: true },
   });
 };
@@ -3074,7 +3124,11 @@ export const fetchUserItemWithVariants = async (
   userItemId: string,
 ) => {
   return await client.query.userItem.findFirst({
-    where: and(eq(userItem.userId, userId), eq(userItem.id, userItemId)),
+    where: and(
+      eq(userItem.userId, userId),
+      eq(userItem.id, userItemId),
+      gt(userItem.quantity, 0),
+    ),
     with: { item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } } },
   });
 };
@@ -3097,7 +3151,13 @@ export const fetchVariantOwnership = async (
     .select({ id: userItem.id })
     .from(userItem)
     .innerJoin(itemVariant, eq(userItem.itemId, itemVariant.itemId))
-    .where(and(eq(userItem.userId, userId), eq(itemVariant.id, variantId)))
+    .where(
+      and(
+        eq(userItem.userId, userId),
+        eq(itemVariant.id, variantId),
+        gt(userItem.quantity, 0),
+      ),
+    )
     .limit(1);
 };
 
@@ -3211,13 +3271,25 @@ export const toggleEquipItem = async (
       client
         .update(userItem)
         .set({ equipped: newEquipSlot })
-        .where(eq(userItem.id, useritem.id)),
+        .where(
+          and(
+            eq(userItem.id, useritem.id),
+            eq(userItem.userId, user.userId),
+            gt(userItem.quantity, 0),
+          ),
+        ),
       ...(userItemInSlot
         ? [
             client
               .update(userItem)
               .set({ equipped: "NONE" })
-              .where(eq(userItem.id, userItemInSlot.id)),
+              .where(
+                and(
+                  eq(userItem.id, userItemInSlot.id),
+                  eq(userItem.userId, user.userId),
+                  gt(userItem.quantity, 0),
+                ),
+              ),
           ]
         : []),
     ];
@@ -3228,7 +3300,13 @@ export const toggleEquipItem = async (
       client
         .update(userItem)
         .set({ equipped: "NONE" })
-        .where(eq(userItem.id, useritem.id)),
+        .where(
+          and(
+            eq(userItem.id, useritem.id),
+            eq(userItem.userId, user.userId),
+            gt(userItem.quantity, 0),
+          ),
+        ),
     ];
     message = `Unequipped ${info.name}`;
   }
@@ -3372,7 +3450,11 @@ export const splitItemStack = async (
 > => {
   // Fetch the user item to verify ownership
   const currentUserItem = await client.query.userItem.findFirst({
-    where: and(eq(userItem.id, userItemId), eq(userItem.userId, userId)),
+    where: and(
+      eq(userItem.id, userItemId),
+      eq(userItem.userId, userId),
+      gt(userItem.quantity, 0),
+    ),
     with: { item: true, imbuements: true },
   });
 
@@ -3415,13 +3497,28 @@ export const splitItemStack = async (
   const quantityToSplit = currentUserItem.quantity - quantityToKeep;
   const newUserItemId = nanoid();
 
-  // Update current stack and create new stack in parallel
-  await Promise.all([
-    client
-      .update(userItem)
-      .set({ quantity: quantityToKeep })
-      .where(eq(userItem.id, userItemId)),
-    client.insert(userItem).values({
+  // Claim the source quantity before inserting the new row. This CAS cannot match a negative
+  // merge claim and prevents a concurrent merge from turning a failed split into duplicated items.
+  const updateResult = await client
+    .update(userItem)
+    .set({ quantity: quantityToKeep })
+    .where(
+      and(
+        eq(userItem.id, userItemId),
+        eq(userItem.userId, userId),
+        eq(userItem.quantity, currentUserItem.quantity),
+        gt(userItem.quantity, 0),
+        eq(userItem.isInAuction, false),
+        eq(userItem.equipped, currentUserItem.equipped),
+        eq(userItem.storedAtHome, currentUserItem.storedAtHome),
+      ),
+    );
+  if (updateResult.rowsAffected !== 1) {
+    return { success: false, message: "Inventory changed, please try again" };
+  }
+
+  try {
+    await client.insert(userItem).values({
       id: newUserItemId,
       userId: currentUserItem.userId,
       itemId: currentUserItem.itemId,
@@ -3440,8 +3537,20 @@ export const splitItemStack = async (
       dropChancePerc: currentUserItem.dropChancePerc,
       createdAt: new Date(),
       updatedAt: new Date(),
-    }),
-  ]);
+    });
+  } catch {
+    await client
+      .update(userItem)
+      .set({ quantity: currentUserItem.quantity })
+      .where(
+        and(
+          eq(userItem.id, userItemId),
+          eq(userItem.userId, userId),
+          eq(userItem.quantity, quantityToKeep),
+        ),
+      );
+    return { success: false, message: "Could not create the split stack" };
+  }
 
   return {
     success: true,
@@ -3470,6 +3579,7 @@ const tryRepairUserItemDurability = async (
         eq(userItem.userId, userId),
         eq(userItem.storedAtHome, false),
         eq(userItem.isInAuction, false),
+        gt(userItem.quantity, 0),
         eq(userItem.durability, target.durability),
       ),
     );
@@ -3554,10 +3664,12 @@ const mergeStackRowGuard = (
  * Merges stacks only within the same inventory bucket (`storedAtHome` + `equipped`) so
  * merge never deletes an equipped row while keeping a backpack copy (or mixes home vs carried).
  *
- * Protocol (PlanetScale has no transactions): claim every row in the bucket to quantity 0
- * with CAS guards, then write targets / delete extras. If any step fails, restore original
- * quantities (and re-insert deleted rows) so a concurrent store/retrieve cannot leave a
- * partial merge that duplicates items.
+ * Protocol (PlanetScale has no transactions): claim every row in the bucket by negating its
+ * quantity with CAS guards, then atomically publish every keeper target and zero-quantity
+ * tombstone in one UPDATE. The negative value preserves the original quantity if the process
+ * crashes before publish; a crash after publish leaves the correct positive inventory and only
+ * hidden tombstones for stale cleanup. If a normal claim/publish conflict occurs, restore the
+ * original quantities.
  */
 async function executeMergeStacksForItemBucket(
   drizzle: DrizzleClient,
@@ -3593,12 +3705,15 @@ async function executeMergeStacksForItemBucket(
 
   const conflictMessage = `Failed to merge stacks of ${itemName} — inventory changed, please try again`;
 
-  // Phase 1: claim every row (qty → 0) so no subset of later writes can commit alone.
+  const claimedAt = new Date();
+
+  // Phase 1: claim every row (qty → -qty) so no subset of later writes can commit alone while
+  // retaining enough information for a later request to recover an abandoned claim.
   const claimResults = await Promise.all(
     sortedItems.map((item) =>
       drizzle
         .update(userItem)
-        .set({ quantity: 0 })
+        .set({ quantity: -item.quantity, updatedAt: claimedAt })
         .where(mergeStackRowGuard(userId, item, item.quantity)),
     ),
   );
@@ -3609,12 +3724,12 @@ async function executeMergeStacksForItemBucket(
         claimResults[index]?.rowsAffected === 1
           ? drizzle
               .update(userItem)
-              .set({ quantity: item.quantity })
+              .set({ quantity: item.quantity, updatedAt: item.updatedAt })
               .where(
                 and(
                   eq(userItem.id, item.id),
                   eq(userItem.userId, userId),
-                  eq(userItem.quantity, 0),
+                  eq(userItem.quantity, -item.quantity),
                 ),
               )
           : Promise.resolve(),
@@ -3623,64 +3738,57 @@ async function executeMergeStacksForItemBucket(
     return { success: false, didMerge: false, message: conflictMessage };
   }
 
-  // Phase 2: write keeper targets and delete claimed extras.
-  const applyResults = await Promise.all([
-    ...itemsToKeep.map((item, index) =>
-      drizzle
-        .update(userItem)
-        .set({ quantity: targetQuantityForKeepIndex(index) })
-        .where(mergeStackRowGuard(userId, item, 0)),
-    ),
-    ...itemsToDelete.map((item) =>
-      drizzle.delete(userItem).where(mergeStackRowGuard(userId, item, 0)),
-    ),
-  ]);
+  // Phase 2: atomically publish every keeper and convert extras to hidden tombstones. One UPDATE
+  // means a process crash cannot commit only a subset of the target quantities/deletions.
+  const targetQuantityById = new Map(
+    itemsToKeep.map((item, index) => [item.id, targetQuantityForKeepIndex(index)]),
+  );
+  const publishResult = await drizzle
+    .update(userItem)
+    .set({
+      quantity: userItemMergePublishQuantity(
+        sortedItems.map((item) => ({
+          id: item.id,
+          quantity: targetQuantityById.get(item.id) ?? 0,
+        })),
+      ),
+    })
+    .where(
+      or(
+        ...sortedItems.map((item) => mergeStackRowGuard(userId, item, -item.quantity)),
+      ),
+    );
 
-  if (applyResults.some((result) => result.rowsAffected !== 1)) {
-    // Restore any surviving rows to their pre-merge quantities.
+  if (publishResult.rowsAffected !== sortedItems.length) {
     await Promise.all(
       sortedItems.map((item) =>
         drizzle
           .update(userItem)
-          .set({ quantity: item.quantity })
+          .set({ quantity: item.quantity, updatedAt: item.updatedAt })
           .where(and(eq(userItem.id, item.id), eq(userItem.userId, userId))),
       ),
     );
-    // Re-insert rows that were deleted before a sibling write failed.
-    const surviving = await drizzle.query.userItem.findMany({
-      where: and(
-        eq(userItem.userId, userId),
-        inArray(
-          userItem.id,
-          sortedItems.map((item) => item.id),
-        ),
-      ),
-      columns: { id: true },
-    });
-    const survivingIds = new Set(surviving.map((row) => row.id));
-    const missing = sortedItems.filter((item) => !survivingIds.has(item.id));
-    if (missing.length > 0) {
-      await drizzle.insert(userItem).values(
-        missing.map((item) => ({
-          id: item.id,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
-          userId,
-          itemId: item.itemId,
-          quantity: item.quantity,
-          level: item.level,
-          experience: item.experience,
-          durability: item.durability,
-          equipped: item.equipped,
-          storedAtHome: item.storedAtHome,
-          isInAuction: false,
-          activeVariantId: item.activeVariantId,
-          craftingFinishedAt: item.craftingFinishedAt,
-          dropChancePerc: item.dropChancePerc,
-        })),
-      );
-    }
     return { success: false, didMerge: false, message: conflictMessage };
+  }
+
+  // Physical deletion is cleanup only; zero rows are already excluded everywhere and the stale
+  // claim reaper will remove them if this request dies or the best-effort delete fails.
+  if (itemsToDelete.length > 0) {
+    try {
+      await drizzle.delete(userItem).where(
+        and(
+          eq(userItem.userId, userId),
+          inArray(
+            userItem.id,
+            itemsToDelete.map((item) => item.id),
+          ),
+          eq(userItem.quantity, 0),
+          eq(userItem.updatedAt, claimedAt),
+        ),
+      );
+    } catch {
+      // The logical merge already committed; stale cleanup will retry this tombstone deletion.
+    }
   }
 
   return {
@@ -3718,15 +3826,17 @@ async function executeMergeStacksForItem(
   if (preloaded) {
     info = preloaded.item;
     userItems = preloaded.userItems.filter(
-      (r) => r.userId === userId && r.itemId === itemId,
+      (r) => r.userId === userId && r.itemId === itemId && r.quantity > 0,
     );
   } else {
+    await restoreStaleMergeStackClaims(drizzle, userId);
     const [fetchedInfo, fetchedUserItems] = await Promise.all([
       fetchItem(drizzle, itemId),
       drizzle.query.userItem.findMany({
         where: and(
           eq(userItem.userId, userId),
           eq(userItem.itemId, itemId),
+          gt(userItem.quantity, 0),
           eq(userItem.storedAtHome, false),
           eq(userItem.isInAuction, false),
         ),

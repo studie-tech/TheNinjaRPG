@@ -11,7 +11,9 @@ import {
   clearActiveNpcQuest,
   consumeUserItemAtomically,
   refundUserItemQuantityAtomically,
+  restoreStaleUserItemMergeClaims,
   updateUserItemQuantityAtomically,
+  userItemMergePublishQuantity,
 } from "@/server/utils/concurrency";
 
 describe("concurrency helpers", () => {
@@ -160,6 +162,49 @@ describe("concurrency helpers", () => {
     });
 
     expect(client.insert).not.toHaveBeenCalled();
+  });
+
+  it("restores stale negative merge claims and deletes stale zero tombstones", async () => {
+    const updateWhere = vi.fn().mockResolvedValue({ rowsAffected: 1 });
+    const deleteWhere = vi.fn().mockResolvedValue({ rowsAffected: 1 });
+    const set = vi.fn().mockReturnValue({ where: updateWhere });
+    const client = {
+      update: vi.fn().mockReturnValue({ set }),
+      delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+    };
+    const staleBefore = new Date("2026-08-18T10:00:00.000Z");
+
+    await restoreStaleUserItemMergeClaims({
+      client: client as never,
+      userId: "user-1",
+      staleBefore,
+    });
+
+    expect(client.update).toHaveBeenCalledWith(userItem);
+    expect(client.delete).toHaveBeenCalledWith(userItem);
+    expect(updateWhere).toHaveBeenCalledOnce();
+    expect(deleteWhere).toHaveBeenCalledOnce();
+
+    const restoredQuantity = set.mock.calls[0]?.[0].quantity as SQL;
+    const rendered = new QueryBuilder()
+      .select({ quantity: restoredQuantity })
+      .from(userItem)
+      .toSQL();
+    expect(rendered.sql).toMatch(/-.*quantity/i);
+  });
+
+  it("builds one CASE expression for keeper quantities and zero tombstones", () => {
+    const expression = userItemMergePublishQuantity([
+      { id: "keeper-row", quantity: 5 },
+      { id: "obsolete-row", quantity: 0 },
+    ]);
+    const rendered = new QueryBuilder()
+      .select({ quantity: expression })
+      .from(userItem)
+      .toSQL();
+
+    expect(rendered.sql).toMatch(/case.*when.*then.*when.*then.*else.*end/i);
+    expect(rendered.params).toEqual(["keeper-row", 5, "obsolete-row", 0]);
   });
 });
 
