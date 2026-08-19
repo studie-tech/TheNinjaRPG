@@ -8,11 +8,11 @@ import { cn } from "@/libs/shadui";
 
 /**
  * CDN rendition width requested for avatars in the full layout. Avatars render
- * at up to 320px wide (`max-w-80`); 640 keeps them sharp on high-DPI screens.
- * Sources smaller than the request (e.g. 64px thumbnails) are served as-is, so
- * they are unaffected.
+ * at up to 320px wide (`max-w-80`), so the full layout requests that maximum
+ * directly. Sources smaller than the request (e.g. 64px thumbnails) are
+ * served as-is, so they are unaffected.
  */
-export const AVATAR_FULL_WIDTH = 640;
+export const AVATAR_FULL_WIDTH = 320;
 
 /**
  * CDN rendition width for an avatar displayed at `size` pixels: the requested
