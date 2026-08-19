@@ -1,8 +1,40 @@
 "use client";
 
 import type React from "react";
+import { useEffect, useState } from "react";
+import { useLocalStorage } from "@/hooks/localstorage";
 import Image from "@/layout/Image";
 import { cn } from "@/libs/shadui";
+
+/**
+ * CDN rendition width requested for avatars in the full layout. Avatars render
+ * at up to 320px wide (`max-w-80`); 640 keeps them sharp on high-DPI screens.
+ * Sources smaller than the request (e.g. 64px thumbnails) are served as-is, so
+ * they are unaffected.
+ */
+export const AVATAR_FULL_WIDTH = 640;
+
+/**
+ * CDN rendition width for an avatar displayed at `size` pixels: the requested
+ * size in the light layout (performance mode), otherwise the shared
+ * high-resolution rendition.
+ */
+export const avatarRenditionWidth = (size: number, lightLayout: boolean) =>
+  lightLayout ? size : AVATAR_FULL_WIDTH;
+
+/**
+ * Reads the user's light layout preference and returns the avatar rendition
+ * width. Until mounted it reports the full rendition so the server render and
+ * the first client render agree; the preference lives in localStorage.
+ */
+export const useAvatarRenditionWidth = (size: number) => {
+  const [lightLayout] = useLocalStorage<boolean>("lightLayout", false);
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+  return avatarRenditionWidth(size, isMounted && lightLayout);
+};
 
 interface AvatarImageProps {
   href?: string | null;
@@ -16,6 +48,7 @@ interface AvatarImageProps {
 }
 
 const AvatarImage: React.FC<AvatarImageProps> = (props) => {
+  const renditionWidth = useAvatarRenditionWidth(props.size);
   // If no href, show loader, otherwise show avatar
   if (!props.href) {
     return (
@@ -32,8 +65,8 @@ const AvatarImage: React.FC<AvatarImageProps> = (props) => {
         className={cn(base, hover, props.className)}
         src={props.href}
         alt={`${props.alt || "unknown"} AvatarImage`}
-        width={props.size}
-        height={props.size}
+        width={renditionWidth}
+        height={renditionWidth}
         priority={props.priority}
         loading={props.priority ? "eager" : "lazy"}
         unoptimized={true}
