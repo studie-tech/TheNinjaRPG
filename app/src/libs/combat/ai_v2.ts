@@ -1,13 +1,12 @@
 import type { Grid } from "honeycomb-grid";
 import { spiral } from "honeycomb-grid";
-import { AutoBattleTypes } from "@/drizzle/constants";
 import {
   actionPointsAfterAction,
   availableUserActions,
   performBattleAction,
   stillInBattle,
 } from "@/libs/combat/actions";
-import { hasLiveSummon } from "@/libs/combat/summon";
+import { hasLiveSummon, isSummonActionCastable } from "@/libs/combat/summon";
 import type {
   ActionEffect,
   BattleUserState,
@@ -78,16 +77,8 @@ export const performAIaction = (
         if (user.curHealth < costs.hpCost) return false;
         if (user.curChakra < costs.cpCost) return false;
         if (user.curStamina < costs.spCost) return false;
-        // summon() refuses to spawn in auto-resolved battle types, so keep those
-        // actions out of the candidate list rather than letting the AI pay the
-        // cost for a no-op. does_not_have_summon would stay true afterwards, so
-        // the AI would otherwise re-cast it every single round.
-        if (
-          AutoBattleTypes.includes(nextBattle.battleType) &&
-          action.effects.some((e) => "type" in e && e.type === "summon")
-        ) {
-          return false;
-        }
+        // Keep guaranteed no-op summons out of the candidate list entirely.
+        if (!isSummonActionCastable(action, nextBattle)) return false;
         if (isUser && action.id !== "move") {
           if (
             action.effects.some((e) => "type" in e && e.type === "move") ||
