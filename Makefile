@@ -23,7 +23,7 @@ else
 	RESET        := ""
 endif
 
-include ./app/.env
+-include ./app/.env
 
 PORT ?= 3000
 
@@ -67,6 +67,14 @@ install: # Install application dependencies with bun locally
 	@echo "${GREEN}install${RESET}"
 	bun install --cwd ./app --save-text-lockfile
 
+.PHONY: ensure-env
+ensure-env: # Ensure app/.env exists in this worktree (links it from the main worktree if missing)
+	@bash scripts/dev-ensure-env.sh
+
+.PHONY: ensure-services
+ensure-services: # Ensure the shared local service stack is running (parallel-worktree safe)
+	@bash scripts/dev-ensure-services.sh
+
 .PHONY: clean
 clean: # Clean all local application installation folders
 	@echo "${YELLOW}Cleaning local installation folders${RESET}"
@@ -78,17 +86,16 @@ clean: # Clean all local application installation folders
 reset: clean install # Clean and reinstall all dependencies
 
 .PHONY: bun
-bun: install ## Execute bun command in local development.
+bun: install ensure-services ## Execute bun command in local development.
 	@echo "${GREEN}bun${RESET}"
-	docker compose -f .devcontainer/docker-compose.yml up -d --wait		
 	@echo $(DATABASE_URL)
 	cd app && bun $(ARGS)
 
 .PHONY: start
-start: loadEnv # Run Next.js server, access at http://127.0.0.1:PORT
+start: ensure-env loadEnv # Run Next.js server, access at http://127.0.0.1:PORT
 	@echo "${GREEN}start on port $(PORT)${RESET}"
 	rm -rf app/.next
-	@FORCE_COLOR=1 make bun -- OPENAI_API_KEY=$(OPENAI_API_KEY) dev -p $(PORT) 2>&1 | grep -v "Ignoring Unsecure message event"
+	@set -a; . ./app/.env; set +a; FORCE_COLOR=1 make bun -- OPENAI_API_KEY="$$OPENAI_API_KEY" dev -p $(PORT) 2>&1 | grep -v "Ignoring Unsecure message event"
 
 .PHONY: build
 build: # Build Next.js app
