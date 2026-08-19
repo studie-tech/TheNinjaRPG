@@ -138,9 +138,10 @@ type RefundUserItemQuantityAtomicallyParams = {
 };
 
 /**
- * Compensates a successful item consume in one statement. If the consume decremented the stack,
- * the duplicate-key branch adds the quantity back; if it deleted the stack, the insert branch
- * recreates the original row with only the refunded quantity.
+ * Compensates a successful item consume. If the consume decremented the stack, the duplicate-key
+ * branch adds the quantity back; if it deleted the stack, the insert branch recreates the original
+ * row with only the refunded quantity. A negative quantity belongs to an active stack merge, so
+ * the guarded upsert refuses to change it, recovers the merge claims, and retries the refund.
  */
 export const refundUserItemQuantityAtomically = async ({
   client,
@@ -149,28 +150,43 @@ export const refundUserItemQuantityAtomically = async ({
 }: RefundUserItemQuantityAtomicallyParams) => {
   if (quantity <= 0) return;
 
-  await client
-    .insert(userItem)
-    .values({
-      id: itemSnapshot.id,
-      createdAt: itemSnapshot.createdAt,
-      updatedAt: itemSnapshot.updatedAt,
-      userId: itemSnapshot.userId,
-      itemId: itemSnapshot.itemId,
-      quantity,
-      level: itemSnapshot.level,
-      experience: itemSnapshot.experience,
-      equipped: itemSnapshot.equipped,
-      durability: itemSnapshot.durability,
-      storedAtHome: itemSnapshot.storedAtHome,
-      craftingFinishedAt: itemSnapshot.craftingFinishedAt,
-      isInAuction: itemSnapshot.isInAuction,
-      activeVariantId: itemSnapshot.activeVariantId,
-      dropChancePerc: itemSnapshot.dropChancePerc,
-    })
-    .onDuplicateKeyUpdate({
-      set: { quantity: sql`${userItem.quantity} + ${quantity}` },
-    });
+  const refund = () =>
+    client
+      .insert(userItem)
+      .values({
+        id: itemSnapshot.id,
+        createdAt: itemSnapshot.createdAt,
+        updatedAt: itemSnapshot.updatedAt,
+        userId: itemSnapshot.userId,
+        itemId: itemSnapshot.itemId,
+        quantity,
+        level: itemSnapshot.level,
+        experience: itemSnapshot.experience,
+        equipped: itemSnapshot.equipped,
+        durability: itemSnapshot.durability,
+        storedAtHome: itemSnapshot.storedAtHome,
+        craftingFinishedAt: itemSnapshot.craftingFinishedAt,
+        isInAuction: itemSnapshot.isInAuction,
+        activeVariantId: itemSnapshot.activeVariantId,
+        dropChancePerc: itemSnapshot.dropChancePerc,
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          quantity: sql`IF(${userItem.quantity} >= 0, ${userItem.quantity} + ${quantity}, ${userItem.quantity})`,
+        },
+      });
+
+  const result = await refund();
+  if (result.rowsAffected > 0) return;
+
+  // A no-op duplicate update means the row is held by a merge claim. Recover every row in that
+  // merge before retrying so its pending publish cannot overwrite the refunded quantity.
+  await restoreStaleUserItemMergeClaims({
+    client,
+    userId: itemSnapshot.userId,
+    staleBefore: new Date(),
+  });
+  await refund();
 };
 
 type RestoreStaleUserItemMergeClaimsParams = {
