@@ -867,7 +867,6 @@ export const itemRouter = createTRPCRouter({
   getUserItemCounts: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get user item counts by item ID" } })
     .query(async ({ ctx }) => {
-      await restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId);
       const counts = await ctx.drizzle
         .select({
           count: sql<number>`count(${userItem.id})`,
@@ -883,7 +882,6 @@ export const itemRouter = createTRPCRouter({
   getUserItems: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get all user items" } })
     .query(async ({ ctx }) => {
-      await restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId);
       return await fetchUserItems(ctx.drizzle, ctx.userId);
     }),
   getUserItemsWithVariants: protectedProcedure
@@ -891,7 +889,6 @@ export const itemRouter = createTRPCRouter({
       mcp: { enabled: true, description: "Get all user items including variant data" },
     })
     .query(async ({ ctx }) => {
-      await restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId);
       return await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId);
     }),
   // Get items of public user (staff edit)
@@ -2415,7 +2412,9 @@ export const itemRouter = createTRPCRouter({
                   eq(userItem.quantity, repairKitRow.quantity),
                 ),
               );
-            return result.rowsAffected === 1 ? { repairKitRow, quantityUsed } : false;
+            return result.rowsAffected === 1
+              ? { repairKitRow, quantityConsumed: repairKitRow.quantity }
+              : false;
           }
           const result = await ctx.drizzle
             .update(userItem)
@@ -2427,7 +2426,9 @@ export const itemRouter = createTRPCRouter({
                 eq(userItem.quantity, repairKitRow.quantity),
               ),
             );
-          return result.rowsAffected === 1 ? { repairKitRow, quantityUsed } : false;
+          return result.rowsAffected === 1
+            ? { repairKitRow, quantityConsumed: quantityUsed }
+            : false;
         }),
       );
       if (kitConsumeResults.some((result) => result === false)) {
@@ -2450,7 +2451,7 @@ export const itemRouter = createTRPCRouter({
                   refundUserItemQuantityAtomically({
                     client: ctx.drizzle,
                     itemSnapshot: result.repairKitRow,
-                    quantity: result.quantityUsed,
+                    quantity: result.quantityConsumed,
                   }),
                 ]
               : [],
@@ -3765,7 +3766,13 @@ async function executeMergeStacksForItemBucket(
         drizzle
           .update(userItem)
           .set({ quantity: item.quantity, updatedAt: item.updatedAt })
-          .where(and(eq(userItem.id, item.id), eq(userItem.userId, userId))),
+          .where(
+            and(
+              eq(userItem.id, item.id),
+              eq(userItem.userId, userId),
+              eq(userItem.quantity, -item.quantity),
+            ),
+          ),
       ),
     );
     return { success: false, didMerge: false, message: conflictMessage };

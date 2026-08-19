@@ -109,7 +109,7 @@ describe("concurrency helpers", () => {
   });
 
   it("atomically refunds a consumed item whether its stack survived or was deleted", async () => {
-    const onDuplicateKeyUpdate = vi.fn().mockResolvedValue(undefined);
+    const onDuplicateKeyUpdate = vi.fn().mockResolvedValue({ rowsAffected: 2 });
     const values = vi.fn().mockReturnValue({ onDuplicateKeyUpdate });
     const client = { insert: vi.fn().mockReturnValue({ values }) };
     const itemSnapshot = {
@@ -147,8 +147,52 @@ describe("concurrency helpers", () => {
       .select({ quantity: increment })
       .from(userItem)
       .toSQL();
-    expect(rendered.sql).toMatch(/quantity.*\+\s*\?/i);
+    expect(rendered.sql).toMatch(/if\s*\(.*quantity.*>=\s*0.*quantity.*\+\s*\?/i);
     expect(rendered.params).toEqual([2]);
+  });
+
+  it("recovers a negative merge claim before retrying an item refund", async () => {
+    const onDuplicateKeyUpdate = vi
+      .fn()
+      .mockResolvedValueOnce({ rowsAffected: 0 })
+      .mockResolvedValueOnce({ rowsAffected: 2 });
+    const values = vi.fn().mockReturnValue({ onDuplicateKeyUpdate });
+    const updateWhere = vi.fn().mockResolvedValue({ rowsAffected: 1 });
+    const deleteWhere = vi.fn().mockResolvedValue({ rowsAffected: 0 });
+    const client = {
+      insert: vi.fn().mockReturnValue({ values }),
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({ where: updateWhere }),
+      }),
+      delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+    };
+    const itemSnapshot = {
+      id: "item-row-1",
+      createdAt: new Date("2026-08-18T10:00:00.000Z"),
+      updatedAt: new Date("2026-08-18T10:00:00.000Z"),
+      userId: "user-1",
+      itemId: "repair-kit-1",
+      quantity: 5,
+      level: 1,
+      experience: 0,
+      equipped: "NONE",
+      durability: 100,
+      storedAtHome: false,
+      craftingFinishedAt: null,
+      isInAuction: false,
+      activeVariantId: null,
+      dropChancePerc: 0,
+    } as const;
+
+    await refundUserItemQuantityAtomically({
+      client: client as never,
+      itemSnapshot,
+      quantity: 2,
+    });
+
+    expect(onDuplicateKeyUpdate).toHaveBeenCalledTimes(2);
+    expect(client.update).toHaveBeenCalledWith(userItem);
+    expect(client.delete).toHaveBeenCalledWith(userItem);
   });
 
   it("does not issue a refund statement for a non-positive quantity", async () => {
