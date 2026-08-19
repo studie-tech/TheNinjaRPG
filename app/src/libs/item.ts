@@ -485,7 +485,7 @@ export const showsItemLevelBadge = (item: {
 
 /**
  * ActionSelector badge lists for user items: amber stack quantity (bottom-right)
- * for non-leveling stacks, red ownership level (bottom-left) for leveling gear.
+ * for every stack, red ownership level (bottom-left) for leveling gear.
  */
 export const userItemActionBadges = <
   T extends {
@@ -501,7 +501,7 @@ export const userItemActionBadges = <
   levels: { id: string; level: number }[] | undefined;
 } => ({
   counts: userItems
-    ?.filter((ui) => !showsItemLevelBadge(ui.item) && ui.quantity > 1)
+    ?.filter((ui) => ui.quantity > 1)
     .map((ui) => ({ id: ui.id, quantity: ui.quantity })),
   levels: userItems
     ?.filter((ui) => showsItemLevelBadge(ui.item))
