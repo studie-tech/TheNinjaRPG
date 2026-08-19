@@ -9,7 +9,19 @@
  * Failed CAS (`success: false` / `false`) means another request mutated the row first — return a
  * safe client error and retry-friendly message.
  */
-import { and, eq, exists, gt, gte, inArray, isNull, ne, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  exists,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  ne,
+  sql,
+} from "drizzle-orm";
 import type { BattleType } from "@/drizzle/constants";
 import type { UserItem } from "@/drizzle/schema";
 import {
@@ -160,6 +172,58 @@ export const refundUserItemQuantityAtomically = async ({
       set: { quantity: sql`${userItem.quantity} + ${quantity}` },
     });
 };
+
+type RestoreStaleUserItemMergeClaimsParams = {
+  client: DrizzleClient;
+  userId: string;
+  staleBefore: Date;
+};
+
+/**
+ * Cleans up abandoned stack-merge state. A merge claims a row by negating its quantity, so the
+ * original value remains recoverable after a process crash. Its atomic publish turns obsolete
+ * rows into zero-quantity tombstones, which are safe to delete once stale. Fresh non-positive rows
+ * are left alone for the active merge; callers exclude them from inventory reads and writes.
+ */
+export const restoreStaleUserItemMergeClaims = async ({
+  client,
+  userId,
+  staleBefore,
+}: RestoreStaleUserItemMergeClaimsParams) => {
+  await Promise.all([
+    client
+      .update(userItem)
+      .set({
+        quantity: sql`-${userItem.quantity}`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(userItem.userId, userId),
+          lt(userItem.quantity, 0),
+          lte(userItem.updatedAt, staleBefore),
+        ),
+      ),
+    client
+      .delete(userItem)
+      .where(
+        and(
+          eq(userItem.userId, userId),
+          eq(userItem.quantity, 0),
+          lte(userItem.updatedAt, staleBefore),
+        ),
+      ),
+  ]);
+};
+
+/** Builds the single-statement CASE expression used to atomically publish a stack merge. */
+export const userItemMergePublishQuantity = (
+  targets: readonly { id: string; quantity: number }[],
+) =>
+  sql<number>`CASE ${userItem.id} ${sql.join(
+    targets.map((target) => sql`WHEN ${target.id} THEN ${target.quantity}`),
+    sql.raw(" "),
+  )} ELSE ${userItem.quantity} END`;
 
 type AdjustSeichiSilverParams = {
   client: DrizzleClient;
