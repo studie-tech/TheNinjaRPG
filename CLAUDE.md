@@ -29,6 +29,8 @@ All make commands should be run from the root directory `/`, not from `/app`.
 - **Development**: database `tnr`, branch `development`
 - **AI deployment** (separate app): database `theninja-ai`, branch `main`
 
+**Local dev in parallel worktrees:** `make start PORT=<free-port>` is safe to run in any git worktree at the same time — it symlinks `app/.env` from an existing worktree if missing and starts the shared Docker service stack exactly once (lock-protected). For the full workflow (starting the server, provisioning disposable AI test users via `/api/ai-test-user`, calling tRPC headlessly via `/api/ai-test-user/call-endpoint`, browser login with the Clerk `signInToken`), follow the skill at `~/.claude/skills/tnr-dev-server/SKILL.md` if available.
+
 ## Architecture Overview
 
 This is a Next.js 15 application using the App Router, built as a browser-based RPG game called "TheNinja-RPG". The stack includes:
