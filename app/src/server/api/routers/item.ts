@@ -97,11 +97,7 @@ import {
   objectiveContentIds,
   postProcessRewards,
 } from "@/libs/quest";
-import {
-  calculateKitsToUse,
-  getRepairKits,
-  needsInventoryRepair,
-} from "@/libs/repair";
+import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import {
   fetchSageModeRolls,
   fetchSageModes,
@@ -114,7 +110,10 @@ import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { fetchUserSkills } from "@/routers/skillTree";
 import { fetchStructures } from "@/routers/village";
 import type { DrizzleClient } from "@/server/db";
-import { consumeUserItemAtomically } from "@/server/utils/concurrency";
+import {
+  consumeUserItemAtomically,
+  refundUserItemQuantityAtomically,
+} from "@/server/utils/concurrency";
 import {
   applyLoadoutRename,
   backfillLoadouts,
@@ -2369,7 +2368,7 @@ export const itemRouter = createTRPCRouter({
         kitsToUse.map(async ({ repairItemId, quantityUsed }) => {
           const repairKitRow = useritems.find((ui) => ui.id === repairItemId);
           if (!repairKitRow || quantityUsed <= 0 || !repairKitRow.item.destroyOnUse) {
-            return true;
+            return null;
           }
           if (repairKitRow.quantity <= quantityUsed) {
             const result = await ctx.drizzle
@@ -2381,7 +2380,7 @@ export const itemRouter = createTRPCRouter({
                   eq(userItem.quantity, repairKitRow.quantity),
                 ),
               );
-            return result.rowsAffected === 1;
+            return result.rowsAffected === 1 ? { repairKitRow, quantityUsed } : false;
           }
           const result = await ctx.drizzle
             .update(userItem)
@@ -2393,12 +2392,12 @@ export const itemRouter = createTRPCRouter({
                 eq(userItem.quantity, repairKitRow.quantity),
               ),
             );
-          return result.rowsAffected === 1;
+          return result.rowsAffected === 1 ? { repairKitRow, quantityUsed } : false;
         }),
       );
-      if (kitConsumeResults.some((ok) => !ok)) {
-        await Promise.all(
-          itemsNeedingRepair.map((useritem) =>
+      if (kitConsumeResults.some((result) => result === false)) {
+        await Promise.all([
+          ...itemsNeedingRepair.map((useritem) =>
             ctx.drizzle
               .update(userItem)
               .set({ durability: useritem.durability })
@@ -2410,7 +2409,18 @@ export const itemRouter = createTRPCRouter({
                 ),
               ),
           ),
-        );
+          ...kitConsumeResults.flatMap((result) =>
+            result
+              ? [
+                  refundUserItemQuantityAtomically({
+                    client: ctx.drizzle,
+                    itemSnapshot: result.repairKitRow,
+                    quantity: result.quantityUsed,
+                  }),
+                ]
+              : [],
+          ),
+        ]);
         return errorResponse(
           "Could not consume repair kits — inventory changed, please try again",
         );

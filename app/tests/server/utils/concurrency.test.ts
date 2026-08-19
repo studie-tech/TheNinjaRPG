@@ -10,6 +10,7 @@ import {
   claimUserSnapshot,
   clearActiveNpcQuest,
   consumeUserItemAtomically,
+  refundUserItemQuantityAtomically,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
 
@@ -103,6 +104,62 @@ describe("concurrency helpers", () => {
     });
     expect(result).toBe(false);
     expect(client.update).not.toHaveBeenCalled();
+  });
+
+  it("atomically refunds a consumed item whether its stack survived or was deleted", async () => {
+    const onDuplicateKeyUpdate = vi.fn().mockResolvedValue(undefined);
+    const values = vi.fn().mockReturnValue({ onDuplicateKeyUpdate });
+    const client = { insert: vi.fn().mockReturnValue({ values }) };
+    const itemSnapshot = {
+      id: "item-row-1",
+      createdAt: new Date("2026-08-18T10:00:00.000Z"),
+      updatedAt: new Date("2026-08-18T10:00:00.000Z"),
+      userId: "user-1",
+      itemId: "repair-kit-1",
+      quantity: 5,
+      level: 1,
+      experience: 0,
+      equipped: "NONE",
+      durability: 100,
+      storedAtHome: false,
+      craftingFinishedAt: null,
+      isInAuction: false,
+      activeVariantId: null,
+      dropChancePerc: 0,
+    } as const;
+
+    await refundUserItemQuantityAtomically({
+      client: client as never,
+      itemSnapshot,
+      quantity: 2,
+    });
+
+    expect(client.insert).toHaveBeenCalledWith(userItem);
+    expect(values).toHaveBeenCalledWith({ ...itemSnapshot, quantity: 2 });
+    expect(onDuplicateKeyUpdate).toHaveBeenCalledOnce();
+    expect(onDuplicateKeyUpdate).toHaveBeenCalledWith({
+      set: { quantity: expect.anything() },
+    });
+    const increment = onDuplicateKeyUpdate.mock.calls[0]?.[0].set.quantity as SQL;
+    const rendered = new QueryBuilder()
+      .select({ quantity: increment })
+      .from(userItem)
+      .toSQL();
+    expect(rendered.sql).toMatch(/quantity.*\+\s*\?/i);
+    expect(rendered.params).toEqual([2]);
+  });
+
+  it("does not issue a refund statement for a non-positive quantity", async () => {
+    const client = { insert: vi.fn() };
+    const itemSnapshot = { id: "item-row-1" };
+
+    await refundUserItemQuantityAtomically({
+      client: client as never,
+      itemSnapshot: itemSnapshot as never,
+      quantity: 0,
+    });
+
+    expect(client.insert).not.toHaveBeenCalled();
   });
 });
 
