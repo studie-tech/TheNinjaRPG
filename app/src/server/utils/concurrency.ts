@@ -11,6 +11,7 @@
  */
 import { and, eq, exists, gt, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { BattleType } from "@/drizzle/constants";
+import type { UserItem } from "@/drizzle/schema";
 import {
   bloodlineRolls,
   rankedPvpQueue,
@@ -116,6 +117,48 @@ export const consumeUserItemAtomically = async ({
     expectedQuantity,
     nextQuantity: expectedQuantity - 1,
   });
+};
+
+type RefundUserItemQuantityAtomicallyParams = {
+  client: DrizzleClient;
+  itemSnapshot: UserItem;
+  quantity: number;
+};
+
+/**
+ * Compensates a successful item consume in one statement. If the consume decremented the stack,
+ * the duplicate-key branch adds the quantity back; if it deleted the stack, the insert branch
+ * recreates the original row with only the refunded quantity.
+ */
+export const refundUserItemQuantityAtomically = async ({
+  client,
+  itemSnapshot,
+  quantity,
+}: RefundUserItemQuantityAtomicallyParams) => {
+  if (quantity <= 0) return;
+
+  await client
+    .insert(userItem)
+    .values({
+      id: itemSnapshot.id,
+      createdAt: itemSnapshot.createdAt,
+      updatedAt: itemSnapshot.updatedAt,
+      userId: itemSnapshot.userId,
+      itemId: itemSnapshot.itemId,
+      quantity,
+      level: itemSnapshot.level,
+      experience: itemSnapshot.experience,
+      equipped: itemSnapshot.equipped,
+      durability: itemSnapshot.durability,
+      storedAtHome: itemSnapshot.storedAtHome,
+      craftingFinishedAt: itemSnapshot.craftingFinishedAt,
+      isInAuction: itemSnapshot.isInAuction,
+      activeVariantId: itemSnapshot.activeVariantId,
+      dropChancePerc: itemSnapshot.dropChancePerc,
+    })
+    .onDuplicateKeyUpdate({
+      set: { quantity: sql`${userItem.quantity} + ${quantity}` },
+    });
 };
 
 type AdjustSeichiSilverParams = {
