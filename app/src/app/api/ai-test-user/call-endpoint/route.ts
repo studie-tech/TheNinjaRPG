@@ -106,7 +106,7 @@ export async function POST(request: Request) {
     if (
       procedure === null ||
       procedure === undefined ||
-      typeof procedure !== "object"
+      (typeof procedure !== "object" && typeof procedure !== "function")
     ) {
       return NextResponse.json(
         { success: false, message: `Invalid endpoint path: "${endpointName}"` },
