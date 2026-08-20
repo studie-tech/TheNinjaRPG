@@ -97,9 +97,12 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
   const [sectorInput, setSectorInput] = useState("");
 
   // Quest names for the pool selector
-  const { data: questNames } = api.quests.getAllNames.useQuery(undefined, {
-    staleTime: 60_000,
-  });
+  const { data: questNames } = api.overworldAi.getAssignableQuestNames.useQuery(
+    undefined,
+    {
+      staleTime: 60_000,
+    },
+  );
 
   // Form
   const form = useForm<OverworldPlacementInput>({
@@ -396,7 +399,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                 <MultiSelect
                   options={(questNames ?? []).map((quest) => ({
                     value: quest.id,
-                    label: quest.name,
+                    label: `${quest.name} (${quest.questType})`,
                   }))}
                   selected={selectedQuestIds}
                   onChange={setSelectedQuestIds}

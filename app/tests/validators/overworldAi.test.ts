@@ -51,6 +51,16 @@ describe("OverworldPlacementSchema", () => {
     ).toBe(false);
   });
 
+  it("rejects quest pools on hostile placements", () => {
+    expect(
+      OverworldPlacementSchema.safeParse({
+        ...base,
+        interactionType: "HOSTILE",
+        quests: [{ questId: "q1", chance: 100 }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("requires a non-empty sectorList when sectorType is from_list", () => {
     expect(() =>
       OverworldPlacementSchema.parse({ ...base, sectorType: "from_list", sectorList: [] }),

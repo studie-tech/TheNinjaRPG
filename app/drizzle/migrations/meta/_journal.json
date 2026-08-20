@@ -239,6 +239,13 @@
       "when": 1786884912516,
       "tag": "0033_relocate_road_to_genin_objectives",
       "breakpoints": false
+    },
+    {
+      "idx": 34,
+      "version": "5",
+      "when": 1787244754356,
+      "tag": "0034_solid_jack_flag",
+      "breakpoints": false
     }
   ]
 }
