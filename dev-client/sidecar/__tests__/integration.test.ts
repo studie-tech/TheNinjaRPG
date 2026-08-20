@@ -188,6 +188,12 @@ case "$1" in
     if [ "$2" = "view" ]; then
       echo '{"title":"Fake PR","body":"Fake PR body","author":{"login":"upstream-dev"},"url":"https://github.com/studie-tech/TheNinjaRPG/pull/5"}'
     fi
+    if [ "$2" = "diff" ]; then
+      echo 'diff --git a/src/fake.ts b/src/fake.ts'
+      echo '@@ -1 +1 @@'
+      echo '-const a = 1;'
+      echo '+const a = 2;'
+    fi
     exit 0
     ;;
 esac
@@ -635,4 +641,14 @@ test("refuses an apiBase that is not a known game host", async () => {
   // The patch is ignored rather than accepted: apiBase decides where the
   // device token is sent as a bearer.
   expect(res.json<Record<string, unknown>>().apiBase).toBe(before);
+});
+
+test("a PR review job is given the pull request diff, not just its metadata", () => {
+  // The review worktree is checked out at origin/main, so without an explicit
+  // diff the agent would be reviewing an unchanged tree.
+  const ghLog = readLog("gh-calls.log");
+  expect(ghLog).toContain("pr diff 5");
+  const claudeLog = readLog("claude-calls.log");
+  expect(claudeLog).toContain("untrusted_pull_request_diff");
+  expect(claudeLog).toContain("const a = 2;");
 });

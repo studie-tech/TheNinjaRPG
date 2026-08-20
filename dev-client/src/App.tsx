@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type StatusResponse, sidecar, sidecarInfo, startSidecar } from "./api";
+import {
+  SidecarError,
+  type StatusResponse,
+  sidecar,
+  sidecarInfo,
+  startSidecar,
+} from "./api";
 import { DashboardView } from "./views/Dashboard";
 import { HistoryView } from "./views/History";
 import { SettingsView } from "./views/Settings";
@@ -27,9 +33,24 @@ export function App() {
       setStatus(next);
       setSidecarError(null);
       return;
-    } catch {
-      // The sidecar may simply not be up yet (first launch in the Tauri
-      // shell): ask the shell to start it, then retry once.
+    } catch (first) {
+      // A 401/403 means something IS answering on this port but is not our
+      // sidecar — most likely one orphaned by an earlier crash, or a second
+      // instance. Restarting ours cannot fix that, and retrying every tick
+      // would spawn a doomed process forever, so say what is wrong instead.
+      if (
+        first instanceof SidecarError &&
+        (first.status === 401 || first.status === 403)
+      ) {
+        setSidecarError(
+          "Another process is already using the dev client's port. Quit the other " +
+            "copy (or any leftover tnr-dev-client process) and reopen this app.",
+        );
+        setStatus(null);
+        return;
+      }
+      // Otherwise the sidecar may simply not be up yet (first launch in the
+      // Tauri shell): ask the shell to start it, then retry once.
       const info = await startSidecar();
       if (info?.running) {
         await new Promise((resolve) => setTimeout(resolve, 750));

@@ -107,7 +107,9 @@ function buildStatus(ctx: SidecarContext): StatusResponse {
     port: ctx.port,
     auth: {
       connected: Boolean(token?.deviceToken),
-      githubLogin: settings.githubLogin,
+      // Mirrors what the server last told us; it is only ever set by the
+      // verified challenge flow on the website, never locally.
+      githubLogin: token?.githubLogin ?? null,
       tokenExpiresAt: token?.expiresAt ?? null,
       tokenExpired: token ? token.expiresAt < now : false,
     },

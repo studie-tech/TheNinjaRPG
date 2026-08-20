@@ -273,16 +273,16 @@ export const devContributionRouter = createTRPCRouter({
               eq(devJobDailyUsage.date, today),
             ),
           ),
-        // Only in-flight rows, so a long job history cannot push the caller's
-        // active claim out of a truncated result set.
+        // Only rows the contributor is still working on, so a long job history
+        // cannot push the caller's active claim out of a truncated result set.
+        // VERIFYING is excluded on purpose: the work is already submitted and
+        // only GitHub confirmation is outstanding, so it must not block the next
+        // claim for the whole retry window.
         ctx.drizzle
           .select({ id: devJob.id })
           .from(devJob)
           .where(
-            and(
-              eq(devJob.claimedByUserId, ctx.userId),
-              inArray(devJob.status, ["CLAIMED", "VERIFYING"]),
-            ),
+            and(eq(devJob.claimedByUserId, ctx.userId), eq(devJob.status, "CLAIMED")),
           )
           .limit(1),
         ctx.drizzle
@@ -511,7 +511,11 @@ export const devContributionRouter = createTRPCRouter({
         ctx.drizzle
           .update(devContributionProfile)
           .set({
-            totalJobsCompleted: sql`${devContributionProfile.totalJobsCompleted} + 1`,
+            // Only verified work counts toward the public leaderboard; tokens
+            // are recorded either way because they were genuinely spent.
+            totalJobsCompleted: verification.verified
+              ? sql`${devContributionProfile.totalJobsCompleted} + 1`
+              : sql`${devContributionProfile.totalJobsCompleted}`,
             totalTokensContributed: sql`${devContributionProfile.totalTokensContributed} + ${totalTokens}`,
             lastSeenAt: new Date(),
             updatedAt: new Date(),
@@ -538,7 +542,13 @@ export const devContributionRouter = createTRPCRouter({
             ),
           );
         if (parked.rowsAffected === 0) return errorResponse("Job already completed");
-        await Promise.all(ledgerWrites);
+        // The work is submitted; only GitHub confirmation is outstanding. Holding
+        // the single claim slot until then would lock the contributor out for the
+        // whole retry window over one transient GitHub failure.
+        await Promise.all([
+          ...ledgerWrites,
+          releaseClaimSlot(ctx.drizzle, ctx.userId, job.id),
+        ]);
         return {
           success: true,
           message:

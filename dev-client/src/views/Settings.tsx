@@ -23,13 +23,23 @@ export function SettingsView({
     setError(null);
     setMessage(null);
     try {
-      await sidecar.saveSettings({
-        apiBase: apiBase.trim(),
+      const wanted = apiBase.trim();
+      const saved = await sidecar.saveSettings({
+        apiBase: wanted,
         claudeDailyTokenCap: Math.max(0, Number(claudeCap) || 0),
         codexDailyTokenCap: Math.max(0, Number(codexCap) || 0),
         autoRun,
       });
-      setMessage("Settings saved");
+      // The sidecar silently ignores a game-server host it does not allow, so
+      // reflect what was actually stored instead of reporting a clean save.
+      if (saved.apiBase !== wanted) {
+        setApiBase(saved.apiBase);
+        setError(
+          `"${wanted}" is not an allowed game server, so it was not saved. Other settings were.`,
+        );
+      } else {
+        setMessage("Settings saved");
+      }
       onRefresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save settings");

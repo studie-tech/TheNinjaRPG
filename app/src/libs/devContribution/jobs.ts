@@ -87,12 +87,15 @@ export const planIssueJob = (
     return { create: null, cancelJobIds: [] };
   }
 
-  // A terminal job of the desired type already exists → do not re-issue it.
+  // A settled job of the desired type already exists → do not re-issue it.
   // FAILED counts here: a job that exhausted its attempt budget must not be
   // resurrected by the next backfill pass, or the cron re-creates it forever
   // (with attemptCount reset) for any issue agents cannot finish.
+  //
+  // CANCELLED deliberately does NOT count: closing an issue cancels its pending
+  // job, and an issue that is later reopened must be able to get one again.
   const desiredTerminal = forRef.filter(
-    (j) => j.jobType === wanted && isJobTerminal(j.status),
+    (j) => j.jobType === wanted && (j.status === "COMPLETED" || j.status === "FAILED"),
   );
   if (desiredTerminal.length > 0) {
     return { create: null, cancelJobIds: [] };

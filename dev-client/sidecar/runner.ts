@@ -13,6 +13,7 @@ import {
   postIssueComment,
   postPullRequestReview,
   pullRequestBody,
+  pullRequestDiff,
   pushBranch,
   removeWorktree,
   slugFromUrl,
@@ -64,7 +65,40 @@ interface AgentRun {
 // case, where an escape would be the most damaging.
 const READ_ONLY_TOOLS = "Read,Grep,Glob";
 const READ_ONLY_DENIED = "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch";
-const IMPLEMENT_TOOLS = "Read,Grep,Glob,Edit,Write,Bash";
+
+// Implementation work needs to edit files and run the project's checks. A bare
+// "Bash" entry would pre-approve *every* shell command, which against a prompt
+// built from an attacker-authored issue is barely better than the permission
+// bypass this replaced — so Bash is pre-approved only for the specific commands
+// the job description asks for. Anything else still has to ask, and headless
+// runs have nobody to ask, so it fails instead of running.
+const IMPLEMENT_BASH = [
+  "Bash(bun test:*)",
+  "Bash(bun run test:*)",
+  "Bash(bun run lint:*)",
+  "Bash(bun run typecheck:*)",
+  "Bash(bun install)",
+  "Bash(npm test:*)",
+  "Bash(npm run test:*)",
+  "Bash(npm run lint:*)",
+  "Bash(pnpm test:*)",
+  "Bash(yarn test:*)",
+  "Bash(make test)",
+  "Bash(make lint)",
+  "Bash(make typecheck)",
+  "Bash(git status:*)",
+  "Bash(git diff:*)",
+];
+const IMPLEMENT_TOOLS = [
+  "Read",
+  "Grep",
+  "Glob",
+  "Edit",
+  "Write",
+  ...IMPLEMENT_BASH,
+].join(",");
+// Never pre-approved for implementation either: network egress and notebooks.
+const IMPLEMENT_DENIED = "WebFetch,WebSearch,NotebookEdit";
 
 // Runs the agent CLI headlessly with a scrubbed environment: no GitHub
 // credentials, no git credential prompts. The agent's own LLM auth (stored in
@@ -91,14 +125,24 @@ function runAgent(
           "--verbose",
           "--allowed-tools",
           readOnly ? READ_ONLY_TOOLS : IMPLEMENT_TOOLS,
+          "--disallowed-tools",
+          readOnly ? READ_ONLY_DENIED : IMPLEMENT_DENIED,
           ...(readOnly
-            ? ["--disallowed-tools", READ_ONLY_DENIED]
+            ? []
             : // Implementation work has to edit files in its worktree.
               // acceptEdits pre-approves only that, unlike
               // --dangerously-skip-permissions which disables every check.
               ["--permission-mode", "acceptEdits"]),
         ]
-      : ["exec", "--json", ...(readOnly ? ["--sandbox", "read-only"] : []), prompt];
+      : [
+          "exec",
+          "--json",
+          // codex defaults to a read-only sandbox, so an implementation run
+          // must ask for write access explicitly or it cannot change a file.
+          "--sandbox",
+          readOnly ? "read-only" : "workspace-write",
+          prompt,
+        ];
 
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.GITHUB_TOKEN;
@@ -268,10 +312,20 @@ export function extractAgentText(lines: string[]): string {
       result = event.result;
       continue;
     }
-    // Codex `exec --json` uses a similar terminal shape.
-    if (typeof event.last_agent_message === "string") {
-      result = event.last_agent_message;
-      continue;
+    // Codex `exec --json` has used several shapes across versions, so match on
+    // any of the terminal-message keys rather than a single one. If none match,
+    // the assistant-text accumulation below still provides a fallback.
+    for (const key of ["last_agent_message", "agent_message", "final_message"]) {
+      const value = event[key];
+      if (typeof value === "string" && value.trim()) result = value;
+    }
+    const msg = event.msg as Record<string, unknown> | undefined;
+    if (msg && typeof msg.message === "string" && msg.message.trim()) {
+      if (msg.type === "agent_message" || msg.type === "task_complete") {
+        result = msg.message;
+      } else {
+        texts.push(msg.message);
+      }
     }
     // Otherwise accumulate assistant message text blocks.
     const message = event.message as { role?: string; content?: unknown } | undefined;
@@ -421,7 +475,9 @@ export async function runJob(deps: RunnerDeps): Promise<RunnerResult> {
         if (!committed.ok) throw new Error(`Commit failed: ${committed.stderr}`);
         await checkoutBranch(worktree, branch);
 
-        const login = (await ghLogin()) || settings.githubLogin;
+        // The fork owner is whoever the local gh CLI is authenticated as; the
+        // server-verified login is a separate fact and not a substitute here.
+        const login = await ghLogin();
         if (!login) {
           throw new Error("Could not determine your GitHub login; run `gh auth login`");
         }
@@ -462,12 +518,24 @@ export async function runJob(deps: RunnerDeps): Promise<RunnerResult> {
 
       try {
         const isReview = job.jobType === "PR_REVIEW";
-        const prompt = isReview
-          ? `${buildPrompt(job)}\n\n${fence(
-              "untrusted_github_content",
-              await pullRequestBody({ number: job.refNumber, slug }),
-            )}`
-          : buildPrompt(job);
+        let prompt = buildPrompt(job);
+        if (isReview) {
+          // The worktree sits at origin/main, so the change under review has to
+          // be supplied explicitly or the agent reviews an unchanged tree.
+          const [meta, diff] = await Promise.all([
+            pullRequestBody({ number: job.refNumber, slug }),
+            pullRequestDiff({ number: job.refNumber, slug }),
+          ]);
+          if (!diff.trim()) throw new Error("Could not read the pull request diff");
+          prompt = [
+            prompt,
+            "",
+            fence("untrusted_github_content", meta),
+            "",
+            "The proposed change follows. Review THIS diff against the checked-out base.",
+            fence("untrusted_pull_request_diff", diff),
+          ].join("\n");
+        }
 
         const run = await runAgent(
           cliPath,

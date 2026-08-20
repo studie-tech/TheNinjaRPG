@@ -47,7 +47,6 @@ export interface Settings {
   claudeDailyTokenCap: number;
   codexDailyTokenCap: number;
   autoRun: boolean;
-  githubLogin: string | null;
 }
 
 export interface RewardSummary {

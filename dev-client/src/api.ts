@@ -26,9 +26,11 @@ export function useSidecarInfo(info: SidecarInfo | null): void {
 }
 
 export class SidecarError extends Error {
-  constructor(message: string) {
+  readonly status: number | undefined;
+  constructor(message: string, status?: number) {
     super(message);
     this.name = "SidecarError";
+    this.status = status;
   }
 }
 
@@ -52,7 +54,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       typeof data === "object" && data !== null && "error" in data
         ? String((data as { error: unknown }).error)
         : `Request failed (${res.status})`;
-    throw new SidecarError(message);
+    throw new SidecarError(message, res.status);
   }
   return data as T;
 }
@@ -102,9 +104,11 @@ export async function tauriInvoke<T>(
  */
 export async function openExternal(url: string): Promise<void> {
   if (!/^https?:\/\//i.test(url)) return;
-  const opened = await tauriInvoke<null>("open_external", { url });
-  // Outside the Tauri shell (plain vite dev) fall back to a normal window open.
-  if (opened === null && typeof window !== "undefined") window.open(url, "_blank");
+  // The command resolves to `true` when the shell opened it, and to null only
+  // when there is no shell (plain vite dev) or the invoke failed — so this
+  // fallback cannot double-open inside the real app.
+  const opened = await tauriInvoke<boolean>("open_external", { url });
+  if (opened !== true && typeof window !== "undefined") window.open(url, "_blank");
 }
 
 export const startSidecar = async () => {

@@ -100,9 +100,18 @@ fn start_sidecar(
     }
 
     let path = sidecar_path(&app)?;
-    let child = Command::new(&path)
+    let mut command = Command::new(&path);
+    command
         .env("TNR_DEV_CLIENT_PORT", port.to_string())
-        .env("TNR_DEV_CLIENT_AUTH_TOKEN", &token)
+        .env("TNR_DEV_CLIENT_AUTH_TOKEN", &token);
+    // Own process group, so shutting the sidecar down also reaches the agent
+    // CLI it spawned rather than orphaning it (and its worktree) on the machine.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let child = command
         .spawn()
         .map_err(|error| {
             format!(
@@ -118,11 +127,36 @@ fn start_sidecar(
 #[tauri::command]
 fn stop_sidecar(state: tauri::State<'_, SidecarState>) -> Result<SidecarInfo, String> {
     let mut guard = lock_state(&state)?;
-    if let Some(mut child) = guard.take() {
-        let _ = child.kill();
-        let _ = child.wait();
+    if let Some(child) = guard.take() {
+        terminate(child);
     }
     Ok(info(false, &state.auth_token))
+}
+
+/// Stop the sidecar and everything it started.
+///
+/// SIGTERM to the whole process group first: the sidecar handles it, aborts the
+/// running job and kills the agent CLI. Only then force the group, so a wedged
+/// agent cannot survive as an orphan holding a worktree open.
+fn terminate(mut child: Child) {
+    #[cfg(unix)]
+    {
+        let pgid = child.id() as i32;
+        unsafe {
+            libc::kill(-pgid, libc::SIGTERM);
+        }
+        for _ in 0..30 {
+            if matches!(child.try_wait(), Ok(Some(_))) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        unsafe {
+            libc::kill(-pgid, libc::SIGKILL);
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 #[tauri::command]
@@ -149,14 +183,18 @@ fn sidecar_info(state: tauri::State<'_, SidecarState>) -> Result<SidecarInfo, St
 /// outbound links here. Only http(s) is accepted, so the UI cannot be tricked
 /// into launching arbitrary schemes.
 #[tauri::command]
-fn open_external(url: String) -> Result<(), String> {
+fn open_external(url: String) -> Result<bool, String> {
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Err("only http(s) URLs may be opened".to_string());
     }
     #[cfg(target_os = "macos")]
     let (program, args): (&str, Vec<&str>) = ("open", vec![]);
+    // NOT `cmd /C start`: cmd re-parses its argument, so a URL containing `&`
+    // would be split into further commands. The protocol handler takes the URL
+    // as a single opaque argument.
     #[cfg(target_os = "windows")]
-    let (program, args): (&str, Vec<&str>) = ("cmd", vec!["/C", "start", ""]);
+    let (program, args): (&str, Vec<&str>) =
+        ("rundll32.exe", vec!["url.dll,FileProtocolHandler"]);
     #[cfg(all(unix, not(target_os = "macos")))]
     let (program, args): (&str, Vec<&str>) = ("xdg-open", vec![]);
 
@@ -164,7 +202,9 @@ fn open_external(url: String) -> Result<(), String> {
         .args(args)
         .arg(&url)
         .spawn()
-        .map(|_| ())
+        // Returning `true` (rather than unit, which serialises to null) lets the
+        // UI tell "the shell opened it" apart from "there is no shell here".
+        .map(|_| true)
         .map_err(|error| error.to_string())
 }
 
@@ -185,9 +225,8 @@ fn main() {
             if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
                 if let Some(state) = app.try_state::<SidecarState>() {
                     if let Ok(mut guard) = state.child.lock() {
-                        if let Some(mut child) = guard.take() {
-                            let _ = child.kill();
-                            let _ = child.wait();
+                        if let Some(child) = guard.take() {
+                            terminate(child);
                         }
                     }
                 }

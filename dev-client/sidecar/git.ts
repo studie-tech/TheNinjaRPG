@@ -62,13 +62,6 @@ export function slugFromUrl(url: string): string | null {
   return `${match[1]}/${match[2].replace(/\.git$/, "")}`;
 }
 
-// "owner/repo" from the origin remote of a local clone.
-export async function repoSlug(repoPath: string): Promise<string | null> {
-  const { ok, stdout } = await git(repoPath, ["remote", "get-url", "origin"]);
-  if (!ok) return null;
-  return slugFromUrl(stdout.trim());
-}
-
 // The login of the account `gh` is authenticated as (the fork owner).
 export async function ghLogin(): Promise<string | null> {
   const { ok, stdout } = await gh(["api", "user", "--jq", ".login"]);
@@ -236,4 +229,30 @@ export async function pullRequestBody(opts: {
   ]);
   if (!ok) return "";
   return stdout;
+}
+
+// Truncated so an enormous pull request cannot blow up the agent's context.
+const MAX_DIFF_CHARS = 200_000;
+
+/**
+ * The pull request's diff.
+ *
+ * A review job runs in a worktree checked out at origin/main, so without this
+ * the agent never sees the proposed change and would be reviewing nothing.
+ */
+export async function pullRequestDiff(opts: {
+  number: number;
+  slug: string;
+}): Promise<string> {
+  const { ok, stdout } = await gh([
+    "pr",
+    "diff",
+    String(opts.number),
+    "--repo",
+    opts.slug,
+  ]);
+  if (!ok) return "";
+  return stdout.length > MAX_DIFF_CHARS
+    ? `${stdout.slice(0, MAX_DIFF_CHARS)}\n... (diff truncated)`
+    : stdout;
 }

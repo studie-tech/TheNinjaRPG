@@ -338,12 +338,24 @@ describe("regressions: loop guards and the verification window", () => {
     expect(plan.create).toBeNull();
   });
 
-  it("does not re-create a CANCELLED job either", () => {
+  it("DOES re-create after a CANCELLED job, so a reopened issue gets work again", () => {
+    // Closing an issue cancels its pending job. If CANCELLED also suppressed
+    // re-creation, reopening the issue would leave it permanently without one.
     const cancelled: ExistingJob = {
       ...job({ jobType: "ISSUE_TRIAGE", refKind: "ISSUE", refNumber: 4 }),
       status: "CANCELLED",
     };
-    expect(planIssueJob({ number: 4, labels: [] }, [cancelled]).create).toBeNull();
+    expect(planIssueJob({ number: 4, labels: [] }, [cancelled]).create).toBe(
+      "ISSUE_TRIAGE",
+    );
+  });
+
+  it("does not re-create a COMPLETED job", () => {
+    const done: ExistingJob = {
+      ...job({ jobType: "ISSUE_TRIAGE", refKind: "ISSUE", refNumber: 7 }),
+      status: "COMPLETED",
+    };
+    expect(planIssueJob({ number: 7, labels: [] }, [done]).create).toBeNull();
   });
 
   it("still creates a job when the issue has none at all", () => {

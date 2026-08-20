@@ -128,3 +128,31 @@ describe("extractAgentText error results", () => {
     ).toBe("All good.");
   });
 });
+
+describe("extractAgentText codex shapes", () => {
+  test("reads the codex msg.agent_message envelope", () => {
+    expect(
+      extractAgentText([
+        JSON.stringify({
+          msg: { type: "agent_message", message: "codex review body" },
+        }),
+      ]),
+    ).toBe("codex review body");
+  });
+
+  test("reads a flat agent_message key", () => {
+    expect(extractAgentText([JSON.stringify({ agent_message: "flat body" })])).toBe(
+      "flat body",
+    );
+  });
+
+  test("falls back to accumulated messages when no terminal event appears", () => {
+    // Codex output has shifted between versions; an unrecognised stream must
+    // still yield something rather than failing the whole job.
+    const text = extractAgentText([
+      JSON.stringify({ msg: { type: "agent_reasoning", message: "step one" } }),
+      JSON.stringify({ msg: { type: "agent_reasoning", message: "step two" } }),
+    ]);
+    expect(text).toBe("step one\n\nstep two");
+  });
+});

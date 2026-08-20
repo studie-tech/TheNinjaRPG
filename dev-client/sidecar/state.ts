@@ -80,8 +80,6 @@ export const defaultSettings: Settings = {
   claudeDailyTokenCap: 0,
   codexDailyTokenCap: 0,
   autoRun: false,
-  // Mirrors the server-verified login for display only; the client cannot set it.
-  githubLogin: null,
 };
 
 export function loadSettings(): Settings {

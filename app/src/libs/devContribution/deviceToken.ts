@@ -76,16 +76,6 @@ export const getDeviceTokenSecret = (): string => {
     .digest("hex");
 };
 
-/** True when device-token auth is usable at all (a secret is resolvable). */
-export const isDeviceTokenAuthConfigured = (): boolean => {
-  try {
-    getDeviceTokenSecret();
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 /**
  * Sign a device token for a user. Pure with respect to I/O (takes now + jti).
  */

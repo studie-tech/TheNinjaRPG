@@ -126,30 +126,24 @@ export const grantContributionReward = async (params: {
   }
 
   const reward = CONTRIBUTION_REWARDS[jobType];
-  try {
-    await updateRewards({
-      client,
-      user,
-      reason: `DEV_CONTRIBUTION_${jobType}`,
-      rewards: postProcessRewards({
-        ...ObjectiveReward.parse({}),
-        reward_money: reward.money,
-        reward_exp: reward.exp,
-        reward_reputation: reward.reputation,
-      }),
-    });
-  } catch (error) {
-    // The slot and the rewardGranted flag were already taken, so a failure here
-    // would otherwise cost the contributor one of their five daily slots and
-    // pay nothing. Undo both and report the failure, leaving the job eligible
-    // to be paid on a later attempt.
-    await releaseRewardSlot(client, userId, today);
-    await client
-      .update(devJob)
-      .set({ rewardGranted: false, updatedAt: new Date() })
-      .where(eq(devJob.id, jobId));
-    throw error;
-  }
+  // rewardGranted is deliberately NOT rolled back if this throws. updateRewards
+  // is not atomic — it fans out into several writes — so a failure can leave the
+  // payout partially applied. Clearing the flag would let the retry path
+  // (resolvePendingVerifications) pay the same job a second time and credit the
+  // applied part twice. Leaving it set makes the payout at-most-once, which for
+  // an economy is the right way to fail: the operator can reconcile a rare
+  // under-payment, but a double credit is unrecoverable.
+  await updateRewards({
+    client,
+    user,
+    reason: `DEV_CONTRIBUTION_${jobType}`,
+    rewards: postProcessRewards({
+      ...ObjectiveReward.parse({}),
+      reward_money: reward.money,
+      reward_exp: reward.exp,
+      reward_reputation: reward.reputation,
+    }),
+  });
 
   return reward;
 };

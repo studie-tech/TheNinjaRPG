@@ -144,14 +144,15 @@ export const resolvePendingVerifications = async (
   db: DrizzleClient,
   nowMs: number,
   options: { fetchImpl?: FetchImpl; token?: string } = {},
-): Promise<{ resolved: number; rewarded: number }> => {
+): Promise<{ resolved: number; rewarded: number; errors: string[] }> => {
   const fetchImpl = options.fetchImpl ?? ghFetch;
+  const errors: string[] = [];
   const pending = await db
     .select()
     .from(devJob)
     .where(eq(devJob.status, "VERIFYING"))
     .limit(200);
-  if (pending.length === 0) return { resolved: 0, rewarded: 0 };
+  if (pending.length === 0) return { resolved: 0, rewarded: 0, errors };
 
   const userIds = [...new Set(pending.map((j) => j.claimedByUserId).filter(Boolean))];
   const profiles = userIds.length
@@ -168,56 +169,64 @@ export const resolvePendingVerifications = async (
   for (const job of pending) {
     const userId = job.claimedByUserId;
     if (!userId) continue;
-    const claimedAt = job.claimedAt?.getTime() ?? job.createdAt.getTime();
-    const verification = await verifyContributionResult(
-      {
-        jobType: job.jobType,
-        refNumber: job.refNumber,
-        githubLogin: loginFor.get(userId) ?? "",
-        claimedAt,
-        nowMs,
-        windowMs: CONTRIBUTION_VERIFY_WINDOW_MS,
-      },
-      { fetchImpl, token: options.token },
-    );
+    // Each job is isolated: one that keeps throwing — for instance the
+    // deliberate rethrow when a payout fails — must not stall every other
+    // contributor's pending verification on this and every later tick.
+    try {
+      const claimedAt = job.claimedAt?.getTime() ?? job.createdAt.getTime();
+      const verification = await verifyContributionResult(
+        {
+          jobType: job.jobType,
+          refNumber: job.refNumber,
+          githubLogin: loginFor.get(userId) ?? "",
+          claimedAt,
+          nowMs,
+          windowMs: CONTRIBUTION_VERIFY_WINDOW_MS,
+        },
+        { fetchImpl, token: options.token },
+      );
 
-    const expired = nowMs - claimedAt > CONTRIBUTION_VERIFY_RETRY_MS;
-    if (!verification.verified && verification.retryable && !expired) {
-      continue; // leave VERIFYING; try again next tick
+      const expired = nowMs - claimedAt > CONTRIBUTION_VERIFY_RETRY_MS;
+      if (!verification.verified && verification.retryable && !expired) {
+        continue; // leave VERIFYING; try again next tick
+      }
+
+      let reward = null;
+      if (verification.verified) {
+        reward = await grantContributionReward({
+          client: db,
+          userId,
+          jobId: job.id,
+          jobType: job.jobType,
+          today: getUtcDateString(new Date(nowMs)),
+        });
+      }
+
+      const closed = await db
+        .update(devJob)
+        .set({
+          status: "COMPLETED",
+          completedAt: new Date(nowMs),
+          resultUrl: verification.resultUrl ?? job.resultUrl,
+          error: verification.verified
+            ? null
+            : (verification.error ?? "Result could not be verified"),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(devJob.id, job.id), eq(devJob.status, "VERIFYING")));
+
+      if (closed.rowsAffected === 1) {
+        resolved += 1;
+        if (reward) rewarded += 1;
+      }
+    } catch (error) {
+      errors.push(
+        `job ${job.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
-
-    let reward = null;
-    if (verification.verified) {
-      reward = await grantContributionReward({
-        client: db,
-        userId,
-        jobId: job.id,
-        jobType: job.jobType,
-        today: getUtcDateString(new Date(nowMs)),
-      });
-    }
-
-    const closed = await db
-      .update(devJob)
-      .set({
-        status: "COMPLETED",
-        completedAt: new Date(nowMs),
-        resultUrl: verification.resultUrl ?? job.resultUrl,
-        error: verification.verified
-          ? null
-          : (verification.error ?? "Result could not be verified"),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(devJob.id, job.id), eq(devJob.status, "VERIFYING")));
-
-    if (closed.rowsAffected === 1) {
-      resolved += 1;
-      if (reward) rewarded += 1;
-    }
-    await releaseClaimSlots(db, [job.id]);
   }
 
-  return { resolved, rewarded };
+  return { resolved, rewarded, errors };
 };
 
 /**
@@ -240,24 +249,29 @@ export const releaseOrphanedClaimSlots = async (db: DrizzleClient) => {
     .select({ id: devJob.id, status: devJob.status })
     .from(devJob)
     .where(inArray(devJob.id, jobIds));
-  const live = new Set(
-    liveRows
-      .filter((j) => j.status === "CLAIMED" || j.status === "VERIFYING")
-      .map((j) => j.id),
-  );
+  // Only a CLAIMED job legitimately holds the slot; VERIFYING releases it at
+  // submission time so the contributor can start their next job.
+  const live = new Set(liveRows.filter((j) => j.status === "CLAIMED").map((j) => j.id));
 
   const stale = held.filter((h) => !live.has(h.activeJobId as number));
   if (stale.length === 0) return 0;
-  await db
-    .update(devContributionProfile)
-    .set({ activeJobId: null, updatedAt: new Date() })
-    .where(
-      inArray(
-        devContributionProfile.userId,
-        stale.map((s) => s.userId),
-      ),
-    );
-  return stale.length;
+  // Compare-and-swap on the job id that was read: a slot legitimately re-taken
+  // between the read above and this write must not be cleared out from under
+  // the claim that now holds it.
+  let cleared = 0;
+  for (const slot of stale) {
+    const result = await db
+      .update(devContributionProfile)
+      .set({ activeJobId: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(devContributionProfile.userId, slot.userId),
+          eq(devContributionProfile.activeJobId, slot.activeJobId as number),
+        ),
+      );
+    cleared += result.rowsAffected;
+  }
+  return cleared;
 };
 
 // GitHub's /issues endpoint also returns pull requests; those are skipped here
@@ -410,12 +424,14 @@ export const runMaintenance = async (
   }
 
   try {
-    const { resolved, rewarded } = await resolvePendingVerifications(db, nowMs, {
-      fetchImpl,
-      token,
-    });
+    const { resolved, rewarded, errors } = await resolvePendingVerifications(
+      db,
+      nowMs,
+      { fetchImpl, token },
+    );
     report.verificationsResolved = resolved;
     report.verificationsRewarded = rewarded;
+    report.errors.push(...errors);
   } catch (error) {
     note("verification retry failed", error);
   }
