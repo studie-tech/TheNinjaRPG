@@ -1,30 +1,35 @@
 #!/usr/bin/env bash
 # Ensure the shared TNR local service stack (docker compose) is up.
-# Idempotent and safe to run in parallel across worktrees: every worktree
-# resolves to the same compose project, and only the services that are actually
-# missing are started, so a run from one worktree never disturbs containers
-# another worktree is using. The compose call is serialized with a lock so
-# concurrent worktrees do not race on container creation.
+#
+# Safe to run from several worktrees at once. There is deliberately no lock:
+# concurrent runs can only collide by trying to create the same container, and
+# docker resolves that itself — one wins, the loser gets a name conflict. So
+# this retries and judges by whether the stack is actually up, which is both
+# simpler and more robust than coordinating the runs.
+#
+# The two rules that keep concurrent runs from hurting each other:
+#   - only services that are not running are ever passed to `up`, so a container
+#     another worktree is using is never named and so never recreated;
+#   - a service that exists but is not ready yet is waited on, never started.
 set -euo pipefail
 
+# Pinned rather than inferred: compose would otherwise derive the project from
+# the compose file's parent directory, which an ambient COMPOSE_PROJECT_NAME can
+# silently override, splitting the "shared" stack in two. This is the name the
+# existing containers already carry, so pinning it changes nothing today.
+COMPOSE_PROJECT=devcontainer
 COMPOSE_FILE="$(git rev-parse --show-toplevel)/.devcontainer/docker-compose.yml"
-LOCK="/tmp/tnr-dev-services.lock.d"
-# A holder keeps its lock's mtime fresh while it works, so a lock that stops
-# being touched really has lost its owner. `ps` cannot answer this on its own:
-# a pid recorded by a process in another pid namespace is readable here but not
-# resolvable, and treating that as dead would reclaim a lock whose compose is
-# still running.
-HEARTBEAT_SECONDS=10
-STALE_SECONDS=60
-# ~20 minutes at 0.5s intervals: long enough for a cold first start (image pulls
-# plus database init). Every iteration re-checks the stack, so waiters exit as
-# soon as the services are up.
-WAIT_TRIES=2400
-# Bound `--wait` so a service that never comes up cannot hold the lock forever.
+# Bound `--wait` so a service that never comes up cannot stall a run forever.
 COMPOSE_WAIT_TIMEOUT=300
-# ~5 minutes at 2s intervals, for a stack that is running but still starting up
-# (a cold database restart, say) and so needs waiting rather than starting.
+# ~5 minutes at 2s intervals, for a stack that is running but still starting up.
 READY_WAIT_TRIES=150
+# Retries exist for losing a container-creation race to another worktree, which
+# resolves as soon as the winner's container exists.
+START_ATTEMPTS=3
+
+compose() {
+  docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" "$@"
+}
 
 if ! docker ps --format '{{.Names}}' >/dev/null 2>&1; then
   echo "dev-services: ERROR: docker daemon not reachable. Start Docker and retry." >&2
@@ -33,17 +38,28 @@ fi
 
 # Take the expected service set from the compose file itself: a hardcoded list
 # silently stops covering services that are added or renamed later.
-expected_services="$(docker compose -f "$COMPOSE_FILE" config --services)"
+expected_services="$(compose config --services)"
 if [ -z "$expected_services" ]; then
   echo "dev-services: ERROR: no services defined in $COMPOSE_FILE" >&2
   exit 1
 fi
 
-# `--status running` excludes created and exited containers, so a service that
-# died counts as missing rather than as a healthy stack.
+# Errors are reported, never swallowed: "I could not determine the state" must
+# not be read as "nothing is running", which would make the caller recreate
+# containers other worktrees are using.
+running_services() {
+  local out
+  if ! out="$(compose ps --services --status running 2>&1)"; then
+    echo "dev-services: ERROR: could not query service state:" >&2
+    printf '%s\n' "$out" >&2
+    return 1
+  fi
+  printf '%s\n' "$out"
+}
+
 missing_services() {
   local running s
-  running="$(docker compose -f "$COMPOSE_FILE" ps --services --status running 2>/dev/null || true)"
+  running="$(running_services)" || return 1
   while IFS= read -r s; do
     [ -n "$s" ] || continue
     printf '%s\n' "$running" | grep -qx "$s" || printf '%s\n' "$s"
@@ -51,214 +67,93 @@ missing_services() {
 }
 
 # Running is not the same as ready: `--status running` reports container state
-# and ignores health, so a database that is up but still initialising would pass.
-# Services without a healthcheck have nothing to report and count as ready.
+# and ignores health, so a database that is up but still initialising would
+# pass. Services without a healthcheck have nothing to report and count as ready.
 unready_services() {
-  local ids
-  ids="$(docker compose -f "$COMPOSE_FILE" ps -q --status running 2>/dev/null || true)"
+  local ids out
+  ids="$(compose ps -q --status running 2>/dev/null || true)"
   [ -n "$ids" ] || return 0
-  printf '%s\n' "$ids" | xargs docker inspect \
-    -f '{{index .Config.Labels "com.docker.compose.service"}} {{if .State.Health}}{{.State.Health.Status}}{{else}}healthy{{end}}' \
-    2>/dev/null | awk '$2 != "healthy" { print $1 }'
+  if ! out="$(printf '%s\n' "$ids" | xargs docker inspect \
+    -f '{{index .Config.Labels "com.docker.compose.service"}} {{if .State.Health}}{{.State.Health.Status}}{{else}}healthy{{end}}' 2>&1)"; then
+    echo "dev-services: ERROR: could not inspect service health:" >&2
+    printf '%s\n' "$out" >&2
+    return 1
+  fi
+  printf '%s\n' "$out" | awk '$2 != "healthy" { print $1 }'
 }
 
-services_up() {
-  [ -z "$(missing_services)" ] && [ -z "$(unready_services)" ]
-}
-
-# Wait out a service that is running but still coming up. Nothing to start here,
-# so this deliberately takes no lock and never calls compose — recreating a
-# container another worktree is already using is exactly what must not happen.
 wait_for_ready() {
-  local i
+  local i unready
   for i in $(seq 1 "$READY_WAIT_TRIES"); do
-    [ -z "$(unready_services)" ] && return 0
+    unready="$(unready_services)" || return 1
+    [ -z "$unready" ] && return 0
     sleep 2
   done
   return 1
 }
 
-if services_up; then
-  echo "dev-services: all shared services already running"
-  exit 0
-fi
+report_stuck() {
+  echo "dev-services: ERROR: services never became ready: $1" >&2
+  echo "dev-services: inspect with: docker compose -p $COMPOSE_PROJECT -f $COMPOSE_FILE ps" >&2
+  echo "dev-services: to rebuild the stack from the current compose file: make docker-apply" >&2
+}
 
-# Everything exists and is running, it is just not ready yet: wait rather than
-# start, so this run never disturbs containers another worktree is using.
-if [ -z "$(missing_services)" ]; then
-  echo "dev-services: waiting for $(unready_services | tr '\n' ' ')to become ready"
-  if wait_for_ready; then
-    echo "dev-services: all shared services ready"
+for attempt in $(seq 1 "$START_ATTEMPTS"); do
+  missing="$(missing_services)" || exit 1
+  unready="$(unready_services)" || exit 1
+
+  if [ -z "$missing" ] && [ -z "$unready" ]; then
+    echo "dev-services: all shared services already running"
     exit 0
   fi
-  echo "dev-services: ERROR: still not ready: $(unready_services | tr '\n' ' ')" >&2
-  echo "dev-services: inspect with: docker compose -f $COMPOSE_FILE ps" >&2
+
+  # Everything exists, it is just not ready yet: wait rather than start, so this
+  # run never disturbs a container another worktree is using.
+  if [ -z "$missing" ]; then
+    echo "dev-services: waiting for $(printf '%s' "$unready" | tr '\n' ' ')to become ready"
+    if wait_for_ready; then
+      echo "dev-services: all shared services ready"
+      exit 0
+    fi
+    report_stuck "$(unready_services | tr '\n' ' ')"
+    exit 1
+  fi
+
+  # Name only the missing services. Compose resolves relative paths (the proxy's
+  # ./nginx.conf bind, env_file) against the worktree it runs from, so an
+  # unscoped `up` would recreate healthy containers under another worktree's dev
+  # server; naming the missing ones leaves those untouched while still
+  # recreating a broken container against this worktree's paths. --no-deps keeps
+  # compose from touching healthy dependencies — anything genuinely missing is
+  # already listed.
+  missing_list=()
+  while IFS= read -r service; do
+    [ -n "$service" ] && missing_list+=("$service")
+  done <<<"$missing"
+  echo "dev-services: starting ${missing_list[*]}"
+
+  if compose up -d --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT" --no-deps "${missing_list[@]}"; then
+    continue # re-evaluate at the top; readiness is judged there, not here
+  fi
+
+  # A concurrent worktree may have created the same container first, which fails
+  # this run with a name conflict. That is benign, so long as the stack ends up
+  # running; the loop re-checks and only the last attempt reports failure.
+  if [ "$attempt" -lt "$START_ATTEMPTS" ]; then
+    echo "dev-services: start attempt $attempt failed, re-checking (a concurrent worktree may have won)"
+    sleep 3
+    continue
+  fi
+  echo "dev-services: ERROR: could not start: ${missing_list[*]}" >&2
+  report_stuck "${missing_list[*]}"
   exit 1
-fi
-
-echo "dev-services: starting shared service stack"
-
-# Portable mtime in seconds. BSD `stat -f %m` prints the mtime, but GNU
-# `stat -f %m` prints filesystem info, so verify digits before trusting it and
-# fall back to GNU `stat -c %Y`.
-mtime_of() {
-  local v
-  v="$(stat -f %m "$1" 2>/dev/null || true)"
-  case "$v" in
-    '' | *[!0-9]*) v="$(stat -c %Y "$1" 2>/dev/null || true)" ;;
-  esac
-  printf '%s' "${v:-0}"
-}
-
-lock_pid() {
-  [ -f "$LOCK/pid" ] || return 1
-  local pid
-  pid="$(cat "$LOCK/pid" 2>/dev/null || true)"
-  case "$pid" in
-    '' | *[!0-9]*) return 1 ;;
-  esac
-  printf '%s' "$pid"
-}
-
-# Only ever used to refuse a reclaim, never to trigger one: a visible owner is
-# proof the lock is held, while an invisible one proves nothing (it may live in
-# another pid namespace) and is left to the heartbeat age check.
-# `ps -p` is used instead of `kill -0` because kill reports "no such process"
-# for PIDs owned by other users even when they are alive.
-lock_owner_alive() {
-  local pid
-  pid="$(lock_pid)" || return 1
-  ps -p "$pid" >/dev/null 2>&1
-}
-
-# Reclaiming a lock happens behind a second lock, and the owner is re-checked
-# once that is held. Without this, two waiters can both decide the same lock is
-# stale, and the second one removes the lock the first has just legitimately
-# recreated, leaving both convinced they hold it.
-try_steal() {
-  local steal="$LOCK.steal" now
-  if ! mkdir "$steal" 2>/dev/null; then
-    # Reclaim a reclaim-lock that outlived its owner; a real steal is instant.
-    now="$(date +%s)"
-    if [ -d "$steal" ] && [ $((now - $(mtime_of "$steal"))) -gt 60 ]; then
-      rm -rf "$steal"
-    fi
-    return 1
-  fi
-  # Re-check while holding the reclaim lock: the holder may have been replaced,
-  # or a heartbeat may have landed, since this waiter decided.
-  if lock_owner_alive ||
-    [ $(($(date +%s) - $(mtime_of "$LOCK"))) -le "$STALE_SECONDS" ]; then
-    rmdir "$steal" 2>/dev/null || true
-    return 1
-  fi
-  rm -rf "$LOCK"
-  # A plain waiter may win the freed path here; then this mkdir fails and it
-  # keeps the lock, which is correct.
-  if mkdir "$LOCK" 2>/dev/null; then
-    printf '%s\n' "$$" >"$LOCK/pid"
-    rmdir "$steal" 2>/dev/null || true
-    return 0
-  fi
-  rmdir "$steal" 2>/dev/null || true
-  return 1
-}
-
-# Take the lock (mkdir is atomic). While another worktree holds it, re-check the
-# stack every iteration and reclaim only once the lock has gone STALE_SECONDS
-# without a heartbeat.
-acquired=0
-mkdir_fail_streak=0
-for _ in $(seq 1 "$WAIT_TRIES"); do
-  if services_up; then
-    echo "dev-services: services were started by a concurrent worktree"
-    exit 0
-  fi
-  if mkdir_err="$(mkdir "$LOCK" 2>&1)"; then
-    printf '%s\n' "$$" >"$LOCK/pid"
-    acquired=1
-    break
-  elif [ -d "$LOCK" ]; then
-    # Normal contention.
-    mkdir_fail_streak=0
-  else
-    # mkdir failed and the directory is not there: either the holder released it
-    # in the gap, or the path is unusable (read-only or full /tmp). Only treat a
-    # run of failures as fatal, so a released lock is retried rather than
-    # reported as a broken filesystem.
-    mkdir_fail_streak=$((mkdir_fail_streak + 1))
-    if [ "$mkdir_fail_streak" -ge 3 ]; then
-      echo "dev-services: ERROR: cannot create lock $LOCK: $mkdir_err" >&2
-      exit 1
-    fi
-  fi
-  if ! lock_owner_alive && try_steal; then
-    acquired=1
-    break
-  fi
-  sleep 0.5
 done
-[ "$acquired" -eq 1 ] || {
-  echo "dev-services: ERROR: could not acquire lock $LOCK. If a previous holder crashed, remove it and retry." >&2
-  exit 1
-}
 
-cleanup() {
-  # Releasing the lock must not depend on the heartbeat still being killable:
-  # under `set -e` a failing kill would abort the trap before `rm -rf`, leaking
-  # the lock and turning a successful run into a non-zero exit.
-  if [ -n "${heartbeat_pid:-}" ]; then
-    kill "$heartbeat_pid" 2>/dev/null || true
-  fi
-  rm -rf "$LOCK"
-}
-trap cleanup EXIT
-
-# Keep the lock's mtime fresh for as long as this run holds it, so waiters can
-# tell a slow holder from a dead one without needing to resolve its pid.
-# The owner check is what makes that true: a SIGKILLed run never reaches its
-# trap, and a heartbeat that outlived it would refresh the lock forever and
-# deadlock every other worktree.
-owner_pid=$$
-(
-  while sleep "$HEARTBEAT_SECONDS"; do
-    kill -0 "$owner_pid" 2>/dev/null || exit 0
-    touch "$LOCK" 2>/dev/null || exit 0
-  done
-) &
-heartbeat_pid=$!
-
-# Re-check under the lock: a concurrent worktree may have started the stack
-# while we waited.
-missing=()
-while IFS= read -r service; do
-  [ -n "$service" ] && missing+=("$service")
-done <<<"$(missing_services)"
-if [ "${#missing[@]}" -eq 0 ]; then
-  echo "dev-services: services were started by a concurrent worktree"
+# Fell out of the loop: the last attempt started things but they still are not
+# ready, which the top of the loop would have reported had it run again.
+if missing="$(missing_services)" && [ -z "$missing" ] && wait_for_ready; then
+  echo "dev-services: shared service stack is up"
   exit 0
 fi
-
-# Name only the missing services. Compose resolves relative paths (the proxy's
-# ./nginx.conf bind, env_file) against the worktree it runs from, so an
-# unscoped `up` would recreate healthy containers under another worktree's dev
-# server; naming the missing ones leaves those untouched while still recreating
-# a broken container against this worktree's paths. --no-deps keeps compose from
-# touching healthy dependencies — anything genuinely missing is already listed.
-echo "dev-services: starting ${missing[*]}"
-if ! docker compose -f "$COMPOSE_FILE" up -d --wait \
-  --wait-timeout "$COMPOSE_WAIT_TIMEOUT" --no-deps "${missing[@]}"; then
-  # A starter this lock cannot see (another mount namespace, e.g. a container
-  # sharing the host docker socket) can win the race to create a container and
-  # fail this compose with a name conflict. Sample twice so a container that is
-  # merely flapping is not mistaken for a healthy stack.
-  if services_up && sleep 2 && services_up; then
-    echo "dev-services: stack was completed by a concurrent starter"
-    exit 0
-  fi
-  echo "dev-services: ERROR: docker compose up failed for ${missing[*]}." >&2
-  echo "dev-services: to rebuild the stack against this worktree, run:" >&2
-  echo "  docker compose -f $COMPOSE_FILE up -d --wait" >&2
-  exit 1
-fi
-echo "dev-services: shared service stack is up"
+report_stuck "$(missing_services | tr '\n' ' ')"
+exit 1
