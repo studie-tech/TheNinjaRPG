@@ -251,15 +251,16 @@ export const createTRPCRouter = t.router;
  * guarantee that a user querying is authorized, but you can still access user session data if they
  * are logged in.
  */
-export const publicProcedure = t.procedure
-  .use(ratelimitMiddleware)
-  .use(sentryMiddleware);
-
 /**
  * Device tokens (desktop dev client) authenticate the same way a Clerk session
  * does, so without this they would grant the caller the whole API — bank
  * transfers, item trades, everything. Scope them to the router they were minted
  * for, so a leaked token is limited to contribution bookkeeping.
+ *
+ * Applied to public procedures as well as protected ones: a number of public
+ * queries personalise their results from ctx.userId, which a device token also
+ * populates, so scoping only protectedProcedure would still leak the owner's
+ * data to a stolen token.
  */
 const DEVICE_TOKEN_ROUTER_PREFIX = "devContribution.";
 
@@ -272,6 +273,11 @@ const enforceDeviceTokenScope = t.middleware(async ({ ctx: context, path, next }
   }
   return next();
 });
+
+export const publicProcedure = t.procedure
+  .use(enforceDeviceTokenScope)
+  .use(ratelimitMiddleware)
+  .use(sentryMiddleware);
 
 const enforceUserIsAuthed = t.middleware(
   async ({ ctx: context, path, getRawInput, next }) => {
