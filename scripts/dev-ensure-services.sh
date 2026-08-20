@@ -51,12 +51,18 @@ fi
 # not be read as "nothing is running", which would make the caller recreate
 # containers other worktrees are using.
 running_services() {
-  local out
-  if ! out="$(compose ps --services --status running 2>&1)"; then
+  local out err rc=0
+  err="$(mktemp)"
+  # stdout only: compose writes warnings to stderr even on success, and those
+  # lines would otherwise be consumed as data.
+  out="$(compose ps --services --status running 2>"$err")" || rc=$?
+  if [ "$rc" -ne 0 ]; then
     echo "dev-services: ERROR: could not query service state:" >&2
-    printf '%s\n' "$out" >&2
+    cat "$err" >&2
+    rm -f "$err"
     return 1
   fi
+  rm -f "$err"
   printf '%s\n' "$out"
 }
 
@@ -73,14 +79,21 @@ missing_services() {
 # and ignores health, so a database that is up but still initialising would
 # pass. Services without a healthcheck have nothing to report and count as ready.
 unready_services() {
-  local ids out err
+  local ids out err rc
   # Same discipline as running_services: a failed query must not read as
   # "nothing is running", which here would mean "nothing is unready".
-  if ! ids="$(compose ps -q --status running 2>&1)"; then
+  err="$(mktemp)"
+  rc=0
+  # stdout only: a stderr warning here would be fed to `docker inspect` below as
+  # if it were a container id.
+  ids="$(compose ps -q --status running 2>"$err")" || rc=$?
+  if [ "$rc" -ne 0 ]; then
     echo "dev-services: ERROR: could not query service ids:" >&2
-    printf '%s\n' "$ids" >&2
+    cat "$err" >&2
+    rm -f "$err"
     return 1
   fi
+  rm -f "$err"
   [ -n "$ids" ] || return 0
   err=0
   out="$(printf '%s\n' "$ids" | xargs docker inspect \
@@ -98,16 +111,19 @@ unready_services() {
 # Ready means every expected service is present AND healthy. Checking health
 # alone would call a stack ready once its containers had gone away, since a
 # container that is not running reports no health at all.
+# Returns 0 ready, 1 query failed, 2 timed out, 3 a service went missing. The
+# caller must tell 2 from 3: waiting again after a timeout just burns the same
+# budget over, while a service that vanished does need another pass.
 wait_for_ready() {
   local i unready missing
   for i in $(seq 1 "$READY_WAIT_TRIES"); do
     missing="$(missing_services)" || return 1
     unready="$(unready_services)" || return 1
     [ -z "$missing" ] && [ -z "$unready" ] && return 0
-    [ -n "$missing" ] && return 1 # a service vanished; the caller re-evaluates
+    [ -n "$missing" ] && return 3
     sleep 2
   done
-  return 1
+  return 2
 }
 
 report_stuck() {
@@ -129,13 +145,15 @@ for attempt in $(seq 1 "$START_ATTEMPTS"); do
   # run never disturbs a container another worktree is using.
   if [ -z "$missing" ]; then
     echo "dev-services: waiting for $(printf '%s\n' "$unready" | tr '\n' ' ')to become ready"
-    if wait_for_ready; then
+    rc=0
+    wait_for_ready || rc=$?
+    if [ "$rc" -eq 0 ]; then
       echo "dev-services: all shared services ready"
       exit 0
     fi
-    # A service may have vanished rather than timed out; re-evaluate unless this
-    # was the last attempt.
-    if [ "$attempt" -lt "$START_ATTEMPTS" ]; then
+    # Only a vanished service is worth another pass; a timeout would just wait
+    # the same budget again.
+    if [ "$rc" -eq 3 ] && [ "$attempt" -lt "$START_ATTEMPTS" ]; then
       continue
     fi
     report_stuck "$(unready_services | tr '\n' ' ')"
