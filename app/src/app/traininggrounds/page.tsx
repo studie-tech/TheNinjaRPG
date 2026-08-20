@@ -775,7 +775,11 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       })
       .map((j) => {
         const uj = userJutsus?.find((uj) => uj.jutsuId === j.id);
-        return { ...j, level: uj?.level || 0 };
+        return {
+          ...j,
+          level: uj?.level || 0,
+          highlight: isJutsuPickStep && j.id === TUTORIAL_JUTSU_ID,
+        };
       })
       .filter((j) => j.level < getJutsuLevelCap(j))
       .sort((a, b) => b.level - a.level) ?? [];
@@ -791,14 +795,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       ...tutorialJutsu,
       level: owned?.level || 0,
       highlight: true,
-    });
-  } else if (isJutsuPickStep && alljutsus[0]?.id === TUTORIAL_JUTSU_ID) {
-    alljutsus[0] = { ...alljutsus[0], highlight: true };
+    } as (typeof alljutsus)[number]);
   } else if (isJutsuPickStep) {
     const pinnedIdx = alljutsus.findIndex((j) => j.id === TUTORIAL_JUTSU_ID);
     if (pinnedIdx > 0) {
       const [pinned] = alljutsus.splice(pinnedIdx, 1);
-      if (pinned) alljutsus.unshift({ ...pinned, highlight: true });
+      if (pinned) alljutsus.unshift(pinned);
     }
   }
 
