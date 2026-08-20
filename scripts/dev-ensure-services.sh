@@ -176,8 +176,13 @@ trap cleanup EXIT
 
 # Keep the lock's mtime fresh for as long as this run holds it, so waiters can
 # tell a slow holder from a dead one without needing to resolve its pid.
+# The owner check is what makes that true: a SIGKILLed run never reaches its
+# trap, and a heartbeat that outlived it would refresh the lock forever and
+# deadlock every other worktree.
+owner_pid=$$
 (
   while sleep "$HEARTBEAT_SECONDS"; do
+    kill -0 "$owner_pid" 2>/dev/null || exit 0
     touch "$LOCK" 2>/dev/null || exit 0
   done
 ) &
