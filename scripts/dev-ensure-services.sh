@@ -63,9 +63,11 @@ mtime_of() {
 }
 
 # True when the work that took the lock is still in flight: the owning process
-# (pid file) is alive, or a `docker compose` for this stack is still running
-# (covers the owner being SIGKILLed while its compose child continues, from
-# this worktree or any other).
+# (pid file) is alive, or a `compose up` for this stack is still running (covers
+# the owner being SIGKILLed while its compose child continues, from this
+# worktree or any other). The pattern matches `up` only: waiters run
+# `compose ... ps` every iteration, and matching that would make each waiter
+# read the others as a live owner and never recover a stale lock.
 # `ps -p` is used instead of `kill -0` because kill reports "no such process"
 # for PIDs owned by other users even when they are alive.
 lock_owner_alive() {
@@ -77,7 +79,7 @@ lock_owner_alive() {
       *) ps -p "$pid" >/dev/null 2>&1 && return 0 ;;
     esac
   fi
-  pgrep -f 'compose -f .*\.devcontainer/docker-compose\.yml' >/dev/null 2>&1
+  pgrep -f 'compose -f .*\.devcontainer/docker-compose\.yml up' >/dev/null 2>&1
 }
 
 # Take the lock (mkdir is atomic). If another worktree holds it, re-check the

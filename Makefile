@@ -136,12 +136,12 @@ browser-tools-server: # Run browser-tools MCP server, allowing AI to see browser
 
 --------------Migrations----------------: # -------------------------------------------------------
 .PHONY: dbpush
-dbpush: ensure-env # Push schema to db without creating migrations
+dbpush: ensure-env ensure-services # Push schema to db without creating migrations
 	@echo "${YELLOW}Pushing database schema to database${RESET}"
 	cd app && bun dbpush
 
 .PHONY: seed
-seed: ensure-env # Seed database
+seed: ensure-env ensure-services # Seed database
 	@echo "${YELLOW}Seed data into database ${RESET}"
 	@echo $(DATABASE_URL)
 	cd app && bun seed
