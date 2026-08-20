@@ -164,7 +164,12 @@ done
 }
 
 cleanup() {
-  [ -n "${heartbeat_pid:-}" ] && kill "$heartbeat_pid" 2>/dev/null
+  # Releasing the lock must not depend on the heartbeat still being killable:
+  # under `set -e` a failing kill would abort the trap before `rm -rf`, leaking
+  # the lock and turning a successful run into a non-zero exit.
+  if [ -n "${heartbeat_pid:-}" ]; then
+    kill "$heartbeat_pid" 2>/dev/null || true
+  fi
   rm -rf "$LOCK"
 }
 trap cleanup EXIT
