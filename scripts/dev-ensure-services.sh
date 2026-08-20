@@ -125,8 +125,8 @@ try_steal() {
 }
 
 # Take the lock (mkdir is atomic). While another worktree holds it, re-check the
-# stack every iteration and reclaim only when the owner is provably gone, or
-# when an unidentifiable lock has aged past STALE_SECONDS.
+# stack every iteration and reclaim only once the lock has gone STALE_SECONDS
+# without a heartbeat.
 acquired=0
 mkdir_fail_streak=0
 for _ in $(seq 1 "$WAIT_TRIES"); do
