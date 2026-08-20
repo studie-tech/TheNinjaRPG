@@ -41,6 +41,7 @@ import {
   isQuestObjectiveAvailable,
 } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
+import { isTutorialPageMatch } from "@/libs/tutorial";
 import { getMobileOperatingSystem } from "@/utils/hardware";
 import { parseHtml } from "@/utils/parse";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
@@ -325,6 +326,13 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       const onBattlePage = pathname === "/combat";
       const toBattlePage = currentStepConfig?.page === "/combat";
 
+      // Abandoned tutorial fights leave the user in BATTLE; pull them back
+      // before trying to render a later step on the wrong page.
+      if (inBattle && !onBattlePage) {
+        router.push("/combat");
+        return;
+      }
+
       // Check if we need to show the special Game Menu tutorial
       // Show it when on mobile, sidebar is closed, and we're at a step that requires the game menu
       const shouldShowGameMenuTutorial =
@@ -343,7 +351,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       // Handle regular tutorial steps
       if (!shouldShowGameMenuTutorial) {
         // Show tutorial if we have a valid step and we're on the right page
-        const onCorrectPage = currentStepConfig?.page?.includes(pathname);
+        const onCorrectPage = isTutorialPageMatch(currentStepConfig?.page, pathname);
         const hasRequiredGameMenu =
           currentStepConfig?.requiresGameMenu && isMobile ? rightSideBarOpen : true;
 
@@ -449,7 +457,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     }
 
     // If we're not on the correct page for this step, don't try to highlight
-    if (!step.page?.includes(pathname)) {
+    if (!isTutorialPageMatch(step.page, pathname)) {
       return;
     }
 
@@ -632,8 +640,10 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
         if (showGameMenuTutorial) {
           // If showing game menu tutorial, open the sidebar
           setRightSideBarOpen(true);
-        } else {
-          // Otherwise, proceed to next step
+        } else if (
+          currentStep?.showNextButton ||
+          currentStep?.proceedOnHighlightClick
+        ) {
           handleNextStep();
         }
       }
@@ -654,6 +664,8 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     handleNextStep,
     setRightSideBarOpen,
     router,
+    currentStep?.showNextButton,
+    currentStep?.proceedOnHighlightClick,
   ]);
 
   // Post tutorial state - quest data from userData

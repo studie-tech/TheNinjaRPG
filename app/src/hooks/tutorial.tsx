@@ -15,6 +15,7 @@ import {
 import { availableUserActions } from "@/libs/combat/actions";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { getDistanceToClosestEnemy } from "@/libs/combat/util";
+import { TUTORIAL_CAPTURE_SECTOR, TUTORIAL_HOME_SECTOR } from "@/libs/tutorial";
 import { combatActionIdAtom, userBattleAtom, useUserData } from "@/utils/UserContext";
 
 export interface TutorialStepConfig {
@@ -81,6 +82,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile",
     proceedOnHighlightClick: true,
     requiresGameMenu: true,
+    showNextButton: true,
   },
   {
     id: "YPfhJfdsl37V",
@@ -256,7 +258,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     hideDialog: true,
   },
   {
-    id: "YP5PEaCvfhJfdsl37V",
+    id: "YP5PEaCvfhJfdsl37V-academy",
     title: "Assigning Stats",
     description:
       "Wow, you're picking up things fast. You already acquired a substantial amount of additional XP. Let's go assign it before we proceed on the mission.",
@@ -264,6 +266,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/academy",
     proceedOnHighlightClick: true,
     requiresGameMenu: true,
+    showNextButton: true,
   },
   {
     id: "YPfhJfdsl37dsaV",
@@ -277,7 +280,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile/experience",
   },
   {
-    id: "f34p798tfn0327",
+    id: "f34p798tfn0327-mission-1",
     title: "Level Up!",
     description:
       "Another level up! Perfect, this will make our practise mission easier. Get your level, and then we head out of the village.",
@@ -285,7 +288,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile",
   },
   {
-    id: "f34p798tfn0327",
+    id: "f34p798tfn0327-mission-2",
     title: "Level Up!",
     description:
       "Another level up! Perfect, this will make our practise mission easier. Get your level, and then we head out of the village.",
@@ -323,7 +326,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "For our mission, we need to travel to another sector, so let's go to the global map. Here you can see the entire world of Seichi. We are currently in the starting village of Horizon. To proceed, tap the quest marker \u{1F4DC} on the global map.",
     page: "/travel",
-    relatedValue: 293,
+    relatedValue: TUTORIAL_CAPTURE_SECTOR,
   },
   {
     id: "eRw6ObsRONhzY7AUMO3vm",
@@ -362,7 +365,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       </div>
     ),
     page: "/travel",
-    relatedValue: 296,
+    relatedValue: TUTORIAL_HOME_SECTOR,
   },
   {
     id: "blL789mkRIKtjsWk",
@@ -429,7 +432,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
-    id: "gsfgsdfg",
+    id: "gsfgsdfg-alliance",
     title: "Town Hall",
     description:
       "On the first tab you'll see the current alliance status between all the major villages in Seichi.",
@@ -438,7 +441,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
-    id: "gsfgsdfg",
+    id: "gsfgsdfg-kage-tab",
     title: "Town Hall",
     description: "Let's check on the kage of our village.",
     elementIds: ["tutorial-Kage"],
@@ -446,7 +449,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
-    id: "gsfgsdfg",
+    id: "gsfgsdfg-kage",
     title: "Town Hall",
     description:
       "This is the current kage of our village. The kage is the most powerful ninja, and gets to make decisions on behalf of the entire village together with the village elders.",
@@ -501,7 +504,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
-    id: "YP5PEaCvfhJfdsl37V",
+    id: "YP5PEaCvfhJfdsl37V-wrapup-1",
     title: "Assigning Stats",
     description:
       "Okay, enough sightseeing. Great job on getting the hang of things. Let's assign all your experience points one more",
@@ -509,9 +512,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/academy",
     proceedOnHighlightClick: true,
     requiresGameMenu: true,
+    showNextButton: true,
   },
   {
-    id: "YP5PEaCvfhJfdsl37V",
+    id: "YP5PEaCvfhJfdsl37V-wrapup-2",
     title: "Assigning Stats",
     description:
       "Great job on getting the hang of things. Let's assign all your experience points one more",
@@ -519,9 +523,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/academy",
     proceedOnHighlightClick: true,
     requiresGameMenu: true,
+    showNextButton: true,
   },
   {
-    id: "YPfhJfdsl37V",
+    id: "YPfhJfdsl37V-wrapup",
     title: "Assigning Stats",
     description:
       "Assign the obtained experience to the stat of your liking. A good ninja is well-rounded, so don't stress too much about which stat you assign it to yet.",
@@ -532,14 +537,14 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile/experience",
   },
   {
-    id: "f34p798tfn0327",
+    id: "f34p798tfn0327-wrapup",
     title: "Level Up!",
     description: "And then let's claim your next level.",
     elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
     page: "/profile",
   },
   {
-    id: "f34p798tfn0327",
+    id: "f34p798tfn0327-academy-menu",
     title: "Academy",
     description:
       "I'll let you off the hook now, and then you can roam the village on your own a bit. Before that, please follow me to the academy first.",
@@ -550,7 +555,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
 
   {
-    id: "f34p798tfn0327",
+    id: "f34p798tfn0327-academy-building",
     title: "Academy",
     description:
       "I'll let you off the hook now, and then you can roam the village on your own a bit. Before that, please follow me to the academy first.",
