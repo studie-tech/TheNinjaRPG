@@ -485,6 +485,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                 "pvp",
                 "starter",
                 "anbu",
+                "overworld",
               ].includes(quest.questType) && (
                 <Confirm2
                   title="Confirm deleting quest"
