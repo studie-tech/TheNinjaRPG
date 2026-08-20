@@ -22,6 +22,9 @@ STALE_SECONDS=60
 WAIT_TRIES=2400
 # Bound `--wait` so a service that never comes up cannot hold the lock forever.
 COMPOSE_WAIT_TIMEOUT=300
+# ~5 minutes at 2s intervals, for a stack that is running but still starting up
+# (a cold database restart, say) and so needs waiting rather than starting.
+READY_WAIT_TRIES=150
 
 if ! docker ps --format '{{.Names}}' >/dev/null 2>&1; then
   echo "dev-services: ERROR: docker daemon not reachable. Start Docker and retry." >&2
@@ -47,13 +50,50 @@ missing_services() {
   done <<<"$expected_services"
 }
 
+# Running is not the same as ready: `--status running` reports container state
+# and ignores health, so a database that is up but still initialising would pass.
+# Services without a healthcheck have nothing to report and count as ready.
+unready_services() {
+  local ids
+  ids="$(docker compose -f "$COMPOSE_FILE" ps -q --status running 2>/dev/null || true)"
+  [ -n "$ids" ] || return 0
+  printf '%s\n' "$ids" | xargs docker inspect \
+    -f '{{index .Config.Labels "com.docker.compose.service"}} {{if .State.Health}}{{.State.Health.Status}}{{else}}healthy{{end}}' \
+    2>/dev/null | awk '$2 != "healthy" { print $1 }'
+}
+
 services_up() {
-  [ -z "$(missing_services)" ]
+  [ -z "$(missing_services)" ] && [ -z "$(unready_services)" ]
+}
+
+# Wait out a service that is running but still coming up. Nothing to start here,
+# so this deliberately takes no lock and never calls compose — recreating a
+# container another worktree is already using is exactly what must not happen.
+wait_for_ready() {
+  local i
+  for i in $(seq 1 "$READY_WAIT_TRIES"); do
+    [ -z "$(unready_services)" ] && return 0
+    sleep 2
+  done
+  return 1
 }
 
 if services_up; then
   echo "dev-services: all shared services already running"
   exit 0
+fi
+
+# Everything exists and is running, it is just not ready yet: wait rather than
+# start, so this run never disturbs containers another worktree is using.
+if [ -z "$(missing_services)" ]; then
+  echo "dev-services: waiting for $(unready_services | tr '\n' ' ')to become ready"
+  if wait_for_ready; then
+    echo "dev-services: all shared services ready"
+    exit 0
+  fi
+  echo "dev-services: ERROR: still not ready: $(unready_services | tr '\n' ' ')" >&2
+  echo "dev-services: inspect with: docker compose -f $COMPOSE_FILE ps" >&2
+  exit 1
 fi
 
 echo "dev-services: starting shared service stack"

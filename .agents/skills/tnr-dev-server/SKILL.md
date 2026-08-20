@@ -36,8 +36,11 @@ done
 curl -s -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:$PORT"   # expect 200
 ```
 
-Warm start (deps installed, services up) is ~30s. A cold worktree adds a `bun install`. If you
-never reach 200, the server exited — `cat /tmp/tnr-dev-$PORT.log` (output flushes on exit).
+Warm start (deps installed, services up) is ~30s. It can legitimately take far longer: a cold
+worktree adds a `bun install`, and `ensure-services` may be waiting on another worktree's stack
+startup. So a poll that runs out is not proof the server died — check
+`cat /tmp/tnr-dev-$PORT.log` (which flushes on exit, so content there means it exited) and
+`docker compose -f .devcontainer/docker-compose.yml ps` before restarting anything.
 
 ## 2. Get the broker token
 
@@ -61,7 +64,7 @@ curl -s -X POST "http://127.0.0.1:$PORT/api/ai-test-user" \
   -H "x-tnr-reviewer-token: $TOKEN" \
   -d '{"runId":"<short-unique-id>","users":[
     {"key":"hero","level":50,"rank":"JONIN","villageName":"Akikaze"},
-    {"key":"foe","level":10,"rank":"GENIN","villageName":"Akasumi"}
+    {"key":"foe","level":10,"rank":"GENIN","villageName":"Hyorin"}
   ]}'
 ```
 
@@ -69,8 +72,9 @@ Returns `{success, users:[{key, userId, username, email, password, level, rank, 
 villageName, signInToken, ...}]}`.
 
 - `rank`: `STUDENT`, `GENIN`, `CHUNIN`, `JONIN`, `ELITE JONIN`, `ELDER`, `NONE`.
-- `villageName` must match a seeded village exactly (`app/data/villages.sql`) — e.g. `Akikaze`,
-  `Akasumi`, `City of Mei`. Pass `villageId` instead to skip the lookup.
+- `villageName` must match a village's `name` exactly. The seeded names are `Akikaze`,
+  `Wake Island`, `Hyorin`, `Tsukimori`, `Akasumi`, `Iron Shield`, `Shirohana`, `Syndicate`,
+  `Freedom State`, `Horizon`. Pass `villageId` instead to skip the lookup.
 - Up to 4 users per request; keys must stay unique after normalisation (`Red Team` == `red_team`).
 - `signInToken` is a one-time Clerk ticket valid ~300s.
 
@@ -102,8 +106,9 @@ session is signed in as that user. Single-use — provision a fresh user for ano
 listener:
 
 ```bash
-lsof -ti tcp:$PORT | xargs kill 2>/dev/null
-lsof -i :$PORT   # expect no output
+lsof -ti tcp:$PORT -sTCP:LISTEN | xargs kill 2>/dev/null   # -sTCP:LISTEN: without it this
+                                                          # also kills connected clients
+lsof -i :$PORT -sTCP:LISTEN   # expect no output
 rm -f /tmp/tnr-dev-$PORT.log
 ```
 
@@ -114,13 +119,17 @@ stay; re-provisioning is always safe.
 
 - **Port collisions** — check `lsof -i :$PORT` before choosing.
 - **Empty log with a live 200** — normal (buffering), not a failure.
-- **`Invalid environment variables` at boot** — a key in the shared env file is missing or invalid
-  (`app/src/env/schema.mjs` lists what is required). The link itself is fine: `make start` already
-  ran `ensure-env`. Fix the value in the real file (`realpath app/.env`); do not export vars by hand.
+- **`Invalid environment variables` at boot** — either no `app/.env` exists anywhere (`ensure-env`
+  warns and continues rather than failing, so check its output for
+  `WARNING: no app/.env found`), or a key in the shared file is missing or invalid
+  (`app/src/env/schema.mjs` lists what is required). Fix the real file (`realpath app/.env`);
+  do not export vars by hand.
 - **`app/.env` is shared** — it is a symlink to one canonical file, so editing it repoints *every*
   worktree. To give one worktree its own database, replace its link with a real file.
 - **Docker config changes are not auto-applied** — `ensure-services` only starts services that are
   missing, so it never restarts a container another worktree is using. After editing
   `.devcontainer/docker-compose.yml`, apply it deliberately with `make docker-apply` (this does
   recreate containers, so expect other worktrees' servers to reconnect).
-- **`Village not found`** — village name typo; grep `app/data/villages.sql`.
+- **`Village not found`** — the name is matched against the `name` column only. Do not grep
+  `app/data/villages.sql` for the string: several villages also carry a different in-game
+  `mapName` (`Syndicate` is displayed as "City of Mei"), and matching one of those never resolves.
