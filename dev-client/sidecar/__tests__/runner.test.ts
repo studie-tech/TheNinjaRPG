@@ -103,3 +103,28 @@ describe("extractAgentText", () => {
     expect(text.endsWith("_(truncated)_")).toBe(true);
   });
 });
+
+describe("extractAgentText error results", () => {
+  test("never returns a failed run's diagnostic as the body", () => {
+    // A failed CLI run still emits a result event whose `result` is an error
+    // string (e.g. "Not logged in · Please run /login"). Publishing that as a
+    // GitHub review would leak a local diagnostic into the public repo.
+    const text = extractAgentText([
+      JSON.stringify({
+        type: "result",
+        subtype: "success",
+        is_error: true,
+        result: "Not logged in · Please run /login",
+      }),
+    ]);
+    expect(text).toBe("");
+  });
+
+  test("accepts a successful result event", () => {
+    expect(
+      extractAgentText([
+        JSON.stringify({ type: "result", is_error: false, result: "All good." }),
+      ]),
+    ).toBe("All good.");
+  });
+});

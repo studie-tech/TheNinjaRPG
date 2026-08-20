@@ -252,8 +252,11 @@ export function extractAgentText(lines: string[]): string {
       continue;
     }
 
-    // Claude Code emits a terminal {"type":"result","result":"..."} event.
+    // Claude Code emits a terminal {"type":"result","result":"..."} event. When
+    // is_error is set the payload is a CLI diagnostic ("Not logged in ...") and
+    // must never be published as a review body.
     if (event.type === "result" && typeof event.result === "string") {
+      if (event.is_error === true) return "";
       result = event.result;
       continue;
     }
