@@ -66,6 +66,20 @@ running_services() {
   printf '%s\n' "$out"
 }
 
+# Services that already have a container, in any state. Used to tell a fresh
+# creation from restarting one that already existed.
+services_with_container() {
+  local out err rc=0
+  err="$(mktemp)"
+  out="$(compose ps -a --services 2>"$err")" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    rm -f "$err"
+    return 1
+  fi
+  rm -f "$err"
+  printf '%s\n' "$out"
+}
+
 missing_services() {
   local running s
   running="$(running_services)" || return 1
@@ -156,7 +170,7 @@ for attempt in $(seq 1 "$START_ATTEMPTS"); do
     if [ "$rc" -eq 3 ] && [ "$attempt" -lt "$START_ATTEMPTS" ]; then
       continue
     fi
-    report_stuck "$(unready_services | tr '\n' ' ')"
+    report_stuck "$( { missing_services; unready_services; } 2>/dev/null | sort -u | tr '\n' ' ')"
     exit 1
   fi
 
@@ -176,8 +190,22 @@ for attempt in $(seq 1 "$START_ATTEMPTS"); do
   done <<<"$missing"
   echo "dev-services: starting ${missing_list[*]}"
 
+  # --no-recreate starts an existing container from its stored config, so a
+  # compose-file change made since it was created is silently not applied. Say
+  # so rather than reporting a stack that looks current but is not.
+  stale_list=()
+  if existing="$(services_with_container)"; then
+    for service in "${missing_list[@]}"; do
+      printf '%s\n' "$existing" | grep -qx "$service" && stale_list+=("$service")
+    done
+  fi
+
   if compose up -d --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT" \
     --no-recreate --no-deps "${missing_list[@]}"; then
+    if [ "${#stale_list[@]}" -gt 0 ]; then
+      echo "dev-services: note: ${stale_list[*]} restarted from an existing container;"
+      echo "dev-services: if .devcontainer changed since it was created, run: make docker-apply"
+    fi
     continue # re-evaluate at the top; readiness is judged there, not here
   fi
 
