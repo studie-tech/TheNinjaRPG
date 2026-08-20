@@ -39,11 +39,6 @@ cloc: # Count lines of code
 	@echo "${YELLOW}Count lines of code${RESET}"
 	cloc --exclude-dir=node_modules --exclude-ext=csv  --exclude-ext=json  --exclude-ext=svg .
 
-.PHONY: loadEnv
-loadEnv: # Load environment variables
-	@echo "${YELLOW}Loading environment variables${RESET}"
-	source ./app/.env
-
 -------------DockerSetup---------------: # -------------------------------------------------------
 .PHONY: docker-build
 docker-build: # Build/Rebuild the application.
@@ -57,9 +52,8 @@ docker-stop: # Stop all docker containers.
 
 -----------LocalDevelopment-------------: # -------------------------------------------------------
 .PHONY: setup
-setup: # Start required services and install bun locally
+setup: ensure-services # Start required services and install bun locally
 	@echo "${GREEN}Installing bun locally${RESET}"
-	docker compose -f .devcontainer/docker-compose.yml up -d --wait
 	curl -fsSL https://bun.sh/install | bash
 
 .PHONY: install
@@ -75,6 +69,10 @@ ensure-env: # Ensure app/.env exists in this worktree (links it from the main wo
 ensure-services: # Ensure the shared local service stack is running (parallel-worktree safe)
 	@bash scripts/dev-ensure-services.sh
 
+.PHONY: ensure-skills
+ensure-skills: # Link .agents/skills into .claude/skills so Claude Code can discover them
+	@bash scripts/dev-ensure-skills.sh
+
 .PHONY: clean
 clean: # Clean all local application installation folders
 	@echo "${YELLOW}Cleaning local installation folders${RESET}"
@@ -86,13 +84,13 @@ clean: # Clean all local application installation folders
 reset: clean install # Clean and reinstall all dependencies
 
 .PHONY: bun
-bun: install ensure-services ## Execute bun command in local development.
+bun: install ensure-env ensure-skills ensure-services ## Execute bun command in local development.
 	@echo "${GREEN}bun${RESET}"
 	@echo $(DATABASE_URL)
 	cd app && bun $(ARGS)
 
 .PHONY: start
-start: ensure-env loadEnv # Run Next.js server, access at http://127.0.0.1:PORT
+start: ensure-env # Run Next.js server, access at http://127.0.0.1:PORT
 	@echo "${GREEN}start on port $(PORT)${RESET}"
 	rm -rf app/.next
 	@FORCE_COLOR=1 make bun -- dev -p $(PORT) 2>&1 | grep -v "Ignoring Unsecure message event"
@@ -138,23 +136,23 @@ browser-tools-server: # Run browser-tools MCP server, allowing AI to see browser
 
 --------------Migrations----------------: # -------------------------------------------------------
 .PHONY: dbpush
-dbpush: # Push schema to db without creating migrations
+dbpush: ensure-env # Push schema to db without creating migrations
 	@echo "${YELLOW}Pushing database schema to database${RESET}"
 	cd app && bun dbpush
 
 .PHONY: seed
-seed: # Seed database
+seed: ensure-env # Seed database
 	@echo "${YELLOW}Seed data into database ${RESET}"
 	@echo $(DATABASE_URL)
 	cd app && bun seed
 	
 .PHONY: makemigrations
-makemigrations: # Create database migration file
+makemigrations: ensure-env # Create database migration file
 	@echo "${YELLOW}Create database migrations file ${RESET}"
 	cd app && bun makemigrations
 
 .PHONY: emptymigration
-emptymigration: # Create database migration file
+emptymigration: ensure-env # Create database migration file
 	@echo "${YELLOW}Create empty migrations file ${RESET}"
 	cd app && bun emptymigration
 	
