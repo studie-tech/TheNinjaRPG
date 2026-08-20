@@ -5,8 +5,6 @@ import {
   CONTRIBUTION_MAX_ATTEMPTS,
   CONTRIBUTION_MAX_JOBS_PER_DAY,
   CONTRIBUTION_MAX_REVIEWS_PER_PR,
-  CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY,
-  CONTRIBUTION_REWARDS,
   CONTRIBUTION_STALE_CLAIM_MS,
   type ContributionJobType,
 } from "@/drizzle/constants";
@@ -279,20 +277,6 @@ export const isResultVerified = (input: VerificationInput): boolean => {
   // Defensive: never accept evidence dated meaningfully in the future.
   if (evidence.producedAt > nowMs + CONTRIBUTION_CLOCK_SKEW_MS) return false;
   return true;
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Rewards
-// ─────────────────────────────────────────────────────────────────────────────
-
-// The reward for a completed+verified job, or null when the user's daily
-// rewarded-job cap is already reached (the job still counts, just pays nothing).
-export const getContributionReward = (
-  jobType: ContributionJobType,
-  rewardedJobsToday: number,
-): { money: number; exp: number; reputation: number } | null => {
-  if (rewardedJobsToday >= CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY) return null;
-  return CONTRIBUTION_REWARDS[jobType];
 };
 
 export { CONTRIBUTION_MAX_ATTEMPTS, CONTRIBUTION_MAX_JOBS_PER_DAY };

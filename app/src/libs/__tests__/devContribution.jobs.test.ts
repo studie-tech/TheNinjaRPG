@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   computeBackfillJobs,
   excludeSelfAuthored,
-  getContributionReward,
   hasJobsRemainingToday,
   hasLabel,
   isClaimStale,
@@ -302,18 +301,6 @@ describe("verification", () => {
         windowMs: 2 * 60 * 60 * 1000,
       }),
     ).toBe(false);
-  });
-});
-
-describe("rewards", () => {
-  it("pays the configured reward until the daily rewarded cap", () => {
-    expect(getContributionReward("PR_REVIEW", 0)).toEqual({
-      money: 150,
-      exp: 25,
-      reputation: 1,
-    });
-    expect(getContributionReward("ISSUE_IMPLEMENT", 4)).not.toBeNull();
-    expect(getContributionReward("ISSUE_IMPLEMENT", 5)).toBeNull();
   });
 });
 
