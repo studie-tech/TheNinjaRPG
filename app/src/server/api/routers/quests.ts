@@ -23,6 +23,7 @@ import {
   MAX_SKILL_POINTS,
   MEDICAL_MISSIONS_PER_DAY,
   MEDNIN_EXP_CAP,
+  NPC_ONLY_QUEST_TYPES,
   PVP_MISSIONS_PER_DAY,
   QUESTS_CONCURRENT_LIMIT,
   QuestTypes,
@@ -117,19 +118,23 @@ import { questFilteringSchema } from "@/validators/quest";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import type { QuestCounterFieldName } from "@/validators/user";
 import { getQuestCounterFieldName } from "@/validators/user";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const questsRouter = createTRPCRouter({
-  getAllNames: publicProcedure
+  getAllNames: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get all quest names and IDs" } })
     .query(async ({ ctx }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "Not allowed");
+      }
       const results = await ctx.drizzle.query.quest.findMany({
         columns: { id: true, name: true },
         orderBy: (table, { asc }) => [asc(table.name)],
       });
       return results;
     }),
-  getAll: publicProcedure
+  getAll: protectedProcedure
     .meta({
       mcp: { enabled: true, description: "Get paginated list of quests with filters" },
     })
@@ -140,6 +145,10 @@ export const questsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "Not allowed");
+      }
       const currentCursor = input.cursor ? input.cursor : 0;
       const skip = currentCursor * input.limit;
       const results = await ctx.drizzle.query.quest.findMany({
@@ -181,7 +190,7 @@ export const questsRouter = createTRPCRouter({
         nextCursor: nextCursor,
       };
     }),
-  get: publicProcedure
+  get: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get a single quest by ID" } })
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -191,6 +200,9 @@ export const questsRouter = createTRPCRouter({
           where: eq(userData.userId, ctx.userId ?? ""),
         }),
       ]);
+      if (!user || !canChangeContent(user.role)) {
+        throw serverError("UNAUTHORIZED", "Not allowed");
+      }
       if (!result) {
         return null;
       }
@@ -324,6 +336,9 @@ export const questsRouter = createTRPCRouter({
     })
     .input(z.object({ level: z.number(), questType: z.enum(QuestTypes) }))
     .query(async ({ ctx, input }) => {
+      if ((NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(input.questType)) {
+        return [];
+      }
       // Query
       const [{ user }, quests] = await Promise.all([
         fetchUpdatedUser({
@@ -519,7 +534,7 @@ export const questsRouter = createTRPCRouter({
 
       // Insert quest entry
       await Promise.all([
-        upsertQuestEntry(ctx.drizzle, user, result, prevEntry),
+        upsertQuestEntry(ctx.drizzle, user, result, "random_assignment", prevEntry),
         ctx.drizzle
           .update(userData)
           .set(
@@ -598,6 +613,7 @@ export const questsRouter = createTRPCRouter({
           "battlepyramid",
           "pvp",
           "war",
+          "overworld",
         ].includes(current.questType)
       ) {
         return errorResponse(`Cannot abandon ${current.questType} quest type.`);
@@ -766,6 +782,17 @@ export const questsRouter = createTRPCRouter({
             message: `Ranks rewards are only allowed with starter or exam quests`,
           };
         }
+        const npcOnlyNewQuestTargets = await fetchNpcOnlyNewQuestTargets(
+          ctx.drizzle,
+          data.content.objectives,
+        );
+        if (npcOnlyNewQuestTargets.length > 0) {
+          return errorResponse(
+            `NPC-only quests cannot be started by a new_quest objective: ${npcOnlyNewQuestTargets
+              .map((target) => target.name)
+              .join(", ")}`,
+          );
+        }
         const preparedBindings = await prepareOverworldBindings(
           ctx.drizzle,
           data.content.objectives,
@@ -782,7 +809,7 @@ export const questsRouter = createTRPCRouter({
           const roles = availableRanks(input.data.questRank);
           await upsertQuestEntries(
             ctx.drizzle,
-            entry,
+            { ...entry, ...input.data },
             and(
               inArray(userData.rank, roles),
               gte(userData.updatedAt, secondsFromNow(-60 * 60 * 24 * 7)),
@@ -1788,6 +1815,30 @@ export const fetchQuest = async (client: DrizzleClient, id: string) => {
   });
 };
 
+/** Resolve NPC-only quests referenced by new_quest objectives so content cannot author a bypass. */
+const fetchNpcOnlyNewQuestTargets = async (
+  client: DrizzleClient,
+  objectives: AllObjectivesType[],
+) => {
+  const targetIds = [
+    ...new Set(
+      objectives.flatMap((objective) =>
+        objective.task === "new_quest" && "newQuestIds" in objective
+          ? objective.newQuestIds
+          : [],
+      ),
+    ),
+  ];
+  if (targetIds.length === 0) return [];
+  return client.query.quest.findMany({
+    columns: { id: true, name: true },
+    where: and(
+      inArray(quest.id, targetIds),
+      inArray(quest.questType, [...NPC_ONLY_QUEST_TYPES]),
+    ),
+  });
+};
+
 /**
  * Fetch quest history for a user
  * @param client - The database client
@@ -1857,6 +1908,12 @@ export const upsertQuestEntries = async (
   quest: Quest,
   updateSelector: QueryCondition,
 ) => {
+  if ((NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(quest.questType)) {
+    throw serverError(
+      "PRECONDITION_FAILED",
+      "Overworld quests cannot be assigned to users in bulk.",
+    );
+  }
   // Users to insert for
   const users = await client
     .select({ userId: userData.userId, username: userData.username })
@@ -1931,7 +1988,7 @@ export const incrementDailyQuestCounter = async (
  * not. The overworld-NPC flow filters its pool to these so a mis-pooled type can never
  * reach assignQuestToUser, throw, and strand a player's NPC-quest claim.
  */
-export const ASSIGNABLE_QUEST_TYPES: string[] = [
+export const ASSIGNABLE_QUEST_TYPES: QuestType[] = [
   "story",
   "hunting",
   "gathering",
@@ -1944,6 +2001,7 @@ export const ASSIGNABLE_QUEST_TYPES: string[] = [
   "medical",
   "pvp",
   "war",
+  "overworld",
 ];
 
 /**
@@ -1954,7 +2012,7 @@ export const ASSIGNABLE_QUEST_TYPES: string[] = [
  * NPC in the field can satisfy none of these, so pooling such a quest would hand its content to a
  * player who fails the gate the mission-hall path enforces.
  */
-export const OVERWORLD_GATED_QUEST_TYPES: string[] = [
+export const OVERWORLD_GATED_QUEST_TYPES: QuestType[] = [
   "story",
   "hunting",
   "gathering",
@@ -1963,9 +2021,16 @@ export const OVERWORLD_GATED_QUEST_TYPES: string[] = [
 ];
 
 /** Quest types an overworld NPC pool may offer/grant: assignable minus the gated set above. */
-export const OVERWORLD_ASSIGNABLE_QUEST_TYPES: string[] = ASSIGNABLE_QUEST_TYPES.filter(
-  (type) => !OVERWORLD_GATED_QUEST_TYPES.includes(type),
-);
+export const OVERWORLD_ASSIGNABLE_QUEST_TYPES: QuestType[] =
+  ASSIGNABLE_QUEST_TYPES.filter((type) => !OVERWORLD_GATED_QUEST_TYPES.includes(type));
+
+/** Every path that creates or restarts a quest history row must declare its origin. */
+export type QuestAcquisitionSource =
+  | "ui"
+  | "overworld_npc"
+  | "random_assignment"
+  | "system"
+  | "quest_objective";
 
 /**
  * Returns the user-facing reason a quest cannot start because its type has reached its concurrency
@@ -2094,12 +2159,51 @@ export const assignQuestToUser = async (args: {
   user: NonNullable<UserWithRelations>;
   quest: Quest;
   source: "ui" | "overworld_npc";
+  /** Required for NPC-only quests so their placement assignment can be verified server-side. */
+  overworldPlacementId?: string;
   sectorVillage?: Awaited<ReturnType<typeof fetchSectorVillage>>;
   // Required: it feeds the availability / period-cap guards below and is threaded into
   // upsertQuestEntry to skip its findFirst round-trip. Both callers already fetch it.
   prevAttempt: Awaited<ReturnType<typeof fetchUserQuestByQuestId>>;
 }): Promise<{ success: boolean; message: string }> => {
-  const { client, user, quest: questData, source, sectorVillage, prevAttempt } = args;
+  const {
+    client,
+    user,
+    quest: questData,
+    source,
+    sectorVillage,
+    overworldPlacementId,
+    prevAttempt,
+  } = args;
+
+  // NPC-only quests can never be acquired through the generic UI start endpoint.
+  if (
+    (NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(questData.questType) &&
+    source !== "overworld_npc"
+  ) {
+    return errorResponse(
+      "This quest can only be accepted from its assigned overworld NPC.",
+    );
+  }
+
+  // Verify the concrete placement-to-quest relation instead of trusting a quest id supplied by
+  // another internal caller. The overworld interaction route is the only caller that supplies a
+  // placement id, and it has already validated that the player is standing at that active NPC.
+  if ((NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(questData.questType)) {
+    if (!overworldPlacementId) {
+      return errorResponse("This quest is not assigned to this overworld NPC.");
+    }
+    const placementQuest = await client.query.overworldAiPlacementQuest.findFirst({
+      columns: { questId: true },
+      where: and(
+        eq(overworldAiPlacementQuest.placementId, overworldPlacementId),
+        eq(overworldAiPlacementQuest.questId, questData.id),
+      ),
+    });
+    if (!placementQuest) {
+      return errorResponse("This quest is not assigned to this overworld NPC.");
+    }
+  }
 
   // Rank guard
   const ranks = availableQuestLetterRanks(user.rank);
@@ -2199,10 +2303,10 @@ export const assignQuestToUser = async (args: {
         `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
       );
     }
-    await upsertQuestEntry(client, user, questData, prevAttempt ?? null);
+    await upsertQuestEntry(client, user, questData, source, prevAttempt ?? null);
   } else {
     await Promise.all([
-      upsertQuestEntry(client, user, questData, prevAttempt ?? null),
+      upsertQuestEntry(client, user, questData, source, prevAttempt ?? null),
       incrementDailyQuestCounter(client, user, questData.questType),
     ]);
   }
@@ -2224,8 +2328,18 @@ export const upsertQuestEntry = async (
   client: DrizzleClient,
   user: NonNullable<UserWithRelations>,
   quest: Quest,
+  source: QuestAcquisitionSource,
   prevEntry?: Awaited<ReturnType<typeof fetchUserQuestByQuestId>> | null,
 ) => {
+  if (
+    (NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(quest.questType) &&
+    source !== "overworld_npc"
+  ) {
+    throw serverError(
+      "PRECONDITION_FAILED",
+      "Overworld quests can only be accepted from their assigned NPC.",
+    );
+  }
   // Reuse the caller's pre-fetched history row when supplied; otherwise load it here.
   let entry =
     prevEntry !== undefined
@@ -2319,7 +2433,7 @@ export const insertNextQuest = async (
   const history = await fetchUncompletedQuests(client, user, type);
   const nextQuest = history?.[0];
   if (nextQuest) {
-    const logEntry = await upsertQuestEntry(client, user, nextQuest);
+    const logEntry = await upsertQuestEntry(client, user, nextQuest, "system");
     return { ...logEntry, quest: nextQuest };
   }
   return undefined;
@@ -2383,7 +2497,7 @@ const runCheckRewardsPrepInParallel = async (
   if (resolved && userQuest?.quest.questType === "achievement") {
     if (!userQuest.quest.hidden || canPlayHiddenQuests(user.role)) {
       if (userQuest.quest.maxCompletes > 1) {
-        prepTasks.push(upsertQuestEntry(client, user, userQuest.quest));
+        prepTasks.push(upsertQuestEntry(client, user, userQuest.quest, "system"));
       }
     }
   }
@@ -2691,7 +2805,9 @@ const executeClaimedQuestConsequences = async ({
               `Started new quest: ${quests.map((q) => q.name).join(", ")}`,
             );
             await Promise.all(
-              quests.map((quest) => upsertQuestEntry(client, user, quest)),
+              quests.map((quest) =>
+                upsertQuestEntry(client, user, quest, "quest_objective"),
+              ),
             );
           })(),
         ]

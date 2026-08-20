@@ -95,6 +95,18 @@ export const overworldAiRouter = createTRPCRouter({
     }));
   }),
 
+  getAssignableQuestNames: protectedProcedure.query(async ({ ctx }) => {
+    const user = await fetchUser(ctx.drizzle, ctx.userId);
+    if (!canChangeContent(user.role)) {
+      throw serverError("UNAUTHORIZED", "Not allowed");
+    }
+    return ctx.drizzle.query.quest.findMany({
+      columns: { id: true, name: true, questType: true },
+      where: inArray(quest.questType, OVERWORLD_ASSIGNABLE_QUEST_TYPES),
+      orderBy: (table, { asc }) => [asc(table.name)],
+    });
+  }),
+
   upsertPlacement: protectedProcedure
     .input(z.object({ id: z.string().optional(), data: OverworldPlacementSchema }))
     .output(baseServerResponse)
@@ -708,6 +720,7 @@ export const overworldAiRouter = createTRPCRouter({
           user: activeUser,
           quest: chosen.quest,
           source: "overworld_npc",
+          overworldPlacementId: placement.id,
           prevAttempt: chosen.prev,
         });
       } catch (e) {
