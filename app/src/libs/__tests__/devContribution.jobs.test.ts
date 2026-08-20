@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeBackfillJobs,
-  excludeSelfReview,
+  excludeSelfAuthored,
   getContributionReward,
   hasJobsRemainingToday,
   hasLabel,
@@ -209,8 +209,23 @@ describe("claiming", () => {
       ...job({ jobType: "PR_REVIEW", refKind: "PULL_REQUEST", refNumber: 6, id: 2 }),
       context: { authorLogin: "other" },
     };
-    const kept = excludeSelfReview([mine, theirs], "ME");
-    expect(kept.map((j) => j.id)).toEqual([2]);
+    const kept = excludeSelfAuthored([mine, theirs], "ME");
+    expect(kept.map((j: ExistingJob) => j.id)).toEqual([2]);
+  });
+
+  it("also blocks triaging an issue you opened yourself", () => {
+    // Without this, opening an issue, claiming the triage job it generates and
+    // commenting on it is a self-serve reward loop.
+    const mine = {
+      ...job({ jobType: "ISSUE_TRIAGE", refKind: "ISSUE", refNumber: 11 }),
+      context: { authorLogin: "me" },
+    };
+    const theirs = {
+      ...job({ jobType: "ISSUE_TRIAGE", refKind: "ISSUE", refNumber: 12, id: 2 }),
+      context: { authorLogin: "someone-else" },
+    };
+    const kept = excludeSelfAuthored([mine, theirs], "me");
+    expect(kept.map((j: ExistingJob) => j.id)).toEqual([2]);
   });
 });
 
@@ -307,5 +322,74 @@ describe("activity helpers", () => {
     expect(isJobActive("PENDING")).toBe(true);
     expect(isJobActive("CLAIMED")).toBe(true);
     expect(isJobActive("COMPLETED")).toBe(false);
+  });
+});
+
+describe("regressions: loop guards and the verification window", () => {
+  it("does not re-create a FAILED job for a still-open issue", () => {
+    // planIssueJob only suppressed COMPLETED, so the 10-minute backfill cron
+    // resurrected every FAILED job forever with attemptCount reset to 0.
+    const failed: ExistingJob = {
+      ...job({ jobType: "ISSUE_TRIAGE", refKind: "ISSUE", refNumber: 3 }),
+      status: "FAILED",
+      attemptCount: 3,
+    };
+    const plan = planIssueJob({ number: 3, labels: [] }, [failed]);
+    expect(plan.create).toBeNull();
+  });
+
+  it("does not re-create a CANCELLED job either", () => {
+    const cancelled: ExistingJob = {
+      ...job({ jobType: "ISSUE_TRIAGE", refKind: "ISSUE", refNumber: 4 }),
+      status: "CANCELLED",
+    };
+    expect(planIssueJob({ number: 4, labels: [] }, [cancelled]).create).toBeNull();
+  });
+
+  it("still creates a job when the issue has none at all", () => {
+    expect(planIssueJob({ number: 5, labels: [] }, []).create).toBe("ISSUE_TRIAGE");
+  });
+
+  it("treats VERIFYING as in-flight so backfill does not duplicate it", () => {
+    expect(isJobActive("VERIFYING")).toBe(true);
+    const verifying: ExistingJob = {
+      ...job({ jobType: "ISSUE_TRIAGE", refKind: "ISSUE", refNumber: 6 }),
+      status: "VERIFYING",
+    };
+    expect(planIssueJob({ number: 6, labels: [] }, [verifying]).create).toBeNull();
+  });
+
+  it("rejects a result produced long after the claim", () => {
+    // The bound was compared against nowMs + windowMs, which no real GitHub
+    // timestamp can exceed, so the window never rejected anything.
+    const claimedAt = Date.parse("2026-08-19T00:00:00Z");
+    const windowMs = 2 * 3600 * 1000;
+    const fiveHoursLater = claimedAt + 5 * 3600 * 1000;
+    expect(
+      isResultVerified({
+        jobType: "ISSUE_TRIAGE",
+        githubLogin: "octocat",
+        evidence: { actorLogin: "octocat", producedAt: fiveHoursLater },
+        claimedAt,
+        nowMs: fiveHoursLater + 1000,
+        windowMs,
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts a result produced inside the window", () => {
+    const claimedAt = Date.parse("2026-08-19T00:00:00Z");
+    const windowMs = 2 * 3600 * 1000;
+    const withinWindow = claimedAt + 30 * 60 * 1000;
+    expect(
+      isResultVerified({
+        jobType: "ISSUE_TRIAGE",
+        githubLogin: "octocat",
+        evidence: { actorLogin: "octocat", producedAt: withinWindow },
+        claimedAt,
+        nowMs: withinWindow + 1000,
+        windowMs,
+      }),
+    ).toBe(true);
   });
 });

@@ -151,6 +151,7 @@ function handleFake(
 let home: string;
 let fakeDir: string;
 let fakePort: number;
+let repoDir: string;
 let sidecar: Server;
 
 const FAKE_CLAUDE = `#!/bin/sh
@@ -160,8 +161,8 @@ for a in "$@"; do
 done
 echo "fake-claude args: $*" >> "$TNR_FAKE_DIR/claude-calls.log"
 [ -f "$TNR_FAKE_DIR/hang" ] && { sleep 30; exit 0; }
-echo '{"type":"assistant","message":{"usage":{"input_tokens":100,"output_tokens":50}}}'
-echo '{"type":"result","usage":{"input_tokens":111,"output_tokens":222}}'
+echo '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"partial"}],"usage":{"input_tokens":100,"output_tokens":50}}}'
+echo '{"type":"result","result":"FAKE AGENT WRITE-UP","usage":{"input_tokens":111,"cache_creation_input_tokens":389,"cache_read_input_tokens":1000,"output_tokens":222}}'
 exit 0
 `;
 
@@ -171,6 +172,7 @@ for a in "$@"; do
   [ "$a" = "--version" ] && { echo "fake-codex-cli 9.9.9"; exit 0; }
 done
 echo "fake-codex args: $*" >> "$TNR_FAKE_DIR/codex-calls.log"
+echo '{"last_agent_message":"FAKE CODEX WRITE-UP","usage":{"input_tokens":111,"cache_read_input_tokens":1389,"output_tokens":222}}'
 exit 0
 `;
 
@@ -206,6 +208,21 @@ beforeAll(async () => {
     chmodSync(join(fakeDir, name), 0o755);
   }
   process.env.PATH = `${fakeDir}:${process.env.PATH}`;
+
+  // Every job type now runs inside a throwaway git worktree, so the fixture
+  // needs to be a real repository with an origin/main to branch from.
+  repoDir = mkdtempSync(join(tmpdir(), "tnr-dev-client-repo-"));
+  const run = (args: string[], cwd = repoDir) =>
+    Bun.spawnSync(["git", ...args], { cwd, env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" } });
+  run(["init", "--initial-branch=main", "."]);
+  run(["config", "user.email", "test@example.com"]);
+  run(["config", "user.name", "Test"]);
+  writeFileSync(join(repoDir, "README.md"), "fixture\n", "utf8");
+  run(["add", "-A"]);
+  run(["commit", "-m", "init"]);
+  // A self-referencing origin gives the worktree an origin/main to base on.
+  run(["remote", "add", "origin", repoDir]);
+  run(["fetch", "origin", "main"]);
 
   const fake = Bun.serve({
     hostname: "127.0.0.1",
@@ -263,6 +280,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   sidecar?.stop();
+  rmSync(repoDir, { recursive: true, force: true });
   delete process.env.TNR_DEV_CLIENT_HOME;
   delete process.env.TNR_DEV_CLIENT_NO_BROWSER;
   delete process.env.TNR_FAKE_DIR;
@@ -276,10 +294,15 @@ async function call(
   method: "GET" | "POST",
   path: string,
   body?: unknown,
+  opts: { auth?: boolean; origin?: string } = {},
 ): Promise<{ status: number; text: string; json: <T>() => T }> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["content-type"] = "application/json";
+  if (opts.auth !== false) headers.authorization = `Bearer ${sidecar.authToken}`;
+  if (opts.origin) headers.origin = opts.origin;
   const res = await fetch(`${base()}${path}`, {
     method,
-    headers: body !== undefined ? { "content-type": "application/json" } : undefined,
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
@@ -334,19 +357,18 @@ test("settings save persists locally without a token (no server sync)", async ()
   const fakeBase = `http://127.0.0.1:${fakePort}`;
   const res = await call("POST", "/setup/save", {
     apiBase: fakeBase,
-    repoPath: "/tmp/fake-repo",
-    githubLogin: "fake-login",
+    repoPath: repoDir,
   });
   expect(res.status).toBe(200);
   const settings = res.json<Record<string, unknown>>();
   expect(settings.apiBase).toBe(fakeBase);
-  expect(settings.repoPath).toBe("/tmp/fake-repo");
-  expect(settings.githubLogin).toBe("fake-login");
+  expect(settings.repoPath).toBe(repoDir);
   expect(recorded.updateProfile).toHaveLength(0); // no token yet
 
   const s = await status();
   expect(s.settings.apiBase).toBe(fakeBase);
-  expect(s.auth.githubLogin).toBe("fake-login");
+  // The GitHub login is server-verified now; the client cannot set it.
+  expect(s.auth.githubLogin).toBeNull();
 });
 
 test("sign-in generates a PKCE connect URL for the fake server", async () => {
@@ -455,7 +477,7 @@ test("end-to-end ISSUE_TRIAGE: fake agent runs, triage comment posted, reward pa
   expect(recorded.completes).toHaveLength(1);
   expect(recorded.completes[0]).toEqual({
     jobId: 42,
-    tokensIn: 111,
+    tokensIn: 1500,
     tokensOut: 222,
     resultUrl: "https://github.com/studie-tech/TheNinjaRPG/issues/7",
   });
@@ -467,7 +489,8 @@ test("end-to-end ISSUE_TRIAGE: fake agent runs, triage comment posted, reward pa
   expect(claudeLog).toContain("Triage this issue");
   expect(claudeLog).toContain("Ninja stuck in tree");
 
-  expect(tokensUsedToday("CLAUDE")).toBe(1333); // 1000 seeded + 333 from the run
+  // 1000 seeded + (111 input + 389 cache-create + 1000 cache-read + 222 output).
+  expect(tokensUsedToday("CLAUDE")).toBe(2722);
 
   const history = (await call("GET", "/jobs/history")).json<{
     history: Array<Record<string, unknown>>;
@@ -480,7 +503,7 @@ test("end-to-end ISSUE_TRIAGE: fake agent runs, triage comment posted, reward pa
     status: "COMPLETED",
     verified: true,
     reward: REWARD,
-    tokensIn: 111,
+    tokensIn: 1500,
     tokensOut: 222,
     resultUrl: "https://github.com/studie-tech/TheNinjaRPG/issues/7",
   });
@@ -504,7 +527,7 @@ test("end-to-end PR_REVIEW: PR read via gh, review posted, second job recorded",
   expect(recorded.completes).toHaveLength(2);
   expect(recorded.completes[1]).toEqual({
     jobId: 43,
-    tokensIn: 111,
+    tokensIn: 1500,
     tokensOut: 222,
     resultUrl: "https://github.com/studie-tech/TheNinjaRPG/pull/5",
   });
@@ -570,4 +593,43 @@ test("sign-out revokes the token on the server and clears local state", async ()
   expect(claim.json<{ claimed: boolean; message?: string }>().message).toBe(
     "Sign in first",
   );
+});
+
+test("rejects requests without the per-launch auth token", async () => {
+  // Binding to loopback is not access control: any page the user visits can
+  // reach this port, so every endpoint requires the shell-issued bearer.
+  const res = await call("GET", "/status", undefined, { auth: false });
+  expect(res.status).toBe(401);
+
+  const save = await call(
+    "POST",
+    "/setup/save",
+    { apiBase: "https://evil.tld" },
+    { auth: false },
+  );
+  expect(save.status).toBe(401);
+  // ...and the malicious apiBase must not have been persisted.
+  expect((await status()).settings.apiBase).not.toContain("evil.tld");
+});
+
+test("rejects requests carrying a foreign Origin even with the token", async () => {
+  const res = await call("GET", "/status", undefined, { origin: "https://evil.tld" });
+  expect(res.status).toBe(403);
+  expect(res.text).not.toContain("repoPath");
+});
+
+test("never sets a wildcard CORS origin", async () => {
+  const res = await fetch(`${base()}/status`, {
+    headers: { authorization: `Bearer ${sidecar.authToken}` },
+  });
+  expect(res.headers.get("access-control-allow-origin")).not.toBe("*");
+});
+
+test("refuses an apiBase that is not a known game host", async () => {
+  const before = (await status()).settings.apiBase;
+  const res = await call("POST", "/setup/save", { apiBase: "https://evil.tld" });
+  expect(res.status).toBe(200);
+  // The patch is ignored rather than accepted: apiBase decides where the
+  // device token is sent as a bearer.
+  expect(res.json<Record<string, unknown>>().apiBase).toBe(before);
 });

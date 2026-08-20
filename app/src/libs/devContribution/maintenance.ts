@@ -1,26 +1,36 @@
 // Periodic maintenance for dev-contribution jobs, run by the Vercel cron
 // endpoint /api/dev-contribution-maintenance.
 //
-// Three responsibilities:
+// Responsibilities:
 //  1. Requeue stale claims (claimed jobs whose heartbeat stopped).
-//  2. Ensure the "Fully Clarified" label exists on the repository.
-//  3. Backfill jobs from GitHub's open issues / PRs so work is never stuck
+//  2. Re-check results GitHub could not confirm at completion time.
+//  3. Ensure the "Fully Clarified" label exists on the repository.
+//  4. Backfill jobs from GitHub's open issues / PRs so work is never stuck
 //     waiting on a missed webhook.
 //
 // All network access is injectable for testing; the cron route passes the real
 // fetch + GITHUB_ISSUE_TOKEN.
 
-import { and, eq } from "drizzle-orm";
-import { CONTRIBUTION_CLARIFIED_LABEL, GITHUB_API_ENDPOINT } from "@/drizzle/constants";
-import { devJob } from "@/drizzle/schema";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import {
+  CONTRIBUTION_CLARIFIED_LABEL,
+  CONTRIBUTION_VERIFY_RETRY_MS,
+  CONTRIBUTION_VERIFY_WINDOW_MS,
+  GITHUB_API_ENDPOINT,
+} from "@/drizzle/constants";
+import { devContributionProfile, devJob } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { type FetchImpl, ghFetch, ghHeaders } from "./github";
+import { getUtcDateString } from "@/utils/time";
+import { type FetchImpl, ghFetch, ghHeaders, verifyContributionResult } from "./github";
 import { computeBackfillJobs, isClaimStale, releaseJobStatus } from "./jobs";
+import { grantContributionReward } from "./rewards";
 import type { ExistingJob, OpenIssueRef, OpenPullRequestRef } from "./types";
 import { rowToExisting } from "./webhook";
 
 export interface MaintenanceReport {
   staleRequeued: number;
+  verificationsResolved: number;
+  verificationsRewarded: number;
   jobsCreated: number;
   labelEnsured: boolean;
   errors: string[];
@@ -33,6 +43,7 @@ interface GitHubIssue {
   html_url: string;
   pull_request?: unknown;
   labels: Array<{ name: string }>;
+  user?: { login: string };
 }
 
 interface GitHubPullRequest {
@@ -48,38 +59,205 @@ interface GitHubPullRequest {
 
 const normalize = (value: string | null | undefined) => value?.toLowerCase() ?? "";
 
-// Release claimed jobs whose heartbeat has stopped, back to PENDING while the
-// attempt budget remains, else FAILED.
-export const requeueStaleClaims = async (db: DrizzleClient, nowMs: number) => {
-  const claimed = await db.select().from(devJob).where(eq(devJob.status, "CLAIMED"));
-  let requeued = 0;
+// Fields reset whenever a job stops being held by a contributor.
+const clearClaimFields = {
+  claimedByUserId: null,
+  claimedAt: null,
+  heartbeatAt: null,
+  agent: null,
+} as const;
 
+/** Release the per-user claim slot held on the profile for these jobs. */
+const releaseClaimSlots = async (db: DrizzleClient, jobIds: number[]) => {
+  if (jobIds.length === 0) return;
+  await db
+    .update(devContributionProfile)
+    .set({ activeJobId: null, updatedAt: new Date() })
+    .where(inArray(devContributionProfile.activeJobId, jobIds));
+};
+
+// Release claimed jobs whose heartbeat has stopped, back to PENDING while the
+// attempt budget remains, else FAILED. The updates are batched by target status
+// so a backlog costs two round-trips rather than one per row.
+export const requeueStaleClaims = async (db: DrizzleClient, nowMs: number) => {
+  const claimed = await db
+    .select({
+      id: devJob.id,
+      claimedAt: devJob.claimedAt,
+      heartbeatAt: devJob.heartbeatAt,
+      attemptCount: devJob.attemptCount,
+    })
+    .from(devJob)
+    .where(eq(devJob.status, "CLAIMED"));
+
+  const toPending: number[] = [];
+  const toFailed: number[] = [];
   for (const job of claimed) {
     const claimedAtMs = job.claimedAt?.getTime() ?? 0;
     const heartbeatAtMs = job.heartbeatAt?.getTime() ?? null;
     if (!isClaimStale({ claimedAt: claimedAtMs, heartbeatAt: heartbeatAtMs }, nowMs))
       continue;
-
-    const nextStatus = releaseJobStatus(job.attemptCount);
-    const result = await db
-      .update(devJob)
-      .set({
-        status: nextStatus,
-        claimedByUserId: null,
-        claimedAt: null,
-        heartbeatAt: null,
-        agent: null,
-        error:
-          nextStatus === "FAILED"
-            ? "Claim timed out; attempt budget exhausted"
-            : "Claim timed out; requeued",
-        updatedAt: new Date(),
-      })
-      .where(and(eq(devJob.id, job.id), eq(devJob.status, "CLAIMED")));
-    requeued += result.rowsAffected;
+    (releaseJobStatus(job.attemptCount) === "FAILED" ? toFailed : toPending).push(
+      job.id,
+    );
   }
 
-  return requeued;
+  const stale = [...toPending, ...toFailed];
+  if (stale.length === 0) return 0;
+
+  const [pendingResult, failedResult] = await Promise.all([
+    toPending.length
+      ? db
+          .update(devJob)
+          .set({
+            status: "PENDING",
+            ...clearClaimFields,
+            error: "Claim timed out; requeued",
+            updatedAt: new Date(),
+          })
+          .where(and(inArray(devJob.id, toPending), eq(devJob.status, "CLAIMED")))
+      : Promise.resolve({ rowsAffected: 0 }),
+    toFailed.length
+      ? db
+          .update(devJob)
+          .set({
+            status: "FAILED",
+            ...clearClaimFields,
+            error: "Claim timed out; attempt budget exhausted",
+            updatedAt: new Date(),
+          })
+          .where(and(inArray(devJob.id, toFailed), eq(devJob.status, "CLAIMED")))
+      : Promise.resolve({ rowsAffected: 0 }),
+  ]);
+
+  await releaseClaimSlots(db, stale);
+  return pendingResult.rowsAffected + failedResult.rowsAffected;
+};
+
+/**
+ * Re-check jobs whose result GitHub could not confirm when the client reported
+ * them. Without this a transient rate limit or propagation delay would burn a
+ * contributor's completed work; here it simply gets another look, until
+ * CONTRIBUTION_VERIFY_RETRY_MS has elapsed.
+ */
+export const resolvePendingVerifications = async (
+  db: DrizzleClient,
+  nowMs: number,
+  options: { fetchImpl?: FetchImpl; token?: string } = {},
+): Promise<{ resolved: number; rewarded: number }> => {
+  const fetchImpl = options.fetchImpl ?? ghFetch;
+  const pending = await db
+    .select()
+    .from(devJob)
+    .where(eq(devJob.status, "VERIFYING"))
+    .limit(200);
+  if (pending.length === 0) return { resolved: 0, rewarded: 0 };
+
+  const userIds = [...new Set(pending.map((j) => j.claimedByUserId).filter(Boolean))];
+  const profiles = userIds.length
+    ? await db
+        .select()
+        .from(devContributionProfile)
+        .where(inArray(devContributionProfile.userId, userIds as string[]))
+    : [];
+  const loginFor = new Map(profiles.map((p) => [p.userId, p.githubLogin ?? ""]));
+
+  let resolved = 0;
+  let rewarded = 0;
+
+  for (const job of pending) {
+    const userId = job.claimedByUserId;
+    if (!userId) continue;
+    const claimedAt = job.claimedAt?.getTime() ?? job.createdAt.getTime();
+    const verification = await verifyContributionResult(
+      {
+        jobType: job.jobType,
+        refNumber: job.refNumber,
+        githubLogin: loginFor.get(userId) ?? "",
+        claimedAt,
+        nowMs,
+        windowMs: CONTRIBUTION_VERIFY_WINDOW_MS,
+      },
+      { fetchImpl, token: options.token },
+    );
+
+    const expired = nowMs - claimedAt > CONTRIBUTION_VERIFY_RETRY_MS;
+    if (!verification.verified && verification.retryable && !expired) {
+      continue; // leave VERIFYING; try again next tick
+    }
+
+    let reward = null;
+    if (verification.verified) {
+      reward = await grantContributionReward({
+        client: db,
+        userId,
+        jobId: job.id,
+        jobType: job.jobType,
+        today: getUtcDateString(new Date(nowMs)),
+      });
+    }
+
+    const closed = await db
+      .update(devJob)
+      .set({
+        status: "COMPLETED",
+        completedAt: new Date(nowMs),
+        resultUrl: verification.resultUrl ?? job.resultUrl,
+        error: verification.verified
+          ? null
+          : (verification.error ?? "Result could not be verified"),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(devJob.id, job.id), eq(devJob.status, "VERIFYING")));
+
+    if (closed.rowsAffected === 1) {
+      resolved += 1;
+      if (reward) rewarded += 1;
+    }
+    await releaseClaimSlots(db, [job.id]);
+  }
+
+  return { resolved, rewarded };
+};
+
+/**
+ * Clear claim slots pointing at jobs that are no longer in flight. Guards
+ * against a slot leaking if a process died between taking the slot and
+ * updating the job row.
+ */
+export const releaseOrphanedClaimSlots = async (db: DrizzleClient) => {
+  const held = await db
+    .select({
+      userId: devContributionProfile.userId,
+      activeJobId: devContributionProfile.activeJobId,
+    })
+    .from(devContributionProfile)
+    .where(isNotNull(devContributionProfile.activeJobId));
+  if (held.length === 0) return 0;
+
+  const jobIds = held.map((h) => h.activeJobId as number);
+  const liveRows = await db
+    .select({ id: devJob.id, status: devJob.status })
+    .from(devJob)
+    .where(inArray(devJob.id, jobIds));
+  const live = new Set(
+    liveRows
+      .filter((j) => j.status === "CLAIMED" || j.status === "VERIFYING")
+      .map((j) => j.id),
+  );
+
+  const stale = held.filter((h) => !live.has(h.activeJobId as number));
+  if (stale.length === 0) return 0;
+  await db
+    .update(devContributionProfile)
+    .set({ activeJobId: null, updatedAt: new Date() })
+    .where(
+      inArray(
+        devContributionProfile.userId,
+        stale.map((s) => s.userId),
+      ),
+    );
+  return stale.length;
 };
 
 // GitHub's /issues endpoint also returns pull requests; those are skipped here
@@ -104,6 +282,7 @@ export const fetchOpenIssues = async (
         labels: (item.labels ?? []).map((l) => l.name),
         body: item.body ?? undefined,
         url: item.html_url,
+        authorLogin: item.user?.login,
       });
     }
     if (items.length < 100) break;
@@ -169,34 +348,82 @@ export const ensureClarifiedLabel = async (
   return create.ok || create.status === 422;
 };
 
+/**
+ * Read only the jobs that belong to the refs GitHub just reported. The previous
+ * implementation selected the whole table on every tick, which grew without
+ * bound and eventually blew the cron's memory/time budget.
+ */
+const fetchJobsForRefs = async (
+  db: DrizzleClient,
+  issueNumbers: number[],
+  prNumbers: number[],
+): Promise<ExistingJob[]> => {
+  const parts: Promise<ExistingJob[]>[] = [];
+  const select = (refKind: "ISSUE" | "PULL_REQUEST", numbers: number[]) =>
+    db
+      .select({
+        id: devJob.id,
+        jobType: devJob.jobType,
+        refKind: devJob.refKind,
+        refNumber: devJob.refNumber,
+        status: devJob.status,
+        claimedByUserId: devJob.claimedByUserId,
+        attemptCount: devJob.attemptCount,
+      })
+      .from(devJob)
+      .where(and(eq(devJob.refKind, refKind), inArray(devJob.refNumber, numbers)));
+
+  if (issueNumbers.length) parts.push(select("ISSUE", issueNumbers));
+  if (prNumbers.length) parts.push(select("PULL_REQUEST", prNumbers));
+  if (parts.length === 0) return [];
+  const chunks = await Promise.all(parts);
+  return chunks.flat();
+};
+
 export const runMaintenance = async (
   db: DrizzleClient,
   options: { fetchImpl?: FetchImpl; token?: string } = {},
 ): Promise<MaintenanceReport> => {
   const fetchImpl = options.fetchImpl ?? ghFetch;
   const token = options.token;
+  const nowMs = Date.now();
   const report: MaintenanceReport = {
     staleRequeued: 0,
+    verificationsResolved: 0,
+    verificationsRewarded: 0,
     jobsCreated: 0,
     labelEnsured: false,
     errors: [],
   };
 
+  const note = (label: string, error: unknown) =>
+    report.errors.push(
+      `${label}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
   // Stale requeue does not depend on GitHub.
   try {
-    report.staleRequeued = await requeueStaleClaims(db, Date.now());
+    report.staleRequeued = await requeueStaleClaims(db, nowMs);
+    await releaseOrphanedClaimSlots(db);
   } catch (error) {
-    report.errors.push(
-      `stale requeue failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    note("stale requeue failed", error);
+  }
+
+  try {
+    const { resolved, rewarded } = await resolvePendingVerifications(db, nowMs, {
+      fetchImpl,
+      token,
+    });
+    report.verificationsResolved = resolved;
+    report.verificationsRewarded = rewarded;
+  } catch (error) {
+    note("verification retry failed", error);
   }
 
   try {
     report.labelEnsured = await ensureClarifiedLabel(fetchImpl, token);
   } catch (error) {
-    report.errors.push(
-      `label check failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    note("label check failed", error);
   }
 
   try {
@@ -204,21 +431,29 @@ export const runMaintenance = async (
       fetchOpenIssues(fetchImpl, token),
       fetchOpenPullRequests(fetchImpl, token),
     ]);
-    const existingRows = await db.select().from(devJob);
-    const existingJobs: ExistingJob[] = existingRows.map(rowToExisting);
+    const existingJobs = await fetchJobsForRefs(
+      db,
+      issues.map((i) => i.number),
+      pullRequests.map((p) => p.number),
+    );
 
     const specs = computeBackfillJobs({ issues, pullRequests, existingJobs });
     for (const spec of specs) {
       // Belt and braces: skip if an active job for this ref+type appeared
       // between the read and now (e.g. a webhook event just landed).
-      const active = existingJobs.some(
-        (j) =>
-          j.refKind === spec.refKind &&
-          j.refNumber === spec.refNumber &&
-          j.jobType === spec.jobType &&
-          (j.status === "PENDING" || j.status === "CLAIMED"),
-      );
-      if (active) continue;
+      const fresh = await db
+        .select({ id: devJob.id })
+        .from(devJob)
+        .where(
+          and(
+            eq(devJob.refKind, spec.refKind),
+            eq(devJob.refNumber, spec.refNumber),
+            eq(devJob.jobType, spec.jobType),
+            inArray(devJob.status, ["PENDING", "CLAIMED", "VERIFYING"]),
+          ),
+        )
+        .limit(1);
+      if (fresh.length > 0) continue;
       await db.insert(devJob).values({
         jobType: spec.jobType,
         refKind: spec.refKind,
@@ -230,9 +465,38 @@ export const runMaintenance = async (
       report.jobsCreated += 1;
     }
   } catch (error) {
-    report.errors.push(
-      `backfill failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    note("backfill failed", error);
+  }
+
+  // Cancel duplicate PENDING rows for a ref+type, keeping the oldest. Nothing
+  // can make the webhook/cron insert atomic without transactions, so the
+  // duplicate is reconciled here instead of pretending it cannot happen.
+  try {
+    const duplicates = await db
+      .select({
+        id: devJob.id,
+        jobType: devJob.jobType,
+        refKind: devJob.refKind,
+        refNumber: devJob.refNumber,
+      })
+      .from(devJob)
+      .where(eq(devJob.status, "PENDING"))
+      .limit(1000);
+    const seen = new Set<string>();
+    const extra: number[] = [];
+    for (const job of duplicates.sort((a, b) => a.id - b.id)) {
+      const key = `${job.refKind}:${job.refNumber}:${job.jobType}`;
+      if (seen.has(key)) extra.push(job.id);
+      else seen.add(key);
+    }
+    if (extra.length > 0) {
+      await db
+        .update(devJob)
+        .set({ status: "CANCELLED", error: "Duplicate job", updatedAt: new Date() })
+        .where(and(inArray(devJob.id, extra), eq(devJob.status, "PENDING")));
+    }
+  } catch (error) {
+    note("duplicate cleanup failed", error);
   }
 
   return report;

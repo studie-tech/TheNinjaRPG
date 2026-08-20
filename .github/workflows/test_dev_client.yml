@@ -1,5 +1,10 @@
 name: test_dev_client
 on: pull_request
+
+# Neither job needs write access to the repository.
+permissions:
+  contents: read
+
 jobs:
   test_dev_client:
     name: test_dev_client
@@ -26,8 +31,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - name: install dependencies
+        run: bun install
+        working-directory: ./dev-client
       - name: build frontend (required by tauri::generate_context)
         run: bun run build
+        working-directory: ./dev-client
+      - name: build sidecar (bundled as a tauri resource)
+        run: bun run sidecar:build
         working-directory: ./dev-client
       - name: install rust
         run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable

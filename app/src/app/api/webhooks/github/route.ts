@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { GITHUB_REPO_SLUG } from "@/drizzle/constants";
 import { supportTicket } from "@/drizzle/schema";
 import {
   processContributionIssueEvent,
@@ -20,6 +21,7 @@ interface GitHubWebhookPayload {
     title?: string;
     body?: string | null;
     labels?: Array<{ name: string }>;
+    user?: { login: string };
     closed_at: string | null;
   };
   pull_request?: {
@@ -105,8 +107,15 @@ export async function POST(request: NextRequest) {
     const data = JSON.parse(payload) as GitHubWebhookPayload;
     const eventType = request.headers.get("x-github-event") ?? "unknown";
 
+    // Jobs store only a ref number, and every lookup resolves it against the one
+    // hardcoded repository, so events from any other repo sharing this webhook
+    // would create jobs pointing at unrelated issues.
+    const repoSlug =
+      `${data.repository?.owner?.login ?? ""}/${data.repository?.name ?? ""}`.toLowerCase();
+    const isContributionRepo = repoSlug === GITHUB_REPO_SLUG.toLowerCase();
+
     // Dev contribution job creation (issues + pull_request events).
-    if (data.issue && eventType === "issues") {
+    if (isContributionRepo && data.issue && eventType === "issues") {
       await processContributionIssueEvent(drizzleDB, {
         number: data.issue.number,
         title: data.issue.title ?? `Issue #${data.issue.number}`,
@@ -115,10 +124,11 @@ export async function POST(request: NextRequest) {
         html_url: data.issue.html_url,
         state: data.issue.state,
         action: data.action,
+        authorLogin: data.issue.user?.login,
       });
     }
 
-    if (data.pull_request && eventType === "pull_request") {
+    if (isContributionRepo && data.pull_request && eventType === "pull_request") {
       const headOwner = data.pull_request.head?.repo?.owner?.login?.toLowerCase();
       const baseOwner = data.pull_request.base?.repo?.owner?.login?.toLowerCase();
       await processContributionPullRequestEvent(drizzleDB, {

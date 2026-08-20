@@ -1,5 +1,6 @@
 import {
   CONTRIBUTION_CLARIFIED_LABEL,
+  CONTRIBUTION_CLOCK_SKEW_MS,
   CONTRIBUTION_JOB_PRIORITY,
   CONTRIBUTION_MAX_ATTEMPTS,
   CONTRIBUTION_MAX_JOBS_PER_DAY,
@@ -24,7 +25,7 @@ const normalizeLabel = (label: string) => label.trim().toLowerCase();
 const CLARIFIED_LABEL = normalizeLabel(CONTRIBUTION_CLARIFIED_LABEL);
 
 // A job is "in flight" when it has not reached a terminal state.
-const ACTIVE_STATUSES = new Set(["PENDING", "CLAIMED"]);
+const ACTIVE_STATUSES = new Set(["PENDING", "CLAIMED", "VERIFYING"]);
 const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED", "CANCELLED"]);
 
 export const isJobActive = (status: ExistingJob["status"]) =>
@@ -86,10 +87,12 @@ export const planIssueJob = (
     return { create: null, cancelJobIds: [] };
   }
 
-  // A terminal (completed/failed) job of the desired type already exists → do not
-  // re-issue it. (Failed jobs can be re-attempted via the attempt budget instead.)
+  // A terminal job of the desired type already exists → do not re-issue it.
+  // FAILED counts here: a job that exhausted its attempt budget must not be
+  // resurrected by the next backfill pass, or the cron re-creates it forever
+  // (with attemptCount reset) for any issue agents cannot finish.
   const desiredTerminal = forRef.filter(
-    (j) => j.jobType === wanted && j.status === "COMPLETED",
+    (j) => j.jobType === wanted && isJobTerminal(j.status),
   );
   if (desiredTerminal.length > 0) {
     return { create: null, cancelJobIds: [] };
@@ -143,7 +146,12 @@ export const computeBackfillJobs = (input: BackfillInput): JobSpec[] => {
         refKind: "ISSUE",
         refNumber: issue.number,
         refUrl: issue.url,
-        context: { title: issue.title, labels: issue.labels, body: issue.body },
+        context: {
+          title: issue.title,
+          labels: issue.labels,
+          body: issue.body,
+          authorLogin: issue.authorLogin,
+        },
       });
     }
   }
@@ -185,7 +193,7 @@ export const hasJobsRemainingToday = (jobsCompletedToday: number) =>
 // Filter + rank pending jobs that a user may claim.
 //  - only PENDING jobs;
 //  - never the same (ref + type) the user already has an active or completed job for;
-//  - for reviews, never a PR the user authored (no self-review);
+//  - never a ref the user authored themselves (applied via excludeSelfAuthored);
 //  - ordered by priority (implement > review > triage), then oldest first.
 export const selectClaimCandidates = <T extends ExistingJob>(
   pending: T[],
@@ -197,8 +205,9 @@ export const selectClaimCandidates = <T extends ExistingJob>(
       .map((j) => `${j.refKind}:${j.refNumber}:${j.jobType}`),
   );
 
-  // No self-review: the requester must not be the PR author. The author login is
-  // carried on the job context, so this filter is applied via excludeSelfReview.
+  // No self-authored work: the requester must not have opened the issue/PR. The
+  // author login is carried on the job context, so that filter lives in
+  // excludeSelfAuthored and is applied by the caller.
   const eligible = pending.filter((job) => {
     if (job.status !== "PENDING") return false;
     const key = `${job.refKind}:${job.refNumber}:${job.jobType}`;
@@ -214,9 +223,11 @@ export const selectClaimCandidates = <T extends ExistingJob>(
   });
 };
 
-// Exclude PR review jobs whose author is the requesting user. Pure helper kept
-// separate so the author login (carried on the job context) can be injected.
-export const excludeSelfReview = <
+// Exclude jobs whose underlying issue or pull request the requesting user wrote.
+// This covers triage as well as review: without it a user can open an issue, claim
+// the triage job it generates, comment on their own issue and collect the reward.
+// The author login is carried on the job context, so it is injected by the caller.
+export const excludeSelfAuthored = <
   T extends ExistingJob & { context?: { authorLogin?: string } },
 >(
   jobs: T[],
@@ -224,11 +235,7 @@ export const excludeSelfReview = <
 ): T[] => {
   if (!githubLogin) return jobs;
   const login = githubLogin.toLowerCase();
-  return jobs.filter((job) => {
-    if (job.jobType !== "PR_REVIEW") return true;
-    const author = job.context?.authorLogin?.toLowerCase();
-    return author !== login;
-  });
+  return jobs.filter((job) => job.context?.authorLogin?.toLowerCase() !== login);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -262,9 +269,12 @@ export const isResultVerified = (input: VerificationInput): boolean => {
   if (evidence.actorLogin.toLowerCase() !== githubLogin.toLowerCase()) return false;
 
   // Allow a small clock-skew tolerance before the claim timestamp.
-  const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
-  if (evidence.producedAt < claimedAt - CLOCK_SKEW_TOLERANCE_MS) return false;
-  if (evidence.producedAt > nowMs + windowMs) return false;
+  if (evidence.producedAt < claimedAt - CONTRIBUTION_CLOCK_SKEW_MS) return false;
+  // The result must land within the verification window *of the claim*. Comparing
+  // against nowMs would only reject future-dated evidence, i.e. never.
+  if (evidence.producedAt > claimedAt + windowMs) return false;
+  // Defensive: never accept evidence dated meaningfully in the future.
+  if (evidence.producedAt > nowMs + CONTRIBUTION_CLOCK_SKEW_MS) return false;
   return true;
 };
 

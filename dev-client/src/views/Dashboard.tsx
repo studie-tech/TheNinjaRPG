@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type Agent, type StatusResponse, sidecar } from "../api";
+import { type Agent, openExternal, type StatusResponse, sidecar } from "../api";
 
 const PHASE_LABEL: Record<string, string> = {
   idle: "Idle",
@@ -21,6 +21,8 @@ export function DashboardView({
   const [claiming, setClaiming] = useState<Agent | null>(null);
 
   const run = status.run;
+  // Bound once so the click handlers below narrow correctly.
+  const activeJob = run.job;
   const busy =
     run.phase === "preparing" || run.phase === "agent" || run.phase === "submitting";
 
@@ -97,14 +99,18 @@ export function DashboardView({
         </div>
       )}
 
-      {run.job && (
+      {activeJob && (
         <div className="card">
           <h2>
-            {run.job.jobType}{" "}
-            <a href={run.job.refUrl} target="_blank" rel="noreferrer">
-              #{run.job.refNumber}
-            </a>
-            {run.job.context.title ? ` — ${run.job.context.title}` : ""}
+            {activeJob.jobType}{" "}
+            <button
+              type="button"
+              className="linklike"
+              onClick={() => void openExternal(activeJob.refUrl)}
+            >
+              #{activeJob.refNumber}
+            </button>
+            {activeJob.context.title ? ` — ${activeJob.context.title}` : ""}
           </h2>
           <p className="muted small">
             {PHASE_LABEL[run.phase] ?? run.phase}

@@ -1879,6 +1879,10 @@ export const DISCORD_INVITE_URL = "https://discord.gg/eNtgPdAh7j";
 export const GITHUB_API_ENDPOINT =
   "https://api.github.com/repos/studie-tech/TheNinjaRPG";
 
+// "owner/repo" for the repository above. Derived rather than repeated so the two
+// can never drift apart.
+export const GITHUB_REPO_SLUG = GITHUB_API_ENDPOINT.split("/repos/")[1] ?? "";
+
 // Draco files (see https://github.com/google/draco/tree/main/javascript)
 export const DRACO_DECODER_URL =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF0eCaMuG2iOewJtjGzvNcmEX3TBnoSfMDZPH";
@@ -2927,6 +2931,9 @@ export type ContributionRefKind = (typeof ContributionRefKinds)[number];
 export const ContributionJobStatuses = [
   "PENDING",
   "CLAIMED",
+  // Work was submitted but GitHub could not confirm it yet (propagation delay,
+  // rate limit, outage). Re-checked by the maintenance cron before paying out.
+  "VERIFYING",
   "COMPLETED",
   "FAILED",
   "CANCELLED",
@@ -2946,10 +2953,17 @@ export const CONTRIBUTION_MAX_JOBS_PER_DAY = 10;
 export const CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY = 5;
 // A claimed job whose heartbeat (or claim time) is older than this is stale and requeued.
 export const CONTRIBUTION_STALE_CLAIM_MS = 10 * 60 * 1000;
-// Requeue guard: a claimed job is only stale if BOTH heartbeat and claim are older.
-export const CONTRIBUTION_STALE_GRACE_MS = 5 * 60 * 1000;
-// GitHub result-verification window: the result must be timestamped within this many ms of claim.
+// GitHub result-verification window: the result must be timestamped no later than
+// this long after the job was claimed.
 export const CONTRIBUTION_VERIFY_WINDOW_MS = 2 * 60 * 60 * 1000;
+// Tolerance for clock skew between GitHub's timestamps and ours when checking that
+// a result was produced after the claim.
+export const CONTRIBUTION_CLOCK_SKEW_MS = 5 * 60 * 1000;
+// How long the maintenance cron keeps retrying a result GitHub could not confirm
+// yet before giving up and closing the job unrewarded.
+export const CONTRIBUTION_VERIFY_RETRY_MS = 6 * 60 * 60 * 1000;
+// Pages of GitHub results to walk when looking for a contribution result.
+export const CONTRIBUTION_GITHUB_MAX_PAGES = 10;
 
 // Priority used to order job creation / backfill (higher first). Implementation
 // work is the highest value, then reviews, then triage follow-ups.

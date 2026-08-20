@@ -39,7 +39,8 @@ export interface JobContext {
   title: string;
   labels: string[];
   body?: string;
-  // For pull requests, the author's login (used to block self-review).
+  // Login of whoever opened the issue / pull request, used to block self-authored
+  // work (no reviewing your own PR, no triaging your own issue).
   authorLogin?: string;
   // True when the PR head is on a different repository than the base (a fork).
   isCrossFork?: boolean;
@@ -52,6 +53,7 @@ export interface OpenIssueRef {
   labels: string[];
   body?: string;
   url: string;
+  authorLogin?: string;
 }
 
 // An open GitHub pull request, as fetched for eligibility checks.

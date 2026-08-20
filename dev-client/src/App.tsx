@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { type StatusResponse, sidecar, startSidecar } from "./api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type StatusResponse, sidecar, sidecarInfo, startSidecar } from "./api";
 import { DashboardView } from "./views/Dashboard";
 import { HistoryView } from "./views/History";
 import { SettingsView } from "./views/Settings";
@@ -12,9 +12,17 @@ export function App() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [sidecarError, setSidecarError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("dashboard");
+  const bootstrapped = useRef(false);
+  const refreshing = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
+      // Adopt the shell's port/token before the first call so an overridden
+      // TNR_DEV_CLIENT_PORT is honoured instead of the built-in default.
+      if (!bootstrapped.current) {
+        bootstrapped.current = true;
+        await sidecarInfo();
+      }
       const next = await sidecar.status();
       setStatus(next);
       setSidecarError(null);
@@ -40,8 +48,19 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    void refresh();
-    const interval = setInterval(() => void refresh(), 3000);
+    // Guard against overlapping ticks: a slow /status would otherwise stack up
+    // and, on the failure path, re-invoke start_sidecar on every tick.
+    const tick = async () => {
+      if (refreshing.current) return;
+      refreshing.current = true;
+      try {
+        await refresh();
+      } finally {
+        refreshing.current = false;
+      }
+    };
+    void tick();
+    const interval = setInterval(() => void tick(), 3000);
     return () => clearInterval(interval);
   }, [refresh]);
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { sidecar } from "../api";
+import { openExternal, sidecar } from "../api";
 
 export function SignInView() {
   const [busy, setBusy] = useState(false);
@@ -31,9 +31,13 @@ export function SignInView() {
       </button>
       {connectUrl && (
         <p>
-          <a href={connectUrl} target="_blank" rel="noreferrer">
+          <button
+            type="button"
+            className="linklike"
+            onClick={() => void openExternal(connectUrl)}
+          >
             Open the sign-in page in your browser
-          </a>
+          </button>
         </p>
       )}
       {error && <p className="error">{error}</p>}

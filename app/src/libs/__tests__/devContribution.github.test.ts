@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type FetchImpl,
+  referencesIssue,
   verifyContributionResult,
 } from "@/libs/devContribution/github";
 import {
@@ -140,7 +141,7 @@ describe("verifyContributionResult", () => {
     );
 
     expect(result.verified).toBe(false);
-    expect(result.error).toMatch(/no github login/i);
+    expect(result.error).toMatch(/no verified github login/i);
   });
 
   it("verifies a triage issue comment", async () => {
@@ -175,7 +176,7 @@ describe("verifyContributionResult", () => {
   it("verifies an implementation PR that references the issue", async () => {
     const fetchImpl = mockFetch([
       {
-        match: "/pulls?state=open",
+        match: "/pulls?state=all",
         body: [
           {
             user: { login: "octocat" },
@@ -394,5 +395,166 @@ describe("ensureClarifiedLabel", () => {
     };
 
     await expect(ensureClarifiedLabel(fetchImpl, "token")).resolves.toBe(true);
+  });
+});
+
+describe("regressions: picking the right GitHub artifact", () => {
+  it("verifies the newest review, not an older one by the same user", async () => {
+    // GitHub returns reviews oldest-first. Taking the first match meant a user
+    // who had ever reviewed the PR before could never verify a new review.
+    const fetchImpl = mockFetch([
+      {
+        match: "/pulls/7/reviews",
+        body: [
+          {
+            user: { login: "octocat" },
+            submitted_at: iso(NOW - 30 * 24 * HOUR),
+            html_url: "https://github.com/r/pull/7#old",
+          },
+          {
+            user: { login: "octocat" },
+            submitted_at: iso(NOW - 10 * 60 * 1000),
+            html_url: "https://github.com/r/pull/7#new",
+          },
+        ],
+      },
+    ]);
+
+    const result = await verifyContributionResult(
+      {
+        jobType: "PR_REVIEW",
+        refNumber: 7,
+        githubLogin: "octocat",
+        claimedAt: NOW - HOUR,
+        nowMs: NOW,
+        windowMs: 2 * HOUR,
+      },
+      { fetchImpl },
+    );
+
+    expect(result.verified).toBe(true);
+    expect(result.resultUrl).toBe("https://github.com/r/pull/7#new");
+  });
+
+  it("verifies the newest issue comment, not an older one by the same user", async () => {
+    const fetchImpl = mockFetch([
+      {
+        match: "/issues/42/comments",
+        body: [
+          {
+            user: { login: "octocat" },
+            created_at: iso(NOW - 30 * 24 * HOUR),
+            html_url: "https://github.com/r/issues/42#old",
+          },
+          {
+            user: { login: "octocat" },
+            created_at: iso(NOW - 5 * 60 * 1000),
+            html_url: "https://github.com/r/issues/42#new",
+          },
+        ],
+      },
+    ]);
+
+    const result = await verifyContributionResult(
+      {
+        jobType: "ISSUE_TRIAGE",
+        refNumber: 42,
+        githubLogin: "octocat",
+        claimedAt: NOW - HOUR,
+        nowMs: NOW,
+        windowMs: 2 * HOUR,
+      },
+      { fetchImpl },
+    );
+
+    expect(result.verified).toBe(true);
+    expect(result.resultUrl).toBe("https://github.com/r/issues/42#new");
+  });
+
+  it("does not accept a PR referencing #123 for a job on issue #12", async () => {
+    // Bare substring matching made `#12` match a body containing `#123`, so an
+    // unrelated PR of the user's could be credited as the implementation.
+    const fetchImpl = mockFetch([
+      {
+        match: "/pulls?state=all",
+        body: [
+          {
+            user: { login: "octocat" },
+            title: "Unrelated work",
+            body: "Closes #123",
+            html_url: "https://github.com/r/pull/500",
+            created_at: iso(NOW - 30 * 60 * 1000),
+          },
+        ],
+      },
+    ]);
+
+    const result = await verifyContributionResult(
+      {
+        jobType: "ISSUE_IMPLEMENT",
+        refNumber: 12,
+        githubLogin: "octocat",
+        claimedAt: NOW - HOUR,
+        nowMs: NOW,
+        windowMs: 2 * HOUR,
+      },
+      { fetchImpl },
+    );
+
+    expect(result.verified).toBe(false);
+  });
+
+  it("still accepts an exact issue reference", () => {
+    expect(referencesIssue("Closes #12", 12)).toBe(true);
+    expect(referencesIssue("Closes #12.", 12)).toBe(true);
+    expect(referencesIssue("(#12)", 12)).toBe(true);
+    expect(referencesIssue("Closes #123", 12)).toBe(false);
+    expect(referencesIssue("Closes #1234", 12)).toBe(false);
+  });
+
+  it("marks a GitHub outage as retryable rather than a definitive failure", async () => {
+    // A transient 500 used to close the job unrewarded with no way back.
+    const fetchImpl = mockFetch([{ match: "/pulls/7/reviews", status: 500, body: {} }]);
+    const result = await verifyContributionResult(
+      {
+        jobType: "PR_REVIEW",
+        refNumber: 7,
+        githubLogin: "octocat",
+        claimedAt: NOW - HOUR,
+        nowMs: NOW,
+        windowMs: 2 * HOUR,
+      },
+      { fetchImpl },
+    );
+    expect(result.verified).toBe(false);
+    expect(result.retryable).toBe(true);
+  });
+
+  it("marks an out-of-window result as NOT retryable", async () => {
+    const fetchImpl = mockFetch([
+      {
+        match: "/pulls/7/reviews",
+        body: [
+          {
+            user: { login: "octocat" },
+            submitted_at: iso(NOW - 30 * 24 * HOUR),
+            html_url: "https://github.com/r/pull/7#ancient",
+          },
+        ],
+      },
+    ]);
+    const result = await verifyContributionResult(
+      {
+        jobType: "PR_REVIEW",
+        refNumber: 7,
+        githubLogin: "octocat",
+        claimedAt: NOW - HOUR,
+        nowMs: NOW,
+        windowMs: 2 * HOUR,
+      },
+      { fetchImpl },
+    );
+    expect(result.verified).toBe(false);
+    expect(result.retryable).toBe(false);
   });
 });

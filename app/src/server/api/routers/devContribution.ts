@@ -1,8 +1,9 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
-import { z } from "zod";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
+  CONTRIBUTION_JOB_PRIORITY,
   CONTRIBUTION_STALE_CLAIM_MS,
   CONTRIBUTION_VERIFY_WINDOW_MS,
+  ContributionJobTypes,
 } from "@/drizzle/constants";
 import {
   devContributionProfile,
@@ -12,22 +13,29 @@ import {
 } from "@/drizzle/schema";
 import {
   consumeConnectCode,
+  consumeGithubVerificationNonce,
   DEVICE_TOKEN_TTL_MS,
   getDeviceTokenSecret,
+  revokeAllDeviceTokensForUser,
   revokeDeviceToken,
   signDeviceToken,
+  storeGithubVerificationNonce,
 } from "@/libs/devContribution/deviceToken";
-import { verifyContributionResult } from "@/libs/devContribution/github";
 import {
-  excludeSelfReview,
-  getContributionReward,
+  verifyContributionResult,
+  verifyGistOwnership,
+} from "@/libs/devContribution/github";
+import {
+  excludeSelfAuthored,
   hasJobsRemainingToday,
   isTokenCapExceeded,
   releaseJobStatus,
   selectClaimCandidates,
 } from "@/libs/devContribution/jobs";
-import { postProcessRewards } from "@/libs/quest";
-import { updateRewards } from "@/server/api/routers/quests";
+import {
+  describeReward,
+  grantContributionReward,
+} from "@/libs/devContribution/rewards";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -40,17 +48,26 @@ import { getUtcDateString } from "@/utils/time";
 import {
   claimNextJobInput,
   completeJobInput,
+  confirmGithubVerificationInput,
+  exchangeConnectCodeInput,
   failJobInput,
   getLeaderboardInput,
   getMyJobsInput,
   heartbeatInput,
+  requestGithubVerificationInput,
   updateProfileInput,
 } from "@/validators/devContribution";
-import { ObjectiveReward } from "@/validators/rewards";
 
 // How many pending jobs to consider when matching a claim (bounded so a huge
 // backlog does not balloon the claim round-trip).
 const CLAIM_CANDIDATE_LIMIT = 200;
+
+// MySQL FIELD() orders by position, so the list is the priority ranking highest
+// first. Derived from CONTRIBUTION_JOB_PRIORITY so the SQL that picks the
+// candidate window and the JS that ranks within it cannot drift apart.
+const jobTypeFieldOrder = [...ContributionJobTypes].sort(
+  (a, b) => CONTRIBUTION_JOB_PRIORITY[b] - CONTRIBUTION_JOB_PRIORITY[a],
+);
 
 export const devContributionRouter = createTRPCRouter({
   /**
@@ -61,12 +78,7 @@ export const devContributionRouter = createTRPCRouter({
    * that is only delivered to the client's own loopback server.
    */
   exchangeConnectCode: publicProcedure
-    .input(
-      z.object({
-        code: z.string().min(40).max(160),
-        codeVerifier: z.string().min(40).max(160),
-      }),
-    )
+    .input(exchangeConnectCodeInput)
     .mutation(async ({ input }) => {
       const userId = await consumeConnectCode(input.code, input.codeVerifier);
       if (!userId) {
@@ -92,6 +104,18 @@ export const devContributionRouter = createTRPCRouter({
     await revokeDeviceToken(ctx.deviceTokenJti, Date.now() + DEVICE_TOKEN_TTL_MS);
     return { success: true, message: "Device token revoked" };
   }),
+
+  /**
+   * Invalidate every device token issued to the caller. Unlike
+   * `revokeDeviceToken` this works from an ordinary browser session, so a user
+   * whose token leaked can cut it off without holding it.
+   */
+  revokeAllDeviceTokens: protectedProcedure
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      await revokeAllDeviceTokensForUser(ctx.userId);
+      return { success: true, message: "All desktop clients signed out" };
+    }),
 
   /**
    * Get-or-create the caller's contribution profile plus today's usage.
@@ -130,7 +154,10 @@ export const devContributionRouter = createTRPCRouter({
   }),
 
   /**
-   * Update daily token caps, auto-run flag, and the verified GitHub login.
+   * Update daily token caps and the auto-run flag.
+   *
+   * The GitHub login is intentionally not settable here — see
+   * requestGithubVerification.
    */
   updateProfile: protectedProcedure
     .input(updateProfileInput)
@@ -146,17 +173,74 @@ export const devContributionRouter = createTRPCRouter({
       if (input.autoRun !== undefined) {
         patch.autoRun = input.autoRun;
       }
-      if (input.githubLogin !== undefined) {
-        patch.githubLogin = input.githubLogin.trim();
+
+      await ensureProfile(ctx.drizzle, ctx.userId);
+      if (Object.keys(patch).length > 0) {
+        await ctx.drizzle
+          .update(devContributionProfile)
+          .set({ ...patch, updatedAt: new Date() })
+          .where(eq(devContributionProfile.userId, ctx.userId));
+      }
+
+      return { success: true, message: "Profile updated" };
+    }),
+
+  /**
+   * Step 1 of proving GitHub account ownership: hand out a one-time nonce the
+   * user must publish under the account they claim to own.
+   *
+   * Rewards are paid against the stored login, so accepting a client-supplied
+   * value would let anyone farm another contributor's work. The nonce closes
+   * that by requiring a write only the real account holder can make.
+   */
+  requestGithubVerification: protectedProcedure
+    .input(requestGithubVerificationInput)
+    .mutation(async ({ ctx, input }) => {
+      await ensureProfile(ctx.drizzle, ctx.userId);
+      const nonce = await storeGithubVerificationNonce(ctx.userId, input.githubLogin);
+      return {
+        success: true,
+        message: "Publish this code in a public gist to prove ownership",
+        nonce,
+        instructions:
+          `Run: gh gist create --public --desc "TheNinja-RPG verification" ` +
+          `- <<< "${nonce}"`,
+      };
+    }),
+
+  /**
+   * Step 2: confirm the gist exists, is owned by the claimed login, and holds
+   * the nonce we issued to this game account.
+   */
+  confirmGithubVerification: protectedProcedure
+    .input(confirmGithubVerificationInput)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const nonce = await consumeGithubVerificationNonce(ctx.userId, input.githubLogin);
+      if (!nonce) {
+        return errorResponse(
+          "No pending verification for that login. Request a new code first.",
+        );
+      }
+      const check = await verifyGistOwnership(
+        { gistId: input.gistId, login: input.githubLogin, nonce },
+        { token: process.env.GITHUB_ISSUE_TOKEN },
+      );
+      if (!check.ok) {
+        return errorResponse(check.error ?? "Could not verify GitHub account");
       }
 
       await ensureProfile(ctx.drizzle, ctx.userId);
       await ctx.drizzle
         .update(devContributionProfile)
-        .set({ ...patch, updatedAt: new Date() })
+        .set({
+          githubLogin: check.login ?? input.githubLogin,
+          githubLoginVerifiedAt: new Date(),
+          updatedAt: new Date(),
+        })
         .where(eq(devContributionProfile.userId, ctx.userId));
 
-      return { success: true, message: "Profile updated" };
+      return { success: true, message: `Verified as @${check.login}` };
     }),
 
   /**
@@ -167,8 +251,10 @@ export const devContributionRouter = createTRPCRouter({
    *  - the agent's daily token cap;
    *  - the global daily job cap.
    *
-   * The claim itself is a compare-and-swap on status=PENDING so two clients can
-   * never claim the same job.
+   * Two compare-and-swaps make this safe under concurrency: one takes the
+   * user's single claim slot (so parallel requests cannot each walk away with a
+   * job), the other flips the job row PENDING -> CLAIMED (so two users cannot
+   * take the same job).
    */
   claimNextJob: protectedProcedure
     .input(claimNextJobInput)
@@ -176,7 +262,7 @@ export const devContributionRouter = createTRPCRouter({
       const agent = input.agent;
       const today = getUtcDateString();
 
-      const [profile, usage, userJobs, pending] = await Promise.all([
+      const [profile, usage, activeJobs, pending] = await Promise.all([
         ensureProfile(ctx.drizzle, ctx.userId),
         ctx.drizzle
           .select()
@@ -187,22 +273,33 @@ export const devContributionRouter = createTRPCRouter({
               eq(devJobDailyUsage.date, today),
             ),
           ),
+        // Only in-flight rows, so a long job history cannot push the caller's
+        // active claim out of a truncated result set.
         ctx.drizzle
-          .select()
+          .select({ id: devJob.id })
           .from(devJob)
-          .where(eq(devJob.claimedByUserId, ctx.userId))
-          .limit(200),
+          .where(
+            and(
+              eq(devJob.claimedByUserId, ctx.userId),
+              inArray(devJob.status, ["CLAIMED", "VERIFYING"]),
+            ),
+          )
+          .limit(1),
         ctx.drizzle
           .select()
           .from(devJob)
           .where(eq(devJob.status, "PENDING"))
           .orderBy(
-            sql`FIELD(DevJob.jobType, 'ISSUE_IMPLEMENT', 'PR_REVIEW', 'ISSUE_TRIAGE') ASC, DevJob.createdAt ASC`,
+            sql`FIELD(${devJob.jobType}, ${sql.join(
+              jobTypeFieldOrder.map((t) => sql`${t}`),
+              sql`, `,
+            )}) ASC`,
+            devJob.createdAt,
           )
           .limit(CLAIM_CANDIDATE_LIMIT),
       ]);
 
-      if (userJobs.some((j) => j.status === "CLAIMED")) {
+      if (activeJobs.length > 0) {
         return {
           success: true,
           claimed: false,
@@ -230,36 +327,87 @@ export const devContributionRouter = createTRPCRouter({
         };
       }
 
-      const candidates = excludeSelfReview(
-        selectClaimCandidates(withContexts(pending), withContexts(userJobs)),
+      // Refs this user has already worked on, so they are not offered again.
+      const refNumbers = [...new Set(pending.map((j) => j.refNumber))];
+      const history = refNumbers.length
+        ? await ctx.drizzle
+            .select({
+              jobType: devJob.jobType,
+              refKind: devJob.refKind,
+              refNumber: devJob.refNumber,
+              status: devJob.status,
+              id: devJob.id,
+              attemptCount: devJob.attemptCount,
+            })
+            .from(devJob)
+            .where(
+              and(
+                eq(devJob.claimedByUserId, ctx.userId),
+                inArray(devJob.refNumber, refNumbers),
+              ),
+            )
+        : [];
+
+      const candidates = excludeSelfAuthored(
+        selectClaimCandidates(withContexts(pending), history),
         profile.githubLogin ?? undefined,
       );
 
       for (const candidate of candidates) {
+        // Take the caller's single claim slot. Losing this CAS means a parallel
+        // request already holds it, so stop rather than claiming a second job.
+        const slot = await ctx.drizzle
+          .update(devContributionProfile)
+          .set({ activeJobId: candidate.id, lastSeenAt: new Date() })
+          .where(
+            and(
+              eq(devContributionProfile.userId, ctx.userId),
+              isNull(devContributionProfile.activeJobId),
+            ),
+          );
+        if (slot.rowsAffected !== 1) {
+          return {
+            success: true,
+            claimed: false,
+            message:
+              "You already have an active job. Finish it before claiming another.",
+          };
+        }
+
+        const claimedAt = new Date();
         const result = await ctx.drizzle
           .update(devJob)
           .set({
             status: "CLAIMED",
             agent,
             claimedByUserId: ctx.userId,
-            claimedAt: new Date(),
-            heartbeatAt: new Date(),
+            claimedAt,
+            heartbeatAt: claimedAt,
             attemptCount: sql`${devJob.attemptCount} + 1`,
-            updatedAt: new Date(),
+            updatedAt: claimedAt,
           })
           .where(and(eq(devJob.id, candidate.id), eq(devJob.status, "PENDING")));
 
         if (result.rowsAffected === 1) {
-          await ctx.drizzle
-            .update(devContributionProfile)
-            .set({ lastSeenAt: new Date() })
-            .where(eq(devContributionProfile.userId, ctx.userId));
           return {
             success: true,
             claimed: true,
-            job: serializeJob(withContext(candidate)),
+            // Serialize the post-update state: the row we read was still PENDING.
+            job: serializeJob(
+              withContext({
+                ...candidate,
+                status: "CLAIMED" as const,
+                agent,
+                claimedByUserId: ctx.userId,
+                claimedAt,
+                heartbeatAt: claimedAt,
+              }),
+            ),
           };
         }
+
+        // Another user took this job first: hand the slot back and try the next.
+        await releaseClaimSlot(ctx.drizzle, ctx.userId, candidate.id);
       }
 
       return {
@@ -276,9 +424,10 @@ export const devContributionRouter = createTRPCRouter({
     .input(heartbeatInput)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      const now = new Date();
       const result = await ctx.drizzle
         .update(devJob)
-        .set({ heartbeatAt: new Date(), updatedAt: new Date() })
+        .set({ heartbeatAt: now, updatedAt: now })
         .where(
           and(
             eq(devJob.id, input.jobId),
@@ -291,15 +440,19 @@ export const devContributionRouter = createTRPCRouter({
       }
       await ctx.drizzle
         .update(devContributionProfile)
-        .set({ lastSeenAt: new Date() })
+        .set({ lastSeenAt: now })
         .where(eq(devContributionProfile.userId, ctx.userId));
       return { success: true, message: "Heartbeat recorded" };
     }),
 
   /**
    * Report a finished job. The server re-verifies the result on GitHub before
-   * granting a reward; unverified jobs still complete (counting toward history
-   * and tokens) but pay nothing.
+   * granting a reward.
+   *
+   * A result GitHub cannot confirm right now (propagation delay, rate limit,
+   * outage) parks the job as VERIFYING for the maintenance cron to re-check,
+   * rather than closing it unrewarded — otherwise a momentary GitHub hiccup
+   * would permanently burn work the contributor actually did.
    */
   completeJob: protectedProcedure
     .input(completeJobInput)
@@ -307,42 +460,17 @@ export const devContributionRouter = createTRPCRouter({
       const now = Date.now();
       const today = getUtcDateString();
 
-      const [job, user, profile, rewardedToday] = await Promise.all([
+      const [job, profile] = await Promise.all([
         ctx.drizzle
           .select()
           .from(devJob)
           .where(eq(devJob.id, input.jobId))
           .then((rows) => rows[0]),
-        ctx.drizzle
-          .select()
-          .from(userData)
-          .where(eq(userData.userId, ctx.userId))
-          .then((r) => r[0]),
         ensureProfile(ctx.drizzle, ctx.userId),
-        ctx.drizzle
-          .select({ count: sql<number>`count(*)` })
-          .from(devJob)
-          .where(
-            and(
-              eq(devJob.claimedByUserId, ctx.userId),
-              eq(devJob.status, "COMPLETED"),
-              eq(devJob.rewardGranted, true),
-              gte(devJob.completedAt, new Date(`${today}T00:00:00.000Z`)),
-            ),
-          )
-          .then((rows) => rows[0]?.count ?? 0),
       ]);
 
       if (!job || job.status !== "CLAIMED" || job.claimedByUserId !== ctx.userId) {
         return errorResponse("Job is not active or belongs to another user");
-      }
-      if (job.rewardGranted) {
-        return {
-          success: true,
-          message: "Job already completed",
-          reward: null,
-          verified: true,
-        };
       }
 
       const claimedAt = job.claimedAt?.getTime() ?? now;
@@ -358,44 +486,12 @@ export const devContributionRouter = createTRPCRouter({
         { token: process.env.GITHUB_ISSUE_TOKEN },
       );
 
-      const reward = verification.verified
-        ? getContributionReward(job.jobType, rewardedToday)
-        : null;
-
-      const result = await ctx.drizzle
-        .update(devJob)
-        .set({
-          status: "COMPLETED",
-          completedAt: new Date(),
-          resultUrl: verification.verified
-            ? (verification.resultUrl ?? input.resultUrl ?? null)
-            : (input.resultUrl ?? null),
-          tokensIn: input.tokensIn,
-          tokensOut: input.tokensOut,
-          rewardGranted: reward !== null,
-          error: verification.verified
-            ? null
-            : (verification.error ?? "Result could not be verified"),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(devJob.id, input.jobId),
-            eq(devJob.status, "CLAIMED"),
-            eq(devJob.claimedByUserId, ctx.userId),
-            eq(devJob.rewardGranted, false),
-          ),
-        );
-
-      if (result.rowsAffected === 0) {
-        return errorResponse("Job already completed");
-      }
-
       const totalTokens = input.tokensIn + input.tokensOut;
       const agent = job.agent ?? "CLAUDE";
+      const deferred = !verification.verified && verification.retryable === true;
 
-      const writes: Promise<unknown>[] = [
-        // Upsert the daily ledger (INSERT ... ON DUPLICATE KEY UPDATE).
+      // Usage is recorded either way: the tokens were spent.
+      const ledgerWrites = [
         ctx.drizzle
           .insert(devJobDailyUsage)
           .values({
@@ -412,7 +508,6 @@ export const devContributionRouter = createTRPCRouter({
               updatedAt: new Date(),
             },
           }),
-        // Bump lifetime profile counters atomically.
         ctx.drizzle
           .update(devContributionProfile)
           .set({
@@ -424,33 +519,90 @@ export const devContributionRouter = createTRPCRouter({
           .where(eq(devContributionProfile.userId, ctx.userId)),
       ];
 
-      if (reward && user) {
-        writes.push(
-          updateRewards({
-            client: ctx.drizzle,
-            user,
-            reason: `DEV_CONTRIBUTION_${job.jobType}`,
-            rewards: postProcessRewards({
-              ...ObjectiveReward.parse({}),
-              reward_money: reward.money,
-              reward_exp: reward.exp,
-              reward_reputation: reward.reputation,
-            }),
-          }),
-        );
+      if (deferred) {
+        const parked = await ctx.drizzle
+          .update(devJob)
+          .set({
+            status: "VERIFYING",
+            tokensIn: input.tokensIn,
+            tokensOut: input.tokensOut,
+            resultUrl: input.resultUrl ?? null,
+            error: verification.error ?? "Awaiting GitHub verification",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(devJob.id, input.jobId),
+              eq(devJob.status, "CLAIMED"),
+              eq(devJob.claimedByUserId, ctx.userId),
+            ),
+          );
+        if (parked.rowsAffected === 0) return errorResponse("Job already completed");
+        await Promise.all(ledgerWrites);
+        return {
+          success: true,
+          message:
+            "Job submitted. GitHub has not confirmed the result yet; it will be re-checked shortly.",
+          reward: null,
+          verified: false,
+          pending: true,
+        };
       }
 
-      await Promise.all(writes);
+      const closed = await ctx.drizzle
+        .update(devJob)
+        .set({
+          status: "COMPLETED",
+          completedAt: new Date(),
+          resultUrl: verification.verified
+            ? (verification.resultUrl ?? input.resultUrl ?? null)
+            : (input.resultUrl ?? null),
+          tokensIn: input.tokensIn,
+          tokensOut: input.tokensOut,
+          error: verification.verified
+            ? null
+            : (verification.error ?? "Result could not be verified"),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(devJob.id, input.jobId),
+            eq(devJob.status, "CLAIMED"),
+            eq(devJob.claimedByUserId, ctx.userId),
+          ),
+        );
+
+      if (closed.rowsAffected === 0) {
+        return errorResponse("Job already completed");
+      }
+
+      // Payout runs after the job is closed, and is itself CAS-guarded on both
+      // the daily slot and devJob.rewardGranted, so it can never pay twice.
+      const reward = verification.verified
+        ? await grantContributionReward({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            jobId: input.jobId,
+            jobType: job.jobType,
+            today,
+          })
+        : null;
+
+      await Promise.all([
+        ...ledgerWrites,
+        releaseClaimSlot(ctx.drizzle, ctx.userId, job.id),
+      ]);
 
       return {
         success: true,
         message: verification.verified
-          ? "Job completed and verified"
-          : "Job completed (result could not be verified yet, no reward granted)",
-        reward: reward
-          ? `${reward.money} money, ${reward.exp} exp, ${reward.reputation} reputation`
-          : null,
+          ? reward
+            ? "Job completed and verified"
+            : "Job completed and verified (daily reward limit reached)"
+          : "Job completed (result could not be verified, no reward granted)",
+        reward: reward ? describeReward(reward) : null,
         verified: verification.verified,
+        pending: false,
       };
     }),
 
@@ -471,7 +623,7 @@ export const devContributionRouter = createTRPCRouter({
       }
 
       const nextStatus = releaseJobStatus(job.attemptCount);
-      await ctx.drizzle
+      const released = await ctx.drizzle
         .update(devJob)
         .set({
           status: nextStatus,
@@ -489,6 +641,10 @@ export const devContributionRouter = createTRPCRouter({
             eq(devJob.claimedByUserId, ctx.userId),
           ),
         );
+      if (released.rowsAffected === 0) {
+        return errorResponse("Job is no longer active");
+      }
+      await releaseClaimSlot(ctx.drizzle, ctx.userId, job.id);
 
       return {
         success: true,
@@ -531,7 +687,7 @@ export const devContributionRouter = createTRPCRouter({
         })
         .from(devContributionProfile)
         .innerJoin(userData, eq(devContributionProfile.userId, userData.userId))
-        .where(gte(devContributionProfile.totalJobsCompleted, 1))
+        .where(sql`${devContributionProfile.totalJobsCompleted} >= 1`)
         .orderBy(
           desc(devContributionProfile.totalJobsCompleted),
           desc(devContributionProfile.totalTokensContributed),
@@ -600,6 +756,19 @@ const serializeJob = (job: ReturnType<typeof withContext>): SerializedJob => ({
   heartbeatAt: job.heartbeatAt,
   staleThresholdMs: CONTRIBUTION_STALE_CLAIM_MS,
 });
+
+/** Free the caller's single claim slot, but only if it still points at this job. */
+async function releaseClaimSlot(client: DrizzleClient, userId: string, jobId: number) {
+  await client
+    .update(devContributionProfile)
+    .set({ activeJobId: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(devContributionProfile.userId, userId),
+        eq(devContributionProfile.activeJobId, jobId),
+      ),
+    );
+}
 
 // Get-or-create the caller's profile. Concurrent first-time claims may race on
 // the insert; the duplicate-key error is tolerated and re-read.

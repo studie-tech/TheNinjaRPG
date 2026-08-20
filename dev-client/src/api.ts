@@ -8,10 +8,22 @@ export type {
   StatusResponse,
 } from "../sidecar/types";
 
-// The sidecar listens on a fixed loopback port. The Tauri shell can confirm
-// it is running via the start_sidecar command; polling /status covers plain
-// browser development where no shell is present.
-export const SIDECAR_PORT = 49200;
+// Where the sidecar actually is, and the per-launch secret it requires. Both
+// come from the Tauri shell (start_sidecar / sidecar_info); the defaults only
+// serve plain browser development, where TNR_DEV_CLIENT_PORT /
+// VITE_TNR_DEV_CLIENT_AUTH_TOKEN can supply them instead.
+export const DEFAULT_SIDECAR_PORT = 49200;
+
+let sidecarPort =
+  Number(import.meta.env.VITE_TNR_DEV_CLIENT_PORT) || DEFAULT_SIDECAR_PORT;
+let authToken: string = import.meta.env.VITE_TNR_DEV_CLIENT_AUTH_TOKEN ?? "";
+
+/** Adopt the port + token the shell reports, so overrides actually take effect. */
+export function useSidecarInfo(info: SidecarInfo | null): void {
+  if (!info) return;
+  if (info.port) sidecarPort = info.port;
+  if (info.authToken) authToken = info.authToken;
+}
 
 export class SidecarError extends Error {
   constructor(message: string) {
@@ -21,11 +33,13 @@ export class SidecarError extends Error {
 }
 
 function url(path: string): string {
-  return `http://127.0.0.1:${SIDECAR_PORT}${path}`;
+  return `http://127.0.0.1:${sidecarPort}${path}`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url(path), init);
+  const headers = new Headers(init?.headers);
+  if (authToken) headers.set("authorization", `Bearer ${authToken}`);
+  const res = await fetch(url(path), { ...init, headers });
   const text = await res.text();
   let data: unknown = null;
   try {
@@ -66,6 +80,7 @@ export const sidecar = {
 export interface SidecarInfo {
   running: boolean;
   port: number;
+  authToken: string;
 }
 
 export async function tauriInvoke<T>(
@@ -79,5 +94,27 @@ export async function tauriInvoke<T>(
   }
 }
 
-export const startSidecar = () => tauriInvoke<SidecarInfo>("start_sidecar");
+/**
+ * Open a URL in the user's real browser.
+ *
+ * A plain <a target="_blank"> does nothing useful inside a Tauri webview, so
+ * external links are routed through the shell's opener instead.
+ */
+export async function openExternal(url: string): Promise<void> {
+  if (!/^https?:\/\//i.test(url)) return;
+  const opened = await tauriInvoke<null>("open_external", { url });
+  // Outside the Tauri shell (plain vite dev) fall back to a normal window open.
+  if (opened === null && typeof window !== "undefined") window.open(url, "_blank");
+}
+
+export const startSidecar = async () => {
+  const info = await tauriInvoke<SidecarInfo>("start_sidecar");
+  useSidecarInfo(info);
+  return info;
+};
 export const stopSidecar = () => tauriInvoke<SidecarInfo>("stop_sidecar");
+export const sidecarInfo = async () => {
+  const info = await tauriInvoke<SidecarInfo>("sidecar_info");
+  useSidecarInfo(info);
+  return info;
+};

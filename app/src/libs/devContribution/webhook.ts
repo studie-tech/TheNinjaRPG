@@ -4,8 +4,10 @@
 // module translates the relevant ones into job rows, reusing the same pure
 // eligibility logic as the cron backfill so both paths stay consistent.
 //
-// All inserts are guarded by a re-read of the ref's existing jobs so a webhook
-// event racing with the cron backfill cannot create duplicates.
+// Inserts are guarded by a fresh re-read of the ref's jobs immediately before
+// writing. Without transactions that narrows the webhook-vs-cron race rather
+// than closing it, so runMaintenance also reconciles any duplicate PENDING rows
+// that slip through.
 
 import { and, eq, inArray } from "drizzle-orm";
 import { devJob } from "@/drizzle/schema";
@@ -42,6 +44,28 @@ const fetchJobsForRef = async (
   return rows.map(rowToExisting);
 };
 
+/** Fresh check for an in-flight job of this exact ref + type. */
+const hasActiveJob = async (
+  db: DrizzleClient,
+  refKind: "PULL_REQUEST" | "ISSUE",
+  refNumber: number,
+  jobType: ExistingJob["jobType"],
+): Promise<boolean> => {
+  const rows = await db
+    .select({ id: devJob.id })
+    .from(devJob)
+    .where(
+      and(
+        eq(devJob.refKind, refKind),
+        eq(devJob.refNumber, refNumber),
+        eq(devJob.jobType, jobType),
+        inArray(devJob.status, ["PENDING", "CLAIMED", "VERIFYING"]),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+};
+
 const cancelPending = async (db: DrizzleClient, ids: number[]): Promise<number> => {
   if (ids.length === 0) return 0;
   const result = await db
@@ -72,6 +96,7 @@ export const processContributionIssueEvent = async (
     html_url: string;
     state: string;
     action: string;
+    authorLogin?: string;
   },
 ): Promise<WebhookEventSummary> => {
   const summary: WebhookEventSummary = { created: [], cancelled: 0 };
@@ -91,11 +116,9 @@ export const processContributionIssueEvent = async (
   }
 
   if (plan.create) {
-    // Re-check for a racing insert (webhook vs cron) before writing.
-    const racing = existing.some(
-      (j) =>
-        j.jobType === plan.create && (j.status === "PENDING" || j.status === "CLAIMED"),
-    );
+    // Re-read (not the snapshot above, which planIssueJob already consumed) so a
+    // job inserted since then is seen.
+    const racing = await hasActiveJob(db, "ISSUE", issue.number, plan.create);
     if (!racing) {
       await db.insert(devJob).values({
         jobType: plan.create,
@@ -107,6 +130,7 @@ export const processContributionIssueEvent = async (
           title: issue.title,
           labels: issue.labels,
           body: issue.body ?? undefined,
+          authorLogin: issue.authorLogin,
         }),
       });
       summary.created.push(plan.create);
@@ -148,10 +172,7 @@ export const processContributionPullRequestEvent = async (
   }
 
   if (shouldCreatePrReviewJob({ ...pr, isBot: pr.authorIsBot }, existing)) {
-    const racing = existing.some(
-      (j) =>
-        j.jobType === "PR_REVIEW" && (j.status === "PENDING" || j.status === "CLAIMED"),
-    );
+    const racing = await hasActiveJob(db, "PULL_REQUEST", pr.number, "PR_REVIEW");
     if (!racing) {
       await db.insert(devJob).values({
         jobType: "PR_REVIEW",

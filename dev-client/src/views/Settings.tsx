@@ -9,7 +9,6 @@ export function SettingsView({
   onRefresh: () => void;
 }) {
   const [apiBase, setApiBase] = useState(status.settings.apiBase);
-  const [githubLogin, setGithubLogin] = useState(status.settings.githubLogin ?? "");
   const [claudeCap, setClaudeCap] = useState(
     String(status.settings.claudeDailyTokenCap),
   );
@@ -26,7 +25,6 @@ export function SettingsView({
     try {
       await sidecar.saveSettings({
         apiBase: apiBase.trim(),
-        githubLogin: githubLogin.trim(),
         claudeDailyTokenCap: Math.max(0, Number(claudeCap) || 0),
         codexDailyTokenCap: Math.max(0, Number(codexCap) || 0),
         autoRun,
@@ -71,18 +69,15 @@ export function SettingsView({
           onChange={(e) => setApiBase(e.target.value)}
         />
 
-        <label htmlFor="githublogin">
-          GitHub login (the account your gh CLI is signed in as)
-        </label>
-        <input
-          id="githublogin"
-          value={githubLogin}
-          onChange={(e) => setGithubLogin(e.target.value)}
-          placeholder="your-gh-login"
-        />
+        <div className="label">GitHub account</div>
         <p className="muted small">
-          Used to label pull requests and stop you from being assigned to review your
-          own PRs. The server verifies this against GitHub.
+          {status.auth.githubLogin
+            ? `Verified as @${status.auth.githubLogin}.`
+            : "Not linked yet."}{" "}
+          Rewards are paid against this account, so it can only be set by proving
+          ownership: run <code>devContribution.requestGithubVerification</code> from the
+          website, publish the code it gives you in a public gist, then confirm it. The
+          desktop client cannot set it directly.
         </p>
 
         <div className="grid-2">

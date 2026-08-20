@@ -19,6 +19,9 @@ describe("device tokens", () => {
       ok: true,
       userId: "user_123",
       jti: "jti-1",
+      // iat is returned so the caller can compare it against the per-user
+      // revocation epoch.
+      iat: Math.floor(NOW / 1000),
       exp: Math.floor(NOW / 1000) + Math.floor(DEVICE_TOKEN_TTL_MS / 1000),
     });
   });

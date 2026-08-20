@@ -10,6 +10,28 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { HistoryEntry, Settings } from "./types";
 
+// The device token is sent as a bearer to whatever apiBase says, so an
+// attacker-chosen value would exfiltrate it. Only these origins are accepted.
+const ALLOWED_API_HOSTS = [
+  "www.theninja-rpg.com",
+  "theninja-rpg.com",
+  "localhost",
+  "127.0.0.1",
+];
+
+export const isAllowedApiBase = (value: string): boolean => {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+    // Plain http is only ever acceptable for local development.
+    const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    if (url.protocol === "http:" && !isLocal) return false;
+    return ALLOWED_API_HOSTS.includes(url.hostname);
+  } catch {
+    return false;
+  }
+};
+
 // All client state lives in one user-owned directory. Override with
 // TNR_DEV_CLIENT_HOME for tests / non-standard installs.
 export const dataDir = (): string =>
@@ -58,6 +80,7 @@ export const defaultSettings: Settings = {
   claudeDailyTokenCap: 0,
   codexDailyTokenCap: 0,
   autoRun: false,
+  // Mirrors the server-verified login for display only; the client cannot set it.
   githubLogin: null,
 };
 
@@ -71,10 +94,30 @@ export function loadSettings(): Settings {
   }
 }
 
+/**
+ * Merge a settings patch, ignoring keys the caller may not set and rejecting an
+ * apiBase that is not a known game host.
+ */
 export function saveSettings(patch: Partial<Settings>): Settings {
   ensureDataDir();
-  const next = { ...loadSettings(), ...patch };
+  const current = loadSettings();
+  const next: Settings = { ...current };
+
+  if (typeof patch.apiBase === "string" && isAllowedApiBase(patch.apiBase)) {
+    next.apiBase = patch.apiBase;
+  }
+  if (typeof patch.repoPath === "string") next.repoPath = patch.repoPath;
+  if (typeof patch.autoRun === "boolean") next.autoRun = patch.autoRun;
+  for (const key of ["claudeDailyTokenCap", "codexDailyTokenCap"] as const) {
+    const value = patch[key];
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      next[key] = Math.floor(value);
+    }
+  }
+
   writeFileSync(settingsPath(), JSON.stringify(next, null, 2), "utf8");
+  // Settings carry the local repo path and the game host; keep them owner-only.
+  chmodSync(settingsPath(), 0o600);
   return next;
 }
 

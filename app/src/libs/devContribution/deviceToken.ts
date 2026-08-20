@@ -1,9 +1,15 @@
-import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 import { Redis } from "@upstash/redis";
 
 // Read process.env directly (rather than the validated `env` module) so this
 // crypto utility stays importable in unit tests without a full app env.
-const isProduction = (): boolean => process.env.NODE_ENV === "production";
+const nodeEnv = (): string => process.env.NODE_ENV ?? "";
 
 /**
  * Dev-client device tokens.
@@ -14,16 +20,17 @@ const isProduction = (): boolean => process.env.NODE_ENV === "production";
  * single-use PKCE code for a short-lived, signed device token. All subsequent
  * tRPC calls carry it as `Authorization: Bearer <token>`.
  *
- * Tokens are compact HS256-signed JWTs bound to a Clerk user id. Verification
- * is pure (no I/O) so it can run in the tRPC context creator and be unit
- * tested. Revocation is a Redis-side check, handled by the caller.
+ * Tokens are compact HS256-signed JWTs bound to a Clerk user id. Signature
+ * verification is pure (no I/O) so it can run in the tRPC context creator and
+ * be unit tested. Revocation is a Redis-side check, handled by the caller.
  */
 
 const DEVICE_TOKEN_ISSUER = "tnr-dev-client";
 
 // Device tokens are short-lived: the client re-authenticates through the
-// browser (one click) when they expire.
-export const DEVICE_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+// browser (one click) when they expire. Kept deliberately short because the
+// token authenticates as the user, so a leaked one is costly.
+export const DEVICE_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const b64url = (input: string | Buffer): string =>
   Buffer.from(input).toString("base64url");
@@ -45,23 +52,38 @@ export interface DeviceTokenClaims {
 }
 
 /**
- * Resolve the signing secret. Uses a dedicated env var when present; falls
- * back to a derived key outside production so local development works, and
- * fails closed in production when the dedicated secret is missing.
+ * Resolve the signing secret.
+ *
+ * Fails closed unless a dedicated secret is configured. The local-development
+ * fallback is gated on an explicit `development`/`test` NODE_ENV rather than on
+ * "not production", because every other value (staging, preview, unset) is an
+ * internet-reachable deployment where a repo-derivable key would let anyone
+ * mint a token for any user id.
  */
 export const getDeviceTokenSecret = (): string => {
   if (process.env.DEV_CLIENT_TOKEN_SECRET) {
     return process.env.DEV_CLIENT_TOKEN_SECRET;
   }
-  if (isProduction()) {
+  const env = nodeEnv();
+  if (env !== "development" && env !== "test") {
     throw new Error(
-      "DEV_CLIENT_TOKEN_SECRET is required in production for dev-client device tokens.",
+      "DEV_CLIENT_TOKEN_SECRET is required outside local development for dev-client device tokens.",
     );
   }
   const baseSecret = process.env.CAPTCHA_SALT ?? "dev-client-token-secret";
   return createHmac("sha256", baseSecret)
     .update("dev-client-token-key-v1")
     .digest("hex");
+};
+
+/** True when device-token auth is usable at all (a secret is resolvable). */
+export const isDeviceTokenAuthConfigured = (): boolean => {
+  try {
+    getDeviceTokenSecret();
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 /**
@@ -90,7 +112,7 @@ export const signDeviceToken = (
 };
 
 export type DeviceTokenVerification =
-  | { ok: true; userId: string; jti: string; exp: number }
+  | { ok: true; userId: string; jti: string; iat: number; exp: number }
   | { ok: false; error: string };
 
 /**
@@ -153,7 +175,13 @@ export const verifyDeviceToken = (
     return { ok: false, error: "token not valid yet" };
   }
 
-  return { ok: true, userId: payload.sub, jti: payload.jti, exp: payload.exp };
+  return {
+    ok: true,
+    userId: payload.sub,
+    jti: payload.jti,
+    iat: payload.iat,
+    exp: payload.exp,
+  };
 };
 
 /**
@@ -182,9 +210,13 @@ export const verifierMatchesChallenge = (
 
 // ---------------------------------------------------------------------------
 // Single-use connect codes (Redis-backed). The browser-hosted /dev-connect
-// page stores a short-lived code bound to (userId, PKCE challenge, state) and
+// page stores a short-lived code bound to (userId, PKCE challenge) and
 // redirects the user's browser to the desktop client's loopback callback.
 // The client exchanges the code + verifier for a device token.
+//
+// NOTE: the OAuth `state` parameter is verified by the desktop client when the
+// browser hits its loopback callback; it is deliberately not stored here, so
+// nothing in this module implies a server-side binding it does not enforce.
 // ---------------------------------------------------------------------------
 
 const CONNECT_CODE_PREFIX = "dev-connect:code:";
@@ -192,12 +224,12 @@ export const CONNECT_CODE_TTL_SEC = 300;
 
 export const storeConnectCode = async (
   code: string,
-  record: { userId: string; challenge: string; state: string },
+  record: { userId: string; challenge: string },
 ): Promise<void> => {
   const redis = Redis.fromEnv();
   await redis.set(
     `${CONNECT_CODE_PREFIX}${hashConnectCode(code)}`,
-    JSON.stringify(record),
+    JSON.stringify({ userId: record.userId, challenge: record.challenge }),
     { ex: CONNECT_CODE_TTL_SEC },
   );
 };
@@ -213,11 +245,11 @@ export const consumeConnectCode = async (
 ): Promise<string | null> => {
   const redis = Redis.fromEnv();
   const stored = await redis.getdel(`${CONNECT_CODE_PREFIX}${hashConnectCode(code)}`);
-  if (!stored || typeof stored !== "string") return null;
+  if (!stored) return null;
 
-  let record: { userId: string; challenge: string; state?: string };
+  let record: { userId?: unknown; challenge?: unknown };
   try {
-    record = JSON.parse(stored);
+    record = typeof stored === "string" ? JSON.parse(stored) : (stored as never);
   } catch {
     return null;
   }
@@ -229,11 +261,48 @@ export const consumeConnectCode = async (
 };
 
 // ---------------------------------------------------------------------------
-// Revocation (Redis-backed). A revoked jti is stored until the token would
-// have expired anyway, so the keyspace self-cleans.
+// GitHub ownership challenge. Rewards are paid against the profile's GitHub
+// login, so that login may only be set by proving control of the account: the
+// server issues a nonce, the user publishes it in a gist, and the server reads
+// the gist back and checks the owner.
+// ---------------------------------------------------------------------------
+
+const GITHUB_NONCE_PREFIX = "dev-client:gh-nonce:";
+export const GITHUB_NONCE_TTL_SEC = 30 * 60;
+
+const nonceKey = (userId: string, login: string) =>
+  `${GITHUB_NONCE_PREFIX}${userId}:${login.toLowerCase()}`;
+
+export const storeGithubVerificationNonce = async (
+  userId: string,
+  login: string,
+): Promise<string> => {
+  const redis = Redis.fromEnv();
+  const nonce = `tnr-verify-${randomBytes(16).toString("hex")}`;
+  await redis.set(nonceKey(userId, login), nonce, { ex: GITHUB_NONCE_TTL_SEC });
+  return nonce;
+};
+
+export const consumeGithubVerificationNonce = async (
+  userId: string,
+  login: string,
+): Promise<string | null> => {
+  const redis = Redis.fromEnv();
+  const stored = await redis.getdel(nonceKey(userId, login));
+  return typeof stored === "string" && stored.length > 0 ? stored : null;
+};
+
+// ---------------------------------------------------------------------------
+// Revocation (Redis-backed).
+//
+// Two mechanisms: a per-token jti tombstone (used by the desktop client's own
+// "sign out"), and a per-user epoch that invalidates every token issued before
+// it. The epoch is what makes a leaked token recoverable — the owner can cut it
+// off from an ordinary browser session, without needing to hold the token.
 // ---------------------------------------------------------------------------
 
 const REVOCATION_PREFIX = "dev-client:revoked:";
+const EPOCH_PREFIX = "dev-client:epoch:";
 
 /**
  * Mark a device token (by jti) as revoked until `untilMs`.
@@ -247,22 +316,46 @@ export const revokeDeviceToken = async (
   await redis.set(`${REVOCATION_PREFIX}${jti}`, "1", { ex: ttlSec });
 };
 
+/** Invalidate every device token issued to this user before now. */
+export const revokeAllDeviceTokensForUser = async (
+  userId: string,
+  nowMs: number = Date.now(),
+): Promise<void> => {
+  const redis = Redis.fromEnv();
+  await redis.set(`${EPOCH_PREFIX}${userId}`, Math.floor(nowMs / 1000), {
+    ex: Math.ceil(DEVICE_TOKEN_TTL_MS / 1000) + 60,
+  });
+};
+
 /**
- * Check whether a device token (by jti) has been revoked. Fails open if the
- * limiter/Redis is unreachable in development (mirrors ratelimitMiddleware),
- * and fails closed in production.
+ * Is this token still usable? Checks the per-token tombstone and the per-user
+ * epoch in a single Redis round-trip.
+ *
+ * Fails open only in local development (where Redis is often absent, mirroring
+ * ratelimitMiddleware) and fails closed everywhere else — an unreachable Redis
+ * must not silently disable revocation on a live deployment.
  */
-export const isDeviceTokenRevoked = async (jti: string): Promise<boolean> => {
+export const isDeviceTokenActive = async (params: {
+  jti: string;
+  userId: string;
+  iat: number;
+}): Promise<boolean> => {
   try {
     const redis = Redis.fromEnv();
-    const exists = await redis.exists(`${REVOCATION_PREFIX}${jti}`);
-    return (exists as number) > 0;
+    const [revoked, epoch] = await redis.mget<[unknown, unknown]>(
+      `${REVOCATION_PREFIX}${params.jti}`,
+      `${EPOCH_PREFIX}${params.userId}`,
+    );
+    if (revoked) return false;
+    const epochSec = typeof epoch === "number" ? epoch : Number(epoch);
+    if (Number.isFinite(epochSec) && params.iat < epochSec) return false;
+    return true;
   } catch (error) {
-    if (process.env.NODE_ENV === "development") {
+    if (nodeEnv() === "development") {
       console.warn(
         `Redis unreachable, allowing device token check to pass in dev: ${error instanceof Error ? error.message : String(error)}`,
       );
-      return false;
+      return true;
     }
     throw error;
   }

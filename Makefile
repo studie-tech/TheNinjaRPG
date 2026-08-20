@@ -134,15 +134,15 @@ dev-client-test: # Run dev client unit tests
 	@echo "${YELLOW}Running dev client tests${RESET}"
 	cd dev-client && bun test
 
- .PHONY: dev-client-typecheck
- dev-client-typecheck: # Run TypeScript type checking for the dev client
- 	@echo "${YELLOW}Typechecking the dev client${RESET}"
- 	cd dev-client && bun run typecheck
+.PHONY: dev-client-typecheck
+dev-client-typecheck: # Run TypeScript type checking for the dev client
+	@echo "${YELLOW}Typechecking the dev client${RESET}"
+	cd dev-client && bun run typecheck
 
- .PHONY: dev-client-lint
- dev-client-lint: # Lint the dev client with biome
- 	@echo "${YELLOW}Linting the dev client${RESET}"
- 	cd dev-client && bun run lint
+.PHONY: dev-client-lint
+dev-client-lint: # Lint the dev client with biome
+	@echo "${YELLOW}Linting the dev client${RESET}"
+	cd dev-client && bun run lint
 
  .PHONY: dev-client-build-sidecar
 dev-client-build-sidecar: # Compile the dev client sidecar binary

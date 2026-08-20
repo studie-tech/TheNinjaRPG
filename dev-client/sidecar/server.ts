@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { platform } from "node:os";
 import { type ClaimNextJobOutput, GameApi, TrpcError } from "./api";
 import { todayUtc, tokensUsedToday } from "./budget";
@@ -28,6 +29,34 @@ import type {
 export const SIDECAR_VERSION = "0.1.0";
 export const DEFAULT_PORT = Number(process.env.TNR_DEV_CLIENT_PORT ?? 49200);
 
+// Origins allowed to talk to the loopback API. The Tauri webview serves the UI
+// from a custom scheme; nothing else has any business calling us.
+const ALLOWED_ORIGINS = new Set([
+  "tauri://localhost",
+  "http://tauri.localhost",
+  "https://tauri.localhost",
+  // vite dev server (bun run dev)
+  "http://localhost:1420",
+  "http://127.0.0.1:1420",
+]);
+
+/**
+ * Every endpoint except /callback requires this bearer token, which is minted
+ * per launch and handed to the UI through the Tauri shell.
+ *
+ * Binding to 127.0.0.1 is not an access control: any web page the user visits
+ * can issue cross-origin requests to loopback. Without this a malicious site
+ * could repoint apiBase and walk off with the device token.
+ */
+const resolveAuthToken = (): string =>
+  process.env.TNR_DEV_CLIENT_AUTH_TOKEN || randomBytes(32).toString("hex");
+
+const isLoopbackHost = (host: string | null): boolean => {
+  if (!host) return false;
+  const hostname = host.split(":")[0]?.toLowerCase() ?? "";
+  return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "[::1]";
+};
+
 interface PendingFlow {
   state: string;
   verifier: string;
@@ -37,9 +66,11 @@ interface PendingFlow {
 export interface SidecarContext {
   api: GameApi;
   port: number;
+  authToken: string;
   pendingFlow: PendingFlow | null;
   run: RunState;
   abortController: AbortController | null;
+  autoRunTimer: ReturnType<typeof setTimeout> | null;
   log: (line: string) => void;
 }
 
@@ -207,8 +238,6 @@ async function handleSaveSettings(
         claudeDailyTokenCap: body.claudeDailyTokenCap,
         codexDailyTokenCap: body.codexDailyTokenCap,
         autoRun: body.autoRun,
-        githubLogin:
-          body.githubLogin === "" ? undefined : (body.githubLogin ?? undefined),
       });
     } catch {
       // ignore
@@ -300,48 +329,67 @@ async function handleClaim(
       error: result.error,
     };
 
-    // autoRun: keep the queue warm.
+    // autoRun: keep the queue warm. The timer handle is retained so Stop (and
+    // shutdown) can cancel a queued re-claim; without that, aborting in the gap
+    // between runs silently starts another job.
     const settings = loadSettings();
-    if (settings.autoRun && result.ok && !ctx.abortController?.signal.aborted) {
-      setTimeout(() => {
-        void handleClaim(ctx, agent);
-      }, 5000);
-    }
+    const wasAborted = ctx.abortController?.signal.aborted ?? false;
     // Drop the controller so aborts after a finished run report "not running"
     // instead of aborting a stale, already-settled signal.
     ctx.abortController = null;
+    if (settings.autoRun && result.ok && !wasAborted) {
+      ctx.autoRunTimer = setTimeout(() => {
+        ctx.autoRunTimer = null;
+        void handleClaim(ctx, agent);
+      }, 5000);
+    }
   })();
 
   return { claimed: true };
 }
 
 function handleAbort(ctx: SidecarContext): { aborted: boolean } {
-  if (!ctx.abortController) return { aborted: false };
-  ctx.abortController.abort();
-  return { aborted: true };
+  let aborted = false;
+  if (ctx.autoRunTimer) {
+    clearTimeout(ctx.autoRunTimer);
+    ctx.autoRunTimer = null;
+    aborted = true;
+  }
+  if (ctx.abortController) {
+    ctx.abortController.abort();
+    aborted = true;
+  }
+  return { aborted };
 }
 
 // ── HTTP server ──────────────────────────────────────────────────────────────
 
-function json(body: unknown, status = 200): Response {
+/**
+ * CORS headers for an allowlisted origin only. A wildcard here would let any
+ * page the user visits read these responses.
+ */
+function corsHeaders(origin: string | null): Record<string, string> {
+  const headers: Record<string, string> = { vary: "Origin" };
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    headers["access-control-allow-origin"] = origin;
+    headers["access-control-allow-headers"] = "content-type, authorization";
+    headers["access-control-allow-methods"] = "GET, POST, OPTIONS";
+    headers["access-control-max-age"] = "600";
+  }
+  return headers;
+}
+
+function json(body: unknown, status = 200, origin: string | null = null): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      "content-type": "application/json",
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers": "content-type, authorization",
-      "access-control-allow-methods": "GET, POST, OPTIONS",
-    },
+    headers: { "content-type": "application/json", ...corsHeaders(origin) },
   });
 }
 
 function html(body: string, status = 200): Response {
   return new Response(body, {
     status,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "access-control-allow-origin": "*",
-    },
+    headers: { "content-type": "text/html; charset=utf-8" },
   });
 }
 
@@ -360,6 +408,8 @@ export function startServer(port: number, log: (line: string) => void): Server {
       getDeviceToken: () => loadToken()?.deviceToken ?? null,
     }),
     port,
+    authToken: resolveAuthToken(),
+    autoRunTimer: null,
     pendingFlow: null,
     run: {
       job: null,
@@ -380,49 +430,71 @@ export function startServer(port: number, log: (line: string) => void): Server {
     fetch: async (req) => {
       const url = new URL(req.url);
       const path = url.pathname;
+      const origin = req.headers.get("origin");
 
-      if (req.method === "OPTIONS") return json({ ok: true });
+      // Reject anything not addressed to loopback: a DNS-rebinding host header
+      // is the standard way around a 127.0.0.1 bind.
+      if (!isLoopbackHost(req.headers.get("host"))) {
+        return json({ error: "Forbidden" }, 403, origin);
+      }
+      // A non-allowlisted Origin means a web page is calling us, never the UI.
+      if (origin && !ALLOWED_ORIGINS.has(origin)) {
+        return json({ error: "Forbidden" }, 403, null);
+      }
+
+      if (req.method === "OPTIONS") return json({ ok: true }, 200, origin);
+
+      // /callback is the browser landing after the connect flow, so it cannot
+      // carry the header. It is protected by the PKCE state match instead.
+      const isPublic = req.method === "GET" && path === "/callback";
+      if (!isPublic) {
+        const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+        if (bearer !== ctx.authToken) {
+          return json({ error: "Unauthorized" }, 401, origin);
+        }
+      }
 
       try {
         if (req.method === "GET" && path === "/status") {
-          return json(await handleStatus(ctx));
+          return json(await handleStatus(ctx), 200, origin);
         }
-        if (req.method === "GET" && path === "/callback") {
+        if (isPublic) {
           const result = await handleCallback(ctx, url);
           return html(result.body, result.status);
         }
         if (req.method === "GET" && path === "/jobs/history") {
-          return json({ history: loadHistory() });
+          return json({ history: loadHistory() }, 200, origin);
         }
         if (req.method === "POST" && path === "/auth/signin") {
-          return json(handleSignIn(ctx));
+          return json(handleSignIn(ctx), 200, origin);
         }
         if (req.method === "POST" && path === "/auth/signout") {
-          return json(await handleSignOut(ctx));
+          return json(await handleSignOut(ctx), 200, origin);
         }
         if (req.method === "POST" && path === "/setup/detect-clis") {
-          return json(await detectAllClis());
+          return json(await detectAllClis(), 200, origin);
         }
         if (req.method === "POST" && path === "/setup/save") {
           const body = await readJson<Partial<Settings>>(req);
-          if (!body) return json({ error: "Invalid body" }, 400);
-          return json(await handleSaveSettings(ctx, body));
+          if (!body) return json({ error: "Invalid body" }, 400, origin);
+          return json(await handleSaveSettings(ctx, body), 200, origin);
         }
         if (req.method === "POST" && path === "/jobs/claim") {
           const body = await readJson<{ agent?: string }>(req);
           const agent = body?.agent;
           if (agent !== "CLAUDE" && agent !== "CODEX")
-            return json({ error: "agent must be CLAUDE or CODEX" }, 400);
-          return json(await handleClaim(ctx, agent));
+            return json({ error: "agent must be CLAUDE or CODEX" }, 400, origin);
+          return json(await handleClaim(ctx, agent), 200, origin);
         }
         if (req.method === "POST" && path === "/jobs/abort") {
-          return json(handleAbort(ctx));
+          return json(handleAbort(ctx), 200, origin);
         }
-        return json({ error: "Not found" }, 404);
+        return json({ error: "Not found" }, 404, origin);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         log(`Handler error: ${message}`);
-        return json({ error: message }, 500);
+        // Log the detail locally; do not hand internals back over HTTP.
+        return json({ error: "Internal error" }, 500, origin);
       }
     },
   });
@@ -433,7 +505,10 @@ export function startServer(port: number, log: (line: string) => void): Server {
 
   return {
     port: ctx.port,
+    authToken: ctx.authToken,
     stop: () => {
+      if (ctx.autoRunTimer) clearTimeout(ctx.autoRunTimer);
+      ctx.autoRunTimer = null;
       ctx.abortController?.abort();
       server.stop(true);
     },
@@ -442,5 +517,6 @@ export function startServer(port: number, log: (line: string) => void): Server {
 
 export interface Server {
   port: number;
+  authToken: string;
   stop: () => void;
 }

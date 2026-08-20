@@ -1,6 +1,10 @@
 CREATE TABLE `DevContributionProfile` (
 	`userId` varchar(191) NOT NULL,
 	`githubLogin` varchar(191),
+	`githubLoginVerifiedAt` datetime(3),
+	`activeJobId` bigint,
+	`rewardedJobsDate` date,
+	`rewardedJobsToday` int NOT NULL DEFAULT 0,
 	`claudeDailyTokenCap` bigint NOT NULL DEFAULT 0,
 	`codexDailyTokenCap` bigint NOT NULL DEFAULT 0,
 	`autoRun` boolean NOT NULL DEFAULT false,
@@ -18,7 +22,7 @@ CREATE TABLE `DevJob` (
 	`refKind` enum('PULL_REQUEST','ISSUE') NOT NULL,
 	`refNumber` int NOT NULL,
 	`refUrl` varchar(500) NOT NULL,
-	`status` enum('PENDING','CLAIMED','COMPLETED','FAILED','CANCELLED') NOT NULL DEFAULT 'PENDING',
+	`status` enum('PENDING','CLAIMED','VERIFYING','COMPLETED','FAILED','CANCELLED') NOT NULL DEFAULT 'PENDING',
 	`agent` enum('CLAUDE','CODEX'),
 	`claimedByUserId` varchar(191),
 	`claimedAt` datetime(3),
@@ -50,6 +54,5 @@ CREATE TABLE `DevJobDailyUsage` (
 CREATE INDEX `DevContributionProfile_githubLogin_idx` ON `DevContributionProfile` (`githubLogin`);
 CREATE INDEX `DevContributionProfile_createdAt_idx` ON `DevContributionProfile` (`createdAt`);
 CREATE INDEX `DevJob_status_idx` ON `DevJob` (`status`);
-CREATE INDEX `DevJob_jobType_refKind_refNumber_idx` ON `DevJob` (`jobType`,`refKind`,`refNumber`);
-CREATE INDEX `DevJob_claimedByUserId_idx` ON `DevJob` (`claimedByUserId`);
-CREATE INDEX `DevJob_createdAt_idx` ON `DevJob` (`createdAt`);
+CREATE INDEX `DevJob_refKind_refNumber_jobType_idx` ON `DevJob` (`refKind`,`refNumber`,`jobType`);
+CREATE INDEX `DevJob_claimedByUserId_status_idx` ON `DevJob` (`claimedByUserId`,`status`);

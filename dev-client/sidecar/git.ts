@@ -8,11 +8,19 @@ import { join } from "node:path";
 
 // Long bodies go through temp files (--body-file) to avoid any shell quoting
 // issues; gh is invoked via execFile (no shell) but files keep it simple.
-function bodyFile(content: string): string {
+// The directory is always removed afterwards, hence the callback form.
+async function withBodyFile<T>(
+  content: string,
+  use: (file: string) => Promise<T>,
+): Promise<T> {
   const dir = mkdtempSync(join(tmpdir(), "tnr-dev-client-"));
-  const file = join(dir, "body.md");
-  writeFileSync(file, content, "utf8");
-  return file;
+  try {
+    const file = join(dir, "body.md");
+    writeFileSync(file, content, "utf8");
+    return await use(file);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 export interface CmdResult {
@@ -101,11 +109,38 @@ export async function checkoutBranch(
   return git(worktreePath, ["checkout", "-b", branch]);
 }
 
+/**
+ * Push the work branch to the contributor's own fork.
+ *
+ * `origin` is only correct when the configured clone is a fork; for a clone of
+ * the upstream repository the push would be rejected for anyone without write
+ * access. Prefer a remote that actually belongs to `login`, and fall back to
+ * origin so an already-fork-shaped setup keeps working.
+ */
 export async function pushBranch(
   worktreePath: string,
   branch: string,
+  login?: string,
 ): Promise<CmdResult> {
-  return git(worktreePath, ["push", "-u", "origin", branch]);
+  const remote = (await forkRemote(worktreePath, login)) ?? "origin";
+  return git(worktreePath, ["push", "-u", remote, branch]);
+}
+
+/** The first remote whose URL is owned by `login`, if any. */
+export async function forkRemote(
+  worktreePath: string,
+  login: string | undefined,
+): Promise<string | null> {
+  if (!login) return null;
+  const { ok, stdout } = await git(worktreePath, ["remote", "-v"]);
+  if (!ok) return null;
+  for (const line of stdout.split("\n")) {
+    const [name, url] = line.trim().split(/\s+/);
+    if (!name || !url) continue;
+    const slug = slugFromUrl(url);
+    if (slug?.split("/")[0]?.toLowerCase() === login.toLowerCase()) return name;
+  }
+  return null;
 }
 
 export async function createPullRequest(opts: {
@@ -140,16 +175,18 @@ export async function postPullRequestReview(opts: {
   slug: string;
   body: string;
 }): Promise<{ ok: boolean; url: string | null; error: string }> {
-  const { ok, stderr } = await gh([
-    "pr",
-    "review",
-    String(opts.number),
-    "--repo",
-    opts.slug,
-    "--comment",
-    "--body-file",
-    bodyFile(opts.body),
-  ]);
+  const { ok, stderr } = await withBodyFile(opts.body, (file) =>
+    gh([
+      "pr",
+      "review",
+      String(opts.number),
+      "--repo",
+      opts.slug,
+      "--comment",
+      "--body-file",
+      file,
+    ]),
+  );
   if (!ok)
     return { ok: false, url: null, error: stderr.trim() || "gh pr review failed" };
   return {
@@ -164,15 +201,17 @@ export async function postIssueComment(opts: {
   slug: string;
   body: string;
 }): Promise<{ ok: boolean; url: string | null; error: string }> {
-  const { ok, stderr } = await gh([
-    "issue",
-    "comment",
-    String(opts.number),
-    "--repo",
-    opts.slug,
-    "--body-file",
-    bodyFile(opts.body),
-  ]);
+  const { ok, stderr } = await withBodyFile(opts.body, (file) =>
+    gh([
+      "issue",
+      "comment",
+      String(opts.number),
+      "--repo",
+      opts.slug,
+      "--body-file",
+      file,
+    ]),
+  );
   if (!ok)
     return { ok: false, url: null, error: stderr.trim() || "gh issue comment failed" };
   return {

@@ -5344,8 +5344,18 @@ export const devContributionProfile = mysqlTable(
   "DevContributionProfile",
   {
     userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
-    // GitHub login that the client's `gh` CLI is authenticated as (verified on first login).
+    // GitHub login the user has proven ownership of, via the gist-nonce challenge in
+    // the devContribution router. Only ever written by that verified flow, never by
+    // client-supplied input: rewards are paid against this login.
     githubLogin: varchar("githubLogin", { length: 191 }),
+    githubLoginVerifiedAt: datetime("githubLoginVerifiedAt", { mode: "date", fsp: 3 }),
+    // The single in-flight claim slot. Taken with a compare-and-swap on NULL so two
+    // concurrent claims cannot both succeed; released on complete/fail/requeue.
+    activeJobId: bigint("activeJobId", { mode: "number" }),
+    // Daily rewarded-job counter, guarded by a conditional UPDATE so parallel
+    // completions cannot exceed CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY.
+    rewardedJobsDate: date("rewardedJobsDate", { mode: "string" }),
+    rewardedJobsToday: int("rewardedJobsToday").default(0).notNull(),
     // Per-day token caps per agent, enforced by the client and backstopped server-side.
     // 0 = unlimited.
     claudeDailyTokenCap: bigint("claudeDailyTokenCap", { mode: "number" })
@@ -5421,13 +5431,17 @@ export const devJob = mysqlTable(
   (table) => {
     return {
       statusIdx: index("DevJob_status_idx").on(table.status),
-      jobTypeRefIdx: index("DevJob_jobType_refKind_refNumber_idx").on(
-        table.jobType,
+      // Ref lookups filter on (refKind, refNumber) without a jobType, so refKind
+      // must lead for the index to be usable.
+      refIdx: index("DevJob_refKind_refNumber_jobType_idx").on(
         table.refKind,
         table.refNumber,
+        table.jobType,
       ),
-      claimedByIdx: index("DevJob_claimedByUserId_idx").on(table.claimedByUserId),
-      createdAtIdx: index("DevJob_createdAt_idx").on(table.createdAt),
+      claimedByStatusIdx: index("DevJob_claimedByUserId_status_idx").on(
+        table.claimedByUserId,
+        table.status,
+      ),
     };
   },
 );

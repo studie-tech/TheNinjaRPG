@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "e0ae9dc4-3bb5-4b3d-999d-86c513792ac5",
+  "id": "63253330-d4d2-42b8-94e2-6f9502aac834",
   "prevId": "ce66bfa2-8be8-4ee4-ace5-7a6d006b6311",
   "tables": {
     "AbEvent": {
@@ -3668,6 +3668,35 @@
           "notNull": false,
           "autoincrement": false
         },
+        "githubLoginVerifiedAt": {
+          "name": "githubLoginVerifiedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "activeJobId": {
+          "name": "activeJobId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rewardedJobsDate": {
+          "name": "rewardedJobsDate",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rewardedJobsToday": {
+          "name": "rewardedJobsToday",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "claudeDailyTokenCap": {
           "name": "claudeDailyTokenCap",
           "type": "bigint",
@@ -3800,7 +3829,7 @@
         },
         "status": {
           "name": "status",
-          "type": "enum('PENDING','CLAIMED','COMPLETED','FAILED','CANCELLED')",
+          "type": "enum('PENDING','CLAIMED','VERIFYING','COMPLETED','FAILED','CANCELLED')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
@@ -3919,26 +3948,20 @@
           ],
           "isUnique": false
         },
-        "DevJob_jobType_refKind_refNumber_idx": {
-          "name": "DevJob_jobType_refKind_refNumber_idx",
+        "DevJob_refKind_refNumber_jobType_idx": {
+          "name": "DevJob_refKind_refNumber_jobType_idx",
           "columns": [
-            "jobType",
             "refKind",
-            "refNumber"
+            "refNumber",
+            "jobType"
           ],
           "isUnique": false
         },
-        "DevJob_claimedByUserId_idx": {
-          "name": "DevJob_claimedByUserId_idx",
+        "DevJob_claimedByUserId_status_idx": {
+          "name": "DevJob_claimedByUserId_status_idx",
           "columns": [
-            "claimedByUserId"
-          ],
-          "isUnique": false
-        },
-        "DevJob_createdAt_idx": {
-          "name": "DevJob_createdAt_idx",
-          "columns": [
-            "createdAt"
+            "claimedByUserId",
+            "status"
           ],
           "isUnique": false
         }

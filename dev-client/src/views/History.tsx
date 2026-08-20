@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { type HistoryEntry, sidecar } from "../api";
+import { type HistoryEntry, openExternal, sidecar } from "../api";
 
 export function HistoryView() {
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
@@ -49,19 +49,22 @@ export function HistoryView() {
               {entries.map((entry) => (
                 <tr key={`${entry.jobId}-${entry.finishedAt}`}>
                   <td>
-                    <a href={entry.refUrl} target="_blank" rel="noreferrer">
+                    <button
+                      type="button"
+                      className="linklike"
+                      onClick={() => void openExternal(entry.refUrl)}
+                    >
                       {entry.jobType} #{entry.refNumber}
-                    </a>
+                    </button>
                     {entry.resultUrl && entry.resultUrl !== entry.refUrl && (
                       <div>
-                        <a
-                          className="small"
-                          href={entry.resultUrl}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          className="linklike small"
+                          onClick={() => void openExternal(entry.resultUrl as string)}
                         >
                           result
-                        </a>
+                        </button>
                       </div>
                     )}
                   </td>

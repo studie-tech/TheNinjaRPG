@@ -283,3 +283,18 @@ a:hover {
 .field-row input[type="checkbox"] {
   width: auto;
 }
+
+/* Links must go through the shell opener in a Tauri webview, so they are
+   buttons; keep them looking like links. */
+.linklike {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent, #6aa8ff);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.linklike:hover {
+  opacity: 0.85;
+}

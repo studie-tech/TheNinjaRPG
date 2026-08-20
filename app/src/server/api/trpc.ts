@@ -31,7 +31,7 @@ import { userData } from "@/drizzle/schema";
  */
 import {
   getDeviceTokenSecret,
-  isDeviceTokenRevoked,
+  isDeviceTokenActive,
   verifyDeviceToken,
 } from "@/libs/devContribution/deviceToken";
 import {
@@ -65,14 +65,33 @@ export const createAppTRPCContext = async (options: {
   // signed token (Authorization: Bearer) after signing in through the
   // browser-hosted /dev-connect flow. Only consulted when no Clerk session
   // is present, so browser users are unaffected.
+  //
+  // Secret resolution is wrapped: DEV_CLIENT_TOKEN_SECRET is optional, and a
+  // deployment without it should simply not support device tokens rather than
+  // 500 on every request that happens to carry an Authorization header.
   if (!userId) {
     const bearer = options.readHeaders.get("authorization")?.replace(/^Bearer\s+/i, "");
     if (bearer) {
-      const nowMs = Date.now();
-      const verified = verifyDeviceToken(getDeviceTokenSecret(), bearer, nowMs);
-      if (verified.ok && !(await isDeviceTokenRevoked(verified.jti))) {
-        userId = verified.userId;
-        deviceTokenJti = verified.jti;
+      let secret: string | null = null;
+      try {
+        secret = getDeviceTokenSecret();
+      } catch {
+        secret = null;
+      }
+      if (secret) {
+        const nowMs = Date.now();
+        const verified = verifyDeviceToken(secret, bearer, nowMs);
+        if (
+          verified.ok &&
+          (await isDeviceTokenActive({
+            jti: verified.jti,
+            userId: verified.userId,
+            iat: verified.iat,
+          }))
+        ) {
+          userId = verified.userId;
+          deviceTokenJti = verified.jti;
+        }
       }
     }
   }
@@ -236,6 +255,24 @@ export const publicProcedure = t.procedure
   .use(ratelimitMiddleware)
   .use(sentryMiddleware);
 
+/**
+ * Device tokens (desktop dev client) authenticate the same way a Clerk session
+ * does, so without this they would grant the caller the whole API — bank
+ * transfers, item trades, everything. Scope them to the router they were minted
+ * for, so a leaked token is limited to contribution bookkeeping.
+ */
+const DEVICE_TOKEN_ROUTER_PREFIX = "devContribution.";
+
+const enforceDeviceTokenScope = t.middleware(async ({ ctx: context, path, next }) => {
+  if (context.deviceTokenJti && !path.startsWith(DEVICE_TOKEN_ROUTER_PREFIX)) {
+    throw new TRPCError({
+      message: `Device tokens may only be used for ${DEVICE_TOKEN_ROUTER_PREFIX}* (attempted ${path})`,
+      code: "UNAUTHORIZED",
+    });
+  }
+  return next();
+});
+
 const enforceUserIsAuthed = t.middleware(
   async ({ ctx: context, path, getRawInput, next }) => {
     // Check that the user is authed
@@ -252,6 +289,7 @@ const enforceUserIsAuthed = t.middleware(
 );
 
 export const protectedProcedure = t.procedure
+  .use(enforceDeviceTokenScope)
   .use(enforceUserIsAuthed)
   .use(sentryMiddleware);
 
