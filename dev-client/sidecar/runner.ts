@@ -57,7 +57,13 @@ interface AgentRun {
 // Tools each job type needs. Triage and review only read; nothing about them
 // justifies handing an agent write or execute access, and the prompt they are
 // given is built from attacker-authored GitHub text.
+//
+// The allowlist is the actual boundary: a tool that is not listed is not
+// pre-approved, and in headless mode there is nobody to approve it, so the call
+// fails instead of running. The denylist is belt-and-braces for the read-only
+// case, where an escape would be the most damaging.
 const READ_ONLY_TOOLS = "Read,Grep,Glob";
+const READ_ONLY_DENIED = "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch";
 const IMPLEMENT_TOOLS = "Read,Grep,Glob,Edit,Write,Bash";
 
 // Runs the agent CLI headlessly with a scrubbed environment: no GitHub
@@ -85,10 +91,12 @@ function runAgent(
           "--verbose",
           "--allowed-tools",
           readOnly ? READ_ONLY_TOOLS : IMPLEMENT_TOOLS,
-          // acceptEdits confines automatic approval to file edits inside cwd,
-          // unlike --dangerously-skip-permissions which disables every check.
-          "--permission-mode",
-          readOnly ? "plan" : "acceptEdits",
+          ...(readOnly
+            ? ["--disallowed-tools", READ_ONLY_DENIED]
+            : // Implementation work has to edit files in its worktree.
+              // acceptEdits pre-approves only that, unlike
+              // --dangerously-skip-permissions which disables every check.
+              ["--permission-mode", "acceptEdits"]),
         ]
       : ["exec", "--json", ...(readOnly ? ["--sandbox", "read-only"] : []), prompt];
 
