@@ -15,7 +15,7 @@ import {
   Tag,
   Ticket,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,7 @@ import { UncontrolledSliderField } from "@/layout/SliderField";
 import { cn } from "@/libs/shadui";
 import { getMaxItemShopPurchaseQuantity } from "@/libs/shop";
 import { showMutationToast } from "@/libs/toast";
+import { isTutorialItemBuyStep } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { useAwake } from "@/utils/routing";
 import { getStrucBoost } from "@/utils/village";
@@ -276,6 +277,29 @@ const Shop: React.FC<ShopProps> = (props) => {
     );
 
   const { currentStep, handleNextStep } = useTutorialStep();
+  const isItemBuyStep = isTutorialItemBuyStep(currentStep);
+
+  const { data: tutorialItem } = api.item.get.useQuery(
+    { id: TUTORIAL_ITEM_ID },
+    { enabled: isItemBuyStep },
+  );
+
+  useEffect(() => {
+    if (!isItemBuyStep || !tutorialItem || item) return;
+    setItem(tutorialItem);
+    setIsOpen(true);
+  }, [isItemBuyStep, tutorialItem, item]);
+
+  const catalogItems = [...(allItems ?? [])];
+  if (isItemBuyStep && tutorialItem) {
+    const pinnedIdx = catalogItems.findIndex((row) => row.id === TUTORIAL_ITEM_ID);
+    if (pinnedIdx === -1) {
+      catalogItems.unshift(tutorialItem);
+    } else if (pinnedIdx > 0) {
+      const [pinned] = catalogItems.splice(pinnedIdx, 1);
+      if (pinned) catalogItems.unshift(pinned);
+    }
+  }
 
   const { mutate: purchase, isPending: isPurchasing } = api.item.buy.useMutation({
     onSuccess: (data) => {
@@ -284,7 +308,7 @@ const Shop: React.FC<ShopProps> = (props) => {
         void utils.item.getUserItemCounts.invalidate();
         void utils.profile.getUser.invalidate();
         void utils.item.getUserItems.invalidate();
-        if (currentStep?.title === "Item shop") {
+        if (isItemBuyStep) {
           handleNextStep();
         }
       }
@@ -599,11 +623,11 @@ const Shop: React.FC<ShopProps> = (props) => {
               </div>
 
               <div className="px-1.5 py-2 sm:px-3 sm:py-3 md:p-5" id={catalogListDomId}>
-                {isFetching && !allItems?.length ? (
+                {isFetching && !catalogItems.length ? (
                   <div className="flex min-h-[40vh] items-center justify-center">
                     <Loader explanation="Loading catalog…" />
                   </div>
-                ) : !allItems?.length ? (
+                ) : !catalogItems.length ? (
                   <div className="flex min-h-[36vh] flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 px-6 py-16 text-center">
                     <ShoppingBag className="mb-3 h-12 w-12 text-muted-foreground opacity-60" />
                     <p className="font-medium text-lg">No items match your filters</p>
@@ -616,7 +640,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                 ) : (
                   <>
                     <ul className="mx-auto grid max-w-7xl list-none grid-cols-3 gap-1 sm:gap-2 md:grid-cols-4 md:gap-3 lg:grid-cols-6">
-                      {allItems.map((row) => {
+                      {catalogItems.map((row) => {
                         const rowFactor = shopItemDiscountFactor(
                           row,
                           sDiscount,
@@ -662,7 +686,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                         );
                       })}
                     </ul>
-                    {isFetching && allItems.length > 0 && (
+                    {isFetching && catalogItems.length > 0 && (
                       <div className="flex justify-center py-8">
                         <Loader explanation="Updating catalog…" />
                       </div>

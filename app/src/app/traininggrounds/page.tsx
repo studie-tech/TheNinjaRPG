@@ -53,6 +53,7 @@ import {
   STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   TrainingSpeeds,
+  TUTORIAL_JUTSU_ID,
   UserStatNames,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
@@ -89,6 +90,7 @@ import {
   trainEfficiency,
   trainingSpeedSeconds,
 } from "@/libs/train";
+import { isTutorialJutsuPickStep } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import {
@@ -107,6 +109,8 @@ export default function Training() {
   // Ensure user is in village
   const { userData, timeDiff, access, updateUser } =
     useRequireInVillage("/traininggrounds");
+  const { currentStep } = useTutorialStep();
+  const hideOtherTraining = isTutorialJutsuPickStep(currentStep);
 
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -120,8 +124,14 @@ export default function Training() {
     <>
       <StatsTraining userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
       <JutsuTraining userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
-      <CovertTraining userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
-      {showSenseiSystem && (
+      {!hideOtherTraining && (
+        <CovertTraining
+          userData={userData}
+          timeDiff={timeDiff}
+          updateUser={updateUser}
+        />
+      )}
+      {showSenseiSystem && !hideOtherTraining && (
         <SenseiSystem userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
       )}
     </>
@@ -444,6 +454,9 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (isPending) return <Loader explanation="Processing..." />;
+  if (isTutorialJutsuPickStep(currentStep) && !userData.currentlyTraining) {
+    return null;
+  }
 
   // Convenience definitions
   const trainItemClassName = "hover:opacity-50 hover:cursor-pointer relative";
@@ -682,6 +695,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 
   // Tutorial management hook
   const { currentStep, handleNextStep } = useTutorialStep();
+  const isJutsuPickStep = isTutorialJutsuPickStep(currentStep);
+
+  const { data: tutorialJutsu } = api.jutsu.get.useQuery(
+    { id: TUTORIAL_JUTSU_ID },
+    { enabled: isJutsuPickStep },
+  );
 
   // Mutations
   const { mutate: train, isPending: isStartingTrain } =
@@ -691,7 +710,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
           await updateUser(result.data);
-          if (currentStep?.title === "Jutsu Training") {
+          if (isJutsuPickStep) {
             handleNextStep();
           }
         }
@@ -720,6 +739,13 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Mutation loading
   const isPending = isStartingTrain || isStoppingTrain;
 
+  useEffect(() => {
+    if (!isJutsuPickStep || !tutorialJutsu || jutsu || !userData) return;
+    if (!canTrainJutsu(tutorialJutsu, userData)) return;
+    setJutsu(tutorialJutsu);
+    setIsOpen(true);
+  }, [isJutsuPickStep, tutorialJutsu, jutsu, userData]);
+
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
 
@@ -730,28 +756,51 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   }
 
   // Filtering jutsus
-  const alljutsus = jutsus?.pages
-    .flatMap((page) => page.data)
-    .filter((j) => {
-      if (j.parentJutsuId)
-        return (
-          // Training/leveling is item-free, so ignore the bloodline item requirement here
-          canUseJutsu(j, userData, true) &&
-          (userJutsuOwnership?.some((uj) => uj.jutsuId === j.id) ?? false)
-        );
-      return canTrainJutsu(j, userData);
-    })
-    .filter((j) => !evolvedAncestorIds.has(j.id))
-    .filter((j) => {
-      const userJutsu = userJutsus?.find((uj) => uj.jutsuId === j.id);
-      return userJutsu || !isJutsuTrainToLearnRestricted(j.jutsuType);
-    })
-    .map((j) => {
-      const uj = userJutsus?.find((uj) => uj.jutsuId === j.id);
-      return { ...j, level: uj?.level || 0 };
-    })
-    .filter((j) => j.level < getJutsuLevelCap(j))
-    .sort((a, b) => b.level - a.level);
+  const alljutsus =
+    jutsus?.pages
+      .flatMap((page) => page.data)
+      .filter((j) => {
+        if (j.parentJutsuId)
+          return (
+            // Training/leveling is item-free, so ignore the bloodline item requirement here
+            canUseJutsu(j, userData, true) &&
+            (userJutsuOwnership?.some((uj) => uj.jutsuId === j.id) ?? false)
+          );
+        return canTrainJutsu(j, userData);
+      })
+      .filter((j) => !evolvedAncestorIds.has(j.id))
+      .filter((j) => {
+        const userJutsu = userJutsus?.find((uj) => uj.jutsuId === j.id);
+        return userJutsu || !isJutsuTrainToLearnRestricted(j.jutsuType);
+      })
+      .map((j) => {
+        const uj = userJutsus?.find((uj) => uj.jutsuId === j.id);
+        return { ...j, level: uj?.level || 0 };
+      })
+      .filter((j) => j.level < getJutsuLevelCap(j))
+      .sort((a, b) => b.level - a.level) ?? [];
+
+  if (
+    isJutsuPickStep &&
+    tutorialJutsu &&
+    canTrainJutsu(tutorialJutsu, userData) &&
+    !alljutsus.some((j) => j.id === tutorialJutsu.id)
+  ) {
+    const owned = userJutsus?.find((uj) => uj.jutsuId === tutorialJutsu.id);
+    alljutsus.unshift({
+      ...tutorialJutsu,
+      level: owned?.level || 0,
+      highlight: true,
+    });
+  } else if (isJutsuPickStep && alljutsus[0]?.id === TUTORIAL_JUTSU_ID) {
+    alljutsus[0] = { ...alljutsus[0], highlight: true };
+  } else if (isJutsuPickStep) {
+    const pinnedIdx = alljutsus.findIndex((j) => j.id === TUTORIAL_JUTSU_ID);
+    if (pinnedIdx > 0) {
+      const [pinned] = alljutsus.splice(pinnedIdx, 1);
+      if (pinned) alljutsus.unshift({ ...pinned, highlight: true });
+    }
+  }
 
   // Training time
   const finishTrainingAt = userJutsus?.find(
