@@ -91,7 +91,6 @@ reset: clean install # Clean and reinstall all dependencies
 .PHONY: bun
 bun: install ensure-env ensure-services ## Execute bun command in local development.
 	@echo "${GREEN}bun${RESET}"
-	@echo $(DATABASE_URL)
 	cd app && bun $(ARGS)
 
 .PHONY: start
@@ -101,12 +100,12 @@ start: ensure-env # Run Next.js server, access at http://127.0.0.1:PORT
 	@FORCE_COLOR=1 make bun -- dev -p $(PORT) 2>&1 | grep -v "Ignoring Unsecure message event"
 
 .PHONY: build
-build: # Build Next.js app
+build: ensure-env # Build Next.js app
 	@echo "${GREEN}build${RESET}"
 	cd app && bun run build
 
 .PHONY: bundleanalysis
-bundleanalysis: # Build Next.js app with bundle analysis
+bundleanalysis: ensure-env # Build Next.js app with bundle analysis
 	@echo "${GREEN}bundleanalysis${RESET}"
 	cd app && bun run build-stats
 
@@ -148,7 +147,6 @@ dbpush: ensure-env ensure-services # Push schema to db without creating migratio
 .PHONY: seed
 seed: ensure-env ensure-services # Seed database
 	@echo "${YELLOW}Seed data into database ${RESET}"
-	@echo $(DATABASE_URL)
 	cd app && bun seed
 	
 .PHONY: makemigrations
