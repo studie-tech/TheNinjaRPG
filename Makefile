@@ -45,6 +45,11 @@ docker-build: # Build/Rebuild the application.
 	@echo "${YELLOW}Building/Rebuilding the application${RESET}"
 	docker-compose --file $$PWD/.devcontainer/docker-compose.yml build --no-cache
 
+.PHONY: docker-apply
+docker-apply: # Recreate the shared service stack from the current docker-compose.yml
+	@echo "${YELLOW}Applying docker-compose changes to the shared stack${RESET}"
+	docker compose -f $$PWD/.devcontainer/docker-compose.yml up -d --wait
+
 .PHONY: docker-stop
 docker-stop: # Stop all docker containers.
 	@echo "${GREEN}docker-stop${RESET}"
@@ -57,7 +62,7 @@ setup: ensure-services # Start required services and install bun locally
 	curl -fsSL https://bun.sh/install | bash
 
 .PHONY: install
-install: # Install application dependencies with bun locally
+install: ensure-skills # Install application dependencies with bun locally
 	@echo "${GREEN}install${RESET}"
 	bun install --cwd ./app --save-text-lockfile
 
@@ -84,7 +89,7 @@ clean: # Clean all local application installation folders
 reset: clean install # Clean and reinstall all dependencies
 
 .PHONY: bun
-bun: install ensure-env ensure-skills ensure-services ## Execute bun command in local development.
+bun: install ensure-env ensure-services ## Execute bun command in local development.
 	@echo "${GREEN}bun${RESET}"
 	@echo $(DATABASE_URL)
 	cd app && bun $(ARGS)

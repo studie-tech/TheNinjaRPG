@@ -21,9 +21,9 @@ nohup make start PORT=$PORT > /tmp/tnr-dev-$PORT.log 2>&1 &
 ```
 
 `make start` is idempotent and safe to run from several worktrees at once. It links `app/.env`
-from a worktree that has one (`ensure-env`) and brings up the shared Docker stack exactly once,
-lock-protected (`ensure-services`). The same guards run for `make bun`, `make seed`, `make dbpush`
-and `make makemigrations`, so those work in a fresh worktree too.
+from a worktree that has one (`ensure-env`) and starts whatever part of the shared Docker stack is
+missing, lock-protected (`ensure-services`). `make bun`, `make dbpush` and `make seed` run both
+guards too; `make makemigrations` only needs the env, since it diffs the schema without a database.
 
 **Judge readiness by HTTP, never by the log.** `make start` pipes through `grep`, which
 block-buffers when redirected — the log looks empty until the server exits.
@@ -46,7 +46,8 @@ env file — the checked-in `app/.env.example` ships it empty, and an unset toke
 with a 500 ("not configured"). `app/.env` is usually a symlink, so resolve it:
 
 ```bash
-TOKEN=$(grep '^AI_TEST_USER_BROKER_TOKEN=' "$(realpath app/.env)" | cut -d= -f2-)
+# tr strips surrounding quotes: dotenv accepts them, a curl header does not.
+TOKEN=$(grep '^AI_TEST_USER_BROKER_TOKEN=' "$(realpath app/.env)" | cut -d= -f2- | tr -d "\"'")
 : "${TOKEN:?set AI_TEST_USER_BROKER_TOKEN in the real app/.env}"
 ```
 
@@ -113,12 +114,13 @@ stay; re-provisioning is always safe.
 
 - **Port collisions** — check `lsof -i :$PORT` before choosing.
 - **Empty log with a live 200** — normal (buffering), not a failure.
-- **`Invalid environment variables` at boot** — the `.env` chain is broken. Run `make ensure-env`
-  and restart; do not export vars by hand.
+- **`Invalid environment variables` at boot** — a key in the shared env file is missing or invalid
+  (`app/src/env/schema.mjs` lists what is required). The link itself is fine: `make start` already
+  ran `ensure-env`. Fix the value in the real file (`realpath app/.env`); do not export vars by hand.
 - **`app/.env` is shared** — it is a symlink to one canonical file, so editing it repoints *every*
   worktree. To give one worktree its own database, replace its link with a real file.
-- **Docker config changes are not auto-applied** — `ensure-services` deliberately never recreates
-  running containers (that would restart the stack under other worktrees). After editing
-  `.devcontainer/docker-compose.yml`, apply it yourself with
-  `docker compose -f .devcontainer/docker-compose.yml up -d`.
+- **Docker config changes are not auto-applied** — `ensure-services` only starts services that are
+  missing, so it never restarts a container another worktree is using. After editing
+  `.devcontainer/docker-compose.yml`, apply it deliberately with `make docker-apply` (this does
+  recreate containers, so expect other worktrees' servers to reconnect).
 - **`Village not found`** — village name typo; grep `app/data/villages.sql`.
