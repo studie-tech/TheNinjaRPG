@@ -99,20 +99,20 @@ export async function POST(request: Request) {
     abPixelLayoutVariant: undefined,
   });
 
-  // Resolve the procedure by traversing the caller object
-  const pathSegments = endpointName.split(".");
+  // The caller is a recursive proxy that returns a callable for any key, so
+  // walking it cannot tell a real procedure from internals like `_def` or
+  // `toString`. Check the router's own procedure map, which is keyed by the
+  // full dotted path, before resolving the callable off the caller.
+  const procedures = appRouter._def.procedures as Record<string, unknown>;
+  if (!Object.hasOwn(procedures, endpointName)) {
+    return NextResponse.json(
+      { success: false, message: `Invalid endpoint path: "${endpointName}"` },
+      { status: 400 },
+    );
+  }
+
   let procedure: unknown = caller;
-  for (const segment of pathSegments) {
-    if (
-      procedure === null ||
-      procedure === undefined ||
-      (typeof procedure !== "object" && typeof procedure !== "function")
-    ) {
-      return NextResponse.json(
-        { success: false, message: `Invalid endpoint path: "${endpointName}"` },
-        { status: 400 },
-      );
-    }
+  for (const segment of endpointName.split(".")) {
     procedure = (procedure as Record<string, unknown>)[segment];
   }
 
