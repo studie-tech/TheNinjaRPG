@@ -22,7 +22,7 @@ nohup make start PORT=$PORT > /tmp/tnr-dev-$PORT.log 2>&1 &
 
 `make start` is idempotent and safe to run from several worktrees at once. It links `app/.env`
 from a worktree that has one (`ensure-env`) and starts whatever part of the shared Docker stack is
-missing, lock-protected (`ensure-services`). `make bun`, `make dbpush` and `make seed` run both
+missing, leaving containers other worktrees are using alone (`ensure-services`). `make bun`, `make dbpush` and `make seed` run both
 guards too; `make makemigrations` only needs the env, since it diffs the schema without a database.
 
 **Judge readiness by HTTP, never by the log.** `make start` pipes through `grep`, which
@@ -37,8 +37,8 @@ curl -s -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:$PORT"   # expect 200
 ```
 
 Warm start (deps installed, services up) is ~30s. It can legitimately take far longer: a cold
-worktree adds a `bun install`, and `ensure-services` may be waiting on another worktree's stack
-startup. So a poll that runs out is not proof the server died — check
+worktree adds a `bun install`, and `ensure-services` waits for a service that another worktree
+started but that is not ready yet. So a poll that runs out is not proof the server died — check
 `cat /tmp/tnr-dev-$PORT.log` (which flushes on exit, so content there means it exited) and
 `docker compose -f .devcontainer/docker-compose.yml ps` before restarting anything.
 
@@ -126,6 +126,9 @@ stay; re-provisioning is always safe.
   do not export vars by hand.
 - **`app/.env` is shared** — it is a symlink to one canonical file, so editing it repoints *every*
   worktree. To give one worktree its own database, replace its link with a real file.
+- **A long-running stack predates the db healthcheck** — readiness gating only works for
+  containers created after it was added, so a `tnr_mysql` from before then reports no health and
+  counts as ready. Run `make docker-apply` once to pick it up.
 - **Docker config changes are not auto-applied** — `ensure-services` only starts services that are
   missing, so it never restarts a container another worktree is using. After editing
   `.devcontainer/docker-compose.yml`, apply it deliberately with `make docker-apply` (this does

@@ -48,7 +48,7 @@ docker-build: # Build/Rebuild the application.
 .PHONY: docker-apply
 docker-apply: # Recreate the shared service stack from the current docker-compose.yml
 	@echo "${YELLOW}Applying docker-compose changes to the shared stack${RESET}"
-	docker compose -f $$PWD/.devcontainer/docker-compose.yml up -d --wait
+	docker compose -p devcontainer -f $$PWD/.devcontainer/docker-compose.yml up -d --wait
 
 .PHONY: docker-stop
 docker-stop: # Stop all docker containers.

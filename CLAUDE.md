@@ -29,7 +29,7 @@ All make commands should be run from the root directory `/`, not from `/app`.
 - **Development**: database `tnr`, branch `development`
 - **AI deployment** (separate app): database `theninja-ai`, branch `main`
 
-**Local dev in parallel worktrees:** `make start PORT=<free-port>` is safe to run in any git worktree at the same time — it links `app/.env` from an existing worktree if missing and brings up the shared Docker service stack exactly once (lock-protected). For the full workflow (starting the server, provisioning disposable AI test users via `/api/ai-test-user`, calling tRPC headlessly via `/api/ai-test-user/call-endpoint`, browser login with the Clerk `signInToken`), follow the skill at `.agents/skills/tnr-dev-server/SKILL.md`.
+**Local dev in parallel worktrees:** `make start PORT=<free-port>` is safe to run in any git worktree at the same time — it links `app/.env` from an existing worktree if missing and starts only the parts of the shared Docker service stack that are not already running. For the full workflow (starting the server, provisioning disposable AI test users via `/api/ai-test-user`, calling tRPC headlessly via `/api/ai-test-user/call-endpoint`, browser login with the Clerk `signInToken`), follow the skill at `.agents/skills/tnr-dev-server/SKILL.md`.
 
 **Agent skills:** shared skills live in `.agents/skills/<name>/SKILL.md`, the harness-neutral location Codex, Cursor, Copilot, Gemini CLI, opencode and Amp read directly. Claude Code only discovers skills under `.claude/skills/`, which is gitignored, so `make ensure-skills` (run automatically by `make bun`) symlinks each one into place. Add new skills under `.agents/skills/` only.
 
