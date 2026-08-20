@@ -7,7 +7,7 @@
 // maintenance cron's deferred verification go through here so the cap holds
 // across them.
 
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY,
   CONTRIBUTION_REWARDS,
@@ -38,26 +38,33 @@ export const consumeRewardSlot = async (
   userId: string,
   today: string,
 ): Promise<boolean> => {
-  const result = await client
-    .update(devContributionProfile)
-    .set({
-      rewardedJobsDate: today,
-      rewardedJobsToday: sql`IF(${devContributionProfile.rewardedJobsDate} = ${today}, ${devContributionProfile.rewardedJobsToday} + 1, 1)`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(devContributionProfile.userId, userId),
-        or(
-          // A new day always has a free slot.
-          sql`${devContributionProfile.rewardedJobsDate} IS NULL`,
-          sql`${devContributionProfile.rewardedJobsDate} <> ${today}`,
-          sql`${devContributionProfile.rewardedJobsToday} < ${CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY}`,
-        ),
-      ),
-    );
-  return result.rowsAffected === 1;
+  const result = await client.execute(buildConsumeRewardSlotSql(userId, today));
+  // The planetscale driver reports affected rows on the result envelope.
+  return (result as unknown as { rowsAffected?: number }).rowsAffected === 1;
 };
+
+/**
+ * The compare-and-swap statement, built as raw SQL on purpose.
+ *
+ * MySQL evaluates SET assignments left to right and later ones observe values
+ * already assigned in the same statement, so `rewardedJobsToday` must be
+ * computed while `rewardedJobsDate` still holds the OLD day — otherwise the
+ * first payout of a new day increments yesterday's count instead of resetting
+ * to 1, and the cap carries over.
+ *
+ * Drizzle's `.set({...})` cannot express this: it emits columns in table
+ * declaration order, not object order. Hence the explicit statement (and the
+ * test that pins the order).
+ */
+export const buildConsumeRewardSlotSql = (userId: string, today: string) =>
+  sql`UPDATE DevContributionProfile
+      SET rewardedJobsToday = IF(rewardedJobsDate = ${today}, rewardedJobsToday + 1, 1),
+          rewardedJobsDate = ${today},
+          updatedAt = NOW(3)
+      WHERE userId = ${userId}
+        AND (rewardedJobsDate IS NULL
+             OR rewardedJobsDate <> ${today}
+             OR rewardedJobsToday < ${CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY})`;
 
 /** Give back a slot consumed for a payout that then could not be completed. */
 export const releaseRewardSlot = async (
