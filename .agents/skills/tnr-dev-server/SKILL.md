@@ -106,8 +106,12 @@ session is signed in as that user. Single-use — provision a fresh user for ano
 listener:
 
 ```bash
-lsof -ti tcp:$PORT -sTCP:LISTEN | xargs kill 2>/dev/null   # -sTCP:LISTEN: without it this
-                                                          # also kills connected clients
+# -sTCP:LISTEN excludes connected clients (a bare port match would kill the
+# browser too); the command check guards against the port having meanwhile been
+# taken by something unrelated.
+lsof -ti tcp:$PORT -sTCP:LISTEN | while read -r pid; do
+  ps -p "$pid" -o command= | grep -q "next dev" && kill "$pid"
+done
 lsof -i :$PORT -sTCP:LISTEN   # expect no output
 rm -f /tmp/tnr-dev-$PORT.log
 ```
