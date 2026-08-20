@@ -9,10 +9,13 @@ set -euo pipefail
 
 COMPOSE_FILE="$(git rev-parse --show-toplevel)/.devcontainer/docker-compose.yml"
 LOCK="/tmp/tnr-dev-services.lock.d"
-# Steal delay for a lock whose owner cannot be identified (no pid file, or a pid
-# this host cannot resolve). A recorded owner that is provably dead is stolen
-# immediately instead of waiting this out.
-STALE_SECONDS=300
+# A holder keeps its lock's mtime fresh while it works, so a lock that stops
+# being touched really has lost its owner. `ps` cannot answer this on its own:
+# a pid recorded by a process in another pid namespace is readable here but not
+# resolvable, and treating that as dead would reclaim a lock whose compose is
+# still running.
+HEARTBEAT_SECONDS=10
+STALE_SECONDS=60
 # ~20 minutes at 0.5s intervals: long enough for a cold first start (image pulls
 # plus database init). Every iteration re-checks the stack, so waiters exit as
 # soon as the services are up.
@@ -77,21 +80,15 @@ lock_pid() {
   printf '%s' "$pid"
 }
 
+# Only ever used to refuse a reclaim, never to trigger one: a visible owner is
+# proof the lock is held, while an invisible one proves nothing (it may live in
+# another pid namespace) and is left to the heartbeat age check.
 # `ps -p` is used instead of `kill -0` because kill reports "no such process"
 # for PIDs owned by other users even when they are alive.
 lock_owner_alive() {
   local pid
   pid="$(lock_pid)" || return 1
   ps -p "$pid" >/dev/null 2>&1
-}
-
-# Only a pid this host can read AND resolve as gone counts as provably dead. A
-# pid written inside another namespace is unreadable here, so it falls through
-# to the age check rather than being stolen instantly.
-lock_owner_known_dead() {
-  local pid
-  pid="$(lock_pid)" || return 1
-  ! ps -p "$pid" >/dev/null 2>&1
 }
 
 # Reclaiming a lock happens behind a second lock, and the owner is re-checked
@@ -108,11 +105,9 @@ try_steal() {
     fi
     return 1
   fi
-  if lock_owner_alive; then
-    rmdir "$steal" 2>/dev/null || true
-    return 1
-  fi
-  if ! lock_owner_known_dead &&
+  # Re-check while holding the reclaim lock: the holder may have been replaced,
+  # or a heartbeat may have landed, since this waiter decided.
+  if lock_owner_alive ||
     [ $(($(date +%s) - $(mtime_of "$LOCK"))) -le "$STALE_SECONDS" ]; then
     rmdir "$steal" 2>/dev/null || true
     return 1
@@ -169,9 +164,19 @@ done
 }
 
 cleanup() {
+  [ -n "${heartbeat_pid:-}" ] && kill "$heartbeat_pid" 2>/dev/null
   rm -rf "$LOCK"
 }
 trap cleanup EXIT
+
+# Keep the lock's mtime fresh for as long as this run holds it, so waiters can
+# tell a slow holder from a dead one without needing to resolve its pid.
+(
+  while sleep "$HEARTBEAT_SECONDS"; do
+    touch "$LOCK" 2>/dev/null || exit 0
+  done
+) &
+heartbeat_pid=$!
 
 # Re-check under the lock: a concurrent worktree may have started the stack
 # while we waited.
