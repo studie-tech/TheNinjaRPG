@@ -14,6 +14,15 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    # Without this, `compose up --wait` treats the container as ready the moment
+    # it is running, so a cold start can return before MySQL accepts
+    # connections and the first query (e.g. `make dbpush`) fails.
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
   # PHPMyAdmin - local database management
   phpmyadmin:
