@@ -97,6 +97,7 @@ export async function POST(request: Request) {
     userAgent: "tnr-reviewer-broker",
     abLemuReplacementVariant: undefined,
     abPixelLayoutVariant: undefined,
+    deviceTokenJti: undefined,
   });
 
   // Resolve the procedure by traversing the caller object

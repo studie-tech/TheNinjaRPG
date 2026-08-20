@@ -232,6 +232,13 @@
       "when": 1786884912515,
       "tag": "0032_brief_maximus",
       "breakpoints": false
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1787139910592,
+      "tag": "0033_red_pride",
+      "breakpoints": false
     }
   ]
 }

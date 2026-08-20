@@ -3,6 +3,10 @@ import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { supportTicket } from "@/drizzle/schema";
+import {
+  processContributionIssueEvent,
+  processContributionPullRequestEvent,
+} from "@/libs/devContribution/webhook";
 import { createSupportTicketActivity } from "@/server/api/routers/support";
 import { drizzleDB } from "@/server/db";
 
@@ -13,7 +17,31 @@ interface GitHubWebhookPayload {
     number: number;
     html_url: string;
     state: string;
+    title?: string;
+    body?: string | null;
+    labels?: Array<{ name: string }>;
     closed_at: string | null;
+  };
+  pull_request?: {
+    number: number;
+    html_url: string;
+    state: string;
+    title?: string;
+    body?: string | null;
+    labels?: Array<{ name: string }>;
+    user?: { login: string; type?: string };
+    head?: {
+      repo?: {
+        name: string;
+        owner?: { login: string };
+      };
+    };
+    base?: {
+      repo?: {
+        name: string;
+        owner?: { login: string };
+      };
+    };
   };
   repository: {
     name: string;
@@ -75,13 +103,44 @@ export async function POST(request: NextRequest) {
     }
 
     const data = JSON.parse(payload) as GitHubWebhookPayload;
+    const eventType = request.headers.get("x-github-event") ?? "unknown";
+
+    // Dev contribution job creation (issues + pull_request events).
+    if (data.issue && eventType === "issues") {
+      await processContributionIssueEvent(drizzleDB, {
+        number: data.issue.number,
+        title: data.issue.title ?? `Issue #${data.issue.number}`,
+        labels: (data.issue.labels ?? []).map((l) => l.name),
+        body: data.issue.body,
+        html_url: data.issue.html_url,
+        state: data.issue.state,
+        action: data.action,
+      });
+    }
+
+    if (data.pull_request && eventType === "pull_request") {
+      const headOwner = data.pull_request.head?.repo?.owner?.login?.toLowerCase();
+      const baseOwner = data.pull_request.base?.repo?.owner?.login?.toLowerCase();
+      await processContributionPullRequestEvent(drizzleDB, {
+        number: data.pull_request.number,
+        title: data.pull_request.title ?? `PR #${data.pull_request.number}`,
+        labels: (data.pull_request.labels ?? []).map((l) => l.name),
+        body: data.pull_request.body,
+        html_url: data.pull_request.html_url,
+        state: data.pull_request.state,
+        action: data.action,
+        authorLogin: data.pull_request.user?.login ?? "",
+        authorIsBot: data.pull_request.user?.type === "Bot",
+        isCrossFork: !!headOwner && !!baseOwner && headOwner !== baseOwner,
+      });
+    }
 
     // Only handle issue events
     if (!data.issue) {
       return NextResponse.json({ message: "Not an issue event" }, { status: 200 });
     }
 
-    // Handle issue closed event
+    // Handle issue closed event (support ticket sync)
     if (data.action === "closed") {
       await handleIssueClosed(data);
     }

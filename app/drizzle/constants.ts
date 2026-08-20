@@ -2904,3 +2904,68 @@ export const DMG_SETTING_DEFAULTS: Record<string, number> = {
   DMG_ADVANTAGE_MAX,
 };
 export const DMG_SETTING_NAMES = Object.keys(DMG_SETTING_DEFAULTS);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dev Contribution system (local AI agents that do open-source dev work)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The label an issue carries once a maintainer has fully clarified the spec.
+// Triage jobs only target issues WITHOUT this label; implementation jobs only
+// target issues WITH it.
+export const CONTRIBUTION_CLARIFIED_LABEL = "Fully Clarified";
+
+export const ContributionJobTypes = [
+  "PR_REVIEW",
+  "ISSUE_TRIAGE",
+  "ISSUE_IMPLEMENT",
+] as const;
+export type ContributionJobType = (typeof ContributionJobTypes)[number];
+
+export const ContributionRefKinds = ["PULL_REQUEST", "ISSUE"] as const;
+export type ContributionRefKind = (typeof ContributionRefKinds)[number];
+
+export const ContributionJobStatuses = [
+  "PENDING",
+  "CLAIMED",
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED",
+] as const;
+export type ContributionJobStatus = (typeof ContributionJobStatuses)[number];
+
+export const ContributionAgents = ["CLAUDE", "CODEX"] as const;
+export type ContributionAgent = (typeof ContributionAgents)[number];
+
+// How many times a single job may be claimed (attempted) before it is parked as FAILED.
+export const CONTRIBUTION_MAX_ATTEMPTS = 3;
+// Loop guard: hard cap on PR review jobs ever created for one pull request.
+export const CONTRIBUTION_MAX_REVIEWS_PER_PR = 3;
+// Global daily cap on jobs one user may complete (across all agents + types).
+export const CONTRIBUTION_MAX_JOBS_PER_DAY = 10;
+// Daily cap on jobs that may earn a reward (rest still count toward history/tokens).
+export const CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY = 5;
+// A claimed job whose heartbeat (or claim time) is older than this is stale and requeued.
+export const CONTRIBUTION_STALE_CLAIM_MS = 10 * 60 * 1000;
+// Requeue guard: a claimed job is only stale if BOTH heartbeat and claim are older.
+export const CONTRIBUTION_STALE_GRACE_MS = 5 * 60 * 1000;
+// GitHub result-verification window: the result must be timestamped within this many ms of claim.
+export const CONTRIBUTION_VERIFY_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+// Priority used to order job creation / backfill (higher first). Implementation
+// work is the highest value, then reviews, then triage follow-ups.
+export const CONTRIBUTION_JOB_PRIORITY: Record<ContributionJobType, number> = {
+  ISSUE_IMPLEMENT: 100,
+  PR_REVIEW: 50,
+  ISSUE_TRIAGE: 10,
+};
+
+// In-game rewards per completed + verified job. Centralized here so balance
+// changes are a one-line edit; tune before launch.
+export const CONTRIBUTION_REWARDS: Record<
+  ContributionJobType,
+  { money: number; exp: number; reputation: number }
+> = {
+  PR_REVIEW: { money: 150, exp: 25, reputation: 1 },
+  ISSUE_TRIAGE: { money: 75, exp: 15, reputation: 1 },
+  ISSUE_IMPLEMENT: { money: 400, exp: 60, reputation: 2 },
+};

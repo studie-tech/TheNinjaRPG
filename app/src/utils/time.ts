@@ -372,6 +372,16 @@ export const periodStart = (
   if (delay === "monthly") return new Date(Date.UTC(y, m, 1));
   // weekly: back up to Monday (getUTCDay: 0=Sun..6=Sat)
   const dow = now.getUTCDay();
-  const deltaToMonday = (dow + 6) % 7; // Sun→6, Mon→0, Tue→1, ...
+  const deltaToMonday = (dow + 6) % 7; // Sun→6, Mon→0, ...
   return new Date(Date.UTC(y, m, d - deltaToMonday));
+};
+
+/**
+ * The current UTC calendar day as "YYYY-MM-DD".
+ *
+ * Used for daily caps and the per-day usage ledger so a "day" means the same
+ * thing on the server and in the desktop client.
+ */
+export const getUtcDateString = (now: Date = new Date()) => {
+  return now.toISOString().slice(0, 10);
 };

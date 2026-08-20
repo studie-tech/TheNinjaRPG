@@ -20,11 +20,6 @@ import type { NextRequest } from "next/server";
 import superjson from "superjson";
 import { ZodError, z } from "zod";
 import { userData } from "@/drizzle/schema";
-import {
-  AB_PIXEL_LAYOUT_COOKIE,
-  LEGACY_AB_LAYOUT_COOKIE,
-} from "@/libs/layoutPreference";
-import type { McpMeta } from "@/libs/mcp";
 /**
  * 1. CONTEXT
  *
@@ -34,6 +29,16 @@ import type { McpMeta } from "@/libs/mcp";
  * processing a request
  *
  */
+import {
+  getDeviceTokenSecret,
+  isDeviceTokenRevoked,
+  verifyDeviceToken,
+} from "@/libs/devContribution/deviceToken";
+import {
+  AB_PIXEL_LAYOUT_COOKIE,
+  LEGACY_AB_LAYOUT_COOKIE,
+} from "@/libs/layoutPreference";
+import type { McpMeta } from "@/libs/mcp";
 import { drizzleDB } from "@/server/db";
 import { getClientIp } from "@/utils/network";
 
@@ -53,7 +58,25 @@ export const createAppTRPCContext = async (options: {
 }) => {
   // Get user ID - SIMPLE
   const session = await auth();
-  const userId = session.userId;
+  let userId = session.userId;
+  let deviceTokenJti: string | undefined;
+
+  // Dev-client device tokens: desktop clients authenticate with a short-lived
+  // signed token (Authorization: Bearer) after signing in through the
+  // browser-hosted /dev-connect flow. Only consulted when no Clerk session
+  // is present, so browser users are unaffected.
+  if (!userId) {
+    const bearer = options.readHeaders.get("authorization")?.replace(/^Bearer\s+/i, "");
+    if (bearer) {
+      const nowMs = Date.now();
+      const verified = verifyDeviceToken(getDeviceTokenSecret(), bearer, nowMs);
+      if (verified.ok && !(await isDeviceTokenRevoked(verified.jti))) {
+        userId = verified.userId;
+        deviceTokenJti = verified.jti;
+      }
+    }
+  }
+
   // Get IP
   const { readHeaders } = options;
   const userIp = getClientIp(readHeaders);
@@ -73,6 +96,7 @@ export const createAppTRPCContext = async (options: {
     userAgent,
     abLemuReplacementVariant,
     abPixelLayoutVariant,
+    deviceTokenJti,
   };
 };
 

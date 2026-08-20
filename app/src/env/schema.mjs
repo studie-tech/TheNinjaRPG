@@ -34,6 +34,8 @@ export const serverSchema = z.object({
   AI_TEST_USER_BROKER_TOKEN: z.string().optional(),
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: z.string().optional(),
+  // Secret for signing dev-client device tokens (desktop app auth)
+  DEV_CLIENT_TOKEN_SECRET: z.string().optional(),
 });
 
 /**
@@ -70,6 +72,8 @@ export const serverEnv = {
   AI_TEST_USER_BROKER_TOKEN: process.env.AI_TEST_USER_BROKER_TOKEN,
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: process.env.TOWER_DEFENSE_HMAC_SECRET,
+  // Secret for signing dev-client device tokens (desktop app auth)
+  DEV_CLIENT_TOKEN_SECRET: process.env.DEV_CLIENT_TOKEN_SECRET,
 };
 
 /**

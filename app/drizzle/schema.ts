@@ -5329,3 +5329,162 @@ export const userStreakProgressRelations = relations(userStreakProgress, ({ one 
     references: [activityStreakConfig.id],
   }),
 }));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dev Contribution system
+//
+// Players run local AI coding agents (Claude Code / Codex CLI) from a desktop
+// client that pulls dev jobs (review PRs, triage issues, implement clarified
+// issues) against the public GitHub repo. Jobs are claimed one-at-a-time with
+// compare-and-swap guards; rewards are only granted once the result is verified
+// on GitHub. All GitHub I/O is done by the app, never by the agent itself.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const devContributionProfile = mysqlTable(
+  "DevContributionProfile",
+  {
+    userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+    // GitHub login that the client's `gh` CLI is authenticated as (verified on first login).
+    githubLogin: varchar("githubLogin", { length: 191 }),
+    // Per-day token caps per agent, enforced by the client and backstopped server-side.
+    // 0 = unlimited.
+    claudeDailyTokenCap: bigint("claudeDailyTokenCap", { mode: "number" })
+      .default(0)
+      .notNull(),
+    codexDailyTokenCap: bigint("codexDailyTokenCap", { mode: "number" })
+      .default(0)
+      .notNull(),
+    autoRun: boolean("autoRun").default(false).notNull(),
+    // Lifetime counters (for the leaderboard / profile display).
+    totalJobsCompleted: int("totalJobsCompleted").default(0).notNull(),
+    totalTokensContributed: bigint("totalTokensContributed", { mode: "number" })
+      .default(0)
+      .notNull(),
+    // Last time the client heartbeated (any claim/heartbeat/complete/fail).
+    lastSeenAt: datetime("lastSeenAt", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      githubLoginIdx: index("DevContributionProfile_githubLogin_idx").on(
+        table.githubLogin,
+      ),
+      createdAtIdx: index("DevContributionProfile_createdAt_idx").on(table.createdAt),
+    };
+  },
+);
+export type DevContributionProfile = InferSelectModel<typeof devContributionProfile>;
+
+export const devJob = mysqlTable(
+  "DevJob",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    jobType: mysqlEnum("jobType", consts.ContributionJobTypes).notNull(),
+    refKind: mysqlEnum("refKind", consts.ContributionRefKinds).notNull(),
+    // GitHub issue or PR number the job targets.
+    refNumber: int("refNumber").notNull(),
+    refUrl: varchar("refUrl", { length: 500 }).notNull(),
+    status: mysqlEnum("status", consts.ContributionJobStatuses)
+      .default("PENDING")
+      .notNull(),
+    // Agent that claimed the job (set on claim).
+    agent: mysqlEnum("agent", consts.ContributionAgents),
+    claimedByUserId: varchar("claimedByUserId", { length: 191 }),
+    claimedAt: datetime("claimedAt", { mode: "date", fsp: 3 }),
+    heartbeatAt: datetime("heartbeatAt", { mode: "date", fsp: 3 }),
+    completedAt: datetime("completedAt", { mode: "date", fsp: 3 }),
+    // How many times this job has been claimed. Parks at CONTRIBUTION_MAX_ATTEMPTS.
+    attemptCount: int("attemptCount").default(0).notNull(),
+    // Tokens the contributing agent reported (input / output) for this job.
+    tokensIn: bigint("tokensIn", { mode: "number" }).default(0).notNull(),
+    tokensOut: bigint("tokensOut", { mode: "number" }).default(0).notNull(),
+    // Where the result lives (review URL, comment URL, or PR URL).
+    resultUrl: varchar("resultUrl", { length: 500 }),
+    error: text("error"),
+    // Snapshot of the ref (title / labels / body hash) captured at creation time so
+    // backfill can detect drift without re-fetching every time.
+    contextJson: mediumtext("contextJson"),
+    // Set true the moment the reward is granted; guarded so a reward is paid at most once.
+    rewardGranted: boolean("rewardGranted").default(false).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      statusIdx: index("DevJob_status_idx").on(table.status),
+      jobTypeRefIdx: index("DevJob_jobType_refKind_refNumber_idx").on(
+        table.jobType,
+        table.refKind,
+        table.refNumber,
+      ),
+      claimedByIdx: index("DevJob_claimedByUserId_idx").on(table.claimedByUserId),
+      createdAtIdx: index("DevJob_createdAt_idx").on(table.createdAt),
+    };
+  },
+);
+export type DevJob = InferSelectModel<typeof devJob>;
+
+// Per-user, per-day, per-agent usage ledger. Upserted with
+// INSERT ... ON DUPLICATE KEY UPDATE so parallel completions compose.
+export const devJobDailyUsage = mysqlTable(
+  "DevJobDailyUsage",
+  {
+    userId: varchar("userId", { length: 191 }).notNull(),
+    // UTC calendar day, e.g. "2026-08-19".
+    date: date("date", { mode: "string" }).notNull(),
+    agent: mysqlEnum("agent", consts.ContributionAgents).notNull(),
+    tokens: bigint("tokens", { mode: "number" }).default(0).notNull(),
+    jobsCompleted: int("jobsCompleted").default(0).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userDateAgentKey: uniqueIndex("DevJobDailyUsage_userId_date_agent_key").on(
+        table.userId,
+        table.date,
+        table.agent,
+      ),
+    };
+  },
+);
+export type DevJobDailyUsage = InferSelectModel<typeof devJobDailyUsage>;
+
+export const devContributionProfileRelations = relations(
+  devContributionProfile,
+  ({ one, many }) => ({
+    user: one(userData, {
+      fields: [devContributionProfile.userId],
+      references: [userData.userId],
+    }),
+    jobs: many(devJob),
+    usage: many(devJobDailyUsage),
+  }),
+);
+
+export const devJobRelations = relations(devJob, ({ one }) => ({
+  claimedBy: one(userData, {
+    fields: [devJob.claimedByUserId],
+    references: [userData.userId],
+  }),
+}));
+
+export const devJobDailyUsageRelations = relations(devJobDailyUsage, ({ one }) => ({
+  user: one(userData, {
+    fields: [devJobDailyUsage.userId],
+    references: [userData.userId],
+  }),
+}));

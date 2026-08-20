@@ -55,6 +55,7 @@ const createMcpContext = async () => {
     userAgent: requestData?.userAgent ?? "mcp-client",
     abLemuReplacementVariant: undefined,
     abPixelLayoutVariant: undefined,
+    deviceTokenJti: undefined,
   };
 };
 
