@@ -213,7 +213,10 @@ beforeAll(async () => {
   // needs to be a real repository with an origin/main to branch from.
   repoDir = mkdtempSync(join(tmpdir(), "tnr-dev-client-repo-"));
   const run = (args: string[], cwd = repoDir) =>
-    Bun.spawnSync(["git", ...args], { cwd, env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" } });
+    Bun.spawnSync(["git", ...args], {
+      cwd,
+      env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" },
+    });
   run(["init", "--initial-branch=main", "."]);
   run(["config", "user.email", "test@example.com"]);
   run(["config", "user.name", "Test"]);
