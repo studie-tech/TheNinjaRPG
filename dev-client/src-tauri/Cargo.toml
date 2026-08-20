@@ -1,0 +1,13 @@
+[package]
+name = "tnr-dev-client"
+version = "0.1.0"
+description = "TheNinja-RPG desktop dev client"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

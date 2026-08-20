@@ -123,6 +123,40 @@ openhands: # Open OpenHands on http://127.0.0.1:3004
 		--name openhands-app \
 		docker.all-hands.dev/all-hands-ai/openhands:0.19
 
+--------------DevClient------------------: # -------------------------------------------------------
+.PHONY: dev-client-install
+dev-client-install: # Install dev client dependencies with bun
+	@echo "${GREEN}dev-client-install${RESET}"
+	cd dev-client && bun install --save-text-lockfile
+
+.PHONY: dev-client-test
+dev-client-test: # Run dev client unit tests
+	@echo "${YELLOW}Running dev client tests${RESET}"
+	cd dev-client && bun test
+
+ .PHONY: dev-client-typecheck
+ dev-client-typecheck: # Run TypeScript type checking for the dev client
+ 	@echo "${YELLOW}Typechecking the dev client${RESET}"
+ 	cd dev-client && bun run typecheck
+
+ .PHONY: dev-client-lint
+ dev-client-lint: # Lint the dev client with biome
+ 	@echo "${YELLOW}Linting the dev client${RESET}"
+ 	cd dev-client && bun run lint
+
+ .PHONY: dev-client-build-sidecar
+dev-client-build-sidecar: # Compile the dev client sidecar binary
+	@echo "${YELLOW}Compiling the sidecar${RESET}"
+	cd dev-client && bun run sidecar:build
+
+.PHONY: dev-client-dev
+dev-client-dev: dev-client-install dev-client-build-sidecar # Run the dev client (Tauri dev mode)
+	@cd dev-client && TNR_DEV_CLIENT_SIDECAR=$$PWD/bin/tnr-dev-client bun run tauri dev
+
+.PHONY: dev-client-build
+dev-client-build: dev-client-install dev-client-build-sidecar # Build the desktop app bundle
+	cd dev-client && bun run tauri build
+
 --------------AI-helpers----------------: # -------------------------------------------------------
 .PHONY: browser-tools-server
 browser-tools-server: # Run browser-tools MCP server, allowing AI to see browser
