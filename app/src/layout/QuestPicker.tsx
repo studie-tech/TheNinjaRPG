@@ -13,6 +13,7 @@ import Loader from "@/layout/Loader";
 import { LogbookEntry, useCheckRewards } from "@/layout/Logbook";
 import { getActiveObjective } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
+import { getTutorialHighlightedQuestId } from "@/libs/tutorial";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 interface QuestPickerProps {
@@ -85,7 +86,9 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
     if (
       currentStep?.elementIds?.find((id) => id.startsWith("tutorial-take-quest-")) &&
       currentStep?.relatedValue &&
-      userData?.userQuests?.find((uq) => uq.questId === currentStep?.relatedValue)
+      userData?.userQuests?.find(
+        (uq) => uq.questId === currentStep?.relatedValue && !uq.endAt,
+      )
     ) {
       const quest = quests?.find((q) => q.id === currentStep?.relatedValue);
       const tracker = userData?.questData?.find((q) => q.id === quest?.id);
@@ -100,25 +103,33 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
 
   // Default active tab
   useEffect(() => {
-    // Ensure that we are using the correct active element
+    const tutorialQuestId = userData?.tutorialOn
+      ? getTutorialHighlightedQuestId(currentStep)
+      : undefined;
+    const tutorialQuest =
+      typeof tutorialQuestId === "string"
+        ? quests?.find((q) => q.id === tutorialQuestId)
+        : undefined;
+    if (tutorialQuest && activeElement !== tutorialQuest.name) {
+      setActiveElement(tutorialQuest.name);
+      return;
+    }
+
     const activeQuest = activeElement && quests?.find((q) => q.name === activeElement);
     if (!activeQuest && quests) setActiveElement("");
-    // If active element is set,
     if (userData && !activeElement) {
-      // Try to set to current quest if exists
       const currentQuest = userData.userQuests?.find(
-        (uq) => uq.quest.questType === props.questType,
+        (uq) => uq.quest.questType === props.questType && !uq.endAt,
       );
       if (currentQuest) {
         setActiveElement(currentQuest.quest.name);
         return;
       }
-      // Otherwise, set to first available quest in the list
       if (quests?.[0]) {
         setActiveElement(quests[0].name);
       }
     }
-  }, [userData, activeElement, props.questType, quests]);
+  }, [userData, activeElement, props.questType, quests, currentStep, setActiveElement]);
 
   // Filter for story quests only
   const availableQuests = quests ?? [];

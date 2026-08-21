@@ -141,7 +141,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "NASO2bE1zEQcc",
-    title: "Battle Arena",
+    title: "The Battlefield",
     description:
       "This is the battlefield, where you can see your character and opponent(s). ",
     elementIds: ["tutorial-combat-field"],
@@ -153,7 +153,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "Qz0sQcQLjTdlv",
-    title: "Battle Arena",
+    title: "Combat Rounds",
     description: `Combat is based on rounds, where during your round you have ${COMBAT_SECONDS} seconds to perform your actions, and then it's your opponent's turn. You can see your action points and the time left for your round here.`,
     elementIds: ["tutorial-combat-action-timer"],
     page: "/combat",
@@ -164,9 +164,14 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "bRelJfsU9wuHNmhUSg0db",
-    title: "Battle Arena",
+    title: "Your Actions",
     description:
       "Move closer to your opponent, and beat it up with your basic attack. ",
+    elementIds: [
+      "tutorial-combat-action-move",
+      "tutorial-combat-action-basicAttack",
+      "tutorial-combat-field",
+    ],
     page: "/combat",
     onCombatLoss: "w3eWC11tISZc0CUZ2tvYN",
     onCombatWin: "PCaQdWoDFuR0VGUq5c_ab",
@@ -319,8 +324,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     id: "qPx_xVsMAZY0t05thYgZj",
     title: "Travel",
     elementIds: [
-      "tutorial-global-travel-proceed",
       "tutorial-global-map",
+      "tutorial-global-travel-proceed",
       "tutorial-Global",
     ],
     description:
@@ -350,8 +355,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     id: "UD2jVibug6Y0yKLYGzA_N",
     title: "Travel",
     elementIds: [
-      "tutorial-global-travel-proceed",
       "tutorial-global-map",
+      "tutorial-global-travel-proceed",
       "tutorial-Global",
     ],
     description: (

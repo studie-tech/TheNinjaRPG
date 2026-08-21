@@ -41,7 +41,7 @@ import {
   isQuestObjectiveAvailable,
 } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
-import { isTutorialPageMatch } from "@/libs/tutorial";
+import { isTutorialPageMatch, isUsableHighlightRect } from "@/libs/tutorial";
 import { getMobileOperatingSystem } from "@/utils/hardware";
 import { parseHtml } from "@/utils/parse";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
@@ -412,12 +412,27 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     );
 
     if (highlightInfo) {
+      const before = highlightInfo.element.getBoundingClientRect();
+      const isCompactTarget = before.height < window.innerHeight * 0.55;
+      const isOffscreen =
+        before.bottom < 80 ||
+        before.top > window.innerHeight - 80 ||
+        before.right < 0 ||
+        before.left > window.innerWidth;
+      if (isOffscreen && isCompactTarget) {
+        highlightInfo.element.scrollIntoView({
+          block: "nearest",
+          inline: "nearest",
+          behavior: "auto",
+        });
+      }
+      const rect = highlightInfo.element.getBoundingClientRect();
       setHighlight({
         isPrimaryElement: highlightInfo.isPrimaryElement,
-        top: highlightInfo.top,
-        left: highlightInfo.left,
-        width: highlightInfo.width,
-        height: highlightInfo.height,
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
       });
       // no-op
     } else {
@@ -1255,6 +1270,19 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
 export default TutorialAssistant;
 
 // Helper function to find element to highlight based on current tutorial step
+const getUsableHighlightElement = (id: string | undefined) => {
+  if (!id) return null;
+  const nodes = document.querySelectorAll<HTMLElement>(`[id="${CSS.escape(id)}"]`);
+  for (const element of Array.from(nodes)) {
+    const style = window.getComputedStyle(element);
+    if (style.display === "none" || style.visibility === "hidden") continue;
+    const rect = element.getBoundingClientRect();
+    if (!isUsableHighlightRect(rect)) continue;
+    return element;
+  }
+  return null;
+};
+
 const findElementToHighlight = (
   step: TutorialStepConfig,
   rightSideBarRef: React.RefObject<HTMLDivElement | null>,
@@ -1262,13 +1290,12 @@ const findElementToHighlight = (
 ) => {
   if (!step?.elementIds || step.elementIds.length === 0) return null;
 
-  // Find the first non-null element in elementIds
   let element: HTMLElement | null =
-    step.elementIds?.map((id) => id && document.getElementById(id)).find(Boolean) ||
-    null;
-  const primaryElement =
-    step.elementIds?.[0] && document.getElementById(step.elementIds[0]);
-  const isPrimaryElement = element === primaryElement;
+    step.elementIds?.map((id) => getUsableHighlightElement(id)).find(Boolean) || null;
+  const primaryElement = getUsableHighlightElement(step.elementIds?.[0]);
+  const isPrimaryElement = Boolean(
+    element && primaryElement && element === primaryElement,
+  );
 
   // Check within the rightSideBarRef if available and open
   const sidebarElement = rightSideBarRef.current;
@@ -1282,11 +1309,13 @@ const findElementToHighlight = (
     const foundElement =
       step.elementIds
         ?.map((id) => id && sidebarElement.querySelector<HTMLElement>(`#${id}`))
-        .find(Boolean) ||
-      Array.from(sidebarElement.querySelectorAll<HTMLElement>("[id]")).find((el) =>
-        step.elementIds?.some(
-          (id) => id && el.id?.includes(id.replace("tutorial-", "")),
-        ),
+        .find((el) => el && isUsableHighlightRect(el.getBoundingClientRect())) ||
+      Array.from(sidebarElement.querySelectorAll<HTMLElement>("[id]")).find(
+        (el) =>
+          isUsableHighlightRect(el.getBoundingClientRect()) &&
+          step.elementIds?.some(
+            (id) => id && el.id?.includes(id.replace("tutorial-", "")),
+          ),
       );
 
     if (foundElement) {
@@ -1296,13 +1325,8 @@ const findElementToHighlight = (
 
   if (!element) return null;
 
-  // Get element position - getBoundingClientRect() gives viewport coordinates
   const rect = element.getBoundingClientRect();
-
-  // Validate that the element has been laid out and has dimensions
-  // getBoundingClientRect returns all zeros if element exists but hasn't been rendered yet
-  // This commonly happens with accordion children that are being expanded
-  if (rect.width === 0 || rect.height === 0) {
+  if (!isUsableHighlightRect(rect)) {
     return null;
   }
 
