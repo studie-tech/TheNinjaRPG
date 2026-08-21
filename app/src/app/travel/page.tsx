@@ -84,7 +84,6 @@ import type { GlobalTile, SectorPoint } from "@/libs/threejs/types";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import { calcGlobalTravelTime } from "@/libs/travel";
-import { isTutorialGlobalMapStep } from "@/libs/tutorial";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useAwake } from "@/utils/routing";
@@ -417,16 +416,6 @@ export default function Travel() {
 
   // Tutorial step
   const { currentStep, handleNextStepAsync } = useTutorialStep();
-
-  useEffect(() => {
-    if (
-      userData?.tutorialOn &&
-      isTutorialGlobalMapStep(currentStep) &&
-      activeTab !== globalLink
-    ) {
-      setActiveTab(globalLink);
-    }
-  }, [activeTab, currentStep, globalLink, userData?.tutorialOn]);
 
   // Mutations
   const { mutate: startGlobalMove, isPending: isStartingTravel } =

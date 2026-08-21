@@ -15,14 +15,7 @@ import {
   Tag,
   Ticket,
 } from "lucide-react";
-import {
-  type Dispatch,
-  type SetStateAction,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -285,7 +278,6 @@ const Shop: React.FC<ShopProps> = (props) => {
 
   const { currentStep, handleNextStep } = useTutorialStep();
   const isItemBuyStep = isTutorialItemBuyStep(currentStep);
-  const hasAutoOpenedTutorialItem = useRef(false);
 
   const setItemConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
     const next = typeof open === "function" ? open(isOpen) : open;
@@ -300,17 +292,6 @@ const Shop: React.FC<ShopProps> = (props) => {
     { id: TUTORIAL_ITEM_ID },
     { enabled: isItemBuyStep },
   );
-
-  useEffect(() => {
-    if (!isItemBuyStep) {
-      hasAutoOpenedTutorialItem.current = false;
-      return;
-    }
-    if (hasAutoOpenedTutorialItem.current || !tutorialItem || item) return;
-    hasAutoOpenedTutorialItem.current = true;
-    setItem(tutorialItem);
-    setIsOpen(true);
-  }, [isItemBuyStep, tutorialItem, item]);
 
   const catalogItems = [...(allItems ?? [])];
   if (isItemBuyStep && tutorialItem) {
