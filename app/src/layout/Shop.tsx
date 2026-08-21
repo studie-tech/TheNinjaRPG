@@ -15,7 +15,7 @@ import {
   Tag,
   Ticket,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -278,6 +278,7 @@ const Shop: React.FC<ShopProps> = (props) => {
 
   const { currentStep, handleNextStep } = useTutorialStep();
   const isItemBuyStep = isTutorialItemBuyStep(currentStep);
+  const hasAutoOpenedTutorialItem = useRef(false);
 
   const { data: tutorialItem } = api.item.get.useQuery(
     { id: TUTORIAL_ITEM_ID },
@@ -285,7 +286,12 @@ const Shop: React.FC<ShopProps> = (props) => {
   );
 
   useEffect(() => {
-    if (!isItemBuyStep || !tutorialItem || item) return;
+    if (!isItemBuyStep) {
+      hasAutoOpenedTutorialItem.current = false;
+      return;
+    }
+    if (hasAutoOpenedTutorialItem.current || !tutorialItem || item) return;
+    hasAutoOpenedTutorialItem.current = true;
     setItem(tutorialItem);
     setIsOpen(true);
   }, [isItemBuyStep, tutorialItem, item]);
