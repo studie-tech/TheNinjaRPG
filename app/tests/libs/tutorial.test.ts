@@ -136,7 +136,7 @@ describe("TUTORIAL_STEPS", () => {
     const source = readFileSync(tutorialPath, "utf8");
     const blocks = [
       ...source.matchAll(/elementIds:\s*\[([\s\S]*?)\]/g),
-    ].map((match) => match[1]);
+    ].map((match) => match[1] ?? "");
     const globalBlocks = blocks.filter((block) => block.includes("tutorial-global-map"));
     expect(globalBlocks.length).toBeGreaterThan(0);
     for (const block of globalBlocks) {
