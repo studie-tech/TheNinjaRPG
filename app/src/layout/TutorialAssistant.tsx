@@ -288,6 +288,10 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   // Track if we've already scrolled for the current step to avoid repeated scrolling
   const hasScrolledForStepRef = React.useRef<number>(-1);
 
+  // Track the step/element pair we have already scrolled into view, so the
+  // reveal happens once per target instead of on every position update
+  const hasRevealedTargetRef = React.useRef<string>("");
+
   // Tutorial management hook
   const {
     currentStep,
@@ -327,9 +331,22 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       const toBattlePage = currentStepConfig?.page === "/combat";
 
       // Abandoned tutorial fights leave the user in BATTLE; pull them back
-      // before trying to render a later step on the wrong page.
-      if (inBattle && !onBattlePage) {
-        router.push("/combat");
+      // before trying to render a later step on the wrong page. Only for a
+      // step that is actually about the fight - players past the tutorial (or
+      // on an unrelated step) stay free to browse while a battle runs, and a
+      // stale BATTLE status with no battle row must not pin them to /combat.
+      const isBattleStep =
+        toBattlePage ||
+        Boolean(currentStepConfig?.onCombatWin) ||
+        Boolean(currentStepConfig?.onCombatLoss);
+      if (
+        inBattle &&
+        !onBattlePage &&
+        userData.battleId &&
+        tutorialStep < TUTORIAL_STEPS.length &&
+        isBattleStep
+      ) {
+        router.replace("/combat");
         return;
       }
 
@@ -412,19 +429,27 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     );
 
     if (highlightInfo) {
-      const before = highlightInfo.element.getBoundingClientRect();
-      const isCompactTarget = before.height < window.innerHeight * 0.55;
-      const isOffscreen =
-        before.bottom < 80 ||
-        before.top > window.innerHeight - 80 ||
-        before.right < 0 ||
-        before.left > window.innerWidth;
-      if (isOffscreen && isCompactTarget) {
-        highlightInfo.element.scrollIntoView({
-          block: "nearest",
-          inline: "nearest",
-          behavior: "auto",
-        });
+      // Bring a freshly targeted element into view once. This runs off a 250ms
+      // interval, the scroll listener and a body-wide MutationObserver, so
+      // without the per-target guard the page would snap back every time the
+      // player scrolls the highlight off screen.
+      const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}`;
+      if (hasRevealedTargetRef.current !== targetKey) {
+        hasRevealedTargetRef.current = targetKey;
+        const before = highlightInfo.element.getBoundingClientRect();
+        const isCompactTarget = before.height < window.innerHeight * 0.55;
+        const isOffscreen =
+          before.bottom < 80 ||
+          before.top > window.innerHeight - 80 ||
+          before.right < 0 ||
+          before.left > window.innerWidth;
+        if (isOffscreen && isCompactTarget) {
+          highlightInfo.element.scrollIntoView({
+            block: "nearest",
+            inline: "nearest",
+            behavior: "auto",
+          });
+        }
       }
       const rect = highlightInfo.element.getBoundingClientRect();
       setHighlight({

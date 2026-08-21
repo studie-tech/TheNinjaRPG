@@ -211,6 +211,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "Now that your character is a bit stronger, click a jutsu from the list to train. The more you train and progress the more powerful jutsu will be available for you to train.",
     page: "/traininggrounds",
+    showNextButton: true,
   },
   {
     id: "r2azv66f1YNtFW2gbldOd",
@@ -240,6 +241,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     ],
     description: "Let's buy some shurikens, a good weapon to start with.",
     page: "/itemshop",
+    showNextButton: true,
   },
   {
     id: "U04RvrqvvYaOcenOGKMDw",
@@ -324,8 +326,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     id: "qPx_xVsMAZY0t05thYgZj",
     title: "Travel",
     elementIds: [
-      "tutorial-global-map",
       "tutorial-global-travel-proceed",
+      "tutorial-global-map",
       "tutorial-Global",
     ],
     description:
@@ -355,8 +357,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     id: "UD2jVibug6Y0yKLYGzA_N",
     title: "Travel",
     elementIds: [
-      "tutorial-global-map",
       "tutorial-global-travel-proceed",
+      "tutorial-global-map",
       "tutorial-Global",
     ],
     description: (
@@ -576,6 +578,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       "You're ready to start the Genin exam. Passing this exam will award you the rank of Genin, which will unlock more difficult missions and jutsus, as well as pick pick one of the major ninja villages to join. Feel free to explore a bit, if you want, and otherwise come back here once you're ready for the exam. ",
     page: "/academy",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    showNextButton: true,
   },
   // {
   //   title: "That's it for now!",
@@ -739,7 +742,11 @@ export const useTutorialStep = () => {
 
   // Derived
   const stepNumber = userData?.tutorialStep || 0;
-  const staticStep = TUTORIAL_STEPS?.[stepNumber];
+  // A switched-off tutorial has no current step. Callers use `currentStep` to
+  // pin UI (hide training sections, pin shop rows, force quest tabs), so a
+  // player who stopped the tutorial mid-way must not keep that UI forever.
+  const staticStep =
+    userData?.tutorialOn === false ? undefined : TUTORIAL_STEPS?.[stepNumber];
 
   // Calculate distance to closest enemy for dynamic combat steps
   const distanceToEnemy = useMemo(() => {
