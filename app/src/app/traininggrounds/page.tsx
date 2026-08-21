@@ -16,7 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
@@ -706,12 +706,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Mutations
   const { mutate: train, isPending: isStartingTrain } =
     api.jutsu.startTraining.useMutation({
-      onSuccess: async (result) => {
+      onSuccess: async (result, variables) => {
         showMutationToast(result);
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
           await updateUser(result.data);
-          if (isJutsuPickStep) {
+          if (isJutsuPickStep && variables.jutsuId === TUTORIAL_JUTSU_ID) {
             handleNextStep();
           }
         }
@@ -739,6 +739,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 
   // Mutation loading
   const isPending = isStartingTrain || isStoppingTrain;
+
+  const setJutsuConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
+    const next = typeof open === "function" ? open(isOpen) : open;
+    setIsOpen(next);
+    if (!next) setJutsu(undefined);
+  };
 
   useEffect(() => {
     if (!isJutsuPickStep) {
@@ -888,13 +894,14 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
               title="Confirm Purchase"
               proceed_label={proceed_label}
               isOpen={isOpen}
-              setIsOpen={setIsOpen}
+              setIsOpen={setJutsuConfirmOpen}
               isValid={false}
+              onClose={() => setJutsu(undefined)}
               onAccept={() => {
                 if (canTrain && !isPending) {
                   train({ jutsuId: jutsu.id });
                 } else {
-                  setIsOpen(false);
+                  setJutsuConfirmOpen(false);
                 }
               }}
               confirmClassName={
