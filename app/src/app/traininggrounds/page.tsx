@@ -16,7 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
@@ -696,7 +696,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Tutorial management hook
   const { currentStep, handleNextStep } = useTutorialStep();
   const isJutsuPickStep = isTutorialJutsuPickStep(currentStep);
-  const hasAutoOpenedTutorialJutsu = useRef(false);
 
   const { data: tutorialJutsu } = api.jutsu.get.useQuery(
     { id: TUTORIAL_JUTSU_ID },
@@ -745,20 +744,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     setIsOpen(next);
     if (!next) setJutsu(undefined);
   };
-
-  useEffect(() => {
-    if (!isJutsuPickStep) {
-      hasAutoOpenedTutorialJutsu.current = false;
-      return;
-    }
-    if (hasAutoOpenedTutorialJutsu.current || !tutorialJutsu || jutsu || !userData) {
-      return;
-    }
-    if (!canTrainJutsu(tutorialJutsu, userData)) return;
-    hasAutoOpenedTutorialJutsu.current = true;
-    setJutsu(tutorialJutsu);
-    setIsOpen(true);
-  }, [isJutsuPickStep, tutorialJutsu, jutsu, userData]);
 
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
