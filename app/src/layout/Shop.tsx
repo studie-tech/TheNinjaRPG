@@ -15,6 +15,7 @@ import {
   Tag,
   Ticket,
 } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -43,7 +44,7 @@ import { UncontrolledSliderField } from "@/layout/SliderField";
 import { cn } from "@/libs/shadui";
 import { getMaxItemShopPurchaseQuantity } from "@/libs/shop";
 import { showMutationToast } from "@/libs/toast";
-import { isTutorialItemBuyStep } from "@/libs/tutorial";
+import { isTutorialItemBuyStep, isTutorialPageMatch } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { useAwake } from "@/utils/routing";
 import { getStrucBoost } from "@/utils/village";
@@ -276,8 +277,13 @@ const Shop: React.FC<ShopProps> = (props) => {
       (row) => !row.expireFromStoreAt || new Date(row.expireFromStoreAt) > new Date(),
     );
 
+  const pathname = usePathname();
   const { currentStep, handleNextStep } = useTutorialStep();
-  const isItemBuyStep = isTutorialItemBuyStep(currentStep);
+  // Shop also renders the souvenir and black-market catalogs; the tutorial pin
+  // belongs only on the page its step points at.
+  const isItemBuyStep =
+    isTutorialItemBuyStep(currentStep) &&
+    isTutorialPageMatch(currentStep?.page, pathname);
 
   const setItemConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
     const next = typeof open === "function" ? open(isOpen) : open;
