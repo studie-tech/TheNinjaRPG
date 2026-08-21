@@ -2,12 +2,12 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
+import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 import {
-  findFirstHighlightableId,
-  getTutorialStepPath,
   getTutorialHighlightedQuestId,
+  getTutorialStepPath,
   getTutorialTakeQuestId,
-  isTutorialGlobalMapStep,
   isTutorialItemBuyStep,
   isTutorialJutsuPickStep,
   isTutorialPageMatch,
@@ -16,7 +16,34 @@ import {
   TUTORIAL_ITEM_BUY_STEP_ID,
   TUTORIAL_JUTSU_PICK_STEP_ID,
 } from "@/libs/tutorial";
-import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
+
+/**
+ * TUTORIAL_STEPS lives in a client module that pulls in tRPC, jotai and
+ * next/navigation, so it cannot be imported here. Read the source instead and
+ * slice it to the array, so `id:` keys elsewhere in the file cannot leak in.
+ */
+const readTutorialStepsSource = () => {
+  const tutorialPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../src/hooks/tutorial.tsx",
+  );
+  const source = readFileSync(tutorialPath, "utf8");
+  const start = source.indexOf("export const TUTORIAL_STEPS");
+  expect(start).toBeGreaterThan(-1);
+  const end = source.indexOf("\n];", start);
+  expect(end).toBeGreaterThan(start);
+  return source.slice(start, end);
+};
+
+const stepIds = () =>
+  [...readTutorialStepsSource().matchAll(/^ {4}id: "([^"]+)"/gm)].map(
+    (match) => match[1],
+  );
+
+const elementIdBlocks = () =>
+  [...readTutorialStepsSource().matchAll(/elementIds:\s*\[([\s\S]*?)\]/g)].map(
+    (match) => match[1] ?? "",
+  );
 
 describe("getTutorialStepPath", () => {
   it("strips in-page hashes", () => {
@@ -65,19 +92,6 @@ describe("TUTORIAL_HOME_SECTOR", () => {
   });
 });
 
-describe("isTutorialGlobalMapStep", () => {
-  it("detects steps that should open the world map", () => {
-    expect(
-      isTutorialGlobalMapStep({
-        elementIds: ["tutorial-global-map", "tutorial-Global"],
-      }),
-    ).toBe(true);
-    expect(isTutorialGlobalMapStep({ elementIds: ["tutorial-travel-sector"] })).toBe(
-      false,
-    );
-  });
-});
-
 describe("getTutorialTakeQuestId", () => {
   it("reads the quest id from a take-quest highlight", () => {
     expect(
@@ -106,21 +120,7 @@ describe("getTutorialHighlightedQuestId", () => {
   });
 });
 
-describe("findFirstHighlightableId", () => {
-  it("skips missing and zero-size nodes so a closed modal does not win", () => {
-    const rects: Record<string, { width: number; height: number } | null> = {
-      "tutorial-global-travel-proceed": { width: 0, height: 0 },
-      "tutorial-global-map": { width: 400, height: 400 },
-      "tutorial-Global": { width: 48, height: 24 },
-    };
-    expect(
-      findFirstHighlightableId(
-        ["tutorial-global-travel-proceed", "tutorial-global-map", "tutorial-Global"],
-        (id) => rects[id] ?? null,
-      ),
-    ).toBe("tutorial-global-map");
-  });
-
+describe("isUsableHighlightRect", () => {
   it("rejects unusable highlight rects", () => {
     expect(isUsableHighlightRect({ width: 0, height: 20 })).toBe(false);
     expect(isUsableHighlightRect({ width: 40, height: 20 })).toBe(true);
@@ -128,18 +128,17 @@ describe("findFirstHighlightableId", () => {
 });
 
 describe("TUTORIAL_STEPS", () => {
-  it("opens the world map before the Global tab so travel teaching is not stuck on sector view", () => {
-    const tutorialPath = join(
-      dirname(fileURLToPath(import.meta.url)),
-      "../../src/hooks/tutorial.tsx",
+  it("highlights the world-travel confirm button before the globe and the Global tab", () => {
+    const globalBlocks = elementIdBlocks().filter((block) =>
+      block.includes("tutorial-global-map"),
     );
-    const source = readFileSync(tutorialPath, "utf8");
-    const blocks = [
-      ...source.matchAll(/elementIds:\s*\[([\s\S]*?)\]/g),
-    ].map((match) => match[1] ?? "");
-    const globalBlocks = blocks.filter((block) => block.includes("tutorial-global-map"));
     expect(globalBlocks.length).toBeGreaterThan(0);
     for (const block of globalBlocks) {
+      // Once the travel modal opens its proceed button must win the highlight;
+      // the always-mounted globe would otherwise keep it for the whole step.
+      expect(block.indexOf("tutorial-global-travel-proceed")).toBeLessThan(
+        block.indexOf("tutorial-global-map"),
+      );
       expect(block.indexOf("tutorial-global-map")).toBeLessThan(
         block.indexOf("tutorial-Global"),
       );
@@ -147,13 +146,32 @@ describe("TUTORIAL_STEPS", () => {
   });
 
   it("uses unique ids so findIndex cannot jump to an earlier step", () => {
-    const tutorialPath = join(
-      dirname(fileURLToPath(import.meta.url)),
-      "../../src/hooks/tutorial.tsx",
-    );
-    const source = readFileSync(tutorialPath, "utf8");
-    const ids = [...source.matchAll(/^\s+id:\s+"([^"]+)"/gm)].map((match) => match[1]);
-    expect(ids.length).toBeGreaterThan(40);
+    const ids = stepIds();
+    expect(ids.length).toBe(TUTORIAL_STEPS_COUNT);
     expect(ids).toHaveLength(new Set(ids).size);
+  });
+
+  it("keeps the pinned-step constants pointing at real steps", () => {
+    const ids = stepIds();
+    expect(ids).toContain(TUTORIAL_JUTSU_PICK_STEP_ID);
+    expect(ids).toContain(TUTORIAL_ITEM_BUY_STEP_ID);
+  });
+
+  it("gives every single-action step a Next button so it cannot dead-end", () => {
+    // Enter/ArrowRight only advance when a step declares showNextButton or
+    // proceedOnHighlightClick, so a step whose only other exit is one specific
+    // game action needs an explicit escape hatch.
+    const source = readTutorialStepsSource();
+    for (const stepId of [
+      TUTORIAL_JUTSU_PICK_STEP_ID,
+      TUTORIAL_ITEM_BUY_STEP_ID,
+      // Genin Exam - the final step, only otherwise exited by taking the quest
+      "qgfxpmmQ2mYayeN2iMuX6",
+    ]) {
+      const start = source.indexOf(`id: "${stepId}"`);
+      expect(start).toBeGreaterThan(-1);
+      const block = source.slice(start, source.indexOf("\n  },", start));
+      expect(block).toContain("showNextButton: true");
+    }
   });
 });

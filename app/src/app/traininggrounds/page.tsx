@@ -783,18 +783,24 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       .filter((j) => j.level < getJutsuLevelCap(j))
       .sort((a, b) => b.level - a.level) ?? [];
 
+  const tutorialJutsuLevel =
+    userJutsus?.find((uj) => uj.jutsuId === TUTORIAL_JUTSU_ID)?.level || 0;
   if (
     isJutsuPickStep &&
     tutorialJutsu &&
     canTrainJutsu(tutorialJutsu, userData) &&
+    // The list drops capped jutsu; pinning one back would show a tile whose
+    // confirm modal can only say "Level capped".
+    tutorialJutsuLevel < getJutsuLevelCap(tutorialJutsu) &&
     !alljutsus.some((j) => j.id === tutorialJutsu.id)
   ) {
-    const owned = userJutsus?.find((uj) => uj.jutsuId === tutorialJutsu.id);
     alljutsus.unshift({
+      // jutsu.get carries no relations, unlike the paginated jutsu.getAll rows
+      bloodline: null,
       ...tutorialJutsu,
-      level: owned?.level || 0,
+      level: tutorialJutsuLevel,
       highlight: true,
-    } as (typeof alljutsus)[number]);
+    });
   } else if (isJutsuPickStep) {
     const pinnedIdx = alljutsus.findIndex((j) => j.id === TUTORIAL_JUTSU_ID);
     if (pinnedIdx > 0) {

@@ -6,7 +6,11 @@ export const TUTORIAL_JUTSU_PICK_STEP_ID = "eSBZJXRN_MCSYM90z3d5f";
 /** Step that asks the player to buy the starter shuriken. */
 export const TUTORIAL_ITEM_BUY_STEP_ID = "KvGkDox06od5iiFaGAzkM";
 
-/** Starter-quest puppy fight; matches the live Getting Started objective. */
+/**
+ * Starter-quest puppy fight. Mirrors the `defeat_opponents` objective of the
+ * live "Getting Started" quest; the sector lives in quest content, so it is not
+ * derivable here and must be re-checked if that objective moves.
+ */
 export const TUTORIAL_CAPTURE_SECTOR = 293;
 
 /** Horizon's current world sector — not the pre-remap 296 value. */
@@ -32,9 +36,6 @@ export const isTutorialJutsuPickStep = (step?: { id?: string } | null) =>
 
 export const isTutorialItemBuyStep = (step?: { id?: string } | null) =>
   step?.id === TUTORIAL_ITEM_BUY_STEP_ID;
-
-export const isTutorialGlobalMapStep = (step?: { elementIds?: string[] } | null) =>
-  Boolean(step?.elementIds?.includes("tutorial-global-map"));
 
 /** Take-quest id from a step like `tutorial-take-quest-<questId>`. */
 export const getTutorialTakeQuestId = (step?: { elementIds?: string[] } | null) =>
@@ -63,21 +64,3 @@ const MIN_HIGHLIGHT_PX = 4;
 /** True when a DOM rect is large enough to draw a tutorial highlight. */
 export const isUsableHighlightRect = (rect: { width: number; height: number }) =>
   rect.width > MIN_HIGHLIGHT_PX && rect.height > MIN_HIGHLIGHT_PX;
-
-/**
- * First tutorial element id that currently has a usable box.
- * Skips missing, collapsed, or zero-size nodes so a closed modal does not
- * steal the highlight from the next target.
- */
-export const findFirstHighlightableId = (
-  elementIds: string[] | undefined,
-  getRect: (id: string) => { width: number; height: number } | null,
-) => {
-  if (!elementIds) return null;
-  for (const id of elementIds) {
-    if (!id) continue;
-    const rect = getRect(id);
-    if (rect && isUsableHighlightRect(rect)) return id;
-  }
-  return null;
-};
