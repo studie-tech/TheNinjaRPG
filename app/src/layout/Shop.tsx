@@ -15,7 +15,14 @@ import {
   Tag,
   Ticket,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -280,6 +287,15 @@ const Shop: React.FC<ShopProps> = (props) => {
   const isItemBuyStep = isTutorialItemBuyStep(currentStep);
   const hasAutoOpenedTutorialItem = useRef(false);
 
+  const setItemConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
+    const next = typeof open === "function" ? open(isOpen) : open;
+    setIsOpen(next);
+    if (!next) {
+      setItem(undefined);
+      setStacksize(1);
+    }
+  };
+
   const { data: tutorialItem } = api.item.get.useQuery(
     { id: TUTORIAL_ITEM_ID },
     { enabled: isItemBuyStep },
@@ -308,13 +324,13 @@ const Shop: React.FC<ShopProps> = (props) => {
   }
 
   const { mutate: purchase, isPending: isPurchasing } = api.item.buy.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       showMutationToast(data);
       if (data.success) {
         void utils.item.getUserItemCounts.invalidate();
         void utils.profile.getUser.invalidate();
         void utils.item.getUserItems.invalidate();
-        if (isItemBuyStep) {
+        if (isItemBuyStep && variables.itemId === TUTORIAL_ITEM_ID) {
           handleNextStep();
         }
       }
@@ -403,8 +419,12 @@ const Shop: React.FC<ShopProps> = (props) => {
       title="Confirm Purchase"
       proceed_label={isPurchasing ? undefined : canAfford ? costString : missingString}
       isOpen={isOpen}
-      setIsOpen={setIsOpen}
+      setIsOpen={setItemConfirmOpen}
       isValid={false}
+      onClose={() => {
+        setItem(undefined);
+        setStacksize(1);
+      }}
       onAccept={() => {
         if (canAfford) {
           purchase({
@@ -413,7 +433,7 @@ const Shop: React.FC<ShopProps> = (props) => {
             villageId: userData.villageId,
           });
         } else {
-          setIsOpen(false);
+          setItemConfirmOpen(false);
         }
       }}
       confirmClassName={
