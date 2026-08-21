@@ -95,16 +95,24 @@ export const overworldAiRouter = createTRPCRouter({
     }));
   }),
 
+  /**
+   * Quest names for the placement pool editor. Returns every quest with an `assignable` flag
+   * rather than filtering server-side: the editor needs a name for quests already in a pool whose
+   * type has since drifted out of the grantable set, which a filtered list would reduce to a raw id.
+   */
   getAssignableQuestNames: protectedProcedure.query(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
     if (!canChangeContent(user.role)) {
       throw serverError("UNAUTHORIZED", "Not allowed");
     }
-    return ctx.drizzle.query.quest.findMany({
+    const quests = await ctx.drizzle.query.quest.findMany({
       columns: { id: true, name: true, questType: true },
-      where: inArray(quest.questType, OVERWORLD_ASSIGNABLE_QUEST_TYPES),
       orderBy: (table, { asc }) => [asc(table.name)],
     });
+    return quests.map((q) => ({
+      ...q,
+      assignable: OVERWORLD_ASSIGNABLE_QUEST_TYPES.includes(q.questType),
+    }));
   }),
 
   upsertPlacement: protectedProcedure
