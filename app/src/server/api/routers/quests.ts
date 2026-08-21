@@ -3,6 +3,7 @@ import {
   asc,
   eq,
   getTableColumns,
+  gt,
   gte,
   inArray,
   isNull,
@@ -1521,9 +1522,7 @@ export const updateRewards = async (info: {
   // Recording history without equipping would permanently burn that id (no swap path).
   // COALESCE still protects an empty-slot race from double-equipping.
   const rolledSageMode =
-    !user.sageModeId && sageModes.length > 0
-      ? getRandomElement(sageModes)
-      : undefined;
+    !user.sageModeId && sageModes.length > 0 ? getRandomElement(sageModes) : undefined;
 
   const updatedUserData: Record<string, unknown> = {
     questData: user.questData,
@@ -2727,7 +2726,15 @@ const executeClaimedQuestConsequences = async ({
         ]
       : []),
     ...(removedUserItemIds.length > 0
-      ? [client.delete(userItem).where(inArray(userItem.id, removedUserItemIds))]
+      ? [
+          // The quantity guard refuses rows held by a stack-merge claim (negative quantity), so
+          // this delete can never break an in-flight merge publish and duplicate the stack.
+          client
+            .delete(userItem)
+            .where(
+              and(inArray(userItem.id, removedUserItemIds), gt(userItem.quantity, 0)),
+            ),
+        ]
       : []),
     ...[
       opponent

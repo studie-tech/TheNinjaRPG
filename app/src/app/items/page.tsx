@@ -849,6 +849,8 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     (userItem: UserItemWithRelations) =>
       userItem.item?.effects?.some((e: { type: string }) => e.type === "repair") &&
       userItem.quantity > 0 &&
+      !userItem.storedAtHome &&
+      !userItem.isInAuction &&
       (!userItem.craftingFinishedAt || userItem.craftingFinishedAt < new Date()),
   );
 
@@ -1269,6 +1271,8 @@ const Character: React.FC<CharacterProps> = (props) => {
     (userItem: UserItemWithRelations) =>
       userItem.item?.effects?.some((e: { type: string }) => e.type === "repair") &&
       userItem.quantity > 0 &&
+      !userItem.storedAtHome &&
+      !userItem.isInAuction &&
       (!userItem.craftingFinishedAt || userItem.craftingFinishedAt < new Date()),
   );
 

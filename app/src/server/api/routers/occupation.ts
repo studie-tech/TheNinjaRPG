@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -467,7 +467,9 @@ export const occupationRouter = createTRPCRouter({
         );
       }
 
-      // Write-time guard: only proceed if item is still not in auction (atomic)
+      // Write-time guard: only proceed if item is still not in auction (atomic). The quantity
+      // guard also refuses rows held by a stack-merge claim or left as a merge tombstone, so an
+      // imbuement is never attached to a row the merge protocol is about to fold away or delete.
       const notInAuctionGuard = await ctx.drizzle
         .update(userItem)
         .set({ updatedAt: new Date() })
@@ -475,6 +477,7 @@ export const occupationRouter = createTRPCRouter({
           and(
             eq(userItem.id, input.userItemId),
             eq(userItem.userId, ctx.userId),
+            gt(userItem.quantity, 0),
             eq(userItem.isInAuction, false),
           ),
         );

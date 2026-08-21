@@ -113,9 +113,11 @@ import { fetchStructures } from "@/routers/village";
 import type { DrizzleClient } from "@/server/db";
 import {
   consumeUserItemAtomically,
+  MERGE_STACK_CLAIM_TIMEOUT_MS,
   refundUserItemQuantityAtomically,
   restoreStaleUserItemMergeClaims,
-  userItemMergePublishQuantity,
+  updateUserItemQuantityAtomically,
+  userItemMergeQuantityCase,
 } from "@/server/utils/concurrency";
 import {
   applyLoadoutRename,
@@ -908,7 +910,7 @@ export const itemRouter = createTRPCRouter({
           message: "You can only view your own items",
         });
       }
-      await restoreStaleMergeStackClaims(ctx.drizzle, input.userId);
+      // fetchUserItems self-heals stale merge claims for the viewed user.
       return await fetchUserItems(ctx.drizzle, input.userId, {
         includeHidden: true,
       });
@@ -1403,6 +1405,10 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ itemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.status !== "AWAKE") {
+        return errorResponse(`Cannot merge items while ${user.status.toLowerCase()}`);
+      }
       const result = await executeMergeStacksForItem(
         ctx.drizzle,
         ctx.userId,
@@ -1429,7 +1435,13 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const storedAtHome = input?.storedAtHome ?? false;
-      await restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId);
+      const [user] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId),
+      ]);
+      if (user.status !== "AWAKE") {
+        return errorResponse(`Cannot merge items while ${user.status.toLowerCase()}`);
+      }
       const userItemsAll = await ctx.drizzle.query.userItem.findMany({
         where: and(
           eq(userItem.userId, ctx.userId),
@@ -2395,40 +2407,23 @@ export const itemRouter = createTRPCRouter({
         );
       }
 
-      // Consume repair kits only after every target write succeeded
+      // Consume repair kits only after every target write succeeded. calculateKitsToUse clamps
+      // quantityUsed to the stack quantity, so the helper's delete-at-zero branch covers the
+      // full-stack case.
       const kitConsumeResults = await Promise.all(
         kitsToUse.map(async ({ repairItemId, quantityUsed }) => {
           const repairKitRow = useritems.find((ui) => ui.id === repairItemId);
           if (!repairKitRow || quantityUsed <= 0 || !repairKitRow.item.destroyOnUse) {
             return null;
           }
-          if (repairKitRow.quantity <= quantityUsed) {
-            const result = await ctx.drizzle
-              .delete(userItem)
-              .where(
-                and(
-                  eq(userItem.id, repairItemId),
-                  eq(userItem.userId, ctx.userId),
-                  eq(userItem.quantity, repairKitRow.quantity),
-                ),
-              );
-            return result.rowsAffected === 1
-              ? { repairKitRow, quantityConsumed: repairKitRow.quantity }
-              : false;
-          }
-          const result = await ctx.drizzle
-            .update(userItem)
-            .set({ quantity: sql`${userItem.quantity} - ${quantityUsed}` })
-            .where(
-              and(
-                eq(userItem.id, repairItemId),
-                eq(userItem.userId, ctx.userId),
-                eq(userItem.quantity, repairKitRow.quantity),
-              ),
-            );
-          return result.rowsAffected === 1
-            ? { repairKitRow, quantityConsumed: quantityUsed }
-            : false;
+          const consumed = await updateUserItemQuantityAtomically({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            userItemId: repairItemId,
+            expectedQuantity: repairKitRow.quantity,
+            nextQuantity: repairKitRow.quantity - quantityUsed,
+          });
+          return consumed ? { repairKitRow, quantityConsumed: quantityUsed } : false;
         }),
       );
       if (kitConsumeResults.some((result) => result === false)) {
@@ -3062,10 +3057,6 @@ export const fetchItemWithCraftingRequirements = async (
   });
 };
 
-// Merge claims normally live for only a few database round trips. After this timeout a negative
-// quantity is considered abandoned and can be restored from its encoded original value.
-const MERGE_STACK_CLAIM_TIMEOUT_MS = 30_000;
-
 const restoreStaleMergeStackClaims = async (client: DrizzleClient, userId: string) =>
   restoreStaleUserItemMergeClaims({
     client,
@@ -3073,18 +3064,43 @@ const restoreStaleMergeStackClaims = async (client: DrizzleClient, userId: strin
     staleBefore: new Date(Date.now() - MERGE_STACK_CLAIM_TIMEOUT_MS),
   });
 
+/**
+ * Self-heals abandoned stack-merge state on the primary inventory reads: rows are fetched
+ * without a quantity filter, and only when a stale claim/tombstone is actually present (a merge
+ * died mid-protocol — rare) does the reaper run followed by one refetch. The common case pays no
+ * extra round trip, and a crashed merge recovers on the player's next inventory load instead of
+ * leaving their stacks invisible until they press merge again.
+ */
+const withStaleMergeClaimRecovery = async <
+  T extends { quantity: number; updatedAt: Date },
+>(
+  client: DrizzleClient,
+  userId: string,
+  fetchRows: () => Promise<T[]>,
+): Promise<T[]> => {
+  let rows = await fetchRows();
+  const staleBefore = new Date(Date.now() - MERGE_STACK_CLAIM_TIMEOUT_MS);
+  if (rows.some((row) => row.quantity <= 0 && row.updatedAt <= staleBefore)) {
+    await restoreStaleUserItemMergeClaims({ client, userId, staleBefore });
+    rows = await fetchRows();
+  }
+  return rows.filter((row) => row.quantity > 0);
+};
+
 export const fetchUserItems = async (
   client: DrizzleClient,
   userId: string,
   options?: { includeHidden?: boolean },
 ) => {
-  const useritems = await client.query.userItem.findMany({
-    where: and(eq(userItem.userId, userId), gt(userItem.quantity, 0)),
-    with: {
-      item: true,
-      imbuements: { with: { item: true } },
-    },
-  });
+  const useritems = await withStaleMergeClaimRecovery(client, userId, () =>
+    client.query.userItem.findMany({
+      where: eq(userItem.userId, userId),
+      with: {
+        item: true,
+        imbuements: { with: { item: true } },
+      },
+    }),
+  );
   return useritems.filter(
     (ui) => ui.item && (options?.includeHidden || !ui.item.hidden),
   );
@@ -3094,13 +3110,15 @@ export const fetchUserItemsWithVariants = async (
   client: DrizzleClient,
   userId: string,
 ) => {
-  const useritems = await client.query.userItem.findMany({
-    where: and(eq(userItem.userId, userId), gt(userItem.quantity, 0)),
-    with: {
-      item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } },
-      imbuements: { with: { item: true } },
-    },
-  });
+  const useritems = await withStaleMergeClaimRecovery(client, userId, () =>
+    client.query.userItem.findMany({
+      where: eq(userItem.userId, userId),
+      with: {
+        item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } },
+        imbuements: { with: { item: true } },
+      },
+    }),
+  );
   return useritems.filter((ui) => ui.item && !ui.item.hidden);
 };
 
@@ -3540,17 +3558,31 @@ export const splitItemStack = async (
       updatedAt: new Date(),
     });
   } catch {
-    await client
-      .update(userItem)
-      .set({ quantity: currentUserItem.quantity })
-      .where(
-        and(
-          eq(userItem.id, userItemId),
-          eq(userItem.userId, userId),
-          eq(userItem.quantity, quantityToKeep),
-        ),
-      );
-    return { success: false, message: "Could not create the split stack" };
+    // A thrown insert is ambiguous on PlanetScale's HTTP driver (the row may have committed
+    // before the response was lost), so verify before compensating — restoring the source while
+    // the new row exists would duplicate the split quantity.
+    const inserted = await client.query.userItem.findFirst({
+      where: eq(userItem.id, newUserItemId),
+      columns: { id: true },
+    });
+    if (!inserted) {
+      const restored = await client
+        .update(userItem)
+        .set({ quantity: currentUserItem.quantity })
+        .where(
+          and(
+            eq(userItem.id, userItemId),
+            eq(userItem.userId, userId),
+            eq(userItem.quantity, quantityToKeep),
+          ),
+        );
+      if (restored.rowsAffected !== 1) {
+        console.error(
+          `splitItemStack: failed to restore source stack ${userItemId} after insert failure`,
+        );
+      }
+      return { success: false, message: "Could not create the split stack" };
+    }
   }
 
   return {
@@ -3707,74 +3739,110 @@ async function executeMergeStacksForItemBucket(
   const conflictMessage = `Failed to merge stacks of ${itemName} — inventory changed, please try again`;
 
   const claimedAt = new Date();
+  const publishTargets = sortedItems.map((item, index) => ({
+    id: item.id,
+    quantity: index < targetStacks ? targetQuantityForKeepIndex(index) : 0,
+  }));
 
-  // Phase 1: claim every row (qty → -qty) so no subset of later writes can commit alone while
-  // retaining enough information for a later request to recover an abandoned claim.
-  const claimResults = await Promise.all(
-    sortedItems.map((item) =>
-      drizzle
-        .update(userItem)
-        .set({ quantity: -item.quantity, updatedAt: claimedAt })
-        .where(mergeStackRowGuard(userId, item, item.quantity)),
-    ),
-  );
-
-  if (claimResults.some((result) => result.rowsAffected !== 1)) {
-    await Promise.all(
-      sortedItems.map((item, index) =>
-        claimResults[index]?.rowsAffected === 1
-          ? drizzle
-              .update(userItem)
-              .set({ quantity: item.quantity, updatedAt: item.updatedAt })
-              .where(
-                and(
-                  eq(userItem.id, item.id),
-                  eq(userItem.userId, userId),
+  // Restores every row this attempt touched back to its original quantity in one UPDATE. The
+  // `updatedAt = claimedAt` stamp scopes the write to our own claims/publishes, and the per-row
+  // quantity guard matches both a still-claimed row (-q) and an already-published one (its
+  // target), so even a partially applied publish is fully undone. `updatedAt` intentionally stays
+  // at `claimedAt`: positive rows are never touched by the stale-claim reaper, and the tombstone
+  // delete additionally guards on quantity 0.
+  const restoreOriginalQuantities = () =>
+    drizzle
+      .update(userItem)
+      .set({
+        quantity: userItemMergeQuantityCase(
+          sortedItems.map((item) => ({ id: item.id, quantity: item.quantity })),
+        ),
+      })
+      .where(
+        and(
+          eq(userItem.userId, userId),
+          eq(userItem.updatedAt, claimedAt),
+          or(
+            ...sortedItems.map((item, index) =>
+              and(
+                eq(userItem.id, item.id),
+                or(
                   eq(userItem.quantity, -item.quantity),
+                  eq(userItem.quantity, publishTargets[index]?.quantity ?? 0),
                 ),
-              )
-          : Promise.resolve(),
-      ),
-    );
-    return { success: false, didMerge: false, message: conflictMessage };
-  }
-
-  // Phase 2: atomically publish every keeper and convert extras to hidden tombstones. One UPDATE
-  // means a process crash cannot commit only a subset of the target quantities/deletions.
-  const targetQuantityById = new Map(
-    itemsToKeep.map((item, index) => [item.id, targetQuantityForKeepIndex(index)]),
-  );
-  const publishResult = await drizzle
-    .update(userItem)
-    .set({
-      quantity: userItemMergePublishQuantity(
-        sortedItems.map((item) => ({
-          id: item.id,
-          quantity: targetQuantityById.get(item.id) ?? 0,
-        })),
-      ),
-    })
-    .where(
-      or(
-        ...sortedItems.map((item) => mergeStackRowGuard(userId, item, -item.quantity)),
-      ),
-    );
-
-  if (publishResult.rowsAffected !== sortedItems.length) {
-    await Promise.all(
-      sortedItems.map((item) =>
-        drizzle
-          .update(userItem)
-          .set({ quantity: item.quantity, updatedAt: item.updatedAt })
-          .where(
-            and(
-              eq(userItem.id, item.id),
-              eq(userItem.userId, userId),
-              eq(userItem.quantity, -item.quantity),
+              ),
             ),
           ),
-      ),
-    );
+        ),
+      );
+
+  let publishedRows = 0;
+  try {
+    // Phase 1: claim every row (qty → -qty) in ONE statement so a partial claim volley cannot
+    // exist, while retaining enough information to recover an abandoned claim.
+    const claimResult = await drizzle
+      .update(userItem)
+      .set({
+        quantity: userItemMergeQuantityCase(
+          sortedItems.map((item) => ({ id: item.id, quantity: -item.quantity })),
+        ),
+        updatedAt: claimedAt,
+      })
+      .where(
+        or(
+          ...sortedItems.map((item) => mergeStackRowGuard(userId, item, item.quantity)),
+        ),
+      );
+
+    if (claimResult.rowsAffected !== sortedItems.length) {
+      await restoreOriginalQuantities();
+      return { success: false, didMerge: false, message: conflictMessage };
+    }
+
+    // Phase 2: atomically publish every keeper and convert extras to hidden tombstones in one
+    // UPDATE, so a process crash cannot commit only a subset of the target quantities/deletions.
+    const publishResult = await drizzle
+      .update(userItem)
+      .set({ quantity: userItemMergeQuantityCase(publishTargets) })
+      .where(
+        or(
+          ...sortedItems.map((item) =>
+            mergeStackRowGuard(userId, item, -item.quantity),
+          ),
+        ),
+      );
+    publishedRows = publishResult.rowsAffected;
+
+    if (publishedRows !== sortedItems.length) {
+      const restored = await restoreOriginalQuantities();
+      // rowsAffected counts changed rows only; a published row whose target equals its
+      // original quantity restores without changing, so subtract those before comparing.
+      const unchangedByRestore = sortedItems.filter(
+        (item, index) => (publishTargets[index]?.quantity ?? 0) === item.quantity,
+      ).length;
+      if (
+        publishedRows > 0 &&
+        restored.rowsAffected < sortedItems.length - unchangedByRestore
+      ) {
+        // A concurrent writer moved a row out of both recoverable states mid-protocol; surface
+        // it loudly since quantities may need manual reconciliation.
+        console.error(
+          `mergeStacks: partial publish of ${itemName} for ${userId} restored ${restored.rowsAffected}/${sortedItems.length} rows`,
+        );
+      }
+      return { success: false, didMerge: false, message: conflictMessage };
+    }
+  } catch (err) {
+    // A rejected statement leaves unknown state (it may or may not have applied); the restore's
+    // claim-scoped guards make it safe either way, and the stale reaper covers anything left.
+    try {
+      await restoreOriginalQuantities();
+    } catch {
+      // Stale-claim recovery on the next inventory read handles any remaining claims.
+    }
+    if (err instanceof TypeError || err instanceof ReferenceError) {
+      throw err;
+    }
     return { success: false, didMerge: false, message: conflictMessage };
   }
 
@@ -3836,19 +3904,22 @@ async function executeMergeStacksForItem(
       (r) => r.userId === userId && r.itemId === itemId && r.quantity > 0,
     );
   } else {
-    await restoreStaleMergeStackClaims(drizzle, userId);
+    // fetchItem is independent of the user's claim state, so it runs in parallel with the
+    // reaper → items chain instead of serializing behind it.
     const [fetchedInfo, fetchedUserItems] = await Promise.all([
       fetchItem(drizzle, itemId),
-      drizzle.query.userItem.findMany({
-        where: and(
-          eq(userItem.userId, userId),
-          eq(userItem.itemId, itemId),
-          gt(userItem.quantity, 0),
-          eq(userItem.storedAtHome, false),
-          eq(userItem.isInAuction, false),
-        ),
-        with: { imbuements: true },
-      }),
+      restoreStaleMergeStackClaims(drizzle, userId).then(() =>
+        drizzle.query.userItem.findMany({
+          where: and(
+            eq(userItem.userId, userId),
+            eq(userItem.itemId, itemId),
+            gt(userItem.quantity, 0),
+            eq(userItem.storedAtHome, false),
+            eq(userItem.isInAuction, false),
+          ),
+          with: { imbuements: true },
+        }),
+      ),
     ]);
     info = fetchedInfo ?? undefined;
     userItems = fetchedUserItems;

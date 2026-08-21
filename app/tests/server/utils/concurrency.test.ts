@@ -13,7 +13,7 @@ import {
   refundUserItemQuantityAtomically,
   restoreStaleUserItemMergeClaims,
   updateUserItemQuantityAtomically,
-  userItemMergePublishQuantity,
+  userItemMergeQuantityCase,
 } from "@/server/utils/concurrency";
 
 describe("concurrency helpers", () => {
@@ -151,21 +151,13 @@ describe("concurrency helpers", () => {
     expect(rendered.params).toEqual([2]);
   });
 
-  it("recovers a negative merge claim before retrying an item refund", async () => {
-    const onDuplicateKeyUpdate = vi
+  it("refunds into a fresh row when the original is held by a merge claim", async () => {
+    const onDuplicateKeyUpdate = vi.fn().mockResolvedValue({ rowsAffected: 0 });
+    const values = vi
       .fn()
-      .mockResolvedValueOnce({ rowsAffected: 0 })
-      .mockResolvedValueOnce({ rowsAffected: 2 });
-    const values = vi.fn().mockReturnValue({ onDuplicateKeyUpdate });
-    const updateWhere = vi.fn().mockResolvedValue({ rowsAffected: 1 });
-    const deleteWhere = vi.fn().mockResolvedValue({ rowsAffected: 0 });
-    const client = {
-      insert: vi.fn().mockReturnValue({ values }),
-      update: vi.fn().mockReturnValue({
-        set: vi.fn().mockReturnValue({ where: updateWhere }),
-      }),
-      delete: vi.fn().mockReturnValue({ where: deleteWhere }),
-    };
+      .mockReturnValueOnce({ onDuplicateKeyUpdate })
+      .mockReturnValueOnce(Promise.resolve({ rowsAffected: 1 }));
+    const client = { insert: vi.fn().mockReturnValue({ values }) };
     const itemSnapshot = {
       id: "item-row-1",
       createdAt: new Date("2026-08-18T10:00:00.000Z"),
@@ -190,9 +182,19 @@ describe("concurrency helpers", () => {
       quantity: 2,
     });
 
-    expect(onDuplicateKeyUpdate).toHaveBeenCalledTimes(2);
-    expect(client.update).toHaveBeenCalledWith(userItem);
-    expect(client.delete).toHaveBeenCalledWith(userItem);
+    // First attempt is the guarded upsert on the original row; the claimed row
+    // no-ops it, and the fallback inserts the refund as a brand-new row that an
+    // in-flight merge publish cannot overwrite.
+    expect(client.insert).toHaveBeenCalledTimes(2);
+    expect(onDuplicateKeyUpdate).toHaveBeenCalledOnce();
+    const fallbackRow = values.mock.calls[1]?.[0] as {
+      id: string;
+      quantity: number;
+      itemId: string;
+    };
+    expect(fallbackRow.quantity).toBe(2);
+    expect(fallbackRow.itemId).toBe("repair-kit-1");
+    expect(fallbackRow.id).not.toBe("item-row-1");
   });
 
   it("does not issue a refund statement for a non-positive quantity", async () => {
@@ -238,7 +240,7 @@ describe("concurrency helpers", () => {
   });
 
   it("builds one CASE expression for keeper quantities and zero tombstones", () => {
-    const expression = userItemMergePublishQuantity([
+    const expression = userItemMergeQuantityCase([
       { id: "keeper-row", quantity: 5 },
       { id: "obsolete-row", quantity: 0 },
     ]);

@@ -2,7 +2,7 @@ import { Client as PlanetScaleClient } from "@planetscale/database";
 import * as Sentry from "@sentry/nextjs";
 import type { inferRouterOutputs } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { after } from "next/server";
 import { z } from "zod";
@@ -329,6 +329,9 @@ export const staffRouter = createTRPCRouter({
           .where(
             and(
               ne(userItem.equipped, "NONE"),
+              // Skip rows held by a stack-merge claim (negative quantity) so this bulk write
+              // cannot change a claimed row's equipped slot mid-merge-publish.
+              gt(userItem.quantity, 0),
               sql`${userItem.userId} NOT IN (
                 SELECT ${userData.userId} FROM ${userData} WHERE ${userData.isAi} = true
               )`,

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { BattleDataEntryType, BattleTypes } from "@/drizzle/constants";
@@ -460,19 +460,23 @@ export const updateKage = async (
 
     ...(deleteItems.length > 0
       ? [
-          client.delete(userItem).where(inArray(userItem.id, deleteItems)),
+          client
+            .delete(userItem)
+            .where(and(inArray(userItem.id, deleteItems), gt(userItem.quantity, 0))),
           client
             .delete(userItemImbuement)
             .where(inArray(userItemImbuement.userItemId, deleteItems)),
         ]
       : []),
 
+    // The quantity guard skips rows a stack merge has claimed or already folded away, so this
+    // absolute snapshot write can never resurrect a merge tombstone or stomp a claim.
     ...(updateItems.length > 0
       ? updateItems.map((ui) =>
           client
             .update(userItem)
             .set({ quantity: ui.quantity })
-            .where(eq(userItem.id, ui.id)),
+            .where(and(eq(userItem.id, ui.id), gt(userItem.quantity, 0))),
         )
       : []),
 
@@ -1429,19 +1433,23 @@ export const updateUser = async (
       // Delete items
       ...(deleteItems.length > 0
         ? [
-            client.delete(userItem).where(inArray(userItem.id, deleteItems)),
+            client
+              .delete(userItem)
+              .where(and(inArray(userItem.id, deleteItems), gt(userItem.quantity, 0))),
             client
               .delete(userItemImbuement)
               .where(inArray(userItemImbuement.userItemId, deleteItems)),
           ]
         : []),
-      // Update items quantity
+      // Update items quantity. The quantity guard skips rows a stack merge has claimed or
+      // already folded away, so this absolute snapshot write can never resurrect a merge
+      // tombstone or stomp a claim.
       ...(updateItems.length > 0
         ? updateItems.map((ui) =>
             client
               .update(userItem)
               .set({ quantity: ui.quantity, durability: ui.durability })
-              .where(eq(userItem.id, ui.id)),
+              .where(and(eq(userItem.id, ui.id), gt(userItem.quantity, 0))),
           )
         : []),
       // Jutsu experience & level from experience
