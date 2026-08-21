@@ -204,7 +204,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       `tutorial-combat-action-${TUTORIAL_JUTSU_ID}`,
     ],
     description:
-      "Now that your character is a bit stronger, pick a jutsu from the list to train. The more you train and progress the more powerful jutsu will be available for you to train.",
+      "Now that your character is a bit stronger, click a jutsu from the list to train. The more you train and progress the more powerful jutsu will be available for you to train.",
     page: "/traininggrounds",
   },
   {
