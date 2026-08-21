@@ -787,44 +787,14 @@ export const questsRouter = createTRPCRouter({
             message: `Ranks rewards are only allowed with starter or exam quests`,
           };
         }
-        // Guard both directions of a new_quest edge. Outbound: this quest may not point at an
-        // NPC-only quest. Inbound: this quest may not BECOME NPC-only while something still
-        // points at it — `create` always starts a quest as a mission, so retyping is the only
-        // way an NPC-only quest exists, and an orphaned edge throws mid-consequence at runtime.
-        const becomingNpcOnly =
-          isNpcOnlyQuestType(data.questType) && !isNpcOnlyQuestType(entry.questType);
-        const [npcOnlyNewQuestTargets, inboundStarters] = await Promise.all([
-          fetchNpcOnlyNewQuestTargets(ctx.drizzle, data.content.objectives),
-          becomingNpcOnly
-            ? fetchQuestsStartingQuest(ctx.drizzle, entry.id)
-            : Promise.resolve([]),
-        ]);
-        if (npcOnlyNewQuestTargets.length > 0) {
-          return errorResponse(
-            `NPC-only quests cannot be started by a new_quest objective: ${npcOnlyNewQuestTargets
-              .map((target) => target.name)
-              .join(", ")}`,
-          );
-        }
-        // A self-reference added in this same save is not yet stored, so check the incoming
-        // objectives too rather than relying on the query above.
-        const selfStarting =
-          becomingNpcOnly &&
-          data.content.objectives.some(
-            (objective) =>
-              objective.task === "new_quest" &&
-              "newQuestIds" in objective &&
-              objective.newQuestIds.includes(entry.id),
-          );
-        if (inboundStarters.length > 0 || selfStarting) {
-          const names = inboundStarters.map((q) => q.name);
-          if (selfStarting) names.push(entry.name);
-          return errorResponse(
-            `Cannot change this quest to ${data.questType}: it is still started by a new_quest objective in ${[
-              ...new Set(names),
-            ].join(", ")}. Remove those objectives first.`,
-          );
-        }
+        const edgeError = await npcOnlyNewQuestEdgeError(ctx.drizzle, {
+          questId: entry.id,
+          questName: entry.name,
+          currentType: entry.questType,
+          nextType: data.questType,
+          objectives: data.content.objectives,
+        });
+        if (edgeError) return errorResponse(edgeError);
         const preparedBindings = await prepareOverworldBindings(
           ctx.drizzle,
           data.content.objectives,
@@ -980,17 +950,14 @@ export const questsRouter = createTRPCRouter({
       if (!check) {
         return errorResponse(`Objective flow invalid: ${message}`);
       }
-      const npcOnlyNewQuestTargets = await fetchNpcOnlyNewQuestTargets(
-        ctx.drizzle,
-        questData.content.objectives,
-      );
-      if (npcOnlyNewQuestTargets.length > 0) {
-        return errorResponse(
-          `NPC-only quests cannot be started by a new_quest objective: ${npcOnlyNewQuestTargets
-            .map((target) => target.name)
-            .join(", ")}`,
-        );
-      }
+      const edgeError = await npcOnlyNewQuestEdgeError(ctx.drizzle, {
+        questId: questData.id,
+        questName: questData.name,
+        currentType: questData.questType,
+        nextType: questData.questType,
+        objectives: questData.content.objectives,
+      });
+      if (edgeError) return errorResponse(edgeError);
       const preparedBindings = await prepareOverworldBindings(
         ctx.drizzle,
         questData.content.objectives,
@@ -1901,6 +1868,58 @@ const fetchQuestsStartingQuest = async (client: DrizzleClient, questId: string) 
     columns: { id: true, name: true },
     where: sql`JSON_CONTAINS(JSON_EXTRACT(${quest.content}, '$.objectives[*].newQuestIds[*]'), JSON_QUOTE(${questId})) = 1`,
   });
+
+/**
+ * Reason a quest save must be rejected because of a new_quest edge involving an NPC-only quest,
+ * or null when it may proceed. Both directions matter:
+ *
+ * - Outbound: an objective may not start an NPC-only quest, which would hand out content the
+ *   overworld-NPC gate is supposed to be the only source of.
+ * - Inbound: a quest may not BECOME NPC-only while something still starts it. `create` always
+ *   makes a mission, so retyping is the only way an NPC-only quest exists, and a stranded edge
+ *   throws in `upsertQuestEntry` after the player's snapshot has already been committed — the
+ *   objective is burnt, the chain dead, and a terminal objective completes with no reward.
+ */
+export const npcOnlyNewQuestEdgeError = async (
+  client: DrizzleClient,
+  args: {
+    questId: string;
+    questName: string;
+    currentType: QuestType;
+    nextType: QuestType;
+    objectives: AllObjectivesType[];
+  },
+): Promise<string | null> => {
+  const { questId, questName, currentType, nextType, objectives } = args;
+  const becomingNpcOnly =
+    isNpcOnlyQuestType(nextType) && !isNpcOnlyQuestType(currentType);
+  const [outboundTargets, inboundStarters] = await Promise.all([
+    fetchNpcOnlyNewQuestTargets(client, objectives),
+    becomingNpcOnly ? fetchQuestsStartingQuest(client, questId) : Promise.resolve([]),
+  ]);
+  if (outboundTargets.length > 0) {
+    return `NPC-only quests cannot be started by a new_quest objective: ${outboundTargets
+      .map((target) => target.name)
+      .join(", ")}`;
+  }
+  // A self-reference added in this same save is not stored yet, so the query above cannot see it.
+  const starterNames = inboundStarters.map((q) => q.name);
+  const selfStarting =
+    becomingNpcOnly &&
+    objectives.some(
+      (objective) =>
+        objective.task === "new_quest" &&
+        "newQuestIds" in objective &&
+        objective.newQuestIds.includes(questId),
+    );
+  if (selfStarting) starterNames.push(questName);
+  if (starterNames.length > 0) {
+    return `Cannot change this quest to ${nextType}: it is still started by a new_quest objective in ${[
+      ...new Set(starterNames),
+    ].join(", ")}. Remove those objectives first.`;
+  }
+  return null;
+};
 
 /** Resolve NPC-only quests referenced by new_quest objectives so content cannot author a bypass. */
 const fetchNpcOnlyNewQuestTargets = async (
