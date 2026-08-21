@@ -1897,22 +1897,27 @@ export const npcOnlyNewQuestEdgeError = async (
     fetchNpcOnlyNewQuestTargets(client, objectives),
     becomingNpcOnly ? fetchQuestsStartingQuest(client, questId) : Promise.resolve([]),
   ]);
-  if (outboundTargets.length > 0) {
-    return `NPC-only quests cannot be started by a new_quest objective: ${outboundTargets
+  // Both queries read stored rows, which are stale for this quest itself: this save rewrites its
+  // type AND its objectives. Judge every self-reference from the incoming state instead, so an
+  // editor can always type their way back out of an edge rather than being locked out of the form.
+  const startsItself = objectives.some(
+    (objective) =>
+      objective.task === "new_quest" &&
+      "newQuestIds" in objective &&
+      objective.newQuestIds.includes(questId),
+  );
+  const blockedTargets = outboundTargets.filter(
+    (target) => target.id !== questId || isNpcOnlyQuestType(nextType),
+  );
+  if (blockedTargets.length > 0) {
+    return `NPC-only quests cannot be started by a new_quest objective: ${blockedTargets
       .map((target) => target.name)
       .join(", ")}`;
   }
-  // A self-reference added in this same save is not stored yet, so the query above cannot see it.
-  const starterNames = inboundStarters.map((q) => q.name);
-  const selfStarting =
-    becomingNpcOnly &&
-    objectives.some(
-      (objective) =>
-        objective.task === "new_quest" &&
-        "newQuestIds" in objective &&
-        objective.newQuestIds.includes(questId),
-    );
-  if (selfStarting) starterNames.push(questName);
+  const starterNames = inboundStarters
+    .filter((starter) => starter.id !== questId)
+    .map((starter) => starter.name);
+  if (becomingNpcOnly && startsItself) starterNames.push(questName);
   if (starterNames.length > 0) {
     return `Cannot change this quest to ${nextType}: it is still started by a new_quest objective in ${[
       ...new Set(starterNames),
