@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -10,7 +10,14 @@ import {
   OCCUPATION_CHANGE_COOLDOWN_DAYS,
   OCCUPATIONS,
 } from "@/drizzle/constants";
-import { item, userData, userItem, userItemImbuement } from "@/drizzle/schema";
+import {
+  item,
+  userCraftingQueue,
+  userCraftingQueueMaterial,
+  userData,
+  userItem,
+  userItemImbuement,
+} from "@/drizzle/schema";
 import {
   calculateItemConsumption,
   getCraftingRank,
@@ -18,6 +25,7 @@ import {
   getTotalItemQuantity,
 } from "@/libs/crafting";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getNextQueueSchedule, rescheduleQueue } from "@/libs/queue";
 import {
   fetchItemWithCraftingRequirements,
   fetchUserItems,
@@ -29,13 +37,111 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import {
   claimUserSnapshot,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
+import { getCraftingQueue, settleCraftingQueue } from "@/server/utils/queue";
+import { getQueueTotalCapacity } from "@/utils/paypal";
 import { canChangeContent } from "@/utils/permissions";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { getShrineBoost } from "@/utils/village";
+
+const rescheduleCraftingJobs = async (
+  client: DrizzleClient,
+  userId: string,
+  now = new Date(),
+) => {
+  const remaining = await client.query.userCraftingQueue.findMany({
+    where: and(
+      eq(userCraftingQueue.userId, userId),
+      isNull(userCraftingQueue.completedAt),
+      isNull(userCraftingQueue.cancelledAt),
+    ),
+    orderBy: asc(userCraftingQueue.startsAt),
+  });
+  const active = remaining.find(
+    (entry) => entry.startsAt <= now && entry.finishesAt > now,
+  );
+  const waiting = remaining.filter((entry) => entry.startsAt > now);
+  for (const scheduled of rescheduleQueue(waiting, active?.finishesAt ?? now)) {
+    await client
+      .update(userCraftingQueue)
+      .set({ startsAt: scheduled.startsAt, finishesAt: scheduled.finishesAt })
+      .where(eq(userCraftingQueue.id, scheduled.entry.id));
+  }
+};
+
+/** Backfill the legacy future-dated output rows. outputCreatedAt marks these as
+ * already rewarded so settlement only unlocks the linked inventory stacks. */
+const prepareCraftingQueue = async (client: DrizzleClient, userId: string) => {
+  const now = new Date();
+  const legacyOutputs = (await fetchUserItems(client, userId)).filter(
+    (entry) => entry.craftingFinishedAt && entry.craftingFinishedAt > now,
+  );
+  const groups = new Map<
+    string,
+    {
+      itemId: string;
+      quantity: number;
+      startsAt: Date;
+      finishesAt: Date;
+    }
+  >();
+  for (const output of legacyOutputs) {
+    if (!output.craftingFinishedAt) continue;
+    const finishesAt = output.craftingFinishedAt;
+    const key = `${output.itemId}:${finishesAt.getTime()}`;
+    const current = groups.get(key);
+    if (current) {
+      current.quantity += output.quantity;
+      if (output.createdAt < current.startsAt) current.startsAt = output.createdAt;
+    } else {
+      groups.set(key, {
+        itemId: output.itemId,
+        quantity: output.quantity,
+        startsAt: output.createdAt,
+        finishesAt,
+      });
+    }
+  }
+  if (groups.size > 0) {
+    await client.transaction(async (tx) => {
+      await tx
+        .update(userData)
+        .set({ updatedAt: sql`${userData.updatedAt}` })
+        .where(eq(userData.userId, userId));
+      for (const group of groups.values()) {
+        const exists = await tx.query.userCraftingQueue.findFirst({
+          where: and(
+            eq(userCraftingQueue.userId, userId),
+            eq(userCraftingQueue.itemId, group.itemId),
+            eq(userCraftingQueue.finishesAt, group.finishesAt),
+            isNull(userCraftingQueue.completedAt),
+            isNull(userCraftingQueue.cancelledAt),
+          ),
+        });
+        if (exists) continue;
+        await tx.insert(userCraftingQueue).values({
+          id: nanoid(),
+          userId,
+          itemId: group.itemId,
+          quantity: group.quantity,
+          durationSeconds: Math.max(
+            1,
+            Math.round((group.finishesAt.getTime() - group.startsAt.getTime()) / 1000),
+          ),
+          craftingExperience: 0,
+          startsAt: group.startsAt,
+          finishesAt: group.finishesAt,
+          outputCreatedAt: group.startsAt,
+        });
+      }
+    });
+  }
+  await settleCraftingQueue(client, userId, now);
+};
 
 export const occupationRouter = createTRPCRouter({
   getCraftableItems: protectedProcedure
@@ -87,6 +193,11 @@ export const occupationRouter = createTRPCRouter({
       return { success: true, message: "Occupation selected successfully!" };
     }),
 
+  getCraftingQueue: protectedProcedure.query(async ({ ctx }) => {
+    await prepareCraftingQueue(ctx.drizzle, ctx.userId);
+    return getCraftingQueue(ctx.drizzle, ctx.userId);
+  }),
+
   craftItem: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Craft an item using materials" } })
     .input(
@@ -96,6 +207,7 @@ export const occupationRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await prepareCraftingQueue(ctx.drizzle, ctx.userId);
       // Run all initial queries in parallel
       const [{ user }, itemWithRequirements, useritems] = await Promise.all([
         // Get user data
@@ -105,10 +217,6 @@ export const occupationRouter = createTRPCRouter({
         // Check if user is already crafting something
         fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
-      // Derived
-      const currentlyCrafting = useritems.find(
-        (item) => item.craftingFinishedAt && item.craftingFinishedAt > new Date(),
-      );
       // Guards
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") {
@@ -122,11 +230,6 @@ export const occupationRouter = createTRPCRouter({
       }
       if (!itemWithRequirements) {
         return errorResponse("Item not found");
-      }
-      if (currentlyCrafting) {
-        return errorResponse(
-          "You are already crafting an item. Please wait for it to finish.",
-        );
       }
       if (itemWithRequirements.hidden) {
         return errorResponse("This item is hidden and cannot be crafted");
@@ -196,12 +299,13 @@ export const occupationRouter = createTRPCRouter({
         craftingTime * 60 * shrineBoostFactor * clanCraftingTimeFactor * input.quantity,
       );
 
-      // Calculate crafting finish time
-      const finishTime = new Date(Date.now() + craftSeconds * 1000);
-
-      // Execute crafting: consume materials and create crafting item
-      // Calculate consumption for each requirement
-      const allConsumptions = [];
+      // Snapshot the exact source stacks. Output, EXP, and quests are awarded
+      // only when this job settles.
+      const allConsumptions: Array<{
+        userItemId: string;
+        consumeQuantity: number;
+        newQuantity: number;
+      }> = [];
       for (const requirement of itemWithRequirements.craftingRequirements) {
         const requiredQuantity = requirement.quantity * input.quantity;
         const consumption = calculateItemConsumption(
@@ -216,126 +320,184 @@ export const occupationRouter = createTRPCRouter({
         allConsumptions.push(...consumption.consumptions);
       }
 
-      // CAS + atomic material rows prevent duplicate crafts under concurrent requests.
-      const craftClaimResult = await claimUserSnapshot({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        updatedAt: user.updatedAt,
-        where: [
-          eq(userData.status, "AWAKE"),
-          or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
-        ],
-      });
-      if (!craftClaimResult.success) {
-        return errorResponse(
-          "Could not start crafting — state changed, please try again",
-        );
-      }
-
-      const materialUpdates = await Promise.all(
-        allConsumptions.map((consumption) =>
-          updateUserItemQuantityAtomically({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            userItemId: consumption.userItemId,
-            expectedQuantity: consumption.consumeQuantity + consumption.newQuantity,
-            nextQuantity: consumption.newQuantity,
-          }),
-        ),
-      );
-      if (!materialUpdates.every(Boolean)) {
-        return errorResponse(
-          "Could not start crafting — materials changed, please try again",
-        );
-      }
-
-      // Create crafting item entry/entries
-      // Respect stackSize limit when creating items
-      const craftingItemInserts = [];
-      if (itemWithRequirements.stackSize === 1) {
-        // Create separate items for non-stackable items
-        for (let i = 0; i < input.quantity; i++) {
-          craftingItemInserts.push(
-            ctx.drizzle.insert(userItem).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              itemId: input.itemId,
-              quantity: 1,
-              craftingFinishedAt: finishTime,
-            }),
-          );
-        }
-      } else {
-        // Create stacked items respecting stackSize limit
-        let remainingQuantity = input.quantity;
-        while (remainingQuantity > 0) {
-          const stackQuantity = Math.min(
-            remainingQuantity,
-            itemWithRequirements.stackSize,
-          );
-          craftingItemInserts.push(
-            ctx.drizzle.insert(userItem).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              itemId: input.itemId,
-              quantity: stackQuantity,
-              craftingFinishedAt: finishTime,
-            }),
-          );
-          remainingQuantity -= stackQuantity;
-        }
-      }
-
-      // Award crafting experience (from item config, or 0 if not set)
-      // Apply clan crafting experience boost (only for real clans, not outlaw factions/towns)
       const clanCraftingExpBoost = user.isOutlaw
         ? 0
         : (user.clan?.craftingExpBoost ?? 0) / 100;
       const baseExpGain =
         (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
       const expGain = Math.floor(baseExpGain * (1 + clanCraftingExpBoost));
-      // Update trackers: crafting experience, total items crafted, and any
-      // craft-this-specific-item objectives. Emitted here (behind the craft CAS /
-      // expUpdate rowsAffected guard below) — NOT from the quest-reward EXP path
-      // (quest.ts:367-377), which must stay experience-only to avoid double-counting.
-      const { trackers } = getNewTrackers(user, [
-        { task: "crafting_experience_gained", increment: expGain },
-        { task: "items_crafted", increment: input.quantity },
-        {
-          task: "craft_specific_item",
-          increment: input.quantity,
-          contentId: input.itemId,
-        },
-      ]);
-      const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
-      const expUpdate = ctx.drizzle
-        .update(userData)
-        .set({
-          craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
-          questData: questDataForDb,
-        })
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            eq(userData.status, "AWAKE"),
-            or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
+      const queueId = nanoid();
+      const enqueueResult = await ctx.drizzle.transaction(async (tx) => {
+        const lock = await tx
+          .update(userData)
+          .set({ updatedAt: sql`${userData.updatedAt}` })
+          .where(
+            and(
+              eq(userData.userId, ctx.userId),
+              eq(userData.status, "AWAKE"),
+              or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
+            ),
+          );
+        if (lock.rowsAffected !== 1) return "STATE_CHANGED" as const;
+        // Sequential: PlanetScale/Vitess rejects concurrent queries on one transaction.
+        const currentUser = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        });
+        const currentQueue = await tx.query.userCraftingQueue.findMany({
+          where: and(
+            eq(userCraftingQueue.userId, ctx.userId),
+            isNull(userCraftingQueue.completedAt),
+            isNull(userCraftingQueue.cancelledAt),
           ),
+          orderBy: asc(userCraftingQueue.startsAt),
+        });
+        const materialRows = await tx.query.userItem.findMany({
+          where: and(
+            eq(userItem.userId, ctx.userId),
+            inArray(
+              userItem.id,
+              allConsumptions.map((consumption) => consumption.userItemId),
+            ),
+          ),
+        });
+        if (!currentUser) return "STATE_CHANGED" as const;
+        if (currentQueue.length >= getQueueTotalCapacity(currentUser)) {
+          return "FULL" as const;
+        }
+        const reservations: (typeof userCraftingQueueMaterial.$inferInsert)[] = [];
+        for (const consumption of allConsumptions) {
+          const source = materialRows.find((row) => row.id === consumption.userItemId);
+          if (!source) return "MATERIALS" as const;
+          const update = await tx
+            .update(userItem)
+            .set({ quantity: consumption.newQuantity })
+            .where(
+              and(
+                eq(userItem.id, source.id),
+                eq(userItem.userId, ctx.userId),
+                eq(
+                  userItem.quantity,
+                  consumption.consumeQuantity + consumption.newQuantity,
+                ),
+                eq(userItem.isInAuction, false),
+              ),
+            );
+          if (update.rowsAffected !== 1) return "MATERIALS" as const;
+          reservations.push({
+            id: nanoid(),
+            queueId,
+            itemId: source.itemId,
+            quantity: consumption.consumeQuantity,
+            sourceUserItemId: source.id,
+            sourceEquipped: source.equipped,
+            sourceDurability: source.durability,
+            sourceStoredAtHome: source.storedAtHome,
+            sourceActiveVariantId: source.activeVariantId,
+            sourceDropChancePerc: source.dropChancePerc,
+          });
+        }
+        const schedule = getNextQueueSchedule(
+          craftSeconds,
+          currentQueue.at(-1)?.finishesAt,
         );
-
-      const [, expResult] = await Promise.all([
-        Promise.all(craftingItemInserts),
-        expUpdate,
-      ]);
-      if (!expResult || expResult.rowsAffected !== 1) {
-        return errorResponse(
-          "Could not start crafting — you must be awake and not on Wake Island",
-        );
+        await tx.insert(userCraftingQueue).values({
+          id: queueId,
+          userId: ctx.userId,
+          itemId: input.itemId,
+          quantity: input.quantity,
+          durationSeconds: craftSeconds,
+          craftingExperience: expGain,
+          ...schedule,
+        });
+        if (reservations.length > 0) {
+          await tx.insert(userCraftingQueueMaterial).values(reservations);
+        }
+        return "OK" as const;
+      });
+      if (enqueueResult === "FULL") return errorResponse("Crafting queue is full");
+      if (enqueueResult === "MATERIALS") {
+        return errorResponse("Materials changed, please try again");
       }
-
+      if (enqueueResult !== "OK")
+        return errorResponse("State changed, please try again");
+      const queue = await getCraftingQueue(ctx.drizzle, ctx.userId);
+      const queued = [...(queue.active ? [queue.active] : []), ...queue.waiting].find(
+        (entry) => entry.id === queueId,
+      );
       return {
         success: true,
-        message: `Started crafting ${input.quantity}x ${itemWithRequirements.name}. ${expGain > 0 ? `+${expGain} EXP.` : ""} Ready in ${formatSecondsToTimeDisplay(craftSeconds)}.`,
-        finishTime: finishTime.toISOString(),
+        message: `Queued ${input.quantity}x ${itemWithRequirements.name}. Ready in ${formatSecondsToTimeDisplay(craftSeconds)}.`,
+        finishTime: queued?.finishesAt.toISOString(),
+        queue,
+      };
+    }),
+
+  cancelQueuedCraft: protectedProcedure
+    .input(z.object({ queueId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await prepareCraftingQueue(ctx.drizzle, ctx.userId);
+      const now = new Date();
+      const refunded = await ctx.drizzle.transaction(async (tx) => {
+        await tx
+          .update(userData)
+          .set({ updatedAt: sql`${userData.updatedAt}` })
+          .where(eq(userData.userId, ctx.userId));
+        const target = await tx.query.userCraftingQueue.findFirst({
+          where: and(
+            eq(userCraftingQueue.id, input.queueId),
+            eq(userCraftingQueue.userId, ctx.userId),
+            isNull(userCraftingQueue.completedAt),
+            isNull(userCraftingQueue.cancelledAt),
+            gt(userCraftingQueue.startsAt, now),
+          ),
+          with: { materials: true },
+        });
+        if (!target) return null;
+        const claim = await tx
+          .update(userCraftingQueue)
+          .set({ cancelledAt: now })
+          .where(
+            and(
+              eq(userCraftingQueue.id, target.id),
+              isNull(userCraftingQueue.cancelledAt),
+              isNull(userCraftingQueue.completedAt),
+            ),
+          );
+        if (claim.rowsAffected !== 1) return null;
+        for (const material of target.materials) {
+          const restored = await tx
+            .update(userItem)
+            .set({ quantity: sql`${userItem.quantity} + ${material.quantity}` })
+            .where(
+              and(
+                eq(userItem.id, material.sourceUserItemId),
+                eq(userItem.userId, ctx.userId),
+              ),
+            );
+          if (restored.rowsAffected === 0) {
+            await tx.insert(userItem).values({
+              id: material.sourceUserItemId,
+              userId: ctx.userId,
+              itemId: material.itemId,
+              quantity: material.quantity,
+              equipped: material.sourceEquipped,
+              durability: material.sourceDurability,
+              storedAtHome: material.sourceStoredAtHome,
+              activeVariantId: material.sourceActiveVariantId,
+              dropChancePerc: material.sourceDropChancePerc,
+            });
+          }
+        }
+        await rescheduleCraftingJobs(tx as DrizzleClient, ctx.userId, now);
+        return target.materials.reduce((sum, material) => sum + material.quantity, 0);
+      });
+      if (refunded === null)
+        return errorResponse("Only waiting crafts can be cancelled");
+      return {
+        success: true,
+        message: "Queued craft cancelled and reserved materials restored",
+        refundedMaterials: refunded,
+        queue: await getCraftingQueue(ctx.drizzle, ctx.userId),
       };
     }),
 
@@ -529,7 +691,7 @@ export const occupationRouter = createTRPCRouter({
         );
 
       const [, expResult] = await Promise.all([createImbuement, expUpdate]);
-      if (!expResult || expResult.rowsAffected !== 1) {
+      if (expResult?.rowsAffected !== 1) {
         return errorResponse(
           "Could not start imbuing — you must be awake and not on Wake Island",
         );

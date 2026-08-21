@@ -44,6 +44,7 @@ import {
   jutsu,
   userData,
   userJutsu,
+  userJutsuTrainingQueue,
 } from "@/drizzle/schema";
 import {
   filterRollableBloodlines,
@@ -1090,6 +1091,24 @@ export const updateBloodline = async (
         })
       ).map((j) => j.id)
     : [];
+  if (bloodlineJutsus.length > 0) {
+    const pending = await client.query.userJutsuTrainingQueue.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(userJutsuTrainingQueue.userId, user.userId),
+        inArray(userJutsuTrainingQueue.jutsuId, bloodlineJutsus),
+        isNull(userJutsuTrainingQueue.completedAt),
+        isNull(userJutsuTrainingQueue.cancelledAt),
+      ),
+    });
+    if (pending) {
+      throw serverError(
+        "BAD_REQUEST",
+        "Cancel queued training for bloodline jutsu before changing bloodlines",
+      );
+    }
+  }
+
   // Update user first, with a CAS on both reputation (atomic decrement, floor guard) and the
   // caller's pre-state bloodlineId (prevents a raced/duplicate grant from re-spending reputation
   // or clobbering a bloodline someone else already changed).

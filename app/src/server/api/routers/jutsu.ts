@@ -4,11 +4,13 @@ import {
   asc,
   desc,
   eq,
+  gt,
   gte,
   inArray,
   isNotNull,
   isNull,
   like,
+  lte,
   ne,
   or,
   sql,
@@ -40,11 +42,11 @@ import {
   skillTree,
   userData,
   userJutsu,
+  userJutsuTrainingQueue,
 } from "@/drizzle/schema";
 import { filterVisibleEvolutions, validateEvolutionGraph } from "@/libs/evolution";
 import type { ComputedJutsuLoadout, JutsuCapFlags, JutsuEquipCap } from "@/libs/jutsu";
 import {
-  canEquipUnderCaps,
   computeJutsuLoadoutAssignments,
   countEquippedByCap,
   findExceededJutsuEquipCap,
@@ -61,6 +63,7 @@ import {
 } from "@/libs/loadout";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getNextQueueSchedule, rescheduleQueue } from "@/libs/queue";
 import { callDiscordContent } from "@/libs/socials";
 import {
   calcJutsuEquipLimit,
@@ -89,8 +92,9 @@ import {
   backfillLoadouts,
   fetchLoadoutUser,
 } from "@/server/utils/loadout";
+import { getJutsuTrainingQueue, settleJutsuTrainingQueue } from "@/server/utils/queue";
 import { calculateContentDiff } from "@/utils/diff";
-import { fedJutsuLoadouts } from "@/utils/paypal";
+import { fedJutsuLoadouts, getQueueTotalCapacity } from "@/utils/paypal";
 import {
   canChangeContent,
   canEditJutsus,
@@ -111,8 +115,110 @@ import {
   jutsuReskinUpdateSchema,
 } from "@/validators/jutsu";
 import { renameLoadoutSchema } from "@/validators/loadout";
-import { QuestTracker } from "@/validators/objectives";
 import { fetchUpdatedUser, fetchUser } from "./profile";
+
+const rescheduleJutsuJobs = async (
+  client: DrizzleClient,
+  userId: string,
+  now = new Date(),
+) => {
+  const remaining = await client.query.userJutsuTrainingQueue.findMany({
+    where: and(
+      eq(userJutsuTrainingQueue.userId, userId),
+      isNull(userJutsuTrainingQueue.completedAt),
+      isNull(userJutsuTrainingQueue.cancelledAt),
+    ),
+    orderBy: asc(userJutsuTrainingQueue.startsAt),
+  });
+  const active = remaining.find(
+    (entry) => entry.startsAt <= now && entry.finishesAt > now,
+  );
+  const waiting = remaining.filter((entry) => entry.startsAt > now);
+  for (const scheduled of rescheduleQueue(waiting, active?.finishesAt ?? now)) {
+    await client
+      .update(userJutsuTrainingQueue)
+      .set({ startsAt: scheduled.startsAt, finishesAt: scheduled.finishesAt })
+      .where(eq(userJutsuTrainingQueue.id, scheduled.entry.id));
+  }
+};
+
+const hasPendingJutsuTraining = async (
+  client: DrizzleClient,
+  jutsuIds: string[],
+  userId?: string,
+) =>
+  !!(await client.query.userJutsuTrainingQueue.findFirst({
+    columns: { id: true },
+    where: and(
+      inArray(userJutsuTrainingQueue.jutsuId, jutsuIds),
+      ...(userId ? [eq(userJutsuTrainingQueue.userId, userId)] : []),
+      isNull(userJutsuTrainingQueue.completedAt),
+      isNull(userJutsuTrainingQueue.cancelledAt),
+    ),
+  }));
+
+/** Convert the pre-credited legacy timer into a pending level. A level-zero row
+ * is retained for a first-time legacy learn so its already-issued quest credit
+ * is not emitted again when queue settlement restores level one. */
+const prepareJutsuTrainingQueue = async (client: DrizzleClient, userId: string) => {
+  const [{ user }, userjutsus] = await Promise.all([
+    fetchUpdatedUser({ client, userId }),
+    fetchUserJutsus(client, userId),
+  ]);
+  if (!user) return;
+  const legacy = userjutsus.find((entry) => entry.finishTraining);
+  const legacyFinish = legacy?.finishTraining;
+  if (legacy && legacyFinish) {
+    const now = new Date();
+    if (legacyFinish <= now) {
+      await client
+        .update(userJutsu)
+        .set({ finishTraining: null })
+        .where(and(eq(userJutsu.id, legacy.id), isNotNull(userJutsu.finishTraining)));
+    } else {
+      const existing = await client.query.userJutsuTrainingQueue.findFirst({
+        where: and(
+          eq(userJutsuTrainingQueue.userId, userId),
+          isNull(userJutsuTrainingQueue.completedAt),
+          isNull(userJutsuTrainingQueue.cancelledAt),
+        ),
+      });
+      if (!existing) {
+        const durationSeconds = Math.ceil(
+          calcJutsuTrainTime(legacy.jutsu, Math.max(0, legacy.level - 1), user) / 1000,
+        );
+        const startsAt = new Date(legacyFinish.getTime() - durationSeconds * 1000);
+        await client.transaction(async (tx) => {
+          const rollbackCredit = await tx
+            .update(userJutsu)
+            .set({
+              level: Math.max(0, legacy.level - 1),
+              equipped: legacy.level > 1 ? legacy.equipped : false,
+              finishTraining: null,
+            })
+            .where(
+              and(
+                eq(userJutsu.id, legacy.id),
+                eq(userJutsu.finishTraining, legacyFinish),
+              ),
+            );
+          if (rollbackCredit.rowsAffected !== 1) return;
+          await tx.insert(userJutsuTrainingQueue).values({
+            id: nanoid(),
+            userId,
+            jutsuId: legacy.jutsuId,
+            projectedLevel: legacy.level,
+            reservedRyo: 0,
+            durationSeconds,
+            startsAt,
+            finishesAt: legacyFinish,
+          });
+        });
+      }
+    }
+  }
+  await settleJutsuTrainingQueue(client, userId);
+};
 
 export const jutsuRouter = createTRPCRouter({
   getRecentTransfers: protectedProcedure
@@ -166,6 +272,17 @@ export const jutsuRouter = createTRPCRouter({
         (t.changes as string[]).some((c) => c.includes("Used free transfer.")),
       );
       // Guard
+      if (
+        await hasPendingJutsuTraining(
+          ctx.drizzle,
+          [input.fromJutsuId, input.toJutsuId],
+          ctx.userId,
+        )
+      ) {
+        return errorResponse(
+          "Cancel affected queued training before transferring levels",
+        );
+      }
       if (!fromJutsu) return errorResponse("Source jutsu not found");
       if (!toJutsu) return errorResponse("Target jutsu not found");
       if (fromJutsu.parentJutsuId)
@@ -441,6 +558,11 @@ export const jutsuRouter = createTRPCRouter({
       if (entry.id === TUTORIAL_JUTSU_ID)
         return errorResponse("Cannot delete tutorial jutsu");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      if (await hasPendingJutsuTraining(ctx.drizzle, [input.id])) {
+        return errorResponse(
+          "Cannot delete a jutsu while players have queued training",
+        );
+      }
       if (totalRelations > 0) {
         const message = [
           ...relations.jutsuInjectors.map((j) => `Jutsu: ${j.name}`),
@@ -480,6 +602,11 @@ export const jutsuRouter = createTRPCRouter({
       const userjutsus = await fetchUserJutsus(ctx.drizzle, ctx.userId);
       const userjutsuObj = userjutsus.find((j) => j.id === input.id);
       if (userjutsuObj) {
+        if (
+          await hasPendingJutsuTraining(ctx.drizzle, [userjutsuObj.jutsuId], ctx.userId)
+        ) {
+          return errorResponse("Cancel queued training before forgetting this jutsu");
+        }
         const res1 = await ctx.drizzle
           .delete(userJutsu)
           .where(eq(userJutsu.id, input.id));
@@ -546,6 +673,17 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("This evolution is not yet available");
       const userJutsuObj = userJutsus.find((j) => j.id === input.userJutsuId);
       if (!userJutsuObj) return errorResponse("You don't own this jutsu");
+      if (
+        await hasPendingJutsuTraining(
+          ctx.drizzle,
+          [userJutsuObj.jutsuId, input.evolutionJutsuId],
+          ctx.userId,
+        )
+      ) {
+        return errorResponse(
+          "Cancel affected queued training before evolving this jutsu",
+        );
+      }
       if (userJutsuObj.finishTraining && userJutsuObj.finishTraining > new Date())
         return errorResponse(
           "This jutsu is currently being trained. Wait for training to complete before evolving.",
@@ -721,6 +859,9 @@ export const jutsuRouter = createTRPCRouter({
           : Promise.resolve(null),
       ]);
       // Guard
+      if (await hasPendingJutsuTraining(ctx.drizzle, [input.id])) {
+        return errorResponse("Cannot edit a jutsu while players have queued training");
+      }
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Jutsu not found");
@@ -914,6 +1055,11 @@ export const jutsuRouter = createTRPCRouter({
       if (!canEditJutsus(user.role)) {
         return errorResponse("Not allowed to edit public user");
       }
+      if (await hasPendingJutsuTraining(ctx.drizzle, [input.jutsuId], input.userId)) {
+        return errorResponse(
+          "Cancel the affected queued training before adjusting levels",
+        );
+      }
       // Roles that can only edit themselves
       if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
         return errorResponse("You can only edit your own jutsus");
@@ -966,18 +1112,17 @@ export const jutsuRouter = createTRPCRouter({
       ]);
       return { success: true, message: `Jutsu updated` };
     }),
-  // Start training a given jutsu
+  getTrainingQueue: protectedProcedure.query(async ({ ctx }) => {
+    await prepareJutsuTrainingQueue(ctx.drizzle, ctx.userId);
+    return getJutsuTrainingQueue(ctx.drizzle, ctx.userId);
+  }),
+
+  // Queue exactly one level of a jutsu.
   startTraining: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Start training a jutsu" } })
     .input(z.object({ jutsuId: z.string() }))
-    .output(
-      baseServerResponse.extend({
-        data: z
-          .object({ money: z.number(), questData: z.array(QuestTracker).nullable() })
-          .optional(),
-      }),
-    )
     .mutation(async ({ ctx, input }) => {
+      await prepareJutsuTrainingQueue(ctx.drizzle, ctx.userId);
       const [data, info, userjutsus, students] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
@@ -992,11 +1137,6 @@ export const jutsuRouter = createTRPCRouter({
 
       // Derived
       const userjutsuObj = userjutsus.find((j) => j.jutsuId === input.jutsuId);
-      const equippedJutsus = userjutsus.filter((uj) => uj.equipped);
-      const curEquip = equippedJutsus.length;
-      const maxEquip = calcJutsuEquipLimit(user);
-      const equippedCapCounts = countEquippedByCap(equippedJutsus);
-
       if (!info) return errorResponse("Jutsu not found");
       if (!canTrainJutsu(info, user) && !info.parentJutsuId)
         return errorResponse("Jutsu not for you");
@@ -1019,178 +1159,283 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("You have already evolved this jutsu");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
 
-      const level = userjutsuObj ? userjutsuObj.level : 0;
-      if (level >= JUTSU_LEVEL_CAP) {
+      const pending = await ctx.drizzle.query.userJutsuTrainingQueue.findMany({
+        where: and(
+          eq(userJutsuTrainingQueue.userId, ctx.userId),
+          isNull(userJutsuTrainingQueue.completedAt),
+          isNull(userJutsuTrainingQueue.cancelledAt),
+        ),
+        orderBy: asc(userJutsuTrainingQueue.startsAt),
+      });
+      const committedLevel = userjutsuObj?.level ?? 0;
+      const projectedLevel =
+        committedLevel +
+        pending.filter((entry) => entry.jutsuId === input.jutsuId).length +
+        1;
+      if (projectedLevel > JUTSU_LEVEL_CAP) {
         return errorResponse("Jutsu is already at max level");
       }
       if (info.hidden && !canChangeContent(user.role)) {
         return errorResponse("Jutsu is hidden, cannot be trained");
       }
-      if (userjutsus.find((j) => j.finishTraining && j.finishTraining > new Date())) {
-        return errorResponse("You are already training a jutsu");
-      }
-
-      // Time & cost
-      const trainTime = calcJutsuTrainTime(info, level, user);
-      const trainCost = calcJutsuTrainCost(info, level, user, students);
-
-      // Quests
-      let questDataFull = user.questData ?? [];
-      if (!userjutsuObj) {
-        const { trackers } = getNewTrackers(user, [
-          { task: "jutsus_mastered", increment: 1 },
-          { task: "train_specific_jutsu", increment: 1, contentId: input.jutsuId },
-        ]);
-        questDataFull = trackers;
-      }
-      const questDataForDb = filterQuestTrackersForDbPersist(questDataFull, user);
-
-      // Deduct money first, but persist new-jutsu quest progress only after the
-      // ownership insert is confirmed. A duplicate request can then refund its
-      // own money without restoring a stale questData snapshot over the winner.
-      const moneyUpdate = await ctx.drizzle
-        .update(userData)
-        .set({ money: sql`${userData.money} - ${trainCost}` })
-        .where(and(eq(userData.userId, ctx.userId), gte(userData.money, trainCost)));
-      if (moneyUpdate.rowsAffected !== 1) {
+      const enqueueResult = await ctx.drizzle.transaction(async (tx) => {
+        const lock = await tx
+          .update(userData)
+          .set({ updatedAt: sql`${userData.updatedAt}` })
+          .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
+        if (lock.rowsAffected !== 1) return { status: "STATE_CHANGED" as const };
+        // Sequential: PlanetScale/Vitess rejects concurrent queries on one transaction.
+        const currentUser = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        });
+        const currentJutsu = await tx.query.userJutsu.findFirst({
+          where: and(
+            eq(userJutsu.userId, ctx.userId),
+            eq(userJutsu.jutsuId, input.jutsuId),
+          ),
+        });
+        const currentQueue = await tx.query.userJutsuTrainingQueue.findMany({
+          where: and(
+            eq(userJutsuTrainingQueue.userId, ctx.userId),
+            isNull(userJutsuTrainingQueue.completedAt),
+            isNull(userJutsuTrainingQueue.cancelledAt),
+          ),
+          orderBy: asc(userJutsuTrainingQueue.startsAt),
+        });
+        if (!currentUser) return { status: "STATE_CHANGED" as const };
+        if (currentQueue.length >= getQueueTotalCapacity(currentUser)) {
+          return { status: "FULL" as const };
+        }
+        const nextLevel =
+          (currentJutsu?.level ?? 0) +
+          currentQueue.filter((entry) => entry.jutsuId === input.jutsuId).length +
+          1;
+        if (nextLevel > JUTSU_LEVEL_CAP) return { status: "CAP" as const };
+        const levelBefore = nextLevel - 1;
+        const trainTime = calcJutsuTrainTime(info, levelBefore, currentUser);
+        const trainCost = calcJutsuTrainCost(info, levelBefore, currentUser, students);
+        const moneyUpdate = await tx
+          .update(userData)
+          .set({ money: sql`${userData.money} - ${trainCost}` })
+          .where(and(eq(userData.userId, ctx.userId), gte(userData.money, trainCost)));
+        if (moneyUpdate.rowsAffected !== 1) return { status: "MONEY" as const };
+        const schedule = getNextQueueSchedule(
+          Math.ceil(trainTime / 1000),
+          currentQueue.at(-1)?.finishesAt,
+        );
+        await tx.insert(userJutsuTrainingQueue).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          jutsuId: input.jutsuId,
+          projectedLevel: nextLevel,
+          reservedRyo: trainCost,
+          durationSeconds: Math.ceil(trainTime / 1000),
+          ...schedule,
+        });
+        return { status: "OK" as const, trainCost, nextLevel };
+      });
+      if (enqueueResult.status === "FULL")
+        return errorResponse("Jutsu training queue is full");
+      if (enqueueResult.status === "CAP")
+        return errorResponse("Jutsu is already at max level");
+      if (enqueueResult.status === "MONEY")
         return errorResponse("You don't have enough money");
-      }
-
-      // Insert or update user jutsu
-      if (userjutsuObj) {
-        await ctx.drizzle
-          .update(userJutsu)
-          .set({
-            level: sql`${userJutsu.level} + 1`,
-            finishTraining: new Date(Date.now() + trainTime),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(eq(userJutsu.id, userjutsuObj.id), eq(userJutsu.userId, ctx.userId)),
-          );
-      } else {
-        // Soft pre-check whether auto-equip is likely to succeed. Insert already
-        // equipped when the snapshot says yes; only the over-cap rollback CAS
-        // runs afterward to handle concurrent equips (under-cap re-check would
-        // duplicate what the rollback covers a moment later).
-        const capFlags = getJutsuCapFlags(info);
-        const canAutoEquip =
-          curEquip < maxEquip &&
-          checkJutsuBloodlineItem(info, user.items) &&
-          canEquipUnderCaps(capFlags, equippedCapCounts);
-
-        const newUserJutsuId = nanoid();
-        // onDuplicateKeyUpdate no-op (`id = id`) absorbs unique-index races. PlanetScale
-        // reports changed rows, so a duplicate yields rowsAffected === 0 (not 2). Deduct
-        // already happened above, so refund it when this request definitively did not
-        // insert. Quest progress has not been persisted yet and needs no compensation.
-        const refundTrainCost = () =>
-          ctx.drizzle
-            .update(userData)
-            .set({ money: sql`${userData.money} + ${trainCost}` })
-            .where(eq(userData.userId, ctx.userId));
-
-        let insertedByThisRequest = false;
-        try {
-          const insertResult = await ctx.drizzle
-            .insert(userJutsu)
-            .values({
-              id: newUserJutsuId,
-              userId: ctx.userId,
-              jutsuId: input.jutsuId,
-              finishTraining: new Date(Date.now() + trainTime),
-              equipped: canAutoEquip,
-            })
-            .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-          insertedByThisRequest = insertResult.rowsAffected === 1;
-        } catch {
-          // A transport error can arrive after MySQL committed the insert. Re-read
-          // the unique ownership row before compensating so a committed training
-          // session is never refunded and granted for free.
-          let persisted: { id: string } | undefined;
-          try {
-            [persisted] = await ctx.drizzle
-              .select({ id: userJutsu.id })
-              .from(userJutsu)
-              .where(
-                and(
-                  eq(userJutsu.userId, ctx.userId),
-                  eq(userJutsu.jutsuId, input.jutsuId),
-                ),
-              )
-              .limit(1);
-          } catch {
-            return errorResponse(
-              "Training status could not be confirmed — please refresh before retrying",
-            );
-          }
-          insertedByThisRequest = persisted?.id === newUserJutsuId;
-          if (!insertedByThisRequest) {
-            await refundTrainCost();
-            return errorResponse(
-              persisted
-                ? "You already own this jutsu — please refresh and try again"
-                : "Failed to start training — please try again",
-            );
-          }
-        }
-
-        if (!insertedByThisRequest) {
-          await refundTrainCost();
-          return errorResponse(
-            "You already own this jutsu — please refresh and try again",
-          );
-        }
-
-        await Promise.all([
-          ctx.drizzle
-            .update(userData)
-            .set({ questData: questDataForDb })
-            .where(eq(userData.userId, ctx.userId)),
-          canAutoEquip
-            ? rollbackEquipIfOverCap({
-                client: ctx.drizzle,
-                userId: ctx.userId,
-                userJutsuId: newUserJutsuId,
-                maxEquip,
-                flags: capFlags,
-              })
-            : undefined,
-        ]);
-      }
-
+      if (enqueueResult.status !== "OK")
+        return errorResponse("State changed, please try again");
       return {
         success: true,
-        message: `You started training: ${info.name}`,
-        data: { money: user.money - trainCost, questData: questDataFull },
+        message: `Queued training: ${info.name} level ${enqueueResult.nextLevel}`,
+        data: {
+          money: user.money - enqueueResult.trainCost,
+          questData: user.questData,
+        },
+        queue: await getJutsuTrainingQueue(ctx.drizzle, ctx.userId),
       };
     }),
 
   stopTraining: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Stop training current jutsu" } })
-    .output(baseServerResponse)
-    .mutation(async ({ ctx }) => {
-      const userjutsus = await fetchUserJutsus(ctx.drizzle, ctx.userId);
-      const userjutsuObj = userjutsus.find(
-        (j) => j.finishTraining && j.finishTraining > new Date(),
-      );
-      if (!userjutsuObj) {
-        return { success: false, message: "Not training any jutsu" };
-      }
-      await ctx.drizzle
-        .update(userJutsu)
-        .set({
-          level: sql`${userJutsu.level} - 1`,
-          finishTraining: null,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(eq(userJutsu.id, userjutsuObj.id), eq(userJutsu.userId, ctx.userId)),
-        );
-
+    .meta({ mcp: { enabled: true, description: "Cancel active jutsu training" } })
+    .input(z.object({ queueId: z.string().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      await prepareJutsuTrainingQueue(ctx.drizzle, ctx.userId);
+      const [data, students] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchStudents(ctx.drizzle, ctx.userId),
+      ]);
+      if (!data.user) return errorResponse("User not found");
+      const user = data.user;
+      const now = new Date();
+      const stopped = await ctx.drizzle.transaction(async (tx) => {
+        await tx
+          .update(userData)
+          .set({ updatedAt: sql`${userData.updatedAt}` })
+          .where(eq(userData.userId, ctx.userId));
+        const active = await tx.query.userJutsuTrainingQueue.findFirst({
+          where: and(
+            eq(userJutsuTrainingQueue.userId, ctx.userId),
+            ...(input?.queueId ? [eq(userJutsuTrainingQueue.id, input.queueId)] : []),
+            isNull(userJutsuTrainingQueue.completedAt),
+            isNull(userJutsuTrainingQueue.cancelledAt),
+            lte(userJutsuTrainingQueue.startsAt, now),
+            gt(userJutsuTrainingQueue.finishesAt, now),
+          ),
+          orderBy: asc(userJutsuTrainingQueue.startsAt),
+        });
+        if (!active) return false;
+        const claim = await tx
+          .update(userJutsuTrainingQueue)
+          .set({ cancelledAt: now })
+          .where(
+            and(
+              eq(userJutsuTrainingQueue.id, active.id),
+              isNull(userJutsuTrainingQueue.cancelledAt),
+              isNull(userJutsuTrainingQueue.completedAt),
+            ),
+          );
+        if (claim.rowsAffected !== 1) return false;
+        // Sequential: PlanetScale/Vitess rejects concurrent queries on one transaction.
+        const remainingForJutsu = await tx.query.userJutsuTrainingQueue.findMany({
+          where: and(
+            eq(userJutsuTrainingQueue.userId, ctx.userId),
+            eq(userJutsuTrainingQueue.jutsuId, active.jutsuId),
+            isNull(userJutsuTrainingQueue.completedAt),
+            isNull(userJutsuTrainingQueue.cancelledAt),
+          ),
+          orderBy: asc(userJutsuTrainingQueue.startsAt),
+        });
+        const committed = await tx.query.userJutsu.findFirst({
+          where: and(
+            eq(userJutsu.userId, ctx.userId),
+            eq(userJutsu.jutsuId, active.jutsuId),
+          ),
+        });
+        const info = await tx.query.jutsu.findFirst({
+          where: eq(jutsu.id, active.jutsuId),
+        });
+        if (!info) throw new Error("Queued jutsu no longer exists");
+        let projected = committed?.level ?? 0;
+        let repricingRefund = 0;
+        for (const entry of remainingForJutsu) {
+          projected += 1;
+          const nextCost = calcJutsuTrainCost(info, projected - 1, user, students);
+          const nextDuration = Math.ceil(
+            calcJutsuTrainTime(info, projected - 1, user) / 1000,
+          );
+          repricingRefund += Math.max(0, entry.reservedRyo - nextCost);
+          await tx
+            .update(userJutsuTrainingQueue)
+            .set({
+              projectedLevel: projected,
+              reservedRyo: nextCost,
+              durationSeconds: nextDuration,
+            })
+            .where(eq(userJutsuTrainingQueue.id, entry.id));
+        }
+        if (repricingRefund > 0) {
+          await tx
+            .update(userData)
+            .set({ money: sql`${userData.money} + ${repricingRefund}` })
+            .where(eq(userData.userId, ctx.userId));
+        }
+        await rescheduleJutsuJobs(tx as DrizzleClient, ctx.userId, now);
+        return true;
+      });
+      if (!stopped) return errorResponse("Not training any jutsu");
       return {
         success: true,
-        message: `You stopped training: ${userjutsuObj.jutsu?.name}`,
+        message: "Active jutsu training cancelled without refund",
+        queue: await getJutsuTrainingQueue(ctx.drizzle, ctx.userId),
+      };
+    }),
+
+  cancelQueuedTraining: protectedProcedure
+    .input(z.object({ queueId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await prepareJutsuTrainingQueue(ctx.drizzle, ctx.userId);
+      const [data, students] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchStudents(ctx.drizzle, ctx.userId),
+      ]);
+      if (!data.user) return errorResponse("User not found");
+      const user = data.user;
+      const now = new Date();
+      const refund = await ctx.drizzle.transaction(async (tx) => {
+        await tx
+          .update(userData)
+          .set({ updatedAt: sql`${userData.updatedAt}` })
+          .where(eq(userData.userId, ctx.userId));
+        const target = await tx.query.userJutsuTrainingQueue.findFirst({
+          where: and(
+            eq(userJutsuTrainingQueue.id, input.queueId),
+            eq(userJutsuTrainingQueue.userId, ctx.userId),
+            isNull(userJutsuTrainingQueue.completedAt),
+            isNull(userJutsuTrainingQueue.cancelledAt),
+            gt(userJutsuTrainingQueue.startsAt, now),
+          ),
+        });
+        if (!target) return null;
+        const claim = await tx
+          .update(userJutsuTrainingQueue)
+          .set({ cancelledAt: now })
+          .where(
+            and(
+              eq(userJutsuTrainingQueue.id, target.id),
+              isNull(userJutsuTrainingQueue.cancelledAt),
+            ),
+          );
+        if (claim.rowsAffected !== 1) return null;
+        // Sequential: PlanetScale/Vitess rejects concurrent queries on one transaction.
+        const remaining = await tx.query.userJutsuTrainingQueue.findMany({
+          where: and(
+            eq(userJutsuTrainingQueue.userId, ctx.userId),
+            isNull(userJutsuTrainingQueue.completedAt),
+            isNull(userJutsuTrainingQueue.cancelledAt),
+          ),
+          orderBy: asc(userJutsuTrainingQueue.startsAt),
+        });
+        const committed = await tx.query.userJutsu.findFirst({
+          where: and(
+            eq(userJutsu.userId, ctx.userId),
+            eq(userJutsu.jutsuId, target.jutsuId),
+          ),
+        });
+        const info = await tx.query.jutsu.findFirst({
+          where: eq(jutsu.id, target.jutsuId),
+        });
+        if (!info) throw new Error("Queued jutsu no longer exists");
+        let projected = committed?.level ?? 0;
+        let repricingRefund = 0;
+        for (const entry of remaining.filter((job) => job.jutsuId === target.jutsuId)) {
+          projected += 1;
+          const nextCost = calcJutsuTrainCost(info, projected - 1, user, students);
+          const nextDuration = Math.ceil(
+            calcJutsuTrainTime(info, projected - 1, user) / 1000,
+          );
+          repricingRefund += Math.max(0, entry.reservedRyo - nextCost);
+          await tx
+            .update(userJutsuTrainingQueue)
+            .set({
+              projectedLevel: projected,
+              reservedRyo: nextCost,
+              durationSeconds: nextDuration,
+            })
+            .where(eq(userJutsuTrainingQueue.id, entry.id));
+        }
+        const totalRefund = target.reservedRyo + repricingRefund;
+        await tx
+          .update(userData)
+          .set({ money: sql`${userData.money} + ${totalRefund}` })
+          .where(eq(userData.userId, ctx.userId));
+        await rescheduleJutsuJobs(tx as DrizzleClient, ctx.userId, now);
+        return totalRefund;
+      });
+      if (refund === null)
+        return errorResponse("Only waiting training can be cancelled");
+      return {
+        success: true,
+        message: `Queued training cancelled; refunded ${refund} ryo`,
+        refund,
+        queue: await getJutsuTrainingQueue(ctx.drizzle, ctx.userId),
       };
     }),
 

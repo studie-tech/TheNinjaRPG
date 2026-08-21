@@ -3023,6 +3023,205 @@ export const userJutsuRelations = relations(userJutsu, ({ one }) => ({
   }),
 }));
 
+export const userStatTrainingQueue = mysqlTable(
+  "UserStatTrainingQueue",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    stat: mysqlEnum("stat", consts.UserStatNames).notNull(),
+    trainingSpeed: mysqlEnum("trainingSpeed", consts.TrainingSpeeds).notNull(),
+    durationSeconds: int("durationSeconds", { unsigned: true }).notNull(),
+    fullStatGain: double("fullStatGain").notNull(),
+    fullExperienceGain: double("fullExperienceGain").notNull(),
+    startsAt: datetime("startsAt", { mode: "date", fsp: 3 }).notNull(),
+    finishesAt: datetime("finishesAt", { mode: "date", fsp: 3 }).notNull(),
+    completedAt: datetime("completedAt", { mode: "date", fsp: 3 }),
+    cancelledAt: datetime("cancelledAt", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    userFinishesIdx: index("UserStatTrainingQueue_userId_finishesAt_idx").on(
+      table.userId,
+      table.finishesAt,
+    ),
+    userStartsIdx: index("UserStatTrainingQueue_userId_startsAt_idx").on(
+      table.userId,
+      table.startsAt,
+    ),
+    userSettlementIdx: index(
+      "UserStatTrainingQueue_userId_completedAt_cancelledAt_idx",
+    ).on(table.userId, table.completedAt, table.cancelledAt),
+    dueIdx: index("UserStatTrainingQueue_due_idx").on(
+      table.completedAt,
+      table.cancelledAt,
+      table.finishesAt,
+    ),
+  }),
+);
+export type UserStatTrainingQueue = InferSelectModel<typeof userStatTrainingQueue>;
+
+export const userJutsuTrainingQueue = mysqlTable(
+  "UserJutsuTrainingQueue",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    jutsuId: varchar("jutsuId", { length: 191 }).notNull(),
+    projectedLevel: int("projectedLevel", { unsigned: true }).notNull(),
+    reservedRyo: int("reservedRyo", { unsigned: true }).notNull(),
+    durationSeconds: int("durationSeconds", { unsigned: true }).notNull(),
+    startsAt: datetime("startsAt", { mode: "date", fsp: 3 }).notNull(),
+    finishesAt: datetime("finishesAt", { mode: "date", fsp: 3 }).notNull(),
+    completedAt: datetime("completedAt", { mode: "date", fsp: 3 }),
+    cancelledAt: datetime("cancelledAt", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    userFinishesIdx: index("UserJutsuTrainingQueue_userId_finishesAt_idx").on(
+      table.userId,
+      table.finishesAt,
+    ),
+    userStartsIdx: index("UserJutsuTrainingQueue_userId_startsAt_idx").on(
+      table.userId,
+      table.startsAt,
+    ),
+    userSettlementIdx: index(
+      "UserJutsuTrainingQueue_userId_completedAt_cancelledAt_idx",
+    ).on(table.userId, table.completedAt, table.cancelledAt),
+    dueIdx: index("UserJutsuTrainingQueue_due_idx").on(
+      table.completedAt,
+      table.cancelledAt,
+      table.finishesAt,
+    ),
+    userJutsuIdx: index("UserJutsuTrainingQueue_userId_jutsuId_idx").on(
+      table.userId,
+      table.jutsuId,
+    ),
+  }),
+);
+export type UserJutsuTrainingQueue = InferSelectModel<typeof userJutsuTrainingQueue>;
+
+export const userCraftingQueue = mysqlTable(
+  "UserCraftingQueue",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    itemId: varchar("itemId", { length: 191 }).notNull(),
+    quantity: int("quantity", { unsigned: true }).notNull(),
+    durationSeconds: int("durationSeconds", { unsigned: true }).notNull(),
+    craftingExperience: int("craftingExperience", { unsigned: true }).notNull(),
+    startsAt: datetime("startsAt", { mode: "date", fsp: 3 }).notNull(),
+    finishesAt: datetime("finishesAt", { mode: "date", fsp: 3 }).notNull(),
+    completedAt: datetime("completedAt", { mode: "date", fsp: 3 }),
+    cancelledAt: datetime("cancelledAt", { mode: "date", fsp: 3 }),
+    outputCreatedAt: datetime("outputCreatedAt", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    userFinishesIdx: index("UserCraftingQueue_userId_finishesAt_idx").on(
+      table.userId,
+      table.finishesAt,
+    ),
+    userStartsIdx: index("UserCraftingQueue_userId_startsAt_idx").on(
+      table.userId,
+      table.startsAt,
+    ),
+    userSettlementIdx: index(
+      "UserCraftingQueue_userId_completedAt_cancelledAt_idx",
+    ).on(table.userId, table.completedAt, table.cancelledAt),
+    dueIdx: index("UserCraftingQueue_due_idx").on(
+      table.completedAt,
+      table.cancelledAt,
+      table.finishesAt,
+    ),
+  }),
+);
+export type UserCraftingQueue = InferSelectModel<typeof userCraftingQueue>;
+
+export const userCraftingQueueMaterial = mysqlTable(
+  "UserCraftingQueueMaterial",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    queueId: varchar("queueId", { length: 191 }).notNull(),
+    itemId: varchar("itemId", { length: 191 }).notNull(),
+    quantity: int("quantity", { unsigned: true }).notNull(),
+    sourceUserItemId: varchar("sourceUserItemId", { length: 191 }).notNull(),
+    sourceEquipped: mysqlEnum("sourceEquipped", consts.ItemSlots)
+      .default("NONE")
+      .notNull(),
+    sourceDurability: smallint("sourceDurability", { unsigned: true }).notNull(),
+    sourceStoredAtHome: boolean("sourceStoredAtHome").default(false).notNull(),
+    sourceActiveVariantId: varchar("sourceActiveVariantId", { length: 191 }),
+    sourceDropChancePerc: smallint("sourceDropChancePerc", { unsigned: true })
+      .default(0)
+      .notNull(),
+  },
+  (table) => ({
+    queueIdIdx: index("UserCraftingQueueMaterial_queueId_idx").on(table.queueId),
+  }),
+);
+export type UserCraftingQueueMaterial = InferSelectModel<
+  typeof userCraftingQueueMaterial
+>;
+
+export const userStatTrainingQueueRelations = relations(
+  userStatTrainingQueue,
+  ({ one }) => ({
+    user: one(userData, {
+      fields: [userStatTrainingQueue.userId],
+      references: [userData.userId],
+    }),
+  }),
+);
+
+export const userJutsuTrainingQueueRelations = relations(
+  userJutsuTrainingQueue,
+  ({ one }) => ({
+    user: one(userData, {
+      fields: [userJutsuTrainingQueue.userId],
+      references: [userData.userId],
+    }),
+    jutsu: one(jutsu, {
+      fields: [userJutsuTrainingQueue.jutsuId],
+      references: [jutsu.id],
+    }),
+  }),
+);
+
+export const userCraftingQueueRelations = relations(
+  userCraftingQueue,
+  ({ one, many }) => ({
+    user: one(userData, {
+      fields: [userCraftingQueue.userId],
+      references: [userData.userId],
+    }),
+    item: one(item, {
+      fields: [userCraftingQueue.itemId],
+      references: [item.id],
+    }),
+    materials: many(userCraftingQueueMaterial),
+  }),
+);
+
+export const userCraftingQueueMaterialRelations = relations(
+  userCraftingQueueMaterial,
+  ({ one }) => ({
+    queue: one(userCraftingQueue, {
+      fields: [userCraftingQueueMaterial.queueId],
+      references: [userCraftingQueue.id],
+    }),
+    item: one(item, {
+      fields: [userCraftingQueueMaterial.itemId],
+      references: [item.id],
+    }),
+  }),
+);
+
 export const userReport = mysqlTable(
   "UserReport",
   {

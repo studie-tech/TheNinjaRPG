@@ -13,6 +13,7 @@ import {
   MAX_REPS_EXTRA_PER_MONTH,
   MAX_REPS_PER_MONTH,
   PAYPAL_DISCOUNT_PERCENT,
+  QUEUE_WAITING_SLOTS,
 } from "@/drizzle/constants";
 import type { FederalStatus, UserData } from "@/drizzle/schema";
 
@@ -25,6 +26,16 @@ export const getUserFederalStatus = (
     return user.federalStatus;
   }
 };
+
+/** Number of jobs that may wait behind the active job in each independent queue. */
+export const getQueueWaitingSlots = (
+  user: Pick<UserData, "staffAccount" | "federalStatus">,
+) => QUEUE_WAITING_SLOTS[getUserFederalStatus(user)];
+
+/** Total jobs in a queue: one active job plus the federal waiting-slot allowance. */
+export const getQueueTotalCapacity = (
+  user: Pick<UserData, "staffAccount" | "federalStatus">,
+) => 1 + getQueueWaitingSlots(user);
 
 export const fedJutsuLoadouts = (
   user?: Pick<UserData, "staffAccount" | "federalStatus">,

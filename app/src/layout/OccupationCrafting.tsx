@@ -42,6 +42,11 @@ export default function OccupationCrafting() {
   // API calls
   const { data: userItems } = api.item.getUserItems.useQuery();
   const { data: craftableItems } = api.occupation.getCraftableItems.useQuery();
+  const { data: craftingQueue } = api.occupation.getCraftingQueue.useQuery();
+  const queueIsFull =
+    !!craftingQueue &&
+    craftingQueue.waiting.length + (craftingQueue.active ? 1 : 0) >=
+      craftingQueue.totalCapacity;
 
   // Get currently imbuing items
   const activeImbuingItem = (userItems || []).find(
@@ -90,6 +95,16 @@ export default function OccupationCrafting() {
     onSuccess: async (data) => {
       showMutationToast(data);
       await utils.item.getUserItems.invalidate();
+    },
+  });
+
+  const cancelQueuedCraft = api.occupation.cancelQueuedCraft.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      await Promise.all([
+        utils.occupation.getCraftingQueue.invalidate(),
+        utils.item.getUserItems.invalidate(),
+      ]);
     },
   });
 
@@ -196,10 +211,87 @@ export default function OccupationCrafting() {
               craftableItems={craftableItems}
               userItems={userItems}
               userData={userData}
-              isCurrentlyCrafting={craftingStatus?.isCurrentlyCrafting || false}
+              queueIsFull={queueIsFull}
             />
           </CardContent>
         </Card>
+
+        {craftingQueue && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <Hammer className="h-5 w-5" /> Crafting Queue
+                </span>
+                <span className="font-normal text-sm">
+                  {craftingQueue.waiting.length + (craftingQueue.active ? 1 : 0)} /{" "}
+                  {craftingQueue.totalCapacity} ({craftingQueue.waitingSlots} waiting
+                  slots)
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {craftingQueue.active && (
+                <div className="rounded bg-muted p-3">
+                  <div className="flex justify-between">
+                    <span>
+                      Active: {craftingQueue.active.quantity}x{" "}
+                      {craftingQueue.active.item.name}
+                    </span>
+                    <Countdown
+                      targetDate={craftingQueue.active.finishesAt}
+                      onEndShow="Settling…"
+                      onFinish={() => {
+                        void utils.occupation.getCraftingQueue.invalidate();
+                        void utils.item.getUserItems.invalidate();
+                      }}
+                    />
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    Reserved:{" "}
+                    {craftingQueue.active.materials.length > 0
+                      ? craftingQueue.active.materials
+                          .map(
+                            (material) => `${material.quantity}x ${material.item.name}`,
+                          )
+                          .join(", ")
+                      : "legacy craft"}
+                  </p>
+                </div>
+              )}
+              {craftingQueue.waiting.map((entry, index) => (
+                <div
+                  key={entry.id}
+                  className="flex items-center justify-between rounded border p-3"
+                >
+                  <div>
+                    <div>
+                      {index + 1}. {entry.quantity}x {entry.item.name}
+                    </div>
+                    <div className="text-muted-foreground text-xs">
+                      Refund:{" "}
+                      {entry.materials
+                        .map(
+                          (material) => `${material.quantity}x ${material.item.name}`,
+                        )
+                        .join(", ")}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => cancelQueuedCraft.mutate({ queueId: entry.id })}
+                    disabled={cancelQueuedCraft.isPending}
+                  >
+                    Cancel & refund
+                  </Button>
+                </div>
+              ))}
+              {!craftingQueue.active && craftingQueue.waiting.length === 0 && (
+                <p className="text-muted-foreground text-sm">No crafts queued.</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Current Crafting */}
         {craftingStatus?.isCurrentlyCrafting && (

@@ -55,7 +55,6 @@ import AvatarImage from "@/layout/Avatar";
 import Countdown from "@/layout/Countdown";
 import ElementImage from "@/layout/ElementImage";
 import Image from "@/layout/Image";
-import { getFilter, useFiltering } from "@/layout/JutsuFiltering";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import StatusBar from "@/layout/StatusBar";
 import { sealCheck } from "@/libs/combat/tags";
@@ -65,8 +64,7 @@ import { useGameMenu } from "@/libs/menus";
 import { calcLevelRequirements, getExpBracket } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { calcCovertTrainingFinishAt } from "@/libs/stealth";
-import { trainingSpeedSeconds } from "@/libs/train";
-import { getDaysHoursMinutesSeconds, getGameTime, secondsFromDate } from "@/utils/time";
+import { getDaysHoursMinutesSeconds, getGameTime } from "@/utils/time";
 import { userBattleAtom, useUserData } from "@/utils/UserContext";
 import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
 
@@ -118,19 +116,12 @@ const MenuBoxProfile: React.FC = () => {
   const [gameTime, setGameTime] = useState<string>(() => getGameTime());
   const battle = useAtomValue(userBattleAtom);
   const utils = api.useUtils();
-  const state = useFiltering();
-
-  // Get user's jutsus
-  const { data: userJutsus } = api.jutsu.getUserJutsus.useQuery(getFilter(state), {
-    enabled: !!userData,
-  });
   const { data: userItems } = api.item.getUserItems.useQuery(undefined, {
     enabled: !!userData,
   });
-  const trainingJutsu = userJutsus?.find(
-    (j) => j.finishTraining && j.finishTraining > new Date(),
-  );
-
+  const { data: queueOverview } = api.train.getQueueOverview.useQuery(undefined, {
+    enabled: !!userData,
+  });
   /** Finish time for stealth or sensory training at the training grounds */
   const covertTrainingFinishAt = useMemo(() => {
     if (!userData?.covertTrainingType) return null;
@@ -465,7 +456,7 @@ const MenuBoxProfile: React.FC = () => {
               </Tooltip>
             </TooltipProvider>
           )}
-          {userData?.trainingStartedAt && userData?.currentlyTraining && (
+          {queueOverview?.stats.active && (
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger className="w-full">
@@ -473,12 +464,13 @@ const MenuBoxProfile: React.FC = () => {
                     <Dumbbell className="mr-2 h-6 w-6" />
                     <Link href="/traininggrounds">
                       <Countdown
-                        targetDate={secondsFromDate(
-                          trainingSpeedSeconds(userData?.trainingSpeed),
-                          userData?.trainingStartedAt,
-                        )}
+                        targetDate={queueOverview.stats.active.finishesAt}
                         timeDiff={timeDiff}
+                        onFinish={() => utils.train.getQueueOverview.invalidate()}
                       />
+                      {queueOverview.stats.waiting.length > 0 && (
+                        <span> +{queueOverview.stats.waiting.length}</span>
+                      )}
                     </Link>
                   </div>
                 </TooltipTrigger>
@@ -486,7 +478,7 @@ const MenuBoxProfile: React.FC = () => {
               </Tooltip>
             </TooltipProvider>
           )}
-          {trainingJutsu && (
+          {queueOverview?.jutsus.active && (
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger className="w-full">
@@ -494,18 +486,20 @@ const MenuBoxProfile: React.FC = () => {
                     <Atom className="mr-2 h-6 w-6" />
                     <Link href="/traininggrounds">
                       <Countdown
-                        targetDate={trainingJutsu.finishTraining || new Date()}
+                        targetDate={queueOverview.jutsus.active.finishesAt}
                         timeDiff={timeDiff}
                         onFinish={async () => {
+                          await utils.train.getQueueOverview.invalidate();
                           await utils.jutsu.getUserJutsus.invalidate();
                         }}
                       />
+                      {queueOverview.jutsus.waiting.length > 0 && (
+                        <span> +{queueOverview.jutsus.waiting.length}</span>
+                      )}
                     </Link>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent>
-                  Training {trainingJutsu.jutsu?.name} to level {trainingJutsu.level}
-                </TooltipContent>
+                <TooltipContent>Jutsu training queue</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
@@ -538,7 +532,32 @@ const MenuBoxProfile: React.FC = () => {
               </Tooltip>
             </TooltipProvider>
           )}
-          {activeItemCraftingTimer && (
+          {queueOverview?.crafting.active && (
+            <TooltipProvider delayDuration={50}>
+              <Tooltip>
+                <TooltipTrigger className="w-full">
+                  <div className="flex flex-row items-center hover:text-orange-500">
+                    <Hammer className="mr-2 h-6 w-6" />
+                    <Link href="/occupation">
+                      <Countdown
+                        targetDate={queueOverview.crafting.active.finishesAt}
+                        timeDiff={timeDiff}
+                        onFinish={async () => {
+                          await utils.train.getQueueOverview.invalidate();
+                          await utils.item.getUserItems.invalidate();
+                        }}
+                      />
+                      {queueOverview.crafting.waiting.length > 0 && (
+                        <span> +{queueOverview.crafting.waiting.length}</span>
+                      )}
+                    </Link>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>Crafting queue</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {activeItemCraftingTimer && !queueOverview?.crafting.active && (
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger className="w-full">
