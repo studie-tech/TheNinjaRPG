@@ -1,4 +1,4 @@
-import { LetterRanks, QuestTypes } from "@/drizzle/constants";
+import { LetterRanks, NPC_ONLY_QUEST_TYPES, QuestTypes } from "@/drizzle/constants";
 import {
   buildFilter,
   ContentFiltering,
@@ -33,6 +33,14 @@ const makeSchema = () =>
         includeNone: true,
         emptyValues: ["ALL"],
         options: toOptions(QuestTypes),
+        // NPC-only types are redacted from listings for players, so offering them here would
+        // only ever produce an empty result.
+        filterOptions: (opts, ctx) =>
+          (ctx as { canChangeContent?: boolean } | undefined)?.canChangeContent
+            ? opts
+            : opts.filter(
+                (o) => !(NPC_ONLY_QUEST_TYPES as readonly string[]).includes(o.value),
+              ),
         noneOption: { value: "ALL", label: "None" },
       },
       {

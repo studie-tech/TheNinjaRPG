@@ -15,7 +15,7 @@ import {
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { baseServerResponse, errorResponse, serverError } from "@/api/trpc";
-import type { QuestType } from "@/drizzle/constants";
+import type { QuestType, UserRole } from "@/drizzle/constants";
 import {
   ERRANDS_PER_DAY,
   IMG_AVATAR_DEFAULT,
@@ -118,23 +118,22 @@ import { questFilteringSchema } from "@/validators/quest";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import type { QuestCounterFieldName } from "@/validators/user";
 import { getQuestCounterFieldName } from "@/validators/user";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
 export const questsRouter = createTRPCRouter({
-  getAllNames: protectedProcedure
+  getAllNames: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get all quest names and IDs" } })
     .query(async ({ ctx }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (!canChangeContent(user.role)) {
-        throw serverError("UNAUTHORIZED", "Not allowed");
-      }
-      const results = await ctx.drizzle.query.quest.findMany({
-        columns: { id: true, name: true },
-        orderBy: (table, { asc }) => [asc(table.name)],
-      });
-      return results;
+      const [viewerRole, results] = await Promise.all([
+        fetchViewerRole(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.quest.findMany({
+          columns: { id: true, name: true, questType: true },
+          orderBy: (table, { asc }) => [asc(table.name)],
+        }),
+      ]);
+      return hideNpcOnlyQuestsFrom(viewerRole, results);
     }),
-  getAll: protectedProcedure
+  getAll: publicProcedure
     .meta({
       mcp: { enabled: true, description: "Get paginated list of quests with filters" },
     })
@@ -145,52 +144,55 @@ export const questsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (!canChangeContent(user.role)) {
-        throw serverError("UNAUTHORIZED", "Not allowed");
-      }
       const currentCursor = input.cursor ? input.cursor : 0;
       const skip = currentCursor * input.limit;
-      const results = await ctx.drizzle.query.quest.findMany({
-        with: { village: true },
-        where: and(
-          ...(input?.name ? [like(quest.name, `%${input.name}%`)] : []),
-          ...(input?.objectives && input.objectives.length > 0
-            ? [
-                or(
-                  ...input.objectives.map(
-                    (e) => sql`JSON_SEARCH(${quest.content},'one',${e}) IS NOT NULL`,
+      const [viewerRole, results] = await Promise.all([
+        fetchViewerRole(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.quest.findMany({
+          with: { village: true },
+          where: and(
+            ...(input?.name ? [like(quest.name, `%${input.name}%`)] : []),
+            ...(input?.objectives && input.objectives.length > 0
+              ? [
+                  or(
+                    ...input.objectives.map(
+                      (e) => sql`JSON_SEARCH(${quest.content},'one',${e}) IS NOT NULL`,
+                    ),
                   ),
-                ),
-              ]
-            : []),
-          ...(input?.questType ? [eq(quest.questType, input.questType)] : []),
-          ...(input?.rank ? [eq(quest.questRank, input.rank)] : []),
-          ...(input?.village ? [eq(quest.requiredVillage, input.village)] : []),
-          ...(input?.bloodline ? [eq(quest.requiredBloodlineId, input.bloodline)] : []),
-          ...(input?.sageMode ? [eq(quest.requiredSageModeId, input.sageMode)] : []),
-          ...(input?.userLevel
-            ? [
-                gte(quest.maxLevel, input.userLevel),
-                lte(quest.requiredLevel, input.userLevel),
-              ]
-            : []),
-          ...(input?.hidden !== undefined ? [eq(quest.hidden, !!input.hidden)] : []),
-        ),
-        offset: skip,
-        limit: input.limit,
-        ...(input?.questType === "tier" ? { orderBy: asc(quest.tierLevel) } : {}),
-      });
+                ]
+              : []),
+            ...(input?.questType ? [eq(quest.questType, input.questType)] : []),
+            ...(input?.rank ? [eq(quest.questRank, input.rank)] : []),
+            ...(input?.village ? [eq(quest.requiredVillage, input.village)] : []),
+            ...(input?.bloodline
+              ? [eq(quest.requiredBloodlineId, input.bloodline)]
+              : []),
+            ...(input?.sageMode ? [eq(quest.requiredSageModeId, input.sageMode)] : []),
+            ...(input?.userLevel
+              ? [
+                  gte(quest.maxLevel, input.userLevel),
+                  lte(quest.requiredLevel, input.userLevel),
+                ]
+              : []),
+            ...(input?.hidden !== undefined ? [eq(quest.hidden, !!input.hidden)] : []),
+          ),
+          offset: skip,
+          limit: input.limit,
+          ...(input?.questType === "tier" ? { orderBy: asc(quest.tierLevel) } : {}),
+        }),
+      ]);
       results.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });
+      // Paginate on the raw page so a hidden NPC-only quest shortens a page rather than
+      // truncating the infinite scroll early.
       const nextCursor = results.length < input.limit ? null : currentCursor + 1;
       return {
-        data: results,
+        data: hideNpcOnlyQuestsFrom(viewerRole, results),
         nextCursor: nextCursor,
       };
     }),
-  get: protectedProcedure
+  get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a single quest by ID" } })
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -200,10 +202,13 @@ export const questsRouter = createTRPCRouter({
           where: eq(userData.userId, ctx.userId ?? ""),
         }),
       ]);
-      if (!user || !canChangeContent(user.role)) {
-        throw serverError("UNAUTHORIZED", "Not allowed");
-      }
       if (!result) {
+        return null;
+      }
+      if (
+        isNpcOnlyQuestType(result.questType) &&
+        !canChangeContent(user?.role ?? "USER")
+      ) {
         return null;
       }
       controlShownQuestLocationInformation(result, user);
@@ -336,7 +341,7 @@ export const questsRouter = createTRPCRouter({
     })
     .input(z.object({ level: z.number(), questType: z.enum(QuestTypes) }))
     .query(async ({ ctx, input }) => {
-      if ((NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(input.questType)) {
+      if (isNpcOnlyQuestType(input.questType)) {
         return [];
       }
       // Query
@@ -782,15 +787,42 @@ export const questsRouter = createTRPCRouter({
             message: `Ranks rewards are only allowed with starter or exam quests`,
           };
         }
-        const npcOnlyNewQuestTargets = await fetchNpcOnlyNewQuestTargets(
-          ctx.drizzle,
-          data.content.objectives,
-        );
+        // Guard both directions of a new_quest edge. Outbound: this quest may not point at an
+        // NPC-only quest. Inbound: this quest may not BECOME NPC-only while something still
+        // points at it — `create` always starts a quest as a mission, so retyping is the only
+        // way an NPC-only quest exists, and an orphaned edge throws mid-consequence at runtime.
+        const becomingNpcOnly =
+          isNpcOnlyQuestType(data.questType) && !isNpcOnlyQuestType(entry.questType);
+        const [npcOnlyNewQuestTargets, inboundStarters] = await Promise.all([
+          fetchNpcOnlyNewQuestTargets(ctx.drizzle, data.content.objectives),
+          becomingNpcOnly
+            ? fetchQuestsStartingQuest(ctx.drizzle, entry.id)
+            : Promise.resolve([]),
+        ]);
         if (npcOnlyNewQuestTargets.length > 0) {
           return errorResponse(
             `NPC-only quests cannot be started by a new_quest objective: ${npcOnlyNewQuestTargets
               .map((target) => target.name)
               .join(", ")}`,
+          );
+        }
+        // A self-reference added in this same save is not yet stored, so check the incoming
+        // objectives too rather than relying on the query above.
+        const selfStarting =
+          becomingNpcOnly &&
+          data.content.objectives.some(
+            (objective) =>
+              objective.task === "new_quest" &&
+              "newQuestIds" in objective &&
+              objective.newQuestIds.includes(entry.id),
+          );
+        if (inboundStarters.length > 0 || selfStarting) {
+          const names = inboundStarters.map((q) => q.name);
+          if (selfStarting) names.push(entry.name);
+          return errorResponse(
+            `Cannot change this quest to ${data.questType}: it is still started by a new_quest objective in ${[
+              ...new Set(names),
+            ].join(", ")}. Remove those objectives first.`,
           );
         }
         const preparedBindings = await prepareOverworldBindings(
@@ -947,6 +979,17 @@ export const questsRouter = createTRPCRouter({
       );
       if (!check) {
         return errorResponse(`Objective flow invalid: ${message}`);
+      }
+      const npcOnlyNewQuestTargets = await fetchNpcOnlyNewQuestTargets(
+        ctx.drizzle,
+        questData.content.objectives,
+      );
+      if (npcOnlyNewQuestTargets.length > 0) {
+        return errorResponse(
+          `NPC-only quests cannot be started by a new_quest objective: ${npcOnlyNewQuestTargets
+            .map((target) => target.name)
+            .join(", ")}`,
+        );
       }
       const preparedBindings = await prepareOverworldBindings(
         ctx.drizzle,
@@ -1815,6 +1858,50 @@ export const fetchQuest = async (client: DrizzleClient, id: string) => {
   });
 };
 
+/** True when a quest type can only ever be acquired from its assigned overworld NPC. */
+const isNpcOnlyQuestType = (questType: QuestType) =>
+  (NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(questType);
+
+/**
+ * Role of the (possibly signed-out) caller of a public content-browsing endpoint. Defaults to
+ * "USER" so an unauthenticated visitor is redacted exactly like an ordinary player.
+ */
+const fetchViewerRole = async (
+  client: DrizzleClient,
+  userId: string | null | undefined,
+) => {
+  if (!userId) return "USER" as UserRole;
+  const viewer = await client.query.userData.findFirst({
+    columns: { role: true },
+    where: eq(userData.userId, userId),
+  });
+  return viewer?.role ?? ("USER" as UserRole);
+};
+
+/**
+ * Drops NPC-only quests from a content listing for anyone who cannot edit content. They are
+ * unobtainable outside their assigned overworld NPC, so listing them in the manual would only
+ * advertise content the player has no way to start.
+ */
+const hideNpcOnlyQuestsFrom = <T extends { questType: QuestType }>(
+  viewerRole: UserRole,
+  quests: T[],
+) =>
+  canChangeContent(viewerRole)
+    ? quests
+    : quests.filter((q) => !isNpcOnlyQuestType(q.questType));
+
+/**
+ * Quests whose stored objectives start `questId` through a new_quest consequence. Retyping a
+ * quest to an NPC-only type while such a reference is live would strand the referring chain, so
+ * the update endpoint rejects the retype until the reference is removed.
+ */
+const fetchQuestsStartingQuest = async (client: DrizzleClient, questId: string) =>
+  client.query.quest.findMany({
+    columns: { id: true, name: true },
+    where: sql`JSON_CONTAINS(JSON_EXTRACT(${quest.content}, '$.objectives[*].newQuestIds[*]'), JSON_QUOTE(${questId})) = 1`,
+  });
+
 /** Resolve NPC-only quests referenced by new_quest objectives so content cannot author a bypass. */
 const fetchNpcOnlyNewQuestTargets = async (
   client: DrizzleClient,
@@ -1908,7 +1995,7 @@ export const upsertQuestEntries = async (
   quest: Quest,
   updateSelector: QueryCondition,
 ) => {
-  if ((NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(quest.questType)) {
+  if (isNpcOnlyQuestType(quest.questType)) {
     throw serverError(
       "PRECONDITION_FAILED",
       "Overworld quests cannot be assigned to users in bulk.",
@@ -2177,10 +2264,7 @@ export const assignQuestToUser = async (args: {
   } = args;
 
   // NPC-only quests can never be acquired through the generic UI start endpoint.
-  if (
-    (NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(questData.questType) &&
-    source !== "overworld_npc"
-  ) {
+  if (isNpcOnlyQuestType(questData.questType) && source !== "overworld_npc") {
     return errorResponse(
       "This quest can only be accepted from its assigned overworld NPC.",
     );
@@ -2189,7 +2273,7 @@ export const assignQuestToUser = async (args: {
   // Verify the concrete placement-to-quest relation instead of trusting a quest id supplied by
   // another internal caller. The overworld interaction route is the only caller that supplies a
   // placement id, and it has already validated that the player is standing at that active NPC.
-  if ((NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(questData.questType)) {
+  if (isNpcOnlyQuestType(questData.questType)) {
     if (!overworldPlacementId) {
       return errorResponse("This quest is not assigned to this overworld NPC.");
     }
@@ -2331,10 +2415,7 @@ export const upsertQuestEntry = async (
   source: QuestAcquisitionSource,
   prevEntry?: Awaited<ReturnType<typeof fetchUserQuestByQuestId>> | null,
 ) => {
-  if (
-    (NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(quest.questType) &&
-    source !== "overworld_npc"
-  ) {
+  if (isNpcOnlyQuestType(quest.questType) && source !== "overworld_npc") {
     throw serverError(
       "PRECONDITION_FAILED",
       "Overworld quests can only be accepted from their assigned NPC.",
@@ -2801,11 +2882,17 @@ const executeClaimedQuestConsequences = async ({
             const quests = await client.query.quest.findMany({
               where: inArray(quest.id, startedQuestIds),
             });
-            notifications.push(
-              `Started new quest: ${quests.map((q) => q.name).join(", ")}`,
-            );
+            // Runs after the user snapshot is already committed, so a throw here would burn the
+            // objective without starting the quest. An NPC-only target can only appear via a
+            // content edit that stranded the edge, so skip it instead of failing the request.
+            const startable = quests.filter((q) => !isNpcOnlyQuestType(q.questType));
+            if (startable.length > 0) {
+              notifications.push(
+                `Started new quest: ${startable.map((q) => q.name).join(", ")}`,
+              );
+            }
             await Promise.all(
-              quests.map((quest) =>
+              startable.map((quest) =>
                 upsertQuestEntry(client, user, quest, "quest_objective"),
               ),
             );
