@@ -379,7 +379,8 @@ export default function MyItems() {
                       </p>
                       <p className="text-muted-foreground text-sm">
                         You have {itemsNeedingRepair.length} damaged item
-                        {itemsNeedingRepair.length !== 1 ? "s" : ""} that need{" "}
+                        {itemsNeedingRepair.length !== 1 ? "s" : ""} that need
+                        {itemsNeedingRepair.length === 1 ? "s" : ""}{" "}
                         {repairAllInfo.totalDurabilityNeeded} total durability, but you
                         don&apos;t have enough repair kits to repair all of them.
                       </p>
