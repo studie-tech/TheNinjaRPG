@@ -22,6 +22,7 @@ import {
   ne,
   sql,
 } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import type { BattleType } from "@/drizzle/constants";
 import type { UserItem } from "@/drizzle/schema";
 import {
@@ -131,6 +132,12 @@ export const consumeUserItemAtomically = async ({
   });
 };
 
+/**
+ * How long a stack-merge claim (negative quantity) may exist before it is considered abandoned
+ * and safe to restore. Claims normally live for only a few database round trips.
+ */
+export const MERGE_STACK_CLAIM_TIMEOUT_MS = 30_000;
+
 type RefundUserItemQuantityAtomicallyParams = {
   client: DrizzleClient;
   itemSnapshot: UserItem;
@@ -140,8 +147,9 @@ type RefundUserItemQuantityAtomicallyParams = {
 /**
  * Compensates a successful item consume. If the consume decremented the stack, the duplicate-key
  * branch adds the quantity back; if it deleted the stack, the insert branch recreates the original
- * row with only the refunded quantity. A negative quantity belongs to an active stack merge, so
- * the guarded upsert refuses to change it, recovers the merge claims, and retries the refund.
+ * row with only the refunded quantity. A negative quantity belongs to an active stack merge whose
+ * publish would overwrite any value we set, so the guarded upsert refuses to touch it and the
+ * refund lands in a fresh row instead — the next merge folds it back into the stack.
  */
 export const refundUserItemQuantityAtomically = async ({
   client,
@@ -150,43 +158,26 @@ export const refundUserItemQuantityAtomically = async ({
 }: RefundUserItemQuantityAtomicallyParams) => {
   if (quantity <= 0) return;
 
-  const refund = () =>
-    client
-      .insert(userItem)
-      .values({
-        id: itemSnapshot.id,
-        createdAt: itemSnapshot.createdAt,
-        updatedAt: itemSnapshot.updatedAt,
-        userId: itemSnapshot.userId,
-        itemId: itemSnapshot.itemId,
-        quantity,
-        level: itemSnapshot.level,
-        experience: itemSnapshot.experience,
-        equipped: itemSnapshot.equipped,
-        durability: itemSnapshot.durability,
-        storedAtHome: itemSnapshot.storedAtHome,
-        craftingFinishedAt: itemSnapshot.craftingFinishedAt,
-        isInAuction: itemSnapshot.isInAuction,
-        activeVariantId: itemSnapshot.activeVariantId,
-        dropChancePerc: itemSnapshot.dropChancePerc,
-      })
-      .onDuplicateKeyUpdate({
-        set: {
-          quantity: sql`IF(${userItem.quantity} >= 0, ${userItem.quantity} + ${quantity}, ${userItem.quantity})`,
-        },
-      });
-
-  const result = await refund();
+  const result = await client
+    .insert(userItem)
+    .values({ ...itemSnapshot, quantity })
+    .onDuplicateKeyUpdate({
+      set: {
+        quantity: sql`IF(${userItem.quantity} >= 0, ${userItem.quantity} + ${quantity}, ${userItem.quantity})`,
+      },
+    });
   if (result.rowsAffected > 0) return;
 
-  // A no-op duplicate update means the row is held by a merge claim. Recover every row in that
-  // merge before retrying so its pending publish cannot overwrite the refunded quantity.
-  await restoreStaleUserItemMergeClaims({
-    client,
-    userId: itemSnapshot.userId,
-    staleBefore: new Date(),
+  // The claimed original keeps its equipped slot when the merge publishes it back, so the
+  // refund row must start unequipped — two rows can never share one slot.
+  await client.insert(userItem).values({
+    ...itemSnapshot,
+    id: nanoid(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    equipped: "NONE",
+    quantity,
   });
-  await refund();
 };
 
 type RestoreStaleUserItemMergeClaimsParams = {
@@ -232,8 +223,11 @@ export const restoreStaleUserItemMergeClaims = async ({
   ]);
 };
 
-/** Builds the single-statement CASE expression used to atomically publish a stack merge. */
-export const userItemMergePublishQuantity = (
+/**
+ * Builds the per-row CASE expression used by the stack-merge protocol so one UPDATE can set a
+ * different quantity per row (claim negation, publish targets, and conflict restores).
+ */
+export const userItemMergeQuantityCase = (
   targets: readonly { id: string; quantity: number }[],
 ) =>
   sql<number>`CASE ${userItem.id} ${sql.join(

@@ -21,11 +21,13 @@ export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
   const { mutate: mergeAllStacks, isPending } = api.item.mergeAllStacks.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
+      // Invalidate even on failure responses: a partial merge reports success=false
+      // after having already mutated some stacks, and the UI must not go stale.
+      await Promise.all([
+        utils.item.getUserItemsWithVariants.invalidate(),
+        utils.item.getUserItems.invalidate(),
+      ]);
       if (data.success) {
-        await Promise.all([
-          utils.item.getUserItemsWithVariants.invalidate(),
-          utils.item.getUserItems.invalidate(),
-        ]);
         onMerged?.();
       }
     },

@@ -40,6 +40,8 @@ export const needsInventoryRepair = (ui: {
 /**
  * Gets all repair kits from user items. Shared by the inventory UI and
  * `item.useRepairAll` so preview and mutation pick the same stacks.
+ * Excludes home-stored and auction-listed kits — `item.useRepairItem` rejects
+ * those, and bulk repair must never consume a stack backing a live listing.
  */
 export const getRepairKits = (
   userItems: UserItemWithRelations[] | undefined,
@@ -49,6 +51,8 @@ export const getRepairKits = (
       (userItem) =>
         userItem.item?.effects?.some((e) => e.type === "repair") &&
         userItem.quantity > 0 &&
+        !userItem.storedAtHome &&
+        !userItem.isInAuction &&
         (!userItem.craftingFinishedAt || userItem.craftingFinishedAt < new Date()),
     )
     .map((userItem) => {
