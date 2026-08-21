@@ -101,38 +101,28 @@ export const publicState = [
  * Which user state is private
  */
 export const privateState = [
-  "bukijutsuDefence",
-  "bukijutsuOffence",
-  "genjutsuDefence",
-  "genjutsuOffence",
-  "highestDefence",
+  "bloodlineMastery",
+  "bukijutsuMastery",
+  "defence",
+  "genjutsuMastery",
   "highestGenerals",
-  "highestOffence",
+  "highestMasteryType",
   "intelligence",
   "itemLoadout",
   "jutsuLoadout",
-  "ninjutsuDefence",
-  "ninjutsuOffence",
+  "ninjutsuMastery",
+  "offence",
+  "sageMastery",
   "speed",
   "strength",
-  "taijutsuDefence",
-  "taijutsuOffence",
+  "taijutsuMastery",
   "updatedAt",
   "willpower",
 ] as const;
 
 export const allState = [...publicState, ...privateState] as const;
 
-export const StatNames = [
-  "bukijutsuDefence",
-  "bukijutsuOffence",
-  "genjutsuDefence",
-  "genjutsuOffence",
-  "ninjutsuDefence",
-  "ninjutsuOffence",
-  "taijutsuDefence",
-  "taijutsuOffence",
-] as const;
+export const StatNames = ["offence", "defence"] as const;
 
 export const GenNames = ["strength", "intelligence", "willpower", "speed"] as const;
 export type GenName = (typeof GenNames)[number];

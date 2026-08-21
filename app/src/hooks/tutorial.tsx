@@ -181,9 +181,9 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   {
     id: "OGLXpIqVbb0hPWtJ00LzT",
     title: "Training",
-    elementIds: ["tutorial-traininggrounds-taijutsuoffence"],
+    elementIds: ["tutorial-traininggrounds-offence"],
     description:
-      "Welcome to the training grounds. Here you can either train some of your basic stats, or train a new jutsu to use in battle. Let's start out by doing a bit of offensive taijutsu training, making your attacks more powerful.",
+      "Welcome to the training grounds. Here you can either train some of your basic stats, or train a new jutsu to use in battle. Let's start out by doing a bit of offence training, making your attacks more powerful.",
     page: "/traininggrounds",
   },
   {

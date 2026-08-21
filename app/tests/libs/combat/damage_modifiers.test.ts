@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/server/db", () => ({ drizzleDB: {} }));
+
 import {
   DMG_REDUCTION_CAP,
   OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,
@@ -671,7 +674,7 @@ describe("computeDamagePacket", () => {
       statTypes: ["Highest"],
       generalTypes: ["Highest"],
       elements: ["Fire"],
-      highestOffence: "bukijutsuOffence",
+      highestMasteryType: "Bukijutsu",
       highestGenerals: ["strength", "speed"],
     });
 
@@ -687,7 +690,7 @@ describe("computeDamagePacket", () => {
           isNew: false,
           castThisRound: false,
           createdRound: 1,
-          highestOffence: "bukijutsuOffence",
+          highestMasteryType: "Bukijutsu",
           highestGenerals: ["strength", "speed"],
           ...params.runtime,
         },

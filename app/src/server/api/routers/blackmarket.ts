@@ -21,6 +21,7 @@ import {
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { actionLog, ryoTrade, userData } from "@/drizzle/schema";
+import { getAssignedCombatStatTotal } from "@/libs/profile";
 import { filterValidElementsTypeguard } from "@/libs/train";
 import type { DrizzleClient } from "@/server/db";
 import { getRandomElement } from "@/utils/array";
@@ -609,22 +610,16 @@ export const blackMarketRouter = createTRPCRouter({
         return { success: false, message: "Not enough reputation points" };
       }
       const inputSum = round(Object.values(input).reduce((a, b) => a + b, 0));
-      const availableStats = round(user.experience + 120);
+      const availableStats = round(getAssignedCombatStatTotal(user));
       if (inputSum !== availableStats) {
-        const message = `Requested points ${inputSum} for not match experience points ${availableStats}`;
+        const message = `Requested points ${inputSum} do not match your ${availableStats} assigned combat stat points`;
         return { success: false, message };
       }
       const result = await ctx.drizzle
         .update(userData)
         .set({
-          ninjutsuOffence: input.ninjutsuOffence,
-          taijutsuOffence: input.taijutsuOffence,
-          genjutsuOffence: input.genjutsuOffence,
-          bukijutsuOffence: input.bukijutsuOffence,
-          ninjutsuDefence: input.ninjutsuDefence,
-          taijutsuDefence: input.taijutsuDefence,
-          genjutsuDefence: input.genjutsuDefence,
-          bukijutsuDefence: input.bukijutsuDefence,
+          offence: input.offence,
+          defence: input.defence,
           strength: input.strength,
           speed: input.speed,
           intelligence: input.intelligence,

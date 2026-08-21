@@ -1498,14 +1498,8 @@ export const updateUser = async (
           seichiSilver: result.seichiSilver
             ? sql`seichiSilver + ${result.seichiSilver}`
             : sql`seichiSilver`,
-          ninjutsuOffence: sql`ninjutsuOffence + ${result.ninjutsuOffence}`,
-          genjutsuOffence: sql`genjutsuOffence + ${result.genjutsuOffence}`,
-          taijutsuOffence: sql`taijutsuOffence + ${result.taijutsuOffence}`,
-          bukijutsuOffence: sql`bukijutsuOffence + ${result.bukijutsuOffence}`,
-          ninjutsuDefence: sql`ninjutsuDefence + ${result.ninjutsuDefence}`,
-          genjutsuDefence: sql`genjutsuDefence + ${result.genjutsuDefence}`,
-          taijutsuDefence: sql`taijutsuDefence + ${result.taijutsuDefence}`,
-          bukijutsuDefence: sql`bukijutsuDefence + ${result.bukijutsuDefence}`,
+          offence: sql`offence + ${result.offence}`,
+          defence: sql`defence + ${result.defence}`,
           villagePrestige: sql`villagePrestige + ${result.villagePrestige}`,
           dailyArenaFights: sql`dailyArenaFights + ${curBattle.battleType === "ARENA" ? 1 : 0}`,
           dailySageActivations: sql`dailySageActivations + ${user.sageModeUsedThisBattle ? 1 : 0}`,

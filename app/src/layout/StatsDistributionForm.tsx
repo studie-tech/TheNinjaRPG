@@ -175,39 +175,36 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
       name: "Ninjutsu",
       image: IMG_TRAIN_NIN_OFF,
       description: "Master chakra manipulation",
-      stats: [
-        "willpower",
-        "intelligence",
-        "ninjutsuOffence",
-        "ninjutsuDefence",
-      ] as const,
+      stats: ["willpower", "intelligence", "offence", "defence"] as const,
     },
     {
       id: "taijutsu",
       name: "Taijutsu",
       image: IMG_TRAIN_TAI_OFF,
       description: "Master of martial arts",
-      stats: ["strength", "speed", "taijutsuOffence", "taijutsuDefence"] as const,
+      stats: ["strength", "speed", "offence", "defence"] as const,
     },
     {
       id: "genjutsu",
       name: "Genjutsu",
       image: IMG_TRAIN_GEN_OFF,
       description: "Master of illusions",
-      stats: ["willpower", "speed", "genjutsuOffence", "genjutsuDefence"] as const,
+      stats: ["willpower", "speed", "offence", "defence"] as const,
     },
     {
       id: "bukijutsu",
       name: "Bukijutsu",
       image: IMG_TRAIN_BUKI_OFF,
       description: "Weapons mastery",
-      stats: ["intelligence", "speed", "bukijutsuOffence", "bukijutsuDefence"] as const,
+      stats: ["intelligence", "speed", "offence", "defence"] as const,
     },
   ];
 
-  // Check if any stat in the specialization is capped
+  // Disable a specialization only when every one of its stats is already at cap.
+  // All presets share offence/defence, so treating a single capped combat stat as
+  // "maxed" would hide every Simple option.
   const isSpecializationDisabled = (option: (typeof specializationOptions)[number]) => {
-    return option.stats.some((stat) => {
+    return option.stats.every((stat) => {
       const maxValue = maxValues[stat];
       const currentValue = defaultValues[stat] ?? 0;
       return maxValue !== undefined && maxValue !== null && currentValue >= maxValue;
@@ -223,24 +220,43 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
     });
   };
 
+  /**
+   * Points this preset adds per stat: an even split, with whatever a capped stat cannot take
+   * spilled onto the stats that still have room. The confirm dialog renders this same result,
+   * so the preview always matches what gets applied.
+   */
+  const getSpecializationSplit = (
+    option: (typeof specializationOptions)[number],
+  ): Record<string, number> => {
+    const pointsPerStat = Math.floor(availableStats / 4);
+    const leftoverPoints = availableStats - pointsPerStat * 4;
+    const added: Record<string, number> = {};
+    let unusedPoints = 0;
+    option.stats.forEach((stat, index) => {
+      const room = maxValues[stat] ?? 0;
+      const wanted = pointsPerStat + (index < leftoverPoints ? 1 : 0);
+      const add = Math.min(room, wanted);
+      unusedPoints += wanted - add;
+      added[stat] = add;
+    });
+    for (const stat of option.stats) {
+      if (unusedPoints <= 0) break;
+      const room = (maxValues[stat] ?? 0) - (added[stat] ?? 0);
+      const add = Math.min(room, unusedPoints);
+      added[stat] = (added[stat] ?? 0) + add;
+      unusedPoints -= add;
+    }
+    return added;
+  };
+
   const handleSpecializationSelect = (
     option: (typeof specializationOptions)[number],
   ) => {
-    // Build the stat distribution object
     const distribution: Partial<StatSchemaType> = { ...defaultValues };
-
-    // Calculate 25% of available stats for each stat (4 stats total)
-    const pointsPerStat = Math.floor(availableStats / 4);
-    const leftoverPoints = availableStats - pointsPerStat * 4;
-
-    option.stats.forEach((stat, index) => {
-      // Add base points to each stat
-      const basePoints = pointsPerStat;
-      // Add 1 extra point to the first N stats where N is the number of leftover points
-      const extraPoint = index < leftoverPoints ? 1 : 0;
-      distribution[stat] = (defaultValues[stat] ?? 0) + basePoints + extraPoint;
-    });
-
+    const added = getSpecializationSplit(option);
+    for (const stat of option.stats) {
+      distribution[stat] = (defaultValues[stat] ?? 0) + (added[stat] ?? 0);
+    }
     onAccept(distribution as StatSchemaType);
   };
 
@@ -249,6 +265,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
       {specializationOptions.map((option) => {
         const isDisabled = isSpecializationDisabled(option);
         const cappedStats = getCappedStats(option);
+        const split = getSpecializationSplit(option);
 
         return (
           <Confirm2
@@ -289,16 +306,14 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
               <ul className="mb-2 list-inside list-disc">
                 {option.stats.map((stat, index) => {
                   const isCapped = cappedStats.includes(stat);
-                  const pointsPerStat = Math.floor(availableStats / 4);
-                  const leftoverPoints = availableStats - pointsPerStat * 4;
-                  const points = pointsPerStat + (index < leftoverPoints ? 1 : 0);
+                  const points = split[stat] ?? 0;
                   return (
                     <li
                       key={`${stat}-${index}`}
                       className={`capitalize ${isCapped ? "font-semibold text-red-500" : ""}`}
                     >
-                      {capitalizeFirstLetter(noCase(stat))} (+{points})
-                      {isCapped && " (currently maxed)"}
+                      {capitalizeFirstLetter(noCase(stat))} (+
+                      {points.toLocaleString()}){isCapped && " (currently maxed)"}
                     </li>
                   );
                 })}

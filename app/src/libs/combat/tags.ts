@@ -4,6 +4,7 @@ import type {
   BattleType,
   ElementName,
   GeneralType,
+  MasteryType,
   PoolType,
   StatType,
 } from "@/drizzle/constants";
@@ -32,7 +33,9 @@ import {
   getPreventTypeName,
   isEffectActive,
   selectTransferEffects,
+  storeMasteryBases,
 } from "@/libs/combat/util";
+import { MASTERY_TYPE_TO_STAT } from "@/libs/mastery";
 import { calcHP, scaleUserStats } from "@/libs/profile";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import type {
@@ -48,7 +51,7 @@ import {
   isNegativeUserEffect,
   isPositiveUserEffect,
 } from "@/validators/combat";
-import type { DmgConfig, GenName, GenNames, StatNames } from "./constants";
+import type { DmgConfig, GenName, GenNames } from "./constants";
 import type {
   ActionEffect,
   BattleEffect,
@@ -65,7 +68,7 @@ import type {
  */
 type RealizeTagUser = Pick<
   ReturnedUserState,
-  "userId" | "villageId" | "highestOffence" | "highestDefence" | "highestGenerals"
+  "userId" | "villageId" | "highestMasteryType" | "highestGenerals"
 >;
 
 /**
@@ -93,8 +96,7 @@ export const realizeTag = <T extends BattleEffect>(props: {
   tag.level = level ?? 0;
   tag.isNew = true;
   tag.castThisRound = true;
-  tag.highestOffence = user.highestOffence;
-  tag.highestDefence = user.highestDefence;
+  tag.highestMasteryType = user.highestMasteryType;
   tag.highestGenerals = user.highestGenerals;
   tag.barrierAbsorb = barrierAbsorb || 0;
   tag.actionId = props.actionId;
@@ -104,8 +106,6 @@ export const realizeTag = <T extends BattleEffect>(props: {
     }
   }
   if (target) {
-    tag.targetHighestOffence = target.highestOffence;
-    tag.targetHighestDefence = target.highestDefence;
     tag.targetHighestGenerals = target.highestGenerals;
   }
   if (battle && "rounds" in tag) {
@@ -534,23 +534,28 @@ export const debuffPrevent = (
   }
 };
 
+/**
+ * Human-readable summary of what an effect affects.
+ * @param effect - the effect to describe
+ * @param type - set by damage modifiers, where `statTypes` still selects which damage
+ *   the modifier applies to. When unset the effect adjusts the unified combat stats, so
+ *   `statTypes` are reported as Offence/Defence rather than as jutsu types.
+ */
 export const getAffected = (effect: UserEffect, type?: "offence" | "defence") => {
   const stats: string[] = [];
-  if ("statTypes" in effect && effect.statTypes) {
-    effect.statTypes.forEach((stat: StatType) => {
-      if (stat === "Highest") {
-        const highestOffence = effect.highestOffence;
-        if (highestOffence && (!type || type === "offence")) {
-          stats.push(getStatTypeFromStat(highestOffence));
-        }
-        const highestDefence = effect.highestDefence;
-        if (highestDefence && (!type || type === "defence")) {
-          stats.push(getStatTypeFromStat(highestDefence));
-        }
-      } else {
-        stats.push(stat);
-      }
-    });
+  if ("statTypes" in effect && effect.statTypes?.length) {
+    if (type) {
+      effect.statTypes.forEach((stat: StatType) => {
+        stats.push(stat === "Highest" ? capitalizeFirstLetter(type) : stat);
+      });
+    } else {
+      const direction = "direction" in effect ? effect.direction : "both";
+      if (direction === "offence" || direction === "both") stats.push("Offence");
+      if (direction === "defence" || direction === "both") stats.push("Defence");
+    }
+  }
+  if ("masteryTypes" in effect && effect.masteryTypes) {
+    stats.push(...effect.masteryTypes);
   }
   if ("generalTypes" in effect && effect.generalTypes) {
     effect.generalTypes.forEach((general: GeneralType) => {
@@ -596,126 +601,33 @@ const applyPercentageStatModifier = (
   (target[statName] as number) = (target[statName] as number) + change;
 };
 
-/** Adjust stats of target based on effect */
+const applyCombatStatChange = (
+  target: BattleUserState,
+  stat: "offence" | "defence",
+  power: number,
+  calculation: string,
+) => {
+  if (calculation === "static") {
+    target[stat] += power;
+  } else {
+    applyPercentageStatModifier(target, stat, power);
+  }
+};
+
+/** Adjust combat stats of target based on effect */
 export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
   const { power, adverb, qualifier } = getPower(effect);
   const affected = getAffected(effect);
   if ("statTypes" in effect || "generalTypes" in effect) {
     if (!effect.isNew && !effect.castThisRound) {
-      effect.statTypes?.forEach((stat: StatType) => {
-        if (stat === "Highest") {
-          if (effect.calculation === "static") {
-            if (effect.direction === "offence" || effect.direction === "both") {
-              switch (target.highestOffence) {
-                case "ninjutsuOffence":
-                  target.ninjutsuOffence += power;
-                  break;
-                case "genjutsuOffence":
-                  target.genjutsuOffence += power;
-                  break;
-                case "taijutsuOffence":
-                  target.taijutsuOffence += power;
-                  break;
-                case "bukijutsuOffence":
-                  target.bukijutsuOffence += power;
-                  break;
-              }
-            }
-            if (effect.direction === "defence" || effect.direction === "both") {
-              switch (target.highestDefence) {
-                case "ninjutsuDefence":
-                  target.ninjutsuDefence += power;
-                  break;
-                case "genjutsuDefence":
-                  target.genjutsuDefence += power;
-                  break;
-                case "taijutsuDefence":
-                  target.taijutsuDefence += power;
-                  break;
-                case "bukijutsuDefence":
-                  target.bukijutsuDefence += power;
-                  break;
-              }
-            }
-          } else {
-            // Percentage calculation - use additive stacking
-            if (effect.direction === "offence" || effect.direction === "both") {
-              applyPercentageStatModifier(target, target.highestOffence, power);
-            }
-            if (effect.direction === "defence" || effect.direction === "both") {
-              applyPercentageStatModifier(target, target.highestDefence, power);
-            }
-          }
-        } else if (stat === "Ninjutsu") {
-          if (effect.calculation === "static") {
-            if (effect.direction === "offence" || effect.direction === "both") {
-              target.ninjutsuOffence += power;
-            }
-            if (effect.direction === "defence" || effect.direction === "both") {
-              target.ninjutsuDefence += power;
-            }
-          } else {
-            // Percentage calculation - use additive stacking
-            if (effect.direction === "offence" || effect.direction === "both") {
-              applyPercentageStatModifier(target, "ninjutsuOffence", power);
-            }
-            if (effect.direction === "defence" || effect.direction === "both") {
-              applyPercentageStatModifier(target, "ninjutsuDefence", power);
-            }
-          }
-        } else if (stat === "Genjutsu") {
-          if (effect.calculation === "static") {
-            if (effect.direction === "offence" || effect.direction === "both") {
-              target.genjutsuOffence += power;
-            }
-            if (effect.direction === "defence" || effect.direction === "both") {
-              target.genjutsuDefence += power;
-            }
-          } else {
-            // Percentage calculation - use additive stacking
-            if (effect.direction === "offence" || effect.direction === "both") {
-              applyPercentageStatModifier(target, "genjutsuOffence", power);
-            }
-            if (effect.direction === "defence" || effect.direction === "both") {
-              applyPercentageStatModifier(target, "genjutsuDefence", power);
-            }
-          }
-        } else if (stat === "Taijutsu") {
-          if (effect.calculation === "static") {
-            if (effect.direction === "offence" || effect.direction === "both") {
-              target.taijutsuOffence += power;
-            }
-            if (effect.direction === "defence" || effect.direction === "both") {
-              target.taijutsuDefence += power;
-            }
-          } else {
-            // Percentage calculation - use additive stacking
-            if (effect.direction === "offence" || effect.direction === "both") {
-              applyPercentageStatModifier(target, "taijutsuOffence", power);
-            }
-            if (effect.direction === "defence" || effect.direction === "both") {
-              applyPercentageStatModifier(target, "taijutsuDefence", power);
-            }
-          }
-        } else if (stat === "Bukijutsu") {
-          if (effect.calculation === "static") {
-            if (effect.direction === "offence" || effect.direction === "both") {
-              target.bukijutsuOffence += power;
-            }
-            if (effect.direction === "defence" || effect.direction === "both") {
-              target.bukijutsuDefence += power;
-            }
-          } else {
-            // Percentage calculation - use additive stacking
-            if (effect.direction === "offence" || effect.direction === "both") {
-              applyPercentageStatModifier(target, "bukijutsuOffence", power);
-            }
-            if (effect.direction === "defence" || effect.direction === "both") {
-              applyPercentageStatModifier(target, "bukijutsuDefence", power);
-            }
-          }
+      if (effect.statTypes && effect.statTypes.length > 0) {
+        if (effect.direction === "offence" || effect.direction === "both") {
+          applyCombatStatChange(target, "offence", power, effect.calculation);
         }
-      });
+        if (effect.direction === "defence" || effect.direction === "both") {
+          applyCombatStatChange(target, "defence", power, effect.calculation);
+        }
+      }
       effect.generalTypes?.forEach((general: GeneralType) => {
         if (general === "Highest") {
           if (effect.calculation === "static") {
@@ -883,6 +795,51 @@ export const decreaseStats = (
   effect.power = -Math.abs(effect.power);
   effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
   return adjustStats(effect, target);
+};
+
+const adjustMasteries = (effect: UserEffect, target: BattleUserState) => {
+  const { power, adverb, qualifier } = getPower(effect);
+  const affected = getAffected(effect);
+  if ("masteryTypes" in effect && effect.masteryTypes) {
+    if (!effect.isNew && !effect.castThisRound) {
+      storeMasteryBases(target);
+      effect.masteryTypes.forEach((mastery: MasteryType) => {
+        const stat = MASTERY_TYPE_TO_STAT[mastery];
+        if (effect.calculation === "static") {
+          target[stat] += power;
+        } else {
+          applyPercentageStatModifier(target, stat, power);
+        }
+      });
+    }
+  }
+  return getInfo(target, effect, `${affected} mastery is ${adverb} by ${qualifier}`);
+};
+
+export const increaseMastery = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+) => {
+  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
+  if (preventTag && preventTag.createdRound < effect.createdRound) {
+    if (!pass) return preventResponse(effect, target, "cannot be buffed");
+  }
+  return adjustMasteries(effect, target);
+};
+
+export const decreaseMastery = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+) => {
+  const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
+  if (preventTag && preventTag.createdRound < effect.createdRound) {
+    if (!pass) return preventResponse(effect, target, "cannot be debuffed");
+  }
+  effect.power = -Math.abs(effect.power);
+  effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
+  return adjustMasteries(effect, target);
 };
 
 /** Adjust damage given by target. Applies to both direct and residual (DOT) damage. */
@@ -1275,6 +1232,7 @@ export const clone = (
   }
   if (effect.isNew) {
     const newAi = structuredClone(user);
+    delete newAi.baseStatsForModifiers;
     // Place on battlefield
     newAi.userId = nanoid();
     effect.creatorId = newAi.userId;
@@ -1304,14 +1262,8 @@ export const clone = (
     // Scale to level
     scaleUserStats(newAi);
     // Set stats
-    newAi.ninjutsuOffence = newAi.ninjutsuOffence * perc;
-    newAi.ninjutsuDefence = newAi.ninjutsuDefence * perc;
-    newAi.genjutsuOffence = newAi.genjutsuOffence * perc;
-    newAi.genjutsuDefence = newAi.genjutsuDefence * perc;
-    newAi.taijutsuOffence = newAi.taijutsuOffence * perc;
-    newAi.taijutsuDefence = newAi.taijutsuDefence * perc;
-    newAi.bukijutsuOffence = newAi.bukijutsuOffence * perc;
-    newAi.bukijutsuDefence = newAi.bukijutsuDefence * perc;
+    newAi.offence = newAi.offence * perc;
+    newAi.defence = newAi.defence * perc;
     newAi.strength = newAi.strength * perc;
     newAi.intelligence = newAi.intelligence * perc;
     newAi.willpower = newAi.willpower * perc;
@@ -1347,49 +1299,18 @@ export const updateStatUsage = (
   effect: UserEffect | GroundEffect,
   inverse = false,
 ) => {
-  if ("statTypes" in effect && "direction" in effect) {
-    effect.statTypes?.forEach((statType: StatType) => {
-      if (
-        (effect.direction === "offence" && !inverse) ||
-        (effect.direction === "defence" && inverse)
-      ) {
-        switch (statType) {
-          case "Taijutsu":
-            user.usedStats.taijutsuOffence += 1;
-            break;
-          case "Bukijutsu":
-            user.usedStats.bukijutsuOffence += 1;
-            break;
-          case "Ninjutsu":
-            user.usedStats.ninjutsuOffence += 1;
-            break;
-          case "Genjutsu":
-            user.usedStats.genjutsuOffence += 1;
-            break;
-          case "Highest":
-            user.usedStats[user.highestOffence] += 1;
-            break;
-        }
-      } else {
-        switch (statType) {
-          case "Taijutsu":
-            user.usedStats.taijutsuDefence += 1;
-            break;
-          case "Bukijutsu":
-            user.usedStats.bukijutsuDefence += 1;
-            break;
-          case "Ninjutsu":
-            user.usedStats.ninjutsuDefence += 1;
-            break;
-          case "Genjutsu":
-            user.usedStats.genjutsuDefence += 1;
-            break;
-          case "Highest":
-            user.usedStats[user.highestDefence] += 1;
-            break;
-        }
-      }
-    });
+  if ("statTypes" in effect && "direction" in effect && effect.statTypes?.length) {
+    if (effect.direction === "both") {
+      user.usedStats.offence += 1;
+      user.usedStats.defence += 1;
+    } else if (
+      (effect.direction === "offence" && !inverse) ||
+      (effect.direction === "defence" && inverse)
+    ) {
+      user.usedStats.offence += 1;
+    } else {
+      user.usedStats.defence += 1;
+    }
   }
   if ("generalTypes" in effect) {
     effect.generalTypes?.forEach((general: GeneralType) => {
@@ -1449,25 +1370,10 @@ export const damageCalc = (
     let atkPowerFromStats = 0;
     let defPowerFromStats = 0;
 
-    effect.statTypes?.forEach((statType: StatType) => {
-      let a = "";
-      let b = "";
-      if (statType === "Highest") {
-        if (!effect.highestOffence || !effect.targetHighestDefence) return;
-        a = effect.highestOffence;
-        b = effect.targetHighestDefence;
-      } else {
-        const lower = statType.toLowerCase();
-        a = `${lower}Offence`;
-        b = `${lower}Defence`;
-      }
-      if (a in origin && b in target) {
-        const left = origin[a as keyof typeof origin] as number;
-        const right = target[b as keyof typeof target] as number;
-        atkPowerFromStats += Math.sqrt(Math.max(0, left));
-        defPowerFromStats += Math.sqrt(Math.max(0, right));
-      }
-    });
+    if (effect.statTypes && effect.statTypes.length > 0) {
+      atkPowerFromStats += Math.sqrt(Math.max(0, origin.offence));
+      defPowerFromStats += Math.sqrt(Math.max(0, target.defence));
+    }
 
     // Accumulate attack and defense power from generals (weighted 2x per formula)
     let atkPowerFromGens = 0;
@@ -3138,6 +3044,7 @@ export const summon = (
       }
       if (ai) {
         const newAi = structuredClone(ai);
+        delete newAi.baseStatsForModifiers;
         // Place on battlefield
         newAi.userId = nanoid();
         // Explicitly set identity/control flags (mirror clone(), do not rely on
@@ -3169,14 +3076,8 @@ export const summon = (
         newAi.maxHealth = effect.aiHp;
         newAi.curHealth = newAi.maxHealth;
         // Set stats
-        newAi.ninjutsuOffence = newAi.ninjutsuOffence * perc;
-        newAi.ninjutsuDefence = newAi.ninjutsuDefence * perc;
-        newAi.genjutsuOffence = newAi.genjutsuOffence * perc;
-        newAi.genjutsuDefence = newAi.genjutsuDefence * perc;
-        newAi.taijutsuOffence = newAi.taijutsuOffence * perc;
-        newAi.taijutsuDefence = newAi.taijutsuDefence * perc;
-        newAi.bukijutsuOffence = newAi.bukijutsuOffence * perc;
-        newAi.bukijutsuDefence = newAi.bukijutsuDefence * perc;
+        newAi.offence = newAi.offence * perc;
+        newAi.defence = newAi.defence * perc;
         newAi.strength = newAi.strength * perc;
         newAi.intelligence = newAi.intelligence * perc;
         newAi.willpower = newAi.willpower * perc;
@@ -3411,30 +3312,6 @@ export const getPower = (effect: UserEffect | GroundEffect) => {
   return { power, adverb, qualifier };
 };
 
-/** Convert from e.g. ninjutsuOffence -> Ninjutsu */
-export const getStatTypeFromStat = (stat: (typeof StatNames)[number]) => {
-  switch (stat) {
-    case "ninjutsuOffence":
-      return "Ninjutsu";
-    case "ninjutsuDefence":
-      return "Ninjutsu";
-    case "genjutsuOffence":
-      return "Genjutsu";
-    case "genjutsuDefence":
-      return "Genjutsu";
-    case "taijutsuOffence":
-      return "Taijutsu";
-    case "taijutsuDefence":
-      return "Taijutsu";
-    case "bukijutsuOffence":
-      return "Bukijutsu";
-    case "bukijutsuDefence":
-      return "Bukijutsu";
-    default:
-      console.error("Invalid stat type", stat);
-      throw Error("Invalid stat type");
-  }
-};
 /**
  * Calculate ratio of user stats & elements between one user effect to another
  * Returns a ratio between 0 to 1, 0 indicating e.g. that none of the stats in LHS are
@@ -3449,8 +3326,8 @@ export const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) =>
     if ("statTypes" in e) {
       e.statTypes?.forEach((statType: StatType) => {
         tags.push(
-          statType === "Highest" && e.highestOffence
-            ? getStatTypeFromStat(e.highestOffence)
+          statType === "Highest" && e.highestMasteryType
+            ? e.highestMasteryType
             : statType,
         );
       });

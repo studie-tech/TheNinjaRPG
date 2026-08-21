@@ -154,6 +154,7 @@ import {
 } from "@/libs/combat/util";
 import { fetchDmgConfig } from "@/libs/gamesettings";
 import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
+import { hasMasteryRequirements } from "@/libs/mastery";
 import {
   calcActiveUserRegen,
   calcCP,
@@ -173,7 +174,6 @@ import {
   mockAchievementHistoryEntries,
 } from "@/libs/quest";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
-import { toDefenceStat, toOffenceStat } from "@/libs/stats";
 import { rollStealthKeep } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
 import {
@@ -210,7 +210,7 @@ import { getRandomElement } from "@/utils/array";
 import { randomInt } from "@/utils/math";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
-import type { StatSchemaType } from "@/validators/combat";
+import type { AssignableUserStats } from "@/validators/combat";
 import { BarrierTag, performActionSchema, statSchema } from "@/validators/combat";
 import { sectorIdSchema } from "@/validators/travel";
 import { fetchUpdatedUser, fetchUser } from "./profile";
@@ -1573,8 +1573,8 @@ export const initiateBattle = async (
     userIds: string[];
     targetIds: string[];
     client: DrizzleClient;
-    userStatDistribution?: StatSchemaType;
-    targetStatDistribution?: StatSchemaType;
+    userStatDistribution?: AssignableUserStats;
+    targetStatDistribution?: AssignableUserStats;
     scaleTarget?: boolean;
     forceLoadouts?: RankedLoadout[];
     forceDefenderVillageId?: string;
@@ -2639,8 +2639,7 @@ export const processUsersForBattle = async (
       // Set all users to not be agressors by default
       isAggressor: false,
       // Initialize processing-specific fields (will be set below)
-      highestOffence: "ninjutsuOffence",
-      highestDefence: "ninjutsuDefence",
+      highestMasteryType: "Ninjutsu",
       highestGenerals: [],
       round: 0,
       iAmHere: false,
@@ -2653,14 +2652,8 @@ export const processUsersForBattle = async (
       isSummon: info.isSummon,
       usedGenerals: { strength: 0, intelligence: 0, willpower: 0, speed: 0 },
       usedStats: {
-        ninjutsuOffence: 0,
-        genjutsuOffence: 0,
-        taijutsuOffence: 0,
-        bukijutsuOffence: 0,
-        ninjutsuDefence: 0,
-        genjutsuDefence: 0,
-        taijutsuDefence: 0,
-        bukijutsuDefence: 0,
+        offence: 0,
+        defence: 0,
       },
       leftBattle: false,
       fledBattle: false,
@@ -2746,38 +2739,19 @@ export const processUsersForBattle = async (
       user.medicalExperience = 100000;
     }
 
-    // Add highest offence name to user
-    const offences = {
-      ninjutsuOffence: user.ninjutsuOffence,
-      genjutsuOffence: user.genjutsuOffence,
-      taijutsuOffence: user.taijutsuOffence,
-      bukijutsuOffence: user.bukijutsuOffence,
-    };
-    type offenceKey = keyof typeof offences;
-    // If preferredStat is "Highest" or not set, calculate the actual highest stat
+    // Add preferred (or highest) mastery type to user, used for tag efficiency matching
+    const masteries = {
+      Ninjutsu: user.ninjutsuMastery,
+      Genjutsu: user.genjutsuMastery,
+      Taijutsu: user.taijutsuMastery,
+      Bukijutsu: user.bukijutsuMastery,
+    } as const;
     if (!user.preferredStat || user.preferredStat === "Highest") {
-      user.highestOffence = Object.keys(offences).reduce((prev, cur) =>
-        offences[prev as offenceKey] > offences[cur as offenceKey] ? prev : cur,
-      ) as offenceKey;
+      user.highestMasteryType = (
+        Object.keys(masteries) as (keyof typeof masteries)[]
+      ).reduce((prev, cur) => (masteries[prev] > masteries[cur] ? prev : cur));
     } else {
-      user.highestOffence = toOffenceStat(user.preferredStat);
-    }
-
-    // Add highest defence name to user
-    const defences = {
-      ninjutsuDefence: user.ninjutsuDefence,
-      genjutsuDefence: user.genjutsuDefence,
-      taijutsuDefence: user.taijutsuDefence,
-      bukijutsuDefence: user.bukijutsuDefence,
-    };
-    type defenceKey = keyof typeof defences;
-    // If preferredStat is "Highest" or not set, calculate the actual highest stat
-    if (!user.preferredStat || user.preferredStat === "Highest") {
-      user.highestDefence = Object.keys(defences).reduce((prev, cur) =>
-        defences[prev as defenceKey] > defences[cur as defenceKey] ? prev : cur,
-      ) as defenceKey;
-    } else {
-      user.highestDefence = toDefenceStat(user.preferredStat);
+      user.highestMasteryType = user.preferredStat;
     }
 
     // Add highest generals to user
@@ -3105,7 +3079,14 @@ export const processUsersForBattle = async (
         ) {
           if (ui.item.effects && ui.equipped !== "NONE") {
             const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
-            if (currentDurability <= DURABILITY_USABILITY_THR) {
+            // Unequip rather than merely skipping the effects: gear left equipped keeps
+            // taking durability damage every round while granting nothing. Mastery gates
+            // are enforced on equip too, so this only catches gear equipped before the
+            // requirement was added or before the wearer's masteries were reset.
+            if (
+              currentDurability <= DURABILITY_USABILITY_THR ||
+              !hasMasteryRequirements(user, ui.item)
+            ) {
               ui.equipped = "NONE" as const;
             } else {
               // Add item effects to user (only if user has required bloodline)

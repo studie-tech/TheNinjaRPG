@@ -4,6 +4,12 @@
  */
 
 import { EVOLUTION_MAX_CHILDREN, EVOLUTION_MAX_DEPTH } from "@/drizzle/constants";
+import type {
+  MasteryRequirementField,
+  MasteryRequirementFields,
+  MasteryStatSource,
+} from "@/libs/mastery";
+import { hasMasteryRequirements, MASTERY_REQUIREMENT_FIELDS } from "@/libs/mastery";
 
 /** Minimal node for validating parent/child evolution graphs. */
 export type EvolutionNode = {
@@ -11,31 +17,22 @@ export type EvolutionNode = {
   parentId: string | null;
 };
 
+/** Requirement column paired with the general it gates against, and its display name. */
+const GENERAL_REQUIREMENT_FIELDS = [
+  ["requiredStrength", "strength", "Strength"],
+  ["requiredSpeed", "speed", "Speed"],
+  ["requiredIntelligence", "intelligence", "Intelligence"],
+  ["requiredWillpower", "willpower", "Willpower"],
+] as const;
+
+type GeneralRequirementField = (typeof GENERAL_REQUIREMENT_FIELDS)[number][0];
+
 /** Nullable per-stat gates used when evolving owned content. */
-export type EvolutionStatRequirements = {
-  requiredNinjutsuOffence?: number | null;
-  requiredNinjutsuDefence?: number | null;
-  requiredGenjutsuOffence?: number | null;
-  requiredGenjutsuDefence?: number | null;
-  requiredTaijutsuOffence?: number | null;
-  requiredTaijutsuDefence?: number | null;
-  requiredBukijutsuOffence?: number | null;
-  requiredBukijutsuDefence?: number | null;
-  requiredStrength?: number | null;
-  requiredSpeed?: number | null;
-  requiredIntelligence?: number | null;
-  requiredWillpower?: number | null;
+export type EvolutionStatRequirements = MasteryRequirementFields & {
+  [K in GeneralRequirementField]?: number | null;
 };
 
-export type EvolutionUserStats = {
-  ninjutsuOffence: number;
-  ninjutsuDefence: number;
-  genjutsuOffence: number;
-  genjutsuDefence: number;
-  taijutsuOffence: number;
-  taijutsuDefence: number;
-  bukijutsuOffence: number;
-  bukijutsuDefence: number;
+export type EvolutionUserStats = MasteryStatSource & {
   strength: number;
   speed: number;
   intelligence: number;
@@ -47,25 +44,25 @@ export const isEvolution = (parentId: string | null | undefined): boolean => !!p
 export const meetsEvolutionStatRequirements = (
   requirements: EvolutionStatRequirements,
   stats: EvolutionUserStats,
-): boolean => {
-  const checks: { req: number | null | undefined; val: number }[] = [
-    { req: requirements.requiredNinjutsuOffence, val: stats.ninjutsuOffence },
-    { req: requirements.requiredNinjutsuDefence, val: stats.ninjutsuDefence },
-    { req: requirements.requiredGenjutsuOffence, val: stats.genjutsuOffence },
-    { req: requirements.requiredGenjutsuDefence, val: stats.genjutsuDefence },
-    { req: requirements.requiredTaijutsuOffence, val: stats.taijutsuOffence },
-    { req: requirements.requiredTaijutsuDefence, val: stats.taijutsuDefence },
-    { req: requirements.requiredBukijutsuOffence, val: stats.bukijutsuOffence },
-    { req: requirements.requiredBukijutsuDefence, val: stats.bukijutsuDefence },
-    { req: requirements.requiredStrength, val: stats.strength },
-    { req: requirements.requiredSpeed, val: stats.speed },
-    { req: requirements.requiredIntelligence, val: stats.intelligence },
-    { req: requirements.requiredWillpower, val: stats.willpower },
-  ];
-  return checks.every(
-    ({ req, val }) => req === null || req === undefined || val >= req,
-  );
-};
+): boolean =>
+  hasMasteryRequirements(stats, requirements) &&
+  GENERAL_REQUIREMENT_FIELDS.every(([reqKey, statKey]) => {
+    const required = requirements[reqKey];
+    return required == null || stats[statKey] >= required;
+  });
+
+/**
+ * Every stat gate a jutsu/item can carry, with a bare display name. The single source for
+ * the content editors and for the requirement lists on the jutsu and item detail views;
+ * callers add their own prefix ("Req. ", "Required ").
+ */
+export const EVOLUTION_STAT_FIELDS: {
+  id: MasteryRequirementField | GeneralRequirementField;
+  label: string;
+}[] = [
+  ...MASTERY_REQUIREMENT_FIELDS.map(([id, , label]) => ({ id, label })),
+  ...GENERAL_REQUIREMENT_FIELDS.map(([id, , label]) => ({ id, label })),
+];
 
 export type EvolutionGraphValidation = { ok: true } | { ok: false; message: string };
 
@@ -157,17 +154,6 @@ export const filterVisibleEvolutions = <T extends { hidden: boolean }>(
 ): T[] => evolutions.filter((evolution) => !evolution.hidden || canViewHidden);
 
 /** Labels for evolution stat requirement UI (shared across content editors). */
-export const EVOLUTION_STAT_FORM_FIELDS = [
-  { id: "requiredNinjutsuOffence", label: "Req. Nin. Offence" },
-  { id: "requiredNinjutsuDefence", label: "Req. Nin. Defence" },
-  { id: "requiredGenjutsuOffence", label: "Req. Gen. Offence" },
-  { id: "requiredGenjutsuDefence", label: "Req. Gen. Defence" },
-  { id: "requiredTaijutsuOffence", label: "Req. Tai. Offence" },
-  { id: "requiredTaijutsuDefence", label: "Req. Tai. Defence" },
-  { id: "requiredBukijutsuOffence", label: "Req. Buki. Offence" },
-  { id: "requiredBukijutsuDefence", label: "Req. Buki. Defence" },
-  { id: "requiredStrength", label: "Req. Strength" },
-  { id: "requiredSpeed", label: "Req. Speed" },
-  { id: "requiredIntelligence", label: "Req. Intelligence" },
-  { id: "requiredWillpower", label: "Req. Willpower" },
-] as const;
+export const EVOLUTION_STAT_FORM_FIELDS = EVOLUTION_STAT_FIELDS.map(
+  ({ id, label }) => ({ id, label: `Req. ${label}` }),
+);

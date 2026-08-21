@@ -19,6 +19,7 @@ import {
   KAGE_PRESTIGE_COST,
   KILLING_NOTORIETY_GAIN,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MasteryNames,
   PVP_KILL_ANBU_POINTS_REWARD,
   PVP_KILL_PRESTIGE_REWARD,
   PVP_KILL_PRESTIGE_REWARD_ANBU,
@@ -988,6 +989,8 @@ export const calcApplyRatio = (
     "increaseheal",
     "increasepoolcost",
     "increasestat",
+    "increasemastery",
+    "decreasemastery",
     "lifesteal",
     "moveprevent",
     "onehitkillprevent",
@@ -1126,8 +1129,10 @@ export const sortEffects = (
     "clear",
     "decreasepoolcost",
     "decreasestat",
+    "decreasemastery",
     "increasepoolcost",
     "increasestat",
+    "increasemastery",
     // Mid-modifiers
     "barrier",
     "shield",
@@ -2185,14 +2190,8 @@ export const calcBattleResult = (
         intelligence: 0,
         willpower: 0,
         speed: 0,
-        ninjutsuOffence: 0,
-        genjutsuOffence: 0,
-        taijutsuOffence: 0,
-        bukijutsuOffence: 0,
-        ninjutsuDefence: 0,
-        genjutsuDefence: 0,
-        taijutsuDefence: 0,
-        bukijutsuDefence: 0,
+        offence: 0,
+        defence: 0,
         money: 0,
         seichiSilver: 0,
         villagePrestige: deltaPrestige,
@@ -2230,14 +2229,8 @@ export const calcBattleResult = (
         let total = statsTotal + gensTotal;
         if (total === 0) {
           user.usedStats = {
-            ninjutsuOffence: 1,
-            genjutsuOffence: 1,
-            taijutsuOffence: 1,
-            bukijutsuOffence: 1,
-            ninjutsuDefence: 1,
-            genjutsuDefence: 1,
-            taijutsuDefence: 1,
-            bukijutsuDefence: 1,
+            offence: 1,
+            defence: 1,
           };
           user.usedGenerals = {
             strength: 1,
@@ -2245,7 +2238,7 @@ export const calcBattleResult = (
             willpower: 1,
             speed: 1,
           };
-          total = 12;
+          total = 6;
         }
         let assignedExp = 0;
         const { stats_cap, gens_cap } = getUserCaps(user.rank);
@@ -3009,4 +3002,28 @@ export const selectTransferEffects = (
       return a.id.localeCompare(b.id);
     })
     .slice(0, cap);
+};
+
+/** Remember unbuffed masteries so residual mastery tags can be reapplied without stacking. */
+export const storeMasteryBases = (user: BattleUserState) => {
+  if (!user.baseStatsForModifiers) {
+    user.baseStatsForModifiers = {};
+  }
+  for (const key of MasteryNames) {
+    if (user.baseStatsForModifiers[key] === undefined) {
+      user.baseStatsForModifiers[key] = user[key];
+    }
+  }
+};
+
+/** Restore masteries to the values stored before residual mastery tags were applied. */
+export const resetMasteriesToBase = (user: BattleUserState) => {
+  const base = user.baseStatsForModifiers;
+  if (!base) return;
+  for (const key of MasteryNames) {
+    const stored = base[key];
+    if (stored !== undefined) {
+      user[key] = stored;
+    }
+  }
 };

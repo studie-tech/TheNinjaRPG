@@ -1,4 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("@/server/db", () => ({ drizzleDB: {} }));
+
 import { damageCalc } from "@/libs/combat/tags";
 import { dmgConfig } from "@/libs/combat/constants";
 import { DMG_REDUCTION_CAP } from "@/drizzle/constants";
@@ -56,11 +59,11 @@ describe("damageCalc - new HP-based formula", () => {
 
     const weakAttacker = makeUser({
       userId: "attacker",
-      ninjutsuOffence: 100000,
+      offence: 100000,
     });
     const strongAttacker = makeUser({
       userId: "attacker",
-      ninjutsuOffence: 450000,
+      offence: 450000,
     });
 
     const dmgWeak = damageCalc(effect, weakAttacker, defender, dmgConfig);
@@ -75,11 +78,11 @@ describe("damageCalc - new HP-based formula", () => {
 
     const weakDefender = makeUser({
       userId: "defender",
-      ninjutsuDefence: 100000,
+      defence: 100000,
     });
     const strongDefender = makeUser({
       userId: "defender",
-      ninjutsuDefence: 450000,
+      defence: 450000,
     });
 
     const dmgVsWeak = damageCalc(effect, attacker, weakDefender, dmgConfig);
@@ -93,18 +96,18 @@ describe("damageCalc - new HP-based formula", () => {
     const baseStat = 450000;
 
     // Base case: equal stats
-    const baseAttacker = makeUser({ userId: "attacker", ninjutsuOffence: baseStat });
-    const baseDefender = makeUser({ userId: "defender", ninjutsuDefence: baseStat });
+    const baseAttacker = makeUser({ userId: "attacker", offence: baseStat });
+    const baseDefender = makeUser({ userId: "defender", defence: baseStat });
     const baseDmg = damageCalc(effect, baseAttacker, baseDefender, dmgConfig);
 
     // Buffed case: both get 30% increase
     const buffedAttacker = makeUser({
       userId: "attacker",
-      ninjutsuOffence: baseStat * 1.3,
+      offence: baseStat * 1.3,
     });
     const buffedDefender = makeUser({
       userId: "defender",
-      ninjutsuDefence: baseStat * 1.3,
+      defence: baseStat * 1.3,
     });
     const buffedDmg = damageCalc(effect, buffedAttacker, buffedDefender, dmgConfig);
 
@@ -130,7 +133,7 @@ describe("damageCalc - new HP-based formula", () => {
     const attacker = makeUser({ userId: "attacker" });
     const defender = makeUser({
       userId: "defender",
-      ninjutsuDefence: 0,
+      defence: 0,
     });
 
     const dmg = damageCalc(effect, attacker, defender, dmgConfig);
@@ -142,11 +145,11 @@ describe("damageCalc - new HP-based formula", () => {
     const effect = makeDamageEffect();
     const attacker = makeUser({
       userId: "attacker",
-      ninjutsuOffence: 1,
+      offence: 1,
     });
     const defender = makeUser({
       userId: "defender",
-      ninjutsuDefence: 450000,
+      defence: 450000,
     });
 
     const dmg = damageCalc(effect, attacker, defender, dmgConfig);
@@ -157,11 +160,11 @@ describe("damageCalc - new HP-based formula", () => {
     const effect = makeDamageEffect();
     const attacker = makeUser({
       userId: "attacker",
-      ninjutsuOffence: 10_000_000,
+      offence: 10_000_000,
     });
     const defender = makeUser({
       userId: "defender",
-      ninjutsuDefence: 1,
+      defence: 1,
     });
 
     const dmg = damageCalc(effect, attacker, defender, dmgConfig);

@@ -17,7 +17,8 @@ import {
   MAX_GENS_CAP,
   MAX_ITEM_CRAFTING_REQUIREMENT_QUANTITY,
   MAX_ITEM_STACK_SIZE,
-  MAX_STATS_CAP,
+  MAX_MASTERY_CAP,
+  MasteryTypes,
   PoolTypes,
   SAGE_MASTERY_EXP_CAP,
   SAGE_MODE_MAX_LEVEL,
@@ -339,6 +340,24 @@ export const DecreaseStatTag = z.object({
   type: z.literal("decreasestat").prefault("decreasestat"),
   direction: z.enum(["offence", "defence", "both"]).prefault("both"),
   description: msg("Decrease stats of target"),
+  calculation: z.enum(["static", "percentage"]).prefault("percentage"),
+});
+
+export const IncreaseMasteryTag = z.object({
+  ...BaseAttributes,
+  ...PowerAttributes,
+  type: z.literal("increasemastery").prefault("increasemastery"),
+  masteryTypes: z.array(z.enum(MasteryTypes)).prefault(["Ninjutsu"]),
+  description: msg("Increase mastery of target"),
+  calculation: z.enum(["static", "percentage"]).prefault("percentage"),
+});
+
+export const DecreaseMasteryTag = z.object({
+  ...BaseAttributes,
+  ...PowerAttributes,
+  type: z.literal("decreasemastery").prefault("decreasemastery"),
+  masteryTypes: z.array(z.enum(MasteryTypes)).prefault(["Ninjutsu"]),
+  description: msg("Decrease mastery of target"),
   calculation: z.enum(["static", "percentage"]).prefault("percentage"),
 });
 
@@ -890,6 +909,7 @@ export const AllTags = z.union([
   DecreaseHealGivenTag.prefault({}),
   DecreasePoolCostTag.prefault({}),
   DecreaseMaxPoolsTag.prefault({}),
+  DecreaseMasteryTag.prefault({}),
   DecreaseStatTag.prefault({}),
   DisarmTag.prefault({}),
   DrainTag.prefault({}),
@@ -909,6 +929,7 @@ export const AllTags = z.union([
   IncreasePoolCostTag.prefault({}),
   IncreaseMaxPoolsTag.prefault({}),
   IncreaseRangeTag.prefault({}),
+  IncreaseMasteryTag.prefault({}),
   IncreaseStatTag.prefault({}),
   ImmunityTag.prefault({}),
   LifeStealTag.prefault({}),
@@ -978,6 +999,7 @@ export const isPositiveUserEffect = (tag: ZodAllTags) => {
       "increaseheal",
       "increasemaxpools",
       "increasestat",
+      "increasemastery",
       "increaserange",
       "decreasecooldown",
       "lifesteal",
@@ -1018,6 +1040,7 @@ export const isNegativeUserEffect = (tag: ZodAllTags) => {
       "decreasedamagegiven",
       "decreaseheal",
       "decreasestat",
+      "decreasemastery",
       "decreasemaxpools",
       "disarm",
       "drain",
@@ -1323,14 +1346,12 @@ export const JutsuValidatorRawSchema = z.object({
     .nullable()
     .optional()
     .transform((v) => (v === "" ? null : v) ?? null),
-  requiredNinjutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredNinjutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredGenjutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredGenjutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredTaijutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredTaijutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredBukijutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredBukijutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredNinjutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredGenjutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredTaijutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredBukijutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredBloodlineMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredSageMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
   requiredStrength: makeCappedNullableNumber(MAX_GENS_CAP),
   requiredSpeed: makeCappedNullableNumber(MAX_GENS_CAP),
   requiredIntelligence: makeCappedNullableNumber(MAX_GENS_CAP),
@@ -1464,14 +1485,12 @@ export const ItemValidatorRawSchema = z.object({
     .nullable()
     .optional()
     .transform((v) => (v === "" ? null : v) ?? null),
-  requiredNinjutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredNinjutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredGenjutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredGenjutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredTaijutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredTaijutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredBukijutsuOffence: makeCappedNullableNumber(MAX_STATS_CAP),
-  requiredBukijutsuDefence: makeCappedNullableNumber(MAX_STATS_CAP),
+  requiredNinjutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredGenjutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredTaijutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredBukijutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredBloodlineMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredSageMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
   requiredStrength: makeCappedNullableNumber(MAX_GENS_CAP),
   requiredSpeed: makeCappedNullableNumber(MAX_GENS_CAP),
   requiredIntelligence: makeCappedNullableNumber(MAX_GENS_CAP),
@@ -1527,14 +1546,8 @@ export const createStatSchema = (min = 10, start = 10, user?: UserData) => {
 
   // Calculate max values for each stat
   const maxValues = {
-    ninjutsuOffence: stats_cap - Math.min(user?.ninjutsuOffence || 0, stats_cap),
-    taijutsuOffence: stats_cap - Math.min(user?.taijutsuOffence || 0, stats_cap),
-    genjutsuOffence: stats_cap - Math.min(user?.genjutsuOffence || 0, stats_cap),
-    bukijutsuOffence: stats_cap - Math.min(user?.bukijutsuOffence || 0, stats_cap),
-    ninjutsuDefence: stats_cap - Math.min(user?.ninjutsuDefence || 0, stats_cap),
-    taijutsuDefence: stats_cap - Math.min(user?.taijutsuDefence || 0, stats_cap),
-    genjutsuDefence: stats_cap - Math.min(user?.genjutsuDefence || 0, stats_cap),
-    bukijutsuDefence: stats_cap - Math.min(user?.bukijutsuDefence || 0, stats_cap),
+    offence: stats_cap - Math.min(user?.offence || 0, stats_cap),
+    defence: stats_cap - Math.min(user?.defence || 0, stats_cap),
     strength: gens_cap - Math.min(user?.strength || 0, gens_cap),
     speed: gens_cap - Math.min(user?.speed || 0, gens_cap),
     intelligence: gens_cap - Math.min(user?.intelligence || 0, gens_cap),
@@ -1542,52 +1555,16 @@ export const createStatSchema = (min = 10, start = 10, user?: UserData) => {
   };
 
   const schema = z.object({
-    ninjutsuOffence: z.coerce
+    offence: z.coerce
       .number()
       .min(min)
-      .max(maxValues.ninjutsuOffence)
+      .max(maxValues.offence)
       .transform(roundStat)
       .prefault(start),
-    taijutsuOffence: z.coerce
+    defence: z.coerce
       .number()
       .min(min)
-      .max(maxValues.taijutsuOffence)
-      .transform(roundStat)
-      .prefault(start),
-    genjutsuOffence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.genjutsuOffence)
-      .transform(roundStat)
-      .prefault(start),
-    bukijutsuOffence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.bukijutsuOffence)
-      .transform(roundStat)
-      .prefault(start),
-    ninjutsuDefence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.ninjutsuDefence)
-      .transform(roundStat)
-      .prefault(start),
-    taijutsuDefence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.taijutsuDefence)
-      .transform(roundStat)
-      .prefault(start),
-    genjutsuDefence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.genjutsuDefence)
-      .transform(roundStat)
-      .prefault(start),
-    bukijutsuDefence: z.coerce
-      .number()
-      .min(min)
-      .max(maxValues.bukijutsuDefence)
+      .max(maxValues.defence)
       .transform(roundStat)
       .prefault(start),
     strength: z.coerce
@@ -1622,6 +1599,15 @@ export const createStatSchema = (min = 10, start = 10, user?: UserData) => {
 export const { schema: statSchema, maxValues: defaultStatMaxValues } =
   createStatSchema();
 export type StatSchemaType = z.infer<typeof statSchema>;
+export type AssignableUserStats = StatSchemaType &
+  Partial<{
+    ninjutsuMastery: number;
+    genjutsuMastery: number;
+    taijutsuMastery: number;
+    bukijutsuMastery: number;
+    bloodlineMastery: number;
+    sageMastery: number;
+  }>;
 
 export const actSchema = z.object({
   power: z.coerce.number().min(1).max(100).prefault(1),

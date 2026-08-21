@@ -869,14 +869,8 @@ export const profileRouter = createTRPCRouter({
         if (user.earnedExperience > 0) {
           const { stats_cap, gens_cap } = getUserCaps(user.rank);
           const allStatsCapped =
-            user.ninjutsuOffence >= stats_cap &&
-            user.ninjutsuDefence >= stats_cap &&
-            user.genjutsuOffence >= stats_cap &&
-            user.genjutsuDefence >= stats_cap &&
-            user.taijutsuOffence >= stats_cap &&
-            user.taijutsuDefence >= stats_cap &&
-            user.bukijutsuOffence >= stats_cap &&
-            user.bukijutsuDefence >= stats_cap &&
+            user.offence >= stats_cap &&
+            user.defence >= stats_cap &&
             user.strength >= gens_cap &&
             user.speed >= gens_cap &&
             user.intelligence >= gens_cap &&
@@ -1483,14 +1477,8 @@ export const profileRouter = createTRPCRouter({
       baseServerResponse.extend({
         data: z
           .object({
-            ninjutsuOffence: z.number(),
-            taijutsuOffence: z.number(),
-            genjutsuOffence: z.number(),
-            bukijutsuOffence: z.number(),
-            ninjutsuDefence: z.number(),
-            taijutsuDefence: z.number(),
-            genjutsuDefence: z.number(),
-            bukijutsuDefence: z.number(),
+            offence: z.number(),
+            defence: z.number(),
             strength: z.number(),
             speed: z.number(),
             intelligence: z.number(),
@@ -1516,14 +1504,8 @@ export const profileRouter = createTRPCRouter({
         return errorResponse("Trying to assign more stats than available");
       }
       // Mutate & cap
-      user.ninjutsuOffence += Math.floor(input.ninjutsuOffence);
-      user.taijutsuOffence += Math.floor(input.taijutsuOffence);
-      user.genjutsuOffence += Math.floor(input.genjutsuOffence);
-      user.bukijutsuOffence += Math.floor(input.bukijutsuOffence);
-      user.ninjutsuDefence += Math.floor(input.ninjutsuDefence);
-      user.taijutsuDefence += Math.floor(input.taijutsuDefence);
-      user.genjutsuDefence += Math.floor(input.genjutsuDefence);
-      user.bukijutsuDefence += Math.floor(input.bukijutsuDefence);
+      user.offence += Math.floor(input.offence);
+      user.defence += Math.floor(input.defence);
       user.strength += Math.floor(input.strength);
       user.speed += Math.floor(input.speed);
       user.intelligence += Math.floor(input.intelligence);
@@ -1531,14 +1513,8 @@ export const profileRouter = createTRPCRouter({
       capUserStats(user);
       // Update
       const data = {
-        ninjutsuOffence: user.ninjutsuOffence,
-        taijutsuOffence: user.taijutsuOffence,
-        genjutsuOffence: user.genjutsuOffence,
-        bukijutsuOffence: user.bukijutsuOffence,
-        ninjutsuDefence: user.ninjutsuDefence,
-        taijutsuDefence: user.taijutsuDefence,
-        genjutsuDefence: user.genjutsuDefence,
-        bukijutsuDefence: user.bukijutsuDefence,
+        offence: user.offence,
+        defence: user.defence,
         strength: user.strength,
         speed: user.speed,
         intelligence: user.intelligence,
