@@ -241,7 +241,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
           )}
 
           <div className="relative flex basis-full flex-col pl-5 md:pl-0">
-            {imageExtra}
+            {imageExtra && <div className="flex flex-row">{imageExtra}</div>}
             {!hideTitle ? (
               <h3 className="font-bold text-popover-foreground text-xl tracking-tight">
                 {detailHref ? (
