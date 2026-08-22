@@ -1,6 +1,5 @@
 "use client";
 
-import { useUser } from "@clerk/nextjs";
 import * as Sentry from "@sentry/nextjs";
 import {
   MutationCache,
@@ -9,7 +8,7 @@ import {
   QueryClientProvider,
 } from "@tanstack/react-query";
 import { httpBatchLink, loggerLink, retryLink, TRPCClientError } from "@trpc/client";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
@@ -97,21 +96,6 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
       ],
     }),
   );
-  // Clerk identities can be swapped inside a live tab. Query keys do not carry the
-  // Clerk user id and nothing ever goes stale (staleTime: Infinity), so drop the
-  // previous account's cache when a different one signs in.
-  const { user } = useUser();
-  const clerkUserId = user?.id;
-  // Cleared during render rather than in an effect: an effect runs after the children
-  // have already rendered, which is one render too late to keep the previous account's
-  // user out of them.
-  const lastClerkUserId = useRef<string | undefined>(undefined);
-  if (clerkUserId && lastClerkUserId.current && lastClerkUserId.current !== clerkUserId) {
-    queryClient.clear();
-  }
-  if (clerkUserId) {
-    lastClerkUserId.current = clerkUserId;
-  }
   return (
     <api.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>

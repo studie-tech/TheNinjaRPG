@@ -61,7 +61,7 @@ const findBareOptionalInputs = (source: string) => {
       else if (scannable[i] === ")") {
         depth--;
         if (depth === 0) {
-          if (scannable.slice(i + 1).startsWith(".optional()")) {
+          if (/^\s*\.optional\(\)/.test(scannable.slice(i + 1))) {
             offenders.push(source.slice(0, match.index).split("\n").length);
           }
           break;
@@ -93,6 +93,12 @@ describe("the optional-input scanner", () => {
     expect(
       findBareOptionalInputs("// .input(z.object({ a: z.string() }).optional())"),
     ).toEqual([]);
+  });
+
+  it("sees .optional() on the next line", () => {
+    expect(
+      findBareOptionalInputs(".input(z.object({ a: z.string() })\n.optional())"),
+    ).toEqual([1]);
   });
 
   it("reports the line the input starts on", () => {
