@@ -81,7 +81,11 @@ export const generativeAiRouter = createTRPCRouter({
           size: input.size,
         });
       } catch (cause) {
-        if (cause instanceof Error && cause.message.includes("Prediction failed")) {
+        const isGenerationFailure =
+          cause instanceof Error &&
+          (cause.message.includes("Prediction failed") ||
+            cause.message.includes("Failed to generate image"));
+        if (isGenerationFailure) {
           return {
             success: false,
             message: "Image generation failed - try rephrasing the prompt and retry",

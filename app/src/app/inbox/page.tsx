@@ -361,10 +361,10 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
     defaultValue: [],
   });
   useEffect(() => {
-    const selectedIds = (users ?? []).filter((u) => u?.userId).map((u) => u.userId);
-    if (selectedIds.length > 0) {
-      create.setValue("users", selectedIds);
-    }
+    create.setValue(
+      "users",
+      (users ?? []).filter((u) => u?.userId).map((u) => u.userId),
+    );
   }, [users, create]);
 
   const createConversation = api.comments.createConversation.useMutation({
