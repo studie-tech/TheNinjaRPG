@@ -194,11 +194,7 @@ export const hospitalRouter = createTRPCRouter({
             })
             .where(eq(userData.userId, t.userId)),
           shareExp > 0
-            ? // Resolves students through the senseiId index and locks each of their rows,
-              // while every other UserData writer takes the primary key directly; the
-              // driver-level retry re-issues the loser of that deadlock, and the victim
-              // is rolled back in full so the share cannot be awarded twice.
-              ctx.drizzle
+            ? ctx.drizzle
                 .update(userData)
                 .set({
                   medicalExperience: sql`${userData.medicalExperience} + ${shareExp}`,
