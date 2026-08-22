@@ -1,5 +1,5 @@
 {
-  "lockfileVersion": 1,
+  "lockfileVersion": 3,
   "configVersion": 1,
   "workspaces": {
     "": {
@@ -163,6 +163,12 @@
   },
   "overrides": {
     "@modelcontextprotocol/sdk": "1.30.0",
+    "@types/cytoscape-edgehandles": {
+      "cytoscape": "^3.34.1",
+    },
+    "@types/react-cytoscapejs": {
+      "cytoscape": "^3.34.1",
+    },
   },
   "packages": {
     "@ai-sdk/gateway": ["@ai-sdk/gateway@4.0.62", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.29", "@vercel/oidc": "3.2.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-zR3pustGWhw5eUZHG+fJZx/V/PBe+LxdDpc5hDFWxozG/3MB/+eY62jn+YiR+9uOH+Hx63e5zJoeKLfZfPktWQ=="],

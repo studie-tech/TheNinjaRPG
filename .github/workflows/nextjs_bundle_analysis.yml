@@ -28,6 +28,9 @@ jobs:
       HAS_CLERK_KEY: ${{ steps.check-secret.outputs.hasSecret }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # No step here runs git, so the job never needs the token on disk.
+          persist-credentials: false
       - name: Check secret
         id: check-secret
         env:
@@ -41,6 +44,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # No step here runs git, so the job never needs the token on disk.
+          persist-credentials: false
 
       - name: Install Node.js
         uses: actions/setup-node@v7

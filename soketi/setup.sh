@@ -5,10 +5,15 @@ sudo yum update -y
 sudo yum install -y git python3 gcc
 
 # Install nodejs
+# Pinned to 18: @soketi/soketi 1.6.1 depends on uWebSockets.js v20.10.0, whose
+# prebuilt addons only cover Node ABI 83/93/108 (Node 14/16/18). Anything newer
+# fails at require() with "supports only Node.js 14, 16 and 18", so pm2 cannot
+# start soketi. Upstream's own images are Node 16 (soketi:1.6-16-debian).
+# Revisit only when soketi ships a uWebSockets.js build for a current Node ABI.
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh | bash
 . ~/.nvm/nvm.sh
-nvm install 24
-nvm use 24
+nvm install 18
+nvm use 18
 source ~/.bashrc
 node -e "console.log('Running Node.js ' + process.version)"
 
