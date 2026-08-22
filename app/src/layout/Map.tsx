@@ -928,25 +928,31 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         // Update all TWEEN animations (color pulsing, etc.)
         TWEEN.update();
 
+        // Nothing below reaches the GPU while the context is lost, and queueing
+        // buffer update ranges that never get uploaded would grow unbounded.
+        const canRender = !contextHandlers.isContextLost();
+
         // Tint each highlighted sector's slice of the merged surface's colors
-        for (const pulse of pulses) {
-          const color =
-            pulse.type === "war"
-              ? warTweenColor
-              : pulse.type === "focus"
-                ? focusTweenColor
-                : questTweenColor;
-          for (let i = 0; i < pulse.terrain.length; i += 3) {
-            surfaceColorValues[pulse.offset + i] = (pulse.terrain[i] ?? 0) * color.r;
-            surfaceColorValues[pulse.offset + i + 1] =
-              (pulse.terrain[i + 1] ?? 0) * color.g;
-            surfaceColorValues[pulse.offset + i + 2] =
-              (pulse.terrain[i + 2] ?? 0) * color.b;
+        if (canRender && pulses.length > 0) {
+          for (const pulse of pulses) {
+            const color =
+              pulse.type === "war"
+                ? warTweenColor
+                : pulse.type === "focus"
+                  ? focusTweenColor
+                  : questTweenColor;
+            for (let i = 0; i < pulse.terrain.length; i += 3) {
+              surfaceColorValues[pulse.offset + i] = (pulse.terrain[i] ?? 0) * color.r;
+              surfaceColorValues[pulse.offset + i + 1] =
+                (pulse.terrain[i + 1] ?? 0) * color.g;
+              surfaceColorValues[pulse.offset + i + 2] =
+                (pulse.terrain[i + 2] ?? 0) * color.b;
+            }
+            // Upload only the pulsed vertices, not the whole 400k-vertex buffer
+            surfaceColors.addUpdateRange(pulse.offset, pulse.terrain.length);
           }
-          // Upload only the pulsed vertices, not the whole 400k-vertex buffer
-          surfaceColors.addUpdateRange(pulse.offset, pulse.terrain.length);
+          surfaceColors.needsUpdate = true;
         }
-        if (pulses.length > 0) surfaceColors.needsUpdate = true;
         // Intersections with mouse: https://threejs.org/docs/index.html#api/en/core/Raycaster
         const cameraOrPointerMoved =
           camera.position.x !== lastRaycastCamX ||
@@ -979,7 +985,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
 
         // Render the scene (skip if WebGL context is lost or invalid)
         animationId = requestAnimationFrame(render);
-        if (!contextHandlers.isContextLost() && renderer) {
+        if (canRender && renderer) {
           renderer.render(scene, camera);
         }
 
