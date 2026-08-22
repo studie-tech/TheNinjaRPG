@@ -5,10 +5,10 @@ sudo yum update -y
 sudo yum install -y git python3 gcc
 
 # Install nodejs
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh | bash
 . ~/.nvm/nvm.sh
-nvm install 18
-nvm use 18
+nvm install 24
+nvm use 24
 source ~/.bashrc
 node -e "console.log('Running Node.js ' + process.version)"
 
