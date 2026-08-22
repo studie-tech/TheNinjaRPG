@@ -292,14 +292,38 @@ export async function GET() {
       sql`DELETE a FROM ${historicalAvatar} a LEFT JOIN ${userData} b ON a.userId = b.userId WHERE b.userId IS NULL`,
     );
 
-    // Step 19: Historical avatars
+    // Step 19: Quest history without a user. Both orphan sweeps drain in bounded
+    // primary-key batches, so neither holds locks across the whole table while
+    // players are registering.
     await drizzleDB.execute(
-      sql`DELETE a FROM ${questHistory} a LEFT JOIN ${userData} b ON a.userId = b.userId WHERE b.userId IS NULL`,
+      sql`DELETE target
+          FROM (
+            SELECT id FROM (
+              SELECT a.id
+              FROM ${questHistory} a
+              LEFT JOIN ${userData} b ON a.userId = b.userId
+              WHERE b.userId IS NULL
+              LIMIT ${cleanupBatchSize}
+            ) limited
+          ) expired
+          STRAIGHT_JOIN ${questHistory} target FORCE INDEX (PRIMARY)
+            ON target.id = expired.id`,
     );
 
-    // Step 20: User attributes
+    // Step 20: User attributes without a user
     await drizzleDB.execute(
-      sql`DELETE a FROM ${userAttribute} a LEFT JOIN ${userData} b ON a.userId = b.userId WHERE b.userId IS NULL`,
+      sql`DELETE target
+          FROM (
+            SELECT id FROM (
+              SELECT a.id
+              FROM ${userAttribute} a
+              LEFT JOIN ${userData} b ON a.userId = b.userId
+              WHERE b.userId IS NULL
+              LIMIT ${cleanupBatchSize}
+            ) limited
+          ) expired
+          STRAIGHT_JOIN ${userAttribute} target FORCE INDEX (PRIMARY)
+            ON target.id = expired.id`,
     );
 
     // Step 21: User jutsu & items
