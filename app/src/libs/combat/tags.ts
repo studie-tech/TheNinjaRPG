@@ -1709,18 +1709,14 @@ export const heal = (
   }
   // Calculate healing
   const { power } = getPower(effect);
-  // Battles persisted before the round counter was floored can still carry a negative
-  // value, which the schema rejects and which would fail this battle on every poll from
-  // then on. Tolerate exactly that, and keep throwing on any other malformed effect.
-  const parsedEffect = HealTag.safeParse(effect);
-  if (
-    !parsedEffect.success &&
-    !parsedEffect.error.issues.every((issue) => issue.path[0] === "rounds")
-  ) {
-    throw parsedEffect.error;
+  // Battles persisted before the counter was floored can still carry a negative round,
+  // which the schema rejects. Clamp it in place so the tag parses, the pool selection
+  // below keeps its Stamina/Chakra choice, and the scheduling sees a real value.
+  if (effect.rounds !== undefined && effect.rounds < 0) {
+    effect.rounds = 0;
   }
-  const poolsAffects =
-    (parsedEffect.success ? parsedEffect.data.poolsAffected : undefined) ?? ["Health"];
+  const parsedEffect = HealTag.parse(effect);
+  const poolsAffects = parsedEffect.poolsAffected || ["Health"];
   const heal_hp = poolsAffects.includes("Health")
     ? effect.calculation === "percentage"
       ? target.maxHealth * (power / 100) * applyTimes

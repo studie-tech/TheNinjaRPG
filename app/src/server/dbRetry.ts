@@ -209,8 +209,12 @@ export const createRetryingFetch = (
           // Connection resets clear in milliseconds; a request is waiting on this.
           baseDelayMs: 50,
           deadlineMs: 3000,
+          // A rejected fetch says nothing about whether the statement reached the
+          // database, so only a read may be re-issued on one. TransientDatabaseError
+          // is raised from an inspected response, which already knows.
           isTransient: (error) =>
-            error instanceof TransientDatabaseError || error instanceof TypeError,
+            error instanceof TransientDatabaseError ||
+            (readOnly && error instanceof TypeError),
           ...options,
         },
       );
