@@ -452,6 +452,11 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         const tapGesture = { x: 0, y: 0, active: false, navigated: false };
         onLabelPointerDown = (e: PointerEvent) => {
           if (e.isPrimary) {
+            // A finger or pen taking over means the mouse has stopped pointing
+            // at anything, so its last position must stop driving the hover
+            // pick - on a hybrid device it would otherwise reclaim the outline
+            // from the tap as soon as the globe turned.
+            if (e.pointerType !== "mouse") hasPointerPosition = false;
             // Only a touch/pen contact or the left mouse button can start a
             // tap; right/middle clicks are trackball input, never travel
             if (e.pointerType === "mouse" && e.button !== 0) {
