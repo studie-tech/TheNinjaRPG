@@ -192,10 +192,18 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         );
       };
 
-      // Latest pointer position, consumed by the hover pick in the render loop
+      // Latest pointer position, consumed by the hover pick in the render loop.
+      // It stays unset until a real pointer lands: an unset Vector2 is the
+      // canvas centre in NDC, which would otherwise highlight whatever sector
+      // happens to sit there before anyone pointed at it.
       const mouse = new Vector2();
+      let hasPointerPosition = false;
+      const trackPointer = (point: Vector2) => {
+        mouse.copy(point);
+        hasPointerPosition = true;
+      };
       const onDocumentMouseMove = (event: MouseEvent) => {
-        mouse.copy(toPointerNdc(event.clientX, event.clientY));
+        trackPointer(toPointerNdc(event.clientX, event.clientY));
       };
       if (props.intersection) {
         hoverCanvas.addEventListener("mousemove", onDocumentMouseMove, false);
@@ -472,11 +480,17 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           tapGesture.active = false;
           const moved = Math.hypot(e.clientX - tapGesture.x, e.clientY - tapGesture.y);
           if (tapGesture.navigated || moved > TAP_SLOP_PX) return;
-          const sector = pickSector(toPointerNdc(e.clientX, e.clientY));
+          const point = toPointerNdc(e.clientX, e.clientY);
+          const sector = pickSector(point);
           const tile = sector !== null ? hexasphere?.tiles[sector] : undefined;
           if (sector !== null && tile) {
-            // Keep the picked sector outlined while the caller decides what to
-            // do with it - on touch there is no hover to show what was hit.
+            // Outline the picked sector while the caller decides what to do
+            // with it - on touch there is no hover to show what was hit. A
+            // mouse goes on hovering afterwards, so its position stays live; a
+            // finger leaves no pointer behind, so the outline stays where the
+            // tap put it rather than being replaced by a pick at a phantom
+            // position the moment the globe turns.
+            if (e.pointerType === "mouse") trackPointer(point);
             highlightSector(sector);
             onTileClickRef.current?.(sector, tile);
           }
@@ -967,7 +981,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           camera.position.z !== lastRaycastCamZ ||
           mouse.x !== lastRaycastMouseX ||
           mouse.y !== lastRaycastMouseY;
-        if (props.intersection && cameraOrPointerMoved) {
+        if (props.intersection && hasPointerPosition && cameraOrPointerMoved) {
           lastRaycastCamX = camera.position.x;
           lastRaycastCamY = camera.position.y;
           lastRaycastCamZ = camera.position.z;

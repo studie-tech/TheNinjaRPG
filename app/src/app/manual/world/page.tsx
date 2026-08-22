@@ -17,8 +17,8 @@ const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
 
 /**
  * Manual page explaining world travel, rendered around the interactive globe.
- * For content staff it doubles as the map-editing entry point: double-clicking
- * a globe sector routes to /manual/world/sector-maps?sector=N.
+ * For content staff it doubles as the map-editing entry point: clicking a globe
+ * sector routes to /manual/world/sector-maps?sector=N.
  */
 export default function ManualWorld() {
   const router = useRouter();
@@ -59,8 +59,7 @@ export default function ManualWorld() {
       a hexagonal map where your character can explore and interact with other players.
       {canEditMaps && (
         <p className="mt-2 font-bold text-orange-500">
-          As a content editor: double-click any sector on the globe to open its map
-          editor.
+          As a content editor: click any sector on the globe to open its map editor.
         </p>
       )}
       <div className="mt-4">
