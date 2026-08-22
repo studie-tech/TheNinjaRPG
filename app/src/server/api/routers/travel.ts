@@ -873,8 +873,11 @@ export const travelRouter = createTRPCRouter({
         }
         return { success: true, message: "OK", data: output };
       } else {
-        // Get the user data
-        const user = await fetchUser(ctx.drizzle, userId);
+        // The optimistic update already read the row in parallel; a missing row
+        // means the character was deleted while the session was still live.
+        if (!user) {
+          return errorResponse("Your character no longer exists. Please refresh.");
+        }
         // Force an update on the map of the real information (only if not stealthed)
         if (!isUserCurrentlyStealthed(user)) {
           void updateUserOnMap(pusher, user.sector, user);
