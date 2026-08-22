@@ -12,7 +12,7 @@ import { useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
-import { isRetryableTrpcError, isUnregisteredUserError } from "@/utils/error";
+import { isRetryableTrpcError } from "@/utils/error";
 import {
   api,
   SIGN_IN_REQUIRED_MUTATION_MESSAGE,
@@ -119,19 +119,6 @@ const handleTrpcError = (error: unknown) => {
     error instanceof TRPCClientError &&
     error.message.includes("Unauthorized for tRPC endpoint") &&
     (trpcErrorCode === undefined || trpcErrorCode === "UNAUTHORIZED")
-  ) {
-    return;
-  }
-
-  // A valid Clerk session with no UserData row: registration was never completed, or
-  // the character was deleted while other queries were still in flight. profile.getUser
-  // returns an undefined user for this state, so useRequiredUserData forwards to "/"
-  // and HomeLanding sends the user on to /register. Showing a destructive toast for
-  // every other request that loses the same race adds nothing on top of that redirect.
-  if (
-    error instanceof TRPCClientError &&
-    trpcErrorCode === "NOT_FOUND" &&
-    isUnregisteredUserError(error.message)
   ) {
     return;
   }

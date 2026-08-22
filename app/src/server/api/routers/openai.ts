@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { IMG_ORIENTATIONS } from "@/drizzle/constants";
@@ -86,6 +87,12 @@ export const generativeAiRouter = createTRPCRouter({
           (cause.message.includes("Prediction failed") ||
             cause.message.includes("Failed to generate image"));
         if (isGenerationFailure) {
+          // "Prediction failed" is raised by the Replicate client for ANY model, so this
+          // also catches background-removal and upload failures that nothing else logs.
+          Sentry.captureException(cause, {
+            level: "warning",
+            tags: { source: "generativeAi.createImg" },
+          });
           return {
             success: false,
             message: "Image generation failed - try rephrasing the prompt and retry",

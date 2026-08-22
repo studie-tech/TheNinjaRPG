@@ -4,7 +4,6 @@ import { cookies, headers } from "next/headers";
 import type { NextRequest } from "next/server";
 import { appRouter } from "@/api/root";
 import { createAppTRPCContext } from "@/api/trpc";
-import { isUnregisteredUserError } from "@/utils/error";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -31,12 +30,15 @@ const handler = async (req: NextRequest) => {
       // them through the global error toast in _trpc/Provider.tsx.
       const isCrawlerMethodRejection =
         error.code === "METHOD_NOT_SUPPORTED" && !ctx?.userId;
-      // A Clerk session with no UserData row: character creation was never finished,
-      // or the character was deleted while the tab stayed open. profile.getUser
-      // answers with an undefined user for this state and the client forwards to
-      // /register, so the fetchUser guard firing elsewhere is expected.
+      // A Clerk session with no UserData row of its OWN: character creation was never
+      // finished, or the character was deleted while the tab stayed open. The client
+      // forwards to /register off profile.getUser's undefined user, so the guard firing
+      // elsewhere in the same request is expected. fetchUser raises the identical message
+      // for a missing *target* user, so match the session id rather than the shape.
       const isUnregisteredUser =
-        error.code === "NOT_FOUND" && isUnregisteredUserError(error.message);
+        error.code === "NOT_FOUND" &&
+        !!ctx?.userId &&
+        error.message === `User not found: ${ctx.userId}. Please complete registration.`;
       if (
         !isCrawlerMethodRejection &&
         !isUnregisteredUser &&

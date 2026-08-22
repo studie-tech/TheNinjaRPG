@@ -111,16 +111,6 @@ const createErrorPatternMatcher =
  * Each matcher validates both the error message pattern and stack frame context.
  * These are typically transient network/CDN issues that should be retried automatically.
  */
-/**
- * fetchUser's guard for a Clerk session whose UserData row no longer exists. Anchored on
- * the whole message, not a substring, so an unrelated error that happens to mention
- * registration keeps being reported.
- */
-export const UNREGISTERED_USER_ERROR = /^User not found: \S+\. Please complete registration\.$/;
-
-export const isUnregisteredUserError = (message?: string): boolean =>
-  !!message && UNREGISTERED_USER_ERROR.test(message);
-
 export const isNetworkError = createErrorPatternMatcher([
   "Load failed",
   "fetch failed",
