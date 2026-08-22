@@ -311,6 +311,19 @@ export const devContributionRouter = createTRPCRouter({
         };
       }
 
+      // Rewards are only paid against a proven GitHub identity, and a missing
+      // login is deliberately non-retryable in verifyContributionResult. Without
+      // this guard a contributor could claim, do the work for real, and then
+      // have the job close as COMPLETED with no reward and no retry.
+      if (!profile.githubLogin || !profile.githubLoginVerifiedAt) {
+        return {
+          success: true,
+          claimed: false,
+          message:
+            "Verify your GitHub account before claiming work, or completed jobs cannot be rewarded.",
+        };
+      }
+
       const capForAgent =
         agent === "CLAUDE" ? profile.claudeDailyTokenCap : profile.codexDailyTokenCap;
       const agentTokens = usage.find((u) => u.agent === agent)?.tokens ?? 0;
