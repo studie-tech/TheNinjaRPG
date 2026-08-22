@@ -98,6 +98,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   const { data: userData } = useUserData();
   const [webglError, setWebglError] = useState<boolean>(false);
   const [hoverSector, setHoverSector] = useState<number | null>(null);
+  // Whether the built scene actually carries quest pins, so the legend below
+  // only explains markers that are on the globe
+  const [hasQuestMarkers, setHasQuestMarkers] = useState<boolean>(false);
   const mountRef = useRef<HTMLDivElement | null>(null);
   // Bridges the overlay zoom buttons into the three.js scene built below
   const zoomActionRef = useRef<((factor: number) => void) | null>(null);
@@ -793,6 +796,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         }
       });
 
+      setHasQuestMarkers(
+        sectorsToHighlight.some((highlight) => highlight.type === "quest"),
+      );
+
       // Pulsing a sector means rewriting its slice of the merged surface's
       // shared color buffer every frame. Snapshot each one's terrain colors up
       // front - taken lazily they would capture an already-pulsed slice
@@ -1089,7 +1096,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
               </span>
             </li>
           )}
-          {hoverSector !== null && !showOwnership && (
+          {hasQuestMarkers && (
             <li className="flex flex-row items-center">
               <span className="mr-1 animate-pulse text-2xl text-orange-500">⬢</span>{" "}
               Quest
