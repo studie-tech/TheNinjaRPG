@@ -16,7 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
@@ -53,6 +53,7 @@ import {
   STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   TrainingSpeeds,
+  TUTORIAL_JUTSU_ID,
   UserStatNames,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
@@ -89,6 +90,7 @@ import {
   trainEfficiency,
   trainingSpeedSeconds,
 } from "@/libs/train";
+import { isTutorialJutsuPickStep } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import {
@@ -107,6 +109,8 @@ export default function Training() {
   // Ensure user is in village
   const { userData, timeDiff, access, updateUser } =
     useRequireInVillage("/traininggrounds");
+  const { currentStep } = useTutorialStep();
+  const hideOtherTraining = isTutorialJutsuPickStep(currentStep);
 
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -120,8 +124,14 @@ export default function Training() {
     <>
       <StatsTraining userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
       <JutsuTraining userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
-      <CovertTraining userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
-      {showSenseiSystem && (
+      {!hideOtherTraining && (
+        <CovertTraining
+          userData={userData}
+          timeDiff={timeDiff}
+          updateUser={updateUser}
+        />
+      )}
+      {showSenseiSystem && !hideOtherTraining && (
         <SenseiSystem userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
       )}
     </>
@@ -444,6 +454,9 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (isPending) return <Loader explanation="Processing..." />;
+  if (isTutorialJutsuPickStep(currentStep) && !userData.currentlyTraining) {
+    return null;
+  }
 
   // Convenience definitions
   const trainItemClassName = "hover:opacity-50 hover:cursor-pointer relative";
@@ -682,16 +695,22 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 
   // Tutorial management hook
   const { currentStep, handleNextStep } = useTutorialStep();
+  const isJutsuPickStep = isTutorialJutsuPickStep(currentStep);
+
+  const { data: tutorialJutsu } = api.jutsu.get.useQuery(
+    { id: TUTORIAL_JUTSU_ID },
+    { enabled: isJutsuPickStep },
+  );
 
   // Mutations
   const { mutate: train, isPending: isStartingTrain } =
     api.jutsu.startTraining.useMutation({
-      onSuccess: async (result) => {
+      onSuccess: async (result, variables) => {
         showMutationToast(result);
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
           await updateUser(result.data);
-          if (currentStep?.title === "Jutsu Training") {
+          if (isJutsuPickStep && variables.jutsuId === TUTORIAL_JUTSU_ID) {
             handleNextStep();
           }
         }
@@ -720,6 +739,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Mutation loading
   const isPending = isStartingTrain || isStoppingTrain;
 
+  const setJutsuConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
+    const next = typeof open === "function" ? open(isOpen) : open;
+    setIsOpen(next);
+    if (!next) setJutsu(undefined);
+  };
+
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
 
@@ -730,28 +755,59 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   }
 
   // Filtering jutsus
-  const alljutsus = jutsus?.pages
-    .flatMap((page) => page.data)
-    .filter((j) => {
-      if (j.parentJutsuId)
-        return (
-          // Training/leveling is item-free, so ignore the bloodline item requirement here
-          canUseJutsu(j, userData, true) &&
-          (userJutsuOwnership?.some((uj) => uj.jutsuId === j.id) ?? false)
-        );
-      return canTrainJutsu(j, userData);
-    })
-    .filter((j) => !evolvedAncestorIds.has(j.id))
-    .filter((j) => {
-      const userJutsu = userJutsus?.find((uj) => uj.jutsuId === j.id);
-      return userJutsu || !isJutsuTrainToLearnRestricted(j.jutsuType);
-    })
-    .map((j) => {
-      const uj = userJutsus?.find((uj) => uj.jutsuId === j.id);
-      return { ...j, level: uj?.level || 0 };
-    })
-    .filter((j) => j.level < getJutsuLevelCap(j))
-    .sort((a, b) => b.level - a.level);
+  const alljutsus =
+    jutsus?.pages
+      .flatMap((page) => page.data)
+      .filter((j) => {
+        if (j.parentJutsuId)
+          return (
+            // Training/leveling is item-free, so ignore the bloodline item requirement here
+            canUseJutsu(j, userData, true) &&
+            (userJutsuOwnership?.some((uj) => uj.jutsuId === j.id) ?? false)
+          );
+        return canTrainJutsu(j, userData);
+      })
+      .filter((j) => !evolvedAncestorIds.has(j.id))
+      .filter((j) => {
+        const userJutsu = userJutsus?.find((uj) => uj.jutsuId === j.id);
+        return userJutsu || !isJutsuTrainToLearnRestricted(j.jutsuType);
+      })
+      .map((j) => {
+        const uj = userJutsus?.find((uj) => uj.jutsuId === j.id);
+        return {
+          ...j,
+          level: uj?.level || 0,
+          highlight: isJutsuPickStep && j.id === TUTORIAL_JUTSU_ID,
+        };
+      })
+      .filter((j) => j.level < getJutsuLevelCap(j))
+      .sort((a, b) => b.level - a.level) ?? [];
+
+  const tutorialJutsuLevel =
+    userJutsus?.find((uj) => uj.jutsuId === TUTORIAL_JUTSU_ID)?.level || 0;
+  if (
+    isJutsuPickStep &&
+    tutorialJutsu &&
+    canTrainJutsu(tutorialJutsu, userData) &&
+    // The list drops capped jutsu; pinning one back would show a tile whose
+    // confirm modal can only say "Level capped".
+    tutorialJutsuLevel < getJutsuLevelCap(tutorialJutsu) &&
+    !alljutsus.some((j) => j.id === tutorialJutsu.id)
+  ) {
+    alljutsus.unshift({
+      // jutsu.get carries no relations, unlike the paginated jutsu.getAll rows
+      bloodline: null,
+      ...tutorialJutsu,
+      level: tutorialJutsuLevel,
+      highlight: true,
+    });
+  } else if (isJutsuPickStep) {
+    const pinnedIdx = alljutsus.findIndex((j) => j.id === TUTORIAL_JUTSU_ID);
+    if (pinnedIdx > 0) {
+      const [pinned] = alljutsus.splice(pinnedIdx, 1);
+      if (pinned) alljutsus.unshift(pinned);
+    }
+  }
 
   // Training time
   const finishTrainingAt = userJutsus?.find(
@@ -829,13 +885,14 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
               title="Confirm Purchase"
               proceed_label={proceed_label}
               isOpen={isOpen}
-              setIsOpen={setIsOpen}
+              setIsOpen={setJutsuConfirmOpen}
               isValid={false}
+              onClose={() => setJutsu(undefined)}
               onAccept={() => {
                 if (canTrain && !isPending) {
                   train({ jutsuId: jutsu.id });
                 } else {
-                  setIsOpen(false);
+                  setJutsuConfirmOpen(false);
                 }
               }}
               confirmClassName={

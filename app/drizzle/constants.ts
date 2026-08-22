@@ -660,8 +660,10 @@ export const QuestTypes = [
   "achievement",
   "war",
   "raid",
+  "overworld",
 ] as const;
 export type QuestType = (typeof QuestTypes)[number];
+export const NPC_ONLY_QUEST_TYPES = ["overworld"] as const satisfies readonly QuestType[];
 export const QUESTS_CONCURRENT_LIMIT = 4;
 
 // Ordering here represents the default ordering for tutorial component
@@ -701,6 +703,7 @@ export const QuestTypesWithMaxAttempts = [
   "battlepyramid",
   "starter",
   "raid",
+  "overworld",
 ];
 export type QuestTypeWithMaxAttempts = (typeof QuestTypesWithMaxAttempts)[number];
 

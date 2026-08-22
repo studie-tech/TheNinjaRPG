@@ -110,18 +110,18 @@ export default async function DevConnectPage({
 
   return (
     <div className="mx-auto mt-24 max-w-md rounded-lg border border-border bg-card p-6 text-card-foreground">
-      <h1 className="text-xl font-bold">Connect the TNR Dev Client</h1>
-      <p className="mt-3 text-sm text-muted-foreground">
+      <h1 className="font-bold text-xl">Connect the TNR Dev Client</h1>
+      <p className="mt-3 text-muted-foreground text-sm">
         The desktop dev client on this machine is asking to sign in to your game
         account. It will be able to claim contribution jobs and record their results.
       </p>
-      <p className="mt-3 text-sm text-muted-foreground">
+      <p className="mt-3 text-muted-foreground text-sm">
         Only continue if you just started sign-in from the app on this computer. The
         connection will be sent to{" "}
         <code className="font-mono">127.0.0.1:{parsed.port}</code>.
       </p>
       {params.error === "rate-limit" && (
-        <p className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+        <p className="mt-4 rounded-md bg-destructive/10 p-3 text-destructive text-sm">
           Too many connection attempts. Wait a minute and try again.
         </p>
       )}

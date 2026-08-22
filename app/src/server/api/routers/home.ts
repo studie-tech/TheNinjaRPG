@@ -1,4 +1,4 @@
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gt, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { UserStatus } from "@/drizzle/constants";
 import {
@@ -298,10 +298,20 @@ export const homeRouter = createTRPCRouter({
         ) {
           return errorResponse("Materials inventory is full");
         }
-        await ctx.drizzle
+        const result = await ctx.drizzle
           .update(userItem)
           .set({ storedAtHome: false })
-          .where(eq(userItem.id, input.userItemId));
+          .where(
+            and(
+              eq(userItem.id, input.userItemId),
+              eq(userItem.userId, ctx.userId),
+              eq(userItem.storedAtHome, true),
+              gt(userItem.quantity, 0),
+            ),
+          );
+        if (result.rowsAffected !== 1) {
+          return errorResponse("Inventory changed, please refresh and try again");
+        }
         return { success: true, message: "Item retrieved from your home." };
       } else {
         // Check storage limits based on item type
@@ -323,10 +333,20 @@ export const homeRouter = createTRPCRouter({
             return errorResponse("Your home storage is full");
           }
         }
-        await ctx.drizzle
+        const result = await ctx.drizzle
           .update(userItem)
           .set({ storedAtHome: true })
-          .where(eq(userItem.id, input.userItemId));
+          .where(
+            and(
+              eq(userItem.id, input.userItemId),
+              eq(userItem.userId, ctx.userId),
+              eq(userItem.storedAtHome, false),
+              gt(userItem.quantity, 0),
+            ),
+          );
+        if (result.rowsAffected !== 1) {
+          return errorResponse("Inventory changed, please refresh and try again");
+        }
         return { success: true, message: "Item stored in your home." };
       }
     }),

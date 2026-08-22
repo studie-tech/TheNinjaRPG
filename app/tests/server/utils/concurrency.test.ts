@@ -10,7 +10,10 @@ import {
   claimUserSnapshot,
   clearActiveNpcQuest,
   consumeUserItemAtomically,
+  refundUserItemQuantityAtomically,
+  restoreStaleUserItemMergeClaims,
   updateUserItemQuantityAtomically,
+  userItemMergeQuantityCase,
 } from "@/server/utils/concurrency";
 
 describe("concurrency helpers", () => {
@@ -103,6 +106,151 @@ describe("concurrency helpers", () => {
     });
     expect(result).toBe(false);
     expect(client.update).not.toHaveBeenCalled();
+  });
+
+  it("atomically refunds a consumed item whether its stack survived or was deleted", async () => {
+    const onDuplicateKeyUpdate = vi.fn().mockResolvedValue({ rowsAffected: 2 });
+    const values = vi.fn().mockReturnValue({ onDuplicateKeyUpdate });
+    const client = { insert: vi.fn().mockReturnValue({ values }) };
+    const itemSnapshot = {
+      id: "item-row-1",
+      createdAt: new Date("2026-08-18T10:00:00.000Z"),
+      updatedAt: new Date("2026-08-18T10:00:00.000Z"),
+      userId: "user-1",
+      itemId: "repair-kit-1",
+      quantity: 5,
+      level: 1,
+      experience: 0,
+      equipped: "NONE",
+      durability: 100,
+      storedAtHome: false,
+      craftingFinishedAt: null,
+      isInAuction: false,
+      activeVariantId: null,
+      dropChancePerc: 0,
+    } as const;
+
+    await refundUserItemQuantityAtomically({
+      client: client as never,
+      itemSnapshot,
+      quantity: 2,
+    });
+
+    expect(client.insert).toHaveBeenCalledWith(userItem);
+    expect(values).toHaveBeenCalledWith({ ...itemSnapshot, quantity: 2 });
+    expect(onDuplicateKeyUpdate).toHaveBeenCalledOnce();
+    expect(onDuplicateKeyUpdate).toHaveBeenCalledWith({
+      set: { quantity: expect.anything() },
+    });
+    const increment = onDuplicateKeyUpdate.mock.calls[0]?.[0].set.quantity as SQL;
+    const rendered = new QueryBuilder()
+      .select({ quantity: increment })
+      .from(userItem)
+      .toSQL();
+    expect(rendered.sql).toMatch(/if\s*\(.*quantity.*>=\s*0.*quantity.*\+\s*\?/i);
+    expect(rendered.params).toEqual([2]);
+  });
+
+  it("refunds into a fresh row when the original is held by a merge claim", async () => {
+    const onDuplicateKeyUpdate = vi.fn().mockResolvedValue({ rowsAffected: 0 });
+    const values = vi
+      .fn()
+      .mockReturnValueOnce({ onDuplicateKeyUpdate })
+      .mockReturnValueOnce(Promise.resolve({ rowsAffected: 1 }));
+    const client = { insert: vi.fn().mockReturnValue({ values }) };
+    const itemSnapshot = {
+      id: "item-row-1",
+      createdAt: new Date("2026-08-18T10:00:00.000Z"),
+      updatedAt: new Date("2026-08-18T10:00:00.000Z"),
+      userId: "user-1",
+      itemId: "repair-kit-1",
+      quantity: 5,
+      level: 1,
+      experience: 0,
+      equipped: "NONE",
+      durability: 100,
+      storedAtHome: false,
+      craftingFinishedAt: null,
+      isInAuction: false,
+      activeVariantId: null,
+      dropChancePerc: 0,
+    } as const;
+
+    await refundUserItemQuantityAtomically({
+      client: client as never,
+      itemSnapshot,
+      quantity: 2,
+    });
+
+    // First attempt is the guarded upsert on the original row; the claimed row
+    // no-ops it, and the fallback inserts the refund as a brand-new row that an
+    // in-flight merge publish cannot overwrite.
+    expect(client.insert).toHaveBeenCalledTimes(2);
+    expect(onDuplicateKeyUpdate).toHaveBeenCalledOnce();
+    const fallbackRow = values.mock.calls[1]?.[0] as {
+      id: string;
+      quantity: number;
+      itemId: string;
+    };
+    expect(fallbackRow.quantity).toBe(2);
+    expect(fallbackRow.itemId).toBe("repair-kit-1");
+    expect(fallbackRow.id).not.toBe("item-row-1");
+  });
+
+  it("does not issue a refund statement for a non-positive quantity", async () => {
+    const client = { insert: vi.fn() };
+    const itemSnapshot = { id: "item-row-1" };
+
+    await refundUserItemQuantityAtomically({
+      client: client as never,
+      itemSnapshot: itemSnapshot as never,
+      quantity: 0,
+    });
+
+    expect(client.insert).not.toHaveBeenCalled();
+  });
+
+  it("restores stale negative merge claims and deletes stale zero tombstones", async () => {
+    const updateWhere = vi.fn().mockResolvedValue({ rowsAffected: 1 });
+    const deleteWhere = vi.fn().mockResolvedValue({ rowsAffected: 1 });
+    const set = vi.fn().mockReturnValue({ where: updateWhere });
+    const client = {
+      update: vi.fn().mockReturnValue({ set }),
+      delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+    };
+    const staleBefore = new Date("2026-08-18T10:00:00.000Z");
+
+    await restoreStaleUserItemMergeClaims({
+      client: client as never,
+      userId: "user-1",
+      staleBefore,
+    });
+
+    expect(client.update).toHaveBeenCalledWith(userItem);
+    expect(client.delete).toHaveBeenCalledWith(userItem);
+    expect(updateWhere).toHaveBeenCalledOnce();
+    expect(deleteWhere).toHaveBeenCalledOnce();
+
+    const restoredQuantity = set.mock.calls[0]?.[0].quantity as SQL;
+    const rendered = new QueryBuilder()
+      .select({ quantity: restoredQuantity })
+      .from(userItem)
+      .toSQL();
+    expect(rendered.sql).toMatch(/-.*quantity/i);
+  });
+
+  it("builds one CASE expression for keeper quantities and zero tombstones", () => {
+    const expression = userItemMergeQuantityCase([
+      { id: "keeper-row", quantity: 5 },
+      { id: "obsolete-row", quantity: 0 },
+    ]);
+    const rendered = new QueryBuilder()
+      .select({ quantity: expression })
+      .from(userItem)
+      .toSQL();
+
+    expect(rendered.sql).toMatch(/case.*when.*then.*when.*then.*else.*end/i);
+    expect(rendered.params).toEqual(["keeper-row", 5, "obsolete-row", 0]);
   });
 });
 

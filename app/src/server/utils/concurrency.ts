@@ -9,8 +9,22 @@
  * Failed CAS (`success: false` / `false`) means another request mutated the row first — return a
  * safe client error and retry-friendly message.
  */
-import { and, eq, exists, gt, gte, inArray, isNull, ne, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  exists,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  ne,
+  sql,
+} from "drizzle-orm";
+import { nanoid } from "nanoid";
 import type { BattleType } from "@/drizzle/constants";
+import type { UserItem } from "@/drizzle/schema";
 import {
   bloodlineRolls,
   rankedPvpQueue,
@@ -117,6 +131,109 @@ export const consumeUserItemAtomically = async ({
     nextQuantity: expectedQuantity - 1,
   });
 };
+
+/**
+ * How long a stack-merge claim (negative quantity) may exist before it is considered abandoned
+ * and safe to restore. Claims normally live for only a few database round trips.
+ */
+export const MERGE_STACK_CLAIM_TIMEOUT_MS = 30_000;
+
+type RefundUserItemQuantityAtomicallyParams = {
+  client: DrizzleClient;
+  itemSnapshot: UserItem;
+  quantity: number;
+};
+
+/**
+ * Compensates a successful item consume. If the consume decremented the stack, the duplicate-key
+ * branch adds the quantity back; if it deleted the stack, the insert branch recreates the original
+ * row with only the refunded quantity. A negative quantity belongs to an active stack merge whose
+ * publish would overwrite any value we set, so the guarded upsert refuses to touch it and the
+ * refund lands in a fresh row instead — the next merge folds it back into the stack.
+ */
+export const refundUserItemQuantityAtomically = async ({
+  client,
+  itemSnapshot,
+  quantity,
+}: RefundUserItemQuantityAtomicallyParams) => {
+  if (quantity <= 0) return;
+
+  const result = await client
+    .insert(userItem)
+    .values({ ...itemSnapshot, quantity })
+    .onDuplicateKeyUpdate({
+      set: {
+        quantity: sql`IF(${userItem.quantity} >= 0, ${userItem.quantity} + ${quantity}, ${userItem.quantity})`,
+      },
+    });
+  if (result.rowsAffected > 0) return;
+
+  // The claimed original keeps its equipped slot when the merge publishes it back, so the
+  // refund row must start unequipped — two rows can never share one slot.
+  await client.insert(userItem).values({
+    ...itemSnapshot,
+    id: nanoid(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    equipped: "NONE",
+    quantity,
+  });
+};
+
+type RestoreStaleUserItemMergeClaimsParams = {
+  client: DrizzleClient;
+  userId: string;
+  staleBefore: Date;
+};
+
+/**
+ * Cleans up abandoned stack-merge state. A merge claims a row by negating its quantity, so the
+ * original value remains recoverable after a process crash. Its atomic publish turns obsolete
+ * rows into zero-quantity tombstones, which are safe to delete once stale. Fresh non-positive rows
+ * are left alone for the active merge; callers exclude them from inventory reads and writes.
+ */
+export const restoreStaleUserItemMergeClaims = async ({
+  client,
+  userId,
+  staleBefore,
+}: RestoreStaleUserItemMergeClaimsParams) => {
+  await Promise.all([
+    client
+      .update(userItem)
+      .set({
+        quantity: sql`-${userItem.quantity}`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(userItem.userId, userId),
+          lt(userItem.quantity, 0),
+          lte(userItem.updatedAt, staleBefore),
+        ),
+      ),
+    client
+      .delete(userItem)
+      .where(
+        and(
+          eq(userItem.userId, userId),
+          eq(userItem.quantity, 0),
+          lte(userItem.updatedAt, staleBefore),
+        ),
+      ),
+  ]);
+};
+
+/**
+ * Builds the per-row CASE expression used by the stack-merge protocol so one UPDATE can set a
+ * different quantity per row (claim negation, publish targets, and conflict restores).
+ */
+export const userItemMergeQuantityCase = (
+  targets: readonly { id: string; quantity: number }[],
+) =>
+  sql<number>`CASE ${userItem.id} ${sql.join(
+    targets.map((target) => sql`WHEN ${target.id} THEN ${target.quantity}`),
+    sql.raw(" "),
+  )} ELSE ${userItem.quantity} END`;
 
 type AdjustSeichiSilverParams = {
   client: DrizzleClient;

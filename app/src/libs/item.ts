@@ -229,6 +229,16 @@ export const isImbuing = (
 ): boolean =>
   ui.imbuements.some((im) => im.craftingFinishedAt && im.craftingFinishedAt > now);
 
+/**
+ * Locale-aware comparator for displayed item names.
+ * Prefers top-level `name` (e.g. after applyActiveVariant flatten) so variant
+ * overrides match what ActionSelector renders; falls back to nested `item.name`.
+ */
+export const byItemName = (
+  a: { name?: string; item?: { name: string } },
+  b: { name?: string; item?: { name: string } },
+) => (a.name ?? a.item?.name ?? "").localeCompare(b.name ?? b.item?.name ?? "");
+
 export interface EquipConstraintInfo {
   itemId: string;
   bloodlineId: string | null;
@@ -475,7 +485,7 @@ export const showsItemLevelBadge = (item: {
 
 /**
  * ActionSelector badge lists for user items: amber stack quantity (bottom-right)
- * for non-leveling stacks, red ownership level (bottom-left) for leveling gear.
+ * for every stack, red ownership level (bottom-left) for leveling gear.
  */
 export const userItemActionBadges = <
   T extends {
@@ -491,7 +501,7 @@ export const userItemActionBadges = <
   levels: { id: string; level: number }[] | undefined;
 } => ({
   counts: userItems
-    ?.filter((ui) => !showsItemLevelBadge(ui.item) && ui.quantity > 1)
+    ?.filter((ui) => ui.quantity > 1)
     .map((ui) => ({ id: ui.id, quantity: ui.quantity })),
   levels: userItems
     ?.filter((ui) => showsItemLevelBadge(ui.item))

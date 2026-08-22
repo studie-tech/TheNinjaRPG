@@ -8,6 +8,7 @@ import {
   type EquippedAssignment,
   type EquippedConstraintState,
   isEquippableUserItem,
+  userItemActionBadges,
 } from "@/libs/item";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
@@ -63,6 +64,36 @@ describe("isEquippableUserItem", () => {
         NOW,
       ),
     ).toBe(true);
+  });
+});
+
+describe("userItemActionBadges", () => {
+  it("shows both quantity and level badges for a stack of leveling equipment", () => {
+    const badges = userItemActionBadges([
+      {
+        id: "stacked-weapon",
+        quantity: 5,
+        level: 12,
+        item: { itemType: "WEAPON", slot: "HAND" },
+      },
+    ]);
+
+    expect(badges.counts).toEqual([{ id: "stacked-weapon", quantity: 5 }]);
+    expect(badges.levels).toEqual([{ id: "stacked-weapon", level: 12 }]);
+  });
+
+  it("does not show a quantity badge for a single leveling item", () => {
+    const badges = userItemActionBadges([
+      {
+        id: "single-weapon",
+        quantity: 1,
+        level: 12,
+        item: { itemType: "WEAPON", slot: "HAND" },
+      },
+    ]);
+
+    expect(badges.counts).toEqual([]);
+    expect(badges.levels).toEqual([{ id: "single-weapon", level: 12 }]);
   });
 });
 

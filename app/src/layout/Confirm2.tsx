@@ -17,6 +17,8 @@ interface Confirm2Props {
   isValid?: boolean;
   confirmDisabled?: boolean;
   disabled?: boolean;
+  /** Extra footer controls before Close. Pass a function to receive `close`. */
+  footerExtra?: React.ReactNode | ((args: { close: () => void }) => React.ReactNode);
   onAccept?: (
     e:
       | React.MouseEvent<HTMLButtonElement, MouseEvent>
@@ -27,6 +29,10 @@ interface Confirm2Props {
 
 const Confirm2: React.FC<Confirm2Props> = (props) => {
   const [showModal, setShowModal] = useState<boolean>(false);
+  const footerExtra =
+    typeof props.footerExtra === "function"
+      ? props.footerExtra({ close: () => setShowModal(false) })
+      : props.footerExtra;
   return (
     <>
       {/* biome-ignore lint/a11y/useSemanticElements: wrapper for button children - using button would create invalid nested buttons */}
@@ -66,6 +72,7 @@ const Confirm2: React.FC<Confirm2Props> = (props) => {
         isValid={props.isValid}
         proceedDisabled={props.confirmDisabled}
         onClose={props.onClose}
+        footerExtra={footerExtra}
       >
         {props.children}
       </Modal2>

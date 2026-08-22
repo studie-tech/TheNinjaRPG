@@ -221,12 +221,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               />
             )}
         </div>
-        {props.imageExtra}
       </div>
     ) : null;
   if ("href" in item && item.href) {
     image = <Link href={item.href}>{image}</Link>;
   }
+  const imageExtra = props.imageExtra;
 
   // Define rewards from quests if they are there
   const rewards = "content" in item ? getRewardArray(item.content.reward) : [];
@@ -241,6 +241,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
           )}
 
           <div className="relative flex basis-full flex-col pl-5 md:pl-0">
+            {imageExtra && <div className="flex flex-row">{imageExtra}</div>}
             {!hideTitle ? (
               <h3 className="font-bold text-popover-foreground text-xl tracking-tight">
                 {detailHref ? (

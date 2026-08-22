@@ -47,11 +47,14 @@ import Image from "@/layout/Image";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
+import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
 import Modal2 from "@/layout/Modal2";
 import NavTabs from "@/layout/NavTabs";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
 import {
+  byItemName,
+  calcItemRepairCost,
   calcItemSellingPrice,
   calcMaxEventItems,
   calcMaxItems,
@@ -62,7 +65,7 @@ import {
   showsItemLevelBadge,
   userItemActionBadges,
 } from "@/libs/item";
-import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
+import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
@@ -111,24 +114,24 @@ export default function MyItems() {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.item.getUserItemsWithVariants.invalidate();
-          await utils.profile.getUser.invalidate();
+          await Promise.all([
+            utils.item.getUserItemsWithVariants.invalidate(),
+            utils.profile.getUser.invalidate(),
+          ]);
         }
       },
     });
 
-  const { mutate: mergeAllStacks, isPending: isMergingAllStacks } =
-    api.item.mergeAllStacks.useMutation({
+  const { mutate: mutateRepairAllRyo, isPending: isRepairingAllRyo } =
+    api.item.repairAll.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        await utils.item.getUserItemsWithVariants.invalidate();
-      },
-      onError: (error) => {
-        showMutationToast({
-          success: false,
-          message: error.message,
-          variant: "destructive",
-        });
+        if (data.success) {
+          await Promise.all([
+            utils.item.getUserItemsWithVariants.invalidate(),
+            utils.profile.getUser.invalidate(),
+          ]);
+        }
       },
     });
 
@@ -184,12 +187,15 @@ export default function MyItems() {
     userData.reputationPoints && userData.reputationPoints >= COST_EXTRA_ITEM_SLOT;
 
   // Calculate items needing repair and which kits will be used
-  const itemsNeedingRepair = (userItems || []).filter(
-    (useritem) =>
-      useritem.durability < useritem.item.maxDurability &&
-      useritem.item.maxDurability > 0,
-  );
+  const itemsNeedingRepair = (userItems || []).filter(needsInventoryRepair);
   const repairKits = getRepairKits(userItems);
+  const isCrafter = userData.occupation === "CRAFTING";
+  const totalRyoRepairCost = itemsNeedingRepair.reduce(
+    (total, useritem) => total + calcItemRepairCost(useritem),
+    0,
+  );
+  const canAffordRyoRepair = userData.money >= totalRyoRepairCost;
+  const isRepairAllPending = isRepairingAll || isRepairingAllRyo;
 
   // Calculate which kits will be used (shared with item.useRepairAll)
   const repairKitCalculation = calculateKitsToUse(
@@ -199,6 +205,7 @@ export default function MyItems() {
   );
 
   const repairAllInfo = repairKitCalculation;
+  const canRepairWithKits = repairKits.length > 0 && repairAllInfo.canRepairAll;
 
   return (
     <>
@@ -252,38 +259,13 @@ export default function MyItems() {
             <div className="w-full basis-1/2 p-3">
               <h2 className="font-bold text-2xl text-foreground">Equipped</h2>
               <div className="relative">
-                <Character useritems={userItems} />
+                <Character useritems={userItems} userData={userData} />
               </div>
             </div>
             <div className="max-h-full basis-1/2 overflow-y-scroll border-t-2 border-dashed bg-poppopover p-3 sm:max-h-[600px] sm:border-t-0 sm:border-l-2">
               <div className="mb-2 flex flex-row flex-wrap items-center justify-between gap-2">
                 <h2 className="font-bold text-2xl text-foreground">Backpack</h2>
-                <Confirm2
-                  title="Merge all stacks"
-                  proceed_label={isMergingAllStacks ? undefined : "Merge all stacks"}
-                  isValid={!isMergingAllStacks}
-                  button={
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={isMergingAllStacks}
-                    >
-                      <Merge className="mr-2 h-4 w-4" />
-                      {isMergingAllStacks ? "Merging..." : "Merge all stacks"}
-                    </Button>
-                  }
-                  onAccept={(e) => {
-                    e.preventDefault();
-                    mergeAllStacks();
-                  }}
-                >
-                  <p>
-                    Consolidate stackable items in your carried inventory (backpack and
-                    equipped slots) into the fewest possible stacks. Home storage is not
-                    affected. This cannot be automatically undone.
-                  </p>
-                </Confirm2>
+                <MergeAllStacksButton storedAtHome={false} />
               </div>
               <Backpack
                 userData={userData}
@@ -325,64 +307,108 @@ export default function MyItems() {
           </Confirm2>
         </div>
         <div className="flex gap-2">
-          {itemsNeedingRepair.length > 0 && repairKits.length > 0 && (
+          {itemsNeedingRepair.length > 0 && (repairKits.length > 0 || isCrafter) && (
             <Confirm2
               title="Repair All Items"
               proceed_label={
-                repairAllInfo.canRepairAll
-                  ? isRepairingAll
-                    ? undefined
-                    : "Repair All"
-                  : undefined
+                canRepairWithKits && !isRepairAllPending ? "Repair with Kits" : null
               }
-              isValid={repairAllInfo.canRepairAll && !isRepairingAll}
+              isValid={canRepairWithKits && !isRepairAllPending}
+              disabled={isRepairAllPending}
               button={
-                <Button disabled={isRepairingAll} variant="outline">
+                <Button disabled={isRepairAllPending} variant="outline">
                   <Wrench className="mr-2 h-4 w-4" />
-                  {isRepairingAll ? "Repairing..." : "Repair All"}
+                  {isRepairAllPending ? "Repairing..." : "Repair All"}
                 </Button>
               }
               onAccept={(e) => {
                 e.preventDefault();
-                if (repairAllInfo.canRepairAll) {
+                if (canRepairWithKits) {
                   mutateRepairAll();
                 }
               }}
+              footerExtra={
+                isCrafter
+                  ? ({ close }) => (
+                      <Button
+                        variant="default"
+                        disabled={!canAffordRyoRepair || isRepairAllPending}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          mutateRepairAllRyo();
+                          close();
+                        }}
+                      >
+                        <CircleDollarSign className="mr-2 h-4 w-4" />
+                        Repair with Ryo ({totalRyoRepairCost.toLocaleString()})
+                      </Button>
+                    )
+                  : undefined
+              }
             >
               <div className="space-y-3">
-                {repairAllInfo.canRepairAll ? (
-                  <>
-                    <p>
-                      You are about to repair all {itemsNeedingRepair.length} item
-                      {itemsNeedingRepair.length !== 1 ? "s" : ""} using repair kits.
-                    </p>
-                    {repairAllInfo.kitsToUse.length > 0 && (
-                      <div>
-                        <p className="mb-2 font-semibold">Repair kits to be used:</p>
-                        <div className="space-y-1">
-                          {repairAllInfo.kitsToUse.map((kit) => (
-                            <div
-                              key={kit.repairItemId}
-                              className="flex items-center justify-between text-sm"
-                            >
-                              <span>{kit.repairItemName}</span>
-                              <span className="font-medium">x{kit.quantityUsed}</span>
-                            </div>
-                          ))}
+                {repairKits.length > 0 ? (
+                  canRepairWithKits ? (
+                    <>
+                      <p>
+                        You are about to repair all {itemsNeedingRepair.length} item
+                        {itemsNeedingRepair.length !== 1 ? "s" : ""} using repair kits.
+                      </p>
+                      {repairAllInfo.kitsToUse.length > 0 && (
+                        <div>
+                          <p className="mb-2 font-semibold">Repair kits to be used:</p>
+                          <div className="space-y-1">
+                            {repairAllInfo.kitsToUse.map((kit) => (
+                              <div
+                                key={kit.repairItemId}
+                                className="flex items-center justify-between text-sm"
+                              >
+                                <span>{kit.repairItemName}</span>
+                                <span className="font-medium">x{kit.quantityUsed}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </>
+                      )}
+                    </>
+                  ) : (
+                    <div>
+                      <p className="mb-2 font-semibold text-red-600">
+                        Not enough repair kits
+                      </p>
+                      <p className="text-muted-foreground text-sm">
+                        You have {itemsNeedingRepair.length} damaged item
+                        {itemsNeedingRepair.length !== 1 ? "s" : ""} that need
+                        {itemsNeedingRepair.length === 1 ? "s" : ""}{" "}
+                        {repairAllInfo.totalDurabilityNeeded} total durability, but you
+                        don&apos;t have enough repair kits to repair all of them.
+                      </p>
+                    </div>
+                  )
                 ) : (
-                  <div>
-                    <p className="mb-2 font-semibold text-red-600">
-                      Not enough repair kits
-                    </p>
-                    <p className="text-muted-foreground text-sm">
-                      You have {itemsNeedingRepair.length} damaged item
-                      {itemsNeedingRepair.length !== 1 ? "s" : ""} that need{" "}
-                      {repairAllInfo.totalDurabilityNeeded} total durability, but you
-                      don&apos;t have enough repair kits to repair all of them.
+                  <p className="text-muted-foreground text-sm">
+                    You don&apos;t have any repair kits. As a crafter, you can repair
+                    with ryo instead.
+                  </p>
+                )}
+                {isCrafter && (
+                  <div className="rounded-lg border bg-muted/50 p-3 text-sm">
+                    <p className="font-semibold">Repair with ryo</p>
+                    <p className="text-muted-foreground">
+                      Total cost:{" "}
+                      <span
+                        className={
+                          canAffordRyoRepair ? "text-green-600" : "text-red-600"
+                        }
+                      >
+                        {totalRyoRepairCost.toLocaleString()} ryo
+                      </span>
+                      {!canAffordRyoRepair && (
+                        <span className="ml-2">
+                          (You have {userData.money.toLocaleString()} ryo)
+                        </span>
+                      )}
                     </p>
                   </div>
                 )}
@@ -563,6 +589,83 @@ function RepairModalWrapper({
 }
 
 /**
+ * Shared per-item durability repair actions (kit + ryo).
+ * Used by both Backpack and Character item-details modals.
+ */
+interface ItemDurabilityRepairActionsProps {
+  useritem: UserItemWithRelations;
+  userData: NonNullable<UserWithRelations>;
+  repairItemsCount: number;
+  onOpenRepairModal: () => void;
+  onRepairWithRyo: (userItemId: string) => void;
+  isRepairingWithRyo?: boolean;
+}
+
+function ItemDurabilityRepairActions({
+  useritem,
+  userData,
+  repairItemsCount,
+  onOpenRepairModal,
+  onRepairWithRyo,
+  isRepairingWithRyo = false,
+}: ItemDurabilityRepairActionsProps) {
+  if (
+    useritem.durability >= useritem.item.maxDurability ||
+    useritem.item.maxDurability <= 0
+  ) {
+    return null;
+  }
+
+  const isCrafter = userData.occupation === "CRAFTING";
+  const ryoRepairCost = calcItemRepairCost(useritem);
+  const canAffordItemRyoRepair = userData.money >= ryoRepairCost;
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        onClick={onOpenRepairModal}
+        disabled={repairItemsCount === 0}
+      >
+        <Wrench className="mr-2 h-5 w-5" />
+        Use Repair Item
+      </Button>
+      {isCrafter && (
+        <Confirm2
+          title="Repair with Ryo"
+          proceed_label={
+            canAffordItemRyoRepair && !isRepairingWithRyo
+              ? `Repair for ${ryoRepairCost.toLocaleString()} ryo`
+              : null
+          }
+          isValid={canAffordItemRyoRepair && !isRepairingWithRyo}
+          button={
+            <Button variant="outline" disabled={isRepairingWithRyo}>
+              <CircleDollarSign className="mr-2 h-5 w-5" />
+              Repair with Ryo
+            </Button>
+          }
+          onAccept={(e) => {
+            e.preventDefault();
+            onRepairWithRyo(useritem.id);
+          }}
+        >
+          <p>
+            Repair <strong>{useritem.item.name}</strong> for{" "}
+            <strong>{ryoRepairCost.toLocaleString()} ryo</strong>?
+            {!canAffordItemRyoRepair && (
+              <span className="mt-2 block text-red-600">
+                You only have {userData.money.toLocaleString()} ryo.
+              </span>
+            )}
+          </p>
+        </Confirm2>
+      )}
+    </>
+  );
+}
+
+/**
  * Backpack Screen
  */
 interface BackpackProps {
@@ -669,8 +772,24 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         showMutationToast(data);
         if (data.success) {
           setIsRepairModalOpen(false);
-          await utils.item.getUserItemsWithVariants.invalidate();
-          await utils.profile.getUser.invalidate();
+          await Promise.all([
+            utils.item.getUserItemsWithVariants.invalidate(),
+            utils.profile.getUser.invalidate(),
+          ]);
+        }
+      },
+    });
+
+  const { mutate: mutateRepairWithRyo, isPending: isRepairingWithRyo } =
+    api.item.repair.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          onSettled();
+          await Promise.all([
+            utils.item.getUserItemsWithVariants.invalidate(),
+            utils.profile.getUser.invalidate(),
+          ]);
         }
       },
     });
@@ -717,17 +836,22 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     isSplitting ||
     isUsingRepairItem ||
     isEvolving ||
-    isRemovingImbuement;
-  const items = useritems?.map((useritem) => ({
-    ...applyActiveVariant(useritem as UserItemWithVariants),
-    ...useritem,
-  }));
+    isRemovingImbuement ||
+    isRepairingWithRyo;
+  const items = useritems
+    ?.map((useritem) => ({
+      ...applyActiveVariant(useritem as UserItemWithVariants),
+      ...useritem,
+    }))
+    .sort(byItemName);
   const itemBadges = userItemActionBadges(useritems);
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
   const repairItems = (useritems || []).filter(
     (userItem: UserItemWithRelations) =>
       userItem.item?.effects?.some((e: { type: string }) => e.type === "repair") &&
       userItem.quantity > 0 &&
+      !userItem.storedAtHome &&
+      !userItem.isInAuction &&
       (!userItem.craftingFinishedAt || userItem.craftingFinishedAt < new Date()),
   );
 
@@ -885,17 +1009,14 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                   Consume
                 </Button>
               )}
-              {useritem.durability < useritem.item.maxDurability &&
-                useritem.item.maxDurability > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsRepairModalOpen(true)}
-                    disabled={repairItems.length === 0}
-                  >
-                    <Wrench className="mr-2 h-5 w-5" />
-                    Use Repair Item
-                  </Button>
-                )}
+              <ItemDurabilityRepairActions
+                useritem={useritem}
+                userData={userData}
+                repairItemsCount={repairItems.length}
+                onOpenRepairModal={() => setIsRepairModalOpen(true)}
+                onRepairWithRyo={(userItemId) => mutateRepairWithRyo({ userItemId })}
+                isRepairingWithRyo={isRepairingWithRyo}
+              />
               {((useritem as UserItemWithVariants).item.variants?.length ?? 0) > 0 && (
                 <Button
                   variant="info"
@@ -1029,6 +1150,9 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           {isSelling && <Loader explanation={`Selling ${useritem.item.name}`} />}
           {isEquipping && <Loader explanation={`Equipping ${useritem.item.name}`} />}
           {isEvolving && <Loader explanation={`Evolving ${useritem.item.name}`} />}
+          {isRepairingWithRyo && (
+            <Loader explanation={`Repairing ${useritem.item.name}`} />
+          )}
         </Modal2>
       )}
       {isSplitDialogOpen && useritem && (
@@ -1116,11 +1240,12 @@ const Backpack: React.FC<BackpackProps> = (props) => {
  */
 interface CharacterProps {
   useritems: UserItemWithRelations[] | undefined;
+  userData: NonNullable<UserWithRelations>;
 }
 
 const Character: React.FC<CharacterProps> = (props) => {
   // Set state
-  const { useritems } = props;
+  const { useritems, userData } = props;
   const [slot, setSlot] = useState<ItemSlot | undefined>(undefined);
   const [useritem, setUserItem] = useState<UserItemWithRelations | undefined>(
     undefined,
@@ -1135,16 +1260,20 @@ const Character: React.FC<CharacterProps> = (props) => {
   // The item on the current slot
 
   // Collapse UserItem and Item
-  const items = useritems?.map((useritem) => ({
-    ...applyActiveVariant(useritem as UserItemWithVariants),
-    ...useritem,
-  }));
+  const items = useritems
+    ?.map((useritem) => ({
+      ...applyActiveVariant(useritem as UserItemWithVariants),
+      ...useritem,
+    }))
+    .sort(byItemName);
   const itemBadges = userItemActionBadges(useritems);
   const equipped = items?.find((item) => item.equipped === slot);
   const repairItems = (useritems || []).filter(
     (userItem: UserItemWithRelations) =>
       userItem.item?.effects?.some((e: { type: string }) => e.type === "repair") &&
       userItem.quantity > 0 &&
+      !userItem.storedAtHome &&
+      !userItem.isInAuction &&
       (!userItem.craftingFinishedAt || userItem.craftingFinishedAt < new Date()),
   );
 
@@ -1185,8 +1314,25 @@ const Character: React.FC<CharacterProps> = (props) => {
         showMutationToast(data);
         if (data.success) {
           setIsRepairModalOpen(false);
-          await utils.item.getUserItemsWithVariants.invalidate();
-          await utils.profile.getUser.invalidate();
+          await Promise.all([
+            utils.item.getUserItemsWithVariants.invalidate(),
+            utils.profile.getUser.invalidate(),
+          ]);
+        }
+      },
+    });
+
+  const { mutate: mutateRepairWithRyo, isPending: isRepairingWithRyo } =
+    api.item.repair.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          setShowItemDetails(false);
+          setUserItem(undefined);
+          await Promise.all([
+            utils.item.getUserItemsWithVariants.invalidate(),
+            utils.profile.getUser.invalidate(),
+          ]);
         }
       },
     });
@@ -1289,8 +1435,8 @@ const Character: React.FC<CharacterProps> = (props) => {
               key={useritem.id}
               showStatistic="item"
             />
-            {!isEquipping && !isUsingRepairItem && (
-              <div className="mt-2 flex flex-row gap-1">
+            {!isEquipping && !isUsingRepairItem && !isRepairingWithRyo && (
+              <div className="mt-2 flex flex-row flex-wrap gap-1">
                 <Button
                   variant="info"
                   onClick={() => {
@@ -1301,17 +1447,14 @@ const Character: React.FC<CharacterProps> = (props) => {
                   <Shirt className="mr-2 h-4 w-4" />
                   Unequip
                 </Button>
-                {useritem.durability < useritem.item.maxDurability &&
-                  useritem.item.maxDurability > 0 && (
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsRepairModalOpen(true)}
-                      disabled={repairItems.length === 0}
-                    >
-                      <Wrench className="mr-2 h-4 w-4" />
-                      Use Repair Item
-                    </Button>
-                  )}
+                <ItemDurabilityRepairActions
+                  useritem={useritem}
+                  userData={userData}
+                  repairItemsCount={repairItems.length}
+                  onOpenRepairModal={() => setIsRepairModalOpen(true)}
+                  onRepairWithRyo={(userItemId) => mutateRepairWithRyo({ userItemId })}
+                  isRepairingWithRyo={isRepairingWithRyo}
+                />
                 {((useritem as UserItemWithVariants).item.variants?.length ?? 0) >
                   0 && (
                   <Button
@@ -1329,7 +1472,7 @@ const Character: React.FC<CharacterProps> = (props) => {
                 <div className="grow"></div>
               </div>
             )}
-            {(isEquipping || isUsingRepairItem) && (
+            {(isEquipping || isUsingRepairItem || isRepairingWithRyo) && (
               <Loader
                 explanation={`${isEquipping ? "Unequipping" : "Repairing"} ${useritem.item.name}`}
               />

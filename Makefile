@@ -23,7 +23,7 @@ else
 	RESET        := ""
 endif
 
-include ./app/.env
+-include ./app/.env
 
 PORT ?= 3000
 
@@ -39,16 +39,16 @@ cloc: # Count lines of code
 	@echo "${YELLOW}Count lines of code${RESET}"
 	cloc --exclude-dir=node_modules --exclude-ext=csv  --exclude-ext=json  --exclude-ext=svg .
 
-.PHONY: loadEnv
-loadEnv: # Load environment variables
-	@echo "${YELLOW}Loading environment variables${RESET}"
-	source ./app/.env
-
 -------------DockerSetup---------------: # -------------------------------------------------------
 .PHONY: docker-build
 docker-build: # Build/Rebuild the application.
 	@echo "${YELLOW}Building/Rebuilding the application${RESET}"
 	docker-compose --file $$PWD/.devcontainer/docker-compose.yml build --no-cache
+
+.PHONY: docker-apply
+docker-apply: # Recreate the shared service stack from the current docker-compose.yml
+	@echo "${YELLOW}Applying docker-compose changes to the shared stack${RESET}"
+	docker compose -p devcontainer -f $$PWD/.devcontainer/docker-compose.yml up -d --wait
 
 .PHONY: docker-stop
 docker-stop: # Stop all docker containers.
@@ -57,15 +57,26 @@ docker-stop: # Stop all docker containers.
 
 -----------LocalDevelopment-------------: # -------------------------------------------------------
 .PHONY: setup
-setup: # Start required services and install bun locally
+setup: ensure-services # Start required services and install bun locally
 	@echo "${GREEN}Installing bun locally${RESET}"
-	docker compose -f .devcontainer/docker-compose.yml up -d --wait
 	curl -fsSL https://bun.sh/install | bash
 
 .PHONY: install
-install: # Install application dependencies with bun locally
+install: ensure-skills # Install application dependencies with bun locally
 	@echo "${GREEN}install${RESET}"
 	bun install --cwd ./app --save-text-lockfile
+
+.PHONY: ensure-env
+ensure-env: # Ensure app/.env exists in this worktree (links it from the main worktree if missing)
+	@bash scripts/dev-ensure-env.sh
+
+.PHONY: ensure-services
+ensure-services: # Ensure the shared local service stack is running (parallel-worktree safe)
+	@bash scripts/dev-ensure-services.sh
+
+.PHONY: ensure-skills
+ensure-skills: # Link .agents/skills into .claude/skills so Claude Code can discover them
+	@bash scripts/dev-ensure-skills.sh
 
 .PHONY: clean
 clean: # Clean all local application installation folders
@@ -78,25 +89,23 @@ clean: # Clean all local application installation folders
 reset: clean install # Clean and reinstall all dependencies
 
 .PHONY: bun
-bun: install ## Execute bun command in local development.
+bun: install ensure-env ensure-services ## Execute bun command in local development.
 	@echo "${GREEN}bun${RESET}"
-	docker compose -f .devcontainer/docker-compose.yml up -d --wait		
-	@echo $(DATABASE_URL)
 	cd app && bun $(ARGS)
 
 .PHONY: start
-start: loadEnv # Run Next.js server, access at http://127.0.0.1:PORT
+start: ensure-env # Run Next.js server, access at http://127.0.0.1:PORT
 	@echo "${GREEN}start on port $(PORT)${RESET}"
 	rm -rf app/.next
-	@FORCE_COLOR=1 make bun -- OPENAI_API_KEY=$(OPENAI_API_KEY) dev -p $(PORT) 2>&1 | grep -v "Ignoring Unsecure message event"
+	@FORCE_COLOR=1 make bun -- dev -p $(PORT) 2>&1 | grep -v "Ignoring Unsecure message event"
 
 .PHONY: build
-build: # Build Next.js app
+build: ensure-env # Build Next.js app
 	@echo "${GREEN}build${RESET}"
 	cd app && bun run build
 
 .PHONY: bundleanalysis
-bundleanalysis: # Build Next.js app with bundle analysis
+bundleanalysis: ensure-env # Build Next.js app with bundle analysis
 	@echo "${GREEN}bundleanalysis${RESET}"
 	cd app && bun run build-stats
 
@@ -165,23 +174,22 @@ browser-tools-server: # Run browser-tools MCP server, allowing AI to see browser
 
 --------------Migrations----------------: # -------------------------------------------------------
 .PHONY: dbpush
-dbpush: # Push schema to db without creating migrations
+dbpush: ensure-env ensure-services # Push schema to db without creating migrations
 	@echo "${YELLOW}Pushing database schema to database${RESET}"
 	cd app && bun dbpush
 
 .PHONY: seed
-seed: # Seed database
+seed: ensure-env ensure-services # Seed database
 	@echo "${YELLOW}Seed data into database ${RESET}"
-	@echo $(DATABASE_URL)
 	cd app && bun seed
 	
 .PHONY: makemigrations
-makemigrations: # Create database migration file
+makemigrations: ensure-env # Create database migration file
 	@echo "${YELLOW}Create database migrations file ${RESET}"
 	cd app && bun makemigrations
 
 .PHONY: emptymigration
-emptymigration: # Create database migration file
+emptymigration: ensure-env # Create database migration file
 	@echo "${YELLOW}Create empty migrations file ${RESET}"
 	cd app && bun emptymigration
 	

@@ -15,6 +15,7 @@ import {
 import { availableUserActions } from "@/libs/combat/actions";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { getDistanceToClosestEnemy } from "@/libs/combat/util";
+import { TUTORIAL_CAPTURE_SECTOR, TUTORIAL_HOME_SECTOR } from "@/libs/tutorial";
 import { combatActionIdAtom, userBattleAtom, useUserData } from "@/utils/UserContext";
 
 export interface TutorialStepConfig {
@@ -81,6 +82,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile",
     proceedOnHighlightClick: true,
     requiresGameMenu: true,
+    showNextButton: true,
   },
   {
     id: "YPfhJfdsl37V",
@@ -139,7 +141,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "NASO2bE1zEQcc",
-    title: "Battle Arena",
+    title: "The Battlefield",
     description:
       "This is the battlefield, where you can see your character and opponent(s). ",
     elementIds: ["tutorial-combat-field"],
@@ -151,7 +153,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "Qz0sQcQLjTdlv",
-    title: "Battle Arena",
+    title: "Combat Rounds",
     description: `Combat is based on rounds, where during your round you have ${COMBAT_SECONDS} seconds to perform your actions, and then it's your opponent's turn. You can see your action points and the time left for your round here.`,
     elementIds: ["tutorial-combat-action-timer"],
     page: "/combat",
@@ -162,9 +164,14 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "bRelJfsU9wuHNmhUSg0db",
-    title: "Battle Arena",
+    title: "Your Actions",
     description:
       "Move closer to your opponent, and beat it up with your basic attack. ",
+    elementIds: [
+      "tutorial-combat-action-move",
+      "tutorial-combat-action-basicAttack",
+      "tutorial-combat-field",
+    ],
     page: "/combat",
     onCombatLoss: "w3eWC11tISZc0CUZ2tvYN",
     onCombatWin: "PCaQdWoDFuR0VGUq5c_ab",
@@ -202,8 +209,9 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       `tutorial-combat-action-${TUTORIAL_JUTSU_ID}`,
     ],
     description:
-      "Now that your character is a bit stronger, pick a jutsu from the list to train. The more you train and progress the more powerful jutsu will be available for you to train.",
+      "Now that your character is a bit stronger, click a jutsu from the list to train. The more you train and progress the more powerful jutsu will be available for you to train.",
     page: "/traininggrounds",
+    showNextButton: true,
   },
   {
     id: "r2azv66f1YNtFW2gbldOd",
@@ -233,6 +241,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     ],
     description: "Let's buy some shurikens, a good weapon to start with.",
     page: "/itemshop",
+    showNextButton: true,
   },
   {
     id: "U04RvrqvvYaOcenOGKMDw",
@@ -256,7 +265,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     hideDialog: true,
   },
   {
-    id: "YP5PEaCvfhJfdsl37V",
+    id: "YP5PEaCvfhJfdsl37V-academy",
     title: "Assigning Stats",
     description:
       "Wow, you're picking up things fast. You already acquired a substantial amount of additional XP. Let's go assign it before we proceed on the mission.",
@@ -264,6 +273,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/academy",
     proceedOnHighlightClick: true,
     requiresGameMenu: true,
+    showNextButton: true,
   },
   {
     id: "YPfhJfdsl37dsaV",
@@ -277,7 +287,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile/experience",
   },
   {
-    id: "f34p798tfn0327",
+    id: "f34p798tfn0327-mission-1",
     title: "Level Up!",
     description:
       "Another level up! Perfect, this will make our practise mission easier. Get your level, and then we head out of the village.",
@@ -285,7 +295,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile",
   },
   {
-    id: "f34p798tfn0327",
+    id: "f34p798tfn0327-mission-2",
     title: "Level Up!",
     description:
       "Another level up! Perfect, this will make our practise mission easier. Get your level, and then we head out of the village.",
@@ -323,7 +333,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "For our mission, we need to travel to another sector, so let's go to the global map. Here you can see the entire world of Seichi. We are currently in the starting village of Horizon. To proceed, tap the quest marker \u{1F4DC} on the global map.",
     page: "/travel",
-    relatedValue: 293,
+    relatedValue: TUTORIAL_CAPTURE_SECTOR,
   },
   {
     id: "eRw6ObsRONhzY7AUMO3vm",
@@ -362,7 +372,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       </div>
     ),
     page: "/travel",
-    relatedValue: 296,
+    relatedValue: TUTORIAL_HOME_SECTOR,
   },
   {
     id: "blL789mkRIKtjsWk",
@@ -429,7 +439,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
-    id: "gsfgsdfg",
+    id: "gsfgsdfg-alliance",
     title: "Town Hall",
     description:
       "On the first tab you'll see the current alliance status between all the major villages in Seichi.",
@@ -438,7 +448,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
-    id: "gsfgsdfg",
+    id: "gsfgsdfg-kage-tab",
     title: "Town Hall",
     description: "Let's check on the kage of our village.",
     elementIds: ["tutorial-Kage"],
@@ -446,7 +456,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
-    id: "gsfgsdfg",
+    id: "gsfgsdfg-kage",
     title: "Town Hall",
     description:
       "This is the current kage of our village. The kage is the most powerful ninja, and gets to make decisions on behalf of the entire village together with the village elders.",
@@ -501,7 +511,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     proceedOnHighlightClick: true,
   },
   {
-    id: "YP5PEaCvfhJfdsl37V",
+    id: "YP5PEaCvfhJfdsl37V-wrapup-1",
     title: "Assigning Stats",
     description:
       "Okay, enough sightseeing. Great job on getting the hang of things. Let's assign all your experience points one more",
@@ -509,9 +519,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/academy",
     proceedOnHighlightClick: true,
     requiresGameMenu: true,
+    showNextButton: true,
   },
   {
-    id: "YP5PEaCvfhJfdsl37V",
+    id: "YP5PEaCvfhJfdsl37V-wrapup-2",
     title: "Assigning Stats",
     description:
       "Great job on getting the hang of things. Let's assign all your experience points one more",
@@ -519,9 +530,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/academy",
     proceedOnHighlightClick: true,
     requiresGameMenu: true,
+    showNextButton: true,
   },
   {
-    id: "YPfhJfdsl37V",
+    id: "YPfhJfdsl37V-wrapup",
     title: "Assigning Stats",
     description:
       "Assign the obtained experience to the stat of your liking. A good ninja is well-rounded, so don't stress too much about which stat you assign it to yet.",
@@ -532,14 +544,14 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile/experience",
   },
   {
-    id: "f34p798tfn0327",
+    id: "f34p798tfn0327-wrapup",
     title: "Level Up!",
     description: "And then let's claim your next level.",
     elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
     page: "/profile",
   },
   {
-    id: "f34p798tfn0327",
+    id: "f34p798tfn0327-academy-menu",
     title: "Academy",
     description:
       "I'll let you off the hook now, and then you can roam the village on your own a bit. Before that, please follow me to the academy first.",
@@ -550,7 +562,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
 
   {
-    id: "f34p798tfn0327",
+    id: "f34p798tfn0327-academy-building",
     title: "Academy",
     description:
       "I'll let you off the hook now, and then you can roam the village on your own a bit. Before that, please follow me to the academy first.",
@@ -566,6 +578,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       "You're ready to start the Genin exam. Passing this exam will award you the rank of Genin, which will unlock more difficult missions and jutsus, as well as pick pick one of the major ninja villages to join. Feel free to explore a bit, if you want, and otherwise come back here once you're ready for the exam. ",
     page: "/academy",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    showNextButton: true,
   },
   // {
   //   title: "That's it for now!",
@@ -729,7 +742,11 @@ export const useTutorialStep = () => {
 
   // Derived
   const stepNumber = userData?.tutorialStep || 0;
-  const staticStep = TUTORIAL_STEPS?.[stepNumber];
+  // A switched-off tutorial has no current step. Callers use `currentStep` to
+  // pin UI (hide training sections, pin shop rows, force quest tabs), so a
+  // player who stopped the tutorial mid-way must not keep that UI forever.
+  const staticStep =
+    userData?.tutorialOn === false ? undefined : TUTORIAL_STEPS?.[stepNumber];
 
   // Calculate distance to closest enemy for dynamic combat steps
   const distanceToEnemy = useMemo(() => {

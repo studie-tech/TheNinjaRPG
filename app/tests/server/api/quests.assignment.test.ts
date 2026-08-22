@@ -1,7 +1,11 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from "vitest";
-import { assignQuestToUser } from "../../../src/server/api/routers/quests";
+import {
+  assignQuestToUser,
+  upsertQuestEntries,
+  upsertQuestEntry,
+} from "../../../src/server/api/routers/quests";
 
 const quest = {
   id: "mission-1",
@@ -44,13 +48,23 @@ const user = {
 };
 
 /** Minimal write client for the successful upsert + daily-counter assignment path. */
-const makeClient = () => {
+const makeClient = (assignedQuest: { questId: string } | null = { questId: quest.id }) => {
   const where = vi.fn().mockResolvedValue({ rowsAffected: 1 });
   const update = vi.fn(() => ({ set: vi.fn(() => ({ where })) }));
   const onDuplicateKeyUpdate = vi.fn().mockResolvedValue(undefined);
   const values = vi.fn(() => ({ onDuplicateKeyUpdate }));
   const insert = vi.fn(() => ({ values }));
-  return { client: { update, insert } as never, update, insert };
+  const findFirst = vi.fn().mockResolvedValue(assignedQuest);
+  return {
+    client: {
+      update,
+      insert,
+      query: { overworldAiPlacementQuest: { findFirst } },
+    } as never,
+    update,
+    insert,
+    findFirst,
+  };
 };
 
 describe("assignQuestToUser compatibility", () => {
@@ -111,6 +125,83 @@ describe("assignQuestToUser compatibility", () => {
       success: false,
       message: "This quest type cannot be granted by an overworld NPC.",
     });
+    expect(insert).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a direct UI start for an NPC-only overworld quest without writes", async () => {
+    const { client, update, insert } = makeClient();
+
+    const result = await assignQuestToUser({
+      client,
+      user: { ...user, userQuests: [] } as never,
+      quest: { ...quest, questType: "overworld" } as never,
+      source: "ui",
+      sectorVillage: null,
+      prevAttempt: undefined,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      message: "This quest can only be accepted from its assigned overworld NPC.",
+    });
+    expect(insert).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("grants an overworld quest when it belongs to the interacting NPC placement", async () => {
+    const { client, update, insert, findFirst } = makeClient({ questId: quest.id });
+
+    const result = await assignQuestToUser({
+      client,
+      user: { ...user, userQuests: [] } as never,
+      quest: { ...quest, questType: "overworld" } as never,
+      source: "overworld_npc",
+      overworldPlacementId: "placement-1",
+      prevAttempt: undefined,
+    });
+
+    expect(result).toEqual({ success: true, message: "Quest started: A-rank mission" });
+    expect(findFirst).toHaveBeenCalledOnce();
+    expect(insert).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an overworld quest that is not assigned to the interacting NPC", async () => {
+    const { client, update, insert } = makeClient(null);
+
+    const result = await assignQuestToUser({
+      client,
+      user: { ...user, userQuests: [] } as never,
+      quest: { ...quest, questType: "overworld" } as never,
+      source: "overworld_npc",
+      overworldPlacementId: "placement-2",
+      prevAttempt: undefined,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      message: "This quest is not assigned to this overworld NPC.",
+    });
+    expect(insert).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("blocks objective and bulk assignment bypasses at the write boundary", async () => {
+    const { client, update, insert } = makeClient();
+    const overworldQuest = { ...quest, questType: "overworld" } as never;
+
+    await expect(
+      upsertQuestEntry(
+        client,
+        { ...user, userQuests: [] } as never,
+        overworldQuest,
+        "quest_objective",
+      ),
+    ).rejects.toThrow("Overworld quests can only be accepted from their assigned NPC.");
+    await expect(upsertQuestEntries(client, overworldQuest, undefined as never)).rejects.toThrow(
+      "Overworld quests cannot be assigned to users in bulk.",
+    );
     expect(insert).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });

@@ -3,6 +3,7 @@ import {
   desc,
   eq,
   exists,
+  gt,
   gte,
   inArray,
   isNull,
@@ -313,6 +314,7 @@ export const auctionRouter = createTRPCRouter({
           where: and(
             eq(userItem.id, userItemId),
             eq(userItem.userId, ctx.userId),
+            gt(userItem.quantity, 0),
             eq(userItem.equipped, "NONE"),
             eq(userItem.isInAuction, false),
             or(
@@ -411,7 +413,9 @@ export const auctionRouter = createTRPCRouter({
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + durationHours);
 
-      // Write-time guard: set isInAuction only if item still has no active imbuement (atomic)
+      // Write-time guard: set isInAuction only if item still has no active imbuement (atomic).
+      // The quantity guard also refuses rows held by a stack-merge claim (negative) or left as
+      // a merge tombstone (zero), so a listing can never break an in-flight merge publish.
       const markInAuctionResult = await ctx.drizzle
         .update(userItem)
         .set({
@@ -422,6 +426,7 @@ export const auctionRouter = createTRPCRouter({
           and(
             eq(userItem.id, auctionUserItemId),
             eq(userItem.userId, ctx.userId),
+            gt(userItem.quantity, 0),
             eq(userItem.isInAuction, false),
             sql`NOT EXISTS (SELECT 1 FROM UserItemImbuement WHERE UserItemImbuement.userItemId = ${auctionUserItemId} AND UserItemImbuement.craftingFinishedAt > NOW())`,
           ),

@@ -826,9 +826,7 @@ export default function Travel() {
                 </TooltipProvider>
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
-                    <TooltipTrigger
-                      onClick={() => setShowActive(!showActive)}
-                    >
+                    <TooltipTrigger onClick={() => setShowActive(!showActive)}>
                       {showActive ? (
                         <Eye className={`mr-2 h-7 w-7 text-orange-500`} />
                       ) : (

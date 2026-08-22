@@ -25,7 +25,6 @@ import { type FetchImpl, ghFetch, ghHeaders, verifyContributionResult } from "./
 import { computeBackfillJobs, isClaimStale, releaseJobStatus } from "./jobs";
 import { grantContributionReward } from "./rewards";
 import type { ExistingJob, OpenIssueRef, OpenPullRequestRef } from "./types";
-import { rowToExisting } from "./webhook";
 
 export interface MaintenanceReport {
   staleRequeued: number;

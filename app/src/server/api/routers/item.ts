@@ -5,6 +5,7 @@ import {
   count,
   eq,
   exists,
+  gt,
   gte,
   inArray,
   isNotNull,
@@ -97,7 +98,7 @@ import {
   objectiveContentIds,
   postProcessRewards,
 } from "@/libs/quest";
-import { calculateKitsToUse, getRepairKits } from "@/libs/repair";
+import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import {
   fetchSageModeRolls,
   fetchSageModes,
@@ -112,7 +113,11 @@ import { fetchStructures } from "@/routers/village";
 import type { DrizzleClient } from "@/server/db";
 import {
   consumeUserItemAtomically,
+  MERGE_STACK_CLAIM_TIMEOUT_MS,
+  refundUserItemQuantityAtomically,
+  restoreStaleUserItemMergeClaims,
   updateUserItemQuantityAtomically,
+  userItemMergeQuantityCase,
 } from "@/server/utils/concurrency";
 import {
   applyLoadoutRename,
@@ -871,7 +876,7 @@ export const itemRouter = createTRPCRouter({
           quantity: sql<number>`sum(${userItem.quantity})`,
         })
         .from(userItem)
-        .where(eq(userItem.userId, ctx.userId))
+        .where(and(eq(userItem.userId, ctx.userId), gt(userItem.quantity, 0)))
         .groupBy(userItem.itemId);
       return counts.map((c) => ({ id: c.itemId, quantity: c.quantity ?? 0 }));
     }),
@@ -892,10 +897,7 @@ export const itemRouter = createTRPCRouter({
   getPublicUserItems: protectedProcedure
     .input(getPublicUserItemsSchema)
     .query(async ({ ctx, input }) => {
-      const [user, userItems] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, input.userId, { includeHidden: true }),
-      ]);
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!canEditItems(user.role)) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
@@ -908,7 +910,10 @@ export const itemRouter = createTRPCRouter({
           message: "You can only view your own items",
         });
       }
-      return userItems;
+      // fetchUserItems self-heals stale merge claims for the viewed user.
+      return await fetchUserItems(ctx.drizzle, input.userId, {
+        includeHidden: true,
+      });
     }),
   // Adjust item level of public user
   adjustUserItem: protectedProcedure
@@ -921,6 +926,7 @@ export const itemRouter = createTRPCRouter({
           where: and(
             eq(userItem.id, input.userItemId),
             eq(userItem.userId, input.userId),
+            gt(userItem.quantity, 0),
           ),
           with: { item: true },
         }),
@@ -947,6 +953,7 @@ export const itemRouter = createTRPCRouter({
             eq(userItem.userId, input.userId),
             eq(userItem.level, owned.level),
             eq(userItem.experience, owned.experience),
+            gt(userItem.quantity, 0),
           ),
         );
       if (updateResult.rowsAffected === 0) {
@@ -1240,6 +1247,7 @@ export const itemRouter = createTRPCRouter({
           and(
             eq(userItem.id, input.userItemId),
             eq(userItem.userId, ctx.userId),
+            gt(userItem.quantity, 0),
             ...(input.variantId
               ? [
                   exists(
@@ -1397,6 +1405,10 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ itemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.status !== "AWAKE") {
+        return errorResponse(`Cannot merge items while ${user.status.toLowerCase()}`);
+      }
       const result = await executeMergeStacksForItem(
         ctx.drizzle,
         ctx.userId,
@@ -1416,15 +1428,25 @@ export const itemRouter = createTRPCRouter({
       mcp: {
         enabled: true,
         description:
-          "Merge all mergeable item stacks in carried inventory (excludes home storage)",
+          "Merge all mergeable item stacks in carried inventory (storedAtHome=false) or home storage (storedAtHome=true)",
       },
     })
+    .input(z.object({ storedAtHome: z.boolean().optional() }).optional())
     .output(baseServerResponse)
-    .mutation(async ({ ctx }) => {
+    .mutation(async ({ ctx, input }) => {
+      const storedAtHome = input?.storedAtHome ?? false;
+      const [user] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId),
+      ]);
+      if (user.status !== "AWAKE") {
+        return errorResponse(`Cannot merge items while ${user.status.toLowerCase()}`);
+      }
       const userItemsAll = await ctx.drizzle.query.userItem.findMany({
         where: and(
           eq(userItem.userId, ctx.userId),
-          eq(userItem.storedAtHome, false),
+          gt(userItem.quantity, 0),
+          eq(userItem.storedAtHome, storedAtHome),
           eq(userItem.isInAuction, false),
           or(
             isNull(userItem.craftingFinishedAt),
@@ -1535,9 +1557,25 @@ export const itemRouter = createTRPCRouter({
       }
       // Derived
       const cost = calcItemSellingPrice(user, useritem, structures);
-      // Mutate
+      // Claim the positive stack before granting proceeds. A merge claim negates quantity, so the
+      // CAS cannot delete or pay for a row while it belongs to an in-flight merge.
+      const deleteResult = await ctx.drizzle
+        .delete(userItem)
+        .where(
+          and(
+            eq(userItem.id, input.userItemId),
+            eq(userItem.userId, ctx.userId),
+            eq(userItem.quantity, useritem.quantity),
+            gt(userItem.quantity, 0),
+            eq(userItem.isInAuction, false),
+          ),
+        );
+      if (deleteResult.rowsAffected !== 1) {
+        return errorResponse("Inventory changed, please refresh and try again");
+      }
+
+      // Mutate dependent state only after the inventory CAS succeeds.
       await Promise.all([
-        ctx.drizzle.delete(userItem).where(eq(userItem.id, input.userItemId)),
         ctx.drizzle
           .delete(userItemImbuement)
           .where(eq(userItemImbuement.userItemId, input.userItemId)),
@@ -1630,6 +1668,7 @@ export const itemRouter = createTRPCRouter({
             eq(userItem.userId, ctx.userId),
             ne(userItem.equipped, "NONE"),
             eq(userItem.isInAuction, false),
+            gt(userItem.quantity, 0),
           ),
         }),
       ]);
@@ -1667,6 +1706,7 @@ export const itemRouter = createTRPCRouter({
                 eq(userItem.userId, ctx.userId),
                 ne(userItem.equipped, "NONE"),
                 eq(userItem.isInAuction, false),
+                gt(userItem.quantity, 0),
               ),
             ),
         );
@@ -2050,6 +2090,12 @@ export const itemRouter = createTRPCRouter({
       if (useritem.durability >= useritem.item.maxDurability) {
         return errorResponse("Item is already at full durability");
       }
+      if (useritem.storedAtHome) {
+        return errorResponse("Fetch at home first");
+      }
+      if (useritem.isInAuction) {
+        return errorResponse("Cannot repair items that are in auction");
+      }
       // Calculate repair cost
       const repairCost = calcItemRepairCost(useritem);
       if (user.money < repairCost) {
@@ -2063,11 +2109,19 @@ export const itemRouter = createTRPCRouter({
       if (moneyUpdateResult.rowsAffected !== 1) {
         return errorResponse("Insufficient funds for this repair");
       }
-      // Update item durability
-      await ctx.drizzle
-        .update(userItem)
-        .set({ durability: useritem.item.maxDurability })
-        .where(eq(userItem.id, input.userItemId));
+      // CAS durability write — refund if item left inventory / changed concurrently
+      const repaired = await tryRepairUserItemDurability(
+        ctx.drizzle,
+        ctx.userId,
+        useritem,
+        useritem.item.maxDurability,
+      );
+      if (!repaired) {
+        await refundUserMoney(ctx.drizzle, ctx.userId, repairCost);
+        return errorResponse(
+          "Could not repair item — it may have been stored, auctioned, or already repaired",
+        );
+      }
       return {
         success: true,
         message: `Repaired ${useritem.item.name} for ${repairCost} ryo`,
@@ -2091,12 +2145,8 @@ export const itemRouter = createTRPCRouter({
       if (user.status !== "AWAKE") {
         return errorResponse(`Cannot repair items while ${user.status.toLowerCase()}`);
       }
-      // Filter items that need repair
-      const itemsNeedingRepair = useritems.filter(
-        (useritem) =>
-          useritem.durability < useritem.item.maxDurability &&
-          useritem.item.maxDurability > 0,
-      );
+      // Filter items that need repair (carried inventory only — not home/auction)
+      const itemsNeedingRepair = useritems.filter(needsInventoryRepair);
       if (itemsNeedingRepair.length === 0) {
         return errorResponse("No items need repair");
       }
@@ -2121,18 +2171,39 @@ export const itemRouter = createTRPCRouter({
       if (moneyUpdateResult.rowsAffected !== 1) {
         return errorResponse("Insufficient funds for this repair");
       }
-      // Update item durabilities
-      await Promise.all(
-        itemsNeedingRepair.map((useritem) =>
-          ctx.drizzle
-            .update(userItem)
-            .set({ durability: useritem.item.maxDurability })
-            .where(eq(userItem.id, useritem.id)),
-        ),
+      // CAS each durability write; refund cost for any item that left inventory
+      const repairOutcomes = await Promise.all(
+        itemsNeedingRepair.map(async (useritem) => {
+          const repaired = await tryRepairUserItemDurability(
+            ctx.drizzle,
+            ctx.userId,
+            useritem,
+            useritem.item.maxDurability,
+          );
+          return { useritem, repaired, cost: calcItemRepairCost(useritem) };
+        }),
       );
+      const succeeded = repairOutcomes.filter((o) => o.repaired);
+      const failed = repairOutcomes.filter((o) => !o.repaired);
+      const refundAmount = failed.reduce((sum, o) => sum + o.cost, 0);
+      if (refundAmount > 0) {
+        await refundUserMoney(ctx.drizzle, ctx.userId, refundAmount);
+      }
+      if (succeeded.length === 0) {
+        return errorResponse(
+          "Could not repair items — they may have been stored, auctioned, or already repaired",
+        );
+      }
+      const charged = totalRepairCost - refundAmount;
+      if (failed.length > 0) {
+        return {
+          success: true,
+          message: `Repaired ${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} for ${charged.toLocaleString()} ryo (${failed.length} skipped — stored, auctioned, or changed)`,
+        };
+      }
       return {
         success: true,
-        message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} for ${totalRepairCost.toLocaleString()} ryo`,
+        message: `Repaired ${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} for ${charged.toLocaleString()} ryo`,
       };
     }),
   // Use repair item on another item
@@ -2158,6 +2229,12 @@ export const itemRouter = createTRPCRouter({
       if (user.status !== "AWAKE") {
         return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
       }
+      if (repairUserItem.storedAtHome) {
+        return errorResponse("Fetch the repair item from home storage first");
+      }
+      if (repairUserItem.isInAuction) {
+        return errorResponse("Cannot use a repair item listed in an auction");
+      }
       if (
         repairUserItem.craftingFinishedAt &&
         repairUserItem.craftingFinishedAt > new Date()
@@ -2169,6 +2246,12 @@ export const itemRouter = createTRPCRouter({
       }
       if (targetUserItem.durability >= targetUserItem.item.maxDurability) {
         return errorResponse("Item is already at full durability");
+      }
+      if (targetUserItem.storedAtHome) {
+        return errorResponse("Fetch at home first");
+      }
+      if (targetUserItem.isInAuction) {
+        return errorResponse("Cannot repair items that are in auction");
       }
       // Check if repair item has repair tag
       const repairEffect = repairUserItem.item.effects.find((e) => e.type === "repair");
@@ -2189,29 +2272,43 @@ export const itemRouter = createTRPCRouter({
       if (actualRepair <= 0) {
         return errorResponse("Item is already at full durability");
       }
-      // Mutate
-      const promises: Promise<any>[] = [
-        ctx.drizzle
-          .update(userItem)
-          .set({ durability: newDurability })
-          .where(eq(userItem.id, input.targetItemId)),
-      ];
+      // CAS target durability first — never consume a kit if the write fails
+      const repaired = await tryRepairUserItemDurability(
+        ctx.drizzle,
+        ctx.userId,
+        targetUserItem,
+        newDurability,
+      );
+      if (!repaired) {
+        return errorResponse(
+          "Could not repair item — it may have been stored, auctioned, or already repaired",
+        );
+      }
       // Consume repair item if it's consumable
       if (repairUserItem.item.destroyOnUse) {
-        if (repairUserItem.quantity <= 1) {
-          promises.push(
-            ctx.drizzle.delete(userItem).where(eq(userItem.id, input.repairItemId)),
-          );
-        } else {
-          promises.push(
-            ctx.drizzle
-              .update(userItem)
-              .set({ quantity: sql`${userItem.quantity} - 1` })
-              .where(eq(userItem.id, input.repairItemId)),
+        const consumed = await consumeUserItemAtomically({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          userItemId: input.repairItemId,
+          expectedQuantity: repairUserItem.quantity,
+        });
+        if (!consumed) {
+          // Roll back durability so a kit race does not grant a free repair
+          await ctx.drizzle
+            .update(userItem)
+            .set({ durability: targetUserItem.durability })
+            .where(
+              and(
+                eq(userItem.id, input.targetItemId),
+                eq(userItem.userId, ctx.userId),
+                eq(userItem.durability, newDurability),
+              ),
+            );
+          return errorResponse(
+            "Could not consume repair kit — inventory changed, please try again",
           );
         }
       }
-      await Promise.all(promises);
       return {
         success: true,
         message: `Repaired ${targetUserItem.item.name} by ${actualRepair} durability using ${repairUserItem.item.name}`,
@@ -2244,12 +2341,8 @@ export const itemRouter = createTRPCRouter({
       if (user.status !== "AWAKE") {
         return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
       }
-      // Filter items that need repair
-      const itemsNeedingRepair = useritems.filter(
-        (useritem) =>
-          useritem.durability < useritem.item.maxDurability &&
-          useritem.item.maxDurability > 0,
-      );
+      // Filter items that need repair (carried inventory only — not home/auction)
+      const itemsNeedingRepair = useritems.filter(needsInventoryRepair);
       if (itemsNeedingRepair.length === 0) {
         return errorResponse("No items need repair");
       }
@@ -2275,34 +2368,94 @@ export const itemRouter = createTRPCRouter({
         );
       }
 
-      // Apply repairs and consume destroyOnUse kits together. PlanetScale cannot
-      // roll back a committed stack update, so pairing the writes avoids the
-      // consume-then-abort path that can spend kits without repairing.
-      await Promise.all([
-        ...itemsNeedingRepair.map((useritem) =>
-          ctx.drizzle
-            .update(userItem)
-            .set({ durability: useritem.item.maxDurability })
-            .where(eq(userItem.id, useritem.id)),
-        ),
-        ...kitsToUse.flatMap((kit) => {
-          const repairUserItem = useritems.find((ui) => ui.id === kit.repairItemId);
-          if (!repairUserItem?.item.destroyOnUse) return [];
-          return [
-            updateUserItemQuantityAtomically({
-              client: ctx.drizzle,
-              userId: ctx.userId,
-              userItemId: kit.repairItemId,
-              expectedQuantity: repairUserItem.quantity,
-              nextQuantity: repairUserItem.quantity - kit.quantityUsed,
-            }),
-          ];
-        }),
-      ]);
-
       const kitsUsedSummary = kitsToUse
         .map((kit) => `${kit.quantityUsed}x ${kit.repairItemName}`)
         .join(", ");
+
+      // Apply repairs with CAS; roll back and abort if any target left inventory
+      const repairOutcomes = await Promise.all(
+        itemsNeedingRepair.map(async (useritem) => {
+          const repaired = await tryRepairUserItemDurability(
+            ctx.drizzle,
+            ctx.userId,
+            useritem,
+            useritem.item.maxDurability,
+          );
+          return { useritem, repaired };
+        }),
+      );
+      const failedRepairs = repairOutcomes.filter((o) => !o.repaired);
+      if (failedRepairs.length > 0) {
+        await Promise.all(
+          repairOutcomes
+            .filter((o) => o.repaired)
+            .map((o) =>
+              ctx.drizzle
+                .update(userItem)
+                .set({ durability: o.useritem.durability })
+                .where(
+                  and(
+                    eq(userItem.id, o.useritem.id),
+                    eq(userItem.userId, ctx.userId),
+                    eq(userItem.durability, o.useritem.item.maxDurability),
+                  ),
+                ),
+            ),
+        );
+        return errorResponse(
+          "Could not repair all items — one or more were stored, auctioned, or changed. No kits were consumed.",
+        );
+      }
+
+      // Consume repair kits only after every target write succeeded. calculateKitsToUse clamps
+      // quantityUsed to the stack quantity, so the helper's delete-at-zero branch covers the
+      // full-stack case.
+      const kitConsumeResults = await Promise.all(
+        kitsToUse.map(async ({ repairItemId, quantityUsed }) => {
+          const repairKitRow = useritems.find((ui) => ui.id === repairItemId);
+          if (!repairKitRow || quantityUsed <= 0 || !repairKitRow.item.destroyOnUse) {
+            return null;
+          }
+          const consumed = await updateUserItemQuantityAtomically({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            userItemId: repairItemId,
+            expectedQuantity: repairKitRow.quantity,
+            nextQuantity: repairKitRow.quantity - quantityUsed,
+          });
+          return consumed ? { repairKitRow, quantityConsumed: quantityUsed } : false;
+        }),
+      );
+      if (kitConsumeResults.some((result) => result === false)) {
+        await Promise.all([
+          ...itemsNeedingRepair.map((useritem) =>
+            ctx.drizzle
+              .update(userItem)
+              .set({ durability: useritem.durability })
+              .where(
+                and(
+                  eq(userItem.id, useritem.id),
+                  eq(userItem.userId, ctx.userId),
+                  eq(userItem.durability, useritem.item.maxDurability),
+                ),
+              ),
+          ),
+          ...kitConsumeResults.flatMap((result) =>
+            result
+              ? [
+                  refundUserItemQuantityAtomically({
+                    client: ctx.drizzle,
+                    itemSnapshot: result.repairKitRow,
+                    quantity: result.quantityConsumed,
+                  }),
+                ]
+              : [],
+          ),
+        ]);
+        return errorResponse(
+          "Could not consume repair kits — inventory changed, please try again",
+        );
+      }
 
       return {
         success: true,
@@ -2904,18 +3057,50 @@ export const fetchItemWithCraftingRequirements = async (
   });
 };
 
+const restoreStaleMergeStackClaims = async (client: DrizzleClient, userId: string) =>
+  restoreStaleUserItemMergeClaims({
+    client,
+    userId,
+    staleBefore: new Date(Date.now() - MERGE_STACK_CLAIM_TIMEOUT_MS),
+  });
+
+/**
+ * Self-heals abandoned stack-merge state on the primary inventory reads: rows are fetched
+ * without a quantity filter, and only when a stale claim/tombstone is actually present (a merge
+ * died mid-protocol — rare) does the reaper run followed by one refetch. The common case pays no
+ * extra round trip, and a crashed merge recovers on the player's next inventory load instead of
+ * leaving their stacks invisible until they press merge again.
+ */
+const withStaleMergeClaimRecovery = async <
+  T extends { quantity: number; updatedAt: Date },
+>(
+  client: DrizzleClient,
+  userId: string,
+  fetchRows: () => Promise<T[]>,
+): Promise<T[]> => {
+  let rows = await fetchRows();
+  const staleBefore = new Date(Date.now() - MERGE_STACK_CLAIM_TIMEOUT_MS);
+  if (rows.some((row) => row.quantity <= 0 && row.updatedAt <= staleBefore)) {
+    await restoreStaleUserItemMergeClaims({ client, userId, staleBefore });
+    rows = await fetchRows();
+  }
+  return rows.filter((row) => row.quantity > 0);
+};
+
 export const fetchUserItems = async (
   client: DrizzleClient,
   userId: string,
   options?: { includeHidden?: boolean },
 ) => {
-  const useritems = await client.query.userItem.findMany({
-    where: and(eq(userItem.userId, userId)),
-    with: {
-      item: true,
-      imbuements: { with: { item: true } },
-    },
-  });
+  const useritems = await withStaleMergeClaimRecovery(client, userId, () =>
+    client.query.userItem.findMany({
+      where: eq(userItem.userId, userId),
+      with: {
+        item: true,
+        imbuements: { with: { item: true } },
+      },
+    }),
+  );
   return useritems.filter(
     (ui) => ui.item && (options?.includeHidden || !ui.item.hidden),
   );
@@ -2925,13 +3110,15 @@ export const fetchUserItemsWithVariants = async (
   client: DrizzleClient,
   userId: string,
 ) => {
-  const useritems = await client.query.userItem.findMany({
-    where: and(eq(userItem.userId, userId)),
-    with: {
-      item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } },
-      imbuements: { with: { item: true } },
-    },
-  });
+  const useritems = await withStaleMergeClaimRecovery(client, userId, () =>
+    client.query.userItem.findMany({
+      where: eq(userItem.userId, userId),
+      with: {
+        item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } },
+        imbuements: { with: { item: true } },
+      },
+    }),
+  );
   return useritems.filter((ui) => ui.item && !ui.item.hidden);
 };
 
@@ -2941,7 +3128,11 @@ export const fetchUserItem = async (
   userItemId: string,
 ) => {
   return await client.query.userItem.findFirst({
-    where: and(eq(userItem.userId, userId), eq(userItem.id, userItemId)),
+    where: and(
+      eq(userItem.userId, userId),
+      eq(userItem.id, userItemId),
+      gt(userItem.quantity, 0),
+    ),
     with: { item: true },
   });
 };
@@ -2952,7 +3143,11 @@ export const fetchUserItemWithVariants = async (
   userItemId: string,
 ) => {
   return await client.query.userItem.findFirst({
-    where: and(eq(userItem.userId, userId), eq(userItem.id, userItemId)),
+    where: and(
+      eq(userItem.userId, userId),
+      eq(userItem.id, userItemId),
+      gt(userItem.quantity, 0),
+    ),
     with: { item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } } },
   });
 };
@@ -2975,7 +3170,13 @@ export const fetchVariantOwnership = async (
     .select({ id: userItem.id })
     .from(userItem)
     .innerJoin(itemVariant, eq(userItem.itemId, itemVariant.itemId))
-    .where(and(eq(userItem.userId, userId), eq(itemVariant.id, variantId)))
+    .where(
+      and(
+        eq(userItem.userId, userId),
+        eq(itemVariant.id, variantId),
+        gt(userItem.quantity, 0),
+      ),
+    )
     .limit(1);
 };
 
@@ -3089,13 +3290,25 @@ export const toggleEquipItem = async (
       client
         .update(userItem)
         .set({ equipped: newEquipSlot })
-        .where(eq(userItem.id, useritem.id)),
+        .where(
+          and(
+            eq(userItem.id, useritem.id),
+            eq(userItem.userId, user.userId),
+            gt(userItem.quantity, 0),
+          ),
+        ),
       ...(userItemInSlot
         ? [
             client
               .update(userItem)
               .set({ equipped: "NONE" })
-              .where(eq(userItem.id, userItemInSlot.id)),
+              .where(
+                and(
+                  eq(userItem.id, userItemInSlot.id),
+                  eq(userItem.userId, user.userId),
+                  gt(userItem.quantity, 0),
+                ),
+              ),
           ]
         : []),
     ];
@@ -3106,7 +3319,13 @@ export const toggleEquipItem = async (
       client
         .update(userItem)
         .set({ equipped: "NONE" })
-        .where(eq(userItem.id, useritem.id)),
+        .where(
+          and(
+            eq(userItem.id, useritem.id),
+            eq(userItem.userId, user.userId),
+            gt(userItem.quantity, 0),
+          ),
+        ),
     ];
     message = `Unequipped ${info.name}`;
   }
@@ -3250,7 +3469,11 @@ export const splitItemStack = async (
 > => {
   // Fetch the user item to verify ownership
   const currentUserItem = await client.query.userItem.findFirst({
-    where: and(eq(userItem.id, userItemId), eq(userItem.userId, userId)),
+    where: and(
+      eq(userItem.id, userItemId),
+      eq(userItem.userId, userId),
+      gt(userItem.quantity, 0),
+    ),
     with: { item: true, imbuements: true },
   });
 
@@ -3293,13 +3516,28 @@ export const splitItemStack = async (
   const quantityToSplit = currentUserItem.quantity - quantityToKeep;
   const newUserItemId = nanoid();
 
-  // Update current stack and create new stack in parallel
-  await Promise.all([
-    client
-      .update(userItem)
-      .set({ quantity: quantityToKeep })
-      .where(eq(userItem.id, userItemId)),
-    client.insert(userItem).values({
+  // Claim the source quantity before inserting the new row. This CAS cannot match a negative
+  // merge claim and prevents a concurrent merge from turning a failed split into duplicated items.
+  const updateResult = await client
+    .update(userItem)
+    .set({ quantity: quantityToKeep })
+    .where(
+      and(
+        eq(userItem.id, userItemId),
+        eq(userItem.userId, userId),
+        eq(userItem.quantity, currentUserItem.quantity),
+        gt(userItem.quantity, 0),
+        eq(userItem.isInAuction, false),
+        eq(userItem.equipped, currentUserItem.equipped),
+        eq(userItem.storedAtHome, currentUserItem.storedAtHome),
+      ),
+    );
+  if (updateResult.rowsAffected !== 1) {
+    return { success: false, message: "Inventory changed, please try again" };
+  }
+
+  try {
+    await client.insert(userItem).values({
       id: newUserItemId,
       userId: currentUserItem.userId,
       itemId: currentUserItem.itemId,
@@ -3318,8 +3556,34 @@ export const splitItemStack = async (
       dropChancePerc: currentUserItem.dropChancePerc,
       createdAt: new Date(),
       updatedAt: new Date(),
-    }),
-  ]);
+    });
+  } catch {
+    // A thrown insert is ambiguous on PlanetScale's HTTP driver (the row may have committed
+    // before the response was lost), so verify before compensating — restoring the source while
+    // the new row exists would duplicate the split quantity.
+    const inserted = await client.query.userItem.findFirst({
+      where: eq(userItem.id, newUserItemId),
+      columns: { id: true },
+    });
+    if (!inserted) {
+      const restored = await client
+        .update(userItem)
+        .set({ quantity: currentUserItem.quantity })
+        .where(
+          and(
+            eq(userItem.id, userItemId),
+            eq(userItem.userId, userId),
+            eq(userItem.quantity, quantityToKeep),
+          ),
+        );
+      if (restored.rowsAffected !== 1) {
+        console.error(
+          `splitItemStack: failed to restore source stack ${userItemId} after insert failure`,
+        );
+      }
+      return { success: false, message: "Could not create the split stack" };
+    }
+  }
 
   return {
     success: true,
@@ -3329,23 +3593,51 @@ export const splitItemStack = async (
   };
 };
 
+/**
+ * CAS durability write for inventory repair: only succeeds while the item is still
+ * owned, carried (not home), not auctioned, and at the expected durability.
+ */
+const tryRepairUserItemDurability = async (
+  drizzle: DrizzleClient,
+  userId: string,
+  target: { id: string; durability: number },
+  newDurability: number,
+) => {
+  const result = await drizzle
+    .update(userItem)
+    .set({ durability: newDurability })
+    .where(
+      and(
+        eq(userItem.id, target.id),
+        eq(userItem.userId, userId),
+        eq(userItem.storedAtHome, false),
+        eq(userItem.isInAuction, false),
+        gt(userItem.quantity, 0),
+        eq(userItem.durability, target.durability),
+      ),
+    );
+  return result.rowsAffected === 1;
+};
+
+const refundUserMoney = async (
+  drizzle: DrizzleClient,
+  userId: string,
+  amount: number,
+) => {
+  if (amount <= 0) return;
+  await drizzle
+    .update(userData)
+    .set({ money: sql`${userData.money} + ${amount}` })
+    .where(eq(userData.userId, userId));
+};
+
 // --- Stack merge (used by mergeStacks / mergeAllStacks; kept at bottom with other helpers)
 
 type ItemRowForMerge = NonNullable<Awaited<ReturnType<typeof fetchItem>>>;
 
-type MergeEligibleUserItemForStackMerge = Pick<
-  UserItem,
-  | "id"
-  | "itemId"
-  | "userId"
-  | "quantity"
-  | "level"
-  | "equipped"
-  | "storedAtHome"
-  | "activeVariantId"
-  | "craftingFinishedAt"
-  | "isInAuction"
-> & { imbuements: readonly unknown[] };
+type MergeEligibleUserItemForStackMerge = UserItem & {
+  imbuements: readonly unknown[];
+};
 
 type PreloadedStackMergePayload = {
   userItems: MergeEligibleUserItemForStackMerge[];
@@ -3358,7 +3650,19 @@ type MergeStacksExecutionResult =
 
 type UserItemMergeBucketRow = Pick<
   UserItem,
-  "id" | "quantity" | "level" | "equipped" | "storedAtHome" | "activeVariantId"
+  | "id"
+  | "createdAt"
+  | "updatedAt"
+  | "itemId"
+  | "quantity"
+  | "level"
+  | "experience"
+  | "equipped"
+  | "storedAtHome"
+  | "activeVariantId"
+  | "durability"
+  | "craftingFinishedAt"
+  | "dropChancePerc"
 >;
 
 // activeVariantId is part of the bucket key so two stacks of the same item with
@@ -3375,9 +3679,30 @@ const mergeStacksBucketKey = (
 ) =>
   `${row.storedAtHome ? "home" : "carry"}:${row.equipped}:${row.activeVariantId ?? "none"}:${row.level}`;
 
+const mergeStackRowGuard = (
+  userId: string,
+  item: Pick<UserItemMergeBucketRow, "id" | "equipped" | "storedAtHome">,
+  quantity: number,
+) =>
+  and(
+    eq(userItem.id, item.id),
+    eq(userItem.userId, userId),
+    eq(userItem.isInAuction, false),
+    eq(userItem.quantity, quantity),
+    eq(userItem.equipped, item.equipped),
+    eq(userItem.storedAtHome, item.storedAtHome),
+  );
+
 /**
  * Merges stacks only within the same inventory bucket (`storedAtHome` + `equipped`) so
  * merge never deletes an equipped row while keeping a backpack copy (or mixes home vs carried).
+ *
+ * Protocol (PlanetScale has no transactions): claim every row in the bucket by negating its
+ * quantity with CAS guards, then atomically publish every keeper target and zero-quantity
+ * tombstone in one UPDATE. The negative value preserves the original quantity if the process
+ * crashes before publish; a crash after publish leaves the correct positive inventory and only
+ * hidden tombstones for stale cleanup. If a normal claim/publish conflict occurs, restore the
+ * original quantities.
  */
 async function executeMergeStacksForItemBucket(
   drizzle: DrizzleClient,
@@ -3411,59 +3736,136 @@ async function executeMergeStacksForItemBucket(
     return { success: true, didMerge: false, message: "" };
   }
 
-  const updatePromises = itemsToKeep.flatMap((item, index) => {
-    const targetQuantity = targetQuantityForKeepIndex(index);
-    if (item.quantity === targetQuantity) {
-      return [];
-    }
-    return [
-      drizzle
-        .update(userItem)
-        .set({ quantity: targetQuantity })
-        .where(
-          and(
-            eq(userItem.id, item.id),
-            eq(userItem.userId, userId),
-            eq(userItem.isInAuction, false),
-            eq(userItem.quantity, item.quantity),
-            eq(userItem.equipped, item.equipped),
-            eq(userItem.storedAtHome, item.storedAtHome),
-          ),
-        ),
-    ];
-  });
+  const conflictMessage = `Failed to merge stacks of ${itemName} — inventory changed, please try again`;
 
-  const deletePromises = itemsToDelete.map((item) =>
+  const claimedAt = new Date();
+  const publishTargets = sortedItems.map((item, index) => ({
+    id: item.id,
+    quantity: index < targetStacks ? targetQuantityForKeepIndex(index) : 0,
+  }));
+
+  // Restores every row this attempt touched back to its original quantity in one UPDATE. The
+  // `updatedAt = claimedAt` stamp scopes the write to our own claims/publishes, and the per-row
+  // quantity guard matches both a still-claimed row (-q) and an already-published one (its
+  // target), so even a partially applied publish is fully undone. `updatedAt` intentionally stays
+  // at `claimedAt`: positive rows are never touched by the stale-claim reaper, and the tombstone
+  // delete additionally guards on quantity 0.
+  const restoreOriginalQuantities = () =>
     drizzle
-      .delete(userItem)
+      .update(userItem)
+      .set({
+        quantity: userItemMergeQuantityCase(
+          sortedItems.map((item) => ({ id: item.id, quantity: item.quantity })),
+        ),
+      })
       .where(
         and(
-          eq(userItem.id, item.id),
           eq(userItem.userId, userId),
-          eq(userItem.isInAuction, false),
-          eq(userItem.quantity, item.quantity),
-          eq(userItem.equipped, item.equipped),
-          eq(userItem.storedAtHome, item.storedAtHome),
+          eq(userItem.updatedAt, claimedAt),
+          or(
+            ...sortedItems.map((item, index) =>
+              and(
+                eq(userItem.id, item.id),
+                or(
+                  eq(userItem.quantity, -item.quantity),
+                  eq(userItem.quantity, publishTargets[index]?.quantity ?? 0),
+                ),
+              ),
+            ),
+          ),
         ),
-      ),
-  );
+      );
 
-  // rowsAffected may be 0 if another request already merged (same guarded WHERE); still success.
+  let publishedRows = 0;
   try {
-    await Promise.all([...updatePromises, ...deletePromises]);
-  } catch (err: unknown) {
+    // Phase 1: claim every row (qty → -qty) in ONE statement so a partial claim volley cannot
+    // exist, while retaining enough information to recover an abandoned claim.
+    const claimResult = await drizzle
+      .update(userItem)
+      .set({
+        quantity: userItemMergeQuantityCase(
+          sortedItems.map((item) => ({ id: item.id, quantity: -item.quantity })),
+        ),
+        updatedAt: claimedAt,
+      })
+      .where(
+        or(
+          ...sortedItems.map((item) => mergeStackRowGuard(userId, item, item.quantity)),
+        ),
+      );
+
+    if (claimResult.rowsAffected !== sortedItems.length) {
+      await restoreOriginalQuantities();
+      return { success: false, didMerge: false, message: conflictMessage };
+    }
+
+    // Phase 2: atomically publish every keeper and convert extras to hidden tombstones in one
+    // UPDATE, so a process crash cannot commit only a subset of the target quantities/deletions.
+    const publishResult = await drizzle
+      .update(userItem)
+      .set({ quantity: userItemMergeQuantityCase(publishTargets) })
+      .where(
+        or(
+          ...sortedItems.map((item) =>
+            mergeStackRowGuard(userId, item, -item.quantity),
+          ),
+        ),
+      );
+    publishedRows = publishResult.rowsAffected;
+
+    if (publishedRows !== sortedItems.length) {
+      const restored = await restoreOriginalQuantities();
+      // rowsAffected counts changed rows only; a published row whose target equals its
+      // original quantity restores without changing, so subtract those before comparing.
+      const unchangedByRestore = sortedItems.filter(
+        (item, index) => (publishTargets[index]?.quantity ?? 0) === item.quantity,
+      ).length;
+      if (
+        publishedRows > 0 &&
+        restored.rowsAffected < sortedItems.length - unchangedByRestore
+      ) {
+        // A concurrent writer moved a row out of both recoverable states mid-protocol; surface
+        // it loudly since quantities may need manual reconciliation.
+        console.error(
+          `mergeStacks: partial publish of ${itemName} for ${userId} restored ${restored.rowsAffected}/${sortedItems.length} rows`,
+        );
+      }
+      return { success: false, didMerge: false, message: conflictMessage };
+    }
+  } catch (err) {
+    // A rejected statement leaves unknown state (it may or may not have applied); the restore's
+    // claim-scoped guards make it safe either way, and the stale reaper covers anything left.
+    try {
+      await restoreOriginalQuantities();
+    } catch {
+      // Stale-claim recovery on the next inventory read handles any remaining claims.
+    }
     if (err instanceof TypeError || err instanceof ReferenceError) {
       throw err;
     }
-    if (err instanceof Error) {
-      return {
-        success: false,
-        didMerge: false,
-        message: `Failed to merge stacks of ${itemName}`,
-      };
-    }
-    throw err;
+    return { success: false, didMerge: false, message: conflictMessage };
   }
+
+  // Physical deletion is cleanup only; zero rows are already excluded everywhere and the stale
+  // claim reaper will remove them if this request dies or the best-effort delete fails.
+  if (itemsToDelete.length > 0) {
+    try {
+      await drizzle.delete(userItem).where(
+        and(
+          eq(userItem.userId, userId),
+          inArray(
+            userItem.id,
+            itemsToDelete.map((item) => item.id),
+          ),
+          eq(userItem.quantity, 0),
+          eq(userItem.updatedAt, claimedAt),
+        ),
+      );
+    } catch {
+      // The logical merge already committed; stale cleanup will retry this tombstone deletion.
+    }
+  }
+
   return {
     success: true,
     didMerge: true,
@@ -3475,12 +3877,17 @@ async function executeMergeStacksForItemBucket(
  * Merge stacks for one item type (`mergeStacks`, `mergeAllStacks`).
  *
  * **Carried inventory:** Without `preloaded`, the query uses `storedAtHome === false` only.
- * Home storage is not merged here; players move items to carried first.
+ * Use `mergeAllStacks({ storedAtHome: true })` with preloaded home rows to merge storage.
  *
  * **Buckets:** Each `(storedAtHome, equipped)` group merges separately so equipped and
  * backpack rows are never consolidated into one row.
  *
- * **mergeAllStacks** passes `preloaded` rows already limited to carried, non-auction stacks.
+ * **Concurrency:** Each bucket uses a claim-then-commit protocol (see
+ * `executeMergeStacksForItemBucket`) so concurrent store/retrieve cannot leave a
+ * partial merge that duplicates quantities.
+ *
+ * **mergeAllStacks** passes `preloaded` rows already limited to the requested scope
+ * (carried or home), non-auction stacks.
  */
 async function executeMergeStacksForItem(
   drizzle: DrizzleClient,
@@ -3494,20 +3901,25 @@ async function executeMergeStacksForItem(
   if (preloaded) {
     info = preloaded.item;
     userItems = preloaded.userItems.filter(
-      (r) => r.userId === userId && r.itemId === itemId,
+      (r) => r.userId === userId && r.itemId === itemId && r.quantity > 0,
     );
   } else {
+    // fetchItem is independent of the user's claim state, so it runs in parallel with the
+    // reaper → items chain instead of serializing behind it.
     const [fetchedInfo, fetchedUserItems] = await Promise.all([
       fetchItem(drizzle, itemId),
-      drizzle.query.userItem.findMany({
-        where: and(
-          eq(userItem.userId, userId),
-          eq(userItem.itemId, itemId),
-          eq(userItem.storedAtHome, false),
-          eq(userItem.isInAuction, false),
-        ),
-        with: { imbuements: true },
-      }),
+      restoreStaleMergeStackClaims(drizzle, userId).then(() =>
+        drizzle.query.userItem.findMany({
+          where: and(
+            eq(userItem.userId, userId),
+            eq(userItem.itemId, itemId),
+            gt(userItem.quantity, 0),
+            eq(userItem.storedAtHome, false),
+            eq(userItem.isInAuction, false),
+          ),
+          with: { imbuements: true },
+        }),
+      ),
     ]);
     info = fetchedInfo ?? undefined;
     userItems = fetchedUserItems;

@@ -2403,7 +2403,7 @@ export const fetchUpdatedUser = async (props: {
           limit: 1,
         },
         items: {
-          where: ne(userItem.equipped, "NONE"),
+          where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
           with: {
             item: { columns: { id: true, itemType: true, maxDurability: true } },
           },

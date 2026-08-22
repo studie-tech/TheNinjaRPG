@@ -52,6 +52,13 @@ export const OverworldPlacementSchema = z
     isActive: z.coerce.boolean().prefault(true),
   })
   .superRefine((val, ctx) => {
+    if (val.interactionType !== "FRIENDLY" && val.quests.length > 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Only friendly NPC placements can have a quest pool",
+        path: ["quests"],
+      });
+    }
     if (val.sectorType === "from_list" && val.sectorList.length === 0) {
       ctx.addIssue({
         code: "custom",

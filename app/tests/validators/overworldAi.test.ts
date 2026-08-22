@@ -51,6 +51,33 @@ describe("OverworldPlacementSchema", () => {
     ).toBe(false);
   });
 
+  it("rejects quest pools on hostile placements", () => {
+    const result = OverworldPlacementSchema.safeParse({
+      ...base,
+      interactionType: "HOSTILE",
+      quests: [{ questId: "q1", chance: 100 }],
+    });
+    expect(result.success).toBe(false);
+    // The editor renders this message off the `quests` path; if either drifts, the save button
+    // goes dead with no visible reason.
+    expect(result.error?.issues).toContainEqual(
+      expect.objectContaining({
+        path: ["quests"],
+        message: "Only friendly NPC placements can have a quest pool",
+      }),
+    );
+  });
+
+  it("accepts a hostile placement once its quest pool is cleared", () => {
+    expect(
+      OverworldPlacementSchema.safeParse({
+        ...base,
+        interactionType: "HOSTILE",
+        quests: [],
+      }).success,
+    ).toBe(true);
+  });
+
   it("requires a non-empty sectorList when sectorType is from_list", () => {
     expect(() =>
       OverworldPlacementSchema.parse({ ...base, sectorType: "from_list", sectorList: [] }),

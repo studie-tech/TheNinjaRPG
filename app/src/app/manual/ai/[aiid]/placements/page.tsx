@@ -97,9 +97,12 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
   const [sectorInput, setSectorInput] = useState("");
 
   // Quest names for the pool selector
-  const { data: questNames } = api.quests.getAllNames.useQuery(undefined, {
-    staleTime: 60_000,
-  });
+  const { data: questNames } = api.overworldAi.getAssignableQuestNames.useQuery(
+    undefined,
+    {
+      staleTime: 60_000,
+    },
+  );
 
   // Form
   const form = useForm<OverworldPlacementInput>({
@@ -184,16 +187,30 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
       longitude: placement.longitude,
       latitude: placement.latitude,
       sectorList: (placement.sectorList as number[] | null) ?? [],
-      quests: placement.questPool.map((q) => ({
-        questId: q.questId,
-        chance: q.chance,
-      })),
+      quests:
+        placement.interactionType === "FRIENDLY"
+          ? placement.questPool.map((q) => ({
+              questId: q.questId,
+              chance: q.chance,
+            }))
+          : [],
       isActive: placement.isActive,
     });
     setSectorInput("");
   };
 
   const selectedQuestIds = watchedQuests.map((quest) => quest.questId);
+
+  // Grantable quests, plus any already-pooled quest whose type has since drifted out of the
+  // grantable set — without those the editor would show a bare id and offer no way to remove it.
+  const questOptions = (questNames ?? [])
+    .filter((quest) => quest.assignable || selectedQuestIds.includes(quest.id))
+    .map((quest) => ({
+      value: quest.id,
+      label: quest.assignable
+        ? `${quest.name} (${quest.questType})`
+        : `${quest.name} (${quest.questType} — no longer grantable)`,
+    }));
 
   /** Updates selected quests while retaining the configured chance for existing entries. */
   const setSelectedQuestIds: React.Dispatch<React.SetStateAction<string[]>> = (
@@ -252,7 +269,15 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Interaction Type</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      // Only friendly placements may carry a quest pool; drop it on switch so
+                      // the schema refinement can never reject a save from a hidden field.
+                      if (value !== "FRIENDLY") form.setValue("quests", []);
+                    }}
+                    value={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select interaction type" />
@@ -394,10 +419,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
               <FormItem>
                 <FormLabel>Quest Pool</FormLabel>
                 <MultiSelect
-                  options={(questNames ?? []).map((quest) => ({
-                    value: quest.id,
-                    label: quest.name,
-                  }))}
+                  options={questOptions}
                   selected={selectedQuestIds}
                   onChange={setSelectedQuestIds}
                   placeholder="Select quests..."
@@ -438,12 +460,12 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                     )}
                   </div>
                 )}
-                {form.formState.errors.quests?.message && (
-                  <p className="text-destructive text-sm">
-                    {form.formState.errors.quests.message}
-                  </p>
-                )}
               </FormItem>
+            )}
+            {form.formState.errors.quests?.message && (
+              <p className="text-destructive text-sm">
+                {form.formState.errors.quests.message}
+              </p>
             )}
 
             {/* Is Active */}

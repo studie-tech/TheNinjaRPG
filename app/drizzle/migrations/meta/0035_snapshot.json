@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "63253330-d4d2-42b8-94e2-6f9502aac834",
-  "prevId": "ce66bfa2-8be8-4ee4-ace5-7a6d006b6311",
+  "id": "2efb3029-8056-4885-8e14-829201212166",
+  "prevId": "2106d6fb-7011-4970-a9c9-2ad6e8f4e702",
   "tables": {
     "AbEvent": {
       "name": "AbEvent",
@@ -8089,7 +8089,7 @@
         },
         "questType": {
           "name": "questType",
-          "type": "enum('starter','tier','daily','mission','errand','crime','exam','event','story','anbu','medical','hunting','gathering','battlepyramid','pvp','achievement','war','raid')",
+          "type": "enum('starter','tier','daily','mission','errand','crime','exam','event','story','anbu','medical','hunting','gathering','battlepyramid','pvp','achievement','war','raid','overworld')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -8384,7 +8384,7 @@
         },
         "questType": {
           "name": "questType",
-          "type": "enum('starter','tier','daily','mission','errand','crime','exam','event','story','anbu','medical','hunting','gathering','battlepyramid','pvp','achievement','war','raid')",
+          "type": "enum('starter','tier','daily','mission','errand','crime','exam','event','story','anbu','medical','hunting','gathering','battlepyramid','pvp','achievement','war','raid','overworld')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
