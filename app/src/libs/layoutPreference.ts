@@ -112,9 +112,14 @@ export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
         sameSite: "lax",
         secure,
       })
-      .catch(() => {
-        // Chrome rejects the Cookie Store write in some profiles; the document.cookie
-        // write above has already persisted the preference.
+      .catch((error: unknown) => {
+        // Chrome rejects this mirror write with a malformed-cookie TypeError in some
+        // profiles, and document.cookie above has already persisted the preference, so
+        // that one is noise. Anything else is unexpected and is rethrown so it still
+        // surfaces as an unhandled rejection.
+        const isMalformedCookie =
+          error instanceof TypeError && error.message.includes("Cookie was malformed");
+        if (!isMalformedCookie) throw error;
       });
   }
 };

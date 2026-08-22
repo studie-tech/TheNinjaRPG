@@ -131,7 +131,8 @@ export const registerRouter = createTRPCRouter({
       if (selectedBloodline.hidden)
         return errorResponse("Hidden bloodlines are not allowed for new users");
 
-      // Mutate
+      // Mutate. Sorted so concurrent inserts for the same account take the
+      // UserAttribute unique-index locks in the same order and cannot deadlock.
       const unique_attributes = [
         ...new Set([
           input.attribute_1,

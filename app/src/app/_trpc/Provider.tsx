@@ -12,7 +12,7 @@ import { useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
-import { isRetryableTrpcError } from "@/utils/error";
+import { isRetryableTrpcError, isUnregisteredUserError } from "@/utils/error";
 import {
   api,
   SIGN_IN_REQUIRED_MUTATION_MESSAGE,
@@ -131,7 +131,7 @@ const handleTrpcError = (error: unknown) => {
   if (
     error instanceof TRPCClientError &&
     trpcErrorCode === "NOT_FOUND" &&
-    error.message.includes("Please complete registration.")
+    isUnregisteredUserError(error.message)
   ) {
     return;
   }
