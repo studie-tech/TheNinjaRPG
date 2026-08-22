@@ -97,10 +97,9 @@ export const isRetryableResponse = (
 
 /**
  * Detect the same dropped connection on a thrown error, walking `.cause` because
- * Drizzle wraps the driver's `DatabaseError`. Writes are never retried by the
- * fetch wrapper above, so a call site that knows its statement is idempotent -
- * absolute values only, or a guard that makes a re-apply a no-op - opts in with
- * this detector instead.
+ * Drizzle wraps the driver's `DatabaseError`. Writes are never retried by the fetch
+ * wrapper above, so this is for a call site that wants to answer a lost connection
+ * with something better than a 500 - not to re-issue the statement.
  */
 export const isTransientDatabaseError = (error: unknown): boolean => {
   let current: unknown = error;

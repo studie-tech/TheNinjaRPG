@@ -9,8 +9,6 @@ import { userData } from "@/drizzle/schema";
 import type { RenameDecision } from "@/libs/loadout";
 import { type BaseServerResponse, errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { isTransientDatabaseError } from "@/server/dbRetry";
-import { withRetry } from "@/utils/retry";
 
 /**
  * Thin userData fetch for the loadout endpoints: only the columns needed to
@@ -45,15 +43,7 @@ export const backfillLoadouts = async <T extends { id: string }>(args: {
   writeDefaultPointer: (loadoutId: string) => PromiseLike<unknown>;
 }): Promise<T[]> => {
   if (args.missing.length > 0) {
-    // Deterministic ids plus the no-op `ON DUPLICATE KEY UPDATE` make this upsert
-    // idempotent, so a dropped PlanetScale connection can safely be re-issued.
-    // The driver-level retry skips every write, so opt in explicitly here.
-    await withRetry(async () => args.insertMissing(args.missing), {
-      maxRetries: 2,
-      baseDelayMs: 50,
-      deadlineMs: 3000,
-      isTransient: isTransientDatabaseError,
-    });
+    await args.insertMissing(args.missing);
   }
   // Build a local merged list rather than mutating the caller-owned array.
   const merged =
