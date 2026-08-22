@@ -2535,36 +2535,11 @@ export const upsertQuestEntry = async (
   return entry;
 };
 
-/**
- * Whether any quest content of a given type exists at all, cached per server instance. Without
- * this, bootstrapping a type that has no content re-runs the full availability join on every
- * single user fetch and can never match. New content is picked up on the next expiry.
- */
-const QUEST_TYPE_CONTENT_TTL = 5 * 60 * 1000;
-const questTypeContentCache = new Map<QuestType, { exists: boolean; checkedAt: number }>();
-
-const questTypeHasContent = async (client: DrizzleClient, type: QuestType) => {
-  const now = Date.now();
-  const cached = questTypeContentCache.get(type);
-  if (cached && now - cached.checkedAt < QUEST_TYPE_CONTENT_TTL) {
-    return cached.exists;
-  }
-  const rows = await client
-    .select({ id: quest.id })
-    .from(quest)
-    .where(eq(quest.questType, type))
-    .limit(1);
-  const exists = rows.length > 0;
-  questTypeContentCache.set(type, { exists, checkedAt: now });
-  return exists;
-};
-
 export const insertNextQuest = async (
   client: DrizzleClient,
   user: NonNullable<UserWithRelations>,
   type: QuestType,
 ) => {
-  if (!(await questTypeHasContent(client, type))) return undefined;
   const history = await fetchUncompletedQuests(client, user, type);
   const nextQuest = history?.[0];
   if (nextQuest) {
