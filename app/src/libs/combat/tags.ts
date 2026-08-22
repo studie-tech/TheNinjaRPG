@@ -1709,8 +1709,9 @@ export const heal = (
   }
   // Calculate healing
   const { power } = getPower(effect);
-  const parsedEffect = HealTag.parse(effect);
-  const poolsAffects = parsedEffect.poolsAffected || ["Health"];
+  const parsedEffect = HealTag.safeParse(effect);
+  const poolsAffects =
+    (parsedEffect.success ? parsedEffect.data.poolsAffected : undefined) ?? ["Health"];
   const heal_hp = poolsAffects.includes("Health")
     ? effect.calculation === "percentage"
       ? target.maxHealth * (power / 100) * applyTimes
