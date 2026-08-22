@@ -76,12 +76,21 @@ export interface SidecarContext {
 
 function openInBrowser(url: string): void {
   if (process.env.TNR_DEV_CLIENT_NO_BROWSER) return;
-  const command =
-    platform() === "darwin" ? "open" : platform() === "win32" ? "cmd" : "xdg-open";
-  // cmd.exe splits an unquoted URL at every `&`, and the connect URL is all
-  // query parameters. The empty "" is the window title `start` expects first.
-  const args = platform() === "win32" ? ["/c", "start", "", `"${url}"`] : [url];
-  spawn(command, args, { stdio: "ignore", detached: true }).unref();
+  // NOT `cmd /c start` on Windows: cmd re-parses its argument, so the connect
+  // URL — which is all query parameters — gets split at every `&`. Quoting does
+  // not save it either, because the quotes are re-escaped when the command line
+  // is built. The protocol handler takes the URL as one opaque argument.
+  // Mirrors open_external in src-tauri/src/main.rs.
+  const [command, prefixArgs] =
+    platform() === "darwin"
+      ? ["open", [] as string[]]
+      : platform() === "win32"
+        ? ["rundll32.exe", ["url.dll,FileProtocolHandler"]]
+        : ["xdg-open", [] as string[]];
+  spawn(command, [...prefixArgs, url], {
+    stdio: "ignore",
+    detached: true,
+  }).unref();
 }
 
 function publicRun(run: RunState): RunState {
