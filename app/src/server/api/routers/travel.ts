@@ -533,9 +533,14 @@ export const travelRouter = createTRPCRouter({
         user.latitude = destination.y;
         user.status = "TRAVEL";
         user.travelFinishAt = endTime;
-        // Only broadcast if user is NOT stealthed
+        // Only broadcast if user is NOT stealthed. The sector being left is told
+        // too, the same way a sector crossing already does it, so the departing
+        // player stops being drawn there instead of lingering until the next poll.
         if (!isUserCurrentlyStealthed(user)) {
-          void updateUserOnMap(pusher, user.sector, user);
+          after(() => updateUserOnMap(pusher, input.sector, user));
+          if (departureSector !== input.sector) {
+            after(() => updateUserOnMap(pusher, departureSector, user));
+          }
         }
         return {
           success: true,
@@ -879,9 +884,9 @@ export const travelRouter = createTRPCRouter({
             experience: user.experience,
             rank: user.rank,
           };
-          void updateUserOnMap(pusher, targetSector, broadcast);
+          after(() => updateUserOnMap(pusher, targetSector, broadcast));
           if (targetSector !== sector) {
-            void updateUserOnMap(pusher, sector, broadcast);
+            after(() => updateUserOnMap(pusher, sector, broadcast));
           }
         }
         return { success: true, message: "OK", data: output };
@@ -897,7 +902,7 @@ export const travelRouter = createTRPCRouter({
         }
         // Force an update on the map of the real information (only if not stealthed)
         if (!isUserCurrentlyStealthed(latest)) {
-          void updateUserOnMap(pusher, latest.sector, latest);
+          after(() => updateUserOnMap(pusher, latest.sector, latest));
         }
         // Figure out return message
         if (latest.status !== "AWAKE") {

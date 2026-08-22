@@ -1283,12 +1283,24 @@ export const drawUsers = (info: {
   lastTime: number;
   angle: number;
   minBracket: number;
+  /** The viewing player, whose own marker the scouting filter must never hide */
+  selfUserId?: string;
+  /** Overridable so marker tests can run without a browser texture loader */
+  textureForPath?: typeof loadTexture;
 }) => {
+  const textureForPath = info.textureForPath ?? loadTexture;
   const endMark = profiler.mark("drawUsers");
-  // Group the users by their location
+  // Group the users by their location. The scouting bracket filter picks one
+  // exact bracket, so it hides the viewer too unless they are exempted here -
+  // leaving the player with no marker and no way to tell where they stand.
   const groups = groupBy(
     info.users
-      .filter((user) => user.isNpc || passesBracketFilter(user, info.minBracket))
+      .filter(
+        (user) =>
+          user.isNpc ||
+          user.userId === info.selfUserId ||
+          passesBracketFilter(user, info.minBracket),
+      )
       .map((user) => ({
         ...user,
         group: `${user.latitude},${user.longitude}`,
@@ -1330,7 +1342,7 @@ export const drawUsers = (info: {
           }
 
           if (!userMesh) {
-            userMesh = createUserSprite(user, hex);
+            userMesh = createUserSprite(user, hex, textureForPath);
             info.group_users.add(userMesh);
             userMeshCache.set(cacheKey, userMesh);
           }
@@ -1369,7 +1381,13 @@ export const drawUsers = (info: {
             }
 
             if (!userMesh) {
-              userMesh = createCombatSprite(firstUser, secondUser, battleId, hex);
+              userMesh = createCombatSprite(
+                firstUser,
+                secondUser,
+                battleId,
+                hex,
+                textureForPath,
+              );
               info.group_users.add(userMesh);
               userMeshCache.set(battleId, userMesh);
             }
