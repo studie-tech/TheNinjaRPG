@@ -1,5 +1,6 @@
 "use client";
 
+import { useUser } from "@clerk/nextjs";
 import * as Sentry from "@sentry/nextjs";
 import {
   MutationCache,
@@ -8,7 +9,7 @@ import {
   QueryClientProvider,
 } from "@tanstack/react-query";
 import { httpBatchLink, loggerLink, retryLink, TRPCClientError } from "@trpc/client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
@@ -96,6 +97,20 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
       ],
     }),
   );
+  // Clerk identities can be swapped inside a live tab. Query keys do not carry the
+  // Clerk user id and nothing ever goes stale (staleTime: Infinity), so drop the
+  // previous account's cache when a different one signs in.
+  const { user } = useUser();
+  const clerkUserId = user?.id;
+  const lastClerkUserId = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!clerkUserId) return;
+    const previous = lastClerkUserId.current;
+    lastClerkUserId.current = clerkUserId;
+    if (previous && previous !== clerkUserId) {
+      queryClient.clear();
+    }
+  }, [clerkUserId, queryClient]);
   return (
     <api.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>
@@ -119,6 +134,19 @@ const handleTrpcError = (error: unknown) => {
     error instanceof TRPCClientError &&
     error.message.includes("Unauthorized for tRPC endpoint") &&
     (trpcErrorCode === undefined || trpcErrorCode === "UNAUTHORIZED")
+  ) {
+    return;
+  }
+
+  // A valid Clerk session with no UserData row: registration was never completed, or
+  // the character was deleted while other queries were still in flight. profile.getUser
+  // returns an undefined user for this state, so useRequiredUserData forwards to "/"
+  // and HomeLanding sends the user on to /register. Showing a destructive toast for
+  // every other request that loses the same race adds nothing on top of that redirect.
+  if (
+    error instanceof TRPCClientError &&
+    trpcErrorCode === "NOT_FOUND" &&
+    error.message.includes("Please complete registration.")
   ) {
     return;
   }

@@ -17,6 +17,10 @@ Sentry.init({
   ignoreErrors: [
     "Unauthorized for tRPC endpoint",
     "You are acting too fast",
+    // A Clerk session that has no UserData row, thrown by fetchUser. UX: profile.getUser
+    // returns an undefined user for this state, so useRequiredUserData forwards to "/",
+    // which HomeLanding sends on to /register - no blank screen and no stuck loader.
+    "Please complete registration.",
     // Stale client after a deployment: the router state tree's last element used
     // to be a boolean and is now a number, so a browser still running the
     // previous build fails Next's schema check on every RSC request. UX: the

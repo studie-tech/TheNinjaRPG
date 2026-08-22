@@ -20,7 +20,6 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
-  serverError,
 } from "../trpc";
 
 export const trainRouter = createTRPCRouter({
@@ -47,7 +46,7 @@ export const trainRouter = createTRPCRouter({
         forceRegen: true,
       });
       // Derived
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return errorResponse("User not found");
       const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
       // Guard
       if (user.status !== "AWAKE") return errorResponse("Must be awake to train");
@@ -108,7 +107,7 @@ export const trainRouter = createTRPCRouter({
         }),
       ]);
       // Guard
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
       if (!user.trainingStartedAt) return errorResponse("Not currently training");
       if (!user.currentlyTraining) return errorResponse("Not currently training");
@@ -250,9 +249,7 @@ export const trainRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
-      if (!user) {
-        throw serverError("NOT_FOUND", "User not found");
-      }
+      if (!user) return errorResponse("User not found");
       if (user.currentlyTraining) {
         return {
           success: false,

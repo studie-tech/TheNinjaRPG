@@ -41,10 +41,13 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
   const setActiveElement = props.setActiveQuestId || setLocalActiveElement;
 
   // Query
-  const { data: quests } = api.quests.specificQuests.useQuery({
-    level: userData?.level ?? 0,
-    questType: props.questType,
-  });
+  const { data: quests } = api.quests.specificQuests.useQuery(
+    {
+      level: userData?.level ?? 0,
+      questType: props.questType,
+    },
+    { enabled: !!userData },
+  );
 
   // Tutorial step
   const { currentStep, handleNextStepAsync } = useTutorialStep();
