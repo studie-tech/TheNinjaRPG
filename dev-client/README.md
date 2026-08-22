@@ -59,11 +59,17 @@ binary so the dev shell runs the exact code under test.
 The sidecar can also be run standalone (no Tauri) for quick checks:
 
 ```sh
-bun sidecar/main.ts            # via source
-bin/tnr-dev-client             # or the compiled binary
+# Every sidecar route requires the per-launch auth token, so pin a known one
+# when driving it by hand (the Tauri shell mints a random one and passes it to
+# the UI; a random token you never see is useless from curl).
+TNR_DEV_CLIENT_AUTH_TOKEN=devtoken bun sidecar/main.ts
 # → "TNR_DEV_CLIENT_READY port=49200"
-curl http://127.0.0.1:49200/status
+curl -H "authorization: Bearer devtoken" http://127.0.0.1:49200/status
 ```
+
+Requests without the token get `401`, and requests carrying a cross-origin
+`Origin` header get `403` — that is what stops any web page you happen to be
+visiting from driving your client.
 
 ## Production build
 
@@ -93,19 +99,45 @@ Environment variables:
 - `TNR_DEV_CLIENT_SIDECAR` — path to the sidecar binary (dev override)
 - `TNR_DEV_CLIENT_HOME` — data directory (default `~/.tnr-dev-client`)
 - `TNR_DEV_CLIENT_NO_BROWSER` — set to skip opening the browser on sign-in
+- `TNR_DEV_CLIENT_AUTH_TOKEN` — the loopback API token; the Tauri shell sets
+  this for the sidecar and the UI. Set it yourself only when driving the
+  sidecar by hand, otherwise a fresh random one is generated per launch
 
 ## Sign-in flow
 
 1. UI → `POST /auth/signin` → sidecar generates a PKCE pair, starts listening
    on the loopback port, returns the `/dev-connect` URL and opens the browser.
-2. You sign in on the game site (Clerk). The server redirects back to
+2. You sign in on the game site (Clerk) and confirm on the `/dev-connect`
+   consent screen, which names the loopback port being authorised. Only then
+   is a code minted, and the browser is redirected back to
    `http://127.0.0.1:<port>/callback?code=…&state=…`.
-3. Sidecar validates `state`, exchanges the code for a long-lived device token
-   (`devContribution.exchangeConnectCode`) and stores it locally.
+3. Sidecar validates `state`, exchanges the code for a 24-hour device token
+   (`devContribution.exchangeConnectCode`) and stores it locally. The token is
+   scoped server-side to `devContribution.*`, so it cannot act on the rest of
+   your game account, and it can be revoked from an ordinary browser session.
 4. All subsequent `devContribution` calls go to the game server with
    `Authorization: Bearer <device-token>`.
 
+## Verifying your GitHub account
+
+Rewards are only paid against a GitHub identity you have proven you own, so
+this is a required one-off step — `claimNextJob` refuses to hand out work until
+it is done:
+
+1. `devContribution.requestGithubVerification { githubLogin }` returns a nonce.
+2. Publish it: `gh gist create --public --desc "TheNinja-RPG verification" - <<< "<nonce>"`
+3. `devContribution.confirmGithubVerification { githubLogin, gistId }` — the
+   server reads the gist back and checks its owner before recording the login.
+
+The login is deliberately *not* writable through `updateProfile`. A failed
+confirm leaves the nonce in place so you can retry once the gist propagates.
+
 ## Job flow
+
+Every job type runs inside a throwaway git worktree, and the agent is given the
+smallest tool set that can do the work — read-only for triage and review,
+`acceptEdits` plus a scoped allowlist for implementation. Issue and PR text is
+passed as clearly delimited untrusted data, never as instructions.
 
 - `POST /jobs/claim { agent }` — preflight (cap, CLI, repo, single job at a
   time) → `devContribution.claimNextJob` → run the agent on the job:
@@ -131,7 +163,9 @@ Environment variables:
   in-process against a fake game server and fake `claude`/`codex`/`gh` CLIs,
   exercising the whole loop: settings, the PKCE connect flow, token storage,
   claim pre-flight and daily caps, an end-to-end `ISSUE_TRIAGE` and
-  `PR_REVIEW` run, aborting a running job, and sign-out/revocation.
+  `PR_REVIEW` run, aborting a running job, sign-out/revocation, the loopback
+  API's auth and origin checks, and shutdown killing an agent that ignores
+  SIGTERM.
 
 CI runs the same suite plus `cargo check` for the Tauri shell
 (`.github/workflows/test_dev_client.yml`).
