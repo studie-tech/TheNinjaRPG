@@ -8,6 +8,7 @@ import {
   inArray,
   isNull,
   like,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -1663,7 +1664,9 @@ export const removeFromClan = async (
               status: sql`CASE WHEN status = "QUEUED" THEN "AWAKE" ELSE status END`,
               villageId: sql`CASE WHEN isOutlaw = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE villageId END`,
             })
-            .where(eq(userData.clanId, clanData.id)),
+            // Exclude the leaver, whose row the primary-key update above already
+            // covers; two overlapping updates on UserData deadlock InnoDB.
+            .where(and(eq(userData.clanId, clanData.id), ne(userData.userId, userId))),
           client.delete(mpvpBattleQueue).where(eq(mpvpBattleQueue.id, clanData.id)),
         ]
       : [
