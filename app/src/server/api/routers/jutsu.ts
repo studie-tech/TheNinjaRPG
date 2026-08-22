@@ -2338,9 +2338,6 @@ export const selectJutsuLoadout = async (
     equipIds.length > 0
       ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equipIds)} THEN 1 ELSE 0 END`
       : sql`0`;
-  // This locks the UserData row and every UserJutsu row of the user at once, while
-  // toggleEquip takes the same two tables in the opposite order. The driver-level
-  // retry in dbRetry.ts re-issues whichever of the two loses the deadlock.
   await client.execute(sql`
     UPDATE ${userData}
     LEFT JOIN ${userJutsu} ON ${userJutsu.userId} = ${userData.userId}
@@ -2491,10 +2488,6 @@ export const rollbackEquipIfOverCap = async (args: {
   flags: JutsuCapFlags;
 }): Promise<boolean> => {
   const { client, userId, userJutsuId, maxEquip, flags } = args;
-  // The cap guard is a correlated self-SELECT over the user's other equipped rows, so a
-  // concurrent equip for the same user can deadlock this out. The driver-level retry
-  // re-issues it, and the guard re-evaluates on that attempt, so the compare-and-swap
-  // keeps its meaning.
   const rollback = await client
     .update(userJutsu)
     .set({ equipped: false })
