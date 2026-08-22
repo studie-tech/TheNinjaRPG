@@ -4,7 +4,6 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
-import { UNREGISTERED_USER_ERROR } from "@/utils/error";
 
 Sentry.init({
   dsn: "https://c35c54f99b73b4a3b8a7e60936bc2967@o4507797256601600.ingest.de.sentry.io/4507797262958672",
@@ -19,9 +18,6 @@ Sentry.init({
   ignoreErrors: [
     "Unauthorized for tRPC endpoint",
     "You are acting too fast",
-    // A Clerk session that has no UserData row, thrown by fetchUser. UX: the client
-    // forwards to /register off the undefined user from profile.getUser.
-    UNREGISTERED_USER_ERROR,
   ],
 
   // Set the environment. NODE_ENV is "production" for every Vercel build, so
