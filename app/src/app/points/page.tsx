@@ -188,7 +188,7 @@ const PaypalShopContent = ({
         {isReady && activeTab === "Federal" && <FederalStore />}
         {!isReady && <Loader explanation="Loading..." />}
       </ContentBox>
-      {activeTab === "Reputation" && <TransactionHistory userId={userData.userId} />}
+      {activeTab === "Reputation" && <TransactionHistory />}
       {activeTab === "Reputation" && <LookupTransaction />}
       {activeTab === "Federal" && <SubscriptionsOverview />}
     </>
@@ -871,7 +871,7 @@ const SubscriptionsOverview = () => {
 /**
  * Transaction History component
  */
-export const TransactionHistory: React.FC<{ userId: string }> = (props) => {
+export const TransactionHistory: React.FC<{ userId?: string }> = (props) => {
   const { userId } = props;
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
@@ -882,7 +882,6 @@ export const TransactionHistory: React.FC<{ userId: string }> = (props) => {
   } = api.paypal.getPaypalTransactions.useInfiniteQuery(
     { limit: 10, userId },
     {
-      enabled: !!userId,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
     },

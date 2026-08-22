@@ -194,13 +194,18 @@ export const itemRouter = createTRPCRouter({
       });
     }),
   get: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get a specific item by ID" } })
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Get a specific item by ID, or null if no such item exists",
+      },
+    })
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
+      // Deleted items stay reachable through stale links on this public endpoint,
+      // so a missing row is an ordinary answer rather than an error
       const result = await fetchItem(ctx.drizzle, input.id);
-      if (!result) {
-        throw serverError("NOT_FOUND", "Item not found");
-      }
+      if (!result) return null;
       return result as Omit<typeof result, "effects"> & { effects: ZodAllTags[] };
     }),
   getItemWithCraftingRequirements: publicProcedure

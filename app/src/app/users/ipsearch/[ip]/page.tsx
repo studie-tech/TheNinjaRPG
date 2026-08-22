@@ -8,6 +8,7 @@ import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showUserRank } from "@/libs/profile";
+import { canSeeIps } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
 
@@ -28,6 +29,7 @@ export default function PublicProfile(props: { params: Promise<{ ip: string }> }
       isAi: false,
     },
     {
+      enabled: !!userData && canSeeIps(userData.role),
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
       staleTime: 1000 * 60 * 5, // every 5min
@@ -63,6 +65,13 @@ export default function PublicProfile(props: { params: Promise<{ ip: string }> }
   ];
 
   if (!userData) return <Loader explanation="Loading userdata" />;
+  if (!canSeeIps(userData.role)) {
+    return (
+      <ContentBox title="Users" defaultBackHref="/users" subtitle="IP Lookup">
+        You are not allowed to search IPs.
+      </ContentBox>
+    );
+  }
 
   return (
     <ContentBox
