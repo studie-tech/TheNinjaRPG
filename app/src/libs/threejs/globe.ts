@@ -1,15 +1,20 @@
 import {
+  BufferAttribute,
   BufferGeometry,
+  type Color,
   Group,
   LinearFilter,
   LineBasicMaterial,
   LineSegments,
+  type Raycaster,
+  Sphere,
   Sprite,
   SpriteMaterial,
   Vector3,
 } from "three";
 import { IMG_SECTOR_USER_SPRITE_MASK } from "@/drizzle/constants";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
+import { sectorAtGeographic } from "@/libs/sector-map/world-grid";
 import type { GlobalMapData, GlobalPoint, GlobalTile } from "@/libs/threejs/types";
 import {
   createBorderTexture,
@@ -155,101 +160,177 @@ export const createUserAvatarSprite = (info: {
 
 type Point3 = { x: number; y: number; z: number };
 
+/** Quads per sector edge, falling back to a flat quad without a color field. */
+const sectorVisualScale = (hexasphere: GlobalMapData, tile: GlobalTile) =>
+  hexasphere.visualScale && tile.vc?.length === (hexasphere.visualScale + 1) ** 2
+    ? hexasphere.visualScale
+    : 1;
+
+const FALLBACK_TERRAIN_COLORS: Record<number, number> = {
+  0: 0x3f9ed9,
+  1: 0x3cc164,
+  2: 0xe7cd89,
+  3: 0xe8f6f8,
+};
+
+export interface GlobeSurface {
+  /** Every navigable sector merged into one indexed geometry. */
+  geometry: BufferGeometry;
+  /** Vertex [start, count] pairs per sector id, for recoloring a single tile. */
+  vertexRanges: Int32Array;
+}
+
+/** Evenly spaced points along one sector edge, as flat xyz triples. */
+const interpolateEdge = (
+  from: GlobalPoint,
+  to: GlobalPoint,
+  stride: number,
+  scale: number,
+) => {
+  const points = new Float64Array(stride * 3);
+  for (let step = 0; step < stride; step++) {
+    const amount = step / scale;
+    points[step * 3] = Number(from.x) + (Number(to.x) - Number(from.x)) * amount;
+    points[step * 3 + 1] = Number(from.y) + (Number(to.y) - Number(from.y)) * amount;
+    points[step * 3 + 2] = Number(from.z) + (Number(to.z) - Number(from.z)) * amount;
+  }
+  return points;
+};
+
 /**
- * Geometry for one logical sector, subdivided and colored at its climate-field
- * vertices. Three.js interpolates those colors across each triangle, producing
- * gradual coast and biome transitions without changing sector interaction.
+ * One indexed geometry for the whole navigable globe, subdivided and colored at
+ * each sector's climate-field vertices. Three.js interpolates those colors
+ * across the triangles, producing gradual coast and biome transitions.
+ *
+ * Merging matters: a mesh per sector meant ~1,950 draw calls every frame, which
+ * is what made the map crawl on mobile. Sector identity survives as the
+ * vertexRanges lookup, and picking is arithmetic (see pickGlobeSector) rather
+ * than a raycast, so nothing needs the tiles to stay separate objects.
  */
-export const buildGlobeTileGeometry = (
+export const buildGlobeSurface = (
   hexasphere: GlobalMapData,
-  tile: GlobalTile,
-): { positions: Float32Array; colors: Float32Array } | null => {
-  if (tile.b.length !== 4) return null;
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const visualScale =
-    hexasphere.visualScale && tile.vc?.length === (hexasphere.visualScale + 1) ** 2
-      ? hexasphere.visualScale
-      : 1;
+  sectorTint?: (sector: number) => Color | null,
+): GlobeSurface => {
+  const tiles = hexasphere.tiles;
+  const radius = hexasphere.radius / 3;
 
-  const fallbackColors: Record<number, number> = {
-    0: 0x3f9ed9,
-    1: 0x3cc164,
-    2: 0xe7cd89,
-    3: 0xe8f6f8,
-  };
-  const colorAt = (x: number, y: number): Point3 => {
-    const packed =
-      tile.vc?.[y * (visualScale + 1) + x] ?? fallbackColors[tile.t] ?? 0x3cc164;
-    return {
-      x: ((packed >> 16) & 0xff) / 255,
-      y: ((packed >> 8) & 0xff) / 255,
-      z: (packed & 0xff) / 255,
-    };
-  };
+  // Size the buffers up front: a sector contributes (scale + 1)^2 vertices and
+  // scale^2 quads, and sectors without a proper quad boundary contribute none.
+  const scales = new Int32Array(tiles.length);
+  let vertexTotal = 0;
+  let indexTotal = 0;
+  for (let sector = 0; sector < tiles.length; sector++) {
+    const tile = tiles[sector];
+    if (!tile || tile.b.length !== 4) continue;
+    const scale = sectorVisualScale(hexasphere, tile);
+    scales[sector] = scale;
+    vertexTotal += (scale + 1) ** 2;
+    indexTotal += scale * scale * 6;
+  }
 
-  /** Curved bilinear point for a subdivision corner on the globe surface. */
-  const pointAt = (u: number, v: number): Point3 => {
+  const positions = new Float32Array(vertexTotal * 3);
+  const colors = new Float32Array(vertexTotal * 3);
+  const indices = new Uint32Array(indexTotal);
+  const vertexRanges = new Int32Array(tiles.length * 2).fill(-1);
+  let vertexCursor = 0;
+  let indexCursor = 0;
+
+  for (let sector = 0; sector < tiles.length; sector++) {
+    const scale = scales[sector];
+    const tile = tiles[sector];
+    if (!scale || !tile) continue;
     const [nw, ne, se, sw] = tile.b as [
       GlobalPoint,
       GlobalPoint,
       GlobalPoint,
       GlobalPoint,
     ];
-    const top = {
-      x: Number(nw.x) + (Number(ne.x) - Number(nw.x)) * u,
-      y: Number(nw.y) + (Number(ne.y) - Number(nw.y)) * u,
-      z: Number(nw.z) + (Number(ne.z) - Number(nw.z)) * u,
-    };
-    const bottom = {
-      x: Number(sw.x) + (Number(se.x) - Number(sw.x)) * u,
-      y: Number(sw.y) + (Number(se.y) - Number(sw.y)) * u,
-      z: Number(sw.z) + (Number(se.z) - Number(sw.z)) * u,
-    };
-    const point = {
-      x: top.x + (bottom.x - top.x) * v,
-      y: top.y + (bottom.y - top.y) * v,
-      z: top.z + (bottom.z - top.z) * v,
-    };
-    const length = Math.hypot(point.x, point.y, point.z) || 1;
-    const radius = hexasphere.radius / 3;
-    return {
-      x: (point.x / length) * radius,
-      y: (point.y / length) * radius,
-      z: (point.z / length) * radius,
-    };
-  };
-  const pushTri = (
-    p0: Point3,
-    p1: Point3,
-    p2: Point3,
-    c0: Point3,
-    c1: Point3,
-    c2: Point3,
-  ) => {
-    positions.push(p0.x, p0.y, p0.z, p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
-    colors.push(c0.x, c0.y, c0.z, c1.x, c1.y, c1.z, c2.x, c2.y, c2.z);
-  };
+    const stride = scale + 1;
+    const base = vertexCursor;
+    const tint = sectorTint?.(sector) ?? null;
 
-  for (let y = 0; y < visualScale; y++) {
-    for (let x = 0; x < visualScale; x++) {
-      const u0 = x / visualScale;
-      const u1 = (x + 1) / visualScale;
-      const v0 = y / visualScale;
-      const v1 = (y + 1) / visualScale;
-      const nw = pointAt(u0, v0);
-      const ne = pointAt(u1, v0);
-      const se = pointAt(u1, v1);
-      const sw = pointAt(u0, v1);
-      const nwColor = colorAt(x, y);
-      const neColor = colorAt(x + 1, y);
-      const seColor = colorAt(x + 1, y + 1);
-      const swColor = colorAt(x, y + 1);
-      pushTri(nw, ne, se, nwColor, neColor, seColor);
-      pushTri(nw, se, sw, nwColor, seColor, swColor);
+    // Bilinear interpolation over the quad, evaluated as a north edge and a
+    // south edge that the row loop then blends between.
+    const north = interpolateEdge(nw, ne, stride, scale);
+    const south = interpolateEdge(sw, se, stride, scale);
+
+    for (let y = 0; y < stride; y++) {
+      const v = y / scale;
+      for (let x = 0; x < stride; x++) {
+        // Blended point pushed back onto the sphere, so the surface stays
+        // curved rather than faceted.
+        const edge = x * 3;
+        const nx = north[edge] ?? 0;
+        const ny = north[edge + 1] ?? 0;
+        const nz = north[edge + 2] ?? 0;
+        const px = nx + ((south[edge] ?? 0) - nx) * v;
+        const py = ny + ((south[edge + 1] ?? 0) - ny) * v;
+        const pz = nz + ((south[edge + 2] ?? 0) - nz) * v;
+        const length = Math.hypot(px, py, pz) || 1;
+        const offset = (base + y * stride + x) * 3;
+        positions[offset] = (px / length) * radius;
+        positions[offset + 1] = (py / length) * radius;
+        positions[offset + 2] = (pz / length) * radius;
+
+        const packed =
+          tile.vc?.[y * stride + x] ?? FALLBACK_TERRAIN_COLORS[tile.t] ?? 0x3cc164;
+        const red = ((packed >> 16) & 0xff) / 255;
+        const green = ((packed >> 8) & 0xff) / 255;
+        const blue = (packed & 0xff) / 255;
+        colors[offset] = tint ? red * tint.r : red;
+        colors[offset + 1] = tint ? green * tint.g : green;
+        colors[offset + 2] = tint ? blue * tint.b : blue;
+      }
     }
+
+    for (let y = 0; y < scale; y++) {
+      for (let x = 0; x < scale; x++) {
+        const topLeft = base + y * stride + x;
+        const topRight = topLeft + 1;
+        const bottomLeft = topLeft + stride;
+        const bottomRight = bottomLeft + 1;
+        indices[indexCursor++] = topLeft;
+        indices[indexCursor++] = topRight;
+        indices[indexCursor++] = bottomRight;
+        indices[indexCursor++] = topLeft;
+        indices[indexCursor++] = bottomRight;
+        indices[indexCursor++] = bottomLeft;
+      }
+    }
+
+    vertexRanges[sector * 2] = base;
+    vertexRanges[sector * 2 + 1] = stride * stride;
+    vertexCursor += stride * stride;
   }
-  return { positions: new Float32Array(positions), colors: new Float32Array(colors) };
+
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new BufferAttribute(colors, 3));
+  geometry.setIndex(new BufferAttribute(indices, 1));
+  return { geometry, vertexRanges };
+};
+
+// Reused across picks so hover testing allocates nothing per frame.
+const pickSphere = new Sphere(new Vector3(0, 0, 0), 1);
+const pickPoint = new Vector3();
+
+/**
+ * Sector under a ray, or null off the globe and over the non-navigable polar
+ * caps. The sector grid is a uniform longitude/latitude layout, so the surface
+ * hit resolves arithmetically - no per-triangle raycast, and no dependency on
+ * how the terrain happens to be split into meshes.
+ */
+export const pickGlobeSector = (
+  raycaster: Raycaster,
+  hexasphere: GlobalMapData,
+): number | null => {
+  pickSphere.radius = hexasphere.radius / 3;
+  if (!raycaster.ray.intersectSphere(pickSphere, pickPoint)) return null;
+  const length = pickPoint.length() || 1;
+  const latitude = (Math.asin(pickPoint.y / length) * 180) / Math.PI;
+  const longitude = (Math.atan2(pickPoint.z, pickPoint.x) * 180) / Math.PI;
+  const sector = sectorAtGeographic(latitude, longitude);
+  return sector < 0 || sector >= hexasphere.tiles.length ? null : sector;
 };
 
 /**

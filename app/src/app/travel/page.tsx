@@ -667,7 +667,6 @@ export default function Travel() {
           userLocation={true}
           showOwnership={showOwnership && !userData?.tutorialOn}
           autoRotate={false}
-          markerOnlyInteraction={true}
           focusSector={focusSector}
           focusSectorLabel="Target"
           onTileClick={(sector) => {

@@ -1,4 +1,5 @@
 import {
+  MAP_NAVIGABLE_LATITUDE_LIMIT,
   MAP_TOTAL_SECTORS,
   MAP_WORLD_COLUMNS,
   MAP_WORLD_ROWS,
@@ -62,4 +63,22 @@ export const sectorGridEntryEdges = (
     neighbors[2] < 0 ? -1 : 0,
     neighbors[3] < 0 ? -1 : 1,
   ];
+};
+
+/**
+ * Sector covering a geographic position, or -1 for the non-navigable polar
+ * caps. Exact inverse of the generator's uniform longitude/latitude layout, so
+ * a point on the globe resolves to its sector arithmetically instead of by
+ * raycasting the rendered terrain.
+ */
+export const sectorAtGeographic = (latitude: number, longitude: number): number => {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return -1;
+  if (Math.abs(latitude) > MAP_NAVIGABLE_LATITUDE_LIMIT) return -1;
+  const latitudeStep = (MAP_NAVIGABLE_LATITUDE_LIMIT * 2) / MAP_WORLD_ROWS;
+  const row = Math.min(
+    MAP_WORLD_ROWS - 1,
+    Math.max(0, Math.floor((MAP_NAVIGABLE_LATITUDE_LIMIT - latitude) / latitudeStep)),
+  );
+  const column = Math.floor((longitude + 180) / (360 / MAP_WORLD_COLUMNS));
+  return sectorIdAt(column, row);
 };

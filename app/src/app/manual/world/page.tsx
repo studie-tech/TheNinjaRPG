@@ -71,7 +71,7 @@ export default function ManualWorld() {
             intersection={canEditMaps}
             hexasphere={globe}
             highlights={villages}
-            actionExplanation="Double click a sector to edit its map"
+            actionExplanation="Click a sector to edit its map"
             onTileClick={
               canEditMaps
                 ? (sector) => {
