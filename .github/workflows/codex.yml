@@ -204,7 +204,7 @@ jobs:
           openai-api-key: ${{ secrets.AZURE_API_KEY }}
           responses-api-endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           # Azure Responses API expects the deployment name here.
-          model: "gpt-5.4-2026-03-05"
+          model: "gpt-5.6-sol"
           # Needed for branch/commit/push/PR operations (.git writes).
           sandbox: "danger-full-access"
           # Blacksmith runners currently fail both drop-sudo and sudo-based user switching checks.
