@@ -5,7 +5,7 @@ import { type ClaimNextJobOutput, GameApi, TrpcError } from "./api";
 import { todayUtc, tokensUsedToday } from "./budget";
 import { detectAllClis } from "./clis";
 import { buildConnectUrl, generatePkce, generateState, type PkcePair } from "./oauth";
-import { canClaim, runJob } from "./runner";
+import { canClaim, runJob, terminateActiveAgent } from "./runner";
 import {
   appendHistory,
   clearToken,
@@ -508,10 +508,13 @@ export function startServer(port: number, log: (line: string) => void): Server {
   return {
     port: ctx.port,
     authToken: ctx.authToken,
-    stop: () => {
+    stop: async () => {
       if (ctx.autoRunTimer) clearTimeout(ctx.autoRunTimer);
       ctx.autoRunTimer = null;
       ctx.abortController?.abort();
+      // Aborting only signals the run; wait for the agent process itself to be
+      // gone before the sidecar exits, or it outlives us as an orphan.
+      await terminateActiveAgent();
       server.stop(true);
     },
   };
@@ -520,5 +523,5 @@ export function startServer(port: number, log: (line: string) => void): Server {
 export interface Server {
   port: number;
   authToken: string;
-  stop: () => void;
+  stop: () => Promise<void>;
 }

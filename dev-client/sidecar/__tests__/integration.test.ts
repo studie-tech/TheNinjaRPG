@@ -13,6 +13,7 @@ import { join } from "node:path";
 import superjson from "superjson";
 import { recordUsage, tokensUsedToday } from "../budget";
 import { sha256Base64Url } from "../oauth";
+import { terminateActiveAgent } from "../runner";
 import { type Server, startServer } from "../server";
 import { tokenPath } from "../state";
 import type { SerializedJob } from "../types";
@@ -161,6 +162,14 @@ for a in "$@"; do
 done
 echo "fake-claude args: $*" >> "$TNR_FAKE_DIR/claude-calls.log"
 [ -f "$TNR_FAKE_DIR/hang" ] && { sleep 30; exit 0; }
+# Stubborn mode: ignore SIGTERM so only SIGKILL can stop this process.
+if [ -f "$TNR_FAKE_DIR/stubborn" ]; then
+  trap '' TERM
+  echo $$ > "$TNR_FAKE_DIR/stubborn.pid"
+  # Redirect each sleep so no grandchild holds the stdout pipe open; only
+  # SIGKILL ends this loop.
+  while : ; do sleep 0.1 >/dev/null 2>&1; done
+fi
 echo '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"partial"}],"usage":{"input_tokens":100,"output_tokens":50}}}'
 echo '{"type":"result","result":"FAKE AGENT WRITE-UP","usage":{"input_tokens":111,"cache_creation_input_tokens":389,"cache_read_input_tokens":1000,"output_tokens":222}}'
 exit 0
@@ -585,6 +594,43 @@ test("abort stops a running job and reports the failure to the server", async ()
 
   const idle = await call("POST", "/jobs/abort");
   expect(idle.json<{ aborted: boolean }>().aborted).toBe(false);
+});
+
+const isAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+test("shutdown kills an agent that ignores SIGTERM", async () => {
+  writeFileSync(join(fakeDir, "stubborn"), "", "utf8");
+  rmSync(join(fakeDir, "stubborn.pid"), { force: true });
+  nextClaim = triageJob;
+  const claim = await call("POST", "/jobs/claim", { agent: "CLAUDE" });
+  expect(claim.json<{ claimed: boolean }>().claimed).toBe(true);
+
+  await waitFor(
+    async () => existsSync(join(fakeDir, "stubborn.pid")),
+    "the stubborn agent to start",
+  );
+  const pid = Number(readFileSync(join(fakeDir, "stubborn.pid"), "utf8").trim());
+  expect(pid).toBeGreaterThan(0);
+  expect(isAlive(pid)).toBe(true);
+
+  // SIGTERM alone cannot stop this agent, so terminateActiveAgent has to
+  // escalate — and must not resolve until the process is genuinely gone,
+  // otherwise shutdown would leave it orphaned holding a worktree.
+  await terminateActiveAgent(200);
+  expect(isAlive(pid)).toBe(false);
+
+  rmSync(join(fakeDir, "stubborn"), { force: true });
+  await waitFor(
+    async () => (await status()).run.phase === "failed",
+    "the job to settle after the kill",
+  );
 });
 
 test("sign-out revokes the token on the server and clears local state", async () => {

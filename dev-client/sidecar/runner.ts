@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { type GameApi, TrpcError } from "./api";
@@ -27,6 +27,34 @@ const AGENT_TIMEOUT_MS = 30 * 60 * 1000;
 const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000;
 // How long a terminated agent gets to exit before it is SIGKILLed.
 const KILL_GRACE_MS = 5_000;
+
+// The currently running agent CLI, if any. Tracked at module scope so shutdown
+// can wait for it to actually die: aborting the run only *asks* the agent to
+// stop, and an agent that ignores SIGTERM would otherwise be orphaned holding
+// a worktree open after the sidecar has already exited.
+let activeChild: ChildProcess | null = null;
+
+/**
+ * Terminate the running agent, if any, and resolve only once it has exited.
+ * SIGTERM first, then SIGKILL after the grace period.
+ */
+export async function terminateActiveAgent(
+  graceMs: number = KILL_GRACE_MS,
+): Promise<void> {
+  const child = activeChild;
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(force);
+      resolve();
+    };
+    const force = setTimeout(() => {
+      child.kill("SIGKILL");
+    }, graceMs);
+    child.once("close", done);
+    child.kill("SIGTERM");
+  });
+}
 
 export interface RunnerDeps {
   api: GameApi;
@@ -152,6 +180,10 @@ function runAgent(
 
   return new Promise((resolve) => {
     const child = spawn(cliPath, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    activeChild = child;
+    child.once("close", () => {
+      if (activeChild === child) activeChild = null;
+    });
     const lines: string[] = [];
     let stdout = "";
     let stderr = "";

@@ -145,12 +145,16 @@ fn terminate(mut child: Child) {
         unsafe {
             libc::kill(-pgid, libc::SIGTERM);
         }
+        // Give the sidecar time to abort its job and reap the agent CLI.
         for _ in 0..30 {
             if matches!(child.try_wait(), Ok(Some(_))) {
-                return;
+                break;
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
+        // Sweep the group unconditionally. The sidecar having exited does not
+        // prove the agent it spawned is gone, and an orphaned agent keeps a
+        // worktree open. ESRCH on an already-empty group is harmless.
         unsafe {
             libc::kill(-pgid, libc::SIGKILL);
         }

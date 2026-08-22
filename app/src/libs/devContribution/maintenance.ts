@@ -11,7 +11,7 @@
 // All network access is injectable for testing; the cron route passes the real
 // fetch + GITHUB_ISSUE_TOKEN.
 
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   CONTRIBUTION_CLARIFIED_LABEL,
   CONTRIBUTION_VERIFY_RETRY_MS,
@@ -217,6 +217,19 @@ export const resolvePendingVerifications = async (
       if (closed.rowsAffected === 1) {
         resolved += 1;
         if (reward) rewarded += 1;
+        if (verification.verified) {
+          // completeJob only bumps the leaderboard counter when GitHub confirms
+          // inline; work deferred to VERIFYING has to be counted here, or a
+          // transient GitHub failure would keep it off the leaderboard forever.
+          // Gated on the CAS above so it can only ever run once per job.
+          await db
+            .update(devContributionProfile)
+            .set({
+              totalJobsCompleted: sql`${devContributionProfile.totalJobsCompleted} + 1`,
+              updatedAt: new Date(),
+            })
+            .where(eq(devContributionProfile.userId, userId));
+        }
       }
     } catch (error) {
       errors.push(

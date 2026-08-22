@@ -12,10 +12,11 @@ import {
   userData,
 } from "@/drizzle/schema";
 import {
+  clearGithubVerificationNonce,
   consumeConnectCode,
-  consumeGithubVerificationNonce,
   DEVICE_TOKEN_TTL_MS,
   getDeviceTokenSecret,
+  readGithubVerificationNonce,
   revokeAllDeviceTokensForUser,
   revokeDeviceToken,
   signDeviceToken,
@@ -216,7 +217,7 @@ export const devContributionRouter = createTRPCRouter({
     .input(confirmGithubVerificationInput)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const nonce = await consumeGithubVerificationNonce(ctx.userId, input.githubLogin);
+      const nonce = await readGithubVerificationNonce(ctx.userId, input.githubLogin);
       if (!nonce) {
         return errorResponse(
           "No pending verification for that login. Request a new code first.",
@@ -227,8 +228,11 @@ export const devContributionRouter = createTRPCRouter({
         { token: process.env.GITHUB_ISSUE_TOKEN },
       );
       if (!check.ok) {
+        // Leave the nonce in place: the gist may simply not have propagated
+        // yet, and burning it would make the user restart the whole flow.
         return errorResponse(check.error ?? "Could not verify GitHub account");
       }
+      await clearGithubVerificationNonce(ctx.userId, input.githubLogin);
 
       await ensureProfile(ctx.drizzle, ctx.userId);
       await ctx.drizzle

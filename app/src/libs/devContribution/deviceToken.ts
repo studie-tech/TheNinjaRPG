@@ -273,13 +273,28 @@ export const storeGithubVerificationNonce = async (
   return nonce;
 };
 
-export const consumeGithubVerificationNonce = async (
+/**
+ * Read the pending nonce without consuming it. Verification can fail for
+ * reasons the user did not cause (the gist has not propagated yet, GitHub is
+ * down), so the nonce is only cleared once ownership is actually proven —
+ * otherwise a transient error would force the whole flow to restart.
+ */
+export const readGithubVerificationNonce = async (
   userId: string,
   login: string,
 ): Promise<string | null> => {
   const redis = Redis.fromEnv();
-  const stored = await redis.getdel(nonceKey(userId, login));
+  const stored = await redis.get(nonceKey(userId, login));
   return typeof stored === "string" && stored.length > 0 ? stored : null;
+};
+
+/** Drop a nonce once it has been successfully redeemed. */
+export const clearGithubVerificationNonce = async (
+  userId: string,
+  login: string,
+): Promise<void> => {
+  const redis = Redis.fromEnv();
+  await redis.del(nonceKey(userId, login));
 };
 
 // ---------------------------------------------------------------------------
