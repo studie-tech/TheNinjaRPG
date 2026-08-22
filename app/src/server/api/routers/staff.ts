@@ -1087,12 +1087,22 @@ export type staffRouter = inferRouterOutputs<typeof staffRouter>;
 
 /**
  * Check if an error is a MySQL deadlock error (errno 1213).
+ * Drizzle rethrows driver errors as DrizzleQueryError, whose message holds only the
+ * SQL and params, so the driver text has to be looked for down the cause chain.
  * @param error - The error to check.
  * @returns True if the error is a deadlock error.
  */
 const isDeadlockError = (error: unknown): boolean => {
-  if (error instanceof Error) {
-    return error.message.includes("Deadlock") || error.message.includes("errno 1213");
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
+    if (
+      current.message.includes("Deadlock") ||
+      current.message.includes("errno 1213") ||
+      current.message.includes("sqlstate 40001")
+    ) {
+      return true;
+    }
+    current = current.cause;
   }
   return false;
 };
