@@ -83,6 +83,36 @@ describe("createRetryingFetch", () => {
     expect(text).toBe(OK);
   });
 
+  it("does NOT retry a write whose fetch rejects", async () => {
+    // A rejected fetch says nothing about whether the statement reached the database,
+    // so re-issuing it could apply a money or XP increment twice.
+    const base = vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    });
+    const wrapped = createRetryingFetch(base as unknown as typeof fetch, {
+      baseDelayMs: 0,
+    });
+    await expect(
+      wrapped("https://example.test", { body: body(UPDATE) }),
+    ).rejects.toThrow(TypeError);
+    expect(base.mock.calls.length).toBe(1);
+  });
+
+  it("retries a read whose fetch rejects", async () => {
+    let calls = 0;
+    const base = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new TypeError("fetch failed");
+      return new Response(OK, { status: 200 });
+    });
+    const wrapped = createRetryingFetch(base as unknown as typeof fetch, {
+      baseDelayMs: 0,
+    });
+    const res = await wrapped("https://example.test", { body: body(SELECT) });
+    expect(await res.text()).toBe(OK);
+    expect(base.mock.calls.length).toBe(2);
+  });
+
   it("returns the last response instead of throwing once retries are exhausted", async () => {
     const base = flakyFetch(DEADLOCK, 99);
     const wrapped = createRetryingFetch(base, { baseDelayMs: 0, maxRetries: 2 });
