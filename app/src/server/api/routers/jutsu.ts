@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import {
   and,
   asc,
@@ -89,6 +88,7 @@ import {
   backfillLoadouts,
   fetchLoadoutUser,
 } from "@/server/utils/loadout";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedJutsuLoadouts } from "@/utils/paypal";
 import {
@@ -873,13 +873,9 @@ export const jutsuRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, input.userId),
       ]);
-      // Guard
-      if (!canEditJutsus(user.role)) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Not allowed to edit public user",
-        });
-      }
+      // Guard - the result only annotates jutsu names with levels, so a viewer
+      // without editing rights simply sees no levels
+      if (!canEditJutsus(user.role)) return [];
       // Return
       return results;
     }),
@@ -2343,13 +2339,18 @@ export const selectJutsuLoadout = async (
     equipIds.length > 0
       ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equipIds)} THEN 1 ELSE 0 END`
       : sql`0`;
-  await client.execute(sql`
-    UPDATE ${userData}
-    LEFT JOIN ${userJutsu} ON ${userJutsu.userId} = ${userData.userId}
-    SET ${userData.jutsuLoadout} = ${loadout.id},
-        ${userJutsu.equipped} = ${equippedAssignment}
-    WHERE ${userData.userId} = ${user.userId}
-  `);
+  // This locks the UserData row and every UserJutsu row of the user at once, while
+  // toggleEquip takes the same two tables in the opposite order. A deadlock victim is
+  // rolled back whole, so the statement is simply re-issued.
+  await retryOnDeadlock(() =>
+    client.execute(sql`
+      UPDATE ${userData}
+      LEFT JOIN ${userJutsu} ON ${userJutsu.userId} = ${userData.userId}
+      SET ${userData.jutsuLoadout} = ${loadout.id},
+          ${userJutsu.equipped} = ${equippedAssignment}
+      WHERE ${userData.userId} = ${user.userId}
+    `),
+  );
 
   const message =
     invalidJutsus.length > 0
@@ -2493,17 +2494,23 @@ export const rollbackEquipIfOverCap = async (args: {
   flags: JutsuCapFlags;
 }): Promise<boolean> => {
   const { client, userId, userJutsuId, maxEquip, flags } = args;
-  const rollback = await client
-    .update(userJutsu)
-    .set({ equipped: false })
-    .where(
-      and(
-        eq(userJutsu.id, userJutsuId),
-        eq(userJutsu.userId, userId),
-        eq(userJutsu.equipped, true),
-        equipCapRollbackGuardSql(userId, maxEquip, flags),
+  // The cap guard is a correlated self-SELECT over the user's other equipped rows, so a
+  // concurrent equip for the same user can deadlock this out. The guard re-evaluates on
+  // every attempt, so re-issuing the rolled-back statement keeps its compare-and-swap
+  // meaning intact.
+  const rollback = await retryOnDeadlock(() =>
+    client
+      .update(userJutsu)
+      .set({ equipped: false })
+      .where(
+        and(
+          eq(userJutsu.id, userJutsuId),
+          eq(userJutsu.userId, userId),
+          eq(userJutsu.equipped, true),
+          equipCapRollbackGuardSql(userId, maxEquip, flags),
+        ),
       ),
-    );
+  );
   return rollback.rowsAffected === 0;
 };
 
