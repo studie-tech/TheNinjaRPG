@@ -342,6 +342,27 @@ export default function Travel() {
     ];
   }, [villages]);
 
+  // Names for the sectors the player can already see marked on the globe, so
+  // the travel dialog can say where it is sending them rather than only which
+  // number. A hideout is named only for the faction that owns it, matching how
+  // the globe decides which hideout labels to draw.
+  const sectorNames = useMemo(() => {
+    const names = new Map<number, string>();
+    names.set(MAP_WAR_TORN_BATTLEGROUND_SECTOR, "War-Torn Battleground");
+    villages?.forEach((village) => {
+      if (village.type === "HIDEOUT" && userData?.clan?.villageId !== village.id)
+        return;
+      names.set(village.sector, village.mapName || village.name);
+    });
+    return names;
+  }, [villages, userData?.clan?.villageId]);
+
+  /** "sector 222 (Wake Island)", or just the number for empty wilderness. */
+  const describeSector = (sector: number) => {
+    const name = sectorNames.get(sector);
+    return name ? `sector ${sector} (${name})` : `sector ${sector}`;
+  };
+
   // Fetch tracked bounties for map display
   const { data: trackedBounties } = api.bounty.getTrackedBounties.useQuery(undefined, {
     enabled: !!userData,
@@ -1073,7 +1094,8 @@ export default function Travel() {
             {isStartingTravel && <Loader explanation="Preparing to Travel" />}
             {!isStartingTravel && (
               <div>
-                You are about to move from sector {userData.sector} to {targetSector}.{" "}
+                You are about to move from {describeSector(userData.sector)} to{" "}
+                {describeSector(targetSector)}.{" "}
                 <p className="py-2">
                   The travel time is estimated to be{" "}
                   {calcGlobalTravelTime(userData.sector, targetSector, globe)} seconds.
