@@ -103,14 +103,19 @@ export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
   const cookieStore = (window as Window & { cookieStore?: BrowserCookieStore })
     .cookieStore;
   if (cookieStore) {
-    void cookieStore.set({
-      name: LAYOUT_PREFERENCE_COOKIE,
-      value: layout,
-      path: "/",
-      expires,
-      sameSite: "lax",
-      secure,
-    });
+    void cookieStore
+      .set({
+        name: LAYOUT_PREFERENCE_COOKIE,
+        value: layout,
+        path: "/",
+        expires,
+        sameSite: "lax",
+        secure,
+      })
+      .catch(() => {
+        // Chrome rejects the Cookie Store write in some profiles; the document.cookie
+        // write above has already persisted the preference.
+      });
   }
 };
 
