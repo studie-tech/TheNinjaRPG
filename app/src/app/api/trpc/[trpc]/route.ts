@@ -22,7 +22,26 @@ const handler = async (req: NextRequest) => {
       return createAppTRPCContext({ req, readHeaders, readCookies });
     },
     onError: ({ error, path, input, ctx }) => {
-      if (!["UNAUTHORIZED", "TOO_MANY_REQUESTS"].includes(error.code)) {
+      // tRPC rejects a GET against a mutation path with METHOD_NOT_SUPPORTED before any
+      // resolver runs, and only crawlers reach it: httpBatchLink always POSTs mutations,
+      // so an anonymous caller is a bot ignoring the /api/ disallow in robots.ts and there
+      // is no user-facing failure to surface. An authenticated caller would mean genuine
+      // client/server skew, so those keep reporting here, and the client still surfaces
+      // them through the global error toast in _trpc/Provider.tsx.
+      const isCrawlerMethodRejection =
+        error.code === "METHOD_NOT_SUPPORTED" && !ctx?.userId;
+      // A Clerk session with no UserData row: character creation was never finished,
+      // or the character was deleted while the tab stayed open. profile.getUser
+      // answers with an undefined user for this state and the client forwards to
+      // /register, so the fetchUser guard firing elsewhere is expected.
+      const isUnregisteredUser =
+        error.code === "NOT_FOUND" &&
+        error.message.includes("Please complete registration.");
+      if (
+        !isCrawlerMethodRejection &&
+        !isUnregisteredUser &&
+        !["UNAUTHORIZED", "TOO_MANY_REQUESTS"].includes(error.code)
+      ) {
         logError(
           error,
           `❌ tRPC failed with ${error.code} on ${path ?? "<no-path>"}. Message: ${error.message}. Input: ${JSON.stringify(input)}. Stack: ${error.stack}`,

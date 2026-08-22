@@ -345,10 +345,13 @@ export const clanRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       // Query
       const [user, fetchedClan] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        }),
         fetchClan(ctx.drizzle, input.clanId),
       ]);
       // Guard
+      if (!user) return null;
       if (
         user.villageId === fetchedClan?.villageId ||
         fetchedClan?.id === user.clanId ||

@@ -15,7 +15,13 @@ Sentry.init({
   sampleRate: 1.0,
 
   // Which errors to ignore (synced with server config)
-  ignoreErrors: ["Unauthorized for tRPC endpoint", "You are acting too fast"],
+  ignoreErrors: [
+    "Unauthorized for tRPC endpoint",
+    "You are acting too fast",
+    // A Clerk session that has no UserData row, thrown by fetchUser. UX: the client
+    // forwards to /register off the undefined user from profile.getUser.
+    "Please complete registration.",
+  ],
 
   // Set the environment. NODE_ENV is "production" for every Vercel build, so
   // VERCEL_ENV is what separates production from preview deployments.

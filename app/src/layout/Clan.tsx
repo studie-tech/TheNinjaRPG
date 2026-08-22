@@ -1457,7 +1457,10 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
   const utils = api.useUtils();
 
   // Query
-  const { data: clanData } = api.clan.get.useQuery({ clanId: clanId });
+  const { data: clanData } = api.clan.get.useQuery(
+    { clanId: clanId },
+    { enabled: !!userData },
+  );
 
   // Success handler for reuse
   const onSuccess = async (data: BaseServerResponse) => {
@@ -1619,7 +1622,10 @@ export const ClanProfile: React.FC<ClanProfileProps> = (props) => {
   const { clanId, defaultBackHref } = props;
 
   // Queries
-  const { data: clanData } = api.clan.get.useQuery({ clanId: clanId });
+  const { data: clanData } = api.clan.get.useQuery(
+    { clanId: clanId },
+    { enabled: !!userData },
+  );
 
   // Two-level filtering
   const state = useFiltering("clan");

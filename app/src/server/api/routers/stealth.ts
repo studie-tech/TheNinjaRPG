@@ -8,7 +8,6 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
-  serverError,
 } from "../trpc";
 
 const pusher = getServerPusher();
@@ -57,7 +56,7 @@ export const stealthRouter = createTRPCRouter({
       });
 
       // Guard
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE")
         return errorResponse("Must be awake to activate stealth");
 
@@ -132,7 +131,7 @@ export const stealthRouter = createTRPCRouter({
       });
 
       // Guard
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return errorResponse("User not found");
       if (!user.stealthActive) return errorResponse("Stealth is not active");
 
       // Mutation
@@ -213,7 +212,7 @@ export const stealthRouter = createTRPCRouter({
       ]);
 
       // Guard
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake to use sensory");
       if (user.sector !== input.sector)
         return errorResponse("You are not in this sector");
@@ -335,7 +334,7 @@ export const stealthRouter = createTRPCRouter({
       });
 
       // Guard
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake to train");
       if (user.covertTrainingType) {
         return errorResponse("Already training covert skills");
@@ -408,7 +407,7 @@ export const stealthRouter = createTRPCRouter({
       });
 
       // Guard
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return errorResponse("User not found");
       if (!user.covertTrainingType)
         return errorResponse("Not currently training covert skills");
       if (!user.covertTrainingStartedAt || user.covertTrainingMinutes == null)
