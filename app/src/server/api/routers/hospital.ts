@@ -28,6 +28,7 @@ import {
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { findRelationship } from "@/utils/alliance";
 import { getStrucBoost } from "@/utils/village";
 
@@ -194,17 +195,23 @@ export const hospitalRouter = createTRPCRouter({
             })
             .where(eq(userData.userId, t.userId)),
           shareExp > 0
-            ? ctx.drizzle
-                .update(userData)
-                .set({
-                  medicalExperience: sql`${userData.medicalExperience} + ${shareExp}`,
-                })
-                .where(
-                  and(
-                    eq(userData.senseiId, u.userId),
-                    lte(userData.level, SENSEI_MAX_STUDENT_LEVEL),
+            ? // Resolves students through the senseiId index and locks each of their rows,
+              // while every other UserData writer takes the primary key directly. The
+              // increment is rolled back in full on a deadlock, so a re-issue cannot
+              // double-award the share.
+              retryOnDeadlock(() =>
+                ctx.drizzle
+                  .update(userData)
+                  .set({
+                    medicalExperience: sql`${userData.medicalExperience} + ${shareExp}`,
+                  })
+                  .where(
+                    and(
+                      eq(userData.senseiId, u.userId),
+                      lte(userData.level, SENSEI_MAX_STUDENT_LEVEL),
+                    ),
                   ),
-                )
+              )
             : null,
         ]);
         if (tResult.rowsAffected === 1) {

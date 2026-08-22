@@ -83,6 +83,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { isMysqlDeadlockError } from "@/server/utils/mysqlErrors";
 import {
   canClearSectors,
   canCloneUser,
@@ -1086,28 +1087,6 @@ export const staffRouter = createTRPCRouter({
 export type staffRouter = inferRouterOutputs<typeof staffRouter>;
 
 /**
- * Check if an error is a MySQL deadlock error (errno 1213).
- * Drizzle rethrows driver errors as DrizzleQueryError, whose message holds only the
- * SQL and params, so the driver text has to be looked for down the cause chain.
- * @param error - The error to check.
- * @returns True if the error is a deadlock error.
- */
-const isDeadlockError = (error: unknown): boolean => {
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
-    if (
-      current.message.includes("Deadlock") ||
-      current.message.includes("errno 1213") ||
-      current.message.includes("sqlstate 40001")
-    ) {
-      return true;
-    }
-    current = current.cause;
-  }
-  return false;
-};
-
-/**
  * Delay execution for a specified number of milliseconds.
  * @param ms - The number of milliseconds to delay.
  */
@@ -1131,7 +1110,7 @@ export const deleteUser = async (client: DrizzleClient, userId: string) => {
       await deleteUserInternal(client, userId);
       return;
     } catch (error) {
-      if (isDeadlockError(error) && attempt < MAX_RETRIES) {
+      if (isMysqlDeadlockError(error) && attempt < MAX_RETRIES) {
         // Exponential backoff with jitter: 300ms, 600ms, 1200ms, 2400ms, 4800ms, 9600ms...
         // Jitter (0-200ms) prevents thundering herd when multiple users retry simultaneously
         const jitter = Math.random() * MAX_JITTER_MS;
