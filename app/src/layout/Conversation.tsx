@@ -374,10 +374,11 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     userData?.userId,
   ]);
 
-  // Set the object_id to the conversation id
+  // Set the object_id to the conversation id, and drop quotes from the previous one
   useEffect(() => {
     if (conversation) {
       setValue("object_id", conversation.id);
+      setValue("quoteIds", null);
     }
   }, [conversation?.id]);
 

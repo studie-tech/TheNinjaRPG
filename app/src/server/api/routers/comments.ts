@@ -374,7 +374,7 @@ export const commentsRouter = createTRPCRouter({
         }))
         .sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
       // Return filtered conversations
-      return filteredConverations;
+      return filteredConverations ?? [];
     }),
   createConversation: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Create a new private conversation" } })
@@ -729,11 +729,9 @@ export const commentsRouter = createTRPCRouter({
       if (!convo.isEnabled && user.role === "USER") {
         return errorResponse("This conversation is currently disabled.");
       }
-      quotes.forEach((quote) => {
-        if (quote.conversationId !== convo.id) {
-          throw serverError("BAD_REQUEST", "Quote not found");
-        }
-      });
+      if (quotes.some((quote) => quote.conversationId !== convo.id)) {
+        return errorResponse("Quote not found");
+      }
 
       // Update conversation & update user notifications
       const commentId = nanoid();
