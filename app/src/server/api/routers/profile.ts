@@ -2879,16 +2879,6 @@ export const fetchPublicUsers = async (info: {
         return [desc(userData.nRecruited), desc(userData.experience)];
     }
   };
-  // An IP filter is an unindexed scan reserved for staff, so authorize the caller
-  // before running the query rather than discarding the result afterwards
-  if (input.ip) {
-    const requester = userId
-      ? await client.query.userData.findFirst({ where: eq(userData.userId, userId) })
-      : null;
-    if (!requester || !canSeeIps(requester.role)) {
-      throw serverError("FORBIDDEN", "You are not allowed to search IPs");
-    }
-  }
   const [users, user] = await Promise.all([
     client.query.userData.findMany({
       where: and(
@@ -2989,6 +2979,10 @@ export const fetchPublicUsers = async (info: {
         ]
       : [null]),
   ]);
+  // Guard
+  if (input.ip && (!user || !canSeeIps(user.role))) {
+    throw serverError("FORBIDDEN", "You are not allowed to search IPs");
+  }
   // Hide stuff
   users
     .filter((u) => !u.lastIp)
