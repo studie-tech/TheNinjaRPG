@@ -2490,11 +2490,14 @@ export const alignBattle = (
     refillActionPoints(battle);
     battle.round = actionRound;
     // console.log("Action round: ", actionRound);
+    // Effects can be persisted without passing through the pruning gate in
+    // applyEffects, so the counter must floor at 0; a negative value survives
+    // in the battle row and fails the tag schemas, which all require rounds >= 0.
     battle.usersEffects.forEach((e) => {
       if (e.rounds !== undefined) {
         if (!e.castThisRound) {
           // console.log(`Updating effect ${e.type} round ${e.rounds} -> ${e.rounds - 1}`);
-          e.rounds = e.rounds - 1;
+          e.rounds = Math.max(0, e.rounds - 1);
         }
         e.isNew = false;
         e.castThisRound = false;
@@ -2504,7 +2507,7 @@ export const alignBattle = (
       if (e.rounds !== undefined) {
         if (!e.castThisRound) {
           // console.log(`Updating effect ${e.type} round ${e.rounds} -> ${e.rounds - 1}`);
-          e.rounds = e.rounds - 1;
+          e.rounds = Math.max(0, e.rounds - 1);
         }
         e.isNew = false;
         e.castThisRound = false;
