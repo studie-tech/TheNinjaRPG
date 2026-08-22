@@ -626,6 +626,15 @@ test("shutdown kills an agent that ignores SIGTERM", async () => {
   await terminateActiveAgent(200);
   expect(isAlive(pid)).toBe(false);
 
+  // Calling it again once the child is already gone must return promptly
+  // rather than waiting on a `close` event that has already fired — otherwise
+  // shutdown blocks until its outer timeout.
+  const second = await Promise.race([
+    terminateActiveAgent(200).then(() => "resolved"),
+    new Promise((r) => setTimeout(() => r("hung"), 2000)),
+  ]);
+  expect(second).toBe("resolved");
+
   rmSync(join(fakeDir, "stubborn"), { force: true });
   await waitFor(
     async () => (await status()).run.phase === "failed",

@@ -33,6 +33,10 @@ const KILL_GRACE_MS = 5_000;
 // stop, and an agent that ignores SIGTERM would otherwise be orphaned holding
 // a worktree open after the sidecar has already exited.
 let activeChild: ChildProcess | null = null;
+// Resolves when `activeChild` closes. Created at spawn time so terminate never
+// has to check-then-listen: if the process dies in that gap the promise has
+// already settled, rather than the `close` event being missed forever.
+let activeExit: Promise<void> | null = null;
 
 /**
  * Terminate the running agent, if any, and resolve only once it has exited.
@@ -42,18 +46,21 @@ export async function terminateActiveAgent(
   graceMs: number = KILL_GRACE_MS,
 ): Promise<void> {
   const child = activeChild;
-  if (!child || child.exitCode !== null || child.signalCode !== null) return;
-  await new Promise<void>((resolve) => {
-    const done = () => {
-      clearTimeout(force);
-      resolve();
-    };
-    const force = setTimeout(() => {
-      child.kill("SIGKILL");
-    }, graceMs);
-    child.once("close", done);
+  const exited = activeExit;
+  if (!child || !exited) return;
+  if (child.exitCode === null && child.signalCode === null) {
     child.kill("SIGTERM");
-  });
+  }
+  const force = setTimeout(() => {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGKILL");
+    }
+  }, graceMs);
+  try {
+    await exited;
+  } finally {
+    clearTimeout(force);
+  }
 }
 
 export interface RunnerDeps {
@@ -181,8 +188,14 @@ function runAgent(
   return new Promise((resolve) => {
     const child = spawn(cliPath, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
     activeChild = child;
-    child.once("close", () => {
-      if (activeChild === child) activeChild = null;
+    activeExit = new Promise<void>((resolveExit) => {
+      child.once("close", () => {
+        if (activeChild === child) {
+          activeChild = null;
+          activeExit = null;
+        }
+        resolveExit();
+      });
     });
     const lines: string[] = [];
     let stdout = "";
@@ -247,7 +260,13 @@ function runAgent(
         lines.push(pending);
         pending = "";
       }
-      if (aborted) return;
+      // Re-check the live abort signal, not just the polled flag: the process
+      // can exit 0 in the window before the 1s poll notices, and treating that
+      // as success would post to GitHub and complete the job during shutdown.
+      if (aborted || isAborted()) {
+        finish(false, "Aborted by user");
+        return;
+      }
       if (code === 0) finish(true, null);
       else
         finish(
