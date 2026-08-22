@@ -127,6 +127,7 @@ import {
   canEditUsername,
   canEditVillage,
   canModifyUserBadges,
+  canOnlyEditSelf,
   canRemoveBloodlineFromPool,
   canSeeActivityEvents,
   canSeeIps,
@@ -1175,6 +1176,8 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
   // Logged-in user – determines editing permissions
   const { data: currentUser } = useUserData();
   const userRole = currentUser?.role || "USER";
+  // Roles limited to self-editing may not read another user's items
+  const restrictedToSelf = canOnlyEditSelf(userRole) && currentUser?.userId !== userId;
 
   // Permission checks
   const perms = {
@@ -1184,7 +1187,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
     canEditVillage: canEditVillage(userRole),
     canEditRank: canEditRank(userRole),
     canEditJutsus: canEditJutsus(userRole),
-    canEditItems: canEditItems(userRole),
+    canEditItems: canEditItems(userRole) && !restrictedToSelf,
     canEditStaffAccountFlag: canEditStaffAccountFlag(userRole),
     canEditQuests: canEditQuests(userRole),
     canEditUserRoles: canChangeUserRolesTo(userRole),
