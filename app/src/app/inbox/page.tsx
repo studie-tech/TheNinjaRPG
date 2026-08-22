@@ -335,7 +335,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
     resolver: zodResolver(userSearchSchema),
     defaultValues: {
       username: "",
-      users: [props.preSelectedUser],
+      users: props.preSelectedUser ? [props.preSelectedUser] : [],
     },
   });
 
@@ -361,11 +361,9 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
     defaultValue: [],
   });
   useEffect(() => {
-    if (users && users.length > 0) {
-      create.setValue(
-        "users",
-        users.map((u) => u.userId),
-      );
+    const selectedIds = (users ?? []).filter((u) => u?.userId).map((u) => u.userId);
+    if (selectedIds.length > 0) {
+      create.setValue("users", selectedIds);
     }
   }, [users, create]);
 
