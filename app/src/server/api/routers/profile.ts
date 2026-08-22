@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import {
   and,
   asc,
@@ -124,6 +125,7 @@ import { handleQuestConsequences, insertNextQuest } from "@/routers/quests";
 import { fetchVillage } from "@/routers/village";
 import { deleteUser } from "@/server/api/routers/staff";
 import type { DrizzleClient } from "@/server/db";
+import { isTransientDatabaseError } from "@/server/dbRetry";
 import { adjustSeichiSilverAtomically } from "@/server/utils/concurrency";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { getRandomElement } from "@/utils/array";
@@ -151,6 +153,7 @@ import {
   getApprovalGroup,
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
+import { withRetry } from "@/utils/retry";
 import sanitize from "@/utils/sanitize";
 import {
   getTimeOfLastReset,
@@ -2648,20 +2651,27 @@ export const fetchUpdatedUser = async (props: {
     }
   }
 
-  // Ensure that we have a tier quest
-  let questTier = user?.userQuests?.find((q) => q.quest.questType === "tier");
-  if (!questTier && user) {
-    questTier = await insertNextQuest(client, user, "tier");
-    if (questTier) {
-      forceRegen = true;
-    }
-  }
-
-  // Ensure that we have an exam quest
-  let questExam = user?.userQuests?.find((q) => q.quest.questType === "exam");
-  if (!questExam && user) {
-    questExam = await insertNextQuest(client, user, "exam");
-    if (questExam) {
+  // Ensure that we have tier & exam quests. These bootstraps only exist to hand the user their
+  // next quest, and they run on every user fetch, so a transient database error here must not
+  // fail the whole fetch; the next fetch retries the bootstrap.
+  if (user) {
+    const missingTypes = (["tier", "exam"] as const).filter(
+      (type) => !user.userQuests?.some((q) => q.quest.questType === type),
+    );
+    const inserted = await Promise.all(
+      missingTypes.map(async (type) => {
+        try {
+          return await insertNextQuest(client, user, type);
+        } catch (e) {
+          Sentry.captureException(e, {
+            level: "warning",
+            tags: { questBootstrap: type },
+          });
+          return undefined;
+        }
+      }),
+    );
+    if (inserted.some((entry) => entry !== undefined)) {
       forceRegen = true;
     }
   }
@@ -2709,13 +2719,23 @@ export const fetchUpdatedUser = async (props: {
         user.secondaryElement = getRandomElement(available) ?? null;
       }
       // Update database (pools, questData, etc.; village columns only when includeVillageState)
-      await persistPassiveRegenToDb({
-        client,
-        userId,
-        user,
-        userIp,
-        forceRegen: forceRegen ?? false,
-      });
+      try {
+        await persistPassiveRegenToDb({
+          client,
+          userId,
+          user,
+          userIp,
+          forceRegen: forceRegen ?? false,
+        });
+      } catch (error) {
+        // Regen is background bookkeeping and is already applied to the returned
+        // in-memory user, so a database blip here must not fail the query that
+        // happened to trigger it. The next request persists it instead.
+        Sentry.captureException(error, {
+          level: "warning",
+          tags: { source: "persistPassiveRegenToDb" },
+        });
+      }
     }
   }
   if (user) {
@@ -2821,10 +2841,16 @@ const persistPassiveRegenToDb = async ({
     userForRegenPersist,
   );
 
-  await client
-    .update(userData)
-    .set(derivedUserUpdate)
-    .where(eq(userData.userId, userId));
+  // buildDerivedUserRegenUpdate writes absolute values only, so re-issuing this
+  // after a dropped PlanetScale connection cannot double-apply anything.
+  const persistRegen = () =>
+    client.update(userData).set(derivedUserUpdate).where(eq(userData.userId, userId));
+  await withRetry(persistRegen, {
+    maxRetries: 2,
+    baseDelayMs: 50,
+    deadlineMs: 3000,
+    isTransient: isTransientDatabaseError,
+  });
 };
 
 export const fetchPublicUsers = async (info: {
@@ -2868,6 +2894,16 @@ export const fetchPublicUsers = async (info: {
         return [desc(userData.nRecruited), desc(userData.experience)];
     }
   };
+  // An IP filter is an unindexed scan reserved for staff, so authorize the caller
+  // before running the query rather than discarding the result afterwards
+  if (input.ip) {
+    const requester = userId
+      ? await client.query.userData.findFirst({ where: eq(userData.userId, userId) })
+      : null;
+    if (!requester || !canSeeIps(requester.role)) {
+      throw serverError("FORBIDDEN", "You are not allowed to search IPs");
+    }
+  }
   const [users, user] = await Promise.all([
     client.query.userData.findMany({
       where: and(
@@ -2968,10 +3004,6 @@ export const fetchPublicUsers = async (info: {
         ]
       : [null]),
   ]);
-  // Guard
-  if (input.ip && (!user || !canSeeIps(user.role))) {
-    throw serverError("FORBIDDEN", "You are not allowed to search IPs");
-  }
   // Hide stuff
   users
     .filter((u) => !u.lastIp)
