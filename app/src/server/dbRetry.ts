@@ -6,15 +6,24 @@ import { type RetryOptions, withRetry } from "@/utils/retry";
  * re-issuing it is safe - but only for statements that do not mutate data, since a
  * write could equally well have been applied before the connection died.
  *
+ * Cluster events land in the same bucket: while a primary is reparented, vtgate
+ * loses its healthcheck view of the shard and rejects the statement before routing
+ * it anywhere, which clears once the new primary is advertised.
+ *
  * Markers are taken verbatim from the errors PlanetScale returns, e.g.
  * "target: tnr.-.primary: vttablet: rpc error: code = Unavailable desc = error
- * reading from server: read tcp ...: read: connection reset by peer".
+ * reading from server: read tcp ...: read: connection reset by peer" and
+ * "target: tnr.-.primary: inconsistent state detected, primary is serving but
+ * initially found no available tablet".
  */
 const TRANSIENT_MARKERS = [
   "code = Unavailable",
   "connection reset by peer",
   "broken pipe",
   "unexpected EOF",
+  "inconsistent state detected",
+  "no available tablet",
+  "primary is not serving",
 ] as const;
 
 /** Statements that cannot change data, and are therefore safe to re-issue. */
@@ -56,6 +65,23 @@ export const isReadOnlyQuery = (query: string): boolean => {
 export const isTransientDatabaseResponse = (status: number, body: string): boolean => {
   if (status === 502 || status === 503 || status === 504) return true;
   return TRANSIENT_MARKERS.some((marker) => body.includes(marker));
+};
+
+/**
+ * Detect the same dropped connection on a thrown error, walking `.cause` because
+ * Drizzle wraps the driver's `DatabaseError`. Writes are never retried by the
+ * fetch wrapper above, so a call site that knows its statement is idempotent -
+ * absolute values only, or a guard that makes a re-apply a no-op - opts in with
+ * this detector instead.
+ */
+export const isTransientDatabaseError = (error: unknown): boolean => {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
+    const { message, cause } = current;
+    if (TRANSIENT_MARKERS.some((marker) => message.includes(marker))) return true;
+    current = cause;
+  }
+  return false;
 };
 
 interface DriverRequest {

@@ -45,6 +45,7 @@ import { initiateBattle } from "@/routers/combat";
 import { fetchUser } from "@/routers/profile";
 import { breakStealth } from "@/routers/stealth";
 import { fetchSector, fetchSectorVillage } from "@/routers/village";
+import { isTransientDatabaseError } from "@/server/dbRetry";
 import {
   fetchPublishedSectorMap,
   getSectorNeighborIds,
@@ -52,6 +53,7 @@ import {
 } from "@/server/utils/sectorMap";
 import { findRelationship } from "@/utils/alliance";
 import { groupBy } from "@/utils/grouping";
+import { withRetry } from "@/utils/retry";
 import { secondsFromNow } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
 import { sectorIdSchema, startGlobalMoveSchema } from "@/validators/travel";
@@ -577,14 +579,24 @@ export const travelRouter = createTRPCRouter({
       }
       user.status = "AWAKE";
       user.travelFinishAt = null;
-      // Only broadcast if user is NOT stealthed
+      // Fixed values behind a status guard, so re-issuing after a dropped
+      // PlanetScale connection is a harmless no-op
+      const finishTravel = () =>
+        ctx.drizzle
+          .update(userData)
+          .set({ status: "AWAKE", travelFinishAt: null })
+          .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "TRAVEL")));
+      await withRetry(finishTravel, {
+        maxRetries: 2,
+        baseDelayMs: 50,
+        deadlineMs: 3000,
+        isTransient: isTransientDatabaseError,
+      });
+      // Broadcast only once the arrival is committed, and only if the user is
+      // NOT stealthed, so the map never announces a move the database rejected
       if (!isUserCurrentlyStealthed(user)) {
         void updateUserOnMap(pusher, user.sector, user);
       }
-      await ctx.drizzle
-        .update(userData)
-        .set({ status: "AWAKE", travelFinishAt: null })
-        .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "TRAVEL")));
       return { success: true, message: "OK" };
     }),
   // Get all sector ownership
@@ -760,7 +772,7 @@ export const travelRouter = createTRPCRouter({
               destination,
             );
       // Optimistic update & query simultaneously
-      const [user, result, sectorVillage] = await Promise.all([
+      const moveOutcome = await Promise.all([
         ctx.drizzle.query.userData.findFirst({
           where: eq(userData.userId, userId),
           with: { anbuSquad: true },
@@ -798,7 +810,17 @@ export const travelRouter = createTRPCRouter({
               where: eq(village.sector, targetSector),
             })
           : undefined,
-      ]);
+      ]).catch((error: unknown) => {
+        // The CAS guard makes a blind retry unsafe: a re-issue after the first
+        // attempt already applied would match zero rows. Degrade to an ordinary
+        // failed response, which the client already clears its target on.
+        if (isTransientDatabaseError(error)) return null;
+        throw error;
+      });
+      if (!moveOutcome) {
+        return errorResponse("Connection hiccup, please try moving again");
+      }
+      const [user, result, sectorVillage] = moveOutcome;
       // Check if move was successful
       if (result.rowsAffected === 1) {
         // Check for encounters / village defence
