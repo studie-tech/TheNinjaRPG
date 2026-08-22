@@ -10,18 +10,58 @@ import { describe, expect, it } from "vitest";
 
 const ROUTERS_DIR = join(import.meta.dirname, "..", "routers");
 
+/**
+ * Blanks out string and template literals and comments so that parentheses inside
+ * them - `z.string().default(")")` - do not throw the depth count off.
+ */
+const blankNonCode = (source: string) => {
+  const out = source.split("");
+  let i = 0;
+  while (i < source.length) {
+    const ch = source[i];
+    const next = source[i + 1];
+    let close: string | undefined;
+    let escapes = false;
+    if (ch === '"' || ch === "'" || ch === "`") {
+      close = ch;
+      escapes = true;
+    } else if (ch === "/" && next === "/") {
+      close = "\n";
+    } else if (ch === "/" && next === "*") {
+      close = "*/";
+    }
+    if (!close) {
+      i++;
+      continue;
+    }
+    let j = i + (close.length > 1 || escapes ? 1 : 2);
+    while (j < source.length) {
+      if (escapes && source[j] === "\\") {
+        j += 2;
+        continue;
+      }
+      if (source.startsWith(close, j)) break;
+      out[j] = " ";
+      j++;
+    }
+    i = j + close.length;
+  }
+  return out.join("");
+};
+
 /** `.input(z.object( ... ))` followed immediately by a bare `.optional()`. */
 const findBareOptionalInputs = (source: string) => {
   const offenders: number[] = [];
+  const scannable = blankNonCode(source);
   const opener = /\.input\(\s*z\.object\(/g;
-  for (const match of source.matchAll(opener)) {
+  for (const match of scannable.matchAll(opener)) {
     let depth = 0;
-    for (let i = match.index + match[0].length - 1; i < source.length; i++) {
-      if (source[i] === "(") depth++;
-      else if (source[i] === ")") {
+    for (let i = match.index + match[0].length - 1; i < scannable.length; i++) {
+      if (scannable[i] === "(") depth++;
+      else if (scannable[i] === ")") {
         depth--;
         if (depth === 0) {
-          if (source.slice(i + 1).startsWith(".optional()")) {
+          if (scannable.slice(i + 1).startsWith(".optional()")) {
             offenders.push(source.slice(0, match.index).split("\n").length);
           }
           break;
@@ -33,6 +73,34 @@ const findBareOptionalInputs = (source: string) => {
 };
 
 const routerFiles = readdirSync(ROUTERS_DIR).filter((f) => f.endsWith(".ts"));
+
+describe("the optional-input scanner", () => {
+  it("sees through a parenthesis inside a string literal", () => {
+    expect(
+      findBareOptionalInputs(
+        '.input(z.object({ label: z.string().default(")") }).optional())',
+      ),
+    ).toEqual([1]);
+  });
+
+  it("accepts .nullish()", () => {
+    expect(
+      findBareOptionalInputs('.input(z.object({ label: z.string() }).nullish())'),
+    ).toEqual([]);
+  });
+
+  it("ignores commented-out code", () => {
+    expect(
+      findBareOptionalInputs("// .input(z.object({ a: z.string() }).optional())"),
+    ).toEqual([]);
+  });
+
+  it("reports the line the input starts on", () => {
+    expect(
+      findBareOptionalInputs("a\nb\n.input(z.object({ a: z.string() }).optional())"),
+    ).toEqual([3]);
+  });
+});
 
 describe("tRPC procedure inputs", () => {
   it("has router files to check", () => {

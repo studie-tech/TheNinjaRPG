@@ -2654,25 +2654,21 @@ export const fetchUpdatedUser = async (props: {
   // Ensure that we have tier & exam quests. These bootstraps only exist to hand the user their
   // next quest, and they run on every user fetch, so a transient database error here must not
   // fail the whole fetch; the next fetch retries the bootstrap.
+  // They run in sequence, not in parallel: insertNextQuest mutates user.userQuests and
+  // persists its own questData snapshot, so concurrent inserts overwrite each other.
   if (user) {
-    const missingTypes = (["tier", "exam"] as const).filter(
-      (type) => !user.userQuests?.some((q) => q.quest.questType === type),
-    );
-    const inserted = await Promise.all(
-      missingTypes.map(async (type) => {
-        try {
-          return await insertNextQuest(client, user, type);
-        } catch (e) {
-          Sentry.captureException(e, {
-            level: "warning",
-            tags: { questBootstrap: type },
-          });
-          return undefined;
+    for (const questType of ["tier", "exam"] as const) {
+      if (user.userQuests?.some((q) => q.quest.questType === questType)) continue;
+      try {
+        if (await insertNextQuest(client, user, questType)) {
+          forceRegen = true;
         }
-      }),
-    );
-    if (inserted.some((entry) => entry !== undefined)) {
-      forceRegen = true;
+      } catch (e) {
+        Sentry.captureException(e, {
+          level: "warning",
+          tags: { questBootstrap: questType },
+        });
+      }
     }
   }
 

@@ -9,7 +9,7 @@ import {
   QueryClientProvider,
 } from "@tanstack/react-query";
 import { httpBatchLink, loggerLink, retryLink, TRPCClientError } from "@trpc/client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
@@ -102,15 +102,16 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
   // previous account's cache when a different one signs in.
   const { user } = useUser();
   const clerkUserId = user?.id;
+  // Cleared during render rather than in an effect: an effect runs after the children
+  // have already rendered, which is one render too late to keep the previous account's
+  // user out of them.
   const lastClerkUserId = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (!clerkUserId) return;
-    const previous = lastClerkUserId.current;
+  if (clerkUserId && lastClerkUserId.current && lastClerkUserId.current !== clerkUserId) {
+    queryClient.clear();
+  }
+  if (clerkUserId) {
     lastClerkUserId.current = clerkUserId;
-    if (previous && previous !== clerkUserId) {
-      queryClient.clear();
-    }
-  }, [clerkUserId, queryClient]);
+  }
   return (
     <api.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>
