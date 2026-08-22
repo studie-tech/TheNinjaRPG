@@ -297,15 +297,32 @@ export const activityStreakRouter = createTRPCRouter({
         return errorResponse("Not enough currency to purchase this event pass");
       }
 
-      // Create progress entry
-      await ctx.drizzle.insert(userStreakProgress).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        configId: config.id,
-        currentDay: 0,
-        lastClaimDate: null,
-        startedAt: new Date(),
-      });
+      // Create progress entry. A concurrent purchase may have won the unique-index
+      // race after the currency was deducted, so refund rather than charging for a
+      // pass this caller never received.
+      const insertResult = await ctx.drizzle
+        .insert(userStreakProgress)
+        .values({
+          id: nanoid(),
+          userId: ctx.userId,
+          configId: config.id,
+          currentDay: 0,
+          lastClaimDate: null,
+          startedAt: new Date(),
+        })
+        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+
+      if (insertResult.rowsAffected === 0) {
+        await ctx.drizzle
+          .update(userData)
+          .set({
+            money: sql`${userData.money} + ${config.ryoCost}`,
+            reputationPoints: sql`${userData.reputationPoints} + ${config.repsCost}`,
+            seichiSilver: sql`${userData.seichiSilver} + ${config.seichiSilverCost}`,
+          })
+          .where(eq(userData.userId, ctx.userId));
+        return errorResponse("You already own this event pass");
+      }
 
       // Build cost message
       const costs: string[] = [];
@@ -363,25 +380,28 @@ export const activityStreakRouter = createTRPCRouter({
       // Get or create progress entry
       let progress = existingProgress;
 
-      // For RECURRING: auto-create progress if doesn't exist
+      // For RECURRING: auto-create progress if doesn't exist. Concurrent first
+      // claims can both reach this branch, so tolerate the row already existing and
+      // read back whichever insert won; the lastClaimDate guard below then rejects
+      // the loser with a normal error response.
       if (!progress && config.streakType === "RECURRING") {
-        const newProgressId = nanoid();
-        await ctx.drizzle.insert(userStreakProgress).values({
-          id: newProgressId,
-          userId: ctx.userId,
-          configId: config.id,
-          currentDay: 0,
-          lastClaimDate: null,
-          startedAt: new Date(),
+        await ctx.drizzle
+          .insert(userStreakProgress)
+          .values({
+            id: nanoid(),
+            userId: ctx.userId,
+            configId: config.id,
+            currentDay: 0,
+            lastClaimDate: null,
+            startedAt: new Date(),
+          })
+          .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+        progress = await ctx.drizzle.query.userStreakProgress.findFirst({
+          where: and(
+            eq(userStreakProgress.userId, ctx.userId),
+            eq(userStreakProgress.configId, config.id),
+          ),
         });
-        progress = {
-          id: newProgressId,
-          userId: ctx.userId,
-          configId: config.id,
-          currentDay: 0,
-          lastClaimDate: null,
-          startedAt: new Date(),
-        };
       }
 
       // Guard: must have progress (for EVENT_PASS, means must be purchased)
