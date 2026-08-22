@@ -2382,6 +2382,7 @@ const Sector: React.FC<SectorProps> = (props) => {
             lastTime: lastTime,
             angle: userAngle,
             minBracket: minBracketDrawRef.current,
+            selfUserId: userRef.current.userId,
           });
           lastTime = Date.now();
           endUsers();
