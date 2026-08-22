@@ -64,7 +64,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           appearance={{
             variables: {
               colorPrimary: "#ce7e00",
-              colorText: "black",
+              colorForeground: "black",
             },
           }}
         >
