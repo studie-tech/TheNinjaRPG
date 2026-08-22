@@ -99,7 +99,7 @@ export const miscRouter = createTRPCRouter({
     }),
   getAllGameAssetNames: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get all game asset names" } })
-    .input(z.object({ ids: z.array(z.string()) }).optional())
+    .input(z.object({ ids: z.array(z.string()) }).nullish())
     .query(async ({ ctx, input }) => {
       return await fetchGameAssets(ctx.drizzle, input?.ids);
     }),

@@ -1431,7 +1431,7 @@ export const itemRouter = createTRPCRouter({
           "Merge all mergeable item stacks in carried inventory (storedAtHome=false) or home storage (storedAtHome=true)",
       },
     })
-    .input(z.object({ storedAtHome: z.boolean().optional() }).optional())
+    .input(z.object({ storedAtHome: z.boolean().optional() }).nullish())
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const storedAtHome = input?.storedAtHome ?? false;

@@ -527,7 +527,7 @@ export const skillTreeRouter = createTRPCRouter({
   // Get all folders (with optional hidden filter for admins)
   getAllFolders: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get all skill tree folders" } })
-    .input(z.object({ includeHidden: z.boolean().optional() }).optional())
+    .input(z.object({ includeHidden: z.boolean().optional() }).nullish())
     .query(async ({ ctx, input }) => {
       // Run queries in parallel for efficiency
       const [userResult, folders] = await Promise.all([
