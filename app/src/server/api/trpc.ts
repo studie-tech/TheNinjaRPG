@@ -81,16 +81,26 @@ export const createAppTRPCContext = async (options: {
       if (secret) {
         const nowMs = Date.now();
         const verified = verifyDeviceToken(secret, bearer, nowMs);
-        if (
-          verified.ok &&
-          (await isDeviceTokenActive({
-            jti: verified.jti,
-            userId: verified.userId,
-            iat: verified.iat,
-          }))
-        ) {
-          userId = verified.userId;
-          deviceTokenJti = verified.jti;
+        if (verified.ok) {
+          // isDeviceTokenActive fails closed (it throws) when Redis is
+          // unreachable, which is right for revocation but must not take down
+          // the request: this branch runs for ANY signed-out request carrying
+          // an Authorization header, so letting it escape would 500 ordinary
+          // visitors. Treat the failure as "this token does not authenticate".
+          let active = false;
+          try {
+            active = await isDeviceTokenActive({
+              jti: verified.jti,
+              userId: verified.userId,
+              iat: verified.iat,
+            });
+          } catch {
+            active = false;
+          }
+          if (active) {
+            userId = verified.userId;
+            deviceTokenJti = verified.jti;
+          }
         }
       }
     }

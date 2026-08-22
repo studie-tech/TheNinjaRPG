@@ -78,7 +78,9 @@ function openInBrowser(url: string): void {
   if (process.env.TNR_DEV_CLIENT_NO_BROWSER) return;
   const command =
     platform() === "darwin" ? "open" : platform() === "win32" ? "cmd" : "xdg-open";
-  const args = platform() === "win32" ? ["/c", "start", "", url] : [url];
+  // cmd.exe splits an unquoted URL at every `&`, and the connect URL is all
+  // query parameters. The empty "" is the window title `start` expects first.
+  const args = platform() === "win32" ? ["/c", "start", "", `"${url}"`] : [url];
   spawn(command, args, { stdio: "ignore", detached: true }).unref();
 }
 
@@ -289,7 +291,10 @@ async function handleClaim(
   ctx.abortController = new AbortController();
   ctx.log(`Claimed job ${job.id}`);
 
-  // Run in the background; progress is observable via /status.
+  // Run in the background; progress is observable via /status. Everything in
+  // here is wrapped: an escaping rejection would leave run.phase stuck on
+  // "agent", which the UI shows as a job that never ends and which canClaim
+  // treats as still running, so every later claim would be refused.
   void (async () => {
     const setPhase = (phase: RunPhase) => {
       ctx.run = { ...ctx.run, phase };
@@ -345,7 +350,17 @@ async function handleClaim(
         void handleClaim(ctx, agent);
       }, 5000);
     }
-  })();
+  })().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.log(`Job runner crashed: ${message}`);
+    ctx.abortController = null;
+    ctx.run = {
+      ...ctx.run,
+      phase: "failed",
+      finishedAt: Date.now(),
+      error: message,
+    };
+  });
 
   return { claimed: true };
 }

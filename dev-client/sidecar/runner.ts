@@ -27,6 +27,9 @@ const AGENT_TIMEOUT_MS = 30 * 60 * 1000;
 const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000;
 // How long a terminated agent gets to exit before it is SIGKILLed.
 const KILL_GRACE_MS = 5_000;
+// Absolute cap on waiting for a killed agent, so a process that somehow
+// survives SIGKILL (uninterruptible IO) cannot wedge the run loop.
+const KILL_WAIT_MAX_MS = 10_000;
 
 // The currently running agent CLI, if any. Tracked at module scope so shutdown
 // can wait for it to actually die: aborting the run only *asks* the agent to
@@ -57,7 +60,11 @@ export async function terminateActiveAgent(
     }
   }, graceMs);
   try {
-    await exited;
+    // Bounded: shutdown must complete even if the process cannot be reaped.
+    await Promise.race([
+      exited,
+      new Promise<void>((r) => setTimeout(r, graceMs + KILL_WAIT_MAX_MS)),
+    ]);
   } finally {
     clearTimeout(force);
   }
@@ -188,8 +195,11 @@ function runAgent(
   return new Promise((resolve) => {
     const child = spawn(cliPath, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
     activeChild = child;
+    // "exit" fires when the process itself is gone. "close" additionally waits
+    // for its stdio to drain, which a grandchild that inherited the pipe can
+    // hold open long after the agent is dead — that would stall shutdown.
     activeExit = new Promise<void>((resolveExit) => {
-      child.once("close", () => {
+      child.once("exit", () => {
         if (activeChild === child) {
           activeChild = null;
           activeExit = null;
@@ -209,16 +219,33 @@ function runAgent(
       clearTimeout(timeout);
       clearInterval(pollAbort);
       if (!ok) {
-        child.kill("SIGTERM");
-        // An agent that traps SIGTERM would otherwise keep running — and keep
-        // writing into the worktree the caller is about to delete.
-        const sigkill = setTimeout(() => {
-          if (child.exitCode === null && child.signalCode === null) {
-            child.kill("SIGKILL");
-          }
-        }, KILL_GRACE_MS);
-        sigkill.unref?.();
-        child.once("close", () => clearTimeout(sigkill));
+        // Do NOT resolve yet. runJob's finally tears the worktree down with
+        // `git worktree remove --force` + rmSync, so resolving while the agent
+        // is still alive races a process that can keep writing there. Wait for
+        // "exit" (the process is gone) rather than "close" (its stdio drained,
+        // which a grandchild holding the pipe can delay indefinitely), and cap
+        // the whole wait so teardown can never hang.
+        if (child.exitCode === null && child.signalCode === null) {
+          const done = () => {
+            clearTimeout(sigkill);
+            clearTimeout(deadline);
+            resolve({ ok, output: stdout, lines, error });
+          };
+          const sigkill = setTimeout(() => {
+            if (child.exitCode === null && child.signalCode === null) {
+              child.kill("SIGKILL");
+            }
+          }, KILL_GRACE_MS);
+          const deadline = setTimeout(() => {
+            child.removeListener("exit", done);
+            resolve({ ok, output: stdout, lines, error });
+          }, KILL_WAIT_MAX_MS);
+          sigkill.unref?.();
+          deadline.unref?.();
+          child.once("exit", done);
+          child.kill("SIGTERM");
+          return;
+        }
       }
       resolve({ ok, output: stdout, lines, error });
     };

@@ -29,6 +29,11 @@ export interface CmdResult {
   stderr: string;
 }
 
+// Well above MAX_DIFF_CHARS: the default 1 MiB makes execFile error out on a
+// large `gh pr diff` before we get the chance to truncate it ourselves, which
+// surfaced as "Could not read the pull request diff" on big PRs.
+const EXEC_MAX_BUFFER_BYTES = 32 * 1024 * 1024;
+
 export const execFileAsync = (
   file: string,
   args: string[],
@@ -38,7 +43,11 @@ export const execFileAsync = (
     execFile(
       file,
       args,
-      { timeout: opts?.timeout ?? 120_000, cwd: opts?.cwd },
+      {
+        timeout: opts?.timeout ?? 120_000,
+        cwd: opts?.cwd,
+        maxBuffer: EXEC_MAX_BUFFER_BYTES,
+      },
       (error, stdout, stderr) => {
         resolve({
           ok: !error,

@@ -296,8 +296,10 @@ beforeAll(async () => {
   sidecar = startServer(0, () => {});
 }, 30_000);
 
-afterAll(() => {
-  sidecar?.stop();
+afterAll(async () => {
+  // stop() is async (it awaits terminateActiveAgent), so the rmSync calls below
+  // would otherwise delete these directories out from under a live agent.
+  await sidecar?.stop();
   rmSync(repoDir, { recursive: true, force: true });
   delete process.env.TNR_DEV_CLIENT_HOME;
   delete process.env.TNR_DEV_CLIENT_NO_BROWSER;

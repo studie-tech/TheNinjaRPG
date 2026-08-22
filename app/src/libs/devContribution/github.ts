@@ -36,7 +36,17 @@ export interface GithubVerifyResult {
 
 export type FetchImpl = (url: string, init?: RequestInit) => Promise<Response>;
 
-export const ghFetch: FetchImpl = (url, init) => fetch(url, init);
+// Every caller runs on a serverless handler (the completeJob path and the
+// 10-minute cron). Without a bound, a stalled GitHub connection burns the whole
+// invocation instead of failing fast — and an AbortError is classified as
+// retryable, so the deferred-verification path simply tries again next tick.
+export const GITHUB_REQUEST_TIMEOUT_MS = 10_000;
+
+export const ghFetch: FetchImpl = (url, init) =>
+  fetch(url, {
+    ...init,
+    signal: init?.signal ?? AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+  });
 
 export const ghHeaders = (token: string | undefined) => ({
   Accept: "application/vnd.github+json",

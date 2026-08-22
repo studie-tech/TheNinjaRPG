@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import type { Agent, CliInfo } from "./types";
 
@@ -40,8 +40,14 @@ const execFileAsync = (
 
 export const defaultCliProbe: CliProbe = {
   which: async (command) => {
-    const { ok, stdout } = await execFileAsync("which", [command]);
-    return ok && stdout ? stdout : null;
+    // `which` does not exist on Windows; `where` does, and it can return
+    // several matches, so take the first line.
+    const isWindows = platform() === "win32";
+    const { ok, stdout } = await execFileAsync(isWindows ? "where" : "which", [
+      command,
+    ]);
+    if (!ok || !stdout) return null;
+    return stdout.split(/\r?\n/)[0]?.trim() || null;
   },
   exists: (path) => existsSync(path),
   runVersion: async (path) => {

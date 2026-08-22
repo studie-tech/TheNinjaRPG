@@ -57,10 +57,22 @@ fn sidecar_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
         .path()
         .resolve("", tauri::path::BaseDirectory::Resource)
         .map_err(|error| error.to_string())?;
-    let path = dir.join("tnr-dev-client");
-    #[cfg(windows)]
-    let path = path.with_extension("exe");
-    Ok(path)
+    // The bundler writes whatever name tauri.conf.json's resource map gives it,
+    // and `bun build --compile` appends .exe on Windows. Accept either rather
+    // than assuming, so a packaged build cannot look for a name that was never
+    // written (which silently leaves the app unable to start its sidecar).
+    let plain = dir.join("tnr-dev-client");
+    let exe = dir.join("tnr-dev-client.exe");
+    if plain.exists() {
+        return Ok(plain);
+    }
+    if exe.exists() {
+        return Ok(exe);
+    }
+    Err(format!(
+        "sidecar not found in the resource directory ({})",
+        dir.display()
+    ))
 }
 
 fn lock_state(state: &SidecarState) -> Result<std::sync::MutexGuard<'_, Option<Child>>, String> {

@@ -39,6 +39,11 @@ export interface GameApiOptions {
 
 const ROUTER = "devContribution";
 
+// A stalled socket must not wedge the run loop: heartbeat and claimNextJob are
+// called from runJob, so an unbounded request would hang the job until the
+// server expires the claim as stale.
+export const REQUEST_TIMEOUT_MS = 30_000;
+
 export class GameApi {
   private readonly getApiBase: () => string;
   private readonly getDeviceToken: () => string | null;
@@ -60,10 +65,12 @@ export class GameApi {
     const token = this.getDeviceToken();
     if (token) headers.authorization = `Bearer ${token}`;
 
+    const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
     let res: Response;
     if (kind === "mutation") {
       res = await this.fetchImpl(`${base}/api/trpc/${ROUTER}.${procedure}`, {
         method: "POST",
+        signal,
         headers:
           input === undefined
             ? headers
@@ -78,6 +85,7 @@ export class GameApi {
       res = await this.fetchImpl(`${base}/api/trpc/${ROUTER}.${procedure}${query}`, {
         method: "GET",
         headers,
+        signal,
       });
     }
 

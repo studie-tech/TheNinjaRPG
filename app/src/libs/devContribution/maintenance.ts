@@ -14,6 +14,7 @@
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   CONTRIBUTION_CLARIFIED_LABEL,
+  CONTRIBUTION_VERIFY_BATCH_SIZE,
   CONTRIBUTION_VERIFY_RETRY_MS,
   CONTRIBUTION_VERIFY_WINDOW_MS,
   GITHUB_API_ENDPOINT,
@@ -150,7 +151,8 @@ export const resolvePendingVerifications = async (
     .select()
     .from(devJob)
     .where(eq(devJob.status, "VERIFYING"))
-    .limit(200);
+    .orderBy(devJob.updatedAt)
+    .limit(CONTRIBUTION_VERIFY_BATCH_SIZE);
   if (pending.length === 0) return { resolved: 0, rewarded: 0, errors };
 
   const userIds = [...new Set(pending.map((j) => j.claimedByUserId).filter(Boolean))];

@@ -2967,6 +2967,12 @@ export const CONTRIBUTION_CLOCK_SKEW_MS = 5 * 60 * 1000;
 export const CONTRIBUTION_VERIFY_RETRY_MS = 6 * 60 * 60 * 1000;
 // Pages of GitHub results to walk when looking for a contribution result.
 export const CONTRIBUTION_GITHUB_MAX_PAGES = 10;
+// How many VERIFYING jobs one maintenance tick may resolve. Each one can walk
+// several pages of the GitHub API, so an unbounded batch risks blowing the
+// serverless duration limit (leaving the rest unresolved) or tripping GitHub's
+// secondary rate limits. The cron runs every 10 minutes, so the backlog drains
+// quickly at this size.
+export const CONTRIBUTION_VERIFY_BATCH_SIZE = 25;
 
 // Priority used to order job creation / backfill (higher first). Implementation
 // work is the highest value, then reviews, then triage follow-ups.

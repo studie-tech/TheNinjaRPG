@@ -115,34 +115,42 @@ export async function POST(request: NextRequest) {
     const isContributionRepo = repoSlug === GITHUB_REPO_SLUG.toLowerCase();
 
     // Dev contribution job creation (issues + pull_request events).
-    if (isContributionRepo && data.issue && eventType === "issues") {
-      await processContributionIssueEvent(drizzleDB, {
-        number: data.issue.number,
-        title: data.issue.title ?? `Issue #${data.issue.number}`,
-        labels: (data.issue.labels ?? []).map((l) => l.name),
-        body: data.issue.body,
-        html_url: data.issue.html_url,
-        state: data.issue.state,
-        action: data.action,
-        authorLogin: data.issue.user?.login,
-      });
-    }
+    //
+    // Kept off the support-ticket path: a failure here must not return 500,
+    // because that both skips handleIssueClosed below and makes GitHub redeliver
+    // the event, replaying the contribution processing.
+    try {
+      if (isContributionRepo && data.issue && eventType === "issues") {
+        await processContributionIssueEvent(drizzleDB, {
+          number: data.issue.number,
+          title: data.issue.title ?? `Issue #${data.issue.number}`,
+          labels: (data.issue.labels ?? []).map((l) => l.name),
+          body: data.issue.body,
+          html_url: data.issue.html_url,
+          state: data.issue.state,
+          action: data.action,
+          authorLogin: data.issue.user?.login,
+        });
+      }
 
-    if (isContributionRepo && data.pull_request && eventType === "pull_request") {
-      const headOwner = data.pull_request.head?.repo?.owner?.login?.toLowerCase();
-      const baseOwner = data.pull_request.base?.repo?.owner?.login?.toLowerCase();
-      await processContributionPullRequestEvent(drizzleDB, {
-        number: data.pull_request.number,
-        title: data.pull_request.title ?? `PR #${data.pull_request.number}`,
-        labels: (data.pull_request.labels ?? []).map((l) => l.name),
-        body: data.pull_request.body,
-        html_url: data.pull_request.html_url,
-        state: data.pull_request.state,
-        action: data.action,
-        authorLogin: data.pull_request.user?.login ?? "",
-        authorIsBot: data.pull_request.user?.type === "Bot",
-        isCrossFork: !!headOwner && !!baseOwner && headOwner !== baseOwner,
-      });
+      if (isContributionRepo && data.pull_request && eventType === "pull_request") {
+        const headOwner = data.pull_request.head?.repo?.owner?.login?.toLowerCase();
+        const baseOwner = data.pull_request.base?.repo?.owner?.login?.toLowerCase();
+        await processContributionPullRequestEvent(drizzleDB, {
+          number: data.pull_request.number,
+          title: data.pull_request.title ?? `PR #${data.pull_request.number}`,
+          labels: (data.pull_request.labels ?? []).map((l) => l.name),
+          body: data.pull_request.body,
+          html_url: data.pull_request.html_url,
+          state: data.pull_request.state,
+          action: data.action,
+          authorLogin: data.pull_request.user?.login ?? "",
+          authorIsBot: data.pull_request.user?.type === "Bot",
+          isCrossFork: !!headOwner && !!baseOwner && headOwner !== baseOwner,
+        });
+      }
+    } catch (error) {
+      console.error("[github-webhook] dev-contribution processing failed:", error);
     }
 
     // Only handle issue events
