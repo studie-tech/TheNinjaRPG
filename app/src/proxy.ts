@@ -141,9 +141,10 @@ export default clerkMiddleware(
 export const config = {
   matcher: [
     /*
-     * Skip Next internals, legacy static files, and any file-like path. Unmatched
-     * URLs render through global-not-found.tsx without the Clerk-dependent root
-     * layout, so missing assets and scanner probes remain cheap 404 responses.
+     * Skip Next internals, legacy static files, and any file-like path. URLs with no
+     * matching route render through global-not-found.tsx without the Clerk-dependent
+     * root layout, so missing assets and scanner probes remain cheap 404 responses.
+     * Paths that do resolve to a route are re-added explicitly below.
      */
     "/((?!api(?:/|$)|trpc(?:/|$)|_next(?:/|$)|static(?:/|$)|[^?]*\\.[^/?]+).*)",
     /*
@@ -154,13 +155,26 @@ export const config = {
      */
     "/login(.*)",
     "/signup(.*)",
-    "/manual/damage_calcs(.*)",
+    /*
+     * Dynamic route params legitimately contain dots: usernames, IP addresses, and
+     * hotlinked "profile.gif" URLs. Those routes resolve, so they render the
+     * Clerk-dependent root layout and must not be skipped as file-like paths.
+     */
+    "/username/:path*",
+    "/userid/:path*",
+    "/users/:path*",
+    "/forum/:path*",
+    "/reports/:path*",
+    "/support/:path*",
+    "/battlelog/:path*",
+    "/anbu/:path*",
+    "/clanhall/:path*",
+    "/conceptart/:path*",
+    "/manual/:path*",
     // Only route handlers that call Clerk's server helpers need its context.
     "/api/trpc/(.*)",
     "/api/chat/:path*",
     "/api/uploadthing(.*)",
-    // The IP parameter legitimately contains dots.
-    "/users/ipsearch/:path*",
     // MCP OAuth endpoints intentionally bypass Clerk auth in the callback above.
     "/.well-known/oauth-authorization-server(.*)",
     "/.well-known/oauth-protected-resource(.*)",
