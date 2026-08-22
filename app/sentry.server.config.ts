@@ -3,6 +3,7 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
+import { UNREGISTERED_USER_ERROR } from "@/utils/error";
 
 Sentry.init({
   dsn: "https://c35c54f99b73b4a3b8a7e60936bc2967@o4507797256601600.ingest.de.sentry.io/4507797262958672",
@@ -20,7 +21,7 @@ Sentry.init({
     // A Clerk session that has no UserData row, thrown by fetchUser. UX: profile.getUser
     // returns an undefined user for this state, so useRequiredUserData forwards to "/",
     // which HomeLanding sends on to /register - no blank screen and no stuck loader.
-    "Please complete registration.",
+    UNREGISTERED_USER_ERROR,
     // Stale client after a deployment: the router state tree's last element used
     // to be a boolean and is now a number, so a browser still running the
     // previous build fails Next's schema check on every RSC request. UX: the

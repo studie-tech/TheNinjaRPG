@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 import type { NextRequest } from "next/server";
 import { appRouter } from "@/api/root";
 import { createAppTRPCContext } from "@/api/trpc";
+import { isUnregisteredUserError } from "@/utils/error";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -35,8 +36,7 @@ const handler = async (req: NextRequest) => {
       // answers with an undefined user for this state and the client forwards to
       // /register, so the fetchUser guard firing elsewhere is expected.
       const isUnregisteredUser =
-        error.code === "NOT_FOUND" &&
-        error.message.includes("Please complete registration.");
+        error.code === "NOT_FOUND" && isUnregisteredUserError(error.message);
       if (
         !isCrawlerMethodRejection &&
         !isUnregisteredUser &&

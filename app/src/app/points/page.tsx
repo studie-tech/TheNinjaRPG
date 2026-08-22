@@ -870,6 +870,11 @@ const SubscriptionsOverview = () => {
 
 /**
  * Transaction History component
+ *
+ * Omitting userId shows the signed-in user's own history: the server falls back to the
+ * session id, so the client never sends an id for a self view and a stale cached profile
+ * cannot be mistaken for another account. Callers viewing someone else must pass a
+ * definite id - passing an undefined one silently shows the viewer their own history.
  */
 export const TransactionHistory: React.FC<{ userId?: string }> = (props) => {
   const { userId } = props;

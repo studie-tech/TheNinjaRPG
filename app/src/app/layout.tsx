@@ -2,6 +2,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { MultisessionAppSupport } from "@clerk/nextjs/internal";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleTagManager } from "@next/third-parties/google";
+import * as Sentry from "@sentry/nextjs";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
@@ -37,8 +38,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const readCookies = await cookies();
   // A path the proxy matcher misses reaches here without Clerk context and auth()
   // throws. Fall back to the signed-out shell so ClerkProvider can still hydrate the
-  // session on the client instead of the whole render failing.
-  const authResult = await auth().catch(() => null);
+  // session on the client instead of the whole render failing - but keep reporting it,
+  // because a genuine Clerk outage would otherwise silently sign everyone out.
+  const authResult = await auth().catch((error: unknown) => {
+    Sentry.captureException(error, {
+      level: "warning",
+      tags: { source: "rootLayoutAuth" },
+    });
+    return null;
+  });
   const initialIsSignedIn = !!authResult?.userId;
   const initialLayout =
     cookieValueToLayout(readCookies.get(LAYOUT_PREFERENCE_COOKIE)?.value) ??
