@@ -98,7 +98,8 @@ import { fetchSectorVillage } from "@/routers/village";
 import { fetchActiveWars } from "@/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
-import { getRandomElement } from "@/utils/array";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { chunkArray, getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
   canAwardReputation,
@@ -267,7 +268,7 @@ export const questsRouter = createTRPCRouter({
           )
           .orderBy(asc(quest.name)),
       ]);
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return [];
       events.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });
@@ -324,7 +325,7 @@ export const questsRouter = createTRPCRouter({
           .orderBy(asc(quest.name)),
         fetchActiveWars(ctx.drizzle, input.villageId),
       ]);
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return [];
       const villageInWar = activeWars.length > 0;
       const filtered = missions.filter((e) => {
         if (e.questType === "war" && !villageInWar) return false;
@@ -369,7 +370,7 @@ export const questsRouter = createTRPCRouter({
           )
           .orderBy(asc(quest.name)),
       ]);
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return [];
       quests.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });
@@ -597,9 +598,7 @@ export const questsRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
-      if (!user) {
-        throw serverError("PRECONDITION_FAILED", "User does not exist");
-      }
+      if (!user) return errorResponse("User does not exist");
       const current = user?.userQuests?.find((q) => q.questId === input.id && !q.endAt);
       if (!current) {
         return { success: true, message: `Quest already abandoned` };
@@ -1181,7 +1180,7 @@ export const questsRouter = createTRPCRouter({
         ]);
       // Guard
       if (!user) {
-        throw serverError("PRECONDITION_FAILED", "User does not exist");
+        return { success: false, notifications: [] };
       }
 
       // Get updated quest information
@@ -1304,9 +1303,7 @@ export const questsRouter = createTRPCRouter({
         hideInformation: false,
       });
       // Guard
-      if (!user) {
-        throw serverError("PRECONDITION_FAILED", "User does not exist");
-      }
+      if (!user) return errorResponse("User does not exist");
       // Get updated quest information with start_battle task and retry flag
       const { notifications, consequences } = getNewTrackers(user, [
         { task: "start_battle", text: "retry" },
@@ -2013,6 +2010,9 @@ export const fetchUncompletedQuests = async (
     .filter((q) => !q.hidden || canPlayHiddenQuests(user.role));
 };
 
+/** Row locks the bulk quest reset may hold in one statement. */
+const QUEST_RESET_BATCH_SIZE = 100;
+
 /** Upsert quest entries for all users by selector. NOTE: selector determined which users get updated/inserted entries */
 export const upsertQuestEntries = async (
   client: DrizzleClient,
@@ -2055,18 +2055,26 @@ export const upsertQuestEntries = async (
     .from(userData)
     .where(updateSelector);
   if (allUsers.length > 0) {
-    await client
-      .update(questHistory)
-      .set({ completed: 0, endAt: null, startedAt: new Date() })
-      .where(
-        and(
-          inArray(
-            questHistory.userId,
-            allUsers.map((user) => user.userId),
+    // One statement over every eligible user held hundreds of QuestHistory row locks
+    // while ordinary quest traffic wrote the same table through its unique key, and the
+    // daily reset lost the resulting lock cycle. Bounded batches run sequentially so the
+    // reset never contends with itself either, and share one timestamp so a batch that
+    // has to be retried still stamps what the rest of the reset did.
+    const startedAt = new Date();
+    const batches = chunkArray(
+      allUsers.map((user) => user.userId),
+      QUEST_RESET_BATCH_SIZE,
+    );
+    for (const batch of batches) {
+      await retryOnDeadlock(() =>
+        client
+          .update(questHistory)
+          .set({ completed: 0, endAt: null, startedAt })
+          .where(
+            and(inArray(questHistory.userId, batch), eq(questHistory.questId, quest.id)),
           ),
-          eq(questHistory.questId, quest.id),
-        ),
       );
+    }
   }
 };
 
@@ -2530,11 +2538,36 @@ export const upsertQuestEntry = async (
   return entry;
 };
 
+/**
+ * Whether any quest content of a given type exists at all, cached per server instance. Without
+ * this, bootstrapping a type that has no content re-runs the full availability join on every
+ * single user fetch and can never match. New content is picked up on the next expiry.
+ */
+const QUEST_TYPE_CONTENT_TTL = 5 * 60 * 1000;
+const questTypeContentCache = new Map<QuestType, { exists: boolean; checkedAt: number }>();
+
+const questTypeHasContent = async (client: DrizzleClient, type: QuestType) => {
+  const now = Date.now();
+  const cached = questTypeContentCache.get(type);
+  if (cached && now - cached.checkedAt < QUEST_TYPE_CONTENT_TTL) {
+    return cached.exists;
+  }
+  const rows = await client
+    .select({ id: quest.id })
+    .from(quest)
+    .where(eq(quest.questType, type))
+    .limit(1);
+  const exists = rows.length > 0;
+  questTypeContentCache.set(type, { exists, checkedAt: now });
+  return exists;
+};
+
 export const insertNextQuest = async (
   client: DrizzleClient,
   user: NonNullable<UserWithRelations>,
   type: QuestType,
 ) => {
+  if (!(await questTypeHasContent(client, type))) return undefined;
   const history = await fetchUncompletedQuests(client, user, type);
   const nextQuest = history?.[0];
   if (nextQuest) {
