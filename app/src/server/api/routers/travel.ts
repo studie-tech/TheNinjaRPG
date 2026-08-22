@@ -53,7 +53,6 @@ import {
 } from "@/server/utils/sectorMap";
 import { findRelationship } from "@/utils/alliance";
 import { groupBy } from "@/utils/grouping";
-import { withRetry } from "@/utils/retry";
 import { secondsFromNow } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
 import { sectorIdSchema, startGlobalMoveSchema } from "@/validators/travel";
@@ -579,19 +578,10 @@ export const travelRouter = createTRPCRouter({
       }
       user.status = "AWAKE";
       user.travelFinishAt = null;
-      // Fixed values behind a status guard, so re-issuing after a dropped
-      // PlanetScale connection is a harmless no-op
-      const finishTravel = () =>
-        ctx.drizzle
-          .update(userData)
-          .set({ status: "AWAKE", travelFinishAt: null })
-          .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "TRAVEL")));
-      await withRetry(finishTravel, {
-        maxRetries: 2,
-        baseDelayMs: 50,
-        deadlineMs: 3000,
-        isTransient: isTransientDatabaseError,
-      });
+      await ctx.drizzle
+        .update(userData)
+        .set({ status: "AWAKE", travelFinishAt: null })
+        .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "TRAVEL")));
       // Broadcast only once the arrival is committed, and only if the user is
       // NOT stealthed, so the map never announces a move the database rejected
       if (!isUserCurrentlyStealthed(user)) {

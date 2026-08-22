@@ -125,7 +125,6 @@ import { handleQuestConsequences, insertNextQuest } from "@/routers/quests";
 import { fetchVillage } from "@/routers/village";
 import { deleteUser } from "@/server/api/routers/staff";
 import type { DrizzleClient } from "@/server/db";
-import { isTransientDatabaseError } from "@/server/dbRetry";
 import { adjustSeichiSilverAtomically } from "@/server/utils/concurrency";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { getRandomElement } from "@/utils/array";
@@ -153,7 +152,6 @@ import {
   getApprovalGroup,
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
-import { withRetry } from "@/utils/retry";
 import sanitize from "@/utils/sanitize";
 import {
   getTimeOfLastReset,
@@ -2837,16 +2835,7 @@ const persistPassiveRegenToDb = async ({
     userForRegenPersist,
   );
 
-  // buildDerivedUserRegenUpdate writes absolute values only, so re-issuing this
-  // after a dropped PlanetScale connection cannot double-apply anything.
-  const persistRegen = () =>
-    client.update(userData).set(derivedUserUpdate).where(eq(userData.userId, userId));
-  await withRetry(persistRegen, {
-    maxRetries: 2,
-    baseDelayMs: 50,
-    deadlineMs: 3000,
-    isTransient: isTransientDatabaseError,
-  });
+  await client.update(userData).set(derivedUserUpdate).where(eq(userData.userId, userId));
 };
 
 export const fetchPublicUsers = async (info: {
