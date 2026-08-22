@@ -68,6 +68,34 @@ export const isTransientDatabaseResponse = (status: number, body: string): boole
 };
 
 /**
+ * A deadlock is not ambiguous the way a dropped connection is: InnoDB picks a victim
+ * and rolls it back in full before returning errno 1213, so nothing of the statement
+ * was applied and re-issuing it is safe even when it writes, increments a counter, or
+ * carries a compare-and-swap guard whose predicate simply re-evaluates.
+ *
+ * Markers are taken verbatim from what PlanetScale returns, e.g. "target:
+ * tnr.-.primary: vttablet: rpc error: code = Aborted desc = Deadlock found when trying
+ * to get lock; try restarting transaction (errno 1213)".
+ */
+const DEADLOCK_MARKERS = ["Deadlock found", "errno 1213", "sqlstate 40001"] as const;
+
+/** Detect a deadlock in a PlanetScale HTTP response body. */
+export const isDeadlockResponse = (body: string): boolean =>
+  DEADLOCK_MARKERS.some((marker) => body.includes(marker));
+
+/**
+ * Whether a response is worth re-issuing. A deadlock is safe to retry whatever the
+ * statement did; a dropped connection only for reads, since a write may have been
+ * applied before the connection died.
+ */
+export const isRetryableResponse = (
+  status: number,
+  body: string,
+  readOnly: boolean,
+): boolean =>
+  isDeadlockResponse(body) || (readOnly && isTransientDatabaseResponse(status, body));
+
+/**
  * Detect the same dropped connection on a thrown error, walking `.cause` because
  * Drizzle wraps the driver's `DatabaseError`. Writes are never retried by the
  * fetch wrapper above, so a call site that knows its statement is idempotent -
@@ -118,16 +146,21 @@ const parseDriverRequest = (
 };
 
 /**
- * Wrap `fetch` so that read-only PlanetScale queries survive a dropped
- * connection instead of surfacing as a user-visible tRPC error.
+ * Wrap `fetch` so that PlanetScale queries survive a dropped connection or a lost
+ * deadlock instead of surfacing as a user-visible tRPC error.
  *
- * Writes are passed straight through: a mutation may have been applied before
- * the connection reset, and this codebase grants money/XP through non-idempotent
+ * A dropped connection is only retried for reads: a mutation may have been applied
+ * before the reset, and this codebase grants money/XP through non-idempotent
  * increments, so a blind retry could double-apply a reward.
  *
- * Statements inside a transaction are also passed through. A reset aborts the
+ * A deadlock is retried whatever the statement was. InnoDB rolls the victim back in
+ * full before reporting errno 1213, so re-issuing cannot double-apply - which is why
+ * every mutation gets this for free rather than each call site opting in.
+ *
+ * Statements inside a transaction are passed straight through. A reset aborts the
  * transaction server-side, so re-issuing the read would run it outside the
- * transaction's snapshot - `paypal.ts` depends on that isolation.
+ * transaction's snapshot (`paypal.ts` depends on that isolation), and a deadlock rolls
+ * the whole transaction back, so replaying one statement would lose the rest.
  *
  * When every attempt fails the final response is returned unchanged, so the
  * driver still raises its normal `DatabaseError` and callers behave as before.
@@ -138,9 +171,10 @@ export const createRetryingFetch = (
 ): typeof fetch => {
   return async (input, init) => {
     const request = parseDriverRequest(init?.body);
-    if (!request || request.inTransaction || !isReadOnlyQuery(request.query)) {
+    if (!request || request.inTransaction) {
       return baseFetch(input, init);
     }
+    const readOnly = isReadOnlyQuery(request.query);
 
     let lastResponse: { body: string; status: number; headers: Headers } | null = null;
 
@@ -166,7 +200,7 @@ export const createRetryingFetch = (
             headers: response.headers,
           };
           lastResponse = snapshot;
-          if (isTransientDatabaseResponse(snapshot.status, snapshot.body)) {
+          if (isRetryableResponse(snapshot.status, snapshot.body, readOnly)) {
             throw new TransientDatabaseError("Transient PlanetScale error");
           }
           return rebuild(snapshot);

@@ -88,7 +88,6 @@ import {
   backfillLoadouts,
   fetchLoadoutUser,
 } from "@/server/utils/loadout";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedJutsuLoadouts } from "@/utils/paypal";
 import {
@@ -2340,17 +2339,15 @@ export const selectJutsuLoadout = async (
       ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equipIds)} THEN 1 ELSE 0 END`
       : sql`0`;
   // This locks the UserData row and every UserJutsu row of the user at once, while
-  // toggleEquip takes the same two tables in the opposite order. A deadlock victim is
-  // rolled back whole, so the statement is simply re-issued.
-  await retryOnDeadlock(() =>
-    client.execute(sql`
-      UPDATE ${userData}
-      LEFT JOIN ${userJutsu} ON ${userJutsu.userId} = ${userData.userId}
-      SET ${userData.jutsuLoadout} = ${loadout.id},
-          ${userJutsu.equipped} = ${equippedAssignment}
-      WHERE ${userData.userId} = ${user.userId}
-    `),
-  );
+  // toggleEquip takes the same two tables in the opposite order. The driver-level
+  // retry in dbRetry.ts re-issues whichever of the two loses the deadlock.
+  await client.execute(sql`
+    UPDATE ${userData}
+    LEFT JOIN ${userJutsu} ON ${userJutsu.userId} = ${userData.userId}
+    SET ${userData.jutsuLoadout} = ${loadout.id},
+        ${userJutsu.equipped} = ${equippedAssignment}
+    WHERE ${userData.userId} = ${user.userId}
+  `);
 
   const message =
     invalidJutsus.length > 0
@@ -2495,22 +2492,20 @@ export const rollbackEquipIfOverCap = async (args: {
 }): Promise<boolean> => {
   const { client, userId, userJutsuId, maxEquip, flags } = args;
   // The cap guard is a correlated self-SELECT over the user's other equipped rows, so a
-  // concurrent equip for the same user can deadlock this out. The guard re-evaluates on
-  // every attempt, so re-issuing the rolled-back statement keeps its compare-and-swap
-  // meaning intact.
-  const rollback = await retryOnDeadlock(() =>
-    client
-      .update(userJutsu)
-      .set({ equipped: false })
-      .where(
-        and(
-          eq(userJutsu.id, userJutsuId),
-          eq(userJutsu.userId, userId),
-          eq(userJutsu.equipped, true),
-          equipCapRollbackGuardSql(userId, maxEquip, flags),
-        ),
+  // concurrent equip for the same user can deadlock this out. The driver-level retry
+  // re-issues it, and the guard re-evaluates on that attempt, so the compare-and-swap
+  // keeps its meaning.
+  const rollback = await client
+    .update(userJutsu)
+    .set({ equipped: false })
+    .where(
+      and(
+        eq(userJutsu.id, userJutsuId),
+        eq(userJutsu.userId, userId),
+        eq(userJutsu.equipped, true),
+        equipCapRollbackGuardSql(userId, maxEquip, flags),
       ),
-  );
+    );
   return rollback.rowsAffected === 0;
 };
 

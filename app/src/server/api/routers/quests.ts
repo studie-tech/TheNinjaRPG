@@ -98,7 +98,6 @@ import { fetchSectorVillage } from "@/routers/village";
 import { fetchActiveWars } from "@/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { chunkArray, getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -2066,14 +2065,12 @@ export const upsertQuestEntries = async (
       QUEST_RESET_BATCH_SIZE,
     );
     for (const batch of batches) {
-      await retryOnDeadlock(() =>
-        client
-          .update(questHistory)
-          .set({ completed: 0, endAt: null, startedAt })
-          .where(
-            and(inArray(questHistory.userId, batch), eq(questHistory.questId, quest.id)),
-          ),
-      );
+      await client
+        .update(questHistory)
+        .set({ completed: 0, endAt: null, startedAt })
+        .where(
+          and(inArray(questHistory.userId, batch), eq(questHistory.questId, quest.id)),
+        );
     }
   }
 };
