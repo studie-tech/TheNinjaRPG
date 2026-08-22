@@ -35,8 +35,11 @@ import "sonner/dist/styles.css";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const readCookies = await cookies();
-  const { userId } = await auth();
-  const initialIsSignedIn = !!userId;
+  // A path the proxy matcher misses reaches here without Clerk context and auth()
+  // throws. Fall back to the signed-out shell so ClerkProvider can still hydrate the
+  // session on the client instead of the whole render failing.
+  const authResult = await auth().catch(() => null);
+  const initialIsSignedIn = !!authResult?.userId;
   const initialLayout =
     cookieValueToLayout(readCookies.get(LAYOUT_PREFERENCE_COOKIE)?.value) ??
     cookieValueToLayout(readCookies.get(AB_PIXEL_LAYOUT_COOKIE)?.value) ??
