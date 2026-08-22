@@ -10,7 +10,21 @@ sudo yum install -y git python3 gcc
 # fails at require() with "supports only Node.js 14, 16 and 18", so pm2 cannot
 # start soketi. Upstream's own images are Node 16 (soketi:1.6-16-debian).
 # Revisit only when soketi ships a uWebSockets.js build for a current Node ABI.
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh | bash
+# The installer is pinned to the immutable commit behind tag v0.40.7 and checked
+# against its digest before running, so a moved tag cannot swap the script out.
+# Both values change together whenever nvm is bumped.
+NVM_COMMIT="f0b0c6bb0b281ceeb106c8cf9ab8fde141215092"
+NVM_INSTALLER_SHA256="066ce4eaf4d78eaa6410433bc9ba58faaba646157cbbed6109153e6c24c5f8a5"
+nvm_installer="$(mktemp)"
+curl -fsSL -o "$nvm_installer" \
+  "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_COMMIT}/install.sh"
+if ! echo "${NVM_INSTALLER_SHA256}  ${nvm_installer}" | sha256sum -c - >/dev/null 2>&1; then
+  echo "nvm installer digest mismatch - refusing to run it" >&2
+  rm -f "$nvm_installer"
+  exit 1
+fi
+bash "$nvm_installer"
+rm -f "$nvm_installer"
 . ~/.nvm/nvm.sh
 nvm install 18
 nvm use 18
