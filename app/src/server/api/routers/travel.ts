@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import type { inferRouterOutputs } from "@trpc/server";
 import { and, asc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
 import {
@@ -582,10 +583,10 @@ export const travelRouter = createTRPCRouter({
         .update(userData)
         .set({ status: "AWAKE", travelFinishAt: null })
         .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "TRAVEL")));
-      // Broadcast only once the arrival is committed, and only if the user is
-      // NOT stealthed, so the map never announces a move the database rejected
+      // Deferred, not voided: the broadcast now runs after the write rather than
+      // before it, so nothing else keeps the invocation alive long enough to finish it.
       if (!isUserCurrentlyStealthed(user)) {
-        void updateUserOnMap(pusher, user.sector, user);
+        after(() => updateUserOnMap(pusher, user.sector, user));
       }
       return { success: true, message: "OK" };
     }),
