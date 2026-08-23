@@ -10,6 +10,7 @@ import {
   isProxyError as isProxyErrorPattern,
   isSafariJsonError as isSafariJsonErrorPattern,
   type StackFrame,
+  isExtensionExecutorStack,
 } from "@/utils/error";
 
 Sentry.init({
@@ -116,6 +117,12 @@ Sentry.init({
     }
     if (isThirdPartyInjectedError(event)) {
       return null; // Drop errors from injected scripts (e.g. Facebook/Cookiebot)
+    }
+    if (isExtensionExecutorError(event)) {
+      // Drop errors whose whole stack is a browser extension's executors/<n>.js bundle.
+      // UX: nothing of ours runs in that stack, so there is no app behaviour to fix and
+      // nothing the player can act on.
+      return null;
     }
     if (isEffectInterruptError(event)) {
       return null; // Drop Effect-TS fiber interruption errors (SpacetimeDB SDK)
@@ -459,6 +466,16 @@ const isPayPalSdkError = (event: Sentry.ErrorEvent): boolean => {
 
   return false;
 };
+
+/**
+ * Check if every frame of an error comes from a browser extension's executors bundle.
+ */
+const isExtensionExecutorError = (event: Sentry.ErrorEvent): boolean =>
+  isExtensionExecutorStack(
+    (event.exception?.values?.[0]?.stacktrace?.frames ?? []).map(
+      (frame) => frame.abs_path ?? frame.filename,
+    ),
+  );
 
 /**
  * Check if an error is from an injected third-party script like Facebook or Cookiebot.

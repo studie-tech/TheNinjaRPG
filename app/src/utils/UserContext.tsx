@@ -224,9 +224,11 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
     updateNotifications,
   } = useRequiredUserData();
   // Get sector information based on user data
+  // Sector 0 is a real sector, so gate on the value being present rather than on it
+  // being truthy, which skipped the query entirely for anyone standing in sector 0.
   const { data: sectorVillage, isPending } = api.travel.getVillageInSector.useQuery(
     { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
-    { enabled: !!userData?.sector },
+    { enabled: userData?.sector != null },
   );
   const ownVillage = userData?.village?.sector === sectorVillage?.sector;
   const router = useRouter();

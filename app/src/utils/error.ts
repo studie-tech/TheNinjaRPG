@@ -111,6 +111,23 @@ const createErrorPatternMatcher =
  * Each matcher validates both the error message pattern and stack frame context.
  * These are typically transient network/CDN issues that should be retried automatically.
  */
+/**
+ * A browser extension that bundles its content scripts as executors/<n>.js. The frames
+ * carry the page's origin, so Sentry files them under this project even though no code
+ * of ours appears anywhere in the stack.
+ */
+const EXTENSION_EXECUTOR_PATH = /(^|\/)executors\/\d+\.js$/;
+
+/**
+ * True only when EVERY frame comes from that extension bundle. Requiring all of them
+ * keeps a genuine error of ours that merely passes through an extension frame reportable.
+ */
+export const isExtensionExecutorStack = (
+  paths: Array<string | undefined>,
+): boolean =>
+  paths.length > 0 &&
+  paths.every((path) => !!path && EXTENSION_EXECUTOR_PATH.test(path));
+
 export const isNetworkError = createErrorPatternMatcher([
   "Load failed",
   "fetch failed",
