@@ -11,9 +11,11 @@
 // All network access is injectable for testing; the cron route passes the real
 // fetch + GITHUB_ISSUE_TOKEN.
 
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import {
+  CONTRIBUTION_BACKFILL_BATCH_SIZE,
   CONTRIBUTION_CLARIFIED_LABEL,
+  CONTRIBUTION_STALE_CLAIM_MS,
   CONTRIBUTION_VERIFY_BATCH_SIZE,
   CONTRIBUTION_VERIFY_RETRY_MS,
   CONTRIBUTION_VERIFY_WINDOW_MS,
@@ -23,7 +25,12 @@ import { devContributionProfile, devJob } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { getUtcDateString } from "@/utils/time";
 import { type FetchImpl, ghFetch, ghHeaders, verifyContributionResult } from "./github";
-import { computeBackfillJobs, isClaimStale, releaseJobStatus } from "./jobs";
+import {
+  computeBackfillJobs,
+  isClaimStale,
+  isJobActive,
+  releaseJobStatus,
+} from "./jobs";
 import { grantContributionReward } from "./rewards";
 import type { ExistingJob, OpenIssueRef, OpenPullRequestRef } from "./types";
 
@@ -58,6 +65,11 @@ interface GitHubPullRequest {
   base: { repo?: { owner?: { login: string } } };
 }
 
+// Bound on the open-ref feeds. Hitting it means the picture is incomplete, so
+// absence from the feed can no longer be read as "this ref is closed".
+const ISSUE_PAGE_LIMIT = 5;
+const PR_PAGE_LIMIT = 3;
+
 const normalize = (value: string | null | undefined) => value?.toLowerCase() ?? "";
 
 // Fields reset whenever a job stops being held by a contributor.
@@ -74,7 +86,17 @@ const releaseClaimSlots = async (db: DrizzleClient, jobIds: number[]) => {
   await db
     .update(devContributionProfile)
     .set({ activeJobId: null, updatedAt: new Date() })
-    .where(inArray(devContributionProfile.activeJobId, jobIds));
+    .where(
+      and(
+        inArray(devContributionProfile.activeJobId, jobIds),
+        // A released job keeps its id, so it can be re-claimed by someone else
+        // before this runs. Clearing on the id alone would then strip a slot
+        // that legitimately holds the same job again.
+        sql`NOT EXISTS (SELECT 1 FROM DevJob j
+                        WHERE j.id = DevContributionProfile.activeJobId
+                          AND j.status = 'CLAIMED')`,
+      ),
+    );
 };
 
 /**
@@ -136,6 +158,17 @@ export const requeueStaleClaims = async (db: DrizzleClient, nowMs: number) => {
   const stale = [...toPending, ...toFailed];
   if (stale.length === 0) return 0;
 
+  // The snapshot decided staleness, but the client may have heartbeated since.
+  // Without carrying that into the compare-and-swap the update would yank a job
+  // that is actively running again, so re-assert the same condition at write
+  // time: no signal — claim or heartbeat — newer than the cutoff.
+  const cutoff = new Date(nowMs - CONTRIBUTION_STALE_CLAIM_MS);
+  const stillStale = and(
+    eq(devJob.status, "CLAIMED"),
+    lte(devJob.claimedAt, cutoff),
+    or(isNull(devJob.heartbeatAt), lte(devJob.heartbeatAt, cutoff)),
+  );
+
   const [pendingResult, failedResult] = await Promise.all([
     toPending.length
       ? db
@@ -146,7 +179,7 @@ export const requeueStaleClaims = async (db: DrizzleClient, nowMs: number) => {
             error: "Claim timed out; requeued",
             updatedAt: new Date(),
           })
-          .where(and(inArray(devJob.id, toPending), eq(devJob.status, "CLAIMED")))
+          .where(and(inArray(devJob.id, toPending), stillStale))
       : Promise.resolve({ rowsAffected: 0 }),
     toFailed.length
       ? db
@@ -157,7 +190,7 @@ export const requeueStaleClaims = async (db: DrizzleClient, nowMs: number) => {
             error: "Claim timed out; attempt budget exhausted",
             updatedAt: new Date(),
           })
-          .where(and(inArray(devJob.id, toFailed), eq(devJob.status, "CLAIMED")))
+          .where(and(inArray(devJob.id, toFailed), stillStale))
       : Promise.resolve({ rowsAffected: 0 }),
   ]);
 
@@ -339,9 +372,10 @@ export const releaseOrphanedClaimSlots = async (db: DrizzleClient) => {
 export const fetchOpenIssues = async (
   fetchImpl: FetchImpl,
   token: string | undefined,
-): Promise<OpenIssueRef[]> => {
+): Promise<{ refs: OpenIssueRef[]; truncated: boolean }> => {
   const issues: OpenIssueRef[] = [];
-  for (let page = 1; page <= 5; page++) {
+  let truncated = true;
+  for (let page = 1; page <= ISSUE_PAGE_LIMIT; page++) {
     const res = await fetchImpl(
       `${GITHUB_API_ENDPOINT}/issues?state=open&per_page=100&page=${page}`,
       { headers: ghHeaders(token) },
@@ -359,17 +393,21 @@ export const fetchOpenIssues = async (
         authorLogin: item.user?.login,
       });
     }
-    if (items.length < 100) break;
+    if (items.length < 100) {
+      truncated = false;
+      break;
+    }
   }
-  return issues;
+  return { refs: issues, truncated };
 };
 
 export const fetchOpenPullRequests = async (
   fetchImpl: FetchImpl,
   token: string | undefined,
-): Promise<OpenPullRequestRef[]> => {
+): Promise<{ refs: OpenPullRequestRef[]; truncated: boolean }> => {
   const prs: OpenPullRequestRef[] = [];
-  for (let page = 1; page <= 3; page++) {
+  let truncated = true;
+  for (let page = 1; page <= PR_PAGE_LIMIT; page++) {
     const res = await fetchImpl(
       `${GITHUB_API_ENDPOINT}/pulls?state=open&per_page=100&page=${page}`,
       { headers: ghHeaders(token) },
@@ -390,9 +428,12 @@ export const fetchOpenPullRequests = async (
         isBot: item.user?.type === "Bot",
       });
     }
-    if (items.length < 100) break;
+    if (items.length < 100) {
+      truncated = false;
+      break;
+    }
   }
-  return prs;
+  return { refs: prs, truncated };
 };
 
 // Create the "Fully Clarified" label when it is missing (the game's label that
@@ -504,10 +545,12 @@ export const runMaintenance = async (
   }
 
   try {
-    const [issues, pullRequests] = await Promise.all([
+    const [issueFeed, prFeed] = await Promise.all([
       fetchOpenIssues(fetchImpl, token),
       fetchOpenPullRequests(fetchImpl, token),
     ]);
+    const issues = issueFeed.refs;
+    const pullRequests = prFeed.refs;
     const existingJobs = await fetchJobsForRefs(
       db,
       issues.map((i) => i.number),
@@ -520,31 +563,65 @@ export const runMaintenance = async (
       existingJobs,
     });
     report.jobsCancelled = await cancelObsoleteJobs(db, cancelJobIds);
-    for (const spec of specs) {
-      // Belt and braces: skip if an active job for this ref+type appeared
-      // between the read and now (e.g. a webhook event just landed).
-      const fresh = await db
-        .select({ id: devJob.id })
-        .from(devJob)
-        .where(
-          and(
-            eq(devJob.refKind, spec.refKind),
-            eq(devJob.refNumber, spec.refNumber),
-            eq(devJob.jobType, spec.jobType),
-            inArray(devJob.status, ["PENDING", "CLAIMED", "VERIFYING"]),
-          ),
+    // One re-read plus one multi-row insert, rather than a SELECT and an INSERT
+    // per spec: the loop form cost 2N serialized round-trips against a database
+    // the repo asks us to make as few trips to as possible.
+    const capped = specs.slice(0, CONTRIBUTION_BACKFILL_BATCH_SIZE);
+    if (capped.length < specs.length) {
+      report.errors.push(
+        `backfill capped at ${CONTRIBUTION_BACKFILL_BATCH_SIZE} of ${specs.length} jobs; the rest follow next tick`,
+      );
+    }
+    if (capped.length > 0) {
+      // Re-read active jobs for exactly these refs, so a webhook insert that
+      // landed between the first read and now is still seen.
+      const active = await fetchJobsForRefs(
+        db,
+        capped.filter((c) => c.refKind === "ISSUE").map((c) => c.refNumber),
+        capped.filter((c) => c.refKind === "PULL_REQUEST").map((c) => c.refNumber),
+      );
+      const taken = new Set(
+        active
+          .filter((j) => isJobActive(j.status))
+          .map((j) => `${j.refKind}:${j.refNumber}:${j.jobType}`),
+      );
+      const rows = capped
+        .filter(
+          (spec) => !taken.has(`${spec.refKind}:${spec.refNumber}:${spec.jobType}`),
         )
-        .limit(1);
-      if (fresh.length > 0) continue;
-      await db.insert(devJob).values({
-        jobType: spec.jobType,
-        refKind: spec.refKind,
-        refNumber: spec.refNumber,
-        refUrl: spec.refUrl,
-        status: "PENDING",
-        contextJson: JSON.stringify(spec.context),
-      });
-      report.jobsCreated += 1;
+        .map((spec) => ({
+          jobType: spec.jobType,
+          refKind: spec.refKind,
+          refNumber: spec.refNumber,
+          refUrl: spec.refUrl,
+          status: "PENDING" as const,
+          contextJson: JSON.stringify(spec.context),
+        }));
+      if (rows.length > 0) {
+        await db.insert(devJob).values(rows);
+        report.jobsCreated += rows.length;
+      }
+    }
+
+    // Close direction: a ref that is no longer open should not keep a PENDING
+    // job. Only safe when the feed was complete — if it truncated, absence just
+    // means the ref fell past the page cap.
+    if (!issueFeed.truncated && !prFeed.truncated) {
+      const openIssues = new Set(issues.map((i) => i.number));
+      const openPrs = new Set(pullRequests.map((p) => p.number));
+      const pending = await db
+        .select({ id: devJob.id, refKind: devJob.refKind, refNumber: devJob.refNumber })
+        .from(devJob)
+        .where(eq(devJob.status, "PENDING"))
+        .limit(1000);
+      const orphaned = pending
+        .filter((j) =>
+          j.refKind === "ISSUE"
+            ? !openIssues.has(j.refNumber)
+            : !openPrs.has(j.refNumber),
+        )
+        .map((j) => j.id);
+      report.jobsCancelled += await cancelObsoleteJobs(db, orphaned);
     }
   } catch (error) {
     note("backfill failed", error);

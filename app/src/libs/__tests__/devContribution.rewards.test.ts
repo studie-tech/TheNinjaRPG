@@ -57,3 +57,17 @@ describe("consumeRewardSlot statement", () => {
     expect(query.params).toContain("user_42");
   });
 });
+
+describe("regression: a stale day must not reset the reward cap", () => {
+  it("guards the date with < so an older `today` matches no branch", () => {
+    // The maintenance cron stamps `today` once per tick and can cross UTC
+    // midnight mid-batch, so a payout can arrive carrying yesterday. With `<>`
+    // that satisfied the guard and then wrote rewardedJobsDate backwards,
+    // resetting rewardedJobsToday to 1 and handing the user a fresh daily cap.
+    const query = render("user_1", "2026-08-20");
+    expect(query).toContain("rewardedJobsDate < ?");
+    expect(query).not.toContain("rewardedJobsDate <> ?");
+    // The count branch only applies on the same day, never on a stale one.
+    expect(query).toContain("rewardedJobsDate = ? AND rewardedJobsToday < ?");
+  });
+});

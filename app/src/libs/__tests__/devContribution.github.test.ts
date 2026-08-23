@@ -267,7 +267,7 @@ describe("fetchOpenIssues", () => {
       },
     ]);
 
-    const issues = await fetchOpenIssues(fetchImpl, "token");
+    const { refs: issues } = await fetchOpenIssues(fetchImpl, "token");
     expect(issues).toHaveLength(1);
     expect(issues[0]).toEqual({
       number: 1,
@@ -295,7 +295,7 @@ describe("fetchOpenIssues", () => {
       return new Response(JSON.stringify(longPage.slice(0, 3)), { status: 200 });
     };
 
-    const issues = await fetchOpenIssues(fetchImpl, "token");
+    const { refs: issues } = await fetchOpenIssues(fetchImpl, "token");
     expect(issues).toHaveLength(103);
     expect(calls).toHaveLength(2);
   });
@@ -341,7 +341,7 @@ describe("fetchOpenPullRequests", () => {
       },
     ]);
 
-    const prs = await fetchOpenPullRequests(fetchImpl, "token");
+    const { refs: prs } = await fetchOpenPullRequests(fetchImpl, "token");
     expect(prs).toHaveLength(3);
     expect(prs[0]).toMatchObject({
       number: 10,
@@ -556,5 +556,38 @@ describe("regressions: picking the right GitHub artifact", () => {
     );
     expect(result.verified).toBe(false);
     expect(result.retryable).toBe(false);
+  });
+});
+
+describe("open-ref feeds report truncation", () => {
+  const page = (n: number, count: number) =>
+    Array.from({ length: count }, (_, i) => ({
+      number: n * 1000 + i,
+      title: "t",
+      body: null,
+      html_url: "u",
+      labels: [],
+      user: { login: "a" },
+      head: { repo: { owner: { login: "fork" } } },
+      base: { repo: { owner: { login: "upstream" } } },
+    }));
+
+  it("flags truncated when every page comes back full", async () => {
+    // Absence from a truncated feed does not mean the ref is closed, so the
+    // caller must be able to tell a complete picture from a capped one before
+    // it cancels anything on the strength of a ref being missing.
+    const fetchImpl = async () =>
+      new Response(JSON.stringify(page(1, 100)), { status: 200 });
+    const issues = await fetchOpenIssues(fetchImpl, "token");
+    expect(issues.truncated).toBe(true);
+    const prs = await fetchOpenPullRequests(fetchImpl, "token");
+    expect(prs.truncated).toBe(true);
+  });
+
+  it("does not flag truncated when a short page ends the feed", async () => {
+    const fetchImpl = async () =>
+      new Response(JSON.stringify(page(1, 2)), { status: 200 });
+    expect((await fetchOpenIssues(fetchImpl, "token")).truncated).toBe(false);
+    expect((await fetchOpenPullRequests(fetchImpl, "token")).truncated).toBe(false);
   });
 });

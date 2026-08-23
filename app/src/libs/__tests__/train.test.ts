@@ -36,9 +36,12 @@ describe("checkJutsuBloodlineItem", () => {
   it.each([
     ["null", null],
     ["empty string", ""],
-  ])("returns true when no requiredBloodlineItemId is set (%s)", (_label, requiredBloodlineItemId) => {
-    expect(check(requiredBloodlineItemId)).toBe(true);
-  });
+  ])(
+    "returns true when no requiredBloodlineItemId is set (%s)",
+    (_label, requiredBloodlineItemId) => {
+      expect(check(requiredBloodlineItemId)).toBe(true);
+    },
+  );
 
   it("returns false when requiredBloodlineItemId is set and userItems is undefined", () => {
     expect(check(ITEM_ID)).toBe(false);

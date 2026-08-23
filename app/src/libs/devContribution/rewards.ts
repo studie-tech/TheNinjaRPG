@@ -58,6 +58,12 @@ export const consumeRewardSlot = async (
  * Drizzle's `.set({...})` cannot express this: it emits columns in table
  * declaration order, not object order. Hence the explicit statement (and the
  * test that pins the order).
+ *
+ * The date predicate is `<`, not `<>`: a caller can arrive with a `today` that
+ * is already stale (the maintenance cron stamps it once per tick and can cross
+ * UTC midnight mid-batch). With `<>` that stale value satisfied the guard and
+ * then wrote the date backwards, resetting the counter and handing the user a
+ * fresh cap. With `<` a stale caller matches no branch and simply gets no slot.
  */
 export const buildConsumeRewardSlotSql = (userId: string, today: string) =>
   sql`UPDATE DevContributionProfile
@@ -66,8 +72,9 @@ export const buildConsumeRewardSlotSql = (userId: string, today: string) =>
           updatedAt = NOW(3)
       WHERE userId = ${userId}
         AND (rewardedJobsDate IS NULL
-             OR rewardedJobsDate <> ${today}
-             OR rewardedJobsToday < ${CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY})`;
+             OR rewardedJobsDate < ${today}
+             OR (rewardedJobsDate = ${today}
+                 AND rewardedJobsToday < ${CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY}))`;
 
 /** Give back a slot consumed for a payout that then could not be completed. */
 export const releaseRewardSlot = async (

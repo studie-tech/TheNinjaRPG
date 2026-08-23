@@ -2979,6 +2979,9 @@ export const CONTRIBUTION_GITHUB_MAX_PAGES = 10;
 // serverless duration limit (leaving the rest unresolved) or tripping GitHub's
 // secondary rate limits. The cron runs every 10 minutes, so the backlog drains
 // quickly at this size.
+// Cap on jobs one backfill tick may create, so a cold start cannot blow the
+// serverless budget. The remainder is picked up by the next tick.
+export const CONTRIBUTION_BACKFILL_BATCH_SIZE = 50;
 export const CONTRIBUTION_VERIFY_BATCH_SIZE = 25;
 
 // Priority used to order job creation / backfill (higher first). Implementation
