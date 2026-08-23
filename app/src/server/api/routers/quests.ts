@@ -98,7 +98,7 @@ import { fetchSectorVillage } from "@/routers/village";
 import { fetchActiveWars } from "@/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
-import { getRandomElement } from "@/utils/array";
+import { chunkArray, getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
   canAwardReputation,
@@ -267,7 +267,7 @@ export const questsRouter = createTRPCRouter({
           )
           .orderBy(asc(quest.name)),
       ]);
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return [];
       events.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });
@@ -324,7 +324,7 @@ export const questsRouter = createTRPCRouter({
           .orderBy(asc(quest.name)),
         fetchActiveWars(ctx.drizzle, input.villageId),
       ]);
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return [];
       const villageInWar = activeWars.length > 0;
       const filtered = missions.filter((e) => {
         if (e.questType === "war" && !villageInWar) return false;
@@ -369,7 +369,7 @@ export const questsRouter = createTRPCRouter({
           )
           .orderBy(asc(quest.name)),
       ]);
-      if (!user) throw serverError("NOT_FOUND", "User not found");
+      if (!user) return [];
       quests.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });
@@ -597,9 +597,7 @@ export const questsRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
-      if (!user) {
-        throw serverError("PRECONDITION_FAILED", "User does not exist");
-      }
+      if (!user) return errorResponse("User does not exist");
       const current = user?.userQuests?.find((q) => q.questId === input.id && !q.endAt);
       if (!current) {
         return { success: true, message: `Quest already abandoned` };
@@ -1181,7 +1179,7 @@ export const questsRouter = createTRPCRouter({
         ]);
       // Guard
       if (!user) {
-        throw serverError("PRECONDITION_FAILED", "User does not exist");
+        return { success: false, notifications: [] };
       }
 
       // Get updated quest information
@@ -1304,9 +1302,7 @@ export const questsRouter = createTRPCRouter({
         hideInformation: false,
       });
       // Guard
-      if (!user) {
-        throw serverError("PRECONDITION_FAILED", "User does not exist");
-      }
+      if (!user) return errorResponse("User does not exist");
       // Get updated quest information with start_battle task and retry flag
       const { notifications, consequences } = getNewTrackers(user, [
         { task: "start_battle", text: "retry" },
@@ -2013,6 +2009,9 @@ export const fetchUncompletedQuests = async (
     .filter((q) => !q.hidden || canPlayHiddenQuests(user.role));
 };
 
+/** Row locks the bulk quest reset may hold in one statement. */
+const QUEST_RESET_BATCH_SIZE = 100;
+
 /** Upsert quest entries for all users by selector. NOTE: selector determined which users get updated/inserted entries */
 export const upsertQuestEntries = async (
   client: DrizzleClient,
@@ -2055,18 +2054,24 @@ export const upsertQuestEntries = async (
     .from(userData)
     .where(updateSelector);
   if (allUsers.length > 0) {
-    await client
-      .update(questHistory)
-      .set({ completed: 0, endAt: null, startedAt: new Date() })
-      .where(
-        and(
-          inArray(
-            questHistory.userId,
-            allUsers.map((user) => user.userId),
-          ),
-          eq(questHistory.questId, quest.id),
-        ),
-      );
+    // One statement over every eligible user held hundreds of QuestHistory row locks
+    // while ordinary quest traffic wrote the same table through its unique key, and the
+    // daily reset lost the resulting lock cycle. Bounded batches run sequentially so the
+    // reset never contends with itself either, and share one timestamp so a batch that
+    // has to be retried still stamps what the rest of the reset did.
+    const startedAt = new Date();
+    const batches = chunkArray(
+      allUsers.map((user) => user.userId),
+      QUEST_RESET_BATCH_SIZE,
+    );
+    for (const batch of batches) {
+      await client
+        .update(questHistory)
+        .set({ completed: 0, endAt: null, startedAt })
+        .where(
+          and(inArray(questHistory.userId, batch), eq(questHistory.questId, quest.id)),
+        );
+    }
   }
 };
 

@@ -227,23 +227,25 @@ export const paypalRouter = createTRPCRouter({
       z.object({
         cursor: z.number().nullish(),
         limit: z.number().min(1).max(100),
-        userId: z.string(),
+        userId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const currentCursor = input.cursor ? input.cursor : 0;
       const skip = currentCursor * input.limit;
+      // Defaulting to the session means a self-view can never send a stale user id
+      const targetUserId = input.userId ?? ctx.userId;
       const [user, transactions] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.paypalTransaction.findMany({
           offset: skip,
           limit: input.limit,
-          where: eq(paypalTransaction.createdById, input.userId),
+          where: eq(paypalTransaction.createdById, targetUserId),
           with: { affectedUser: true },
           orderBy: desc(paypalTransaction.createdAt),
         }),
       ]);
-      if (!canSeeSecretData(user.role) && ctx.userId !== input.userId) {
+      if (!canSeeSecretData(user.role) && ctx.userId !== targetUserId) {
         throw serverError("UNAUTHORIZED", "You are not allowed to see this data");
       }
       const nextCursor = transactions.length < input.limit ? null : currentCursor + 1;

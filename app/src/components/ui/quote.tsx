@@ -1,3 +1,4 @@
+import { decodeHTML } from "entities";
 import { X } from "lucide-react";
 import type * as React from "react";
 import { renderToString } from "react-dom/server";
@@ -11,9 +12,13 @@ interface QuoteProps extends React.HTMLAttributes<HTMLQuoteElement> {
   ref?: React.Ref<HTMLQuoteElement>;
 }
 
-function htmlDecode(input: string) {
-  const doc = new DOMParser().parseFromString(input, "text/html");
-  return doc.documentElement.textContent;
+// Quoted content arrives as an already-sanitized HTML string that parseHtml turns
+// back into elements below. Anything else is serialized first. Decoding runs through
+// `entities` rather than DOMParser, which does not exist while /news, /forum and the
+// conversation pages render on the server.
+function toHtmlString(children: React.ReactNode) {
+  if (typeof children === "string") return children;
+  return decodeHTML(renderToString(children));
 }
 
 const Quote = ({
@@ -25,7 +30,7 @@ const Quote = ({
   onRemove,
   ...props
 }: QuoteProps) => {
-  const content = htmlDecode(renderToString(children));
+  const content = toHtmlString(children);
   return (
     <blockquote
       ref={ref}

@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { IMG_ORIENTATIONS } from "@/drizzle/constants";
@@ -63,17 +64,43 @@ export const generativeAiRouter = createTRPCRouter({
           "Maximum of 100 creations per day reached",
         );
       }
-      // Create image
-      const resultUrls = await txt2imgNanoBanana({
-        preprompt: input.preprompt,
-        prompt: input.prompt,
-        previousImg: input.previousImg,
-        removeBg: input.removeBg,
-        userId: ctx.userId,
-        width: input.maxDim,
-        height: input.maxDim,
-        size: input.size,
-      });
+      // Create image. nano-banana collapses every upstream Gemini failure (safety
+      // refusal, text-instead-of-image, transient model error) into one opaque
+      // "Prediction failed", and the full context is already logged server-side in
+      // txt2imgNanoBanana. Surface it as a normal failed-mutation toast instead of an
+      // unhandled 500; anything else (bad token, Replicate outage) still throws.
+      let resultUrls: string[] = [];
+      try {
+        resultUrls = await txt2imgNanoBanana({
+          preprompt: input.preprompt,
+          prompt: input.prompt,
+          previousImg: input.previousImg,
+          removeBg: input.removeBg,
+          userId: ctx.userId,
+          width: input.maxDim,
+          height: input.maxDim,
+          size: input.size,
+        });
+      } catch (cause) {
+        const isGenerationFailure =
+          cause instanceof Error &&
+          (cause.message.includes("Prediction failed") ||
+            cause.message.includes("Failed to generate image"));
+        if (isGenerationFailure) {
+          // "Prediction failed" is raised by the Replicate client for ANY model, so this
+          // also catches background-removal and upload failures that nothing else logs.
+          Sentry.captureException(cause, {
+            level: "warning",
+            tags: { source: "generativeAi.createImg" },
+          });
+          return {
+            success: false,
+            message: "Image generation failed - try rephrasing the prompt and retry",
+            url: null,
+          };
+        }
+        throw cause;
+      }
       // Store for future reference
       if (resultUrls && resultUrls.length > 0) {
         await ctx.drizzle.insert(historicalAvatar).values(

@@ -107,7 +107,7 @@ export const anbuRouter = createTRPCRouter({
     }),
   getRequests: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get ANBU join requests" } })
-    .input(z.object({ squadId: z.string().optional() }).optional())
+    .input(z.object({ squadId: z.string().optional() }).nullish())
     .query(getAnbuRequests),
   createRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Request to join an ANBU squad" } })
@@ -697,7 +697,7 @@ type AnbuRequestContext = { drizzle: DrizzleClient; userId: string };
  */
 export async function getAnbuRequests(args: {
   ctx: AnbuRequestContext;
-  input?: { squadId?: string };
+  input?: { squadId?: string } | null;
 }) {
   const { ctx, input } = args;
   if (input?.squadId) {

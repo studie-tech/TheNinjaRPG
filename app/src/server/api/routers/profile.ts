@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import {
   and,
   asc,
@@ -2648,21 +2649,24 @@ export const fetchUpdatedUser = async (props: {
     }
   }
 
-  // Ensure that we have a tier quest
-  let questTier = user?.userQuests?.find((q) => q.quest.questType === "tier");
-  if (!questTier && user) {
-    questTier = await insertNextQuest(client, user, "tier");
-    if (questTier) {
-      forceRegen = true;
-    }
-  }
-
-  // Ensure that we have an exam quest
-  let questExam = user?.userQuests?.find((q) => q.quest.questType === "exam");
-  if (!questExam && user) {
-    questExam = await insertNextQuest(client, user, "exam");
-    if (questExam) {
-      forceRegen = true;
+  // Ensure that we have tier & exam quests. These bootstraps only exist to hand the user their
+  // next quest, and they run on every user fetch, so a transient database error here must not
+  // fail the whole fetch; the next fetch retries the bootstrap.
+  // They run in sequence, not in parallel: insertNextQuest mutates user.userQuests and
+  // persists its own questData snapshot, so concurrent inserts overwrite each other.
+  if (user) {
+    for (const questType of ["tier", "exam"] as const) {
+      if (user.userQuests?.some((q) => q.quest.questType === questType)) continue;
+      try {
+        if (await insertNextQuest(client, user, questType)) {
+          forceRegen = true;
+        }
+      } catch (e) {
+        Sentry.captureException(e, {
+          level: "warning",
+          tags: { questBootstrap: questType },
+        });
+      }
     }
   }
 
@@ -2709,13 +2713,23 @@ export const fetchUpdatedUser = async (props: {
         user.secondaryElement = getRandomElement(available) ?? null;
       }
       // Update database (pools, questData, etc.; village columns only when includeVillageState)
-      await persistPassiveRegenToDb({
-        client,
-        userId,
-        user,
-        userIp,
-        forceRegen: forceRegen ?? false,
-      });
+      try {
+        await persistPassiveRegenToDb({
+          client,
+          userId,
+          user,
+          userIp,
+          forceRegen: forceRegen ?? false,
+        });
+      } catch (error) {
+        // Regen is background bookkeeping and is already applied to the returned
+        // in-memory user, so a database blip here must not fail the query that
+        // happened to trigger it. The next request persists it instead.
+        Sentry.captureException(error, {
+          level: "warning",
+          tags: { source: "persistPassiveRegenToDb" },
+        });
+      }
     }
   }
   if (user) {
@@ -2821,10 +2835,7 @@ const persistPassiveRegenToDb = async ({
     userForRegenPersist,
   );
 
-  await client
-    .update(userData)
-    .set(derivedUserUpdate)
-    .where(eq(userData.userId, userId));
+  await client.update(userData).set(derivedUserUpdate).where(eq(userData.userId, userId));
 };
 
 export const fetchPublicUsers = async (info: {

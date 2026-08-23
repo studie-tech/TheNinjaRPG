@@ -188,7 +188,7 @@ const PaypalShopContent = ({
         {isReady && activeTab === "Federal" && <FederalStore />}
         {!isReady && <Loader explanation="Loading..." />}
       </ContentBox>
-      {activeTab === "Reputation" && <TransactionHistory userId={userData.userId} />}
+      {activeTab === "Reputation" && <TransactionHistory />}
       {activeTab === "Reputation" && <LookupTransaction />}
       {activeTab === "Federal" && <SubscriptionsOverview />}
     </>
@@ -870,8 +870,13 @@ const SubscriptionsOverview = () => {
 
 /**
  * Transaction History component
+ *
+ * Omitting userId shows the signed-in user's own history: the server falls back to the
+ * session id, so the client never sends an id for a self view and a stale cached profile
+ * cannot be mistaken for another account. Callers viewing someone else must pass a
+ * definite id - passing an undefined one silently shows the viewer their own history.
  */
-export const TransactionHistory: React.FC<{ userId: string }> = (props) => {
+export const TransactionHistory: React.FC<{ userId?: string }> = (props) => {
   const { userId } = props;
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
@@ -882,7 +887,6 @@ export const TransactionHistory: React.FC<{ userId: string }> = (props) => {
   } = api.paypal.getPaypalTransactions.useInfiniteQuery(
     { limit: 10, userId },
     {
-      enabled: !!userId,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
     },

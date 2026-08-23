@@ -164,7 +164,7 @@ This document outlines various screens, menus, and gameplay systems available in
     - Provides access to the world map.
 - **Global Map:**  
   - Click and drag to rotate.  
-  - Double-click a sector to initiate travel (492 sectors available).
+  - Click a sector to initiate travel, then confirm in the dialog.
 - **Errand Completion:**  
   - Travel to the designated location, complete the errand, and claim your reward (2500 ryo).
 

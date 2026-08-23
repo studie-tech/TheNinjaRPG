@@ -13,6 +13,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
+  Sphere,
   SphereGeometry,
   Sprite,
   SpriteMaterial,
@@ -33,10 +34,10 @@ import type { Village } from "@/drizzle/schema";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
 import WebGlError from "@/layout/WebGLError";
-import type { HexagonalFaceMesh } from "@/libs/hexgrid";
 import {
-  buildGlobeTileGeometry,
+  buildGlobeSurface,
   createUserAvatarSprite,
+  pickGlobeSector,
   samplePolarCapColor,
 } from "@/libs/threejs/globe";
 import { TrackballControls } from "@/libs/threejs/TrackBallControls";
@@ -70,8 +71,6 @@ interface MapProps {
   actionExplanation?: string;
   focusSector?: number | null;
   focusSectorLabel?: string;
-  /** Restrict clicks/taps to visible labels and pins instead of bare sectors. */
-  markerOnlyInteraction?: boolean;
   onTileClick?: (sector: number | null, tile: GlobalTile | null) => void;
   onTileHover?: (sector: number | null, tile: GlobalTile | null) => void;
 }
@@ -99,6 +98,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   const { data: userData } = useUserData();
   const [webglError, setWebglError] = useState<boolean>(false);
   const [hoverSector, setHoverSector] = useState<number | null>(null);
+  // Whether the built scene actually carries quest pins, so the legend below
+  // only explains markers that are on the globe
+  const [hasQuestMarkers, setHasQuestMarkers] = useState<boolean>(false);
   const mountRef = useRef<HTMLDivElement | null>(null);
   // Bridges the overlay zoom buttons into the three.js scene built below
   const zoomActionRef = useRef<((factor: number) => void) | null>(null);
@@ -106,14 +108,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   // without rebuilding the three.js scene when travel state changes.
   const onTileClickRef = useRef(props.onTileClick);
   onTileClickRef.current = props.onTileClick;
-  const mouse = new Vector2();
   const { hexasphere, showOwnership } = props;
   const autoRotate = props.autoRotate ?? true;
-  const actionExplanation =
-    props.actionExplanation ||
-    (props.markerOnlyInteraction
-      ? "Click a village label to travel"
-      : "Double click tile to move there");
+  const actionExplanation = props.actionExplanation || "Click tile to move there";
 
   // Get sector ownerships if needed
   const { data: ownershipData } = api.village.getSectorOwnerships.useQuery(
@@ -131,20 +128,6 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     }
   }, [ownershipData]);
 
-  const onDocumentMouseMove = (event: MouseEvent) => {
-    if (mountRef.current) {
-      const bounding_box = mountRef.current.getBoundingClientRect();
-      mouse.x = (event.offsetX / bounding_box.width) * 2 - 1;
-      mouse.y = -((event.offsetY / bounding_box.height) * 2 - 1);
-    }
-  };
-
-  // Track touch state for double-tap detection on mobile
-  const lastTapRef = useRef<{ time: number; sector: number | null }>({
-    time: 0,
-    sector: null,
-  });
-
   // Tutorial step
   const { currentStep } = useTutorialStep();
   const isTravelStep = currentStep?.title === "Travel";
@@ -156,12 +139,6 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       // Performance stats
       // const stats = new Stats();
       // document.body.appendChild(stats.dom);
-
-      // Interacivity with mouse
-      if (props.intersection) {
-        sceneRef.addEventListener("mousemove", onDocumentMouseMove, false);
-      }
-      let intersected: HexagonalFaceMesh | undefined;
 
       const WIDTH = sceneRef.getBoundingClientRect().width;
       const HEIGHT = WIDTH;
@@ -179,7 +156,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       // scene-graph order and ignores renderOrder entirely, and since
       // group_highlights is traversed before group_tiles the translucent sector
       // grid painted OVER every marker. Sorting makes the marker/label/pin
-      // renderOrder tiers effective (~500 objects, negligible sort cost).
+      // renderOrder tiers effective (a few dozen objects, negligible sort cost).
       const { scene, renderer, raycaster, handleResize } = setupScene({
         mountRef: mountRef,
         width: WIDTH,
@@ -201,6 +178,36 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       // Canvas element (renderer is non-null past the guard above) - used to
       // toggle the pointer cursor while hovering sectors on the globe
       const hoverCanvas = renderer.domElement;
+
+      /**
+       * Viewport coordinates to normalized device coordinates, measured against
+       * the canvas itself rather than the event target, so a pointer event that
+       * originated on an overlay still maps to the right point on the globe.
+       */
+      const toPointerNdc = (clientX: number, clientY: number) => {
+        const bounds = hoverCanvas.getBoundingClientRect();
+        return new Vector2(
+          ((clientX - bounds.left) / bounds.width) * 2 - 1,
+          -((clientY - bounds.top) / bounds.height) * 2 + 1,
+        );
+      };
+
+      // Latest pointer position, consumed by the hover pick in the render loop.
+      // It stays unset until a real pointer lands: an unset Vector2 is the
+      // canvas centre in NDC, which would otherwise highlight whatever sector
+      // happens to sit there before anyone pointed at it.
+      const mouse = new Vector2();
+      let hasPointerPosition = false;
+      const trackPointer = (point: Vector2) => {
+        mouse.copy(point);
+        hasPointerPosition = true;
+      };
+      const onDocumentMouseMove = (event: MouseEvent) => {
+        trackPointer(toPointerNdc(event.clientX, event.clientY));
+      };
+      if (props.intersection) {
+        hoverCanvas.addEventListener("mousemove", onDocumentMouseMove, false);
+      }
 
       // Track WebGL context loss to prevent shader errors on iOS mobile browsers
       // Clear texture caches when context is lost to free memory
@@ -382,99 +389,74 @@ const GlobalMap: React.FC<MapProps> = (props) => {
 
       /**
        * Sector of the closest label/pin under the given NDC point, or null.
-       * Sprites still raycast when the globe occludes them, so a label hit
-       * only counts when no tile sits in front of it along the same ray.
+       * Sprites still raycast when the globe occludes them, so a label hit only
+       * counts when the globe surface does not sit in front of it.
        */
+      const globeSphere = new Sphere(new Vector3(0, 0, 0), hexasphere.radius / 3);
+      const globeHit = new Vector3();
       const pickLabelTarget = (point: Vector2): number | null => {
         if (labelTargets.length === 0) return null;
         raycaster.setFromCamera(point, camera);
         const labelHit = raycaster.intersectObjects(labelTargets, false)[0];
         if (!labelHit) return null;
-        const tileHit = raycaster.intersectObjects(group_tiles.children)[0];
-        if (tileHit && tileHit.distance < labelHit.distance) return null;
+        if (
+          raycaster.ray.intersectSphere(globeSphere, globeHit) &&
+          globeHit.distanceTo(raycaster.ray.origin) < labelHit.distance
+        ) {
+          return null;
+        }
         const sector = labelHit.object.userData.sector as number;
         return typeof sector === "number" ? sector : null;
       };
 
-      // Add map interaction handlers. Travel can opt into marker-only mode,
-      // while map editing and war declaration retain direct sector selection.
-      let onDblClick: (() => void) | null = null;
-      let onTouchEnd: ((e: TouchEvent) => void) | null = null;
+      /**
+       * Sector under an NDC point: labels and pins win over the bare terrain
+       * beneath them, matching what hovering highlights.
+       */
+      const pickSector = (point: Vector2): number | null => {
+        const labelSector = pickLabelTarget(point);
+        if (labelSector !== null) return labelSector;
+        raycaster.setFromCamera(point, camera);
+        return pickGlobeSector(raycaster, hexasphere);
+      };
+
+      // Currently highlighted sector, shared by the hover pick and the tap
+      // handler so a tap-set outline is not immediately treated as stale.
+      let highlightedSector: number | null = null;
+      const highlightSector = (sector: number | null) => {
+        if (sector === highlightedSector) return;
+        highlightedSector = sector;
+        setHoverOutline(sector);
+        hoverCanvas.style.cursor = sector === null ? "default" : "pointer";
+        const tile = sector !== null ? hexasphere?.tiles[sector] : undefined;
+        if (props.onTileHover && sector !== null && tile) {
+          props.onTileHover(sector, tile);
+        }
+        setHoverSector(sector);
+      };
+
+      // Single click/tap selects the sector under the pointer, whether that is
+      // a village label, a map pin or bare terrain. Pointer events cover mouse
+      // and touch alike, so desktop and mobile share one code path. A gesture
+      // only counts as a tap when it was single-pointer for its whole lifetime
+      // and the pointer never strayed from the start point - peak displacement,
+      // not start-to-end, so a rotate drag that circles back and a pinch whose
+      // primary finger barely moves both stay navigation.
       let onLabelPointerDown: ((e: PointerEvent) => void) | null = null;
       let onLabelPointerMove: ((e: PointerEvent) => void) | null = null;
       let onLabelPointerUp: ((e: PointerEvent) => void) | null = null;
       let onLabelPointerCancel: (() => void) | null = null;
 
       if (props.intersection && props.onTileClick) {
-        // Desktop: double-click handler
-        onDblClick = () => {
-          if (props.markerOnlyInteraction) return;
-          const intersects = raycaster.intersectObjects(group_tiles.children);
-          if (intersects.length > 0) {
-            const sector = intersects?.[0]?.object?.userData?.id as number;
-            const tile = hexasphere?.tiles[sector];
-            if (tile !== undefined) {
-              onTileClickRef.current?.(sector, tile);
-            }
-          }
-        };
-        renderer.domElement.addEventListener("dblclick", onDblClick, true);
-
-        // Mobile: double-tap detection via touchend
-        // We detect double-tap by checking if two taps happen within 300ms on the same sector
-        onTouchEnd = (e: TouchEvent) => {
-          if (props.markerOnlyInteraction || e.changedTouches.length === 0) return;
-          const touch = e.changedTouches[0];
-          if (!touch) return;
-
-          // Get which sector was tapped
-          const bounding_box = sceneRef.getBoundingClientRect();
-          const mouseX =
-            ((touch.clientX - bounding_box.left) / bounding_box.width) * 2 - 1;
-          const mouseY =
-            -((touch.clientY - bounding_box.top) / bounding_box.height) * 2 + 1;
-          raycaster.setFromCamera(new Vector2(mouseX, mouseY), camera);
-
-          const intersects = raycaster.intersectObjects(group_tiles.children);
-          if (intersects.length === 0) {
-            lastTapRef.current = { time: 0, sector: null };
-            return;
-          }
-
-          const sector = intersects?.[0]?.object?.userData?.id as number;
-          const now = Date.now();
-          const timeSinceLastTap = now - lastTapRef.current.time;
-          const DOUBLE_TAP_DELAY = 300; // ms
-
-          // Check if this is a double-tap on the same sector
-          if (
-            timeSinceLastTap < DOUBLE_TAP_DELAY &&
-            lastTapRef.current.sector === sector
-          ) {
-            // Double-tap detected!
-            const tile = hexasphere?.tiles[sector];
-            if (tile !== undefined) {
-              onTileClickRef.current?.(sector, tile);
-            }
-            // Reset to prevent triple-tap
-            lastTapRef.current = { time: 0, sector: null };
-          } else {
-            // First tap - record it
-            lastTapRef.current = { time: now, sector };
-          }
-        };
-        renderer.domElement.addEventListener("touchend", onTouchEnd, { passive: true });
-
-        // Single click/tap on a village label or map pin starts travel to the
-        // sector it points at. Pointer events cover mouse and touch alike. A
-        // gesture only counts as a tap when it was single-pointer for its whole
-        // lifetime and the pointer never strayed from the start point - peak
-        // displacement, not start-to-end, so a rotate drag that circles back
-        // and a pinch whose primary finger barely moves both stay navigation.
         const TAP_SLOP_PX = 10;
         const tapGesture = { x: 0, y: 0, active: false, navigated: false };
         onLabelPointerDown = (e: PointerEvent) => {
           if (e.isPrimary) {
+            // A finger or pen taking over means the mouse has stopped pointing
+            // at anything, so its last position must stop driving the hover
+            // pick - on a hybrid device it would otherwise reclaim the outline
+            // from the tap as soon as the globe turned.
+            if (e.pointerType !== "mouse") hasPointerPosition = false;
             // Only a touch/pen contact or the left mouse button can start a
             // tap; right/middle clicks are trackball input, never travel
             if (e.pointerType === "mouse" && e.button !== 0) {
@@ -503,14 +485,18 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           tapGesture.active = false;
           const moved = Math.hypot(e.clientX - tapGesture.x, e.clientY - tapGesture.y);
           if (tapGesture.navigated || moved > TAP_SLOP_PX) return;
-          const bounding_box = sceneRef.getBoundingClientRect();
-          const point = new Vector2(
-            ((e.clientX - bounding_box.left) / bounding_box.width) * 2 - 1,
-            -((e.clientY - bounding_box.top) / bounding_box.height) * 2 + 1,
-          );
-          const sector = pickLabelTarget(point);
+          const point = toPointerNdc(e.clientX, e.clientY);
+          const sector = pickSector(point);
           const tile = sector !== null ? hexasphere?.tiles[sector] : undefined;
           if (sector !== null && tile) {
+            // Outline the picked sector while the caller decides what to do
+            // with it - on touch there is no hover to show what was hit. A
+            // mouse goes on hovering afterwards, so its position stays live; a
+            // finger leaves no pointer behind, so the outline stays where the
+            // tap put it rather than being replaced by a pick at a phantom
+            // position the moment the globe turns.
+            if (e.pointerType === "mouse") trackPointer(point);
+            highlightSector(sector);
             onTileClickRef.current?.(sector, tile);
           }
         };
@@ -520,59 +506,49 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         renderer.domElement.addEventListener("pointercancel", onLabelPointerCancel);
       }
 
-      // Textured globe: each logical sector is rendered from a finer visual
-      // terrain field, while its outer quad remains the interaction boundary.
-      // The sector grid stops with the navigable tiles; the separate polar-cap
-      // sphere never contributes edges and therefore remains a solid surface.
+      // Textured globe: every logical sector is rendered from a finer visual
+      // terrain field, merged into a single indexed mesh so the whole world is
+      // one draw call. The sector grid stops with the navigable tiles; the
+      // separate polar-cap sphere never contributes edges and therefore remains
+      // a solid surface.
+      const surface = buildGlobeSurface(hexasphere, (sector) => {
+        // Ownership view tints the tile texture by owning village
+        if (!showOwnership || !ownershipData?.sectors || !ownershipData?.colors) {
+          return null;
+        }
+        const ownerVillageId = ownershipVillageBySector.get(sector);
+        const villageColor = ownerVillageId
+          ? ownershipColorByVillageId.get(ownerVillageId)
+          : undefined;
+        if (villageColor) return new Color(villageColor);
+        return MAP_RESERVED_SECTORS.includes(sector) ? new Color("#b3afae") : null;
+      });
+      const globeMesh = new Mesh(
+        surface.geometry,
+        new MeshBasicMaterial({ vertexColors: true, side: DoubleSide }),
+      );
+      globeMesh.matrixAutoUpdate = false;
+      // Picking is arithmetic (pickGlobeSector), so the terrain never needs to
+      // be a raycast target - and a 400k-vertex mesh would be a costly one.
+      globeMesh.raycast = () => {};
+      group_tiles.add(globeMesh);
+
       const edgePositions: number[] = [];
       const EDGE_LIFT = 1.0015; // sit the outline just above the tile faces
-      for (let i = 0; i < hexasphere.tiles.length; i++) {
-        const t = hexasphere.tiles[i];
-        const built = t && buildGlobeTileGeometry(hexasphere, t);
-        if (t && built) {
-          const geometry = new BufferGeometry();
-          geometry.setAttribute("position", new BufferAttribute(built.positions, 3));
-          geometry.setAttribute("color", new BufferAttribute(built.colors, 3));
-
-          // Ownership view tints the tile texture by owning village
-          let color: string | number = 0xffffff;
-          if (showOwnership && ownershipData?.sectors && ownershipData?.colors) {
-            const ownerVillageId = ownershipVillageBySector.get(i);
-            const villageColor = ownerVillageId
-              ? ownershipColorByVillageId.get(ownerVillageId)
-              : undefined;
-            if (MAP_RESERVED_SECTORS.includes(i)) {
-              color = "#b3afae";
-            }
-            if (villageColor) {
-              color = villageColor;
-            }
-          }
-          const material = new MeshBasicMaterial({
-            color,
-            vertexColors: true,
-            side: DoubleSide,
-          });
-
-          const mesh = new Mesh(geometry, material);
-          mesh.matrixAutoUpdate = false;
-          mesh.userData.id = i;
-          mesh.name = `${i}`;
-          group_tiles.add(mesh);
-
-          // Quad boundary (corners NW,NE,SE,SW), lifted just above the surface,
-          // for the sector-separation wireframe
-          const corner = t.b.map((p) => ({
-            x: (Number(p.x) / 3) * EDGE_LIFT,
-            y: (Number(p.y) / 3) * EDGE_LIFT,
-            z: (Number(p.z) / 3) * EDGE_LIFT,
-          }));
-          for (let k = 0; k < 4; k++) {
-            const a = corner[k];
-            const b = corner[(k + 1) % 4];
-            if (!a || !b) continue;
-            edgePositions.push(a.x, a.y, a.z, b.x, b.y, b.z);
-          }
+      for (const tile of hexasphere.tiles) {
+        if (tile.b.length !== 4) continue;
+        // Quad boundary (corners NW,NE,SE,SW), lifted just above the surface,
+        // for the sector-separation wireframe
+        const corner = tile.b.map((p) => ({
+          x: (Number(p.x) / 3) * EDGE_LIFT,
+          y: (Number(p.y) / 3) * EDGE_LIFT,
+          z: (Number(p.z) / 3) * EDGE_LIFT,
+        }));
+        for (let k = 0; k < 4; k++) {
+          const a = corner[k];
+          const b = corner[(k + 1) % 4];
+          if (!a || !b) continue;
+          edgePositions.push(a.x, a.y, a.z, b.x, b.y, b.z);
         }
       }
 
@@ -718,10 +694,6 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         sector: number;
         color: typeof questTweenColor;
         type: "quest" | "war" | "focus";
-        // Resolved lazily on the first frame and cached, so the render loop does
-        // not re-scan group_tiles' ~486 children by name every frame. undefined =
-        // not yet resolved, null = resolved but no matching mesh (do not retry).
-        mesh?: HexagonalFaceMesh | null;
       }[] = [];
 
       // Add war-torn battleground sector to highlight
@@ -843,6 +815,30 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         }
       });
 
+      setHasQuestMarkers(
+        sectorsToHighlight.some((highlight) => highlight.type === "quest"),
+      );
+
+      // Pulsing a sector means rewriting its slice of the merged surface's
+      // shared color buffer every frame. Snapshot each one's terrain colors up
+      // front - taken lazily they would capture an already-pulsed slice
+      // whenever two highlights land on the same sector, and the tile would
+      // then darken a little more each frame.
+      const surfaceColors = surface.geometry.getAttribute("color") as BufferAttribute;
+      const surfaceColorValues = surfaceColors.array as Float32Array;
+      const pulses = sectorsToHighlight.flatMap((highlight) => {
+        const start = surface.vertexRanges[highlight.sector * 2] ?? -1;
+        const count = surface.vertexRanges[highlight.sector * 2 + 1] ?? 0;
+        if (start < 0) return [];
+        return [
+          {
+            type: highlight.type,
+            offset: start * 3,
+            terrain: surfaceColorValues.slice(start * 3, (start + count) * 3),
+          },
+        ];
+      });
+
       // Compensate camera distance for the narrower lens using the globe's
       // projected angular radius. This keeps the established zoom range while
       // making the globe read flatter.
@@ -946,40 +942,42 @@ const GlobalMap: React.FC<MapProps> = (props) => {
 
       // Render the image
       let animationId = 0;
-      // Gate the ~486-mesh hover raycast: only re-run it when the pointer or the
-      // camera pose actually changed since the last raycast (the globe auto-
-      // rotates, so the camera moving is itself a reason to re-test). Skips the
-      // full raycast on truly idle frames.
+      // Gate the hover pick: only re-run it when the pointer or the camera pose
+      // actually changed since the last one (the globe auto-rotates, so the
+      // camera moving is itself a reason to re-test).
       let lastRaycastCamX = Number.NaN;
       let lastRaycastCamY = Number.NaN;
       let lastRaycastCamZ = Number.NaN;
       let lastRaycastMouseX = Number.NaN;
       let lastRaycastMouseY = Number.NaN;
-      let hoveredLabelSector: number | null = null;
       function render() {
         // Update all TWEEN animations (color pulsing, etc.)
         TWEEN.update();
 
-        // Apply highlight colors to sectors (mesh resolved once, then cached)
-        if (sectorsToHighlight.length > 0) {
-          sectorsToHighlight.forEach((highlight) => {
-            if (highlight.mesh === undefined) {
-              highlight.mesh =
-                (group_tiles.getObjectByName(
-                  `${highlight.sector}`,
-                ) as HexagonalFaceMesh | null) ?? null;
+        // Nothing below reaches the GPU while the context is lost, and queueing
+        // buffer update ranges that never get uploaded would grow unbounded.
+        const canRender = !contextHandlers.isContextLost();
+
+        // Tint each highlighted sector's slice of the merged surface's colors
+        if (canRender && pulses.length > 0) {
+          for (const pulse of pulses) {
+            const color =
+              pulse.type === "war"
+                ? warTweenColor
+                : pulse.type === "focus"
+                  ? focusTweenColor
+                  : questTweenColor;
+            for (let i = 0; i < pulse.terrain.length; i += 3) {
+              surfaceColorValues[pulse.offset + i] = (pulse.terrain[i] ?? 0) * color.r;
+              surfaceColorValues[pulse.offset + i + 1] =
+                (pulse.terrain[i + 1] ?? 0) * color.g;
+              surfaceColorValues[pulse.offset + i + 2] =
+                (pulse.terrain[i + 2] ?? 0) * color.b;
             }
-            const mesh = highlight.mesh;
-            if (mesh) {
-              const color =
-                highlight.type === "war"
-                  ? warTweenColor
-                  : highlight.type === "focus"
-                    ? focusTweenColor
-                    : questTweenColor;
-              mesh.material.color.setRGB(color.r, color.g, color.b);
-            }
-          });
+            // Upload only the pulsed vertices, not the whole 400k-vertex buffer
+            surfaceColors.addUpdateRange(pulse.offset, pulse.terrain.length);
+          }
+          surfaceColors.needsUpdate = true;
         }
         // Intersections with mouse: https://threejs.org/docs/index.html#api/en/core/Raycaster
         const cameraOrPointerMoved =
@@ -988,7 +986,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           camera.position.z !== lastRaycastCamZ ||
           mouse.x !== lastRaycastMouseX ||
           mouse.y !== lastRaycastMouseY;
-        if (props.intersection && cameraOrPointerMoved) {
+        if (props.intersection && hasPointerPosition && cameraOrPointerMoved) {
           lastRaycastCamX = camera.position.x;
           lastRaycastCamY = camera.position.y;
           lastRaycastCamZ = camera.position.z;
@@ -996,57 +994,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           lastRaycastMouseY = mouse.y;
           // Labels and pins take hover precedence over the tiles behind them;
           // hovering one outlines its target sector, matching what a click does
-          const labelSector = pickLabelTarget(mouse);
-          if (labelSector !== null) {
-            if (hoveredLabelSector !== labelSector) {
-              hoveredLabelSector = labelSector;
-              intersected = undefined;
-              setHoverOutline(labelSector);
-              hoverCanvas.style.cursor = "pointer";
-              const tile = hexasphere?.tiles[labelSector];
-              if (props.onTileHover && tile) props.onTileHover(labelSector, tile);
-              setHoverSector(labelSector);
-            }
-          } else {
-            if (hoveredLabelSector !== null) {
-              hoveredLabelSector = null;
-              setHoverOutline(null);
-              hoverCanvas.style.cursor = "default";
-              setHoverSector(null);
-            }
-            // Marker-only travel still needs bare-sector inspection while the
-            // ownership layer is enabled. This restores hover information
-            // without making those sectors clickable travel targets.
-            if (!props.markerOnlyInteraction || showOwnership) {
-              raycaster.setFromCamera(mouse, camera);
-              const intersects = raycaster.intersectObjects(group_tiles.children);
-              if (intersects.length > 0) {
-                // if the closest object intersected is not the currently stored intersection object
-                if (intersects[0] && intersects[0].object !== intersected) {
-                  intersected = intersects[0].object as HexagonalFaceMesh;
-                  const sector = intersected.userData.id;
-                  setHoverOutline(sector);
-                  hoverCanvas.style.cursor = props.markerOnlyInteraction
-                    ? "crosshair"
-                    : "pointer";
-                  const tile = hexasphere?.tiles[sector];
-                  if (props.onTileHover && tile) props.onTileHover(sector, tile);
-                  setHoverSector(sector);
-                }
-              } else if (intersected) {
-                // Pointer moved off the globe: clear the outline and the pointer
-                intersected = undefined;
-                setHoverOutline(null);
-                hoverCanvas.style.cursor = "default";
-                setHoverSector(null);
-              }
-            } else if (intersected) {
-              intersected = undefined;
-              setHoverOutline(null);
-              hoverCanvas.style.cursor = "default";
-              setHoverSector(null);
-            }
-          }
+          highlightSector(pickSector(mouse));
         }
 
         // Auto-rotate around the same fixed north-south axis as manual drags.
@@ -1063,7 +1011,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
 
         // Render the scene (skip if WebGL context is lost or invalid)
         animationId = requestAnimationFrame(render);
-        if (!contextHandlers.isContextLost() && renderer) {
+        if (canRender && renderer) {
           renderer.render(scene, camera);
         }
 
@@ -1083,13 +1031,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         // Remove event listeners safely
         try {
           if (props.intersection) {
-            sceneRef.removeEventListener("mousemove", onDocumentMouseMove);
-          }
-          if (onDblClick) {
-            renderer.domElement.removeEventListener("dblclick", onDblClick, true);
-          }
-          if (onTouchEnd) {
-            renderer.domElement.removeEventListener("touchend", onTouchEnd);
+            hoverCanvas.removeEventListener("mousemove", onDocumentMouseMove);
           }
           if (onLabelPointerDown) {
             renderer.domElement.removeEventListener("pointerdown", onLabelPointerDown);
@@ -1130,7 +1072,6 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     props.highlights,
     props.usersHighlighted,
     props.intersection,
-    props.markerOnlyInteraction,
     props.focusSector,
     showOwnership,
     ownershipData,
@@ -1156,10 +1097,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     <div className="relative">
       <div ref={mountRef} id={"tutorial-global-map"}></div>
       {webglError && <WebGlError />}
-      <div className="absolute top-0 left-0 m-5">
+      <div className="pointer-events-none absolute top-0 left-0 m-5">
         <ul>
           {hoverSector !== null && showOwnership && (
-            <li className="pointer-events-none flex min-w-36 items-center gap-2 rounded-lg border border-white/20 bg-black/75 px-3 py-2 shadow-lg backdrop-blur-sm">
+            <li className="flex min-w-36 items-center gap-2 rounded-lg border border-white/20 bg-black/75 px-3 py-2 shadow-lg backdrop-blur-sm">
               <span
                 className="h-3 w-3 shrink-0 rounded-sm border border-white/50 shadow-sm"
                 style={{ backgroundColor: hoveredOwnerColor }}
@@ -1174,10 +1115,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
               </span>
             </li>
           )}
-          {hoverSector !== null && !showOwnership && (
+          {hasQuestMarkers && (
             <li className="flex flex-row items-center">
               <span className="mr-1 animate-pulse text-2xl text-orange-500">⬢</span>{" "}
-              {props.markerOnlyInteraction ? "Travel marker" : "Quest"}
+              Quest
             </li>
           )}
           {props.focusSector !== undefined && props.focusSector !== null && (
@@ -1188,13 +1129,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           )}
         </ul>
       </div>
-      <div className="absolute top-0 right-0 m-5">
+      <div className="pointer-events-none absolute top-0 right-0 m-5">
         <ul className="flex flex-col items-end gap-2">
-          {props.markerOnlyInteraction && (
-            <li className="pointer-events-none max-w-56 rounded-lg border border-white/20 bg-black/75 px-3 py-2 text-right text-sm text-white shadow-lg backdrop-blur-sm">
-              Click a village label to travel
-            </li>
-          )}
           {hoverSector !== null && (
             <>
               <li>- Highlighting sector {hoverSector}</li>

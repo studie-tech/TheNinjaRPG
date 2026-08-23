@@ -5,7 +5,10 @@ jobs:
     name: test_linting
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          # No step here runs git, so the job never needs the token on disk.
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - name: install dependencies
         run: bun install

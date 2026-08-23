@@ -335,7 +335,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
     resolver: zodResolver(userSearchSchema),
     defaultValues: {
       username: "",
-      users: [props.preSelectedUser],
+      users: props.preSelectedUser ? [props.preSelectedUser] : [],
     },
   });
 
@@ -361,12 +361,10 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
     defaultValue: [],
   });
   useEffect(() => {
-    if (users && users.length > 0) {
-      create.setValue(
-        "users",
-        users.map((u) => u.userId),
-      );
-    }
+    create.setValue(
+      "users",
+      (users ?? []).filter((u) => u?.userId).map((u) => u.userId),
+    );
   }, [users, create]);
 
   const createConversation = api.comments.createConversation.useMutation({

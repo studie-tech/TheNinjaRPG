@@ -9,6 +9,9 @@ import type { UserData } from "@/drizzle/schema";
  * When `includeVillageState` is true — used for `forceRegen` or (with outlaws) negative prestige —
  * village-bound fields are included; `fetchUpdatedUser` re-reads those columns from the DB first
  * so a stale in-memory snapshot cannot overwrite concurrent village mutations.
+ *
+ * Every column here must carry an absolute value. The caller re-issues this UPDATE when a pooled
+ * PlanetScale connection drops, which a `sql` increment would turn into a double-apply.
  */
 export const buildDerivedUserRegenUpdate = (props: {
   user: Pick<

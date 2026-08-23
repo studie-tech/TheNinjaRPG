@@ -539,9 +539,11 @@ export const blackMarketRouter = createTRPCRouter({
         rollHistory.secondary.push(user.secondaryElement);
       }
 
-      // Execute all addElementRoll operations in parallel
+      // Execute all addElementRoll operations in parallel, then reset the
+      // accumulator; drizzle builders re-run their query on every await
       if (mutations.length > 0) {
         await Promise.all(mutations);
+        mutations.length = 0;
       }
 
       // Get the new element

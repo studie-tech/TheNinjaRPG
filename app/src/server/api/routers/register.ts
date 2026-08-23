@@ -131,7 +131,8 @@ export const registerRouter = createTRPCRouter({
       if (selectedBloodline.hidden)
         return errorResponse("Hidden bloodlines are not allowed for new users");
 
-      // Mutate
+      // Mutate. Sorted so concurrent inserts for the same account take the
+      // UserAttribute unique-index locks in the same order and cannot deadlock.
       const unique_attributes = [
         ...new Set([
           input.attribute_1,
@@ -141,7 +142,33 @@ export const registerRouter = createTRPCRouter({
           `${input.eye_color} eyes`,
           `${input.skin_color} skin`,
         ]),
-      ];
+      ].sort();
+      // The account row is written on its own before anything that references it, so
+      // registration never leaves rows behind that look like orphans to the cleaner.
+      const createdUser = await ctx.drizzle
+        .insert(userData)
+        .values({
+          userId: ctx.userId,
+          lastIp: ctx.userIp,
+          recruiterId: input.recruiter_userid,
+          username: input.username,
+          gender: input.gender,
+          avatar: IMG_DEFAULT_PROFILE_PICTURE,
+          villageId: villageData.id,
+          bloodlineId: selectedBloodline.id,
+          approvedTos: true,
+          sector: villageData.sector,
+          extraJutsuSlots: 0,
+          immunityUntil: secondsFromNow(24 * 3600),
+          musicOn: input.musicOn ?? true,
+          sfxOn: input.sfxOn ?? true,
+          buttonSfxOn: input.buttonSfxOn ?? true,
+          ...(reminder ? { earnedExperience: 10000 } : {}),
+        })
+        .onDuplicateKeyUpdate({ set: { userId: sql`userId` } });
+      if (createdUser.rowsAffected === 0) {
+        return errorResponse("Character already created for this account");
+      }
       await ctx.drizzle
         .delete(userAttribute)
         .where(eq(userAttribute.userId, ctx.userId));
@@ -170,24 +197,6 @@ export const registerRouter = createTRPCRouter({
             })),
           )
           .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
-        ctx.drizzle.insert(userData).values({
-          userId: ctx.userId,
-          lastIp: ctx.userIp,
-          recruiterId: input.recruiter_userid,
-          username: input.username,
-          gender: input.gender,
-          avatar: IMG_DEFAULT_PROFILE_PICTURE,
-          villageId: villageData.id,
-          bloodlineId: selectedBloodline.id,
-          approvedTos: true,
-          sector: villageData.sector,
-          extraJutsuSlots: 0,
-          immunityUntil: secondsFromNow(24 * 3600),
-          musicOn: input.musicOn ?? true,
-          sfxOn: input.sfxOn ?? true,
-          buttonSfxOn: input.buttonSfxOn ?? true,
-          ...(reminder ? { earnedExperience: 10000 } : {}),
-        }),
         ctx.drizzle.insert(bloodlineRolls).values({
           id: nanoid(),
           userId: ctx.userId,

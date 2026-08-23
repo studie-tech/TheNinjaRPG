@@ -590,7 +590,7 @@ export const WarMap: React.FC<{
               setShowModal(true);
             }
           }}
-          actionExplanation="Double click tile to declare war on sector"
+          actionExplanation="Click tile to declare war on sector"
           hexasphere={globe}
         />
       )}

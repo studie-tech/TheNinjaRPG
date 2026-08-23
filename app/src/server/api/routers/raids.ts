@@ -80,7 +80,7 @@ export const raidsRouter = createTRPCRouter({
         description: "Get completed raids for history and rewards",
       },
     })
-    .input(z.object({ limit: z.number().min(1).max(50).prefault(20) }).optional())
+    .input(z.object({ limit: z.number().min(1).max(50).prefault(20) }).nullish())
     .query(async ({ ctx, input }) => {
       // Derived
       const now = new Date();
@@ -139,7 +139,7 @@ export const raidsRouter = createTRPCRouter({
         description: "Get available raids for current user",
       },
     })
-    .input(z.object({ sector: z.number().optional() }).optional())
+    .input(z.object({ sector: z.number().optional() }).nullish())
     .query(async ({ ctx, input }) => {
       // Query
       const { user } = await fetchUpdatedUser({

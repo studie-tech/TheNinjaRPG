@@ -57,7 +57,7 @@ jobs:
     steps:
       - name: Parse command and validate actor
         id: parse
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           ALLOW_USERS: ${{ vars.TNR_REVIEWER_ALLOW_USERS }}
         with:
@@ -136,7 +136,7 @@ jobs:
         if: steps.parse.outputs.should_run == 'true'
         id: initial_comment
         continue-on-error: true
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
@@ -174,7 +174,7 @@ jobs:
       check_name: ${{ steps.check_preview.outputs.check_name }}
       details_url: ${{ steps.check_preview.outputs.details_url }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Check Vercel preview health
         id: check_preview
@@ -218,7 +218,7 @@ jobs:
       # First checkout: default branch scripts (trusted — not PR-controlled).
       # These run with secrets in env, so they MUST NOT come from the PR head.
       - name: Checkout trusted scripts
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           path: trusted-scripts
@@ -233,7 +233,7 @@ jobs:
 
       # Second checkout: PR head for Codex to inspect
       - name: Checkout PR head
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           token: ${{ secrets.PAT_TOKEN }}
@@ -318,7 +318,7 @@ jobs:
       - name: Upload TNR artifacts
         if: always()
         id: upload_artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tnr-reviewer-pr-${{ needs.command_gate.outputs.pr_number }}-${{ github.run_id }}
           path: .artifacts

@@ -72,7 +72,7 @@ services:
   # SocketI server for websockets - Local Placeholder for deployed socketi deployment
   socketi:
     container_name: tnr_socketi
-    image: quay.io/soketi/soketi:1.4-16-debian
+    image: quay.io/soketi/soketi:1.6-16-debian
     restart: always
     ports:
       - "6001:6001"

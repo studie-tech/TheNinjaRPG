@@ -4,11 +4,18 @@ import type { Container, ISourceOptions } from "@tsparticles/engine";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { registerParticlePlugins } from "@/libs/particlePlugins";
 import { useActiveLayout } from "@/utils/LayoutContext";
 
-type ParticlesComponent = typeof import("@tsparticles/react")["default"];
+type ParticlesModule = typeof import("@tsparticles/react");
 
-let particlesLoader: Promise<ParticlesComponent> | null = null;
+type LoadedParticles = {
+  Particles: ParticlesModule["default"];
+  ParticlesProvider: ParticlesModule["ParticlesProvider"];
+  init: () => Promise<void>;
+};
+
+let particlesLoader: Promise<LoadedParticles> | null = null;
 
 const PARTICLE_COUNT_MAX = 200;
 const PARTICLE_COUNT_MIN = 100;
@@ -78,21 +85,19 @@ const setAdaptiveParticleCount = (container: Container, nextCount: number) => {
 };
 
 const loadParticles = () => {
-  particlesLoader ??= Promise.all([
-    import("@tsparticles/react"),
-    import("@tsparticles/slim"),
-  ]).then(async ([particlesModule, slimModule]) => {
-    await particlesModule.initParticlesEngine(async (engine) => {
-      await slimModule.loadSlim(engine);
-    });
-    return particlesModule.default;
-  });
+  particlesLoader ??= import("@tsparticles/react").then((particlesModule) => ({
+    Particles: particlesModule.default,
+    ParticlesProvider: particlesModule.ParticlesProvider,
+    // Memoizing the promise keeps this callback referentially stable, which
+    // ParticlesProvider requires for the lifetime of the app. Registration is shared
+    // with the confetti helper, which drives the same engine.
+    init: registerParticlePlugins,
+  }));
   return particlesLoader;
 };
 
 const ParticleProvider = () => {
-  const [ParticlesComponent, setParticlesComponent] =
-    useState<ParticlesComponent | null>(null);
+  const [particles, setParticles] = useState<LoadedParticles | null>(null);
   const [particlesContainer, setParticlesContainer] = useState<Container>();
   const particleContainerRef = useRef<Container | undefined>(undefined);
   const adaptiveParticleCountRef = useRef(PARTICLE_COUNT_MAX);
@@ -107,7 +112,7 @@ const ParticleProvider = () => {
   // this should be run only once per application lifetime
   useEffect(() => {
     if (!shouldRender) {
-      setParticlesComponent(null);
+      setParticles(null);
       setParticlesContainer(undefined);
       particleContainerRef.current = undefined;
       return;
@@ -115,8 +120,8 @@ const ParticleProvider = () => {
 
     let isCancelled = false;
     loadParticles()
-      .then((Component) => {
-        if (!isCancelled) setParticlesComponent(() => Component);
+      .then((loaded) => {
+        if (!isCancelled) setParticles(loaded);
       })
       .catch((error) => {
         console.error("Failed to initialize particles engine:", error);
@@ -265,14 +270,18 @@ const ParticleProvider = () => {
     setParticlesContainer(container);
   }, []);
 
-  if (!shouldRender || !ParticlesComponent) return null;
+  if (!shouldRender || !particles) return null;
+
+  const { Particles, ParticlesProvider } = particles;
 
   return (
-    <ParticlesComponent
-      id="tsparticles"
-      options={PARTICLE_OPTIONS}
-      particlesLoaded={handleParticlesLoaded}
-    />
+    <ParticlesProvider init={particles.init}>
+      <Particles
+        id="tsparticles"
+        options={PARTICLE_OPTIONS}
+        particlesLoaded={handleParticlesLoaded}
+      />
+    </ParticlesProvider>
   );
 };
 

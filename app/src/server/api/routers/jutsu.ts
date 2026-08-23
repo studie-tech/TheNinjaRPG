@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import {
   and,
   asc,
@@ -873,13 +872,9 @@ export const jutsuRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, input.userId),
       ]);
-      // Guard
-      if (!canEditJutsus(user.role)) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Not allowed to edit public user",
-        });
-      }
+      // Guard - the result only annotates jutsu names with levels, so a viewer
+      // without editing rights simply sees no levels
+      if (!canEditJutsus(user.role)) return [];
       // Return
       return results;
     }),

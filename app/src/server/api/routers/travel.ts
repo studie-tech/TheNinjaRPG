@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import type { inferRouterOutputs } from "@trpc/server";
 import { and, asc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
 import {
@@ -45,6 +46,7 @@ import { initiateBattle } from "@/routers/combat";
 import { fetchUser } from "@/routers/profile";
 import { breakStealth } from "@/routers/stealth";
 import { fetchSector, fetchSectorVillage } from "@/routers/village";
+import { isTransientDatabaseError } from "@/server/dbRetry";
 import {
   fetchPublishedSectorMap,
   getSectorNeighborIds,
@@ -531,9 +533,14 @@ export const travelRouter = createTRPCRouter({
         user.latitude = destination.y;
         user.status = "TRAVEL";
         user.travelFinishAt = endTime;
-        // Only broadcast if user is NOT stealthed
+        // Only broadcast if user is NOT stealthed. The sector being left is told
+        // too, the same way a sector crossing already does it, so the departing
+        // player stops being drawn there instead of lingering until the next poll.
         if (!isUserCurrentlyStealthed(user)) {
-          void updateUserOnMap(pusher, user.sector, user);
+          after(() => updateUserOnMap(pusher, input.sector, user));
+          if (departureSector !== input.sector) {
+            after(() => updateUserOnMap(pusher, departureSector, user));
+          }
         }
         return {
           success: true,
@@ -577,14 +584,15 @@ export const travelRouter = createTRPCRouter({
       }
       user.status = "AWAKE";
       user.travelFinishAt = null;
-      // Only broadcast if user is NOT stealthed
-      if (!isUserCurrentlyStealthed(user)) {
-        void updateUserOnMap(pusher, user.sector, user);
-      }
       await ctx.drizzle
         .update(userData)
         .set({ status: "AWAKE", travelFinishAt: null })
         .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "TRAVEL")));
+      // Deferred, not voided: the broadcast now runs after the write rather than
+      // before it, so nothing else keeps the invocation alive long enough to finish it.
+      if (!isUserCurrentlyStealthed(user)) {
+        after(() => updateUserOnMap(pusher, user.sector, user));
+      }
       return { success: true, message: "OK" };
     }),
   // Get all sector ownership
@@ -760,7 +768,7 @@ export const travelRouter = createTRPCRouter({
               destination,
             );
       // Optimistic update & query simultaneously
-      const [user, result, sectorVillage] = await Promise.all([
+      const moveOutcome = await Promise.all([
         ctx.drizzle.query.userData.findFirst({
           where: eq(userData.userId, userId),
           with: { anbuSquad: true },
@@ -798,7 +806,17 @@ export const travelRouter = createTRPCRouter({
               where: eq(village.sector, targetSector),
             })
           : undefined,
-      ]);
+      ]).catch((error: unknown) => {
+        // The CAS guard makes a blind retry unsafe: a re-issue after the first
+        // attempt already applied would match zero rows. Degrade to an ordinary
+        // failed response, which the client already clears its target on.
+        if (isTransientDatabaseError(error)) return null;
+        throw error;
+      });
+      if (!moveOutcome) {
+        return errorResponse("Connection hiccup, please try moving again");
+      }
+      const [user, result, sectorVillage] = moveOutcome;
       // Check if move was successful
       if (result.rowsAffected === 1) {
         // Check for encounters / village defence
@@ -866,30 +884,37 @@ export const travelRouter = createTRPCRouter({
             experience: user.experience,
             rank: user.rank,
           };
-          void updateUserOnMap(pusher, targetSector, broadcast);
+          after(() => updateUserOnMap(pusher, targetSector, broadcast));
           if (targetSector !== sector) {
-            void updateUserOnMap(pusher, sector, broadcast);
+            after(() => updateUserOnMap(pusher, sector, broadcast));
           }
         }
         return { success: true, message: "OK", data: output };
       } else {
-        // Get the user data
-        const user = await fetchUser(ctx.drizzle, userId);
+        // The read above raced the update, so it can predate whatever made the guard
+        // miss and would then explain the failure wrongly - or not at all, leaving the
+        // throw below. Re-read for the failure path; the success path keeps the snapshot.
+        const latest = await ctx.drizzle.query.userData.findFirst({
+          where: eq(userData.userId, userId),
+        });
+        if (!latest) {
+          return errorResponse("Your character no longer exists. Please refresh.");
+        }
         // Force an update on the map of the real information (only if not stealthed)
-        if (!isUserCurrentlyStealthed(user)) {
-          void updateUserOnMap(pusher, user.sector, user);
+        if (!isUserCurrentlyStealthed(latest)) {
+          after(() => updateUserOnMap(pusher, latest.sector, latest));
         }
         // Figure out return message
-        if (user.status !== "AWAKE") {
-          return errorResponse(`Status is: ${user.status.toLowerCase()}`);
+        if (latest.status !== "AWAKE") {
+          return errorResponse(`Status is: ${latest.status.toLowerCase()}`);
         }
-        if (user.sector !== sector) {
+        if (latest.sector !== sector) {
           return errorResponse("You are not in the correct sector");
         }
-        if (user.longitude !== curLongitude || user.latitude !== curLatitude) {
+        if (latest.longitude !== curLongitude || latest.latitude !== curLatitude) {
           return errorResponse("You have moved since you started this move");
         }
-        if (user.villageId !== villageId) {
+        if (latest.villageId !== villageId) {
           return errorResponse(
             "Seems like your village alliance has changed, please check profile.",
           );
@@ -898,11 +923,11 @@ export const travelRouter = createTRPCRouter({
           "BAD_REQUEST",
           `Unknown error while moving. Route input: ${JSON.stringify(input)}. User information: ${JSON.stringify(
             {
-              sector: user.sector,
-              longitude: user.longitude,
-              latitude: user.latitude,
-              status: user.status,
-              villageId: user.villageId,
+              sector: latest.sector,
+              longitude: latest.longitude,
+              latitude: latest.latitude,
+              status: latest.status,
+              villageId: latest.villageId,
             },
           )}`,
         );

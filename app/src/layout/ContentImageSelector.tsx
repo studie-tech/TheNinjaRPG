@@ -76,7 +76,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
           onUploadComplete(data.url);
           await utils.avatar.getHistoricalAvatars.invalidate();
         }
-        showMutationToast({ success: true, message: "Image generated" });
+        showMutationToast(data);
       },
     },
   );

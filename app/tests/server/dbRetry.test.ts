@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createRetryingFetch,
   isReadOnlyQuery,
+  isTransientDatabaseError,
   isTransientDatabaseResponse,
 } from "@/server/dbRetry";
 
@@ -13,6 +14,24 @@ const RESET_BODY = JSON.stringify({
   error: {
     message:
       "target: tnr.-.primary: vttablet: rpc error: code = Unavailable desc = error reading from server: read tcp 10.199.58.69:41408->10.199.169.104:15999: read: connection reset by peer",
+    code: "UNKNOWN",
+  },
+});
+
+// Verbatim body PlanetScale returns while a primary is being reparented
+const FAILOVER_BODY = JSON.stringify({
+  error: {
+    message:
+      "target: tnr.-.primary: inconsistent state detected, primary is serving but initially found no available tablet",
+    code: "UNKNOWN",
+  },
+});
+
+// Verbatim body PlanetScale returns for a deadlock (THENINJARPG-2D1)
+const DEADLOCK_BODY = JSON.stringify({
+  error: {
+    message:
+      "target: tnr.-.primary: vttablet: rpc error: code = Aborted desc = Deadlock found when trying to get lock; try restarting transaction (errno 1213)",
     code: "UNKNOWN",
   },
 });
@@ -64,6 +83,22 @@ describe("isTransientDatabaseResponse", () => {
     expect(isTransientDatabaseResponse(503, "{}")).toBe(true);
   });
 
+  it("detects a vtgate that has lost sight of the primary", () => {
+    expect(isTransientDatabaseResponse(200, FAILOVER_BODY)).toBe(true);
+    expect(isTransientDatabaseResponse(400, FAILOVER_BODY)).toBe(true);
+    expect(
+      isTransientDatabaseResponse(
+        200,
+        JSON.stringify({
+          error: {
+            message:
+              "target: tnr.-.primary: primary is not serving, there may be a reparent operation in progress",
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
   it("ignores ordinary query errors", () => {
     expect(
       isTransientDatabaseResponse(
@@ -72,6 +107,33 @@ describe("isTransientDatabaseResponse", () => {
       ),
     ).toBe(false);
     expect(isTransientDatabaseResponse(200, '{"result":{}}')).toBe(false);
+  });
+});
+
+describe("isTransientDatabaseError", () => {
+  it("detects a dropped connection through Drizzle's wrapper", () => {
+    const driver = new Error(
+      "target: tnr.-.primary: vttablet: rpc error: code = Unavailable desc = error reading from server: read tcp 10.199.35.236:54538->10.199.84.26:15999: read: connection reset by peer",
+    );
+    const wrapped = new Error("Failed query: update userData set ...", {
+      cause: driver,
+    });
+
+    expect(isTransientDatabaseError(wrapped)).toBe(true);
+  });
+
+  it("ignores ordinary query errors and non-errors", () => {
+    expect(
+      isTransientDatabaseError(new Error("Duplicate entry 'x' for key 'PRIMARY'")),
+    ).toBe(false);
+    expect(isTransientDatabaseError("connection reset by peer")).toBe(false);
+  });
+
+  it("stops walking a self-referential cause chain", () => {
+    const loop = new Error("boom") as Error & { cause?: unknown };
+    loop.cause = loop;
+
+    expect(isTransientDatabaseError(loop)).toBe(false);
   });
 });
 
@@ -93,7 +155,23 @@ describe("createRetryingFetch", () => {
     expect(await response.json()).toEqual({ result: { rows: [] } });
   });
 
-  it("never retries a write, even on a transient error", async () => {
+  it("retries a read that races a primary failover", async () => {
+    let calls = 0;
+    const baseFetch = vi.fn(async () => {
+      calls += 1;
+      return calls < 2
+        ? new Response(FAILOVER_BODY, { status: 400 })
+        : new Response('{"result":{"rows":[]}}', { status: 200 });
+    });
+    const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
+
+    const response = await retrying("https://db.test", postWithSession("select 1"));
+
+    expect(calls).toBe(2);
+    expect(await response.json()).toEqual({ result: { rows: [] } });
+  });
+
+  it("never retries a write that hit a dropped connection", async () => {
     const baseFetch = vi.fn(async () => new Response(RESET_BODY, { status: 200 }));
     const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
 
@@ -151,6 +229,87 @@ describe("createRetryingFetch", () => {
     const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
 
     const response = await retrying("https://db.test", postWithSession("select 1"));
+
+    expect(calls).toBe(2);
+    expect(await response.json()).toEqual({ result: { rows: [] } });
+  });
+
+  it("retries a write that lost a deadlock", async () => {
+    // Unambiguous, unlike a reset: InnoDB rolled the statement back in full, so
+    // re-issuing cannot double-apply the increment.
+    let calls = 0;
+    const baseFetch = vi.fn(async () => {
+      calls += 1;
+      return calls < 2
+        ? new Response(DEADLOCK_BODY, { status: 200 })
+        : new Response('{"result":{"rowsAffected":"1"}}', { status: 200 });
+    });
+    const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
+
+    const response = await retrying(
+      "https://db.test",
+      post("update `UserData` set `money` = `money` + 100"),
+    );
+
+    expect(calls).toBe(2);
+    expect(await response.text()).toContain("rowsAffected");
+  });
+
+  it("retries a read that lost a deadlock", async () => {
+    let calls = 0;
+    const baseFetch = vi.fn(async () => {
+      calls += 1;
+      return calls < 2
+        ? new Response(DEADLOCK_BODY, { status: 200 })
+        : new Response('{"result":{"rows":[]}}', { status: 200 });
+    });
+    const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
+
+    const response = await retrying("https://db.test", post("select 1"));
+
+    expect(calls).toBe(2);
+    expect(await response.json()).toEqual({ result: { rows: [] } });
+  });
+
+  it("never retries inside a transaction, even on a deadlock", async () => {
+    // A deadlock rolls the whole transaction back, so replaying one statement
+    // would lose everything the transaction did before it.
+    const baseFetch = vi.fn(async () => new Response(DEADLOCK_BODY, { status: 200 }));
+    const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
+
+    const response = await retrying(
+      "https://db.test",
+      postInTransaction("update `UserData` set `money` = `money` + 100"),
+    );
+
+    expect(baseFetch).toHaveBeenCalledTimes(1);
+    expect(await response.text()).toContain("Deadlock found");
+  });
+
+  it("never retries a write whose fetch rejects", async () => {
+    // A rejected fetch says nothing about whether the statement reached the
+    // database, so re-issuing could apply a money or XP increment twice.
+    const baseFetch = vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    });
+    const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
+
+    await expect(
+      retrying("https://db.test", post("update `UserData` set `money` = `money` + 100")),
+    ).rejects.toThrow(TypeError);
+    expect(baseFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a read whose fetch rejects", async () => {
+    let calls = 0;
+    const baseFetch = vi.fn(async () => {
+      calls += 1;
+      if (calls < 2) throw new TypeError("fetch failed");
+      return new Response('{"result":{"rows":[]}}', { status: 200 });
+    });
+    const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
+
+    const response = await retrying("https://db.test", post("select 1"));
 
     expect(calls).toBe(2);
     expect(await response.json()).toEqual({ result: { rows: [] } });

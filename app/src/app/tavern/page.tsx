@@ -32,9 +32,14 @@ export default function Tavern() {
   const { data: villages } = api.village.getAll.useQuery(undefined, {
     enabled: !!userData,
   });
-  const { data: sectorVillage, isPending } = api.travel.getVillageInSector.useQuery(
+  // isLoading rather than isPending: a disabled query stays pending indefinitely, which
+  // would hold the loader below in place for anyone whose sector is missing.
+  const { data: sectorVillage, isLoading: isLoadingSector } =
+    api.travel.getVillageInSector.useQuery(
     { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
-    { enabled: !!userData },
+    // A loaded user without a sector would otherwise send the -1 placeholder, which
+    // the sector schema rejects. Sector 0 is real, so test for presence, not truth.
+    { enabled: userData?.sector != null },
   );
   const { data: globalTavernEnabled = true, isPending: isLoadingGlobalTavern } =
     api.misc.getGlobalTavernEnabled.useQuery();
@@ -104,7 +109,7 @@ export default function Tavern() {
   };
 
   // Blockers
-  if (!userData || isPending || isLoadingGlobalTavern) {
+  if (!userData || isLoadingSector || isLoadingGlobalTavern) {
     return <ConversationSkeleton {...convoProps} />;
   }
   if (userData.isBanned || userData.isSilenced) return <BanInfo />;

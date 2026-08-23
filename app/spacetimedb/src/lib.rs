@@ -15,7 +15,7 @@ use spacetimedb::{
     reducer, table, ReducerContext, ScheduleAt, SpacetimeType, Table, Timestamp,
     TimeDuration,
 };
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
@@ -770,7 +770,7 @@ fn internal_start_wave(ctx: &ReducerContext, session: GameSession, state: Sessio
     // Get and shuffle edge tiles
     let mut edge_tiles = get_edge_tiles(new_grid_size);
     for i in (1..edge_tiles.len()).rev() {
-        let j = rng.gen_range(0..=i);
+        let j = rng.random_range(0..=i);
         edge_tiles.swap(i, j);
     }
     
@@ -794,7 +794,7 @@ fn internal_start_wave(ctx: &ReducerContext, session: GameSession, state: Sessio
         
         for _ in 0..count {
             // Skip enemy chance
-            if state.skip_enemy_chance > 0.0 && rng.gen::<f64>() < state.skip_enemy_chance {
+            if state.skip_enemy_chance > 0.0 && rng.random::<f64>() < state.skip_enemy_chance {
                 continue;
             }
             
@@ -909,7 +909,7 @@ pub fn throw_shuriken(ctx: &ReducerContext, session_id: u64, target_col: u32, ta
     
     // Create projectile with spawn time (client computes progress)
     let mut rng = create_rng(&format!("{}-projectile-{}", session.seed, now));
-    let crit_roll = rng.gen::<f64>();
+    let crit_roll = rng.random::<f64>();
     
     // COST OPTIMIZATION: Only send spawn, client interpolates progress
     ctx.db.projectile().insert(Projectile {
@@ -1267,7 +1267,7 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
             
             if let Some((_, target_col, target_row, _)) = closest_enemy {
                 let mut rng = create_rng(&format!("{}-auto-{}", session.seed, now));
-                let crit_roll = rng.gen::<f64>();
+                let crit_roll = rng.random::<f64>();
                 
                 // COST OPTIMIZATION: Only insert, client computes progress from spawned_at
                 ctx.db.projectile().insert(Projectile {
@@ -1332,7 +1332,7 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
                         } else {
                             // Apply knockback - need to look up path from spawn table
                             let mut rng = create_rng(&format!("{}-kb-{}-{}", session.seed, now, enemy.id));
-                            if state.knockback_force > 0.0 && rng.gen::<f64>() < state.knockback_chance {
+                            if state.knockback_force > 0.0 && rng.random::<f64>() < state.knockback_chance {
                                 if let Some(spawn) = ctx.db.enemy_spawn().enemy_id().find(enemy.id) {
                                     let new_path_index = enemy.path_index.saturating_sub(state.knockback_force.ceil() as u32);
                                     let new_pos = spawn.path.get(new_path_index as usize).unwrap_or(&enemy_pos);
