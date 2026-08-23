@@ -230,9 +230,9 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
   // would keep the access check below from ever running.
   const { data: sectorVillage, isLoading: isLoadingSector } =
     api.travel.getVillageInSector.useQuery(
-    { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
-    { enabled: userData?.sector != null },
-  );
+      { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
+      { enabled: userData?.sector != null },
+    );
   const ownVillage = userData?.village?.sector === sectorVillage?.sector;
   const router = useRouter();
   useEffect(() => {

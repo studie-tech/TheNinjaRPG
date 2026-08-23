@@ -38,7 +38,8 @@ const handler = async (req: NextRequest) => {
       const isUnregisteredUser =
         error.code === "NOT_FOUND" &&
         !!ctx?.userId &&
-        error.message === `User not found: ${ctx.userId}. Please complete registration.`;
+        error.message ===
+          `User not found: ${ctx.userId}. Please complete registration.`;
       if (
         !isCrawlerMethodRejection &&
         !isUnregisteredUser &&

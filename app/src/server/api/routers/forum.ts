@@ -142,12 +142,7 @@ export const forumRouter = createTRPCRouter({
       }
       if (isNews) {
         void Promise.allSettled(
-          publishNewsToSocialMedia(
-            input.title,
-            sanitized,
-            user.avatar,
-            input.image,
-          ),
+          publishNewsToSocialMedia(input.title, sanitized, user.avatar, input.image),
         );
       }
       return { success: true, message: "Thread created" };

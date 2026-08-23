@@ -126,10 +126,7 @@ export default function Profile() {
             {topPlayers && (
               <TooltipProvider delayDuration={50}>
                 <div className="flex flex-row items-center gap-1">
-                  <p>
-                    PvP Rank:{" "}
-                    {getRankedRank(userData.rankedLp, topPlayers)}
-                  </p>
+                  <p>PvP Rank: {getRankedRank(userData.rankedLp, topPlayers)}</p>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button

@@ -3,6 +3,7 @@ import {
   type FetchImpl,
   referencesIssue,
   verifyContributionResult,
+  verifyGistOwnership,
 } from "@/libs/devContribution/github";
 import {
   ensureClarifiedLabel,
@@ -626,5 +627,65 @@ describe("open-ref feeds report truncation", () => {
       new Response(JSON.stringify(page(1, 2)), { status: 200 });
     expect((await fetchOpenIssues(fetchImpl, "token")).truncated).toBe(false);
     expect((await fetchOpenPullRequests(fetchImpl, "token")).truncated).toBe(false);
+  });
+});
+
+describe("verifyGistOwnership", () => {
+  // This is the only thing binding a game account to a GitHub identity, and the
+  // whole reward model rests on it: everything downstream trusts githubLogin.
+  const gist = (owner: string | undefined, content: string) => ({
+    match: "/gists/abc",
+    body: {
+      ...(owner ? { owner: { login: owner } } : {}),
+      files: { "tnr.txt": { content } },
+    },
+  });
+  const args = { gistId: "abc", login: "octocat", nonce: "nonce-123" };
+
+  it("accepts a gist owned by the claimed login containing the nonce", async () => {
+    const res = await verifyGistOwnership(args, {
+      fetchImpl: mockFetch([gist("octocat", "tnr verification nonce-123")]),
+    });
+    expect(res.ok).toBe(true);
+    expect(res.login).toBe("octocat");
+  });
+
+  it("matches the owner case-insensitively", async () => {
+    const res = await verifyGistOwnership(args, {
+      fetchImpl: mockFetch([gist("OctoCat", "nonce-123")]),
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("rejects a gist owned by someone else, even with the right nonce", async () => {
+    // Otherwise anyone could paste a victim's login and point at their own gist.
+    const res = await verifyGistOwnership(args, {
+      fetchImpl: mockFetch([gist("someone-else", "nonce-123")]),
+    });
+    expect(res.ok).toBe(false);
+    expect(res.login).toBeUndefined();
+  });
+
+  it("rejects a gist that does not contain the nonce", async () => {
+    const res = await verifyGistOwnership(args, {
+      fetchImpl: mockFetch([gist("octocat", "unrelated content")]),
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it("rejects an anonymous gist", async () => {
+    const res = await verifyGistOwnership(args, {
+      fetchImpl: mockFetch([gist(undefined, "nonce-123")]),
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it("rejects when the gist cannot be read, and does not throw on a network error", async () => {
+    const missing = await verifyGistOwnership(args, {
+      fetchImpl: mockFetch([{ match: "/gists/abc", body: {}, status: 404 }]),
+    });
+    expect(missing.ok).toBe(false);
+    const down = await verifyGistOwnership(args, { fetchImpl: throwingFetch });
+    expect(down.ok).toBe(false);
   });
 });

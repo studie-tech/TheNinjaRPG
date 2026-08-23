@@ -99,10 +99,7 @@ const htmlToText = (html: string, breakText: string, collapse: RegExp) => {
     },
   });
 
-  return decodeHTML(text)
-    .replace(/\r\n?/g, "\n")
-    .replace(collapse, " ")
-    .trim();
+  return decodeHTML(text).replace(/\r\n?/g, "\n").replace(collapse, " ").trim();
 };
 
 /** Converts stored HTML to normalized text without retaining script/style contents. */

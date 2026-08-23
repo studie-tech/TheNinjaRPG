@@ -2835,7 +2835,10 @@ const persistPassiveRegenToDb = async ({
     userForRegenPersist,
   );
 
-  await client.update(userData).set(derivedUserUpdate).where(eq(userData.userId, userId));
+  await client
+    .update(userData)
+    .set(derivedUserUpdate)
+    .where(eq(userData.userId, userId));
 };
 
 export const fetchPublicUsers = async (info: {

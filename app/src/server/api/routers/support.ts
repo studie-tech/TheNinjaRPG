@@ -26,7 +26,6 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { reduceByKey } from "@/utils/grouping";
-import sanitize from "@/utils/sanitize";
 import {
   canAssignSupportTicket,
   canDeleteSupportTicket,
@@ -38,6 +37,7 @@ import {
   canViewSupportStatistics,
   canViewSupportTicket,
 } from "@/utils/permissions";
+import sanitize from "@/utils/sanitize";
 import {
   createSupportTicketSchema,
   escalateToGithubSchema,

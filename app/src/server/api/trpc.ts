@@ -279,8 +279,19 @@ export const createTRPCRouter = t.router;
  */
 const DEVICE_TOKEN_ROUTER_PREFIX = "devContribution.";
 
+/**
+ * Whether a device token may call this procedure.
+ *
+ * A device token authenticates the desktop client, which has no business
+ * touching the rest of the API — so it is confined to the contribution router.
+ * The trailing dot matters: without it a router merely *prefixed* with the name
+ * would slip through.
+ */
+export const isDeviceTokenPathAllowed = (path: string): boolean =>
+  path.startsWith(DEVICE_TOKEN_ROUTER_PREFIX);
+
 const enforceDeviceTokenScope = t.middleware(async ({ ctx: context, path, next }) => {
-  if (context.deviceTokenJti && !path.startsWith(DEVICE_TOKEN_ROUTER_PREFIX)) {
+  if (context.deviceTokenJti && !isDeviceTokenPathAllowed(path)) {
     throw new TRPCError({
       message: `Device tokens may only be used for ${DEVICE_TOKEN_ROUTER_PREFIX}* (attempted ${path})`,
       code: "UNAUTHORIZED",

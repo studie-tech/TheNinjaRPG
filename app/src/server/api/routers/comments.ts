@@ -770,12 +770,7 @@ export const commentsRouter = createTRPCRouter({
         .filter((id): id is string => !!id);
 
       const [notifiedUserIds] = await Promise.all([
-        fetchUsersToNotify(
-          ctx.drizzle,
-          ctx.userId,
-          mentionedUserNames,
-          quotedUserIds,
-        ),
+        fetchUsersToNotify(ctx.drizzle, ctx.userId, mentionedUserNames, quotedUserIds),
         // Insert into DB
         ctx.drizzle.insert(conversationComment).values({
           id: commentId,

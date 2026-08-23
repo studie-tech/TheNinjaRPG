@@ -794,7 +794,7 @@ export const EditContent = <
                                                   className={cn(
                                                     "ml-auto",
                                                     String(option.value) ===
-                                                    String(field.value)
+                                                      String(field.value)
                                                       ? "opacity-100"
                                                       : "opacity-0",
                                                   )}

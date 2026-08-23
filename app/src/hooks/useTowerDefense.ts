@@ -140,9 +140,9 @@ const getHudStore = (): HudStore => {
 
 const hudStore = getHudStore();
 
+export type { HudValues };
 // Export for use in page.tsx
 export { hudStore };
-export type { HudValues };
 
 /**
  * Custom hook that subscribes to the HUD store using useSyncExternalStore.

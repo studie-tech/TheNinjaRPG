@@ -49,9 +49,7 @@ export const checkForBadWords = async (content: string): Promise<BadWordsResult>
  * bodies that are stored as HTML. Names and titles should call
  * checkForBadWords only.
  */
-export const moderateUserText = async (
-  content: string,
-): Promise<ModeratedUserText> => {
+export const moderateUserText = async (content: string): Promise<ModeratedUserText> => {
   const moderationResult = await checkForBadWords(content);
   if (!moderationResult.success) return moderationResult;
   return {

@@ -36,11 +36,11 @@ export default function Tavern() {
   // would hold the loader below in place for anyone whose sector is missing.
   const { data: sectorVillage, isLoading: isLoadingSector } =
     api.travel.getVillageInSector.useQuery(
-    { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
-    // A loaded user without a sector would otherwise send the -1 placeholder, which
-    // the sector schema rejects. Sector 0 is real, so test for presence, not truth.
-    { enabled: userData?.sector != null },
-  );
+      { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
+      // A loaded user without a sector would otherwise send the -1 placeholder, which
+      // the sector schema rejects. Sector 0 is real, so test for presence, not truth.
+      { enabled: userData?.sector != null },
+    );
   const { data: globalTavernEnabled = true, isPending: isLoadingGlobalTavern } =
     api.misc.getGlobalTavernEnabled.useQuery();
 

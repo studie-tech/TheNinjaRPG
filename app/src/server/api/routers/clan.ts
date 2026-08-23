@@ -574,17 +574,23 @@ export const clanRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, villageData, clans, clanWithName, villageWithName, moderationResult] =
-        await Promise.all([
-          fetchUser(ctx.drizzle, ctx.userId),
-          fetchVillage(ctx.drizzle, input.villageId),
-          fetchClans(ctx.drizzle, input.villageId),
-          fetchClanByName(ctx.drizzle, input.name),
-          ctx.drizzle.query.village.findFirst({
-            where: eq(village.name, input.name),
-          }),
-          checkForBadWords(input.name),
-        ]);
+      const [
+        user,
+        villageData,
+        clans,
+        clanWithName,
+        villageWithName,
+        moderationResult,
+      ] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchVillage(ctx.drizzle, input.villageId),
+        fetchClans(ctx.drizzle, input.villageId),
+        fetchClanByName(ctx.drizzle, input.name),
+        ctx.drizzle.query.village.findFirst({
+          where: eq(village.name, input.name),
+        }),
+        checkForBadWords(input.name),
+      ]);
       // Derived
       const villageId = villageData?.id;
       const structure = villageData?.structures.find((s) => s.route === "/clanhall");
