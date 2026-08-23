@@ -16,6 +16,7 @@ import {
   Sprite,
   SpriteMaterial,
 } from "three";
+import type { AvatarFacing } from "@/drizzle/constants";
 import {
   ASSETS_LAYER,
   DIRT_LAYER,
@@ -58,6 +59,7 @@ import {
   getClan,
   getEffectiveCurPool,
   getEffectiveMaxPool,
+  getFacingDirection,
   getVillage,
 } from "@/libs/combat/util";
 import { builtinTerrainDepression } from "@/libs/sector-map/terrains";
@@ -709,6 +711,43 @@ export const drawCombatEffect = (info: {
   }
 };
 
+/** Name of the raw-artwork sprite inside an AI's user group. */
+export const AI_AVATAR_SPRITE = "aiAvatar";
+
+/** State `setAiAvatarFacing` keeps on the sprite so it can swap its own material. */
+type AiAvatarData = {
+  /** Which way the source artwork points, straight off the AI's `avatarFacing`. */
+  avatarFacing: AvatarFacing;
+  avatarPath: string;
+  mirrored: boolean;
+};
+
+/**
+ * Material for an AI's raw artwork. Mirroring rides on a flipped texture rather
+ * than a negative scale: the sprite shader takes `length()` of the model matrix
+ * columns, so a negative `scale.x` on a Sprite is silently ignored.
+ */
+const aiAvatarMaterial = (avatarPath: string, mirrored: boolean) => {
+  const map = loadTexture(avatarPath, 50, mirrored);
+  map.generateMipmaps = false;
+  map.minFilter = LinearFilter;
+  const material = createSpriteMaterial(map);
+  material.side = DoubleSide;
+  return material;
+};
+
+/**
+ * Mirror an AI's artwork so it looks toward `facing`. The sprite remembers which
+ * way its source image points, so a flip is only applied when the two disagree.
+ */
+export const setAiAvatarFacing = (sprite: Sprite, facing: AvatarFacing) => {
+  const data = sprite.userData as AiAvatarData;
+  const mirrored = data.avatarFacing !== facing;
+  if (data.mirrored === mirrored) return;
+  data.mirrored = mirrored;
+  sprite.material = aiAvatarMaterial(data.avatarPath, mirrored);
+};
+
 /**
  * User sprite, which loads the avatar image and displays the health bar as a js sprite
  */
@@ -742,19 +781,16 @@ export const createUserSprite = (
   // User marker background or raw image
   const noMarker = userData.isAi && userData.isOriginal;
   if (noMarker) {
-    const map = loadTexture(
-      userData.avatar ? `${userData.avatar}?1=1` : IMG_AVATAR_DEFAULT,
-    );
-    map.generateMipmaps = false;
-    map.minFilter = LinearFilter;
-    if (userData.direction === "right") {
-      map.repeat.set(-1, 1);
-      map.offset.set(1, 0);
-    }
-    const material = createSpriteMaterial(map);
-    material.side = DoubleSide;
-    const sprite = new Sprite(material);
-    sprite.scale.set(-2 * h * 0.8, 2 * h * 0.8, 1);
+    const avatarPath = userData.avatar ? `${userData.avatar}?1=1` : IMG_AVATAR_DEFAULT;
+    const sprite = new Sprite(aiAvatarMaterial(avatarPath, false));
+    sprite.name = AI_AVATAR_SPRITE;
+    // drawCombatUsers turns this toward the opponent on the same frame
+    sprite.userData = {
+      avatarFacing: userData.avatarFacing ?? "left",
+      avatarPath,
+      mirrored: false,
+    } satisfies AiAvatarData;
+    sprite.scale.set(2 * h * 0.8, 2 * h * 0.8, 1);
     sprite.position.set(w / 2, h * 0.9, USER_LAYER);
     group.add(sprite);
     // Star on summons
@@ -1256,6 +1292,17 @@ export const drawCombatUsers = (info: {
           needsOpacityUpdate = true;
         }
       }
+      // Turn AI artwork toward whoever it is fighting
+      const avatarSprite = userMesh?.getObjectByName(AI_AVATAR_SPRITE) as
+        | Sprite
+        | undefined;
+      if (avatarSprite) {
+        setAiAvatarFacing(
+          avatarSprite,
+          getFacingDirection(user, users, user.avatarFacing ?? "left", usersEffects),
+        );
+      }
+
       // Get location
       if (userMesh && grid) {
         userMesh.visible = true;

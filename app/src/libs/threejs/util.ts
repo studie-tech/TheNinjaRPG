@@ -75,8 +75,14 @@ const pendingLoads = new Map<string, Promise<Texture>>();
  * adds `optimizer=image` on extensionless UploadThing keys (PR 1427); Bunny
  * then caches a processed rendition instead of the original file, which is
  * what broke travel-map portraits.
+ *
+ * `mirrored` returns a horizontally flipped twin under its own cache key. It is a
+ * second Texture over the same URL rather than a clone or a repeat/offset tweak on
+ * the shared one: every caller of a given URL shares one Texture, so mutating it
+ * would flip that image everywhere, and `.clone()` copies the still-null image of
+ * an in-flight load. The browser serves the second request from its own HTTP cache.
  */
-export const loadTexture = (path: string, width = 50) => {
+export const loadTexture = (path: string, width = 50, mirrored = false) => {
   // Guard against empty or invalid paths - callers should provide fallback URLs
   if (!path || path.trim() === "") {
     const fallback = new Texture();
@@ -85,14 +91,20 @@ export const loadTexture = (path: string, width = 50) => {
   }
 
   const transformedPath = textureImageUrl(path, width);
+  const cacheKey = mirrored ? `${transformedPath}#mirrored` : transformedPath;
 
   // Return cached texture if available
-  const cached = textureCache.get(transformedPath);
+  const cached = textureCache.get(cacheKey);
   if (cached) return cached;
 
   const texture = getTextureLoader().load(transformedPath);
   texture.colorSpace = SRGBColorSpace;
-  textureCache.set(transformedPath, texture);
+  if (mirrored) {
+    // u = 1 - uv stays inside [0,1], so the default clamped wrapping is enough
+    texture.repeat.set(-1, 1);
+    texture.offset.set(1, 0);
+  }
+  textureCache.set(cacheKey, texture);
   return texture;
 };
 
