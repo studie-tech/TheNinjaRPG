@@ -128,6 +128,15 @@ export const isExtensionExecutorStack = (
   paths.length > 0 &&
   paths.every((path) => !!path && EXTENSION_EXECUTOR_PATH.test(path));
 
+/**
+ * A chained error arrives as several exception values, and only one of them has to
+ * contain our code for the event to be worth keeping - so every value must be
+ * executor-only, and an event carrying none at all is never dropped.
+ */
+export const isExtensionExecutorEvent = (
+  stacks: Array<Array<string | undefined>>,
+): boolean => stacks.length > 0 && stacks.every(isExtensionExecutorStack);
+
 export const isNetworkError = createErrorPatternMatcher([
   "Load failed",
   "fetch failed",

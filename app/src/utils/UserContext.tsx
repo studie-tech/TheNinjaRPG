@@ -226,14 +226,17 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
   // Get sector information based on user data
   // Sector 0 is a real sector, so gate on the value being present rather than on it
   // being truthy, which skipped the query entirely for anyone standing in sector 0.
-  const { data: sectorVillage, isPending } = api.travel.getVillageInSector.useQuery(
+  // isLoading rather than isPending: a disabled query never stops being pending, which
+  // would keep the access check below from ever running.
+  const { data: sectorVillage, isLoading: isLoadingSector } =
+    api.travel.getVillageInSector.useQuery(
     { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
     { enabled: userData?.sector != null },
   );
   const ownVillage = userData?.village?.sector === sectorVillage?.sector;
   const router = useRouter();
   useEffect(() => {
-    if (userData && !isPending) {
+    if (userData && !isLoadingSector) {
       if (!userData.isOutlaw) {
         // Check structure access
         const access = canAccessStructure(userData, structureRoute, sectorVillage);
@@ -247,7 +250,7 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
         setAccess(true);
       }
     }
-  }, [userData, sectorVillage, router, isPending, structureRoute, ownVillage]);
+  }, [userData, sectorVillage, router, isLoadingSector, structureRoute, ownVillage]);
   return {
     userData,
     notifications,
