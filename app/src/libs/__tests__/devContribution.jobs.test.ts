@@ -139,7 +139,7 @@ describe("shouldCreatePrReviewJob", () => {
 
 describe("computeBackfillJobs", () => {
   it("produces specs for eligible refs and skips ineligible ones", () => {
-    const specs = computeBackfillJobs({
+    const { specs } = computeBackfillJobs({
       issues: [
         { number: 1, title: "t", labels: ["bug"], url: "u1" },
         {
@@ -168,6 +168,26 @@ describe("computeBackfillJobs", () => {
       "ISSUE_IMPLEMENT",
       "PR_REVIEW",
     ]);
+  });
+
+  it("reports the obsolete job on a clarified issue so the cron cancels it", () => {
+    // The issue has been clarified since its triage job was created, so the
+    // triage job is obsolete. The cron path must surface it for cancellation —
+    // dropping it leaves both job types live on one issue and the stale triage
+    // still pays out. A CLAIMED job counts: nothing has been submitted yet.
+    const claimedTriage = job({
+      id: 77,
+      refNumber: 2,
+      jobType: "ISSUE_TRIAGE",
+      status: "CLAIMED",
+    });
+    const { specs, cancelJobIds } = computeBackfillJobs({
+      issues: [{ number: 2, title: "t", labels: ["Fully Clarified"], url: "u2" }],
+      pullRequests: [],
+      existingJobs: [claimedTriage],
+    });
+    expect(cancelJobIds).toEqual([77]);
+    expect(specs.map((s) => s.jobType)).toEqual(["ISSUE_IMPLEMENT"]);
   });
 });
 

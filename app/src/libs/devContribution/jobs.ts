@@ -136,11 +136,19 @@ export const shouldCreatePrReviewJob = (
 // Diff GitHub's open refs against existing jobs and return the specs to create.
 // This is the single source of truth for job creation, used by both the cron
 // backfill and (as a guard) the webhook path.
-export const computeBackfillJobs = (input: BackfillInput): JobSpec[] => {
+export const computeBackfillJobs = (
+  input: BackfillInput,
+): { specs: JobSpec[]; cancelJobIds: number[] } => {
   const specs: JobSpec[] = [];
+  // Jobs whose type is no longer the one the issue wants (e.g. a triage job on
+  // an issue that has since been clarified). The webhook path already cancels
+  // these; the cron has to as well, or a missed webhook leaves both job types
+  // live on the same issue and the obsolete one still pays out.
+  const cancelJobIds: number[] = [];
 
   for (const issue of input.issues) {
     const plan = planIssueJob(issue, input.existingJobs);
+    cancelJobIds.push(...plan.cancelJobIds);
     if (plan.create) {
       specs.push({
         jobType: plan.create,
@@ -175,7 +183,7 @@ export const computeBackfillJobs = (input: BackfillInput): JobSpec[] => {
     }
   }
 
-  return specs;
+  return { specs, cancelJobIds };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

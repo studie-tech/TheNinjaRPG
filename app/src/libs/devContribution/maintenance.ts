@@ -32,6 +32,7 @@ export interface MaintenanceReport {
   verificationsResolved: number;
   verificationsRewarded: number;
   jobsCreated: number;
+  jobsCancelled: number;
   labelEnsured: boolean;
   errors: string[];
 }
@@ -74,6 +75,36 @@ const releaseClaimSlots = async (db: DrizzleClient, jobIds: number[]) => {
     .update(devContributionProfile)
     .set({ activeJobId: null, updatedAt: new Date() })
     .where(inArray(devContributionProfile.activeJobId, jobIds));
+};
+
+/**
+ * Cancel jobs that have become obsolete because the issue's desired job type
+ * changed (e.g. a triage job on an issue that has since been clarified).
+ *
+ * PENDING and CLAIMED are cancelled: nobody has submitted that work yet, and
+ * leaving it live means the same issue carries two job types at once and the
+ * obsolete one still pays out. VERIFYING is deliberately left alone — the
+ * contributor already did and submitted that work, so it must still be able to
+ * verify and pay.
+ */
+export const cancelObsoleteJobs = async (
+  db: DrizzleClient,
+  ids: number[],
+): Promise<number> => {
+  if (ids.length === 0) return 0;
+  const result = await db
+    .update(devJob)
+    .set({
+      status: "CANCELLED",
+      ...clearClaimFields,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(inArray(devJob.id, ids), inArray(devJob.status, ["PENDING", "CLAIMED"])),
+    );
+  // A cancelled CLAIMED job was holding its owner's single claim slot.
+  await releaseClaimSlots(db, ids);
+  return result.rowsAffected;
 };
 
 // Release claimed jobs whose heartbeat has stopped, back to PENDING while the
@@ -428,6 +459,7 @@ export const runMaintenance = async (
     verificationsResolved: 0,
     verificationsRewarded: 0,
     jobsCreated: 0,
+    jobsCancelled: 0,
     labelEnsured: false,
     errors: [],
   };
@@ -475,7 +507,12 @@ export const runMaintenance = async (
       pullRequests.map((p) => p.number),
     );
 
-    const specs = computeBackfillJobs({ issues, pullRequests, existingJobs });
+    const { specs, cancelJobIds } = computeBackfillJobs({
+      issues,
+      pullRequests,
+      existingJobs,
+    });
+    report.jobsCancelled = await cancelObsoleteJobs(db, cancelJobIds);
     for (const spec of specs) {
       // Belt and braces: skip if an active job for this ref+type appeared
       // between the read and now (e.g. a webhook event just landed).

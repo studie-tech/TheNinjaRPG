@@ -13,6 +13,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { devJob } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { planIssueJob, shouldCreatePrReviewJob } from "./jobs";
+import { cancelObsoleteJobs } from "./maintenance";
 import type { ExistingJob } from "./types";
 
 export interface WebhookEventSummary {
@@ -112,7 +113,9 @@ export const processContributionIssueEvent = async (
   const plan = planIssueJob({ number: issue.number, labels: issue.labels }, existing);
 
   if (plan.cancelJobIds.length > 0) {
-    summary.cancelled = await cancelPending(db, plan.cancelJobIds);
+    // Obsolete jobs, not merely pending ones: a CLAIMED triage job on an issue
+    // that has just been clarified is now pointless work that would still pay.
+    summary.cancelled = await cancelObsoleteJobs(db, plan.cancelJobIds);
   }
 
   if (plan.create) {
