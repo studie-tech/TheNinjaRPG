@@ -125,7 +125,7 @@ this is a required one-off step — `claimNextJob` refuses to hand out work unti
 it is done:
 
 1. `devContribution.requestGithubVerification { githubLogin }` returns a nonce.
-2. Publish it: `gh gist create --public --desc "TheNinja-RPG verification" - <<< "<nonce>"`
+2. Publish it: `echo "<nonce>" | gh gist create --public --desc "TheNinja-RPG verification" -`
 3. `devContribution.confirmGithubVerification { githubLogin, gistId }` — the
    server reads the gist back and checks its owner before recording the login.
 

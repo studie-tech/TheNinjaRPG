@@ -204,8 +204,8 @@ export const devContributionRouter = createTRPCRouter({
         message: "Publish this code in a public gist to prove ownership",
         nonce,
         instructions:
-          `Run: gh gist create --public --desc "TheNinja-RPG verification" ` +
-          `- <<< "${nonce}"`,
+          `Run: echo "${nonce}" | gh gist create --public ` +
+          `--desc "TheNinja-RPG verification" -`,
       };
     }),
 
