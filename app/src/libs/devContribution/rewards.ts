@@ -8,12 +8,18 @@
 // across them.
 
 import { and, eq, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import {
   CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY,
   CONTRIBUTION_REWARDS,
   type ContributionJobType,
 } from "@/drizzle/constants";
-import { devContributionProfile, devJob, userData } from "@/drizzle/schema";
+import {
+  devContributionProfile,
+  devJob,
+  userData,
+  userRewards,
+} from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 export interface ContributionReward {
@@ -134,15 +140,27 @@ export const grantContributionReward = async (params: {
   // rewardGranted is deliberately NOT rolled back if this throws: leaving it set
   // makes the payout at-most-once, which for an economy is the right way to fail
   // (a rare under-payment is reconcilable; a double credit is not).
-  await client
-    .update(userData)
-    .set({
-      money: sql`${userData.money} + ${reward.money}`,
-      earnedExperience: sql`${userData.earnedExperience} + ${reward.exp}`,
-      reputationPoints: sql`${userData.reputationPoints} + ${reward.reputation}`,
-      reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${reward.reputation}`,
-    })
-    .where(eq(userData.userId, userId));
+  await Promise.all([
+    client
+      .update(userData)
+      .set({
+        money: sql`${userData.money} + ${reward.money}`,
+        earnedExperience: sql`${userData.earnedExperience} + ${reward.exp}`,
+        reputationPoints: sql`${userData.reputationPoints} + ${reward.reputation}`,
+        reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${reward.reputation}`,
+      })
+      .where(eq(userData.userId, userId)),
+    // Preserve the staff-visible reputation audit trail that updateRewards used
+    // to write, so DEV_CONTRIBUTION_* payouts still show up in reputation history.
+    client.insert(userRewards).values({
+      id: nanoid(),
+      awardedById: userId,
+      receiverId: userId,
+      reputationAmount: reward.reputation,
+      moneyAmount: reward.money,
+      reason: `DEV_CONTRIBUTION_${jobType}`,
+    }),
+  ]);
 
   return reward;
 };

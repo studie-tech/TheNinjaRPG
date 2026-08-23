@@ -70,6 +70,10 @@ export interface SidecarContext {
   pendingFlow: PendingFlow | null;
   run: RunState;
   abortController: AbortController | null;
+  // True from the moment a claim is reserved until ctx.run enters a running
+  // phase, so an overlapping claim (manual + autoRun) is rejected before it can
+  // race to overwrite abortController.
+  claiming: boolean;
   autoRunTimer: ReturnType<typeof setTimeout> | null;
   log: (line: string) => void;
 }
@@ -265,131 +269,153 @@ async function handleClaim(
 ): Promise<{ claimed: boolean; message?: string }> {
   if (!loadToken()?.deviceToken) return { claimed: false, message: "Sign in first" };
 
+  // canClaim only sees a running phase once ctx.run is set, which does not
+  // happen until after the awaits below. `claiming` closes that window so an
+  // overlapping claim (e.g. a manual claim landing during the autoRun gap)
+  // is rejected here instead of racing in and overwriting abortController.
+  if (ctx.claiming)
+    return { claimed: false, message: "A claim is already in progress" };
+
   const preflight = canClaim(agent, ctx.run);
   if (!preflight.ok) return { claimed: false, message: preflight.reason };
 
-  const clis = await detectAllClis();
-  const cli: CliInfo | null = agent === "CLAUDE" ? clis.claude : clis.codex;
-  if (!cli)
-    return {
-      claimed: false,
-      message: `${agent.toLowerCase()} CLI not found. Install it and restart the app.`,
-    };
-
-  // Create the abort controller BEFORE the network claim so a Stop pressed
-  // while claimNextJob is in flight is honored, instead of silently starting
-  // the job once the stalled request finally resolves.
+  // Reserve the slot and create the abort controller BEFORE any await, so a
+  // Stop pressed while claimNextJob is in flight is honored (rather than
+  // silently starting the job once the stalled request resolves), and only this
+  // invocation's controller is ever cleared.
+  ctx.claiming = true;
   const controller = new AbortController();
   ctx.abortController = controller;
-
-  let result: ClaimNextJobOutput;
-  try {
-    result = await ctx.api.claimNextJob(agent);
-  } catch (error) {
-    ctx.abortController = null;
-    const message =
-      error instanceof TrpcError ? error.message : "Could not reach the game server";
-    return { claimed: false, message };
-  }
-  if (!result.claimed || !result.job) {
-    ctx.abortController = null;
-    return { claimed: false, message: result.message ?? "No jobs available" };
-  }
-
-  // Honor a Stop that landed while the claim was in flight: release the job we
-  // just claimed rather than starting write-capable work against the user's Stop.
-  if (controller.signal.aborted) {
-    ctx.abortController = null;
-    void ctx.api
-      .failJob({ jobId: result.job.id, error: "Aborted before start" })
-      .catch(() => {});
-    return { claimed: false, message: "Aborted before the job started" };
-  }
-
-  const job: SerializedJob = result.job;
-  ctx.run = {
-    job,
-    agent,
-    phase: "preparing",
-    log: [`Claimed job ${job.id}: ${job.jobType} ${job.refUrl}`],
-    startedAt: Date.now(),
-    finishedAt: null,
-    error: null,
+  // Clear the controller only if it is still ours: a later run must never have
+  // its live controller dropped by this invocation's cleanup.
+  const releaseController = () => {
+    if (ctx.abortController === controller) ctx.abortController = null;
   };
-  ctx.log(`Claimed job ${job.id}`);
 
-  // Run in the background; progress is observable via /status. Everything in
-  // here is wrapped: an escaping rejection would leave run.phase stuck on
-  // "agent", which the UI shows as a job that never ends and which canClaim
-  // treats as still running, so every later claim would be refused.
-  void (async () => {
-    const setPhase = (phase: RunPhase) => {
-      ctx.run = { ...ctx.run, phase };
-    };
-    setPhase("agent");
-    const result = await runJob({
-      api: ctx.api,
-      agent,
+  try {
+    const clis = await detectAllClis();
+    const cli: CliInfo | null = agent === "CLAUDE" ? clis.claude : clis.codex;
+    if (!cli) {
+      releaseController();
+      return {
+        claimed: false,
+        message: `${agent.toLowerCase()} CLI not found. Install it and restart the app.`,
+      };
+    }
+
+    let result: ClaimNextJobOutput;
+    try {
+      result = await ctx.api.claimNextJob(agent);
+    } catch (error) {
+      releaseController();
+      const message =
+        error instanceof TrpcError ? error.message : "Could not reach the game server";
+      return { claimed: false, message };
+    }
+    if (!result.claimed || !result.job) {
+      releaseController();
+      return { claimed: false, message: result.message ?? "No jobs available" };
+    }
+
+    // Honor a Stop that landed while the claim was in flight: release the job we
+    // just claimed rather than starting write-capable work against the user's Stop.
+    if (controller.signal.aborted) {
+      releaseController();
+      void ctx.api
+        .failJob({ jobId: result.job.id, error: "Aborted before start" })
+        .catch(() => {});
+      return { claimed: false, message: "Aborted before the job started" };
+    }
+
+    const job: SerializedJob = result.job;
+    ctx.run = {
       job,
-      cliPath: cli.path,
-      log: (line) => {
-        ctx.run = { ...ctx.run, log: [...ctx.run.log, line] };
-        ctx.log(line);
-      },
-      isAborted: () => ctx.abortController?.signal.aborted ?? false,
-      abort: () => ctx.abortController?.abort(),
+      agent,
+      phase: "preparing",
+      log: [`Claimed job ${job.id}: ${job.jobType} ${job.refUrl}`],
+      startedAt: Date.now(),
+      finishedAt: null,
+      error: null,
+    };
+    ctx.log(`Claimed job ${job.id}`);
+
+    // Run in the background; progress is observable via /status. Everything in
+    // here is wrapped: an escaping rejection would leave run.phase stuck on
+    // "agent", which the UI shows as a job that never ends and which canClaim
+    // treats as still running, so every later claim would be refused.
+    void (async () => {
+      const setPhase = (phase: RunPhase) => {
+        ctx.run = { ...ctx.run, phase };
+      };
+      setPhase("agent");
+      const result = await runJob({
+        api: ctx.api,
+        agent,
+        job,
+        cliPath: cli.path,
+        log: (line) => {
+          ctx.run = { ...ctx.run, log: [...ctx.run.log, line] };
+          ctx.log(line);
+        },
+        isAborted: () => ctx.abortController?.signal.aborted ?? false,
+        abort: () => ctx.abortController?.abort(),
+      });
+
+      const entry: HistoryEntry = {
+        jobId: job.id,
+        jobType: job.jobType,
+        refUrl: job.refUrl,
+        refNumber: job.refNumber,
+        agent,
+        status: result.ok ? "COMPLETED" : "FAILED",
+        verified: result.verified,
+        reward: result.reward,
+        tokensIn: result.tokensIn,
+        tokensOut: result.tokensOut,
+        resultUrl: result.resultUrl,
+        finishedAt: Date.now(),
+        error: result.error ?? undefined,
+      };
+      appendHistory(entry);
+      ctx.run = {
+        ...ctx.run,
+        phase: result.ok ? "completed" : "failed",
+        finishedAt: Date.now(),
+        error: result.error,
+      };
+
+      // autoRun: keep the queue warm. The timer handle is retained so Stop (and
+      // shutdown) can cancel a queued re-claim; without that, aborting in the gap
+      // between runs silently starts another job.
+      const settings = loadSettings();
+      const wasAborted = ctx.abortController?.signal.aborted ?? false;
+      // Drop the controller so aborts after a finished run report "not running"
+      // instead of aborting a stale, already-settled signal.
+      ctx.abortController = null;
+      if (settings.autoRun && result.ok && !wasAborted) {
+        ctx.autoRunTimer = setTimeout(() => {
+          ctx.autoRunTimer = null;
+          void handleClaim(ctx, agent);
+        }, 5000);
+      }
+    })().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      ctx.log(`Job runner crashed: ${message}`);
+      ctx.abortController = null;
+      ctx.run = {
+        ...ctx.run,
+        phase: "failed",
+        finishedAt: Date.now(),
+        error: message,
+      };
     });
 
-    const entry: HistoryEntry = {
-      jobId: job.id,
-      jobType: job.jobType,
-      refUrl: job.refUrl,
-      refNumber: job.refNumber,
-      agent,
-      status: result.ok ? "COMPLETED" : "FAILED",
-      verified: result.verified,
-      reward: result.reward,
-      tokensIn: result.tokensIn,
-      tokensOut: result.tokensOut,
-      resultUrl: result.resultUrl,
-      finishedAt: Date.now(),
-      error: result.error ?? undefined,
-    };
-    appendHistory(entry);
-    ctx.run = {
-      ...ctx.run,
-      phase: result.ok ? "completed" : "failed",
-      finishedAt: Date.now(),
-      error: result.error,
-    };
-
-    // autoRun: keep the queue warm. The timer handle is retained so Stop (and
-    // shutdown) can cancel a queued re-claim; without that, aborting in the gap
-    // between runs silently starts another job.
-    const settings = loadSettings();
-    const wasAborted = ctx.abortController?.signal.aborted ?? false;
-    // Drop the controller so aborts after a finished run report "not running"
-    // instead of aborting a stale, already-settled signal.
-    ctx.abortController = null;
-    if (settings.autoRun && result.ok && !wasAborted) {
-      ctx.autoRunTimer = setTimeout(() => {
-        ctx.autoRunTimer = null;
-        void handleClaim(ctx, agent);
-      }, 5000);
-    }
-  })().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    ctx.log(`Job runner crashed: ${message}`);
-    ctx.abortController = null;
-    ctx.run = {
-      ...ctx.run,
-      phase: "failed",
-      finishedAt: Date.now(),
-      error: message,
-    };
-  });
-
-  return { claimed: true };
+    return { claimed: true };
+  } finally {
+    // ctx.run has entered a running phase by now (set synchronously above), so
+    // canClaim guards further claims; drop the pre-run reservation.
+    ctx.claiming = false;
+  }
 }
 
 function handleAbort(ctx: SidecarContext): { aborted: boolean } {
@@ -453,6 +479,7 @@ export function startServer(port: number, log: (line: string) => void): Server {
     }),
     port,
     authToken: resolveAuthToken(),
+    claiming: false,
     autoRunTimer: null,
     pendingFlow: null,
     run: {
