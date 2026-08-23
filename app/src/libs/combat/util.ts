@@ -8,7 +8,7 @@ import {
   ring,
   spiral,
 } from "honeycomb-grid";
-import type { BattleType, PoolType } from "@/drizzle/constants";
+import type { AvatarFacing, BattleType, PoolType } from "@/drizzle/constants";
 import {
   AutoBattleTypes,
   CLAN_BATTLE_REWARD_POINTS,
@@ -840,6 +840,40 @@ export const findUser = (
     (u) =>
       u.longitude === longitude && u.latitude === latitude && stillInBattle(u, effects),
   );
+};
+
+/**
+ * Which way an AI's artwork should point so it looks at the opponent it is
+ * fighting. Picks the nearest living opponent — `direction` is the team side,
+ * so anyone on the other side counts — and compares columns; ties and an empty
+ * battlefield keep `fallback` so a sprite never flips for a sideways step.
+ */
+export const getFacingDirection = (
+  user: ReturnedUserState,
+  users: ReturnedUserState[],
+  fallback: AvatarFacing,
+  effects?: UserEffect[],
+): AvatarFacing => {
+  let nearest: ReturnedUserState | undefined;
+  let nearestDistance = Infinity;
+  for (const other of users) {
+    if (other.direction === user.direction) continue;
+    if (!stillInBattle(other, effects) || other.leftBattle) continue;
+    const distance = Math.hypot(
+      other.longitude - user.longitude,
+      other.latitude - user.latitude,
+    );
+    // userId tie-break keeps the pick stable across frames when two foes are equidistant
+    if (
+      distance < nearestDistance ||
+      (distance === nearestDistance && nearest && other.userId < nearest.userId)
+    ) {
+      nearest = other;
+      nearestDistance = distance;
+    }
+  }
+  if (!nearest || nearest.longitude === user.longitude) return fallback;
+  return nearest.longitude < user.longitude ? "left" : "right";
 };
 
 /**

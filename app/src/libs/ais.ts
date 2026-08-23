@@ -1,7 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { ElementNames, GeneralTypes, StatTypes, UserRanks } from "@/drizzle/constants";
+import {
+  AvatarFacings,
+  ElementNames,
+  GeneralTypes,
+  StatTypes,
+  UserRanks,
+} from "@/drizzle/constants";
 import type {
   InsertAiSchema,
   InsertAiSchemaInput,
@@ -103,6 +109,12 @@ export const useAiEditForm = (
     { id: "customTitle", type: "text" },
     { id: "avatar", type: "avatar", href: avatarUrl },
     { id: "avatar3d", type: "avatar3d", modelUrl: avatar3dUrl, imgUrl: avatarUrl },
+    {
+      id: "avatarFacing",
+      label: "Avatar Faces [combat mirrors it toward the opponent]",
+      type: "str_array",
+      values: AvatarFacings,
+    },
     { id: "gender", type: "text" },
     { id: "level", type: "number" },
     { id: "regeneration", type: "number" },
