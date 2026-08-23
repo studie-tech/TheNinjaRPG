@@ -75,6 +75,7 @@ const normalize = (value: string | null | undefined) => value?.toLowerCase() ?? 
 // Fields reset whenever a job stops being held by a contributor.
 const clearClaimFields = {
   claimedByUserId: null,
+  claimedGithubLogin: null,
   claimedAt: null,
   heartbeatAt: null,
   agent: null,

@@ -661,6 +661,7 @@ export const devContributionRouter = createTRPCRouter({
           status: verification.verified ? "COMPLETED" : unverifiedStatus,
           completedAt: verification.verified ? new Date() : null,
           claimedByUserId: verification.verified ? job.claimedByUserId : null,
+          claimedGithubLogin: verification.verified ? job.claimedGithubLogin : null,
           claimedAt: verification.verified ? job.claimedAt : null,
           heartbeatAt: verification.verified ? job.heartbeatAt : null,
           agent: verification.verified ? job.agent : null,
@@ -741,6 +742,7 @@ export const devContributionRouter = createTRPCRouter({
         .set({
           status: nextStatus,
           claimedByUserId: null,
+          claimedGithubLogin: null,
           claimedAt: null,
           heartbeatAt: null,
           agent: null,
