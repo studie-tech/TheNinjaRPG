@@ -109,8 +109,14 @@ export const grantContributionReward = async (params: {
   jobId: number;
   jobType: ContributionJobType;
   today: string;
+  /**
+   * The GitHub artifact the reward is for. Claimed under a unique index so one
+   * artifact pays once: a single pull request whose body names several issues
+   * would otherwise satisfy, and collect for, an implement job per issue.
+   */
+  artifactUrl?: string | null;
 }): Promise<ContributionReward | null> => {
-  const { client, userId, jobId, jobType, today } = params;
+  const { client, userId, jobId, jobType, today, artifactUrl } = params;
 
   const user = await client
     .select()
@@ -126,10 +132,23 @@ export const grantContributionReward = async (params: {
 
   // Claim the payout for this job. Losing this CAS means another request already
   // paid it, so hand the slot back.
-  const claimed = await client
-    .update(devJob)
-    .set({ rewardGranted: true, updatedAt: new Date() })
-    .where(and(eq(devJob.id, jobId), eq(devJob.rewardGranted, false)));
+  let claimed: { rowsAffected: number };
+  try {
+    claimed = await client
+      .update(devJob)
+      .set({
+        rewardGranted: true,
+        // Unique: a duplicate-key error here means this exact artifact has
+        // already been paid for under another job.
+        ...(artifactUrl ? { rewardedArtifact: artifactUrl } : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(devJob.id, jobId), eq(devJob.rewardGranted, false)));
+  } catch (error) {
+    await releaseRewardSlot(client, userId, today);
+    if (error instanceof Error && /duplicate entry/i.test(error.message)) return null;
+    throw error;
+  }
   if (claimed.rowsAffected !== 1) {
     await releaseRewardSlot(client, userId, today);
     return null;

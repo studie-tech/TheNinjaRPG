@@ -13,7 +13,8 @@ CREATE TABLE `DevContributionProfile` (
 	`lastSeenAt` datetime(3),
 	`createdAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
 	`updatedAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
-	CONSTRAINT `DevContributionProfile_userId` PRIMARY KEY(`userId`)
+	CONSTRAINT `DevContributionProfile_userId` PRIMARY KEY(`userId`),
+	CONSTRAINT `DevContributionProfile_githubLogin_key` UNIQUE(`githubLogin`)
 );
 
 CREATE TABLE `DevJob` (
@@ -35,9 +36,11 @@ CREATE TABLE `DevJob` (
 	`error` text,
 	`contextJson` mediumtext,
 	`rewardGranted` boolean NOT NULL DEFAULT false,
+	`rewardedArtifact` varchar(500),
 	`createdAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
 	`updatedAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
-	CONSTRAINT `DevJob_id` PRIMARY KEY(`id`)
+	CONSTRAINT `DevJob_id` PRIMARY KEY(`id`),
+	CONSTRAINT `DevJob_rewardedArtifact_key` UNIQUE(`rewardedArtifact`)
 );
 
 CREATE TABLE `DevJobDailyUsage` (
@@ -51,7 +54,6 @@ CREATE TABLE `DevJobDailyUsage` (
 	CONSTRAINT `DevJobDailyUsage_userId_date_agent_key` UNIQUE(`userId`,`date`,`agent`)
 );
 
-CREATE INDEX `DevContributionProfile_githubLogin_idx` ON `DevContributionProfile` (`githubLogin`);
 CREATE INDEX `DevContributionProfile_createdAt_idx` ON `DevContributionProfile` (`createdAt`);
 CREATE INDEX `DevJob_status_idx` ON `DevJob` (`status`);
 CREATE INDEX `DevJob_refKind_refNumber_jobType_idx` ON `DevJob` (`refKind`,`refNumber`,`jobType`);

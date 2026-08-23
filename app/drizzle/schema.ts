@@ -5384,7 +5384,10 @@ export const devContributionProfile = mysqlTable(
   },
   (table) => {
     return {
-      githubLoginIdx: index("DevContributionProfile_githubLogin_idx").on(
+      // One GitHub identity maps to at most one game account: without this,
+      // several accounts can each verify the same login and every one of them
+      // gets credited for that person's single artifact.
+      githubLoginIdx: uniqueIndex("DevContributionProfile_githubLogin_key").on(
         table.githubLogin,
       ),
       createdAtIdx: index("DevContributionProfile_createdAt_idx").on(table.createdAt),
@@ -5424,6 +5427,10 @@ export const devJob = mysqlTable(
     contextJson: mediumtext("contextJson"),
     // Set true the moment the reward is granted; guarded so a reward is paid at most once.
     rewardGranted: boolean("rewardGranted").default(false).notNull(),
+    // The GitHub artifact this job was paid for. Unique, so one pull request
+    // naming several issues cannot collect an implementation reward per issue.
+    // NULL until paid, and MySQL permits many NULLs in a unique index.
+    rewardedArtifact: varchar("rewardedArtifact", { length: 500 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -5440,6 +5447,9 @@ export const devJob = mysqlTable(
         table.refKind,
         table.refNumber,
         table.jobType,
+      ),
+      rewardedArtifactKey: uniqueIndex("DevJob_rewardedArtifact_key").on(
+        table.rewardedArtifact,
       ),
       claimedByStatusIdx: index("DevJob_claimedByUserId_status_idx").on(
         table.claimedByUserId,

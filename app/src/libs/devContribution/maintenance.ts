@@ -272,6 +272,7 @@ export const resolvePendingVerifications = async (
           jobId: job.id,
           jobType: job.jobType,
           today: getUtcDateString(new Date(nowMs)),
+          artifactUrl: verification.resultUrl,
         });
       }
 

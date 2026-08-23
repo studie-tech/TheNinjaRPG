@@ -3,7 +3,10 @@ import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/planetscale-serverless";
 import { describe, expect, it } from "vitest";
 import { CONTRIBUTION_MAX_REWARDED_JOBS_PER_DAY } from "@/drizzle/constants";
-import { buildConsumeRewardSlotSql } from "@/libs/devContribution/rewards";
+import {
+  buildConsumeRewardSlotSql,
+  grantContributionReward,
+} from "@/libs/devContribution/rewards";
 
 // Rendering the statement needs a dialect, not a connection: nothing is executed.
 // `dialect` is internal to drizzle, hence the cast.
@@ -69,5 +72,40 @@ describe("regression: a stale day must not reset the reward cap", () => {
     expect(query).not.toContain("rewardedJobsDate <> ?");
     // The count branch only applies on the same day, never on a stale one.
     expect(query).toContain("rewardedJobsDate = ? AND rewardedJobsToday < ?");
+  });
+});
+
+describe("regression: one GitHub artifact pays once", () => {
+  it("claims the artifact url alongside rewardGranted", async () => {
+    // A single pull request whose body names several issues satisfies the
+    // implement verification for each of them. Idempotency keyed on devJob.id
+    // does not catch that, because those are genuinely different jobs — the
+    // artifact is what must be unique.
+    const sets: Record<string, unknown>[] = [];
+    const client = {
+      select: () => ({
+        from: () => ({ where: () => Promise.resolve([{ userId: "u1" }]) }),
+      }),
+      execute: () => Promise.resolve({ rowsAffected: 1 }),
+      update: () => ({
+        set: (values: Record<string, unknown>) => {
+          sets.push(values);
+          return { where: () => Promise.resolve({ rowsAffected: 1 }) };
+        },
+      }),
+      insert: () => ({ values: () => Promise.resolve({ rowsAffected: 1 }) }),
+    } as unknown as Parameters<typeof grantContributionReward>[0]["client"];
+
+    await grantContributionReward({
+      client,
+      userId: "u1",
+      jobId: 1,
+      jobType: "ISSUE_IMPLEMENT",
+      today: "2026-08-22",
+      artifactUrl: "https://github.com/o/r/pull/9",
+    });
+
+    const claim = sets.find((v) => v.rewardGranted === true);
+    expect(claim?.rewardedArtifact).toBe("https://github.com/o/r/pull/9");
   });
 });

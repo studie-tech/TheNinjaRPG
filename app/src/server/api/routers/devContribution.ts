@@ -235,16 +235,30 @@ export const devContributionRouter = createTRPCRouter({
       await clearGithubVerificationNonce(ctx.userId, input.githubLogin);
 
       await ensureProfile(ctx.drizzle, ctx.userId);
-      await ctx.drizzle
-        .update(devContributionProfile)
-        .set({
-          githubLogin: check.login ?? input.githubLogin,
-          githubLoginVerifiedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(devContributionProfile.userId, ctx.userId));
+      const login = check.login ?? input.githubLogin;
+      try {
+        await ctx.drizzle
+          .update(devContributionProfile)
+          .set({
+            githubLogin: login,
+            githubLoginVerifiedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(devContributionProfile.userId, ctx.userId));
+      } catch (error) {
+        // githubLogin is unique: one GitHub identity maps to at most one game
+        // account, or several accounts could each be credited for the same
+        // person's single artifact. The index is the guarantee; this turns the
+        // driver error into something the player can act on.
+        if (error instanceof Error && /duplicate entry/i.test(error.message)) {
+          return errorResponse(
+            `@${login} is already linked to another game account. Unlink it there first.`,
+          );
+        }
+        throw error;
+      }
 
-      return { success: true, message: `Verified as @${check.login}` };
+      return { success: true, message: `Verified as @${login}` };
     }),
 
   /**
@@ -622,6 +636,7 @@ export const devContributionRouter = createTRPCRouter({
             jobId: input.jobId,
             jobType: job.jobType,
             today,
+            artifactUrl: verification.resultUrl,
           })
         : null;
 

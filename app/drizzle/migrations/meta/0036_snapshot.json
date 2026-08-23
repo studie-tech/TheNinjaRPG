@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "5061e332-cf4b-4ae0-8e2f-c5daa4ef587b",
+  "id": "9ee9c33d-8ecb-4311-8d9d-92750f21465f",
   "prevId": "2171d42d-b511-4147-95a3-5edb7169d991",
   "tables": {
     "AbEvent": {
@@ -3762,12 +3762,12 @@
         }
       },
       "indexes": {
-        "DevContributionProfile_githubLogin_idx": {
-          "name": "DevContributionProfile_githubLogin_idx",
+        "DevContributionProfile_githubLogin_key": {
+          "name": "DevContributionProfile_githubLogin_key",
           "columns": [
             "githubLogin"
           ],
-          "isUnique": false
+          "isUnique": true
         },
         "DevContributionProfile_createdAt_idx": {
           "name": "DevContributionProfile_createdAt_idx",
@@ -3923,6 +3923,13 @@
           "autoincrement": false,
           "default": false
         },
+        "rewardedArtifact": {
+          "name": "rewardedArtifact",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "datetime(3)",
@@ -3956,6 +3963,13 @@
             "jobType"
           ],
           "isUnique": false
+        },
+        "DevJob_rewardedArtifact_key": {
+          "name": "DevJob_rewardedArtifact_key",
+          "columns": [
+            "rewardedArtifact"
+          ],
+          "isUnique": true
         },
         "DevJob_claimedByUserId_status_idx": {
           "name": "DevJob_claimedByUserId_status_idx",
