@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "10b07de2-f526-4a98-b85b-879a51e8a0dd",
+  "id": "d302f453-c7eb-4026-b67f-bcda787147c4",
   "prevId": "2171d42d-b511-4147-95a3-5edb7169d991",
   "tables": {
     "AbEvent": {
@@ -3844,6 +3844,13 @@
         },
         "claimedByUserId": {
           "name": "claimedByUserId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "claimedGithubLogin": {
+          "name": "claimedGithubLogin",
           "type": "varchar(191)",
           "primaryKey": false,
           "notNull": false,

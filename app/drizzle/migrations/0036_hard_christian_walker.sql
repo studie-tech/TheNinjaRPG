@@ -26,6 +26,7 @@ CREATE TABLE `DevJob` (
 	`status` enum('PENDING','CLAIMED','VERIFYING','COMPLETED','FAILED','CANCELLED') NOT NULL DEFAULT 'PENDING',
 	`agent` enum('CLAUDE','CODEX'),
 	`claimedByUserId` varchar(191),
+	`claimedGithubLogin` varchar(191),
 	`claimedAt` datetime(3),
 	`heartbeatAt` datetime(3),
 	`completedAt` datetime(3),

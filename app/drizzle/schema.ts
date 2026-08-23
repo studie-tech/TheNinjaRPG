@@ -5411,6 +5411,10 @@ export const devJob = mysqlTable(
     // Agent that claimed the job (set on claim).
     agent: mysqlEnum("agent", consts.ContributionAgents),
     claimedByUserId: varchar("claimedByUserId", { length: 191 }),
+    // The GitHub login proven at claim time. Verification reads this rather than
+    // the profile, so a later unlink or re-verify cannot strand an in-flight job
+    // (nor retarget an already-claimed one at a newly linked identity).
+    claimedGithubLogin: varchar("claimedGithubLogin", { length: 191 }),
     claimedAt: datetime("claimedAt", { mode: "date", fsp: 3 }),
     heartbeatAt: datetime("heartbeatAt", { mode: "date", fsp: 3 }),
     completedAt: datetime("completedAt", { mode: "date", fsp: 3 }),

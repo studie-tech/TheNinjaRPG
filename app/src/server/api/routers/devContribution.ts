@@ -224,25 +224,29 @@ export const devContributionRouter = createTRPCRouter({
   unlinkGithubAccount: protectedProcedure
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
-      const profile = await ctx.drizzle
-        .select({ activeJobId: devContributionProfile.activeJobId })
-        .from(devContributionProfile)
-        .where(eq(devContributionProfile.userId, ctx.userId))
-        .then((rows) => rows[0]);
-      if (!profile) return errorResponse("No contribution profile to unlink");
-      // Verification is what makes a completed job payable, so unlinking with
-      // work in flight would strand it as permanently unverifiable.
-      if (profile.activeJobId !== null) {
-        return errorResponse("Finish or release your active job before unlinking.");
-      }
-      await ctx.drizzle
+      // Jobs pin the login they were claimed under, so unlinking cannot strand
+      // work that is already submitted and awaiting GitHub. The only thing that
+      // still matters is a live claim, and clearing has to lose to a claim that
+      // takes the slot concurrently — hence the compare-and-swap rather than a
+      // read followed by a write.
+      const cleared = await ctx.drizzle
         .update(devContributionProfile)
         .set({
           githubLogin: null,
           githubLoginVerifiedAt: null,
           updatedAt: new Date(),
         })
-        .where(eq(devContributionProfile.userId, ctx.userId));
+        .where(
+          and(
+            eq(devContributionProfile.userId, ctx.userId),
+            isNull(devContributionProfile.activeJobId),
+          ),
+        );
+      if (cleared.rowsAffected !== 1) {
+        return errorResponse(
+          "Finish or release your active job before unlinking your GitHub account.",
+        );
+      }
       return { success: true, message: "GitHub account unlinked" };
     }),
 
@@ -457,6 +461,7 @@ export const devContributionRouter = createTRPCRouter({
             status: "CLAIMED",
             agent,
             claimedByUserId: ctx.userId,
+            claimedGithubLogin: profile.githubLogin,
             claimedAt,
             heartbeatAt: claimedAt,
             attemptCount: sql`${devJob.attemptCount} + 1`,
@@ -563,7 +568,7 @@ export const devContributionRouter = createTRPCRouter({
         {
           jobType: job.jobType,
           refNumber: job.refNumber,
-          githubLogin: profile.githubLogin ?? "",
+          githubLogin: job.claimedGithubLogin ?? profile.githubLogin ?? "",
           claimedAt,
           nowMs: now,
           windowMs: CONTRIBUTION_VERIFY_WINDOW_MS,

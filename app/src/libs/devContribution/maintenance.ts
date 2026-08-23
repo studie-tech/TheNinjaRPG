@@ -243,7 +243,10 @@ export const resolvePendingVerifications = async (
         {
           jobType: job.jobType,
           refNumber: job.refNumber,
-          githubLogin: loginFor.get(userId) ?? "",
+          // The login proven when the job was claimed, not whatever the profile
+          // says now: unlinking or re-verifying in between must not strand or
+          // retarget work already submitted.
+          githubLogin: job.claimedGithubLogin ?? loginFor.get(userId) ?? "",
           claimedAt,
           nowMs,
           windowMs: CONTRIBUTION_VERIFY_WINDOW_MS,
