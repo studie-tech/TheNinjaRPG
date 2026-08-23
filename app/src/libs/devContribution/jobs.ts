@@ -3,6 +3,7 @@ import {
   CONTRIBUTION_CLOCK_SKEW_MS,
   CONTRIBUTION_JOB_PRIORITY,
   CONTRIBUTION_MAX_ATTEMPTS,
+  CONTRIBUTION_MAX_CLAIMS_PER_DAY,
   CONTRIBUTION_MAX_JOBS_PER_DAY,
   CONTRIBUTION_MAX_REVIEWS_PER_PR,
   CONTRIBUTION_STALE_CLAIM_MS,
@@ -199,6 +200,10 @@ export const isTokenCapExceeded = (tokensUsed: number, cap: number) => {
 };
 
 // Can this user claim more work today at all (global job cap)?
+// Bounds claim churn, separately from the completion/reward cap.
+export const hasClaimsRemainingToday = (jobsClaimedToday: number) =>
+  jobsClaimedToday < CONTRIBUTION_MAX_CLAIMS_PER_DAY;
+
 export const hasJobsRemainingToday = (jobsCompletedToday: number) =>
   jobsCompletedToday < CONTRIBUTION_MAX_JOBS_PER_DAY;
 

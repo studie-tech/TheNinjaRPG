@@ -5471,6 +5471,9 @@ export const devJobDailyUsage = mysqlTable(
     agent: mysqlEnum("agent", consts.ContributionAgents).notNull(),
     tokens: bigint("tokens", { mode: "number" }).default(0).notNull(),
     jobsCompleted: int("jobsCompleted").default(0).notNull(),
+    // Claims, not completions. The completion counter is the reward cap; this one
+    // bounds churn, so a claim/fail loop cannot retire every open ref for free.
+    jobsClaimed: int("jobsClaimed").default(0).notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),

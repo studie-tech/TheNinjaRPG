@@ -28,6 +28,7 @@ import {
 } from "@/libs/devContribution/github";
 import {
   excludeSelfAuthored,
+  hasClaimsRemainingToday,
   hasJobsRemainingToday,
   isTokenCapExceeded,
   releaseJobStatus,
@@ -358,6 +359,18 @@ export const devContributionRouter = createTRPCRouter({
         };
       }
 
+      // Completions are capped above, but releasing a job costs an attempt from
+      // its budget and never touches that counter — so an unbounded claim/fail
+      // loop could retire every open ref without ever "completing" anything.
+      const jobsClaimedToday = usage.reduce((sum, u) => sum + u.jobsClaimed, 0);
+      if (!hasClaimsRemainingToday(jobsClaimedToday)) {
+        return {
+          success: true,
+          claimed: false,
+          message: "Daily claim limit reached. Come back tomorrow.",
+        };
+      }
+
       // Refs this user has already worked on, so they are not offered again.
       const refNumbers = [...new Set(pending.map((j) => j.refNumber))];
       const history = refNumbers.length
@@ -420,6 +433,15 @@ export const devContributionRouter = createTRPCRouter({
           .where(and(eq(devJob.id, candidate.id), eq(devJob.status, "PENDING")));
 
         if (result.rowsAffected === 1) {
+          await ctx.drizzle
+            .insert(devJobDailyUsage)
+            .values({ userId: ctx.userId, date: today, agent, jobsClaimed: 1 })
+            .onDuplicateKeyUpdate({
+              set: {
+                jobsClaimed: sql`${devJobDailyUsage.jobsClaimed} + 1`,
+                updatedAt: new Date(),
+              },
+            });
           return {
             success: true,
             claimed: true,

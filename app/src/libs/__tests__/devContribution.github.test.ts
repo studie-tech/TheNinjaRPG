@@ -10,6 +10,7 @@ import {
   fetchOpenPullRequests,
 } from "@/libs/devContribution/maintenance";
 
+const MINUTE = 60 * 1000;
 const HOUR = 3600 * 1000;
 const NOW = 1_000_000_000_000;
 
@@ -556,6 +557,42 @@ describe("regressions: picking the right GitHub artifact", () => {
     );
     expect(result.verified).toBe(false);
     expect(result.retryable).toBe(false);
+  });
+
+  it("picks the qualifying review even when a newer one falls outside the window", async () => {
+    // Selecting the globally newest artifact and only then testing the window
+    // discards a perfectly good in-window review whenever the contributor has
+    // since reviewed the same PR again, failing work that genuinely happened.
+    const fetchImpl = mockFetch([
+      {
+        match: "/pulls/7/reviews",
+        body: [
+          {
+            user: { login: "octocat" },
+            submitted_at: iso(NOW - 30 * MINUTE),
+            html_url: "https://github.com/r/pull/7#in-window",
+          },
+          {
+            user: { login: "octocat" },
+            submitted_at: iso(NOW + 10 * HOUR),
+            html_url: "https://github.com/r/pull/7#way-later",
+          },
+        ],
+      },
+    ]);
+    const result = await verifyContributionResult(
+      {
+        jobType: "PR_REVIEW",
+        refNumber: 7,
+        githubLogin: "octocat",
+        claimedAt: NOW - HOUR,
+        nowMs: NOW,
+        windowMs: 2 * HOUR,
+      },
+      { fetchImpl },
+    );
+    expect(result.verified).toBe(true);
+    expect(result.resultUrl).toBe("https://github.com/r/pull/7#in-window");
   });
 });
 

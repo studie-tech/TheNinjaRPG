@@ -2981,6 +2981,10 @@ export const CONTRIBUTION_GITHUB_MAX_PAGES = 10;
 // quickly at this size.
 // Cap on jobs one backfill tick may create, so a cold start cannot blow the
 // serverless budget. The remainder is picked up by the next tick.
+// Claims a contributor may start in one day. Higher than the completion cap so
+// genuine retries are fine, but bounded: releasing a job costs an attempt from
+// its budget, so an unbounded claim/fail loop could retire every open ref.
+export const CONTRIBUTION_MAX_CLAIMS_PER_DAY = 30;
 export const CONTRIBUTION_BACKFILL_BATCH_SIZE = 50;
 export const CONTRIBUTION_VERIFY_BATCH_SIZE = 25;
 

@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "9ee9c33d-8ecb-4311-8d9d-92750f21465f",
+  "id": "10b07de2-f526-4a98-b85b-879a51e8a0dd",
   "prevId": "2171d42d-b511-4147-95a3-5edb7169d991",
   "tables": {
     "AbEvent": {
@@ -4026,6 +4026,14 @@
         },
         "jobsCompleted": {
           "name": "jobsCompleted",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "jobsClaimed": {
+          "name": "jobsClaimed",
           "type": "int",
           "primaryKey": false,
           "notNull": true,

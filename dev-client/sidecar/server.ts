@@ -81,7 +81,7 @@ export interface SidecarContext {
   log: (line: string) => void;
 }
 
-function openInBrowser(url: string): void {
+function openInBrowser(url: string, log: (line: string) => void): void {
   if (process.env.TNR_DEV_CLIENT_NO_BROWSER) return;
   // NOT `cmd /c start` on Windows: cmd re-parses its argument, so the connect
   // URL — which is all query parameters — gets split at every `&`. Quoting does
@@ -94,10 +94,20 @@ function openInBrowser(url: string): void {
       : platform() === "win32"
         ? ["rundll32.exe", ["url.dll,FileProtocolHandler"]]
         : ["xdg-open", [] as string[]];
-  spawn(command, [...prefixArgs, url], {
+  const child = spawn(command, [...prefixArgs, url], {
     stdio: "ignore",
     detached: true,
-  }).unref();
+  });
+  // A missing opener (a Linux box without xdg-utils) emits 'error' asynchronously.
+  // An unhandled 'error' on an EventEmitter is thrown, and this fires after the
+  // request handler has already returned, so Bun.serve's try/catch cannot see it
+  // and the whole sidecar goes down while the UI shows a successful sign-in.
+  child.on("error", (error) => {
+    log(
+      `Could not open a browser automatically (${error.message}). Open the connect URL manually.`,
+    );
+  });
+  child.unref();
 }
 
 function publicRun(run: RunState): RunState {
@@ -184,7 +194,7 @@ function handleSignIn(ctx: SidecarContext): { connectUrl: string; port: number }
   });
   ctx.pendingFlow = { state, verifier: pkce.verifier, startedAt: Date.now() };
   ctx.log("Connect flow started, opening browser");
-  openInBrowser(connectUrl);
+  openInBrowser(connectUrl, ctx.log);
   return { connectUrl, port: ctx.port };
 }
 

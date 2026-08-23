@@ -90,19 +90,39 @@ const collectPages = async <T>(
 };
 
 /** Of the candidates authored by `login`, the one produced most recently. */
+/** What a finder returns: the acceptable artifact, plus whether the user had any. */
+interface FindResult {
+  found: { evidence: VerificationEvidence; url: string } | null;
+  sawAnyByUser: boolean;
+}
+
+/**
+ * Newest artifact by this user that the claim window would actually accept.
+ *
+ * The acceptance filter has to be applied during selection, not after it. A
+ * contributor can have a newer artifact on the same ref that falls outside the
+ * window — a later comment on the issue, say — and picking the globally newest
+ * one and only then testing the window would discard the qualifying artifact
+ * and fail a legitimate contribution.
+ */
 const newestByUser = <T>(
   items: T[],
   login: string,
   getLogin: (item: T) => string | undefined,
   getTime: (item: T) => number,
-): T | null => {
+  isAcceptable: (time: number) => boolean = () => true,
+): { best: T | null; sawAnyByUser: boolean } => {
   let best: T | null = null;
+  let sawAnyByUser = false;
   for (const item of items) {
     if (!sameLogin(getLogin(item), login)) continue;
-    if (getTime(item) <= 0) continue;
-    if (!best || getTime(item) > getTime(best)) best = item;
+    const time = getTime(item);
+    if (time <= 0) continue;
+    sawAnyByUser = true;
+    if (!isAcceptable(time)) continue;
+    if (!best || time > getTime(best)) best = item;
   }
-  return best;
+  return { best, sawAnyByUser };
 };
 
 // A review counts if it was submitted by the user at/after the claim time. The
@@ -111,9 +131,10 @@ const newestByUser = <T>(
 const findReviewByUser = async (
   pullNumber: number,
   login: string,
+  isAcceptable: (time: number) => boolean,
   fetchImpl: FetchImpl,
   token: string | undefined,
-): Promise<{ evidence: VerificationEvidence; url: string } | null> => {
+): Promise<FindResult> => {
   const reviews = await collectPages<{
     user: { login: string };
     submitted_at: string | null;
@@ -125,19 +146,23 @@ const findReviewByUser = async (
     token,
     "reviews",
   );
-  const match = newestByUser(
+  const { best: match, sawAnyByUser } = newestByUser(
     reviews,
     login,
     (r) => r.user?.login,
     (r) => parseIso(r.submitted_at),
+    isAcceptable,
   );
-  if (!match) return null;
+  if (!match) return { found: null, sawAnyByUser };
   return {
-    evidence: {
-      actorLogin: match.user.login,
-      producedAt: parseIso(match.submitted_at),
+    sawAnyByUser,
+    found: {
+      evidence: {
+        actorLogin: match.user.login,
+        producedAt: parseIso(match.submitted_at),
+      },
+      url: match.html_url,
     },
-    url: match.html_url,
   };
 };
 
@@ -148,9 +173,10 @@ const findIssueCommentByUser = async (
   issueNumber: number,
   login: string,
   since: number,
+  isAcceptable: (time: number) => boolean,
   fetchImpl: FetchImpl,
   token: string | undefined,
-): Promise<{ evidence: VerificationEvidence; url: string } | null> => {
+): Promise<FindResult> => {
   const sinceParam = new Date(Math.max(0, since)).toISOString();
   const comments = await collectPages<{
     user: { login: string };
@@ -164,16 +190,23 @@ const findIssueCommentByUser = async (
     token,
     "issue comments",
   );
-  const match = newestByUser(
+  const { best: match, sawAnyByUser } = newestByUser(
     comments,
     login,
     (c) => c.user?.login,
     (c) => parseIso(c.created_at),
+    isAcceptable,
   );
-  if (!match) return null;
+  if (!match) return { found: null, sawAnyByUser };
   return {
-    evidence: { actorLogin: match.user.login, producedAt: parseIso(match.created_at) },
-    url: match.html_url,
+    sawAnyByUser,
+    found: {
+      evidence: {
+        actorLogin: match.user.login,
+        producedAt: parseIso(match.created_at),
+      },
+      url: match.html_url,
+    },
   };
 };
 
@@ -188,9 +221,10 @@ export const referencesIssue = (text: string, issueNumber: number): boolean =>
 const findImplementationPrByUser = async (
   issueNumber: number,
   login: string,
+  isAcceptable: (time: number) => boolean,
   fetchImpl: FetchImpl,
   token: string | undefined,
-): Promise<{ evidence: VerificationEvidence; url: string } | null> => {
+): Promise<FindResult> => {
   const prs = await collectPages<{
     number: number;
     user: { login: string };
@@ -209,19 +243,23 @@ const findImplementationPrByUser = async (
   const referencing = prs.filter((pr) =>
     referencesIssue(`${pr.title ?? ""} ${pr.body ?? ""}`, issueNumber),
   );
-  const match = newestByUser(
+  const { best: match, sawAnyByUser } = newestByUser(
     referencing,
     login,
     (pr) => pr.user?.login,
     (pr) => parseIso(pr.created_at),
+    isAcceptable,
   );
-  if (!match) return null;
+  if (!match) return { found: null, sawAnyByUser };
   return {
-    evidence: {
-      actorLogin: match.user.login,
-      producedAt: parseIso(match.created_at),
+    sawAnyByUser,
+    found: {
+      evidence: {
+        actorLogin: match.user.login,
+        producedAt: parseIso(match.created_at),
+      },
+      url: match.html_url,
     },
-    url: match.html_url,
   };
 };
 
@@ -250,27 +288,51 @@ export const verifyContributionResult = async (
   }
 
   const since = params.claimedAt - CONTRIBUTION_CLOCK_SKEW_MS;
+  // Same bounds isResultVerified applies, used to pick the artifact rather than
+  // to judge one already picked.
+  const isAcceptable = (time: number) =>
+    time >= since &&
+    time <= params.claimedAt + params.windowMs &&
+    time <= params.nowMs + CONTRIBUTION_CLOCK_SKEW_MS;
 
   try {
     const found =
       params.jobType === "PR_REVIEW"
-        ? await findReviewByUser(params.refNumber, params.githubLogin, fetchImpl, token)
+        ? await findReviewByUser(
+            params.refNumber,
+            params.githubLogin,
+            isAcceptable,
+            fetchImpl,
+            token,
+          )
         : params.jobType === "ISSUE_TRIAGE"
           ? await findIssueCommentByUser(
               params.refNumber,
               params.githubLogin,
               since,
+              isAcceptable,
               fetchImpl,
               token,
             )
           : await findImplementationPrByUser(
               params.refNumber,
               params.githubLogin,
+              isAcceptable,
               fetchImpl,
               token,
             );
 
-    if (!found) {
+    if (!found.found) {
+      // An artifact that exists but falls outside the claim window will never
+      // become acceptable, so retrying it just burns ticks until the retry
+      // window expires. Only a genuine absence is worth re-checking.
+      if (found.sawAnyByUser) {
+        return {
+          verified: false,
+          retryable: false,
+          error: "Result does not fall within the claim window",
+        };
+      }
       return {
         verified: false,
         retryable: true,
@@ -281,7 +343,7 @@ export const verifyContributionResult = async (
     const verified = isResultVerified({
       jobType: params.jobType,
       githubLogin: params.githubLogin,
-      evidence: found.evidence,
+      evidence: found.found.evidence,
       claimedAt: params.claimedAt,
       nowMs: params.nowMs,
       windowMs: params.windowMs,
@@ -297,7 +359,11 @@ export const verifyContributionResult = async (
       };
     }
 
-    return { verified: true, resultUrl: found.url, evidence: found.evidence };
+    return {
+      verified: true,
+      resultUrl: found.found.url,
+      evidence: found.found.evidence,
+    };
   } catch (error) {
     return {
       verified: false,

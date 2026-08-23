@@ -49,6 +49,7 @@ CREATE TABLE `DevJobDailyUsage` (
 	`agent` enum('CLAUDE','CODEX') NOT NULL,
 	`tokens` bigint NOT NULL DEFAULT 0,
 	`jobsCompleted` int NOT NULL DEFAULT 0,
+	`jobsClaimed` int NOT NULL DEFAULT 0,
 	`createdAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
 	`updatedAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
 	CONSTRAINT `DevJobDailyUsage_userId_date_agent_key` UNIQUE(`userId`,`date`,`agent`)
