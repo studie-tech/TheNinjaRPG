@@ -10,7 +10,7 @@ import {
   isProxyError as isProxyErrorPattern,
   isSafariJsonError as isSafariJsonErrorPattern,
   type StackFrame,
-  isExtensionExecutorStack,
+  isExtensionExecutorEvent,
 } from "@/utils/error";
 
 Sentry.init({
@@ -471,9 +471,11 @@ const isPayPalSdkError = (event: Sentry.ErrorEvent): boolean => {
  * Check if every frame of an error comes from a browser extension's executors bundle.
  */
 const isExtensionExecutorError = (event: Sentry.ErrorEvent): boolean =>
-  isExtensionExecutorStack(
-    (event.exception?.values?.[0]?.stacktrace?.frames ?? []).map(
-      (frame) => frame.abs_path ?? frame.filename,
+  isExtensionExecutorEvent(
+    (event.exception?.values ?? []).map((value) =>
+      (value.stacktrace?.frames ?? []).map(
+        (frame) => frame.abs_path ?? frame.filename,
+      ),
     ),
   );
 
