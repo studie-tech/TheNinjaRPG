@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "2171d42d-b511-4147-95a3-5edb7169d991",
-  "prevId": "2106d6fb-7011-4970-a9c9-2ad6e8f4e702",
+  "id": "5061e332-cf4b-4ae0-8e2f-c5daa4ef587b",
+  "prevId": "2171d42d-b511-4147-95a3-5edb7169d991",
   "tables": {
     "AbEvent": {
       "name": "AbEvent",
@@ -3649,6 +3649,406 @@
           ]
         }
       },
+      "checkConstraint": {}
+    },
+    "DevContributionProfile": {
+      "name": "DevContributionProfile",
+      "columns": {
+        "userId": {
+          "name": "userId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "githubLogin": {
+          "name": "githubLogin",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "githubLoginVerifiedAt": {
+          "name": "githubLoginVerifiedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "activeJobId": {
+          "name": "activeJobId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rewardedJobsDate": {
+          "name": "rewardedJobsDate",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rewardedJobsToday": {
+          "name": "rewardedJobsToday",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "claudeDailyTokenCap": {
+          "name": "claudeDailyTokenCap",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "codexDailyTokenCap": {
+          "name": "codexDailyTokenCap",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "autoRun": {
+          "name": "autoRun",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "totalJobsCompleted": {
+          "name": "totalJobsCompleted",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "totalTokensContributed": {
+          "name": "totalTokensContributed",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "lastSeenAt": {
+          "name": "lastSeenAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        }
+      },
+      "indexes": {
+        "DevContributionProfile_githubLogin_idx": {
+          "name": "DevContributionProfile_githubLogin_idx",
+          "columns": [
+            "githubLogin"
+          ],
+          "isUnique": false
+        },
+        "DevContributionProfile_createdAt_idx": {
+          "name": "DevContributionProfile_createdAt_idx",
+          "columns": [
+            "createdAt"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "DevContributionProfile_userId": {
+          "name": "DevContributionProfile_userId",
+          "columns": [
+            "userId"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "DevJob": {
+      "name": "DevJob",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "jobType": {
+          "name": "jobType",
+          "type": "enum('PR_REVIEW','ISSUE_TRIAGE','ISSUE_IMPLEMENT')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "refKind": {
+          "name": "refKind",
+          "type": "enum('PULL_REQUEST','ISSUE')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "refNumber": {
+          "name": "refNumber",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "refUrl": {
+          "name": "refUrl",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "enum('PENDING','CLAIMED','VERIFYING','COMPLETED','FAILED','CANCELLED')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'PENDING'"
+        },
+        "agent": {
+          "name": "agent",
+          "type": "enum('CLAUDE','CODEX')",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "claimedByUserId": {
+          "name": "claimedByUserId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "claimedAt": {
+          "name": "claimedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "heartbeatAt": {
+          "name": "heartbeatAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "attemptCount": {
+          "name": "attemptCount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "tokensIn": {
+          "name": "tokensIn",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "tokensOut": {
+          "name": "tokensOut",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "resultUrl": {
+          "name": "resultUrl",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "contextJson": {
+          "name": "contextJson",
+          "type": "mediumtext",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rewardGranted": {
+          "name": "rewardGranted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        }
+      },
+      "indexes": {
+        "DevJob_status_idx": {
+          "name": "DevJob_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "DevJob_refKind_refNumber_jobType_idx": {
+          "name": "DevJob_refKind_refNumber_jobType_idx",
+          "columns": [
+            "refKind",
+            "refNumber",
+            "jobType"
+          ],
+          "isUnique": false
+        },
+        "DevJob_claimedByUserId_status_idx": {
+          "name": "DevJob_claimedByUserId_status_idx",
+          "columns": [
+            "claimedByUserId",
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "DevJob_id": {
+          "name": "DevJob_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "DevJobDailyUsage": {
+      "name": "DevJobDailyUsage",
+      "columns": {
+        "userId": {
+          "name": "userId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "agent": {
+          "name": "agent",
+          "type": "enum('CLAUDE','CODEX')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tokens": {
+          "name": "tokens",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "jobsCompleted": {
+          "name": "jobsCompleted",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        }
+      },
+      "indexes": {
+        "DevJobDailyUsage_userId_date_agent_key": {
+          "name": "DevJobDailyUsage_userId_date_agent_key",
+          "columns": [
+            "userId",
+            "date",
+            "agent"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "checkConstraint": {}
     },
     "EmailReminder": {

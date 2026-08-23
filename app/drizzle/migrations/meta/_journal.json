@@ -250,8 +250,15 @@
     {
       "idx": 35,
       "version": "5",
-      "when": 1787383306550,
-      "tag": "0035_watery_tarantula",
+      "when": 1787486142258,
+      "tag": "0035_ai_avatar_facing",
+      "breakpoints": false
+    },
+    {
+      "idx": 36,
+      "version": "5",
+      "when": 1787509044503,
+      "tag": "0036_aberrant_venus",
       "breakpoints": false
     }
   ]

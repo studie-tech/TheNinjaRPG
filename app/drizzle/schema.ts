@@ -2340,6 +2340,9 @@ export const userData = mysqlTable(
     avatar: varchar("avatar", { length: 191 }),
     avatarLight: varchar("avatarLight", { length: 191 }),
     avatar3d: varchar("avatar3d", { length: 191 }),
+    avatarFacing: mysqlEnum("avatarFacing", consts.AvatarFacings)
+      .default("left")
+      .notNull(),
     sector: smallint("sector", { unsigned: true }).default(0).notNull(),
     longitude: smallint("longitude", { unsigned: true }).default(10).notNull(),
     latitude: smallint("latitude", { unsigned: true }).default(7).notNull(),

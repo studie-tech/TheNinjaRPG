@@ -380,6 +380,13 @@ export type UserStatus = (typeof UserStatuses)[number];
 export const FederalStatuses = ["NONE", "NORMAL", "SILVER", "GOLD"] as const;
 export type FederalStatus = (typeof FederalStatuses)[number];
 
+/**
+ * Which way an AI's avatar artwork points. Combat mirrors the sprite when the
+ * opponent it should look at sits on the opposite side of the battlefield.
+ */
+export const AvatarFacings = ["left", "right"] as const;
+export type AvatarFacing = (typeof AvatarFacings)[number];
+
 export const UserRanks = [
   "STUDENT",
   "GENIN",

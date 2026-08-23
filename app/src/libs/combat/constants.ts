@@ -49,6 +49,7 @@ export const publicState = [
   "actionPoints",
   "anbuId",
   "avatar",
+  "avatarFacing",
   "basicActions",
   "bloodlineId",
   "clanId",
