@@ -52,16 +52,21 @@ let activeExit: Promise<void> | null = null;
  * gone, which is the outcome we wanted.
  */
 function signalTree(child: ChildProcess, signal: NodeJS.Signals): void {
-  if (child.exitCode !== null || child.signalCode !== null) return;
   const pid = child.pid;
+  // Deliberately NOT gated on the child having exited. The agent CLI exiting
+  // says nothing about the commands it started: an allowlisted `make test` can
+  // still be running in the group, still writing into a worktree teardown is
+  // about to delete. Signalling the group is exactly how those get reaped, and
+  // ESRCH on an already-empty group is the outcome we wanted anyway.
   if (pid !== undefined) {
     try {
       process.kill(-pid, signal);
       return;
     } catch {
-      // Fall through: no group (or already reaped), so try the process itself.
+      // No group (or already gone) — fall through to the process itself.
     }
   }
+  if (child.exitCode !== null || child.signalCode !== null) return;
   try {
     child.kill(signal);
   } catch {
@@ -611,12 +616,16 @@ export async function runJob(deps: RunnerDeps): Promise<RunnerResult> {
         if (!login) {
           throw new Error("Could not determine your GitHub login; run `gh auth login`");
         }
+        // Commit is local, push is not: this is the last point where stopping
+        // still leaves nothing behind on GitHub.
+        assertNotAborted();
         const pushed = await pushBranch(worktree, branch, login);
         if (!pushed.ok) {
           throw new Error(
             `Push failed: ${pushed.stderr}. Add a remote pointing at your fork of ${slug}.`,
           );
         }
+        assertNotAborted();
         const pr = await createPullRequest({
           slug,
           base: "main",

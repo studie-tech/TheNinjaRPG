@@ -214,6 +214,38 @@ export const devContributionRouter = createTRPCRouter({
    * Step 2: confirm the gist exists, is owned by the claimed login, and holds
    * the nonce we issued to this game account.
    */
+  /**
+   * Unlink the caller's verified GitHub login.
+   *
+   * githubLogin is unique, so without this a login verified on one account
+   * could never be moved to another — including a player's own new account.
+   * Only ever clears the caller's own row.
+   */
+  unlinkGithubAccount: protectedProcedure
+    .output(baseServerResponse)
+    .mutation(async ({ ctx }) => {
+      const profile = await ctx.drizzle
+        .select({ activeJobId: devContributionProfile.activeJobId })
+        .from(devContributionProfile)
+        .where(eq(devContributionProfile.userId, ctx.userId))
+        .then((rows) => rows[0]);
+      if (!profile) return errorResponse("No contribution profile to unlink");
+      // Verification is what makes a completed job payable, so unlinking with
+      // work in flight would strand it as permanently unverifiable.
+      if (profile.activeJobId !== null) {
+        return errorResponse("Finish or release your active job before unlinking.");
+      }
+      await ctx.drizzle
+        .update(devContributionProfile)
+        .set({
+          githubLogin: null,
+          githubLoginVerifiedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(devContributionProfile.userId, ctx.userId));
+      return { success: true, message: "GitHub account unlinked" };
+    }),
+
   confirmGithubVerification: protectedProcedure
     .input(confirmGithubVerificationInput)
     .output(baseServerResponse)
@@ -253,7 +285,7 @@ export const devContributionRouter = createTRPCRouter({
         // driver error into something the player can act on.
         if (error instanceof Error && /duplicate entry/i.test(error.message)) {
           return errorResponse(
-            `@${login} is already linked to another game account. Unlink it there first.`,
+            `@${login} is already linked to another game account. Sign in to that account and unlink it there first (Settings -> unlink GitHub).`,
           );
         }
         throw error;
