@@ -532,7 +532,12 @@ describe("regressions: picking the right GitHub artifact", () => {
     expect(result.retryable).toBe(true);
   });
 
-  it("marks an out-of-window result as NOT retryable", async () => {
+  it("stays retryable when the only artifact PREDATES the claim", async () => {
+    // Repeat work on a ref is supported by design (several review jobs per PR,
+    // and a released implement job can be re-offered), so a contributor often
+    // already has an older review here. Treating that as proof of failure would
+    // close the new job the moment it is checked before GitHub has propagated
+    // the new review — losing a reward for work that did happen.
     const fetchImpl = mockFetch([
       {
         match: "/pulls/7/reviews",
@@ -556,6 +561,35 @@ describe("regressions: picking the right GitHub artifact", () => {
       },
       { fetchImpl },
     );
+    expect(result.verified).toBe(false);
+    expect(result.retryable).toBe(true);
+  });
+
+  it("marks an artifact dated PAST the window as NOT retryable", async () => {
+    const fetchImpl = mockFetch([
+      {
+        match: "/pulls/7/reviews",
+        body: [
+          {
+            user: { login: "octocat" },
+            submitted_at: iso(NOW + 10 * HOUR),
+            html_url: "https://github.com/r/pull/7#too-late",
+          },
+        ],
+      },
+    ]);
+    const result = await verifyContributionResult(
+      {
+        jobType: "PR_REVIEW",
+        refNumber: 7,
+        githubLogin: "octocat",
+        claimedAt: NOW - HOUR,
+        nowMs: NOW,
+        windowMs: 2 * HOUR,
+      },
+      { fetchImpl },
+    );
+    // Nothing later can qualify either, so re-checking only burns ticks.
     expect(result.verified).toBe(false);
     expect(result.retryable).toBe(false);
   });

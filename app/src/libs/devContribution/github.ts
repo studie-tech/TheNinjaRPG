@@ -90,10 +90,18 @@ const collectPages = async <T>(
 };
 
 /** Of the candidates authored by `login`, the one produced most recently. */
-/** What a finder returns: the acceptable artifact, plus whether the user had any. */
+/**
+ * What a finder returns: the acceptable artifact, plus the newest timestamp seen
+ * for this user regardless of acceptance.
+ *
+ * The caller needs the timestamp, not merely "saw something": an artifact that
+ * predates the claim says nothing (the real one may still be propagating and the
+ * job must stay retryable), whereas one dated past the window means no later
+ * artifact can qualify either, so retrying is pointless.
+ */
 interface FindResult {
   found: { evidence: VerificationEvidence; url: string } | null;
-  sawAnyByUser: boolean;
+  newestSeenByUser: number | null;
 }
 
 /**
@@ -111,18 +119,18 @@ const newestByUser = <T>(
   getLogin: (item: T) => string | undefined,
   getTime: (item: T) => number,
   isAcceptable: (time: number) => boolean = () => true,
-): { best: T | null; sawAnyByUser: boolean } => {
+): { best: T | null; newestSeenByUser: number | null } => {
   let best: T | null = null;
-  let sawAnyByUser = false;
+  let newestSeenByUser: number | null = null;
   for (const item of items) {
     if (!sameLogin(getLogin(item), login)) continue;
     const time = getTime(item);
     if (time <= 0) continue;
-    sawAnyByUser = true;
+    if (newestSeenByUser === null || time > newestSeenByUser) newestSeenByUser = time;
     if (!isAcceptable(time)) continue;
     if (!best || time > getTime(best)) best = item;
   }
-  return { best, sawAnyByUser };
+  return { best, newestSeenByUser };
 };
 
 // A review counts if it was submitted by the user at/after the claim time. The
@@ -146,16 +154,16 @@ const findReviewByUser = async (
     token,
     "reviews",
   );
-  const { best: match, sawAnyByUser } = newestByUser(
+  const { best: match, newestSeenByUser } = newestByUser(
     reviews,
     login,
     (r) => r.user?.login,
     (r) => parseIso(r.submitted_at),
     isAcceptable,
   );
-  if (!match) return { found: null, sawAnyByUser };
+  if (!match) return { found: null, newestSeenByUser };
   return {
-    sawAnyByUser,
+    newestSeenByUser,
     found: {
       evidence: {
         actorLogin: match.user.login,
@@ -190,16 +198,16 @@ const findIssueCommentByUser = async (
     token,
     "issue comments",
   );
-  const { best: match, sawAnyByUser } = newestByUser(
+  const { best: match, newestSeenByUser } = newestByUser(
     comments,
     login,
     (c) => c.user?.login,
     (c) => parseIso(c.created_at),
     isAcceptable,
   );
-  if (!match) return { found: null, sawAnyByUser };
+  if (!match) return { found: null, newestSeenByUser };
   return {
-    sawAnyByUser,
+    newestSeenByUser,
     found: {
       evidence: {
         actorLogin: match.user.login,
@@ -243,16 +251,16 @@ const findImplementationPrByUser = async (
   const referencing = prs.filter((pr) =>
     referencesIssue(`${pr.title ?? ""} ${pr.body ?? ""}`, issueNumber),
   );
-  const { best: match, sawAnyByUser } = newestByUser(
+  const { best: match, newestSeenByUser } = newestByUser(
     referencing,
     login,
     (pr) => pr.user?.login,
     (pr) => parseIso(pr.created_at),
     isAcceptable,
   );
-  if (!match) return { found: null, sawAnyByUser };
+  if (!match) return { found: null, newestSeenByUser };
   return {
-    sawAnyByUser,
+    newestSeenByUser,
     found: {
       evidence: {
         actorLogin: match.user.login,
@@ -323,10 +331,14 @@ export const verifyContributionResult = async (
             );
 
     if (!found.found) {
-      // An artifact that exists but falls outside the claim window will never
-      // become acceptable, so retrying it just burns ticks until the retry
-      // window expires. Only a genuine absence is worth re-checking.
-      if (found.sawAnyByUser) {
+      // Only an artifact dated PAST the window proves retrying is pointless: no
+      // later one could qualify either. An artifact that predates the claim is
+      // just earlier work on the same ref — repeat jobs per ref are supported by
+      // design — and must not suppress the retry for work still propagating.
+      if (
+        found.newestSeenByUser !== null &&
+        found.newestSeenByUser > params.claimedAt + params.windowMs
+      ) {
         return {
           verified: false,
           retryable: false,

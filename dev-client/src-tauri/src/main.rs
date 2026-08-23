@@ -160,15 +160,22 @@ fn terminate(mut child: Child) {
             libc::kill(-pgid, libc::SIGTERM);
         }
         // Give the sidecar time to abort its job and reap the agent CLI.
-        for _ in 0..30 {
+        //
+        // This must outlast the sidecar's own escalation, which SIGTERMs the
+        // agent and only SIGKILLs it after KILL_GRACE_MS (5s, runner.ts). The
+        // agent is spawned detached, so it is in its OWN process group and the
+        // group sweep below never reaches it — the sidecar is the only thing
+        // that can reap it. Cutting this short leaves the agent orphaned.
+        // The loop exits as soon as the child does, so a clean quit is instant.
+        for _ in 0..80 {
             if matches!(child.try_wait(), Ok(Some(_))) {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        // Sweep the group unconditionally. The sidecar having exited does not
-        // prove the agent it spawned is gone, and an orphaned agent keeps a
-        // worktree open. ESRCH on an already-empty group is harmless.
+        // Sweep the sidecar's own group unconditionally; ESRCH on an empty
+        // group is harmless. Note this does NOT cover the agent, which has its
+        // own group — that is what the wait above is for.
         unsafe {
             libc::kill(-pgid, libc::SIGKILL);
         }
