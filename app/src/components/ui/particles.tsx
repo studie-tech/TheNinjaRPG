@@ -1,9 +1,10 @@
 "use client";
 
-import type { Container, Engine, ISourceOptions } from "@tsparticles/engine";
+import type { Container, ISourceOptions } from "@tsparticles/engine";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { registerParticlePlugins } from "@/libs/particlePlugins";
 import { useActiveLayout } from "@/utils/LayoutContext";
 
 type ParticlesModule = typeof import("@tsparticles/react");
@@ -11,7 +12,7 @@ type ParticlesModule = typeof import("@tsparticles/react");
 type LoadedParticles = {
   Particles: ParticlesModule["default"];
   ParticlesProvider: ParticlesModule["ParticlesProvider"];
-  init: (engine: Engine) => Promise<void>;
+  init: () => Promise<void>;
 };
 
 let particlesLoader: Promise<LoadedParticles> | null = null;
@@ -84,17 +85,13 @@ const setAdaptiveParticleCount = (container: Container, nextCount: number) => {
 };
 
 const loadParticles = () => {
-  particlesLoader ??= Promise.all([
-    import("@tsparticles/react"),
-    import("@tsparticles/slim"),
-  ]).then(([particlesModule, slimModule]) => ({
+  particlesLoader ??= import("@tsparticles/react").then((particlesModule) => ({
     Particles: particlesModule.default,
     ParticlesProvider: particlesModule.ParticlesProvider,
     // Memoizing the promise keeps this callback referentially stable, which
-    // ParticlesProvider requires for the lifetime of the app.
-    init: async (engine: Engine) => {
-      await slimModule.loadSlim(engine);
-    },
+    // ParticlesProvider requires for the lifetime of the app. Registration is shared
+    // with the confetti helper, which drives the same engine.
+    init: registerParticlePlugins,
   }));
   return particlesLoader;
 };

@@ -111,7 +111,9 @@ const MenuEntry: React.FC<MenuEntryProps> = (props) => {
   // Get current village
   const { data: sectorVillage } = api.travel.getVillageInSector.useQuery(
     { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
-    { enabled: !!userData },
+    // A loaded user without a sector would otherwise send the -1 placeholder, which
+    // the sector schema rejects. Sector 0 is real, so test for presence, not truth.
+    { enabled: userData?.sector != null },
   );
 
   // Get structure discount

@@ -5,6 +5,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { toast } from "@/components/ui/use-toast";
 import type { Quest } from "@/drizzle/schema";
 import Image from "@/layout/Image";
+import { registerParticlePlugins } from "@/libs/particlePlugins";
 import { parseHtml } from "@/utils/parse";
 import type { PostProcessedRewards } from "@/validators/rewards";
 
@@ -23,8 +24,13 @@ export const triggerConfetti = async (
     return;
   }
 
-  // Dynamically import confetti only in browser
-  const { confetti } = await import("@tsparticles/confetti");
+  // Dynamically import confetti only in browser. Registration is shared with the
+  // particle background so that whichever loads the engine first cannot lock the other
+  // out of registering its plugins.
+  const [{ confetti }] = await Promise.all([
+    import("@tsparticles/confetti"),
+    registerParticlePlugins(),
+  ]);
 
   const animationEnd = Date.now() + duration;
   const defaults = {

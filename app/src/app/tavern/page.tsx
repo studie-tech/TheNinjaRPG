@@ -34,7 +34,9 @@ export default function Tavern() {
   });
   const { data: sectorVillage, isPending } = api.travel.getVillageInSector.useQuery(
     { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
-    { enabled: !!userData },
+    // A loaded user without a sector would otherwise send the -1 placeholder, which
+    // the sector schema rejects. Sector 0 is real, so test for presence, not truth.
+    { enabled: userData?.sector != null },
   );
   const { data: globalTavernEnabled = true, isPending: isLoadingGlobalTavern } =
     api.misc.getGlobalTavernEnabled.useQuery();
