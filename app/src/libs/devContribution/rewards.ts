@@ -14,10 +14,7 @@ import {
   type ContributionJobType,
 } from "@/drizzle/constants";
 import { devContributionProfile, devJob, userData } from "@/drizzle/schema";
-import { postProcessRewards } from "@/libs/quest";
-import { updateRewards } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
-import { ObjectiveReward } from "@/validators/rewards";
 
 export interface ContributionReward {
   money: number;
@@ -126,24 +123,26 @@ export const grantContributionReward = async (params: {
   }
 
   const reward = CONTRIBUTION_REWARDS[jobType];
-  // rewardGranted is deliberately NOT rolled back if this throws. updateRewards
-  // is not atomic — it fans out into several writes — so a failure can leave the
-  // payout partially applied. Clearing the flag would let the retry path
-  // (resolvePendingVerifications) pay the same job a second time and credit the
-  // applied part twice. Leaving it set makes the payout at-most-once, which for
-  // an economy is the right way to fail: the operator can reconcile a rare
-  // under-payment, but a double credit is unrecoverable.
-  await updateRewards({
-    client,
-    user,
-    reason: `DEV_CONTRIBUTION_${jobType}`,
-    rewards: postProcessRewards({
-      ...ObjectiveReward.parse({}),
-      reward_money: reward.money,
-      reward_exp: reward.exp,
-      reward_reputation: reward.reputation,
-    }),
-  });
+  // Pay out with a targeted atomic increment rather than updateRewards. This
+  // runs on an independent session (device-token endpoint or maintenance cron)
+  // concurrently with the user's live browser session, and updateRewards writes
+  // back whole-row fields (questData, rank, villageId) from a snapshot — which
+  // would clobber whatever the browser changed in between. Incrementing only the
+  // currency/xp/reputation columns in SQL keeps the payout safe under that race
+  // and composes with parallel grants.
+  //
+  // rewardGranted is deliberately NOT rolled back if this throws: leaving it set
+  // makes the payout at-most-once, which for an economy is the right way to fail
+  // (a rare under-payment is reconcilable; a double credit is not).
+  await client
+    .update(userData)
+    .set({
+      money: sql`${userData.money} + ${reward.money}`,
+      earnedExperience: sql`${userData.earnedExperience} + ${reward.exp}`,
+      reputationPoints: sql`${userData.reputationPoints} + ${reward.reputation}`,
+      reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${reward.reputation}`,
+    })
+    .where(eq(userData.userId, userId));
 
   return reward;
 };

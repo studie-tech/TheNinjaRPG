@@ -92,7 +92,6 @@ export interface RunnerResult {
 
 interface AgentRun {
   ok: boolean;
-  output: string;
   lines: string[];
   error: string | null;
 }
@@ -208,7 +207,6 @@ function runAgent(
       });
     });
     const lines: string[] = [];
-    let stdout = "";
     let stderr = "";
     let settled = false;
     let aborted = false;
@@ -229,7 +227,7 @@ function runAgent(
           const done = () => {
             clearTimeout(sigkill);
             clearTimeout(deadline);
-            resolve({ ok, output: stdout, lines, error });
+            resolve({ ok, lines, error });
           };
           const sigkill = setTimeout(() => {
             if (child.exitCode === null && child.signalCode === null) {
@@ -238,7 +236,7 @@ function runAgent(
           }, KILL_GRACE_MS);
           const deadline = setTimeout(() => {
             child.removeListener("exit", done);
-            resolve({ ok, output: stdout, lines, error });
+            resolve({ ok, lines, error });
           }, KILL_WAIT_MAX_MS);
           sigkill.unref?.();
           deadline.unref?.();
@@ -247,7 +245,7 @@ function runAgent(
           return;
         }
       }
-      resolve({ ok, output: stdout, lines, error });
+      resolve({ ok, lines, error });
     };
 
     const timeout = setTimeout(() => {
@@ -267,9 +265,7 @@ function runAgent(
     // buffer on every chunk would make `lines` grow quadratically.
     let pending = "";
     child.stdout.on("data", (chunk: Buffer) => {
-      const text = chunk.toString("utf8");
-      stdout += text;
-      pending += text;
+      pending += chunk.toString("utf8");
       const parts = pending.split("\n");
       pending = parts.pop() ?? "";
       for (const line of parts) {
@@ -364,8 +360,8 @@ const MAX_GITHUB_BODY = 60_000;
 /**
  * Pull the agent's final prose out of its JSON event stream.
  *
- * Both CLIs are run in machine-readable mode, so `run.output` is a stream of
- * JSON events. Posting that raw is what a reader of the PR would see, so the
+ * Both CLIs are run in machine-readable mode, so the captured lines are a stream
+ * of JSON events. Posting those raw is what a reader of the PR would see, so the
  * text has to be recovered from the events instead.
  */
 export function extractAgentText(lines: string[]): string {

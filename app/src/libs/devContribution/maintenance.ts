@@ -189,6 +189,14 @@ export const resolvePendingVerifications = async (
 
       const expired = nowMs - claimedAt > CONTRIBUTION_VERIFY_RETRY_MS;
       if (!verification.verified && verification.retryable && !expired) {
+        // Rotate this job to the back of the updatedAt ordering so a batch of
+        // perpetually-retrying jobs cannot monopolise every tick and starve
+        // newer VERIFYING jobs (which would otherwise never be fetched until
+        // the stuck ones cross the retry expiry).
+        await db
+          .update(devJob)
+          .set({ updatedAt: new Date() })
+          .where(and(eq(devJob.id, job.id), eq(devJob.status, "VERIFYING")));
         continue; // leave VERIFYING; try again next tick
       }
 

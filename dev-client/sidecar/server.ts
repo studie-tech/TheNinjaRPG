@@ -276,16 +276,35 @@ async function handleClaim(
       message: `${agent.toLowerCase()} CLI not found. Install it and restart the app.`,
     };
 
+  // Create the abort controller BEFORE the network claim so a Stop pressed
+  // while claimNextJob is in flight is honored, instead of silently starting
+  // the job once the stalled request finally resolves.
+  const controller = new AbortController();
+  ctx.abortController = controller;
+
   let result: ClaimNextJobOutput;
   try {
     result = await ctx.api.claimNextJob(agent);
   } catch (error) {
+    ctx.abortController = null;
     const message =
       error instanceof TrpcError ? error.message : "Could not reach the game server";
     return { claimed: false, message };
   }
-  if (!result.claimed || !result.job)
+  if (!result.claimed || !result.job) {
+    ctx.abortController = null;
     return { claimed: false, message: result.message ?? "No jobs available" };
+  }
+
+  // Honor a Stop that landed while the claim was in flight: release the job we
+  // just claimed rather than starting write-capable work against the user's Stop.
+  if (controller.signal.aborted) {
+    ctx.abortController = null;
+    void ctx.api
+      .failJob({ jobId: result.job.id, error: "Aborted before start" })
+      .catch(() => {});
+    return { claimed: false, message: "Aborted before the job started" };
+  }
 
   const job: SerializedJob = result.job;
   ctx.run = {
@@ -297,7 +316,6 @@ async function handleClaim(
     finishedAt: null,
     error: null,
   };
-  ctx.abortController = new AbortController();
   ctx.log(`Claimed job ${job.id}`);
 
   // Run in the background; progress is observable via /status. Everything in

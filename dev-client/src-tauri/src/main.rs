@@ -214,14 +214,21 @@ fn open_external(url: String) -> Result<bool, String> {
     #[cfg(all(unix, not(target_os = "macos")))]
     let (program, args): (&str, Vec<&str>) = ("xdg-open", vec![]);
 
-    Command::new(program)
+    let child = Command::new(program)
         .args(args)
         .arg(&url)
         .spawn()
-        // Returning `true` (rather than unit, which serialises to null) lets the
-        // UI tell "the shell opened it" apart from "there is no shell here".
-        .map(|_| true)
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    // Reap the short-lived opener in the background. Child does not wait() on
+    // drop, so without this each external-link click would leave a zombie on
+    // Unix for the lifetime of the app.
+    std::thread::spawn(move || {
+        let mut child = child;
+        let _ = child.wait();
+    });
+    // Returning `true` (rather than unit, which serialises to null) lets the
+    // UI tell "the shell opened it" apart from "there is no shell here".
+    Ok(true)
 }
 
 fn main() {

@@ -212,7 +212,12 @@ export const ratelimitMiddleware = t.middleware(
       );
     }
     if (!success) {
-      if (context.userId) {
+      // The money/bank penalty deters a real signed-in user from hammering an
+      // endpoint. A device-token session is a background client authenticating
+      // as its owner, so applying the penalty to it would let a leaked or
+      // buggy token grief the owner's currency by spamming a public procedure
+      // (e.g. getLeaderboard). Rate-limit it by rejecting, without the penalty.
+      if (context.userId && !context.deviceTokenJti) {
         const result = await context.drizzle
           .update(userData)
           .set({
