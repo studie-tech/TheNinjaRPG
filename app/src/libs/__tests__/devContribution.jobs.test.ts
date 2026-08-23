@@ -412,3 +412,31 @@ describe("regressions: loop guards and the verification window", () => {
     ).toBe(true);
   });
 });
+
+describe("regression: unverified work must not retire the ref", () => {
+  it("planIssueJob re-offers an issue whose job was released, but not one COMPLETED", () => {
+    const issue = { number: 5, labels: ["Fully Clarified"] };
+    // Unverified work is released back to PENDING under the attempt budget, so
+    // the ref stays live. If it were closed COMPLETED instead, planIssueJob
+    // would treat the issue as permanently done and a caller could burn issues
+    // out of the queue by claiming and reporting completion without doing work.
+    const released = planIssueJob(issue, [
+      job({ refNumber: 5, jobType: "ISSUE_IMPLEMENT", status: "PENDING" }),
+    ]);
+    expect(released.create).toBeNull(); // already live, nothing to add
+
+    const exhausted = planIssueJob(issue, [
+      job({ refNumber: 5, jobType: "ISSUE_IMPLEMENT", status: "FAILED" }),
+    ]);
+    expect(exhausted.create).toBeNull(); // attempt budget spent, stays retired
+
+    const genuinelyDone = planIssueJob(issue, [
+      job({ refNumber: 5, jobType: "ISSUE_IMPLEMENT", status: "COMPLETED" }),
+    ]);
+    expect(genuinelyDone.create).toBeNull();
+
+    // Nothing live at all -> the ref is offered again.
+    const fresh = planIssueJob(issue, []);
+    expect(fresh.create).toBe("ISSUE_IMPLEMENT");
+  });
+});

@@ -700,6 +700,28 @@ test("refuses an apiBase that is not a known game host", async () => {
   expect(res.json<Record<string, unknown>>().apiBase).toBe(before);
 });
 
+test("ignores a hostile apiBase written straight to settings.json", async () => {
+  // Validating only on the write path leaves the guard open to anything running
+  // as the user — including a job agent, whose worktree lives under this very
+  // directory. The device token is sent as a bearer to whatever apiBase says.
+  const file = join(home, "settings.json");
+  const saved = readFileSync(file, "utf8");
+  const configured = (await status()).settings.apiBase;
+  writeFileSync(
+    file,
+    JSON.stringify({ ...JSON.parse(saved), apiBase: "https://evil.tld" }),
+  );
+  try {
+    // The rejected value falls back to the built-in default rather than to the
+    // previous value — loadSettings reads the file, it has no memory of one.
+    expect((await status()).settings.apiBase).toBe("https://www.theninja-rpg.com");
+  } finally {
+    writeFileSync(file, saved);
+  }
+  // ...and the legitimate configured base is back once the file is sane again.
+  expect((await status()).settings.apiBase).toBe(configured);
+});
+
 test("a PR review job is given the pull request diff, not just its metadata", () => {
   // The review worktree is checked out at origin/main, so without an explicit
   // diff the agent would be reviewing an unchanged tree.

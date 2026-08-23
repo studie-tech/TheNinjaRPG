@@ -121,7 +121,10 @@ export const shouldCreatePrReviewJob = (
   const reviews = jobsForRef(jobs, "PULL_REQUEST", pr.number).filter(
     (j) => j.jobType === "PR_REVIEW",
   );
-  const total = reviews.length;
+  // A cancelled review performed no review — a duplicate the reconciliation
+  // dropped, or one voided when the PR briefly closed. Counting it would spend
+  // the PR's review budget on work nobody did.
+  const total = reviews.filter((j) => j.status !== "CANCELLED").length;
   if (total >= CONTRIBUTION_MAX_REVIEWS_PER_PR) {
     return false;
   }

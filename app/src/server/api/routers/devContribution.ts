@@ -576,11 +576,21 @@ export const devContributionRouter = createTRPCRouter({
         };
       }
 
+      // Only verified work retires the ref. Closing unverified work as COMPLETED
+      // would make planIssueJob treat the issue as done for good (it keys off
+      // status alone), so a caller could burn an issue out of the queue by
+      // claiming it and reporting completion without touching GitHub. Release it
+      // under the same attempt budget failJob uses instead.
+      const unverifiedStatus = releaseJobStatus(job.attemptCount);
       const closed = await ctx.drizzle
         .update(devJob)
         .set({
-          status: "COMPLETED",
-          completedAt: new Date(),
+          status: verification.verified ? "COMPLETED" : unverifiedStatus,
+          completedAt: verification.verified ? new Date() : null,
+          claimedByUserId: verification.verified ? job.claimedByUserId : null,
+          claimedAt: verification.verified ? job.claimedAt : null,
+          heartbeatAt: verification.verified ? job.heartbeatAt : null,
+          agent: verification.verified ? job.agent : null,
           resultUrl: verification.verified
             ? (verification.resultUrl ?? input.resultUrl ?? null)
             : (input.resultUrl ?? null),
@@ -626,7 +636,9 @@ export const devContributionRouter = createTRPCRouter({
           ? reward
             ? "Job completed and verified"
             : "Job completed and verified (daily reward limit reached)"
-          : "Job completed (result could not be verified, no reward granted)",
+          : unverifiedStatus === "PENDING"
+            ? "Result could not be verified; the job has been released for another attempt"
+            : "Result could not be verified and the attempt budget is exhausted",
         reward: reward ? describeReward(reward) : null,
         verified: verification.verified,
         pending: false,

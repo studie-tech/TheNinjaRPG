@@ -65,8 +65,13 @@ export function loadToken(): StoredToken | null {
 
 export function saveToken(token: StoredToken): void {
   ensureDataDir();
-  writeFileSync(tokenPath(), JSON.stringify(token, null, 2), "utf8");
-  // The device token grants game-account access: keep it owner-only.
+  // mode on write, not chmod after: creating at the umask default first leaves a
+  // window where the device token is world-readable. chmod still runs so an
+  // existing file from an older build is tightened too.
+  writeFileSync(tokenPath(), JSON.stringify(token, null, 2), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
   chmodSync(tokenPath(), 0o600);
 }
 
@@ -86,7 +91,14 @@ export function loadSettings(): Settings {
   try {
     if (!existsSync(settingsPath())) return { ...defaultSettings };
     const raw = JSON.parse(readFileSync(settingsPath(), "utf8")) as Partial<Settings>;
-    return { ...defaultSettings, ...raw };
+    const merged = { ...defaultSettings, ...raw };
+    // settings.json is a plain file, so validating only on the write path leaves
+    // the guard open to anything running as the user — including a job agent,
+    // whose worktree sits under this same directory. Re-check where it is read.
+    if (typeof merged.apiBase !== "string" || !isAllowedApiBase(merged.apiBase)) {
+      merged.apiBase = defaultSettings.apiBase;
+    }
+    return merged;
   } catch {
     return { ...defaultSettings };
   }

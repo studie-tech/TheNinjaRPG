@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "resources": {
+      "../bin/tnr-dev-client": null,
+      "../bin/tnr-dev-client.exe": "tnr-dev-client.exe"
+    }
+  }
+}

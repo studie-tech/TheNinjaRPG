@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 // TNR Dev Client shell: a thin Tauri v2 host that manages the lifecycle of
 // the compiled Bun sidecar. All game logic lives in the sidecar; the UI talks
 // to it over loopback HTTP.
@@ -170,6 +172,16 @@ fn terminate(mut child: Child) {
         unsafe {
             libc::kill(-pgid, libc::SIGKILL);
         }
+    }
+    #[cfg(windows)]
+    {
+        // There is no process group to signal and TerminateProcess cannot be
+        // caught, so the sidecar never gets to reap the agent it spawned. taskkill
+        // /T walks the tree first; failure here is non-fatal, the kill below still
+        // takes the sidecar itself down.
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .status();
     }
     let _ = child.kill();
     let _ = child.wait();

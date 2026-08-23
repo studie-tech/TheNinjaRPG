@@ -27,6 +27,9 @@ import type {
 } from "./types";
 
 export const SIDECAR_VERSION = "0.1.0";
+// How long a started connect flow stays armed for its callback.
+const CONNECT_FLOW_TTL_MS = 5 * 60 * 1000;
+
 export const DEFAULT_PORT = Number(process.env.TNR_DEV_CLIENT_PORT ?? 49200);
 
 // Origins allowed to talk to the loopback API. The Tauri webview serves the UI
@@ -185,6 +188,14 @@ function handleSignIn(ctx: SidecarContext): { connectUrl: string; port: number }
   return { connectUrl, port: ctx.port };
 }
 
+/** Escape text before it is interpolated into an HTML response body. */
+const escapeHtml = (value: string): string =>
+  value.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c,
+  );
+
 async function handleCallback(
   ctx: SidecarContext,
   url: URL,
@@ -199,6 +210,15 @@ async function handleCallback(
       body: "Connect failed: state mismatch. Start sign-in again.",
     };
   }
+  // startedAt exists to bound the window: without this the flow stays armed
+  // indefinitely, so a much later callback replaying the state still exchanges.
+  if (Date.now() - flow.startedAt > CONNECT_FLOW_TTL_MS) {
+    ctx.pendingFlow = null;
+    return {
+      status: 400,
+      body: "Connect failed: this sign-in attempt expired. Start sign-in again.",
+    };
+  }
   ctx.pendingFlow = null;
 
   try {
@@ -209,7 +229,7 @@ async function handleCallback(
     if (!result.success || !result.deviceToken) {
       return {
         status: 401,
-        body: `Connect failed: ${result.message ?? "unknown error"}`,
+        body: `Connect failed: ${escapeHtml(result.message ?? "unknown error")}`,
       };
     }
     saveToken({
@@ -223,7 +243,7 @@ async function handleCallback(
     };
   } catch (error) {
     const message = error instanceof TrpcError ? error.message : "Connect failed";
-    return { status: 500, body: `<pre>${message}</pre>` };
+    return { status: 500, body: `<pre>${escapeHtml(message)}</pre>` };
   }
 }
 
@@ -234,12 +254,19 @@ async function handleSignOut(ctx: SidecarContext): Promise<{ revoked: boolean }>
     try {
       await ctx.api.revokeDeviceToken();
       revoked = true;
-    } catch {
+    } catch (error) {
       revoked = false;
+      // The local token is cleared regardless, but the server-side one stays
+      // valid until it expires — the user needs to know that happened.
+      ctx.log(
+        `Signed out locally, but revoking the token on the game server failed (it stays valid until it expires): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
   clearToken();
-  ctx.log("Signed out");
+  if (revoked) ctx.log("Signed out");
   return { revoked };
 }
 

@@ -245,8 +245,15 @@ export const resolvePendingVerifications = async (
       const closed = await db
         .update(devJob)
         .set({
-          status: "COMPLETED",
-          completedAt: new Date(nowMs),
+          // Only confirmed work retires the ref. Closing an unconfirmed job as
+          // COMPLETED would make planIssueJob treat the issue as permanently
+          // done, so release it under the attempt budget instead and let the
+          // backfill re-offer it while attempts remain.
+          status: verification.verified
+            ? "COMPLETED"
+            : releaseJobStatus(job.attemptCount),
+          completedAt: verification.verified ? new Date(nowMs) : null,
+          ...(verification.verified ? {} : clearClaimFields),
           resultUrl: verification.resultUrl ?? job.resultUrl,
           error: verification.verified
             ? null
