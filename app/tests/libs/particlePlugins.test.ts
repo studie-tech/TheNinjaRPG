@@ -15,4 +15,18 @@ describe("registerParticlePlugins", () => {
     // reward toast for the rest of the page's life.
     await expect(confetti.init()).resolves.toBeUndefined();
   });
+
+  it("still registers the background's own shapes on the same engine", async () => {
+    const { tsParticles } = await import("@tsparticles/engine");
+
+    await registerParticlePlugins();
+    await tsParticles.init();
+
+    const drawers = await tsParticles.pluginManager.getShapeDrawers({} as never, true);
+    // From loadSlim - the particle background draws these.
+    expect(drawers.has("circle")).toBe(true);
+    expect(drawers.has("triangle")).toBe(true);
+    // From confetti, proving both land on the one singleton rather than two engines.
+    expect(drawers.has("heart")).toBe(true);
+  });
 });
