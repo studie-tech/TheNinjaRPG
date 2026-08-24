@@ -364,13 +364,14 @@ jobs:
           BLOCK_REASON: ${{ steps.check_preview.outputs.reason }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-  # All issue-repro runs share one preview_check concurrency group, and GitHub
-  # keeps only the newest pending job per group — an older pending job gets
-  # cancelled, which skips both result-posting paths. Without this job that
-  # run's "started" comment would forever claim it will be updated.
-  report_cancelled:
+  # preview_check can die without running its own result-posting steps: GitHub
+  # keeps only the newest pending job per concurrency group (older pending jobs
+  # get cancelled), and a hard failure such as the job timeout kills steps
+  # mid-run. The normal blocked path still succeeds the job, so a cancelled or
+  # failed result means the "started" comment was left dangling.
+  report_interrupted:
     needs: [command_gate, preview_check]
-    if: always() && needs.command_gate.outputs.should_run == 'true' && needs.preview_check.result == 'cancelled'
+    if: always() && needs.command_gate.outputs.should_run == 'true' && (needs.preview_check.result == 'cancelled' || needs.preview_check.result == 'failure')
     runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
     permissions:
       issues: write
@@ -378,7 +379,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Mark run as superseded
+      - name: Mark run as interrupted
         run: node .github/scripts/post-tnr-result.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -386,7 +387,7 @@ jobs:
           COMMENT_ID: ${{ needs.command_gate.outputs.comment_id }}
           RESULT: blocked
           MODE: ${{ needs.command_gate.outputs.mode }}
-          BLOCK_REASON: "This run was cancelled before its preview was ready — a newer run took its concurrency slot. Trigger the command again if it is still needed."
+          BLOCK_REASON: "This run was interrupted before its preview was ready — either a newer run took its concurrency slot or the preview wait hit the job timeout. Trigger the command again if it is still needed."
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
   # ── Job 3: Check out the target SHA, run the Codex agent, and post results ──
