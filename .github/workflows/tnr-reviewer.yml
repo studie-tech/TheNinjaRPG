@@ -3,7 +3,7 @@
 #
 # Triggers:
 #   • `/tnr-review-now` as the entire comment on any PR (no extra text allowed)
-#   • `/tnr-repro-now` on any issue (optional extra instructions after the command).
+#   • `/tnr-repro-now` on any issue (optional extra instructions on the same line).
 #     Gated to repository team members (write/maintain/admin), not the comment allowlist.
 #   • Manual workflow_dispatch with a PR number or an issue number
 #
@@ -12,8 +12,8 @@
 #   • issue-repro: try to reproduce the issue on a Preview – tnr deploy of
 #     latest main. We never use production (broker is preview-only) and never
 #     grab "whatever preview is newest" (that is almost always a PR head).
-#     If main has no preview yet, we point `tnr-preview/main` at the main SHA
-#     so Vercel's existing GitHub integration builds one, then reuse it.
+#     If main has no reusable preview, we create an empty snapshot commit of
+#     it on `tnr-preview/main` so Vercel's GitHub integration builds one.
 #
 # Pipeline: command_gate → preview_check → run_tnr_reviewer
 #   1. command_gate: validates the trigger, checks actor permissions, fetches metadata
@@ -82,13 +82,18 @@ jobs:
               : context.payload.comment.user.login;
 
             const reviewExact = /^\/tnr-review-now\s*$/i;
-            const reproCmd = /^\/tnr-repro-now(?:\s+([\s\S]*))?$/i;
+            // Extra instructions come from the command's own line only, so
+            // text further down a comment (directives to other bots, quoted
+            // issue content, notes to humans) is never fed to the agent.
+            const reproFirstLine = /^\/tnr-repro-now(?:[ \t]+(.*))?$/i;
             const teamPermissions = new Set(['admin', 'maintain', 'write']);
 
             let mode = '';
             let extraInstructions = '';
             let issueNumber = 0;
             let command = '';
+            let isPr = false;
+            let wrongContextReply = '';
 
             if (isWorkflowDispatch) {
               const prNumber = Number(context.payload.inputs?.pr_number);
@@ -100,55 +105,42 @@ jobs:
                 core.setFailed('Provide only one of pr_number or issue_number.');
                 return;
               }
+              if (!hasPr && !hasIssue) {
+                core.setFailed('Provide pr_number (PR review) or issue_number (issue repro).');
+                return;
+              }
               if (hasPr) {
                 mode = 'pr-review';
                 issueNumber = prNumber;
                 command = '/tnr-review-now';
-              } else if (hasIssue) {
+              } else {
                 mode = 'issue-repro';
                 issueNumber = issueInput;
                 command = '/tnr-repro-now';
-              } else {
-                core.setOutput('should_run', 'false');
-                return;
               }
             } else {
               const body = (context.payload.comment.body ?? '').trim();
-              const isPr = Boolean(context.payload.issue.pull_request);
+              isPr = Boolean(context.payload.issue.pull_request);
               issueNumber = context.issue.number;
+              const firstLine = (body.split(/\r?\n/, 1)[0] ?? '').trim();
+              const reproMatch = firstLine.match(reproFirstLine);
 
               if (reviewExact.test(body)) {
-                if (!isPr) {
-                  await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: issueNumber,
-                    body: '`/tnr-review-now` is for pull requests. On issues, use `/tnr-repro-now`.',
-                  });
-                  core.setOutput('should_run', 'false');
-                  return;
-                }
                 mode = 'pr-review';
                 command = '/tnr-review-now';
-              } else {
-                const reproMatch = body.match(reproCmd);
-                if (!reproMatch) {
-                  core.setOutput('should_run', 'false');
-                  return;
+                if (!isPr) {
+                  wrongContextReply = '`/tnr-review-now` is for pull requests. On issues, use `/tnr-repro-now`.';
                 }
-                if (isPr) {
-                  await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: issueNumber,
-                    body: '`/tnr-repro-now` is for issues. On pull requests, use `/tnr-review-now`.',
-                  });
-                  core.setOutput('should_run', 'false');
-                  return;
-                }
+              } else if (reproMatch) {
                 mode = 'issue-repro';
                 command = '/tnr-repro-now';
                 extraInstructions = (reproMatch[1] ?? '').trim();
+                if (isPr) {
+                  wrongContextReply = '`/tnr-repro-now` is for issues. On pull requests, use `/tnr-review-now`.';
+                }
+              } else {
+                core.setOutput('should_run', 'false');
+                return;
               }
             }
 
@@ -157,56 +149,77 @@ jobs:
               return;
             }
 
-            if (!isWorkflowDispatch && mode === 'issue-repro') {
-              // Anyone can comment `/tnr-repro-now`, so authorize via repo write access.
-              let permission = '';
-              try {
-                const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  username: actor,
-                });
-                permission = data.permission ?? '';
-              } catch {
-                permission = '';
+            // Authorization runs before ANY comment is posted, so unauthorized
+            // accounts cannot use the commands to make the bot reply.
+            if (mode === 'issue-repro') {
+              // Anyone can comment `/tnr-repro-now`, so authorize via repo
+              // write access. workflow_dispatch already requires write access.
+              if (!isWorkflowDispatch) {
+                let permission = '';
+                try {
+                  const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    username: actor,
+                  });
+                  permission = data.permission ?? '';
+                } catch {
+                  permission = '';
+                }
+                if (!teamPermissions.has(permission)) {
+                  core.setOutput('should_run', 'false');
+                  return;
+                }
               }
-              if (!teamPermissions.has(permission)) {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issueNumber,
-                  body: `@${actor} is not allowed to trigger \`/tnr-repro-now\`. Only repository team members can run this.`,
-                });
-                core.setOutput('should_run', 'false');
-                return;
-              }
-            } else if (!isWorkflowDispatch) {
-              // Actor allowlist — fail closed for PR review comments (require explicit config).
-              // workflow_dispatch already requires repo write/admin to trigger.
+            } else {
+              // Actor allowlist for pr-review. A configured allowlist binds
+              // workflow_dispatch too; only the empty-list fail-closed guard is
+              // comment-only, since dispatch already requires repo write access.
               const allowUsers = (process.env.ALLOW_USERS ?? '')
                 .split(',')
                 .map((value) => value.trim())
                 .filter(Boolean);
-              if (allowUsers.length === 0) {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issueNumber,
-                  body: 'TNR reviewer is blocked: `TNR_REVIEWER_ALLOW_USERS` is not configured.',
-                });
+              if (!isWorkflowDispatch && allowUsers.length === 0) {
+                if (isPr) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issueNumber,
+                    body: 'TNR reviewer is blocked: `TNR_REVIEWER_ALLOW_USERS` is not configured.',
+                  });
+                }
                 core.setOutput('should_run', 'false');
                 return;
               }
-              if (!allowUsers.includes(actor)) {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issueNumber,
-                  body: `@${actor} is not allowed to trigger \`${command}\`.`,
-                });
+              if (allowUsers.length > 0 && !allowUsers.includes(actor)) {
+                if (isWorkflowDispatch) {
+                  core.setFailed(`@${actor} is not allowed to trigger ${command}.`);
+                  return;
+                }
+                if (isPr) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issueNumber,
+                    body: `@${actor} is not allowed to trigger \`${command}\`.`,
+                  });
+                }
                 core.setOutput('should_run', 'false');
                 return;
               }
+            }
+
+            // Authorized but aimed at the wrong target type: point at the
+            // matching command instead of starting a run.
+            if (wrongContextReply) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: wrongContextReply,
+              });
+              core.setOutput('should_run', 'false');
+              return;
             }
 
             core.setOutput('mode', mode);
@@ -240,6 +253,12 @@ jobs:
                 repo: context.repo.repo,
               }),
             ]);
+            // The Issues API returns pull requests too — a dispatch with a PR
+            // number in issue_number must fail, not "reproduce" the PR body.
+            if (issueRes.data.pull_request) {
+              core.setFailed(`#${issueNumber} is a pull request. Use pr_number to review it.`);
+              return;
+            }
             const defaultBranch = repoRes.data.default_branch;
             const { data: ref } = await github.rest.git.getRef({
               owner: context.repo.owner,
@@ -328,6 +347,7 @@ jobs:
           MAIN_SHA: ${{ needs.command_gate.outputs.head_sha }}
           TNR_MAIN_PREVIEW_URL: ${{ vars.TNR_MAIN_PREVIEW_URL }}
           PREVIEW_BRANCH: ${{ vars.TNR_MAIN_PREVIEW_BRANCH || 'tnr-preview/main' }}
+          PREVIEW_ENVIRONMENT_PATTERN: ${{ vars.TNR_MAIN_PREVIEW_ENV_PATTERN || '' }}
           VERCEL_CHECK_NAME_PATTERN: ${{ vars.TNR_VERCEL_CHECK_PATTERN || 'vercel' }}
 
       # If the preview isn't ready, update the comment with the reason
@@ -342,6 +362,31 @@ jobs:
           RESULT: blocked
           MODE: ${{ needs.command_gate.outputs.mode }}
           BLOCK_REASON: ${{ steps.check_preview.outputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  # All issue-repro runs share one preview_check concurrency group, and GitHub
+  # keeps only the newest pending job per group — an older pending job gets
+  # cancelled, which skips both result-posting paths. Without this job that
+  # run's "started" comment would forever claim it will be updated.
+  report_cancelled:
+    needs: [command_gate, preview_check]
+    if: always() && needs.command_gate.outputs.should_run == 'true' && needs.preview_check.result == 'cancelled'
+    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Mark run as superseded
+        run: node .github/scripts/post-tnr-result.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.command_gate.outputs.issue_number }}
+          COMMENT_ID: ${{ needs.command_gate.outputs.comment_id }}
+          RESULT: blocked
+          MODE: ${{ needs.command_gate.outputs.mode }}
+          BLOCK_REASON: "This run was cancelled before its preview was ready — a newer run took its concurrency slot. Trigger the command again if it is still needed."
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
   # ── Job 3: Check out the target SHA, run the Codex agent, and post results ──
@@ -399,6 +444,26 @@ jobs:
           persist-credentials: false
           ref: main
 
+      # `main` may have advanced during the (up to ~35 min) preview wait, in
+      # which case the tree above is newer than the deployment under test. Pin
+      # to the gate-resolved SHA — safe in this mode because head_sha is the
+      # default-branch SHA read by the trusted gate script, never a PR head.
+      - name: Pin checkout to previewed main SHA
+        if: needs.command_gate.outputs.mode == 'issue-repro'
+        shell: bash
+        env:
+          MAIN_SHA: ${{ needs.command_gate.outputs.head_sha }}
+        run: |
+          [ -n "$MAIN_SHA" ] || exit 0
+          current="$(git rev-parse HEAD)"
+          [ "$current" != "$MAIN_SHA" ] || exit 0
+          echo "main advanced past ${MAIN_SHA} (checkout is at ${current}); pinning to the previewed SHA"
+          if git fetch --depth 1 origin "$MAIN_SHA" && git checkout --detach "$MAIN_SHA"; then
+            echo "Pinned working tree to ${MAIN_SHA}"
+          else
+            echo "::warning::Could not pin to ${MAIN_SHA}; the source tree may be newer than the previewed deployment."
+          fi
+
       # Set up Playwright MCP as a stdio server for Codex, plus artifact dirs.
       # No extraHTTPHeaders — those leak into cross-origin requests (Clerk JS)
       # and break auth. Vercel bypass is handled via query-param cookies instead.
@@ -436,7 +501,7 @@ jobs:
           MAIN_SHA: ${{ needs.command_gate.outputs.head_sha }}
           COMMAND_AUTHOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
-          EXTRA_INSTRUCTIONS: ${{ needs.command_gate.outputs.extra_instructions || github.event.inputs.extra_instructions || '' }}
+          EXTRA_INSTRUCTIONS: ${{ needs.command_gate.outputs.extra_instructions }}
           AI_TEST_USER_BROKER_TOKEN: ${{ secrets.AI_TEST_USER_BROKER_TOKEN }}
 
       # Non-blocking liveness probe — accepts any non-5xx response.
