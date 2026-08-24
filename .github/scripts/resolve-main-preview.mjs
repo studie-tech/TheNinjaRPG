@@ -42,6 +42,10 @@ const environmentPatternRaw =
   process.env.PREVIEW_ENVIRONMENT_PATTERN || "^Preview\\s+[–-]\\s+tnr$";
 const pollIntervalMs = Number(process.env.POLL_INTERVAL_MS ?? 15_000);
 const pollTimeoutMs = Number(process.env.POLL_TIMEOUT_MS ?? 25 * 60 * 1000);
+// One shared budget for ALL waiting in this run: chained fallbacks (waiting on
+// an in-progress build, then on its replacement snapshot) must together stay
+// under the job timeout, not each claim the full window.
+const waitBudgetDeadline = Date.now() + pollTimeoutMs;
 
 if (!githubToken) {
   throw new Error("Missing GITHUB_TOKEN");
@@ -233,7 +237,7 @@ const pointPreviewBranchAtSha = async (sha) => {
  * Transient API errors are tolerated; only a persistent streak aborts.
  */
 const waitForPreview = async (sha, timeoutMs = pollTimeoutMs) => {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = Math.min(Date.now() + timeoutMs, waitBudgetDeadline);
   const maxConsecutiveErrors = 5;
   let lastNote = "waiting for Vercel to create a Preview – tnr deployment";
   let consecutiveErrors = 0;
