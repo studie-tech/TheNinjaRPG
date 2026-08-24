@@ -89,6 +89,7 @@ import type { GlobalTile, SectorPoint, SectorUser } from "@/libs/threejs/types";
 import {
   cleanUp,
   disposeGroupPreservingShared,
+  isObjectChainVisible,
   isRendererContextValid,
   pickSpriteAvatar,
   profiler,
@@ -2214,7 +2215,7 @@ const Sector: React.FC<SectorProps> = (props) => {
           group_quest,
         ]);
         intersects
-          .filter((i) => i.object.visible)
+          .filter((i) => isObjectChainVisible(i.object))
           .every((i) => {
             if (i.object.userData.type === "tile") {
               const target = i.object.userData.tile as TerrainHex;
@@ -2247,18 +2248,43 @@ const Sector: React.FC<SectorProps> = (props) => {
                 targetEntry.dy - currentEntry.dy,
               );
               return false;
-            } else if (showUsersRef.current && i.object.userData.type === "talk") {
-              handleNpcTileInteraction(
-                i.object.userData.npcPlacementId as string | undefined,
-              );
-              return false;
-            } else if (showUsersRef.current && i.object.userData.type === "attack") {
+            } else if (
+              showUsersRef.current &&
+              i.object.userData.type === "avatar" &&
+              i.object.userData.npcPlacementId
+            ) {
+              // An NPC's body is a click target like its interaction icon;
+              // without this, the click would fall through the sprite onto
+              // the tile visually behind the NPC and walk the player there.
               if (
                 handleNpcTileInteraction(
                   i.object.userData.npcPlacementId as string | undefined,
                 )
               ) {
                 return false;
+              }
+              return true;
+            } else if (showUsersRef.current && i.object.userData.type === "talk") {
+              if (
+                handleNpcTileInteraction(
+                  i.object.userData.npcPlacementId as string | undefined,
+                )
+              ) {
+                return false;
+              }
+              // Stale sprite (placement despawned): keep the tile clickable
+              return true;
+            } else if (showUsersRef.current && i.object.userData.type === "attack") {
+              const npcPlacementId = i.object.userData.npcPlacementId as
+                | string
+                | undefined;
+              if (npcPlacementId) {
+                if (handleNpcTileInteraction(npcPlacementId)) {
+                  return false;
+                }
+                // Stale NPC sprite: fall through to the tile rather than
+                // re-targeting whatever user shares the template's userId
+                return true;
               }
               const target = usersRef.current?.find(
                 (u) => u.userId === i.object.userData.userId,

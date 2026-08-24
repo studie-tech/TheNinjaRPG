@@ -703,6 +703,21 @@ export const setRaycasterFromMouse = (
 };
 
 /**
+ * Whether an object and every ancestor up to the scene root are visible.
+ * Raycasts ignore visibility, and despawned sector users are hidden at the
+ * group level (their child sprites keep `visible = true`), so a click hit
+ * must clear the whole chain before it is allowed to consume the click.
+ */
+export const isObjectChainVisible = (object: Object3D): boolean => {
+  let current: Object3D | null = object;
+  while (current) {
+    if (!current.visible) return false;
+    current = current.parent;
+  }
+  return true;
+};
+
+/**
  * Performance profiler for benchmarking code segments.
  * Provides detailed timing, frame budget analysis, and renderer stats.
  * Only active in development mode.

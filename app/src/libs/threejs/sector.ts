@@ -92,6 +92,7 @@ import { applyWaveShader } from "@/libs/threejs/shaders";
 import type { SectorUser } from "@/libs/threejs/types";
 import {
   createTexture,
+  isObjectChainVisible,
   loadTexture,
   pickSpriteAvatar,
   profiler,
@@ -819,6 +820,12 @@ export const createUserSprite = (
       });
   const sprite = new Sprite(material);
   sprite.userData.type = "avatar";
+  // NPC bodies are click targets in their own right (players are targeted via
+  // their hover icons instead), so carry the placement identity on the sprite.
+  if (userData.isNpc) {
+    sprite.userData.userId = userData.userId;
+    sprite.userData.npcPlacementId = userData.npcPlacementId;
+  }
   const avatarScale = userData.isNpc ? h * 1.3 : h * 0.8;
   Object.assign(sprite.scale, new Vector3(avatarScale, avatarScale, 1));
   Object.assign(sprite.position, new Vector3(w / 2, h * 1.0, USER_LAYER));
@@ -1462,6 +1469,7 @@ export const intersectUsers = (info: {
   const newUserTooltips = new Set<string>();
   const userMesh = intersects.find(
     (i) =>
+      isObjectChainVisible(i.object) &&
       i.object.parent?.userData.type === "user" &&
       i.object.parent?.userData.userId !== userData.userId,
   )?.object.parent;
@@ -1475,6 +1483,13 @@ export const intersectUsers = (info: {
         g.userId !== userData.userId,
     );
     if (userMesh.userData.battleId) {
+      if (document.body.style.cursor !== "wait") {
+        document.body.style.cursor = "pointer";
+        newUserTooltips.add(userMesh.name);
+      }
+    }
+    // NPC bodies are direct click targets, so signal that on hover
+    if (userMesh.userData.isNpc) {
       if (document.body.style.cursor !== "wait") {
         document.body.style.cursor = "pointer";
         newUserTooltips.add(userMesh.name);
