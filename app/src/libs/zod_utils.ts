@@ -9,8 +9,11 @@ import { z } from "zod";
  * @returns The OpenAI compatible schema.
  */
 export const convertToOpenaiCompatibleSchema = <T extends ZodType>(input: T) => {
+  // These schemas describe tool INPUTS, so serialize the input side: the
+  // output side throws for validators containing .transform() (item, jutsu,
+  // bloodline), since transformed output types have no JSON Schema form.
   const schema = jsonSchema(
-    z.toJSONSchema(input, { target: "draft-07" }) as JSONSchema7,
+    z.toJSONSchema(input, { target: "draft-07", io: "input" }) as JSONSchema7,
   );
   return schema;
 };
