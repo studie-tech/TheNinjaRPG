@@ -569,11 +569,16 @@ export const combatRouter = createTRPCRouter({
         const grid = getBattleGrid(1, battle);
 
         // For kage battles, only allow one move per action. Same whenever any
-        // human in the battle is on auto combat — they are watching, so every
+        // still-fighting human is on auto combat — they are watching, so every
         // driving client (not just their own) must deliver one animated action
-        // per poll instead of a whole exchange.
+        // per poll instead of a whole exchange. Dead/fled/left players no
+        // longer watch a live fight, so they stop capping the batch.
         const anyHumanOnAutoCombat = battle.usersState.some(
-          (u) => !u.isAi && !u.isSummon && u.isAutoCombat,
+          (u) =>
+            !u.isAi &&
+            !u.isSummon &&
+            u.isAutoCombat &&
+            stillInBattle(u, battle.usersEffects),
         );
         const maxActions =
           AutoBattleTypes.includes(battle.battleType) || anyHumanOnAutoCombat ? 1 : 5;
