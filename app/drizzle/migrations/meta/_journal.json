@@ -253,6 +253,13 @@
       "when": 1787486142258,
       "tag": "0035_ai_avatar_facing",
       "breakpoints": false
+    },
+    {
+      "idx": 36,
+      "version": "5",
+      "when": 1787547872558,
+      "tag": "0036_optimal_wolverine",
+      "breakpoints": false
     }
   ]
 }
