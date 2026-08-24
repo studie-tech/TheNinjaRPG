@@ -160,3 +160,12 @@ export const useCombatPreferences = () => {
 };
 
 export type CombatPreferences = ReturnType<typeof useCombatPreferences>;
+
+/**
+ * Whether new arena/training battles should start with the player's own AI
+ * profile in control (auto combat). Shared between the battle arena page and
+ * the in-combat "Go Again" flow so both start battles with the same preference.
+ */
+export const useAutoCombatSetting = () => {
+  return useLocalStorage<boolean>("autoCombatEnabled", true);
+};

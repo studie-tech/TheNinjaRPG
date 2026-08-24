@@ -637,6 +637,14 @@ export type TournamentMatchState = (typeof TournamentMatchStates)[number];
 
 export const AutoBattleTypes = ["KAGE_AI", "CLAN_CHALLENGE"];
 
+/**
+ * Battle types that may be STARTED with auto combat already enabled (the
+ * pre-battle toggle on the arena page). The in-combat toggle is broader: it is
+ * available in every battle type except AutoBattleTypes, which are always
+ * fully AI-driven.
+ */
+export const AutoCombatBattleTypes = ["ARENA", "TRAINING"];
+
 export const BattleDataEntryType = [
   "jutsu",
   "item",
