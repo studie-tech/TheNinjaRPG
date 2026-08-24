@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { BattleDataEntryType, BattleTypes } from "@/drizzle/constants";
@@ -41,10 +41,10 @@ import {
   warKill,
 } from "@/drizzle/schema";
 import { stillInBattle } from "@/libs/combat/actions";
-import { didKageChallengerWin } from "@/libs/combat/kage";
 import type { ActionEffect, CombatResult, CompleteBattle } from "@/libs/combat/types";
 import {
   buildCombatTrackerTasks,
+  didKageChallengerWin,
   getItem,
   getVillage,
   getWarsArray,
@@ -437,26 +437,11 @@ export const updateKage = async (
   if (!challenger.villageId || !kage.villageId) return;
   if (challenger.villageId !== kage.villageId) return;
 
-  // CombatResult is scoped to whichever user finalized the battle. Resolve the
-  // Kage outcome from the shared battle state instead, where the aggressor is
-  // always the challenger. This remains correct regardless of which client
-  // reaches combat cleanup first.
-  const challengerDidWin = didKageChallengerWin(curBattle, challenger, kage);
-
-  // Both PvP clients can finalize the same battle. The unique battleId makes
-  // this insert idempotent; the no-op update preserves the first canonical row.
-  await client
-    .insert(kageDefendedChallenges)
-    .values({
-      id: nanoid(),
-      battleId: curBattle.id,
-      villageId: challenger.villageId,
-      userId: challenger.userId,
-      kageId: kage.userId,
-      didWin: challengerDidWin ? 1 : 0,
-      rounds: curBattle.round,
-    })
-    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+  const challengerDidWin = didKageChallengerWin(
+    challenger,
+    kage,
+    curBattle.usersEffects,
+  );
 
   // Lost items for both sides
   const deleteItems = [
@@ -470,7 +455,24 @@ export const updateKage = async (
   ];
 
   await Promise.all([
-    // Move the hat only if the challenger actually wins
+    // Both PvP clients can finalize the same battle. The unique battleId makes
+    // this insert idempotent; the no-op update preserves the first canonical row.
+    client
+      .insert(kageDefendedChallenges)
+      .values({
+        id: nanoid(),
+        battleId: curBattle.id,
+        villageId: challenger.villageId,
+        userId: challenger.userId,
+        kageId: kage.userId,
+        didWin: challengerDidWin ? 1 : 0,
+        rounds: curBattle.round,
+      })
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
+
+    // Move the hat only if the challenger actually wins. CAS on the kage this
+    // battle defeated: a delayed second finalization of an old battle must not
+    // re-seat its challenger over a kage legitimately installed in the meantime.
     ...(challengerDidWin
       ? [
           client
@@ -479,7 +481,7 @@ export const updateKage = async (
             .where(
               and(
                 eq(village.id, challenger.villageId),
-                ne(village.kageId, challenger.userId),
+                eq(village.kageId, kage.userId),
               ),
             ),
         ]

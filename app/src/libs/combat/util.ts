@@ -459,6 +459,19 @@ export const wasDefeated = (u: BattleUserState, effects: UserEffect[]): boolean 
   !u.fledBattle && !stillInBattle(u, effects);
 
 /**
+ * Resolve a Kage challenge from shared battle state. CombatResult is scoped to
+ * whichever user finalized the battle, so a caller-relative didWin flips meaning
+ * depending on which client reaches combat cleanup first; this predicate reads
+ * the same persisted state at every finalization. Unlike wasDefeated, a kage who
+ * fled counts as beaten — abandoning the challenge forfeits the seat.
+ */
+export const didKageChallengerWin = (
+  challenger: BattleUserState,
+  kage: BattleUserState,
+  effects: UserEffect[],
+): boolean => stillInBattle(challenger, effects) && !stillInBattle(kage, effects);
+
+/**
  * Build the combat objective tracker tasks from pre-loaded battle state.
  *
  * Pure: reads only accumulated battle-state fields (usedActions, usedTagTypes, damageDealt)
