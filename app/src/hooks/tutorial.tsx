@@ -37,6 +37,21 @@ export interface TutorialStepConfig {
 // Dynamic combat tutorial step IDs that should show contextual guidance
 const DYNAMIC_COMBAT_STEP_ID = "bRelJfsU9wuHNmhUSg0db";
 
+/**
+ * Combat tutorial steps that teach manual fighting. While the player's AI
+ * profile is fighting for them (auto combat), these collapse into a single
+ * "watch the battle" step so a new player is never asked to click actions the
+ * auto-combat panel has replaced. The step id and onCombatWin/onCombatLoss
+ * handlers are inherited from the underlying step, so the battle outcome still
+ * routes the tutorial forward (win) or back to the arena (loss) — and taking
+ * back control mid-battle restores the normal teaching steps.
+ */
+const COMBAT_TEACHING_STEP_IDS = [
+  "NASO2bE1zEQcc",
+  "Qz0sQcQLjTdlv",
+  DYNAMIC_COMBAT_STEP_ID,
+];
+
 // Hospitalized tutorial step
 export const TUTORIAL_HOSPITALIZED_STEP: TutorialStepConfig = {
   id: "5uhDcTB1sMeGO_",
@@ -773,8 +788,32 @@ export const useTutorialStep = () => {
     return user.actionPoints >= basicAttack.actionCostPerc;
   }, [battle, userData?.userId]);
 
+  // Whether the player's AI profile is currently fighting for them
+  const isAutoCombatBattle = useMemo(() => {
+    if (!battle || !userData?.userId) return false;
+    return !!battle.usersState.find((u) => u.userId === userData.userId)?.isAutoCombat;
+  }, [battle, userData?.userId]);
+
   // Compute dynamic combat step if applicable
   const currentStep = useMemo(() => {
+    // While auto combat fights the tutorial battle, collapse the manual
+    // teaching steps into one watch step (win/loss routing is inherited)
+    if (
+      staticStep &&
+      COMBAT_TEACHING_STEP_IDS.includes(staticStep.id) &&
+      pathname === "/combat" &&
+      isAutoCombatBattle
+    ) {
+      return {
+        ...staticStep,
+        title: "Auto Combat",
+        description:
+          "Auto combat is enabled, so your AI profile is fighting this battle for you — sit back and watch! If you'd rather learn to fight manually, press 'Take control' below the battlefield.",
+        elementIds: ["tutorial-combat-field"],
+        showNextButton: false,
+        proceedOnHighlightClick: false,
+      };
+    }
     // Check if we're on the dynamic combat step
     if (staticStep?.id === DYNAMIC_COMBAT_STEP_ID && pathname === "/combat") {
       const dynamicStep = getDynamicCombatStep(
@@ -785,7 +824,14 @@ export const useTutorialStep = () => {
       if (dynamicStep) return dynamicStep;
     }
     return staticStep;
-  }, [staticStep, pathname, distanceToEnemy, selectedActionId, canAffordAttack]);
+  }, [
+    staticStep,
+    pathname,
+    distanceToEnemy,
+    selectedActionId,
+    canAffordAttack,
+    isAutoCombatBattle,
+  ]);
 
   // Update user's tutorial step
   const { mutate: updateTutorialStep, isPending } =

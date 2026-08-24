@@ -32,6 +32,7 @@ import type { BattleType } from "@/drizzle/constants";
 import {
   AdjustableBasicActions,
   AutoBattleTypes,
+  AutoCombatBattleTypes,
   BATTLE_ARENA_DAILY_LIMIT,
   BattleTypes,
   COMBAT_BIOMES,
@@ -567,8 +568,14 @@ export const combatRouter = createTRPCRouter({
         // Create the grid for the battle
         const grid = getBattleGrid(1, battle);
 
-        // For kage battles, only allow one move per action
-        const maxActions = AutoBattleTypes.includes(battle.battleType) ? 1 : 5;
+        // For kage battles, only allow one move per action. Same for a session
+        // user on auto combat, so the spectating client animates one action at a
+        // time instead of receiving a whole exchange per poll.
+        const sessionOnAutoCombat = battle.usersState.some(
+          (u) => u.controllerId === suid && !u.isSummon && u.isAutoCombat,
+        );
+        const maxActions =
+          AutoBattleTypes.includes(battle.battleType) || sessionOnAutoCombat ? 1 : 5;
 
         // Instantiate new state variables
         const history: {
@@ -862,7 +869,13 @@ export const combatRouter = createTRPCRouter({
     })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
-    .input(z.object({ aiId: z.string(), stats: statSchema.nullish() }))
+    .input(
+      z.object({
+        aiId: z.string(),
+        stats: statSchema.nullish(),
+        autoCombat: z.boolean().nullish(),
+      }),
+    )
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information
@@ -901,6 +914,7 @@ export const combatRouter = createTRPCRouter({
             client: ctx.drizzle,
             targetStatDistribution: input.stats ?? undefined,
             biome: "default",
+            autoCombatUserIds: input.autoCombat ? [user.userId] : undefined,
           },
           input.stats ? "TRAINING" : "ARENA",
         );
@@ -1355,6 +1369,87 @@ export const combatRouter = createTRPCRouter({
       }
       return errorResponse("Failed to update battle state after multiple attempts");
     }),
+  toggleAutoCombat: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Hand battle turns to own AI profile or take back control",
+      },
+    })
+    .use(ratelimitMiddleware)
+    .use(hasUserMiddleware)
+    .input(z.object({ battleId: z.string(), enabled: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      // Maximum number of retry attempts
+      const MAX_RETRIES = 3;
+      let attempts = 0;
+
+      // Retry loop
+      while (attempts < MAX_RETRIES) {
+        attempts++;
+
+        // Fetch
+        const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
+        const user = userBattle?.usersState.find((u) => u.userId === ctx.userId);
+
+        // Guard. Kage/clan challenges are always fully AI-driven — there is no
+        // manual control to hand over or take back there.
+        if (!userBattle) return errorResponse("You are not in a battle");
+        if (!user) return errorResponse("You are not in this battle");
+        if (user.isAi)
+          return errorResponse("Only human players can toggle auto combat");
+        if (AutoBattleTypes.includes(userBattle.battleType)) {
+          return errorResponse("This battle is always fought by your AI profile");
+        }
+        if (user.leftBattle || user.fledBattle || user.curHealth <= 0) {
+          return errorResponse("You are no longer fighting in this battle");
+        }
+
+        // Check if user is already in the requested state
+        if (!!user.isAutoCombat === input.enabled) {
+          return {
+            success: true,
+            message: "",
+            battle: maskBattle(userBattle, ctx.userId),
+          };
+        }
+
+        // Pre-Mutate
+        user.isAutoCombat = input.enabled;
+        userBattle.updatedAt = new Date();
+        userBattle.version = userBattle.version + 1;
+
+        // Mutate
+        const result = await ctx.drizzle
+          .update(battle)
+          .set({
+            usersState: userBattle.usersState,
+            version: userBattle.version,
+            updatedAt: userBattle.updatedAt,
+          })
+          .where(
+            and(
+              eq(battle.id, input.battleId),
+              eq(battle.version, userBattle.version - 1),
+            ),
+          );
+
+        if (result.rowsAffected > 0) {
+          void pusher.trigger(userBattle.id, "event", {
+            version: userBattle.version + 1,
+          });
+          return {
+            success: true,
+            message: input.enabled
+              ? "Your AI profile has taken over the battle"
+              : "You have taken back control of the battle",
+            battle: maskBattle(userBattle, ctx.userId),
+          };
+        }
+        // Version conflict (e.g. an action resolved meanwhile) — refetch and retry
+      }
+      return errorResponse("Failed to update battle state after multiple attempts");
+    }),
   startShrineBattle: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Start battle at war shrine" } })
     .use(ratelimitMiddleware)
@@ -1582,6 +1677,8 @@ export const initiateBattle = async (
     forceKeepPools?: boolean;
     raidQuestId?: string;
     topPlayersLP?: number[];
+    /** Human users whose turns should be driven by their own AI profile (auto combat) */
+    autoCombatUserIds?: string[];
   },
   battleType: BattleType,
   scaleGains = 1,
@@ -2157,6 +2254,20 @@ export const initiateBattle = async (
       leftSideUserIds: userIds,
       isSummon: false,
     });
+
+  // Hand requested users' turns to their own AI profile (auto combat). Gated on
+  // AutoCombatBattleTypes so callers cannot enable it for unsupported battles.
+  if (info.autoCombatUserIds?.length && AutoCombatBattleTypes.includes(battleType)) {
+    usersState.forEach((user) => {
+      if (
+        !user.isAi &&
+        !user.isSummon &&
+        info.autoCombatUserIds?.includes(user.controllerId)
+      ) {
+        user.isAutoCombat = true;
+      }
+    });
+  }
 
   // Apply pool adjustments to base values for all users with pool effects at battle start
   usersState.forEach((user) => {

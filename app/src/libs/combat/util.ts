@@ -2456,14 +2456,16 @@ export const hasNoAvailableActions = (
  * Determine whose turn the dispatch loop should treat this actor as.
  * A piloted summon (isPiloted) is human-driven on its turn even though it
  * keeps isAi=true for accounting; only its controller may act for it.
+ * The inverse also holds: a human on auto combat (isAutoCombat) keeps
+ * isAi=false for accounting but their turns are driven by their AI profile.
  */
 export const getTurnControl = (
-  actor: Pick<BattleUserState, "isAi" | "isPiloted" | "controllerId">,
+  actor: Pick<BattleUserState, "isAi" | "isPiloted" | "controllerId" | "isAutoCombat">,
   sessionUserId: string,
 ): { isUserTurn: boolean; isAITurn: boolean } => {
   const isMyActor = actor.controllerId === sessionUserId;
-  const isUserTurn = isMyActor && wantsHumanActionSet(actor);
-  const isAITurn = actor.isAi && !actor.isPiloted;
+  const isUserTurn = isMyActor && wantsHumanActionSet(actor) && !actor.isAutoCombat;
+  const isAITurn = (actor.isAi && !actor.isPiloted) || !!actor.isAutoCombat;
   return { isUserTurn, isAITurn };
 };
 

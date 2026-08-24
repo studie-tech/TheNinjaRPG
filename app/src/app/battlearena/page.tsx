@@ -2,12 +2,14 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { sendGTMEvent } from "@next/third-parties/google";
-import { Sun, Swords } from "lucide-react";
+import { Bot, Sun, Swords } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -19,6 +21,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -26,12 +29,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BATTLE_ARENA_DAILY_LIMIT, TUTORIAL_ARENA_DUMMY_ID } from "@/drizzle/constants";
+import { Switch } from "@/components/ui/switch";
+import {
+  BATTLE_ARENA_DAILY_LIMIT,
+  IMG_AVATAR_DEFAULT,
+  TUTORIAL_ARENA_DUMMY_ID,
+} from "@/drizzle/constants";
+import { useAutoCombatSetting } from "@/hooks/combat";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useSleepToggle } from "@/hooks/sleep";
 import { useTutorialStep } from "@/hooks/tutorial";
 import BanInfo from "@/layout/BanInfo";
 import ContentBox from "@/layout/ContentBox";
+import Image from "@/layout/Image";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import type { GenericObject } from "@/layout/ItemWithEffects";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -94,7 +104,7 @@ export default function Arena() {
   let subtitle = "";
   switch (tab) {
     case "Arena":
-      subtitle = `Battle Arena Fights Today: ${userData?.dailyArenaFights}`;
+      subtitle = "Test your skills against opponents at your level";
       break;
     case "Sparring":
       subtitle = "PVP Challenges";
@@ -118,32 +128,26 @@ export default function Arena() {
         defaultBackHref="/village"
         padding={tab === "Arena"}
         topRightContent={
-          <div className="flex flex-row items-center gap-4">
-            {(tab === "Sparring" || tab === "Training" || tab === "Arena") && (
-              <div className="flex flex-row gap-2">
-                <JutsuLoadoutSelector size="small" label="Jutsu" />
-                <ItemLoadoutSelector size="small" label="Items" />
-              </div>
-            )}
-            <Select
-              value={tab || "Arena"}
-              onValueChange={(value) => setTab(value as TabType)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select arena type" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableTabs.map((option, i) => (
-                  <SelectItem key={`${option}-${i}`} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Select
+            value={tab || "Arena"}
+            onValueChange={(value) => setTab(value as TabType)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select arena type" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableTabs.map((option, i) => (
+                <SelectItem key={`${option}-${i}`} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         }
       >
-        {tab === "Arena" && <ChallengeAI key="challenge-ai" aiId={aiId} />}
+        {tab === "Arena" && (
+          <ArenaChallenge key="challenge-ai" aiId={aiId} setAiId={setAiId} />
+        )}
         {tab === "Sparring" && <ChallengeUser key="challenge-user" />}
         {tab === "PVP Rank" && <RankedArenaMain key="ranked-arena" />}
         {tab === "Training" && (
@@ -157,7 +161,6 @@ export default function Arena() {
         )}
         {tab === "Battle Pyramid" && <BattlePyramid key="battle-pyramid" />}
       </ContentBox>
-      {tab === "Arena" && <SelectAI key="select-ai" aiId={aiId} setAiId={setAiId} />}
       {tab === "Sparring" && <ActiveChallenges key="active-challenges" />}
       {tab === "Training" && (
         <AssignTrainingDummyStats
@@ -181,24 +184,36 @@ export default function Arena() {
   );
 }
 
-interface SelectAIProps {
+interface ArenaChallengeProps {
   aiId: string | undefined;
   setAiId: (newValue: string | undefined) => void;
 }
 
-const SelectAI: React.FC<SelectAIProps> = (props) => {
+const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
   // Data from database
   const { aiId, setAiId } = props;
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
+
+  // Router for forwarding
+  const router = useRouter();
+
+  // Tutorial step
+  const { currentStep, handleNextStep } = useTutorialStep();
+
+  // Sleep toggle
+  const { toggleSleep, isTogglingSleep } = useSleepToggle();
+
+  // Auto combat preference
+  const [autoCombat, setAutoCombat] = useAutoCombatSetting();
 
   // Queries
   const { data: aiData } = api.profile.getAllAiNames.useQuery(undefined);
-
   const { data: ai } = api.profile.getAi.useQuery(
     { userId: aiId ?? "" },
     { enabled: !!aiId },
   );
 
+  // Sorted by proximity to the user's level, so relevant opponents come first
   const sortedAis = useMemo(
     () =>
       aiData
@@ -223,85 +238,6 @@ const SelectAI: React.FC<SelectAIProps> = (props) => {
       }
     }
   }, [userData, sortedAis, aiId]);
-
-  // Loaders
-  if (!userData) return <Loader explanation="Loading userdata" />;
-
-  // Derived
-  const canDoArena = userData.dailyArenaFights < BATTLE_ARENA_DAILY_LIMIT;
-
-  return (
-    <ContentBox
-      title="Configure"
-      subtitle="Choose opponent and jutsu loadout"
-      initialBreak={true}
-    >
-      <div className="flex flex-col items-center">
-        {canDoArena && (
-          <div className="mt-3 w-full rounded-2xl">
-            <div className="mb-1">
-              <Select
-                onValueChange={(e) => setAiId(e)}
-                defaultValue={aiId}
-                value={aiId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={`None`} />
-                </SelectTrigger>
-                <SelectContent>
-                  {aiData
-                    ?.filter((ai) => !ai.isSummon && ai.inArena)
-                    .map((ai) => (
-                      <SelectItem key={ai.userId} value={ai.userId}>
-                        {ai.username} (lvl {ai.level})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {ai && (
-              <ItemWithEffects
-                item={
-                  {
-                    id: ai.userId,
-                    name: ai.username,
-                    image: ai.avatar,
-                    description: "",
-                    rarity: "COMMON",
-                    href: `/userid/${ai.userId}`,
-                    attacks: ai.jutsus?.map((jutsu) =>
-                      "jutsu" in jutsu ? jutsu.jutsu?.name : "Unknown",
-                    ),
-                    ...ai,
-                  } as GenericObject
-                }
-                showStatistic="ai"
-              />
-            )}
-          </div>
-        )}
-      </div>
-    </ContentBox>
-  );
-};
-
-interface ChallengeAIProps {
-  aiId: string | undefined;
-}
-
-const ChallengeAI: React.FC<ChallengeAIProps> = (props) => {
-  // Data from database
-  const { aiId } = props;
-  const { data: userData, updateUser } = useRequiredUserData();
-
-  // Router for forwarding
-  const router = useRouter();
-
-  // Tutorial step
-  const { currentStep, handleNextStep } = useTutorialStep();
-
-  // Sleep toggle
-  const { toggleSleep, isTogglingSleep } = useSleepToggle();
 
   // Mutation for starting a fight
   const { mutate: attack, isPending: isAttacking } =
@@ -328,17 +264,134 @@ const ChallengeAI: React.FC<ChallengeAIProps> = (props) => {
   if (!userData) return <Loader explanation="Loading userdata" />;
 
   // Derived
-  const canDoArena = userData.dailyArenaFights < BATTLE_ARENA_DAILY_LIMIT;
+  const fightsUsed = userData.dailyArenaFights;
+  const canDoArena = fightsUsed < BATTLE_ARENA_DAILY_LIMIT;
   const isAsleep = userData.status === "ASLEEP";
+  const bestMatchId = sortedAis?.[0]?.userId;
 
   return (
-    <div className="flex flex-col items-center">
-      The arena is a fairly basic circular and raw battleground, where you can train &
-      test your skills as a ninja. Opponents are various creatures or ninja deemed to be
-      at your level.
-      {!canDoArena && <h1 className="pt-5 pb-3 text-7xl italic">Wait till tomorrow</h1>}
+    <div className="flex flex-col gap-4">
+      <p className="text-sm">
+        The arena is a fairly basic circular and raw battleground, where you can train &
+        test your skills as a ninja. Opponents are various creatures or ninja deemed to
+        be at your level.
+      </p>
+
+      {/* OPPONENT PICKER */}
+      {canDoArena && (
+        <div>
+          <div className="mb-2 flex flex-row items-end justify-between">
+            <p className="font-semibold">Choose your opponent</p>
+            <p className="text-muted-foreground text-xs">Sorted by level match</p>
+          </div>
+          <div className="grid max-h-64 grid-cols-3 gap-2 overflow-y-auto rounded-lg border bg-popover/30 p-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+            {sortedAis?.map((opponent) => {
+              const isSelected = opponent.userId === aiId;
+              return (
+                <button
+                  type="button"
+                  key={opponent.userId}
+                  aria-pressed={isSelected}
+                  onClick={() => setAiId(opponent.userId)}
+                  className={`relative flex flex-col items-center rounded-lg border-2 p-2 transition-colors hover:bg-popover ${
+                    isSelected
+                      ? "border-amber-500 bg-popover shadow-md"
+                      : "border-transparent"
+                  }`}
+                >
+                  <Image
+                    alt={opponent.username}
+                    src={opponent.avatar ?? IMG_AVATAR_DEFAULT}
+                    width={80}
+                    height={80}
+                    className="aspect-square w-full rounded-md object-cover"
+                  />
+                  <p className="w-full truncate text-center font-semibold text-xs">
+                    {opponent.username}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Level {opponent.level}
+                  </p>
+                  {opponent.userId === bestMatchId && (
+                    <Badge className="absolute -top-1 -right-1 px-1 py-0 text-[9px]">
+                      Best match
+                    </Badge>
+                  )}
+                </button>
+              );
+            })}
+            {!sortedAis && <Loader explanation="Loading opponents" />}
+          </div>
+        </div>
+      )}
+
+      {/* SELECTED OPPONENT DETAILS */}
+      {canDoArena && ai && (
+        <ItemWithEffects
+          item={
+            {
+              id: ai.userId,
+              name: ai.username,
+              image: ai.avatar,
+              description: "",
+              rarity: "COMMON",
+              href: `/userid/${ai.userId}`,
+              attacks: ai.jutsus?.map((jutsu) =>
+                "jutsu" in jutsu ? jutsu.jutsu?.name : "Unknown",
+              ),
+              ...ai,
+            } as GenericObject
+          }
+          showStatistic="ai"
+        />
+      )}
+
+      {/* BATTLE OPTIONS */}
+      {canDoArena && (
+        <div className="flex flex-col gap-3 rounded-lg border p-3">
+          <p className="font-semibold text-[10px] text-muted-foreground uppercase">
+            Battle setup
+          </p>
+          <div className="flex flex-row gap-3">
+            <JutsuLoadoutSelector variant="dropdown" label="Jutsu loadout" />
+            <ItemLoadoutSelector variant="dropdown" label="Item loadout" />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col">
+              <p className="flex items-center gap-2 font-semibold text-sm">
+                <Bot className="h-4 w-4" /> Auto combat
+              </p>
+              <p className="text-muted-foreground text-xs">
+                Your{" "}
+                <Link href="/profile/edit" className="underline hover:text-orange-500">
+                  AI profile
+                </Link>{" "}
+                fights for you while you watch the battle live. You can take back
+                control at any time.
+              </p>
+            </div>
+            <Switch
+              checked={autoCombat}
+              onCheckedChange={setAutoCombat}
+              aria-label="Toggle auto combat"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* DAILY LIMIT REACHED */}
+      {!canDoArena && (
+        <div className="flex flex-col items-center py-5">
+          <h1 className="pb-3 text-5xl italic">Wait till tomorrow</h1>
+          <p className="text-muted-foreground text-sm">
+            You have used all of your daily arena fights
+          </p>
+        </div>
+      )}
+
+      {/* WAKE UP / ENTER CTA */}
       {isAsleep && canDoArena && (
-        <div className="p-3">
+        <div className="flex flex-col items-center p-3">
           {isTogglingSleep ? (
             <Loader explanation="Waking up..." />
           ) : (
@@ -356,18 +409,24 @@ const ChallengeAI: React.FC<ChallengeAIProps> = (props) => {
         </div>
       )}
       {!isAttacking && canDoArena && !isAsleep && (
-        <div className="p-3">
+        <div className="flex flex-col items-center gap-2 p-3">
           <Button
             id="tutorial-battlearena-challenge-ai-enter"
             size="xl"
             decoration="gold"
             animation="pulse"
             className="text-2xl italic"
-            onClick={() => aiId && attack({ aiId })}
+            onClick={() => aiId && attack({ aiId, autoCombat })}
           >
             <Swords className="mr-4 h-10 w-10" />
             Enter arena
           </Button>
+          {autoCombat && (
+            <p className="text-muted-foreground text-xs">
+              <Bot className="mr-1 inline h-3 w-3" />
+              Auto combat is on — your AI profile will fight this battle
+            </p>
+          )}
         </div>
       )}
       {isAttacking && (
@@ -380,6 +439,24 @@ const ChallengeAI: React.FC<ChallengeAIProps> = (props) => {
           </div>
         </div>
       )}
+
+      {/* DAILY FIGHTS PROGRESS (plain counter while the limit is effectively disabled) */}
+      <div className="mx-auto flex w-full max-w-xs flex-col gap-1 pb-1">
+        {BATTLE_ARENA_DAILY_LIMIT < 1000 ? (
+          <>
+            <Progress
+              value={Math.min(100, (fightsUsed / BATTLE_ARENA_DAILY_LIMIT) * 100)}
+            />
+            <p className="text-center text-muted-foreground text-xs">
+              {fightsUsed} / {BATTLE_ARENA_DAILY_LIMIT} daily arena fights used
+            </p>
+          </>
+        ) : (
+          <p className="text-center text-muted-foreground text-xs">
+            Arena fights today: {fightsUsed}
+          </p>
+        )}
+      </div>
     </div>
   );
 };
@@ -432,6 +509,10 @@ const ChallengeUser: React.FC = () => {
         You can directly challenge ninja from across the continent to spar against you
         with no consequence to your alliances or village.
       </p>
+      <div className="flex flex-row gap-3 p-2">
+        <JutsuLoadoutSelector variant="dropdown" label="Jutsu loadout" />
+        <ItemLoadoutSelector variant="dropdown" label="Item loadout" />
+      </div>
       <div className="mb-5 p-2">
         <UserSearchSelect
           useFormMethods={userSearchMethods}
@@ -579,6 +660,9 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
   // Sleep toggle
   const { toggleSleep, isTogglingSleep } = useSleepToggle();
 
+  // Auto combat preference
+  const [autoCombat, setAutoCombat] = useAutoCombatSetting();
+
   // Mutation for starting a fight
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startArenaBattle.useMutation({
@@ -612,7 +696,7 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
   // Submit handler
   const onSubmit = form.handleSubmit((data) => {
     setStatDistribution(data);
-    attack({ aiId: aiId, stats: data });
+    attack({ aiId: aiId, stats: data, autoCombat });
   });
 
   // Loaders
@@ -664,6 +748,25 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
                 );
               }
             })}
+          <div className="col-span-2 flex flex-row gap-3">
+            <JutsuLoadoutSelector variant="dropdown" label="Jutsu loadout" />
+            <ItemLoadoutSelector variant="dropdown" label="Item loadout" />
+          </div>
+          <div className="col-span-2 flex items-center justify-between gap-3 rounded-lg border p-3">
+            <div className="flex flex-col">
+              <p className="flex items-center gap-2 font-semibold text-sm">
+                <Bot className="h-4 w-4" /> Auto combat
+              </p>
+              <p className="text-muted-foreground text-xs">
+                Your AI profile fights for you while you watch the battle live
+              </p>
+            </div>
+            <Switch
+              checked={autoCombat}
+              onCheckedChange={setAutoCombat}
+              aria-label="Toggle auto combat"
+            />
+          </div>
           {isAsleep ? (
             <div className="col-span-2 flex flex-row justify-center">
               {isTogglingSleep ? (

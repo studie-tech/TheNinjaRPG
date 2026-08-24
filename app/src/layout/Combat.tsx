@@ -15,7 +15,7 @@ import {
   PvpBattleTypes,
 } from "@/drizzle/constants";
 import type { CombatPreferences } from "@/hooks/combat";
-import { useBattleMaps } from "@/hooks/combat";
+import { useAutoCombatSetting, useBattleMaps } from "@/hooks/combat";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -143,6 +143,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     "statDistribution",
     undefined,
   );
+  const [autoCombat] = useAutoCombatSetting();
   const suid = userData?.userId;
   // The actor the human drives right now: themselves on their turn, or their
   // piloted summon on the summon's turn. Resolved by page.tsx from the same
@@ -264,6 +265,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           aiId: arenaOpponentId,
           stats:
             battleRef.current?.battleType === "TRAINING" ? statDistribution : undefined,
+          autoCombat,
         });
       } else {
         showMutationToast(data);
@@ -523,8 +525,13 @@ const Combat: React.FC<CombatProps> = (props) => {
         // every non-controller observer would spam performAction once a second and
         // the server would reject each with "Not your turn". Clones keep isPiloted
         // falsy, so they stay AI-driven.
+        // Never auto-fire while the battle lobby is still counting down: the
+        // server rejects early actions ("Battle has not started yet"), so
+        // firing would only spam error toasts — relevant now that a player on
+        // auto combat can be the initiative winner of a PvP lobby battle.
+        const inLobby = battleRef.current.createdAt.getTime() > Date.now() - timeDiff;
         const { isAITurn } = getTurnControl(actor, suid);
-        if (isAITurn && !isPending) {
+        if (isAITurn && !isPending && !inLobby) {
           if (canPerformAction()) {
             performAction({
               battleId: battleRef.current.id,
@@ -1379,6 +1386,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                             battleRef.current?.battleType === "TRAINING"
                               ? statDistribution
                               : undefined,
+                          autoCombat,
                         })
                       }
                     >

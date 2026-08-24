@@ -71,6 +71,7 @@ export const publicState = [
   "initiative",
   "isAi",
   "isPiloted",
+  "isAutoCombat",
   "isSummon",
   "isOriginal",
   "items",
