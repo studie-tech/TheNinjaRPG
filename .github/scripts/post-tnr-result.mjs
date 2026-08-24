@@ -66,13 +66,17 @@ const sanitizePlainText = (text, maxLen = 500) =>
     .trim();
 
 /**
- * The agent is handed preview URLs whose query string carries the Vercel
- * deployment-protection bypass secret. GitHub's secret masking does not apply
- * to API-posted comment bodies, so scrub the token here no matter what the
- * agent echoed into its report.
+ * The agent is handed the Vercel deployment-protection bypass secret (as a
+ * query param and a curl header) and the broker token (as a curl header).
+ * GitHub's secret masking does not apply to API-posted comment bodies, so
+ * scrub both the `param=value` and `Header: value` forms here no matter what
+ * the agent echoed into its report.
  */
-const redactBypassSecrets = (text) =>
-  text.replace(/(x-vercel-protection-bypass=)[^&\s"')\]]+/gi, "$1[redacted]");
+const redactAgentSecrets = (text) =>
+  text.replace(
+    /((?:x-vercel-protection-bypass|x-tnr-reviewer-token)\s*[=:]\s*)[^&\s"')\]]+/gi,
+    "$1[redacted]",
+  );
 
 /** Build the markdown body for the PR comment based on the outcome. */
 const buildBody = () => {
@@ -120,7 +124,7 @@ const buildBody = () => {
 };
 
 const main = async () => {
-  const body = redactBypassSecrets(buildBody());
+  const body = redactAgentSecrets(buildBody());
 
   // Preferred path: update the "started" comment in-place
   if (Number.isInteger(commentId) && commentId > 0) {

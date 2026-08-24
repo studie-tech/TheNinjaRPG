@@ -64,9 +64,12 @@ const githubRequest = createGithubClient(githubToken);
 const pushRequest = pushToken ? createGithubClient(pushToken) : null;
 const environmentRegex = new RegExp(environmentPatternRaw, "i");
 
-// Deployment statuses that can never become a usable preview. Vercel's
-// integration does not append `inactive` statuses here (auto_inactive is
-// off), but if one ever appears it is just as dead as a failed build.
+// An `inactive` deployment was built and then superseded or skipped; its
+// environment_url (when present) still serves an immutable preview of exactly
+// this SHA, so it is reusable. Without a URL it is as dead as a failed build.
+// Vercel's integration runs with auto_inactive off, so neither case has been
+// observed here — both are handled defensively.
+const REUSABLE_STATES = ["success", "inactive"];
 const TERMINAL_STATES = ["failure", "error", "inactive"];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -167,7 +170,7 @@ const inspectPreview = async (sha) => {
     };
   });
   const successful = inspected.find(
-    (item) => item.state === "success" && item.url,
+    (item) => REUSABLE_STATES.includes(item.state) && item.url,
   );
   const inProgress = inspected.find((item) =>
     ["pending", "queued", "in_progress"].includes(item.state),

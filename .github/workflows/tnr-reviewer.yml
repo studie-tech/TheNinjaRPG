@@ -465,7 +465,8 @@ jobs:
           if git fetch --depth 1 origin "$MAIN_SHA" && git checkout --detach "$MAIN_SHA"; then
             echo "Pinned working tree to ${MAIN_SHA}"
           else
-            echo "::warning::Could not pin to ${MAIN_SHA}; the source tree may be newer than the previewed deployment."
+            echo "::error::Could not pin to ${MAIN_SHA}; refusing to run against a tree that does not match the previewed deployment."
+            exit 1
           fi
 
       # Set up Playwright MCP as a stdio server for Codex, plus artifact dirs.
