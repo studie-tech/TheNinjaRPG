@@ -409,10 +409,13 @@ jobs:
     steps:
       # First checkout: default branch scripts (trusted — not PR-controlled).
       # These run with secrets in env, so they MUST NOT come from the PR head.
+      # No persisted credentials: this path sits inside the workspace the
+      # Codex agent can read, and the copied scripts get tokens via env.
       - name: Checkout trusted scripts
         uses: actions/checkout@v7
         with:
           fetch-depth: 1
+          persist-credentials: false
           path: trusted-scripts
 
       - name: Cache trusted helper scripts
