@@ -23,6 +23,8 @@ const finalMessage = process.env.FINAL_MESSAGE ?? "";
 const artifactUrl = process.env.ARTIFACT_URL ?? "";
 const blockReason = process.env.BLOCK_REASON ?? "";
 const mode = process.env.MODE ?? "pr-review";
+const isIssueRepro = mode === "issue-repro";
+const agentLabel = isIssueRepro ? "TNR reproducer" : "TNR reviewer";
 const screenshotMarkdown = process.env.SCREENSHOT_MARKDOWN ?? "";
 
 if (!githubToken) {
@@ -71,7 +73,7 @@ const buildBody = () => {
 
   if (result === "blocked") {
     return joinLines([
-      "## TNR reviewer blocked",
+      `## ${agentLabel} blocked`,
       "",
       `Mode: \`${mode}\``,
       blockReason ? `Reason: ${sanitizePlainText(blockReason)}` : "Reason: unknown",
@@ -92,14 +94,14 @@ const buildBody = () => {
 
   if (result === "success") {
     return joinLines([
-      cleanMessage || "## TNR reviewer completed",
+      cleanMessage || `## ${agentLabel} completed`,
       ...screenshotSection,
       ...footerLinks,
     ]);
   }
 
   return joinLines([
-    "## TNR reviewer failed",
+    `## ${agentLabel} failed`,
     "",
     `Mode: \`${mode}\``,
     cleanMessage ? ["", "Agent output:", "", cleanMessage] : null,

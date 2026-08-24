@@ -14,7 +14,7 @@
  *   reason      — human-readable explanation when not ready
  *   check_name, details_url, head_sha, pr_url — supplementary metadata
  */
-import { setOutput, createGithubClient } from "./ci-helpers.mjs";
+import { setOutput, createGithubClient, toTrustedPreviewUrl } from "./ci-helpers.mjs";
 
 const githubToken = process.env.GITHUB_TOKEN;
 const repository = process.env.GITHUB_REPOSITORY;
@@ -39,18 +39,6 @@ if (!owner || !repo) {
 }
 
 const githubRequest = createGithubClient(githubToken);
-
-/** Validate that a URL is a trusted Vercel deployment (*.vercel.app over HTTPS). */
-const toTrustedPreviewUrl = (raw) => {
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "https:") return "";
-    if (!parsed.hostname.endsWith(".vercel.app")) return "";
-    return parsed.origin;
-  } catch {
-    return "";
-  }
-};
 
 /** Parse the deployment URL out of a Vercel check run's output summary. */
 const extractPreviewUrl = (checkRun) => {
