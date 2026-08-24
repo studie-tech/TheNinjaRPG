@@ -2262,11 +2262,18 @@ export const computeUserContentChanges = async (props: {
   oldItemIds: string[];
   newItemIds: string[];
 }) => {
-  const { client, oldJutsuIds, newJutsuIds, oldItemIds, newItemIds } = props;
+  const { client } = props;
+
+  // The diff is positional (deep-object-diff walks array indices), so compare
+  // and render in a canonical order — without mutating the caller's arrays.
+  const oldJutsuIds = props.oldJutsuIds.slice().sort();
+  const newJutsuIds = props.newJutsuIds.slice().sort();
+  const oldItemIds = props.oldItemIds.slice().sort();
+  const newItemIds = props.newItemIds.slice().sort();
 
   const changed =
-    oldJutsuIds.slice().sort().join(",") !== newJutsuIds.slice().sort().join(",") ||
-    oldItemIds.slice().sort().join(",") !== newItemIds.slice().sort().join(",");
+    oldJutsuIds.join(",") !== newJutsuIds.join(",") ||
+    oldItemIds.join(",") !== newItemIds.join(",");
 
   // difference arrays
   let jutsuChanges: string[] = [];
