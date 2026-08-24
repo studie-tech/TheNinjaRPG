@@ -568,14 +568,15 @@ export const combatRouter = createTRPCRouter({
         // Create the grid for the battle
         const grid = getBattleGrid(1, battle);
 
-        // For kage battles, only allow one move per action. Same for a session
-        // user on auto combat, so the spectating client animates one action at a
-        // time instead of receiving a whole exchange per poll.
-        const sessionOnAutoCombat = battle.usersState.some(
-          (u) => u.controllerId === suid && !u.isSummon && u.isAutoCombat,
+        // For kage battles, only allow one move per action. Same whenever any
+        // human in the battle is on auto combat — they are watching, so every
+        // driving client (not just their own) must deliver one animated action
+        // per poll instead of a whole exchange.
+        const anyHumanOnAutoCombat = battle.usersState.some(
+          (u) => !u.isAi && !u.isSummon && u.isAutoCombat,
         );
         const maxActions =
-          AutoBattleTypes.includes(battle.battleType) || sessionOnAutoCombat ? 1 : 5;
+          AutoBattleTypes.includes(battle.battleType) || anyHumanOnAutoCombat ? 1 : 5;
 
         // Instantiate new state variables
         const history: {
@@ -1414,8 +1415,15 @@ export const combatRouter = createTRPCRouter({
           };
         }
 
-        // Pre-Mutate
+        // Pre-Mutate. Piloted summons follow their master: while the master is
+        // on auto combat the action panel is hidden, so a piloted summon would
+        // otherwise have no driver at all and stall its turns to the timer.
         user.isAutoCombat = input.enabled;
+        userBattle.usersState.forEach((u) => {
+          if (u.isSummon && u.isPiloted && u.controllerId === ctx.userId) {
+            u.isAutoCombat = input.enabled;
+          }
+        });
         userBattle.updatedAt = new Date();
         userBattle.version = userBattle.version + 1;
 
