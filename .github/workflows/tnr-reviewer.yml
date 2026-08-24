@@ -388,15 +388,16 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           ref: refs/pull/${{ needs.command_gate.outputs.pr_number }}/head
 
-      # Issue repro checks out a pinned main SHA (trusted), never a PR head.
-      - name: Checkout main SHA
+      # Issue repro checks out the default branch by name (trusted). Do not use
+      # command_gate's head_sha here — that output is also set for PR reviews,
+      # and CodeQL treats it as an untrusted checkout.
+      - name: Checkout main
         if: needs.command_gate.outputs.mode == 'issue-repro'
         uses: actions/checkout@v7
         with:
           fetch-depth: 1
           persist-credentials: false
-          token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ needs.command_gate.outputs.head_sha }}
+          ref: main
 
       # Set up Playwright MCP as a stdio server for Codex, plus artifact dirs.
       # No extraHTTPHeaders — those leak into cross-origin requests (Clerk JS)
