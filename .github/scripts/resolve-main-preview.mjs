@@ -39,6 +39,7 @@ const environmentPatternRaw =
   process.env.PREVIEW_ENVIRONMENT_PATTERN || "^Preview\\s+[–-]\\s+tnr$";
 const pollIntervalMs = Number(process.env.POLL_INTERVAL_MS ?? 15_000);
 const pollTimeoutMs = Number(process.env.POLL_TIMEOUT_MS ?? 25 * 60 * 1000);
+const snapshotAfterMs = Number(process.env.SNAPSHOT_AFTER_MS ?? 90_000);
 
 if (!githubToken) {
   throw new Error("Missing GITHUB_TOKEN");
@@ -187,14 +188,16 @@ const pointPreviewBranchAtSha = async (sha) => {
   return { changed: true, action: "created" };
 };
 
-const waitForPreview = async (sha) => {
-  const deadline = Date.now() + pollTimeoutMs;
+const waitForPreview = async (sha, timeoutMs = pollTimeoutMs) => {
+  const deadline = Date.now() + timeoutMs;
   let lastNote = "waiting for Vercel to create a Preview – tnr deployment";
+  let sawMatching = false;
 
   while (Date.now() < deadline) {
     const { successful, inProgress, inspected } = await inspectPreview(sha);
+    if (inspected.length > 0) sawMatching = true;
     if (successful) {
-      return successful;
+      return { successful, sawMatching: true };
     }
     lastNote = inProgress
       ? `Vercel preview is ${inProgress.state} (${inProgress.environment})`
@@ -207,9 +210,49 @@ const waitForPreview = async (sha) => {
     await sleep(pollIntervalMs);
   }
 
+  return { successful: null, sawMatching, lastNote };
+};
+
+const requirePreview = (result, sha) => {
+  if (result.successful) return result.successful;
   throw new Error(
-    `Timed out after ${Math.round(pollTimeoutMs / 1000)}s waiting for a Preview – tnr deployment of ${sha.slice(0, 7)}. Last status: ${lastNote}`,
+    `Timed out waiting for a Preview – tnr deployment of ${sha.slice(0, 7)}. Last status: ${result.lastNote}`,
   );
+};
+
+/** Empty commit on top of main so Vercel sees a unique non-production SHA. */
+const createMainSnapshotSha = async (baseSha) => {
+  if (!pushRequest) {
+    throw new Error(
+      "PUSH_TOKEN is required to create a unique preview snapshot of main",
+    );
+  }
+  const baseCommit = await pushRequest(
+    `/repos/${owner}/${repo}/git/commits/${baseSha}`,
+  );
+  const snapshot = await pushRequest(`/repos/${owner}/${repo}/git/commits`, {
+    method: "POST",
+    body: JSON.stringify({
+      message: `tnr-preview: snapshot of ${baseSha.slice(0, 7)}`,
+      tree: baseCommit.tree.sha,
+      parents: [baseSha],
+    }),
+  });
+  if (!snapshot?.sha) {
+    throw new Error("Failed to create tnr-preview snapshot commit");
+  }
+  return snapshot.sha;
+};
+
+const isSnapshotOf = async (candidateSha, parentSha) => {
+  try {
+    const commit = await githubRequest(
+      `/repos/${owner}/${repo}/git/commits/${candidateSha}`,
+    );
+    return (commit?.parents ?? []).some((parent) => parent.sha === parentSha);
+  } catch {
+    return false;
+  }
 };
 
 const main = async () => {
@@ -255,7 +298,10 @@ const main = async () => {
     console.log(
       `Preview already in progress (${existing.inProgress.state}); waiting`,
     );
-    const successful = await waitForPreview(resolvedSha);
+    const successful = requirePreview(
+      await waitForPreview(resolvedSha),
+      resolvedSha,
+    );
     ready({
       previewUrl: successful.url,
       reason: `Waited for in-progress ${successful.environment} of main`,
@@ -266,6 +312,39 @@ const main = async () => {
     return;
   }
 
+  // A previous run may already have a unique snapshot commit of this main SHA.
+  const currentBranchSha = await readPreviewBranchSha();
+  if (currentBranchSha && currentBranchSha !== resolvedSha) {
+    const snapshotOfMain = await isSnapshotOf(currentBranchSha, resolvedSha);
+    if (snapshotOfMain) {
+      const snapshotPreview = await inspectPreview(currentBranchSha);
+      if (snapshotPreview.successful) {
+        ready({
+          previewUrl: snapshotPreview.successful.url,
+          reason: `Reusing snapshot preview of main on ${previewBranch}`,
+          checkName: snapshotPreview.successful.environment,
+          detailsUrl: snapshotPreview.successful.detailsUrl,
+          headSha: resolvedSha,
+        });
+        return;
+      }
+      if (snapshotPreview.inProgress) {
+        const successful = requirePreview(
+          await waitForPreview(currentBranchSha),
+          currentBranchSha,
+        );
+        ready({
+          previewUrl: successful.url,
+          reason: `Waited for in-progress snapshot preview of main`,
+          checkName: successful.environment,
+          detailsUrl: successful.detailsUrl,
+          headSha: resolvedSha,
+        });
+        return;
+      }
+    }
+  }
+
   const branchResult = await pointPreviewBranchAtSha(resolvedSha);
   console.log(
     branchResult.changed
@@ -273,12 +352,51 @@ const main = async () => {
       : `${previewBranch} already points at ${resolvedSha}; waiting for Vercel`,
   );
 
-  const successful = await waitForPreview(resolvedSha);
+  // Vercel often skips a preview when the SHA was already deployed as
+  // production. Wait briefly; if no Preview – tnr appears, create a unique
+  // empty commit (same tree as main) so Vercel treats it as a new preview.
+  const firstWait = await waitForPreview(
+    resolvedSha,
+    Math.min(snapshotAfterMs, pollTimeoutMs),
+  );
+  if (firstWait.successful) {
+    ready({
+      previewUrl: firstWait.successful.url,
+      reason: `Created Preview – tnr of main via ${previewBranch}`,
+      checkName: firstWait.successful.environment,
+      detailsUrl: firstWait.successful.detailsUrl,
+      headSha: resolvedSha,
+    });
+    return;
+  }
+
+  if (firstWait.sawMatching) {
+    const successful = requirePreview(
+      await waitForPreview(resolvedSha, pollTimeoutMs - snapshotAfterMs),
+      resolvedSha,
+    );
+    ready({
+      previewUrl: successful.url,
+      reason: `Waited for Preview – tnr of main on ${previewBranch}`,
+      checkName: successful.environment,
+      detailsUrl: successful.detailsUrl,
+      headSha: resolvedSha,
+    });
+    return;
+  }
+
+  const snapshotSha = await createMainSnapshotSha(resolvedSha);
+  await pointPreviewBranchAtSha(snapshotSha);
+  console.log(
+    `No preview of ${resolvedSha.slice(0, 7)}; created snapshot ${snapshotSha.slice(0, 7)} on ${previewBranch}`,
+  );
+  const successful = requirePreview(
+    await waitForPreview(snapshotSha),
+    snapshotSha,
+  );
   ready({
     previewUrl: successful.url,
-    reason: branchResult.changed
-      ? `Created Preview – tnr of main via ${previewBranch}`
-      : `Waited for Preview – tnr of main on ${previewBranch}`,
+    reason: `Created Preview – tnr snapshot of main via ${previewBranch}`,
     checkName: successful.environment,
     detailsUrl: successful.detailsUrl,
     headSha: resolvedSha,
