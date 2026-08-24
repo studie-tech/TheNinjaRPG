@@ -25,6 +25,24 @@ export const setOutput = (key, value) => {
 };
 
 /**
+ * Validate that a URL is a trusted Vercel deployment (*.vercel.app over HTTPS).
+ * Returns the origin only, or an empty string when the URL is untrusted.
+ *
+ * @param {string} raw
+ * @returns {string}
+ */
+export const toTrustedPreviewUrl = (raw) => {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:") return "";
+    if (!parsed.hostname.endsWith(".vercel.app")) return "";
+    return parsed.origin;
+  } catch {
+    return "";
+  }
+};
+
+/**
  * Create an authenticated GitHub REST API request function.
  * Supports GET (default) and any method via options.method / options.body.
  *
