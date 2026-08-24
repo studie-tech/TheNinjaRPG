@@ -377,13 +377,26 @@ jobs:
           cp trusted-scripts/.github/scripts/post-tnr-result.mjs "$RUNNER_TEMP/tnr-scripts/"
           cp trusted-scripts/.github/scripts/upload-screenshots.mjs "$RUNNER_TEMP/tnr-scripts/"
 
-      # Second checkout: PR head for review, or main SHA for issue repro
-      - name: Checkout target ref
+      # Second checkout: PR head for review only. Scripts that run with secrets
+      # were already copied from the trusted default-branch checkout above.
+      - name: Checkout PR head
+        if: needs.command_gate.outputs.mode == 'pr-review'
         uses: actions/checkout@v7
         with:
           fetch-depth: 1
+          persist-credentials: false
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ needs.command_gate.outputs.mode == 'pr-review' && format('refs/pull/{0}/head', needs.command_gate.outputs.pr_number) || needs.command_gate.outputs.head_sha }}
+          ref: refs/pull/${{ needs.command_gate.outputs.pr_number }}/head
+
+      # Issue repro checks out a pinned main SHA (trusted), never a PR head.
+      - name: Checkout main SHA
+        if: needs.command_gate.outputs.mode == 'issue-repro'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ needs.command_gate.outputs.head_sha }}
 
       # Set up Playwright MCP as a stdio server for Codex, plus artifact dirs.
       # No extraHTTPHeaders — those leak into cross-origin requests (Clerk JS)
