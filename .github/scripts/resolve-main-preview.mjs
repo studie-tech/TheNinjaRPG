@@ -64,8 +64,10 @@ const githubRequest = createGithubClient(githubToken);
 const pushRequest = pushToken ? createGithubClient(pushToken) : null;
 const environmentRegex = new RegExp(environmentPatternRaw, "i");
 
-// Deployment statuses that can never become a usable preview.
-const TERMINAL_STATES = ["failure", "error"];
+// Deployment statuses that can never become a usable preview. Vercel's
+// integration does not append `inactive` statuses here (auto_inactive is
+// off), but if one ever appears it is just as dead as a failed build.
+const TERMINAL_STATES = ["failure", "error", "inactive"];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
