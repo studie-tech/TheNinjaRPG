@@ -75,4 +75,15 @@ describe("getTurnControl truth table", () => {
       ),
     ).toEqual({ isUserTurn: false, isAITurn: true });
   });
+
+  it("my piloted summon while I'm on auto combat -> AI turn, not user turn", () => {
+    // toggleAutoCombat propagates the flag to piloted summons so they are not
+    // stranded without a driver while the action panel is hidden
+    expect(
+      getTurnControl(
+        { isAi: true, isPiloted: true, isAutoCombat: true, controllerId: "player1" },
+        suid,
+      ),
+    ).toEqual({ isUserTurn: false, isAITurn: true });
+  });
 });
