@@ -101,14 +101,16 @@ curl -s -X POST "http://127.0.0.1:$PORT/api/ai-test-user/call-endpoint" \
 
 ## 5. Browser login
 
-Open `http://127.0.0.1:$PORT/login?__clerk_ticket=<signInToken>`. Clerk consumes the ticket and the
+Open `http://localhost:$PORT/login?__clerk_ticket=<signInToken>`. Clerk consumes the ticket and the
 session is signed in as that user. Single-use — provision a fresh user for another login.
 
-**Automated browsers can stall here.** Under both the in-app browser pane and the Chrome
-extension, clerk-js has been seen loading its script but sitting at `Clerk.status === "loading"`
-forever, never calling its Frontend API — so the ticket is never consumed and the login page stays
-blank. If that happens, skip the browser entirely and use the headless flow below; don't burn
-tickets on reloads (each is single-use, ~300 s).
+**Browser pages MUST use `localhost`, never `127.0.0.1`.** On a `127.0.0.1` origin the Next dev
+server 403s its own chunks ("Blocked cross-origin request to Next.js dev resource … from
+\"127.0.0.1\"" in the server log), so React never hydrates and clerk-js sits at
+`Clerk.status === "loading"` forever without ever calling its Frontend API — the login page stays
+blank and reloads just burn the single-use (~300 s) ticket. The symptom looks identical in the
+in-app pane, the Chrome extension, and headless drivers. Plain `curl` calls to API routes are
+unaffected (no hydration involved), which is why the earlier sections work with either host.
 
 ## 5b. Headless auth for plain API routes (non-tRPC)
 
