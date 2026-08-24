@@ -66,9 +66,13 @@ export const createGithubClient = (token) => {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(
+      const error = new Error(
         `GitHub API ${path} failed (${response.status}): ${body}`,
       );
+      // Callers branch on the HTTP status (e.g. 404 = ref missing); expose it
+      // directly instead of forcing them to parse the message.
+      error.status = response.status;
+      throw error;
     }
 
     return response.json();

@@ -22,7 +22,7 @@ jobs:
             @codex please review this issue and create your overall understanding of how this would fit into the codebase. Be sure to highlight main flow changes, UI components, UX flows, etc. Investigate it thoroughly with respect to the codebase. Be sure to 1. Highlight any uncertainties and request follow-up information as needed. 2. Highlight any potential concerns and request user input on them. 3. highlight any game mechanics / components which may need adaption / integration with this new feature . Do not start implementing, and do not go deep on implementation details - right now the most important thing is alignment with the user request, so as anything which may still need alignment.
             \`\`\`
 
-            **Want an AI agent to try reproducing a bug on latest \`main\`?** Team members can comment (optional extra instructions after the command):
+            **Want an AI agent to try reproducing a bug on latest \`main\`?** Team members can comment (optional extra instructions on the same line as the command):
 
             \`\`\`
             /tnr-repro-now
