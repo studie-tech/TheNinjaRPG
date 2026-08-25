@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { sendGTMEvent } from "@next/third-parties/google";
-import { BarChart3, Bot, Info, Sun, Swords } from "lucide-react";
+import { Bot, Info, Sun, Swords } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -44,6 +44,8 @@ import BanInfo from "@/layout/BanInfo";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
+import type { GenericObject } from "@/layout/ItemWithEffects";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Loader from "@/layout/Loader";
 import { RankedArenaMain, RankedLoadoutSelector } from "@/layout/PvpRank";
@@ -468,47 +470,24 @@ const OpponentInfoButton: React.FC<OpponentInfoButtonProps> = (props) => {
           <Info className="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-72">
+      <PopoverContent className="max-h-[70vh] w-[90vw] max-w-md overflow-y-auto p-2">
         {!ai && <Loader explanation="Loading opponent" />}
         {ai && (
-          <div className="flex flex-col gap-2 text-sm">
-            <div className="flex items-center gap-3">
-              <Image
-                alt={ai.username}
-                src={ai.avatar ?? IMG_AVATAR_DEFAULT}
-                width={48}
-                height={48}
-                className="h-12 w-12 rounded-md object-cover"
-              />
-              <div className="min-w-0">
-                <Link
-                  href={`/userid/${ai.userId}`}
-                  className="block truncate font-semibold hover:text-orange-500"
-                >
-                  {ai.username}
-                </Link>
-                <p className="text-muted-foreground text-xs">
-                  Level {ai.level} · {ai.rank.toLowerCase()}
-                </p>
-              </div>
-            </div>
-            {ai.jutsus.length > 0 && (
-              <div>
-                <p className="font-semibold text-muted-foreground text-xs uppercase">
-                  Attacks
-                </p>
-                <p className="text-xs">
-                  {ai.jutsus.map((j) => j.jutsu.name).join(", ")}
-                </p>
-              </div>
-            )}
-            <Link
-              href={`/manual/ai/statistics/${ai.userId}`}
-              className="flex items-center gap-1 text-muted-foreground text-xs hover:text-orange-500"
-            >
-              <BarChart3 className="h-3 w-3" /> Usage statistics
-            </Link>
-          </div>
+          <ItemWithEffects
+            item={
+              {
+                id: ai.userId,
+                name: ai.username,
+                image: ai.avatar,
+                description: "",
+                rarity: "COMMON",
+                href: `/userid/${ai.userId}`,
+                attacks: ai.jutsus.map((jutsu) => jutsu.jutsu.name),
+                ...ai,
+              } as GenericObject
+            }
+            showStatistic="ai"
+          />
         )}
       </PopoverContent>
     </Popover>
