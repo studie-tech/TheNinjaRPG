@@ -470,7 +470,7 @@ const OpponentInfoButton: React.FC<OpponentInfoButtonProps> = (props) => {
           <Info className="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="max-h-[70vh] w-[90vw] max-w-md overflow-y-auto p-2">
+      <PopoverContent className="max-h-[70vh] w-[500px] max-w-[90vw] overflow-y-auto">
         {!ai && <Loader explanation="Loading opponent" />}
         {ai && (
           <ItemWithEffects
