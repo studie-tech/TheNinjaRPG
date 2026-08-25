@@ -283,7 +283,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
             {sortedAis?.map((opponent) => {
               const isSelected = opponent.userId === aiId;
               return (
-                <div key={opponent.userId} className="relative">
+                <div key={opponent.userId} className="group relative">
                   <button
                     type="button"
                     aria-pressed={isSelected}
@@ -313,7 +313,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
                       Best match
                     </Badge>
                   )}
-                  <OpponentInfoButton aiId={opponent.userId} />
+                  <OpponentInfoButton aiId={opponent.userId} alwaysShow={isSelected} />
                 </div>
               );
             })}
@@ -439,6 +439,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
 
 interface OpponentInfoButtonProps {
   aiId: string;
+  alwaysShow: boolean;
 }
 
 const OpponentInfoButton: React.FC<OpponentInfoButtonProps> = (props) => {
@@ -448,13 +449,21 @@ const OpponentInfoButton: React.FC<OpponentInfoButtonProps> = (props) => {
     { userId: props.aiId },
     { enabled: open, staleTime: Number.POSITIVE_INFINITY },
   );
+  // Hidden by default to keep the grid calm: shown on the selected tile, on
+  // tile hover (desktop), and while its popover is open. Touch users select a
+  // tile first, which reveals its info button.
+  const isVisible = props.alwaysShow || open;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
           aria-label="Opponent details"
-          className="absolute -top-1 -left-1 rounded-full border bg-popover p-1 text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+          className={`absolute top-2.5 left-2.5 rounded-full bg-black/40 p-1 text-white/80 backdrop-blur-sm transition-all hover:bg-black/70 hover:text-white ${
+            isVisible
+              ? "opacity-100"
+              : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+          }`}
         >
           <Info className="h-3.5 w-3.5" />
         </button>
