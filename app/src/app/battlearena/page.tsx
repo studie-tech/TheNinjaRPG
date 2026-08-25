@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { sendGTMEvent } from "@next/third-parties/google";
-import { Bot, Sun, Swords } from "lucide-react";
+import { BarChart3, Bot, Info, Sun, Swords } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -21,6 +21,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -43,8 +44,6 @@ import BanInfo from "@/layout/BanInfo";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
-import type { GenericObject } from "@/layout/ItemWithEffects";
-import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Loader from "@/layout/Loader";
 import { RankedArenaMain, RankedLoadoutSelector } from "@/layout/PvpRank";
@@ -208,10 +207,6 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
 
   // Queries
   const { data: aiData } = api.profile.getAllAiNames.useQuery(undefined);
-  const { data: ai } = api.profile.getAi.useQuery(
-    { userId: aiId ?? "" },
-    { enabled: !!aiId },
-  );
 
   // Sorted by proximity to the user's level, so relevant opponents come first
   const sortedAis = useMemo(
@@ -288,62 +283,43 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
             {sortedAis?.map((opponent) => {
               const isSelected = opponent.userId === aiId;
               return (
-                <button
-                  type="button"
-                  key={opponent.userId}
-                  aria-pressed={isSelected}
-                  onClick={() => setAiId(opponent.userId)}
-                  className={`relative flex flex-col items-center rounded-lg border-2 p-2 transition-colors hover:bg-popover ${
-                    isSelected
-                      ? "border-amber-500 bg-popover shadow-md"
-                      : "border-transparent"
-                  }`}
-                >
-                  <Image
-                    alt={opponent.username}
-                    src={opponent.avatar ?? IMG_AVATAR_DEFAULT}
-                    width={80}
-                    height={80}
-                    className="aspect-square w-full rounded-md object-cover"
-                  />
-                  <p className="w-full truncate text-center font-semibold text-xs">
-                    {opponent.username}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    Level {opponent.level}
-                  </p>
+                <div key={opponent.userId} className="relative">
+                  <button
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setAiId(opponent.userId)}
+                    className={`flex w-full flex-col items-center rounded-lg border-2 p-2 transition-colors hover:bg-popover ${
+                      isSelected
+                        ? "border-amber-500 bg-popover shadow-md"
+                        : "border-transparent"
+                    }`}
+                  >
+                    <Image
+                      alt={opponent.username}
+                      src={opponent.avatar ?? IMG_AVATAR_DEFAULT}
+                      width={80}
+                      height={80}
+                      className="aspect-square w-full rounded-md object-cover"
+                    />
+                    <p className="w-full truncate text-center font-semibold text-xs">
+                      {opponent.username}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Level {opponent.level}
+                    </p>
+                  </button>
                   {opponent.userId === bestMatchId && (
-                    <Badge className="absolute -top-1 -right-1 px-1 py-0 text-[9px]">
+                    <Badge className="pointer-events-none absolute -top-1 -right-1 px-1 py-0 text-[9px]">
                       Best match
                     </Badge>
                   )}
-                </button>
+                  <OpponentInfoButton aiId={opponent.userId} />
+                </div>
               );
             })}
             {!sortedAis && <Loader explanation="Loading opponents" />}
           </div>
         </div>
-      )}
-
-      {/* SELECTED OPPONENT DETAILS */}
-      {canDoArena && ai && (
-        <ItemWithEffects
-          item={
-            {
-              id: ai.userId,
-              name: ai.username,
-              image: ai.avatar,
-              description: "",
-              rarity: "COMMON",
-              href: `/userid/${ai.userId}`,
-              attacks: ai.jutsus?.map((jutsu) =>
-                "jutsu" in jutsu ? jutsu.jutsu?.name : "Unknown",
-              ),
-              ...ai,
-            } as GenericObject
-          }
-          showStatistic="ai"
-        />
       )}
 
       {/* BATTLE OPTIONS */}
@@ -458,6 +434,75 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
         )}
       </div>
     </div>
+  );
+};
+
+interface OpponentInfoButtonProps {
+  aiId: string;
+}
+
+const OpponentInfoButton: React.FC<OpponentInfoButtonProps> = (props) => {
+  const [open, setOpen] = useState(false);
+  // Details are only fetched once the popover is opened
+  const { data: ai } = api.profile.getAi.useQuery(
+    { userId: props.aiId },
+    { enabled: open, staleTime: Number.POSITIVE_INFINITY },
+  );
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Opponent details"
+          className="absolute -top-1 -left-1 rounded-full border bg-popover p-1 text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72">
+        {!ai && <Loader explanation="Loading opponent" />}
+        {ai && (
+          <div className="flex flex-col gap-2 text-sm">
+            <div className="flex items-center gap-3">
+              <Image
+                alt={ai.username}
+                src={ai.avatar ?? IMG_AVATAR_DEFAULT}
+                width={48}
+                height={48}
+                className="h-12 w-12 rounded-md object-cover"
+              />
+              <div className="min-w-0">
+                <Link
+                  href={`/userid/${ai.userId}`}
+                  className="block truncate font-semibold hover:text-orange-500"
+                >
+                  {ai.username}
+                </Link>
+                <p className="text-muted-foreground text-xs">
+                  Level {ai.level} · {ai.rank.toLowerCase()}
+                </p>
+              </div>
+            </div>
+            {ai.jutsus.length > 0 && (
+              <div>
+                <p className="font-semibold text-muted-foreground text-xs uppercase">
+                  Attacks
+                </p>
+                <p className="text-xs">
+                  {ai.jutsus.map((j) => j.jutsu.name).join(", ")}
+                </p>
+              </div>
+            )}
+            <Link
+              href={`/manual/ai/statistics/${ai.userId}`}
+              className="flex items-center gap-1 text-muted-foreground text-xs hover:text-orange-500"
+            >
+              <BarChart3 className="h-3 w-3" /> Usage statistics
+            </Link>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 };
 
