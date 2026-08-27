@@ -15,6 +15,7 @@ const state = (
   shouldShowPopup: false,
   dismissedToday: false,
   userClosed: false,
+  tutorialActive: false,
   ...patch,
 });
 
@@ -70,5 +71,49 @@ describe("activity streak popup compatibility", () => {
         state({ isOpen: true, userClosed: true }),
       ),
     ).toBe(false);
+  });
+
+  it("never opens while the tutorial is running", () => {
+    // A brand-new account has no streak progress, so the enrolment prompt is
+    // eligible on exactly the accounts that are also mid-tutorial.
+    expect(
+      resolveActivityStreakPopupOpen(
+        state({ shouldShowPopup: true, tutorialActive: true }),
+      ),
+    ).toBe(false);
+    expect(
+      resolveActivityStreakPopupOpen(
+        state({ isLoading: true, tutorialActive: true }),
+      ),
+    ).toBe(false);
+  });
+
+  it("closes an already-open popup if the tutorial restarts underneath it", () => {
+    expect(
+      resolveActivityStreakPopupOpen(state({ isOpen: true, tutorialActive: true })),
+    ).toBe(false);
+  });
+
+  it("does not hold back other popups while suppressed for the tutorial", () => {
+    expect(
+      isActivityStreakPopupBlocking(
+        true,
+        state({ isLoading: true, tutorialActive: true }),
+      ),
+    ).toBe(false);
+    expect(
+      isActivityStreakPopupBlocking(
+        true,
+        state({ shouldShowPopup: true, tutorialActive: true }),
+      ),
+    ).toBe(false);
+  });
+
+  it("resumes normally once the tutorial is finished", () => {
+    expect(
+      resolveActivityStreakPopupOpen(
+        state({ shouldShowPopup: true, tutorialActive: false }),
+      ),
+    ).toBe(true);
   });
 });

@@ -15,7 +15,11 @@ import {
 import { availableUserActions } from "@/libs/combat/actions";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { getDistanceToClosestEnemy } from "@/libs/combat/util";
-import { TUTORIAL_CAPTURE_SECTOR, TUTORIAL_HOME_SECTOR } from "@/libs/tutorial";
+import {
+  isTutorialActive,
+  TUTORIAL_CAPTURE_SECTOR,
+  TUTORIAL_HOME_SECTOR,
+} from "@/libs/tutorial";
 import { combatActionIdAtom, userBattleAtom, useUserData } from "@/utils/UserContext";
 
 export interface TutorialStepConfig {
@@ -760,8 +764,9 @@ export const useTutorialStep = () => {
   // A switched-off tutorial has no current step. Callers use `currentStep` to
   // pin UI (hide training sections, pin shop rows, force quest tabs), so a
   // player who stopped the tutorial mid-way must not keep that UI forever.
-  const staticStep =
-    userData?.tutorialOn === false ? undefined : TUTORIAL_STEPS?.[stepNumber];
+  const staticStep = isTutorialActive(userData)
+    ? TUTORIAL_STEPS?.[stepNumber]
+    : undefined;
 
   // Calculate distance to closest enemy for dynamic combat steps
   const distanceToEnemy = useMemo(() => {
