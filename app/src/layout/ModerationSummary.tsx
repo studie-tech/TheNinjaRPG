@@ -21,11 +21,13 @@ import {
 
 interface ModerationSummaryProps {
   userId?: string;
+  username?: string;
   trigger: React.ReactNode;
 }
 
 export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
   userId,
+  username,
   trigger,
 }) => {
   const [open, setOpen] = React.useState(false);
@@ -139,9 +141,13 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Content Moderation Summary</DialogTitle>
+          <DialogTitle>
+            {username
+              ? `${username}'s Content Moderation Summary`
+              : "Content Moderation Summary"}
+          </DialogTitle>
           <DialogDescription>
-            This shows an overview of content moderation flags on your account
+            Overview of automated content moderation flags on this account
           </DialogDescription>
         </DialogHeader>
 
@@ -155,7 +161,8 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
               No moderation flags found
             </p>
             <p className="text-center text-gray-500 text-sm">
-              Your content hasn&apos;t triggered any automated moderation flags.
+              This account&apos;s content hasn&apos;t triggered any automated moderation
+              flags.
             </p>
           </div>
         ) : (
@@ -203,7 +210,7 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
               <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
               <div>
                 <h4 className="font-medium text-orange-800">
-                  Understanding Your Moderation Data
+                  Understanding This Moderation Data
                 </h4>
                 <p className="mt-1 text-orange-700 text-sm">
                   Content moderation is performed automatically to ensure community
