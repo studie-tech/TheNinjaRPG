@@ -399,7 +399,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         subtitle={`Profile: ${profileName}`}
         initialBreak={userData ? initialBreak : true}
         topRightContent={
-          <div className="flex flex-row gap-1">
+          <div className="flex flex-row items-center gap-1 [&_svg]:block">
             {userData && canCloneUser(userData.role) && (
               <>
                 <TooltipProvider delayDuration={50}>
@@ -415,12 +415,14 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 </TooltipProvider>
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
-                    <TooltipTrigger>
-                      <UpdateUserIdButton
-                        userId={profile.userId}
-                        username={profile.username}
-                        updateUserIdMutation={updateUserId}
-                      />
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <UpdateUserIdButton
+                          userId={profile.userId}
+                          username={profile.username}
+                          updateUserIdMutation={updateUserId}
+                        />
+                      </span>
                     </TooltipTrigger>
                     <TooltipContent>Update User ID</TooltipContent>
                   </Tooltip>
@@ -685,8 +687,10 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 </TooltipProvider>
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
-                    <TooltipTrigger>
-                      <DeleteUserButton userData={profile} />
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <DeleteUserButton userData={profile} />
+                      </span>
                     </TooltipTrigger>
                     <TooltipContent>Delete User</TooltipContent>
                   </Tooltip>
@@ -2519,15 +2523,11 @@ const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
       <TooltipProvider delayDuration={50}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
+            <Coins
+              className="h-6 w-6 cursor-pointer hover:text-orange-500"
               aria-label="Adjust Seichi Silver"
-              className="hover:text-orange-500"
               onClick={() => setIsOpen(true)}
-            >
-              <Coins className="h-6 w-6" />
-            </Button>
+            />
           </TooltipTrigger>
           <TooltipContent>Adjust Seichi Silver</TooltipContent>
         </Tooltip>
@@ -2627,15 +2627,11 @@ const BloodlinePoolManager: React.FC<BloodlinePoolManagerProps> = ({
       <TooltipProvider delayDuration={50}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
+            <Droplets
+              className="h-6 w-6 cursor-pointer hover:text-orange-500"
               aria-label="Manage Bloodline Pool"
-              className="hover:text-orange-500"
               onClick={() => setIsOpen(true)}
-            >
-              <Droplets className="h-6 w-6" />
-            </Button>
+            />
           </TooltipTrigger>
           <TooltipContent>Manage Bloodline Pool</TooltipContent>
         </Tooltip>

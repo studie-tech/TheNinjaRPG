@@ -53,7 +53,7 @@ const Confirm2: React.FC<Confirm2Props> = (props) => {
             setShowModal(true);
           }
         }}
-        className={`inline-block ${props.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+        className={`inline-flex items-center ${props.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
       >
         {props.button}
       </div>
