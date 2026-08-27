@@ -1,7 +1,10 @@
 import { useCallback, useMemo } from "react";
+import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
 import type { GroundEffect, ReturnedBattle, UserEffect } from "@/libs/combat/types";
 import { isEffectActive } from "@/libs/combat/util";
+import { showMutationToast } from "@/libs/toast";
+import { useUserData } from "@/utils/UserContext";
 
 /**
  * Precomputed maps for efficient combat tile lookups
@@ -162,10 +165,30 @@ export const useCombatPreferences = () => {
 export type CombatPreferences = ReturnType<typeof useCombatPreferences>;
 
 /**
- * Whether new arena/training battles should start with the player's own AI
- * profile in control (auto combat). Shared between the battle arena page and
- * the in-combat "Go Again" flow so both start battles with the same preference.
+ * Whether new battles should start with the player's own AI profile in control
+ * (auto combat). Persisted on the user rather than in localStorage so the
+ * choice follows the player across devices, and so toggling it mid-battle can
+ * remember the preference for next time. Defaults to true for every account.
+ *
+ * Returns a [value, setValue] pair mirroring useLocalStorage, so call sites
+ * read the same either way.
  */
-export const useAutoCombatSetting = () => {
-  return useLocalStorage<boolean>("autoCombatEnabled", true);
+export const useAutoCombatSetting = (): [boolean, (enabled: boolean) => void] => {
+  const { data: userData, updateUser } = useUserData();
+  const { mutate: updatePreferences } = api.profile.updatePreferences.useMutation({
+    onSuccess: (data) => {
+      if (!data.success) showMutationToast(data);
+    },
+  });
+  const enabled = userData?.defaultAutoCombat ?? true;
+  const setEnabled = useCallback(
+    (next: boolean) => {
+      // Update the cached user first so the switch responds immediately; the
+      // mutation persists the same value.
+      void updateUser({ defaultAutoCombat: next });
+      updatePreferences({ defaultAutoCombat: next });
+    },
+    [updateUser, updatePreferences],
+  );
+  return [enabled, setEnabled];
 };

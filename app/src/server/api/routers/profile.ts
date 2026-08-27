@@ -287,6 +287,9 @@ export const profileRouter = createTRPCRouter({
           ...(input.iframesMuted !== undefined
             ? { iframesMuted: input.iframesMuted }
             : {}),
+          ...(input.defaultAutoCombat !== undefined
+            ? { defaultAutoCombat: input.defaultAutoCombat }
+            : {}),
           ...(input.preferredStat !== undefined
             ? { preferredStat: input.preferredStat }
             : {}),

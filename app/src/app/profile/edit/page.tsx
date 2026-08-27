@@ -72,6 +72,7 @@ import {
   COST_SWAP_VILLAGE,
 } from "@/drizzle/constants";
 import type { Bloodline, Village } from "@/drizzle/schema";
+import { useAutoCombatSetting } from "@/hooks/combat";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_OPTIONS, useFontScale } from "@/hooks/useFontScale";
 import Accordion from "@/layout/Accordion";
@@ -476,6 +477,9 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   const { data: userData, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
 
+  // Default auto-combat preference (persisted on the user)
+  const [autoCombat, setAutoCombat] = useAutoCombatSetting();
+
   // Form setup
   const form = useForm<z.infer<typeof updateUserPreferencesSchema>>({
     resolver: zodResolver(updateUserPreferencesSchema),
@@ -662,6 +666,15 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
               }
             />
             <Label htmlFor="battle-description">Show battle descriptions</Label>
+            <br />
+            <Switch
+              id="default-auto-combat"
+              checked={autoCombat}
+              onCheckedChange={setAutoCombat}
+            />
+            <Label htmlFor="default-auto-combat">
+              Start battles with auto combat (your AI profile fights for you)
+            </Label>
             <br />
             <br />
             <Confirm2
