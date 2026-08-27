@@ -10,6 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Chart as ChartJS } from "chart.js/auto";
 import {
   Award,
+  BarChart2,
   Coins,
   CopyCheck,
   Droplets,
@@ -95,6 +96,7 @@ import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
+import { ModerationSummary } from "@/layout/ModerationSummary";
 import Post from "@/layout/Post";
 import ReportUser from "@/layout/Report";
 import RichInput from "@/layout/RichInput";
@@ -634,6 +636,18 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               </Confirm2>
             )}
 
+            {userData && (userData.userId === profile.userId || canSeeSecrets) && (
+              <ModerationSummary
+                userId={profile.userId}
+                username={profile.username}
+                trigger={
+                  <BarChart2
+                    className="h-6 w-6 cursor-pointer hover:text-orange-500"
+                    aria-label="Moderation Summary"
+                  />
+                }
+              />
+            )}
             {userData && (
               <ReportUser
                 user={profile}
