@@ -133,7 +133,7 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
           e.stopPropagation();
           setShowModal(true);
         }}
-        className="cursor-pointer"
+        className="inline-flex cursor-pointer items-center p-0"
       >
         {props.button}
       </button>
