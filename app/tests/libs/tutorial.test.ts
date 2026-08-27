@@ -11,6 +11,7 @@ import {
   isTutorialItemBuyStep,
   isTutorialJutsuPickStep,
   isTutorialPageMatch,
+  isTutorialActive,
   isUsableHighlightRect,
   TUTORIAL_HOME_SECTOR,
   TUTORIAL_ITEM_BUY_STEP_ID,
@@ -117,6 +118,25 @@ describe("getTutorialHighlightedQuestId", () => {
         relatedValue: "exam-2",
       }),
     ).toBe("exam-2");
+  });
+});
+
+describe("isTutorialActive", () => {
+  it("is active for a freshly registered account", () => {
+    // Schema defaults for a new UserData row
+    expect(isTutorialActive({ tutorialOn: true, tutorialStep: 0 })).toBe(true);
+  });
+
+  it("is inactive once the tutorial is switched off or finished", () => {
+    expect(isTutorialActive({ tutorialOn: false, tutorialStep: 0 })).toBe(false);
+    expect(
+      isTutorialActive({ tutorialOn: true, tutorialStep: TUTORIAL_STEPS_COUNT }),
+    ).toBe(false);
+  });
+
+  it("is inactive without a user", () => {
+    expect(isTutorialActive(undefined)).toBe(false);
+    expect(isTutorialActive(null)).toBe(false);
   });
 });
 

@@ -1,4 +1,19 @@
+import { TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
 import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
+
+/**
+ * True while the tutorial still has a step left to show. A switched-off
+ * tutorial has no current step, and a step index past the last step means the
+ * player finished it. Kept here rather than in the tutorial hook so that code
+ * outside the tutorial (e.g. auto-opening popups that must not cover it) can
+ * ask the question without pulling in the whole step list.
+ */
+export const isTutorialActive = (
+  user?: { tutorialOn?: boolean | null; tutorialStep?: number | null } | null,
+) =>
+  !!user &&
+  user.tutorialOn !== false &&
+  (user.tutorialStep ?? 0) < TUTORIAL_STEPS_COUNT;
 
 /** Step that asks the player to start training a jutsu (Sonic Slash). */
 export const TUTORIAL_JUTSU_PICK_STEP_ID = "eSBZJXRN_MCSYM90z3d5f";
