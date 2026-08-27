@@ -1,0 +1,1 @@
+ALTER TABLE `UserData` ADD `defaultAutoCombat` boolean DEFAULT true NOT NULL;

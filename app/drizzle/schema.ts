@@ -2413,6 +2413,7 @@ export const userData = mysqlTable(
     preferredGeneral1: mysqlEnum("preferredGeneral1", consts.GeneralTypes),
     preferredGeneral2: mysqlEnum("preferredGeneral2", consts.GeneralTypes),
     showBattleDescription: boolean("showBattleDescription").default(true).notNull(),
+    defaultAutoCombat: boolean("defaultAutoCombat").default(true).notNull(),
     // Statistics
     pvpFights: int("pvpFights").default(0).notNull(),
     pveFights: int("pveFights").default(0).notNull(),

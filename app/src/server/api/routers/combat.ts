@@ -920,7 +920,10 @@ export const combatRouter = createTRPCRouter({
             client: ctx.drizzle,
             targetStatDistribution: input.stats ?? undefined,
             biome: "default",
-            autoCombatUserIds: input.autoCombat ? [user.userId] : undefined,
+            // Callers that do not state a preference (e.g. MCP) fall back to
+            // the player's stored default rather than silently to manual.
+            autoCombatUserIds:
+              (input.autoCombat ?? user.defaultAutoCombat) ? [user.userId] : undefined,
           },
           input.stats ? "TRAINING" : "ARENA",
         );
@@ -1390,6 +1393,14 @@ export const combatRouter = createTRPCRouter({
       const MAX_RETRIES = 3;
       let attempts = 0;
 
+      // Toggling mid-battle also becomes the player's default for future
+      // battles. Idempotent, so a version-conflict retry writes the same value.
+      const rememberPreference = () =>
+        ctx.drizzle
+          .update(userData)
+          .set({ defaultAutoCombat: input.enabled })
+          .where(eq(userData.userId, ctx.userId));
+
       // Retry loop
       while (attempts < MAX_RETRIES) {
         attempts++;
@@ -1413,6 +1424,7 @@ export const combatRouter = createTRPCRouter({
 
         // Check if user is already in the requested state
         if (!!user.isAutoCombat === input.enabled) {
+          await rememberPreference();
           return {
             success: true,
             message: "",
@@ -1432,20 +1444,24 @@ export const combatRouter = createTRPCRouter({
         userBattle.updatedAt = new Date();
         userBattle.version = userBattle.version + 1;
 
-        // Mutate
-        const result = await ctx.drizzle
-          .update(battle)
-          .set({
-            usersState: userBattle.usersState,
-            version: userBattle.version,
-            updatedAt: userBattle.updatedAt,
-          })
-          .where(
-            and(
-              eq(battle.id, input.battleId),
-              eq(battle.version, userBattle.version - 1),
+        // Mutate. The preference write rides along in parallel so remembering
+        // the choice costs no extra latency.
+        const [result] = await Promise.all([
+          ctx.drizzle
+            .update(battle)
+            .set({
+              usersState: userBattle.usersState,
+              version: userBattle.version,
+              updatedAt: userBattle.updatedAt,
+            })
+            .where(
+              and(
+                eq(battle.id, input.battleId),
+                eq(battle.version, userBattle.version - 1),
+              ),
             ),
-          );
+          rememberPreference(),
+        ]);
 
         if (result.rowsAffected > 0) {
           void pusher.trigger(userBattle.id, "event", {
