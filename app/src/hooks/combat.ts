@@ -174,10 +174,24 @@ export type CombatPreferences = ReturnType<typeof useCombatPreferences>;
  * read the same either way.
  */
 export const useAutoCombatSetting = (): [boolean, (enabled: boolean) => void] => {
+  const utils = api.useUtils();
   const { data: userData, updateUser } = useUserData();
   const { mutate: updatePreferences } = api.profile.updatePreferences.useMutation({
-    onSuccess: (data) => {
-      if (!data.success) showMutationToast(data);
+    // Flicking the switch back and forth would otherwise leave two writes in
+    // flight with no ordering guarantee, and whichever landed last would win;
+    // a shared scope makes react-query run them one after the other.
+    scope: { id: "defaultAutoCombat" },
+    // The switch moved before the server confirmed anything, so a write that
+    // does not land has to be undone. Refetching rather than restoring a
+    // remembered value keeps the cache on server truth even if the failure
+    // arrives after a later, successful toggle.
+    onSuccess: async (data) => {
+      if (data.success) return;
+      showMutationToast(data);
+      await utils.profile.getUser.invalidate();
+    },
+    onError: async () => {
+      await utils.profile.getUser.invalidate();
     },
   });
   const enabled = userData?.defaultAutoCombat ?? true;
