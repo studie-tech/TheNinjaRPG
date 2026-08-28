@@ -406,6 +406,9 @@ export const performAIaction = (
           // to fighting shape instead — without this, a player whose attacks
           // all became unaffordable would wait forever (any human would
           // meditate here). Strategic end-turns at healthy pools are untouched.
+          // Meditate costs chakra itself, so below that cost it drops out of
+          // availActions and the turn falls through to wait — the same dead end
+          // a manual player hits, there being no cheaper recovery to reach for.
           const drainedPools =
             user.curStamina < 0.3 * user.maxStamina ||
             user.curChakra < 0.3 * user.maxChakra;

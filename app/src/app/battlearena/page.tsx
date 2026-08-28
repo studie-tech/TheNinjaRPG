@@ -447,13 +447,14 @@ interface OpponentInfoButtonProps {
 const OpponentInfoButton: React.FC<OpponentInfoButtonProps> = (props) => {
   const [open, setOpen] = useState(false);
   // Details are only fetched once the popover is opened
-  const { data: ai } = api.profile.getAi.useQuery(
+  const { data: ai, isPending } = api.profile.getAi.useQuery(
     { userId: props.aiId },
     { enabled: open, staleTime: Number.POSITIVE_INFINITY },
   );
   // Hidden by default to keep the grid calm: shown on the selected tile, on
   // tile hover (desktop), and while its popover is open. Touch users select a
-  // tile first, which reveals its info button.
+  // tile first, which reveals its info button — so while it is invisible it
+  // must also stop swallowing taps meant for the avatar underneath it.
   const isVisible = props.alwaysShow || open;
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -464,14 +465,19 @@ const OpponentInfoButton: React.FC<OpponentInfoButtonProps> = (props) => {
           className={`absolute top-2.5 left-2.5 rounded-full bg-black/40 p-1 text-white/80 backdrop-blur-sm transition-all hover:bg-black/70 hover:text-white ${
             isVisible
               ? "opacity-100"
-              : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+              : "pointer-events-none opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
           }`}
         >
           <Info className="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="max-h-[70vh] w-[500px] max-w-[90vw] overflow-y-auto">
-        {!ai && <Loader explanation="Loading opponent" />}
+        {isPending && <Loader explanation="Loading opponent" />}
+        {!isPending && !ai && (
+          <p className="p-2 text-center text-muted-foreground text-sm">
+            Could not load this opponent
+          </p>
+        )}
         {ai && (
           <ItemWithEffects
             item={

@@ -578,6 +578,7 @@ export const combatRouter = createTRPCRouter({
             !u.isAi &&
             !u.isSummon &&
             u.isAutoCombat &&
+            !u.leftBattle &&
             stillInBattle(u, battle.usersEffects),
         );
         const maxActions =
@@ -1394,7 +1395,8 @@ export const combatRouter = createTRPCRouter({
       let attempts = 0;
 
       // Toggling mid-battle also becomes the player's default for future
-      // battles. Idempotent, so a version-conflict retry writes the same value.
+      // battles, but only once the battle itself has flipped — a toggle the
+      // player saw fail must not silently change what their next battle does.
       const rememberPreference = () =>
         ctx.drizzle
           .update(userData)
@@ -1422,7 +1424,9 @@ export const combatRouter = createTRPCRouter({
           return errorResponse("You are no longer fighting in this battle");
         }
 
-        // Check if user is already in the requested state
+        // Check if user is already in the requested state. Nothing to guard
+        // with a version here — the battle already reads the way the player
+        // asked for, so their choice is safe to remember.
         if (!!user.isAutoCombat === input.enabled) {
           await rememberPreference();
           return {
@@ -1444,26 +1448,23 @@ export const combatRouter = createTRPCRouter({
         userBattle.updatedAt = new Date();
         userBattle.version = userBattle.version + 1;
 
-        // Mutate. The preference write rides along in parallel so remembering
-        // the choice costs no extra latency.
-        const [result] = await Promise.all([
-          ctx.drizzle
-            .update(battle)
-            .set({
-              usersState: userBattle.usersState,
-              version: userBattle.version,
-              updatedAt: userBattle.updatedAt,
-            })
-            .where(
-              and(
-                eq(battle.id, input.battleId),
-                eq(battle.version, userBattle.version - 1),
-              ),
+        // Mutate
+        const result = await ctx.drizzle
+          .update(battle)
+          .set({
+            usersState: userBattle.usersState,
+            version: userBattle.version,
+            updatedAt: userBattle.updatedAt,
+          })
+          .where(
+            and(
+              eq(battle.id, input.battleId),
+              eq(battle.version, userBattle.version - 1),
             ),
-          rememberPreference(),
-        ]);
+          );
 
         if (result.rowsAffected > 0) {
+          await rememberPreference();
           void pusher.trigger(userBattle.id, "event", {
             version: userBattle.version + 1,
           });
