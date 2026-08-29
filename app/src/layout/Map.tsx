@@ -684,8 +684,14 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       scene.add(group_highlights);
       scene.add(group_tiles);
 
-      // Add tweening highlights
-      const questTweenColor = { r: 0.8, g: 0.6, b: 0.0 };
+      // Add tweening highlights. These multiply the tile's terrain colour, so a
+      // channel left at 0 erases that channel rather than tinting it, and a
+      // target of pure black just fades the tile out instead of colouring it --
+      // which is why the quest sector used to read as a shadow next to the
+      // focus sector's purple. Each pulse now stays chromatic and dips to half,
+      // warm amber for quests against the cool purple of a focus, matching the
+      // orange and purple the legend uses for them.
+      const questTweenColor = { r: 1.0, g: 0.55, b: 0.2 };
       // Three.js stores colors in its linear working color space. Constructing
       // from the configured CSS hex performs the required sRGB conversion.
       const warTweenColor = new Color(MAP_WAR_TORN_BATTLEGROUND_COLOR);
@@ -751,7 +757,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           });
         });
         new TWEEN.Tween(questTweenColor)
-          .to({ r: 0.0, g: 0.0, b: 0.0 }, 1000)
+          .to({ r: 0.5, g: 0.28, b: 0.1 }, 1000)
           .repeat(Infinity)
           .easing(TWEEN.Easing.Cubic.InOut)
           .start();
