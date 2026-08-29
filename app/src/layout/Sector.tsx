@@ -197,6 +197,8 @@ const findNearestWalkableEdgeTile = (
  */
 /** Most zoomed-out the sector camera may go: about half a neighbouring sector. */
 const SECTOR_MIN_ZOOM = 0.8;
+/** Most zoomed-in the sector camera may go. */
+const SECTOR_MAX_ZOOM = 3;
 
 const Sector: React.FC<SectorProps> = (props) => {
   // Incoming props
@@ -226,13 +228,13 @@ const Sector: React.FC<SectorProps> = (props) => {
     -1,
   );
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("sectorZoom", 2);
-  // The capture step drops the player on a random walkable tile, which can be
-  // most of a 26x26 sector away from the target, with the camera locked to them
-  // and panning disabled -- so the marker is simply off screen with nothing
-  // pointing at it. Opening that step fully zoomed out puts the whole sector in
-  // view. Only the opening view: zooming in afterwards sticks, as anywhere else.
+  // Global travel lands a tutorial player within a few tiles of the capture
+  // target, so that step opens zoomed right in: the puppy and its marker fill
+  // the view rather than being a speck somewhere on a 26x26 map. Only the
+  // opening view -- zooming back out afterwards sticks, as it does anywhere
+  // else, and every other step keeps the player's stored zoom.
   const { currentStep } = useTutorialStep();
-  const openSectorZoomedOut = isTutorialCaptureStep(currentStep);
+  const openSectorZoomedIn = isTutorialCaptureStep(currentStep);
   const [currentStructure, setCurrentStructure] = useState<VillageStructure | null>(
     null,
   );
@@ -2072,7 +2074,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
       // Setup camara
       const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
-      camera.zoom = prevZoom ?? (openSectorZoomedOut ? SECTOR_MIN_ZOOM : storedZoom);
+      camera.zoom = prevZoom ?? (openSectorZoomedIn ? SECTOR_MAX_ZOOM : storedZoom);
       camera.updateProjectionMatrix();
       cameraRef.current = camera;
 
@@ -2149,7 +2151,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       controls.enablePan = false;
       controls.zoomSpeed = 1.0;
       controls.minZoom = SECTOR_MIN_ZOOM;
-      controls.maxZoom = 3;
+      controls.maxZoom = SECTOR_MAX_ZOOM;
       controls.enabled = !showSorroundingRef.current;
       controlsRef.current = controls;
 

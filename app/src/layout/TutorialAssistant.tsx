@@ -936,7 +936,10 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     dialogOptions?.options.length === 1 ? dialogOptions.options[0] : undefined;
   const soleDialogQuestId = dialogOptions?.questId;
   useEffect(() => {
-    if (!isTutorialCaptureStep(currentTutorialStep)) return;
+    // currentStep, not currentTutorialStep: once a quest supplies a dynamic step
+    // the latter carries a synthesized `quest-<id>`, so matching on the tutorial
+    // step id there succeeds only while that overlay happens to be absent.
+    if (!isTutorialCaptureStep(currentStep)) return;
     if (!soleDialogQuestId || !soleDialogOption?.nextObjectiveId) return;
     const key = `${soleDialogQuestId}:${soleDialogOption.nextObjectiveId}`;
     if (autoAnsweredDialogRef.current === key) return;
@@ -945,7 +948,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       questId: soleDialogQuestId,
       nextObjectiveId: soleDialogOption.nextObjectiveId,
     });
-  }, [currentTutorialStep, soleDialogQuestId, soleDialogOption, checkRewards]);
+  }, [currentStep, soleDialogQuestId, soleDialogOption, checkRewards]);
 
   // Get character images for post-tutorial quest (no background)
   // For starter quests, skip fetching scene characters - we'll use the A/B tested assistant image instead

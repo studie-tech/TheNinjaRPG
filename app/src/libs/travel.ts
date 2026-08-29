@@ -52,6 +52,30 @@ export const getBiomeAtSectorAnchor = (
   return visibleBiome ?? tile?.battleBiome ?? getBiomeFromTileType(globalTileType);
 };
 
+/**
+ * Walkable landing point a short walk from a point of interest, or null when the
+ * sector offers none in range. Deliberately not the tile itself: arriving on top
+ * of a quest target would skip the approach the objective asks for. The default
+ * range is bounded by what a zoomed-in sector camera actually shows -- about
+ * three tiles above and below the player -- so the target lands on screen.
+ */
+export const findLandingNear = (
+  sectorMap: Pick<NormalizedSectorMap, "tiles">,
+  target: { x: number; y: number },
+  randomIndex: (upperBound: number) => number,
+  minDistance = 2,
+  maxDistance = 3,
+) => {
+  const candidates = sectorMap.tiles.filter((tile) => {
+    if (tile.blocked || tile.walkCost <= 0) return false;
+    const distance = Math.max(Math.abs(tile.x - target.x), Math.abs(tile.y - target.y));
+    return distance >= minDistance && distance <= maxDistance;
+  });
+  if (candidates.length === 0) return null;
+  const tile = candidates[randomIndex(candidates.length)];
+  return tile ? { x: tile.x, y: tile.y } : null;
+};
+
 /** Uniformly random walkable landing point for global travel. */
 export const findGlobalTravelDestination = (
   sectorMap: Pick<NormalizedSectorMap, "tiles">,
