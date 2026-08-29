@@ -110,7 +110,11 @@ export default function Training() {
   const { userData, timeDiff, access, updateUser } =
     useRequireInVillage("/traininggrounds");
   const { currentStep } = useTutorialStep();
-  const hideOtherTraining = isTutorialJutsuPickStep(currentStep);
+  // The jutsu step points at the technique list, so that box leads. Stat
+  // training keeps its place underneath rather than vanishing, which left the
+  // page looking like it had lost half its content.
+  const focusJutsuTraining = isTutorialJutsuPickStep(currentStep);
+  const hideOtherTraining = focusJutsuTraining;
 
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -122,8 +126,35 @@ export default function Training() {
   // Show components if we have user
   return (
     <>
-      <StatsTraining userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
-      <JutsuTraining userData={userData} timeDiff={timeDiff} updateUser={updateUser} />
+      {focusJutsuTraining ? (
+        <>
+          <JutsuTraining
+            userData={userData}
+            timeDiff={timeDiff}
+            updateUser={updateUser}
+          />
+          <StatsTraining
+            userData={userData}
+            timeDiff={timeDiff}
+            updateUser={updateUser}
+            initialBreak
+          />
+        </>
+      ) : (
+        <>
+          <StatsTraining
+            userData={userData}
+            timeDiff={timeDiff}
+            updateUser={updateUser}
+          />
+          <JutsuTraining
+            userData={userData}
+            timeDiff={timeDiff}
+            updateUser={updateUser}
+            initialBreak
+          />
+        </>
+      )}
       {!hideOtherTraining && (
         <CovertTraining
           userData={userData}
@@ -142,6 +173,9 @@ interface TrainingProps {
   userData: NonNullable<UserWithRelations>;
   timeDiff: number;
   updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
+  /** Whichever box comes second carries this: it spaces the boxes apart and
+   *  demotes the heading, so the leading box is the one titling the page. */
+  initialBreak?: boolean;
 }
 
 /**
@@ -454,10 +488,6 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (isPending) return <Loader explanation="Processing..." />;
-  if (isTutorialJutsuPickStep(currentStep) && !userData.currentlyTraining) {
-    return null;
-  }
-
   // Convenience definitions
   const trainItemClassName = "hover:opacity-50 hover:cursor-pointer relative";
   const iconClassName = "w-5 h-5 absolute top-1 right-1 text-blue-500";
@@ -496,6 +526,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
       title="Training"
       subtitle={`${efficiency}% efficiency [${userData.dailyTrainings} / ${MAX_DAILY_TRAININGS}]`}
       defaultBackHref="/village"
+      initialBreak={props.initialBreak}
       topRightContent={
         <NavTabs
           current={userData.trainingSpeed}
@@ -852,7 +883,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       title="Techniques"
       subtitle="Jutsu Techniques"
       defaultBackHref="/village"
-      initialBreak={true}
+      initialBreak={props.initialBreak}
       topRightContent={
         <JutsuFiltering state={state} fixedBloodline={userData.bloodlineId} />
       }
