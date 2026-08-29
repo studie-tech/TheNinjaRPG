@@ -42,6 +42,7 @@ import {
 import type { UserData, VillageStructure } from "@/drizzle/schema";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
+import { useTutorialStep } from "@/hooks/tutorial";
 import AvatarImage from "@/layout/Avatar";
 import HealingPopover from "@/layout/HealingPopover";
 import Image from "@/layout/Image";
@@ -102,6 +103,7 @@ import {
 import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import { getBiomeAtSectorAnchor } from "@/libs/travel";
+import { isTutorialCaptureStep } from "@/libs/tutorial";
 import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
@@ -193,6 +195,9 @@ const findNearestWalkableEdgeTile = (
  * crossings animate client-side and reconcile with the server afterwards;
  * window changes patch the live scene in place instead of rebuilding it.
  */
+/** Most zoomed-out the sector camera may go: about half a neighbouring sector. */
+const SECTOR_MIN_ZOOM = 0.8;
+
 const Sector: React.FC<SectorProps> = (props) => {
   // Incoming props
   const { sector, sectorWindow, target, showActive, autoAttackMode } = props;
@@ -221,6 +226,13 @@ const Sector: React.FC<SectorProps> = (props) => {
     -1,
   );
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("sectorZoom", 2);
+  // The capture step drops the player on a random walkable tile, which can be
+  // most of a 26x26 sector away from the target, with the camera locked to them
+  // and panning disabled -- so the marker is simply off screen with nothing
+  // pointing at it. Opening that step fully zoomed out puts the whole sector in
+  // view. Only the opening view: zooming in afterwards sticks, as anywhere else.
+  const { currentStep } = useTutorialStep();
+  const openSectorZoomedOut = isTutorialCaptureStep(currentStep);
   const [currentStructure, setCurrentStructure] = useState<VillageStructure | null>(
     null,
   );
@@ -2060,7 +2072,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
       // Setup camara
       const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
-      camera.zoom = prevZoom ?? storedZoom;
+      camera.zoom = prevZoom ?? (openSectorZoomedOut ? SECTOR_MIN_ZOOM : storedZoom);
       camera.updateProjectionMatrix();
       cameraRef.current = camera;
 
@@ -2136,7 +2148,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       // half a neighboring sector in every direction
       controls.enablePan = false;
       controls.zoomSpeed = 1.0;
-      controls.minZoom = 0.8;
+      controls.minZoom = SECTOR_MIN_ZOOM;
       controls.maxZoom = 3;
       controls.enabled = !showSorroundingRef.current;
       controlsRef.current = controls;

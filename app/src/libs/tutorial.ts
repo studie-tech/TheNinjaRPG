@@ -18,6 +18,14 @@ export const isTutorialActive = (
 /** Step that asks the player to start training a jutsu (Sonic Slash). */
 export const TUTORIAL_JUTSU_PICK_STEP_ID = "eSBZJXRN_MCSYM90z3d5f";
 
+/**
+ * Step that sends the player after the starter quest's puppy. The step's text
+ * promises a marker in the sector, which only exists once the quest's opening
+ * dialog has been answered, so the tutorial answers it and opens the sector
+ * zoomed out far enough to see where the marker actually is.
+ */
+export const TUTORIAL_CAPTURE_STEP_ID = "eRw6ObsRONhzY7AUMO3vm";
+
 /** Step that asks the player to buy the starter shuriken. */
 export const TUTORIAL_ITEM_BUY_STEP_ID = "KvGkDox06od5iiFaGAzkM";
 
@@ -52,6 +60,9 @@ export const isTutorialJutsuPickStep = (step?: { id?: string } | null) =>
 
 export const isTutorialItemBuyStep = (step?: { id?: string } | null) =>
   step?.id === TUTORIAL_ITEM_BUY_STEP_ID;
+
+export const isTutorialCaptureStep = (step?: { id?: string } | null) =>
+  step?.id === TUTORIAL_CAPTURE_STEP_ID;
 
 /** Take-quest id from a step like `tutorial-take-quest-<questId>`. */
 export const getTutorialTakeQuestId = (step?: { elementIds?: string[] } | null) =>
