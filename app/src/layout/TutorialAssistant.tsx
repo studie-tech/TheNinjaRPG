@@ -48,6 +48,55 @@ import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useUserData } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
 
+/** Marks the assistant panel so the highlight logic can measure what it covers. */
+const TUTORIAL_ASSISTANT_PANEL_ID = "tutorial-assistant-panel";
+
+/**
+ * The area of the screen the assistant panel takes clicks in. The panel is fixed
+ * to a corner, so a highlighted element can sit perfectly inside the viewport and
+ * still be impossible to press underneath it. The nameplate hangs outside the
+ * panel's own box so descendants are unioned in, but only ones that actually
+ * intercept pointer events -- the character portrait is decorative and lets
+ * clicks straight through, and counting it would push highlights further up the
+ * page than they need to go.
+ */
+const getAssistantPanelRect = (): DOMRect | null => {
+  const panel = document.getElementById(TUTORIAL_ASSISTANT_PANEL_ID);
+  if (!panel) return null;
+  const rect = panel.getBoundingClientRect();
+  let { top, left, right, bottom } = rect;
+  for (const child of panel.querySelectorAll("*")) {
+    if (getComputedStyle(child).pointerEvents === "none") continue;
+    const r = child.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    top = Math.min(top, r.top);
+    left = Math.min(left, r.left);
+    right = Math.max(right, r.right);
+    bottom = Math.max(bottom, r.bottom);
+  }
+  return new DOMRect(left, top, right - left, bottom - top);
+};
+
+const rectsOverlap = (a: DOMRect, b: DOMRect) =>
+  !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+
+/**
+ * The block whose height the page actually scrolls through. The app mounts its
+ * content in an absolutely positioned wrapper, so padding <body> does not lengthen
+ * the document -- only the overflowing in-flow subtree does. Walking up to the
+ * outermost still-in-flow ancestor lands on that subtree whatever page we are on.
+ */
+const getScrollExtentContainer = (element: HTMLElement): HTMLElement | null => {
+  let candidate: HTMLElement | null = null;
+  let node = element.parentElement;
+  while (node && node !== document.body) {
+    const position = getComputedStyle(node).position;
+    if (position === "static" || position === "relative") candidate = node;
+    node = node.parentElement;
+  }
+  return candidate;
+};
+
 /**
  * Reusable assistant portrait with correct styling
  * @param characterImage - Optional custom character image to display instead of default assistant
@@ -101,7 +150,10 @@ const AssistantDialog: React.FC<{
   onOpenOrderingDialog,
   showOrderingButton,
 }) => (
-  <div className="pointer-events-auto fixed right-4 bottom-24 z-[60] md:right-4 md:bottom-4">
+  <div
+    id={TUTORIAL_ASSISTANT_PANEL_ID}
+    className="pointer-events-auto fixed right-4 bottom-24 z-[60] md:right-4 md:bottom-4"
+  >
     <div className="relative">
       {/* Assistant portrait positioned behind and above the dialog (top-right) */}
       <AssistantPortrait characterImage={characterImage} />
@@ -291,6 +343,14 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   // Track the step/element pair we have already scrolled into view, so the
   // reveal happens once per target instead of on every position update
   const hasRevealedTargetRef = React.useRef<string>("");
+  // Tracked apart from the reveal above: the reveal is spent as soon as the
+  // page scrolls for any reason, but the assistant panel can end up over the
+  // target after that, and uncovering it is a correction the player never asked
+  // for and so must still be allowed to happen once.
+  const hasUncoveredTargetRef = React.useRef<string>("");
+  // Page element currently padded to make room for the panel, so it can be put
+  // back when the tutorial stops pointing at anything.
+  const reservedSpaceRef = React.useRef<HTMLElement | null>(null);
 
   // Tutorial management hook
   const {
@@ -440,24 +500,47 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       // short and on screen, then async content lands underneath it and pushes
       // it below the fold with the reveal already spent.
       const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}`;
-      if (hasRevealedTargetRef.current !== targetKey) {
-        const before = highlightInfo.element.getBoundingClientRect();
-        const isCompactTarget = before.height < window.innerHeight * 0.55;
-        const isOffscreen =
-          before.bottom < 80 ||
-          before.top > window.innerHeight - 80 ||
-          before.right < 0 ||
-          before.left > window.innerWidth;
-        if (isOffscreen && isCompactTarget) {
-          hasRevealedTargetRef.current = targetKey;
-          // Centred, not "nearest": nearest parks the target flush against the
-          // edge it came from, which on the way down is exactly where the
-          // assistant dialog sits.
-          highlightInfo.element.scrollIntoView({
-            block: "center",
-            inline: "nearest",
-            behavior: "auto",
-          });
+      const before = highlightInfo.element.getBoundingClientRect();
+      const isCompactTarget = before.height < window.innerHeight * 0.55;
+      const isOffscreen =
+        before.bottom < 80 ||
+        before.top > window.innerHeight - 80 ||
+        before.right < 0 ||
+        before.left > window.innerWidth;
+      // Being inside the viewport is not the same as being reachable: the
+      // assistant panel is fixed over one corner, and a step whose only advance
+      // action is clicking the highlight (no Next button) is stuck if that
+      // highlight sits underneath it.
+      const panel = getAssistantPanelRect();
+      const isCovered = !!panel && rectsOverlap(before, panel);
+      const needsReveal = isOffscreen && hasRevealedTargetRef.current !== targetKey;
+      const needsUncover = isCovered && hasUncoveredTargetRef.current !== targetKey;
+      if ((needsReveal || needsUncover) && isCompactTarget) {
+        if (needsReveal) hasRevealedTargetRef.current = targetKey;
+        if (needsUncover) hasUncoveredTargetRef.current = targetKey;
+        // Aim for the middle of the band the panel leaves free rather than the
+        // middle of the window, so the scroll cannot park the target right back
+        // underneath it. scrollIntoView has no notion of the panel, hence the
+        // manual delta.
+        const safeTop = 80;
+        const safeBottom =
+          panel && panel.top > safeTop + before.height ? panel.top : window.innerHeight;
+        const delta = before.top + before.height / 2 - (safeTop + safeBottom) / 2;
+        const scroller = highlightInfo.element.ownerDocument.scrollingElement;
+        if (scroller) {
+          // A target near the foot of a short page can be under the panel with
+          // the document already scrolled as far as it goes, so there is nothing
+          // to scroll and the step becomes unwinnable. Lengthen the page by what
+          // the scroll is short of, which costs nothing once it is long enough.
+          const remaining =
+            scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+          const container = getScrollExtentContainer(highlightInfo.element);
+          if (container && delta > remaining) {
+            const reserved = Math.ceil(delta - remaining);
+            container.style.paddingBottom = `${reserved}px`;
+            reservedSpaceRef.current = container;
+          }
+          scroller.scrollBy({ top: delta, behavior: "auto" });
         }
       }
       const rect = highlightInfo.element.getBoundingClientRect();
@@ -471,7 +554,10 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       // no-op
     } else {
       setHighlight(null);
-      // no-op
+      if (reservedSpaceRef.current) {
+        reservedSpaceRef.current.style.paddingBottom = "";
+        reservedSpaceRef.current = null;
+      }
     }
   };
 
