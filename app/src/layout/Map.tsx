@@ -1,4 +1,3 @@
-import * as TWEEN from "@tweenjs/tween.js";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -684,30 +683,37 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       scene.add(group_highlights);
       scene.add(group_tiles);
 
-      // tween.js 25 only registers a tween with a group when one is passed to
-      // the constructor -- a bare `new Tween(obj)` belongs to nothing, and the
-      // global `TWEEN.update()` then advances an empty set. Every highlight
-      // here was built that way, so none of them ever animated; they sat on
-      // their opening values, which looked enough like a highlight that it went
-      // unnoticed. They share this group, and the render loop drives it.
-      const highlightTweens = new TWEEN.Group();
-
-      // Add tweening highlights. These multiply the tile's terrain colour, so a
-      // channel left at 0 erases that channel rather than tinting it, and a
-      // target of pure black just fades the tile out instead of colouring it --
-      // which is why the quest sector used to read as a shadow next to the
-      // focus sector's purple. Each pulse now stays chromatic and dips to half,
-      // warm amber for quests against the cool purple of a focus, matching the
-      // orange and purple the legend uses for them.
-      const questTweenColor = { r: 1.0, g: 0.55, b: 0.2 };
-      // Three.js stores colors in its linear working color space. Constructing
-      // from the configured CSS hex performs the required sRGB conversion.
-      const warTweenColor = new Color(MAP_WAR_TORN_BATTLEGROUND_COLOR);
-      const focusTweenColor = { r: 0.66, g: 0.33, b: 0.97 }; // Purple color for focus sector
-      // Quest pins breathe as well as pulse. The tile tint alone is easy to miss
-      // on a first visit, and the scroll is the thing a new player is being told
-      // to press. Kept to a gentle range so it reads as alive rather than noisy.
+      // Highlight pulses are driven straight from the clock in the render loop
+      // rather than through tween.js. Its yoyo emits the opposite endpoint for a
+      // single frame on each repeat boundary, which showed up as the marker
+      // snapping full size for one frame at both ends of its travel; a cosine
+      // phase has no boundary to glitch on. (The tweens were also never
+      // animating at all before: v25 only registers a tween with a group when
+      // one is passed to the constructor, so the global update advanced an empty
+      // set and every colour sat on its opening value.)
+      //
+      // These multiply the tile's terrain colour, so a channel left at 0 erases
+      // that channel rather than tinting it -- which is why the quest sector
+      // used to read as a shadow next to the focus sector's purple. Warm amber
+      // for quests against the cool purple of a focus, matching the orange and
+      // purple the legend uses for them.
+      const PULSE_PERIOD_MS = 2000;
+      const questPulseFrom = { r: 1.0, g: 0.55, b: 0.2 };
+      const questPulseTo = { r: 0.5, g: 0.28, b: 0.1 };
+      const warBase = new Color(MAP_WAR_TORN_BATTLEGROUND_COLOR);
+      const warPulseFrom = { r: warBase.r, g: warBase.g, b: warBase.b };
+      const warPulseTo = { r: 0.4, g: 0.0, b: 0.0 };
+      const focusPulseFrom = { r: 0.66, g: 0.33, b: 0.97 };
+      const focusPulseTo = { r: 0.33, g: 0.17, b: 0.5 };
+      // Live values the render loop rewrites each frame and the pulse code reads
+      const questTweenColor = { ...questPulseFrom };
+      const warTweenColor = { ...warPulseFrom };
+      const focusTweenColor = { ...focusPulseFrom };
+      // Quest pins breathe as well as pulse: the tile tint alone is easy to miss
+      // on a first visit, and the scroll is what a new player is told to press.
       const questIconScale = { value: 1 };
+      const QUEST_ICON_SCALE_MAX = 1.3;
+
       const sectorsToHighlight: {
         sector: number;
         color: typeof questTweenColor;
@@ -768,30 +774,6 @@ const GlobalMap: React.FC<MapProps> = (props) => {
             }
           });
         });
-        new TWEEN.Tween(questTweenColor, highlightTweens)
-          .to({ r: 0.5, g: 0.28, b: 0.1 }, 1000)
-          .repeat(Infinity)
-          .yoyo(true)
-          .easing(TWEEN.Easing.Cubic.InOut)
-          .start();
-        new TWEEN.Tween(warTweenColor, highlightTweens)
-          .to({ r: 0.4, g: 0.0, b: 0.0 }, 1000)
-          .repeat(Infinity)
-          .yoyo(true)
-          .easing(TWEEN.Easing.Cubic.InOut)
-          .start();
-        new TWEEN.Tween(focusTweenColor, highlightTweens)
-          .to({ r: 0.33, g: 0.17, b: 0.5 }, 1000)
-          .repeat(Infinity)
-          .yoyo(true)
-          .easing(TWEEN.Easing.Cubic.InOut)
-          .start();
-        new TWEEN.Tween(questIconScale, highlightTweens)
-          .to({ value: 1.3 }, 900)
-          .repeat(Infinity)
-          .yoyo(true)
-          .easing(TWEEN.Easing.Cubic.InOut)
-          .start();
       }
 
       // One pin per sector. A sector can be a quest target, a war zone and the
@@ -993,8 +975,25 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       let lastRaycastMouseX = Number.NaN;
       let lastRaycastMouseY = Number.NaN;
       function render() {
-        // Update all TWEEN animations (color pulsing, etc.)
-        highlightTweens.update();
+        // One cosine phase, 0 -> 1 -> 0, drives every highlight pulse. Continuous
+        // at both ends by construction, so nothing jumps on the turnaround.
+        const phase =
+          (1 -
+            Math.cos(
+              ((Date.now() % PULSE_PERIOD_MS) / PULSE_PERIOD_MS) * Math.PI * 2,
+            )) /
+          2;
+        const lerp = (from: number, to: number) => from + (to - from) * phase;
+        questTweenColor.r = lerp(questPulseFrom.r, questPulseTo.r);
+        questTweenColor.g = lerp(questPulseFrom.g, questPulseTo.g);
+        questTweenColor.b = lerp(questPulseFrom.b, questPulseTo.b);
+        warTweenColor.r = lerp(warPulseFrom.r, warPulseTo.r);
+        warTweenColor.g = lerp(warPulseFrom.g, warPulseTo.g);
+        warTweenColor.b = lerp(warPulseFrom.b, warPulseTo.b);
+        focusTweenColor.r = lerp(focusPulseFrom.r, focusPulseTo.r);
+        focusTweenColor.g = lerp(focusPulseFrom.g, focusPulseTo.g);
+        focusTweenColor.b = lerp(focusPulseFrom.b, focusPulseTo.b);
+        questIconScale.value = lerp(1, QUEST_ICON_SCALE_MAX);
 
         // Nothing below reaches the GPU while the context is lost, and queueing
         // buffer update ranges that never get uploaded would grow unbounded.
