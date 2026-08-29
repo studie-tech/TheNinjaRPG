@@ -2982,6 +2982,12 @@ const executeClaimedQuestConsequences = async ({
                 scaleTarget: !!opponent.scaleStats,
                 biome: "default",
                 forceKeepPools: opponent.forceKeepPools ?? false,
+                // Honour the player's stored preference here too. Without it the
+                // tutorial teaches auto combat in the arena and then hands the
+                // player a manual quest fight, which reads as the setting having
+                // stopped working. initiateBattle still gates on
+                // AutoCombatBattleTypes, so a random encounter stays manual.
+                autoCombatUserIds: user.defaultAutoCombat ? [user.userId] : undefined,
               },
               opponent.type === "random_encounter" ? "RANDOM_ENCOUNTER" : "QUEST",
               opponent.scaleGains ?? 1,
