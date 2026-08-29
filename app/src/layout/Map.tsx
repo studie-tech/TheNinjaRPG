@@ -352,7 +352,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       const setHoverOutline = (sector: number | null) => {
         setOwnershipLabelEmphasis(sector);
         const tile = sector !== null ? hexasphere?.tiles[sector] : null;
-        if (!tile || tile.b.length !== 4) {
+        if (tile?.b.length !== 4) {
           hoverOutline.visible = false;
           return;
         }
