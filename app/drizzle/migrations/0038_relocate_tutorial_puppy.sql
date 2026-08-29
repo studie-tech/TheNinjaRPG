@@ -31,3 +31,44 @@ WHERE `id` = 'eYDVpL63vPhK3lywMexdv'
   AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].id')) = '_nY7o'
   AND JSON_UNQUOTE(JSON_EXTRACT(`content`, '$.objectives[1].task')) = 'defeat_opponents'
   AND JSON_EXTRACT(`content`, '$.objectives[1].sector') = 293;
+--> statement-breakpoint
+-- Players who already started the quest carry their own copy of the location.
+-- UserData.questData snapshots sector/latitude/longitude per goal when a quest
+-- begins, and controlShownQuestLocationInformation() lets that snapshot win over
+-- the quest definition -- so moving the quest alone would leave every player
+-- mid-tutorial staring at a marker on 293 while the travel guard, reading
+-- TUTORIAL_CAPTURE_SECTOR, demanded 227. That is a soft-lock, and on production
+-- it is ~25k accounts.
+--
+-- The goal's index inside the tracker varies per player, so the path is derived
+-- per row: JSON_SEARCH finds "$[i].goals[j].id" for the objective, and trimming
+-- the trailing "id" gives the sibling "sector" to write. Guarded on the current
+-- value, so it is idempotent and cannot touch a tracker already moved or one
+-- carrying a location this quest never had.
+--
+-- The (9,6) tile is unchanged and walkable in 227, so latitude/longitude in the
+-- snapshot stay correct as they are.
+
+UPDATE `UserData`
+SET `questData` = JSON_SET(
+      `questData`,
+      CONCAT(
+        LEFT(
+          JSON_UNQUOTE(JSON_SEARCH(`questData`, 'one', '_nY7o', NULL, '$[*].goals[*].id')),
+          CHAR_LENGTH(JSON_UNQUOTE(JSON_SEARCH(`questData`, 'one', '_nY7o', NULL, '$[*].goals[*].id'))) - 2
+        ),
+        'sector'
+      ),
+      227
+    )
+WHERE JSON_SEARCH(`questData`, 'one', '_nY7o', NULL, '$[*].goals[*].id') IS NOT NULL
+  AND JSON_EXTRACT(
+        `questData`,
+        CONCAT(
+          LEFT(
+            JSON_UNQUOTE(JSON_SEARCH(`questData`, 'one', '_nY7o', NULL, '$[*].goals[*].id')),
+            CHAR_LENGTH(JSON_UNQUOTE(JSON_SEARCH(`questData`, 'one', '_nY7o', NULL, '$[*].goals[*].id'))) - 2
+          ),
+          'sector'
+        )
+      ) = 293;
