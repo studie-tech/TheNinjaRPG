@@ -10,6 +10,7 @@ const onNpcTile = { sector: 1, longitude: 1, latitude: 1 };
 
 const boundDeliverWithStaleCoords = DeliverItem.parse({
   id: "o1",
+  task: "deliver_item",
   overworldPlacementId: "p1",
   sectorType: "specific",
   sector: 100,
@@ -42,6 +43,7 @@ describe("isObjectiveLocationSatisfied", () => {
     // (otherwise it could auto-complete on travel).
     const boundCoordsMatch = DeliverItem.parse({
       id: "o4",
+      task: "deliver_item",
       overworldPlacementId: "p9",
       sectorType: "specific",
       sector: 1,
@@ -57,6 +59,7 @@ describe("isObjectiveLocationSatisfied", () => {
   it("still satisfies on exact coordinate match (existing isLocationObjective behavior preserved)", () => {
     const atTile = DeliverItem.parse({
       id: "o2",
+      task: "deliver_item",
       sectorType: "specific",
       sector: 1,
       longitude: 1,
@@ -70,6 +73,7 @@ describe("isObjectiveLocationSatisfied", () => {
   it("is not satisfied for an unbound objective whose coords differ from the player's tile", () => {
     const unbound = DeliverItem.parse({
       id: "o3",
+      task: "deliver_item",
       sectorType: "specific",
       sector: 100,
       longitude: 9,
