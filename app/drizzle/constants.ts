@@ -642,12 +642,17 @@ export type TournamentMatchState = (typeof TournamentMatchStates)[number];
 export const AutoBattleTypes = ["KAGE_AI", "CLAN_CHALLENGE"];
 
 /**
- * Battle types that may be STARTED with auto combat already enabled (the
- * pre-battle toggle on the arena page). The in-combat toggle is broader: it is
- * available in every battle type except AutoBattleTypes, which are always
- * fully AI-driven.
+ * Battle types that may be STARTED with auto combat already enabled, from the
+ * arena page's toggle or a player's stored defaultAutoCombat. QUEST is in the
+ * list because the tutorial introduces auto combat in the arena and then sends
+ * the player straight into a quest fight: starting that one manually reads as
+ * the setting having failed. PvP types are deliberately absent, so nobody can
+ * leave their profile fighting other players unattended.
+ *
+ * The in-combat toggle is broader: it is available in every battle type except
+ * AutoBattleTypes, which are always fully AI-driven.
  */
-export const AutoCombatBattleTypes = ["ARENA", "TRAINING"];
+export const AutoCombatBattleTypes = ["ARENA", "TRAINING", "QUEST"];
 
 export const BattleDataEntryType = [
   "jutsu",
