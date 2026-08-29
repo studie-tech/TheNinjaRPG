@@ -277,17 +277,33 @@ export const combatRouter = createTRPCRouter({
 
           // Calculate if the battle is over for this user, and if so update user DB
           // Fetch game settings for multipliers
-          const result = calcBattleResult(
+          let result = calcBattleResult(
             userBattle,
             ctx.userId,
             userBattle.extraState.settings,
           );
+
+          // The state this poll actually settles on. applyEffects hands back a
+          // clone rather than mutating in place, so everything downstream of it
+          // -- the result, the reward writes, the response -- has to read from
+          // that clone or it disagrees with what was just persisted.
+          let settledBattle = userBattle;
 
           // Check if the battle is over, or state was updated
           const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
           if (battleOver || progressRound || changedActor) {
             if (!hadActivity && actId && activeUser) {
               const { newBattle, actionEffects } = applyEffects(userBattle, actId);
+              settledBattle = newBattle;
+              // Effects ticking on this poll can end the fight -- a lingering
+              // damage tag finishing the last opponent -- so the result computed
+              // above is stale here, and persisting it would store a decided
+              // battle as an unfinished one nobody can ever act in again.
+              // calcBattleResult only mutates when it returns a result, so
+              // re-running it after a null costs nothing.
+              result =
+                result ??
+                calcBattleResult(newBattle, ctx.userId, newBattle.extraState.settings);
 
               // Remove expired ground effects after applyEffects has processed them
               // This ensures summon despawning logic runs before effects are removed
@@ -337,15 +353,15 @@ export const combatRouter = createTRPCRouter({
           // Update user
           if (result) {
             await Promise.all([
-              updateUser(ctx.drizzle, pusher, userBattle, result, ctx.userId),
-              updateWars(ctx.drizzle, pusher, userBattle, result, ctx.userId),
-              updateKage(ctx.drizzle, userBattle, result), // no ctx.userId needed
-              updateRaidProgress(ctx.drizzle, userBattle, ctx.userId),
+              updateUser(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+              updateWars(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+              updateKage(ctx.drizzle, settledBattle, result), // no ctx.userId needed
+              updateRaidProgress(ctx.drizzle, settledBattle, ctx.userId),
             ]);
           }
 
           // Hide private state of non-session user
-          const newMaskedBattle = maskBattle(userBattle, ctx.userId);
+          const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
 
           // Return the new battle + result state if applicable
           return { battle: newMaskedBattle, result: result };
@@ -767,8 +783,13 @@ export const combatRouter = createTRPCRouter({
             continue;
           }
 
-          // If battle state didn't change, just return without updating battle version
+          // If battle state didn't change, just return without updating battle
+          // version. A battle that is already decided is the exception: it has
+          // to be settled below even when nobody could act, or a player whose
+          // last opponent is already dead keeps polling a fight that can never
+          // end.
           if (
+            !result &&
             !actionPerformed &&
             newBattle.round === originalRound &&
             newBattle.activeUserId === originalActiveUserId
