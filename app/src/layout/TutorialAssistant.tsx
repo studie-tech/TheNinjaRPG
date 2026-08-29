@@ -41,7 +41,11 @@ import {
   isQuestObjectiveAvailable,
 } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
-import { isTutorialPageMatch, isUsableHighlightRect } from "@/libs/tutorial";
+import {
+  isTutorialCaptureStep,
+  isTutorialPageMatch,
+  isUsableHighlightRect,
+} from "@/libs/tutorial";
 import { getMobileOperatingSystem } from "@/utils/hardware";
 import { parseHtml } from "@/utils/parse";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
@@ -919,6 +923,29 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       }
     }
   }
+
+  // The capture step tells the player to approach a marker in the sector, but
+  // that marker does not exist until the quest's opening dialog is answered --
+  // the objective it belongs to is not active before then, so the sector draws
+  // nothing and a new player reads the instruction, finds empty ground and
+  // concludes the game is broken. Answering the single option for them keeps the
+  // step's text true from the moment it appears. Tutorial only: everywhere else
+  // the dialog is the player's to read and choose from.
+  const autoAnsweredDialogRef = React.useRef<string>("");
+  const soleDialogOption =
+    dialogOptions?.options.length === 1 ? dialogOptions.options[0] : undefined;
+  const soleDialogQuestId = dialogOptions?.questId;
+  useEffect(() => {
+    if (!isTutorialCaptureStep(currentTutorialStep)) return;
+    if (!soleDialogQuestId || !soleDialogOption?.nextObjectiveId) return;
+    const key = `${soleDialogQuestId}:${soleDialogOption.nextObjectiveId}`;
+    if (autoAnsweredDialogRef.current === key) return;
+    autoAnsweredDialogRef.current = key;
+    checkRewards({
+      questId: soleDialogQuestId,
+      nextObjectiveId: soleDialogOption.nextObjectiveId,
+    });
+  }, [currentTutorialStep, soleDialogQuestId, soleDialogOption, checkRewards]);
 
   // Get character images for post-tutorial quest (no background)
   // For starter quests, skip fetching scene characters - we'll use the A/B tested assistant image instead
