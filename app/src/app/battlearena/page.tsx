@@ -282,17 +282,22 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
           tall as the taller one, so the button stays in view, which the
           tutorial step highlighting it depends on. */}
       {canDoArena && (
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-          {/* OPPONENT PICKER */}
-          <div className="xl:min-w-0 xl:flex-1">
-            <div className="mb-2 flex flex-row items-end justify-between">
-              <p className="font-semibold">Choose your opponent</p>
-              <p className="text-muted-foreground text-xs">Sorted by level match</p>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
+          {/* OPPONENT PICKER — same card shell and heading treatment as the
+              setup panel beside it, so the two line up top and bottom instead
+              of one starting lower and ending shorter than the other. */}
+          <div className="flex flex-col gap-3 rounded-lg border p-3 xl:min-w-0 xl:flex-1">
+            <div className="flex flex-row items-baseline justify-between gap-2">
+              <p className="font-semibold text-[10px] text-muted-foreground uppercase">
+                Choose your opponent
+              </p>
+              <p className="text-[10px] text-muted-foreground">Sorted by level match</p>
             </div>
-            {/* Cap against the window, not just a fixed height: stacked on a
-                short screen the grid scrolls internally rather than growing the
-                page and pushing "Enter arena" out of sight. */}
-            <div className="grid max-h-[min(16rem,26vh)] grid-cols-3 gap-2 overflow-y-auto rounded-lg border bg-popover/30 p-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-4 2xl:grid-cols-5">
+            {/* Cap against the window, not just a fixed height: the grid always
+                scrolls internally rather than growing the page and pushing
+                "Enter arena" out of sight — and side by side, an uncapped grid
+                would stretch its card far past the setup panel next to it. */}
+            <div className="grid max-h-[min(16rem,26vh)] min-h-0 flex-1 grid-cols-3 content-start gap-2 overflow-y-auto rounded-lg bg-popover/30 p-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-4 2xl:grid-cols-5">
               {sortedAis?.map((opponent) => {
                 const isSelected = opponent.userId === aiId;
                 return (
