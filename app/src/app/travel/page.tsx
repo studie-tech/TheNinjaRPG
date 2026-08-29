@@ -84,6 +84,7 @@ import type { GlobalTile, SectorPoint } from "@/libs/threejs/types";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import { calcGlobalTravelTime } from "@/libs/travel";
+import { isTutorialActive } from "@/libs/tutorial";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useAwake } from "@/utils/routing";
@@ -113,6 +114,12 @@ export default function Travel() {
     "showActiveOnMap4",
     true,
   );
+  // Other players start hidden for as long as the tutorial runs. A new player is
+  // dropped into a sector that may already hold a crowd and cannot tell the
+  // quest target from the bystanders -- which is exactly what the eye toggle is
+  // for, they just have no reason to know that yet. The toggle still works and
+  // the choice sticks for the session, so nobody is locked out of the sector.
+  const [revealOthersInTutorial, setRevealOthersInTutorial] = useState(false);
   const [showOwnership, setShowOwnership] = useLocalStorage<boolean>(
     "showOwnership",
     false,
@@ -155,6 +162,8 @@ export default function Travel() {
 
   // Data from database
   const { data: userData, timeDiff, updateUser } = useRequiredUserData();
+  const tutorialRunning = isTutorialActive(userData);
+  const showOtherUsers = tutorialRunning ? revealOthersInTutorial : showActive;
   const { data: villageData } = api.village.getAll.useQuery(undefined, {
     enabled: !!userData,
   });
@@ -749,7 +758,7 @@ export default function Travel() {
           sectorWindow={sectorWindow}
           target={targetPosition}
           showSorrounding={showSorrounding}
-          showActive={showActive}
+          showActive={showOtherUsers}
           autoAttackMode={autoAttackMode}
           setShowSorrounding={setShowSorrounding}
           setTarget={setTargetPosition}
@@ -765,7 +774,7 @@ export default function Travel() {
     hasCurrentSector,
     targetPosition,
     showSorrounding,
-    showActive,
+    showOtherUsers,
     autoAttackMode,
     villages,
   ]);
@@ -874,15 +883,21 @@ export default function Travel() {
                 </TooltipProvider>
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
-                    <TooltipTrigger onClick={() => setShowActive(!showActive)}>
-                      {showActive ? (
+                    <TooltipTrigger
+                      onClick={() =>
+                        tutorialRunning
+                          ? setRevealOthersInTutorial((prev) => !prev)
+                          : setShowActive(!showActive)
+                      }
+                    >
+                      {showOtherUsers ? (
                         <Eye className={`mr-2 h-7 w-7 text-orange-500`} />
                       ) : (
                         <EyeOff className={`mr-2 h-7 w-7`} />
                       )}
                     </TooltipTrigger>
                     <TooltipContent>
-                      {showActive
+                      {showOtherUsers
                         ? "Hide other players on the map"
                         : "Show other players on the map"}
                     </TooltipContent>
