@@ -96,6 +96,10 @@ export type ContentType = (typeof ContentTypes)[number];
 export const MAP_RESERVED_SECTORS = [
   73, 72, 75, 78, 275, 279, 201, 183, 272, 264, 270, 308, 289, 259, 260, 253, 304, 307,
   283, 284, 340, 334, 330, 331, 332, 337, 342, 336, 341, 335, 113, 109, 443,
+  // Home of the starter quest's puppy (migration 0038). Reserved so a shrine,
+  // war or clan hideout cannot take the sector the tutorial sends every new
+  // player into.
+  227,
 ];
 export const MAP_SECTOR_ID_MIN = 0;
 // Cylindrical longitude/latitude sector grid. East/west wraps; the north and

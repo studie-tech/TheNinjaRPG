@@ -267,6 +267,13 @@
       "when": 1787824309360,
       "tag": "0037_wild_king_bedlam",
       "breakpoints": false
+    },
+    {
+      "idx": 38,
+      "version": "5",
+      "when": 1788001986694,
+      "tag": "0038_relocate_tutorial_puppy",
+      "breakpoints": false
     }
   ]
 }

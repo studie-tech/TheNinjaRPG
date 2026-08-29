@@ -24,9 +24,10 @@ export const TUTORIAL_ITEM_BUY_STEP_ID = "KvGkDox06od5iiFaGAzkM";
 /**
  * Starter-quest puppy fight. Mirrors the `defeat_opponents` objective of the
  * live "Getting Started" quest; the sector lives in quest content, so it is not
- * derivable here and must be re-checked if that objective moves.
+ * derivable here and must be re-checked if that objective moves. Moved from
+ * 293 to 227 by migration 0038, which carries the reasoning.
  */
-export const TUTORIAL_CAPTURE_SECTOR = 293;
+export const TUTORIAL_CAPTURE_SECTOR = 227;
 
 /** Horizon's current world sector — not the pre-remap 296 value. */
 export const TUTORIAL_HOME_SECTOR =
