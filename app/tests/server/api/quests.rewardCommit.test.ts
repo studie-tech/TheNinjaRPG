@@ -219,4 +219,35 @@ describe("commitQuestObjectiveRewards compatibility", () => {
     expect(deleteFrom).toHaveBeenCalledOnce();
     expect(deleteWhere).toHaveBeenCalledOnce();
   });
+
+  it("drops the resolved quest tracker so replayed assignments start with fresh objectives", async () => {
+    const { user, missionHistory } = makeUser();
+    const { client, sets } = makeClient([
+      { rowsAffected: 1 },
+      { rowsAffected: 1 },
+      { rowsAffected: 1 },
+    ]);
+    const trackerForResolvedQuest = {
+      id: missionHistory.questId,
+      goals: [{ id: "obj-1", done: true, value: 1 }],
+      startAt: new Date().toISOString(),
+    };
+
+    const result = await commitQuestObjectiveRewards({
+      client,
+      userId: user.userId,
+      user: user as never,
+      rewards: rewards(),
+      trackers: [trackerForResolvedQuest] as never,
+      userQuest: missionHistory as never,
+      resolved: true,
+      notifications: [],
+      consequences: [],
+      existingHistory: missionHistory,
+    });
+
+    expect(result.outcome).toBe("claimed");
+    expect(sets[1]).toMatchObject({ questData: [] });
+    expect(sets[2]).toMatchObject({ questData: [] });
+  });
 });
