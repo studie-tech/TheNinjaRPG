@@ -767,8 +767,23 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           .start();
       }
 
+      // One pin per sector. A sector can be a quest target, a war zone and the
+      // focused sector at once -- the tutorial deliberately focuses the sector
+      // its quest is in -- and pushing all three stacks their icons on the same
+      // point, which just reads as a smudge. The quest scroll wins because it is
+      // the marker the player has to act on; losing the focus pin costs nothing,
+      // since focusing still centres the camera and names the sector in the
+      // legend either way.
+      const highlightPriority = { quest: 0, war: 1, focus: 2 } as const;
+      const pinnedSectors = [...sectorsToHighlight]
+        .sort((a, b) => highlightPriority[a.type] - highlightPriority[b.type])
+        .filter(
+          (highlight, index, all) =>
+            all.findIndex((other) => other.sector === highlight.sector) === index,
+        );
+
       // Highlighted GPS pins for quests and wars
-      sectorsToHighlight.forEach((highlight) => {
+      pinnedSectors.forEach((highlight) => {
         const hasLabel = props.highlights?.find((h) => h.sector === highlight.sector);
         const sector = hexasphere?.tiles[highlight.sector]?.c;
         if (!hasLabel && sector) {
@@ -815,9 +830,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         }
       });
 
-      setHasQuestMarkers(
-        sectorsToHighlight.some((highlight) => highlight.type === "quest"),
-      );
+      setHasQuestMarkers(pinnedSectors.some((highlight) => highlight.type === "quest"));
 
       // Pulsing a sector means rewriting its slice of the merged surface's
       // shared color buffer every frame. Snapshot each one's terrain colors up
@@ -826,7 +839,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       // then darken a little more each frame.
       const surfaceColors = surface.geometry.getAttribute("color") as BufferAttribute;
       const surfaceColorValues = surfaceColors.array as Float32Array;
-      const pulses = sectorsToHighlight.flatMap((highlight) => {
+      const pulses = pinnedSectors.flatMap((highlight) => {
         const start = surface.vertexRanges[highlight.sector * 2] ?? -1;
         const count = surface.vertexRanges[highlight.sector * 2 + 1] ?? 0;
         if (start < 0) return [];
