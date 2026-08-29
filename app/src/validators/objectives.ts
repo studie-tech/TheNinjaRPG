@@ -386,14 +386,14 @@ export const InstantWinLoseObjective = z.object({
 
 export const ResetQuestObjective = z.object({
   ...baseObjectiveFields,
-  task: z.literal("reset_quest").prefault("reset_quest"),
+  task: z.literal("reset_quest"),
   resetObjectiveId: z.string().optional(),
   ...rewardFields,
 });
 
 export const InstantNewQuestObjective = z.object({
   ...baseObjectiveFields,
-  task: z.literal("new_quest").prefault("new_quest"),
+  task: z.literal("new_quest"),
   newQuestIds: z.array(z.string()).prefault([]),
   ...rewardFields,
 });
@@ -401,7 +401,7 @@ export const InstantNewQuestObjective = z.object({
 export const InstantStartBattleObjective = z.object({
   ...baseObjectiveFields,
   ...battleObjectiveFields,
-  task: z.literal("start_battle").prefault("start_battle"),
+  task: z.literal("start_battle"),
   opponentAIs: idsWithNumberField.refine((data) => data.length > 0, {
     error: "At least one opponent AI is required",
   }),
@@ -445,7 +445,7 @@ export const DialogObjective = z.object({
   ...baseObjectiveFields,
   ...rewardFields,
   ...attackerFields,
-  task: z.literal("dialog").prefault("dialog"),
+  task: z.literal("dialog"),
   image: z.string().prefault(""),
   nextObjectiveId: z
     .array(
@@ -460,19 +460,19 @@ export const DialogObjective = z.object({
 export const MoveToObjective = z.object({
   ...baseObjectiveFields,
   ...complexObjectiveFields,
-  task: z.literal("move_to_location").prefault("move_to_location"),
+  task: z.literal("move_to_location"),
 });
 
 export const EncountersAtLocation = z.object({
   ...baseObjectiveFields,
   ...complexObjectiveFields,
   locationType: z.enum(LOCATION_TYPES).prefault("random"),
-  task: z.literal("win_encounter_at_location").prefault("win_encounter_at_location"),
+  task: z.literal("win_encounter_at_location"),
 });
 
 export const CollectItem = z.object({
   ...baseObjectiveFields,
-  task: z.literal("collect_item").prefault("collect_item"),
+  task: z.literal("collect_item"),
   item_name: z.string().min(3).prefault("Secret scroll"),
   collectItemIds: z.array(z.string()).prefault([]),
   delete_on_complete: z.coerce.boolean().prefault(false),
@@ -483,7 +483,7 @@ export type CollectItemType = z.infer<typeof CollectItem>;
 
 export const DeliverItem = z.object({
   ...baseObjectiveFields,
-  task: z.literal("deliver_item").prefault("deliver_item"),
+  task: z.literal("deliver_item"),
   item_name: z.string().min(3).prefault("Secret scroll"),
   deliverItemIds: z.array(z.string()).prefault([]),
   delete_on_complete: z.coerce.boolean().prefault(true),
@@ -494,7 +494,7 @@ export type DeliverItemType = z.infer<typeof DeliverItem>;
 export const DefeatOpponents = z.object({
   ...baseObjectiveFields,
   ...battleObjectiveFields,
-  task: z.literal("defeat_opponents").prefault("defeat_opponents"),
+  task: z.literal("defeat_opponents"),
   opponentAIs: idsWithNumberField,
   ...complexObjectiveFields,
 });
@@ -519,7 +519,7 @@ export type RaidObjectiveType = z.infer<typeof RaidObjective>;
 // contentId stores the crafted item id (matched against craftItemIds).
 export const CraftSpecificItem = z.object({
   ...baseObjectiveFields,
-  task: z.literal("craft_specific_item").prefault("craft_specific_item"),
+  task: z.literal("craft_specific_item"),
   craftItemIds: z.array(z.string()).prefault([]),
   value: z.coerce.number().min(0).prefault(1),
   ...rewardFields,
@@ -528,7 +528,7 @@ export const CraftSpecificItem = z.object({
 // contentId stores the trained jutsu id (matched against trainJutsuIds).
 export const TrainSpecificJutsu = z.object({
   ...baseObjectiveFields,
-  task: z.literal("train_specific_jutsu").prefault("train_specific_jutsu"),
+  task: z.literal("train_specific_jutsu"),
   trainJutsuIds: z.array(z.string()).prefault([]),
   value: z.coerce.number().min(0).prefault(1),
   ...rewardFields,
@@ -537,7 +537,7 @@ export const TrainSpecificJutsu = z.object({
 // contentId stores the completed quest id (matched against completeQuestIds).
 export const CompleteSpecificQuest = z.object({
   ...baseObjectiveFields,
-  task: z.literal("complete_specific_quest").prefault("complete_specific_quest"),
+  task: z.literal("complete_specific_quest"),
   completeQuestIds: z.array(z.string()).prefault([]),
   value: z.coerce.number().min(0).prefault(1),
   ...rewardFields,
@@ -546,7 +546,7 @@ export const CompleteSpecificQuest = z.object({
 // contentId stores the purchased item id (matched against buyItemIds). NPC shop only (v1).
 export const BuyItem = z.object({
   ...baseObjectiveFields,
-  task: z.literal("buy_item").prefault("buy_item"),
+  task: z.literal("buy_item"),
   buyItemIds: z.array(z.string()).prefault([]),
   value: z.coerce.number().min(0).prefault(1),
   ...rewardFields,
@@ -555,7 +555,7 @@ export const BuyItem = z.object({
 // contentId stores a used item id from this battle (matched against useItemIds).
 export const UseSpecificItemCombat = z.object({
   ...baseObjectiveFields,
-  task: z.literal("use_specific_item_combat").prefault("use_specific_item_combat"),
+  task: z.literal("use_specific_item_combat"),
   useItemIds: z.array(z.string()).prefault([]),
   value: z.coerce.number().min(0).prefault(1),
   ...rewardFields,
@@ -564,7 +564,7 @@ export const UseSpecificItemCombat = z.object({
 // contentId stores a used jutsu id from this battle (matched against useJutsuIds).
 export const UseSpecificJutsuCombat = z.object({
   ...baseObjectiveFields,
-  task: z.literal("use_specific_jutsu_combat").prefault("use_specific_jutsu_combat"),
+  task: z.literal("use_specific_jutsu_combat"),
   useJutsuIds: z.array(z.string()).prefault([]),
   value: z.coerce.number().min(0).prefault(1),
   ...rewardFields,
@@ -573,7 +573,7 @@ export const UseSpecificJutsuCombat = z.object({
 // contentId stores an applied combat tag type from a won battle (matched against tagType).
 export const TagUsageWin = z.object({
   ...baseObjectiveFields,
-  task: z.literal("tag_usage_win").prefault("tag_usage_win"),
+  task: z.literal("tag_usage_win"),
   // Default to a valid tag so a freshly-added objective parses (otherwise the editor's
   // safeParse fails, falls back to the raw object, and never renders the tag picker).
   tagType: z.enum(OBJECTIVE_TAG_TYPES).prefault(OBJECTIVE_TAG_TYPES[0]),
@@ -587,7 +587,7 @@ export const TagUsageWin = z.object({
 // single-battle max), so such edits must ship with a reset of affected user trackers.
 export const DamageDealt = z.object({
   ...baseObjectiveFields,
-  task: z.literal("damage_dealt").prefault("damage_dealt"),
+  task: z.literal("damage_dealt"),
   singleBattle: z.coerce.boolean().prefault(false),
   value: z.coerce.number().min(0).prefault(1),
   ...rewardFields,
