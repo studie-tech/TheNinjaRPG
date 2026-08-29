@@ -114,16 +114,25 @@ export const performAIaction = (
     // Derived for convenience
     const userWithDistance = { ...user, path: undefined, distance: 0 };
     const randomEnemy = enemies[Math.floor(Math.random() * enemies.length)];
-    const closestEnemy = enemies.reduce((prev, current) =>
-      prev.distance < current.distance ? prev : current,
-    );
+    // Length-guarded rather than bare reduces: a turn still routes through here
+    // once the last opponent has fallen -- the caller settles the battle on the
+    // same tick -- and reducing the now-empty list would throw instead. The
+    // targeting below already treats a missing closest-* as "no target", the
+    // same way it treats the random-* picks.
+    const closestEnemy = enemies.length
+      ? enemies.reduce((prev, current) =>
+          prev.distance < current.distance ? prev : current,
+        )
+      : undefined;
     const randomAlly = allies[Math.floor(Math.random() * allies.length)];
-    const closestAlly = allies.reduce((prev, current) =>
-      prev.distance < current.distance ? prev : current,
-    );
+    const closestAlly = allies.length
+      ? allies.reduce((prev, current) =>
+          prev.distance < current.distance ? prev : current,
+        )
+      : undefined;
     // Get barriers between user and closest enemy
     astar = new PathCalculator(resetGridFromObstacles(grid));
-    const tHex = findHex(grid, closestEnemy);
+    const tHex = closestEnemy ? findHex(grid, closestEnemy) : undefined;
     const barriers = getBarriers(astar, nextBattle.groundEffects, origin, tHex).map(
       (b) => mapDistancesToTarget(grid, astar, b, origin),
     );

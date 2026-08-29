@@ -126,6 +126,20 @@ describe("performAIaction auto combat", () => {
     expect(nextActionId).toBe("meditate");
   });
 
+  it("survives a turn taken after the last opponent has died", () => {
+    const grid = new Grid(TerrainHex, rectangle({ width: 10, height: 10 }));
+    const human = mkHuman({ isAutoCombat: true });
+    const battle = mkBattle(human);
+    const foe = battle.usersState.find((u) => u.userId === "foe");
+    if (foe) foe.curHealth = 0;
+    // The caller settles a decided battle on this same tick, but it asks for the
+    // turn first: reducing the empty enemy list used to throw here, and the
+    // endpoint turned that into a notification the client retried forever.
+    const { nextBattle } = performAIaction(battle, grid, "user_h1");
+    const after = nextBattle.usersState.find((u) => u.userId === "user_h1");
+    expect(after?.curHealth).toBe(5000);
+  });
+
   it("does NOT self-kill an auto-combat human whose rules produce no action", () => {
     const grid = new Grid(TerrainHex, rectangle({ width: 10, height: 10 }));
     // No jutsu, empty pools, no profile on the battle -> no rule can match
