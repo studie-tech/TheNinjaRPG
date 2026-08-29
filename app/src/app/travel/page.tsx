@@ -438,6 +438,34 @@ export default function Travel() {
   // Tutorial step
   const { currentStep, handleNextStepAsync } = useTutorialStep();
 
+  // While the tutorial is sending the player to one specific sector, open the
+  // globe already centred on it and carrying the Target label. The camera
+  // otherwise starts on the player's own sector, which leaves the destination
+  // up to 40 degrees around the sphere -- far enough out that it draws
+  // edge-on near the limb, with nothing telling a new player the globe turns.
+  // Travel steps are the only ones whose relatedValue is a sector; everywhere
+  // else it names a quest.
+  const tutorialFocusSector =
+    userData?.tutorialOn &&
+    currentStep?.title === "Travel" &&
+    typeof currentStep?.relatedValue === "number"
+      ? currentStep.relatedValue
+      : null;
+  const tutorialSetFocusRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (tutorialFocusSector !== null) {
+      tutorialSetFocusRef.current = tutorialFocusSector;
+      setFocusSector(tutorialFocusSector);
+      return;
+    }
+    // Leaving a guided step drops the marker the tutorial put there, but never
+    // one the player picked out themselves.
+    setFocusSector((current) =>
+      current !== null && current === tutorialSetFocusRef.current ? null : current,
+    );
+    tutorialSetFocusRef.current = null;
+  }, [tutorialFocusSector]);
+
   // Mutations
   const { mutate: startGlobalMove, isPending: isStartingTravel } =
     api.travel.startGlobalMove.useMutation({
