@@ -2012,6 +2012,12 @@ export const fetchUncompletedQuests = async (
 /** Row locks the bulk quest reset may hold in one statement. */
 const QUEST_RESET_BATCH_SIZE = 100;
 
+/** Drop one quest's tracker so a restarted/reassigned quest always starts fresh. */
+const removeQuestTrackerByQuestId = (
+  trackers: z.infer<typeof QuestTracker>[] | null | undefined,
+  questId: string,
+) => (trackers ?? []).filter((tracker) => tracker.id !== questId);
+
 /** Upsert quest entries for all users by selector. NOTE: selector determined which users get updated/inserted entries */
 export const upsertQuestEntries = async (
   client: DrizzleClient,
@@ -2060,16 +2066,39 @@ export const upsertQuestEntries = async (
     // reset never contends with itself either, and share one timestamp so a batch that
     // has to be retried still stamps what the rest of the reset did.
     const startedAt = new Date();
-    const batches = chunkArray(
-      allUsers.map((user) => user.userId),
-      QUEST_RESET_BATCH_SIZE,
-    );
+    const batches = chunkArray(allUsers, QUEST_RESET_BATCH_SIZE);
     for (const batch of batches) {
+      const batchUserIds = batch.map((user) => user.userId);
+      const trackerPath = sql`JSON_UNQUOTE(JSON_SEARCH(
+        ${userData.questData},
+        'one',
+        REPLACE(REPLACE(REPLACE(${quest.id}, '#', '##'), '%', '#%'), '_', '#_'),
+        '#',
+        '$[*].id'
+      ))`;
       await client
         .update(questHistory)
         .set({ completed: 0, endAt: null, startedAt })
         .where(
-          and(inArray(questHistory.userId, batch), eq(questHistory.questId, quest.id)),
+          and(
+            inArray(questHistory.userId, batchUserIds),
+            eq(questHistory.questId, quest.id),
+          ),
+        );
+
+      // Remove only this quest's tracker in SQL. Updating the JSON document atomically avoids
+      // overwriting progress another request may have recorded for an unrelated active quest
+      // after this reset selected its users.
+      await client
+        .update(userData)
+        .set({
+          questData: sql`JSON_REMOVE(
+            ${userData.questData},
+            REPLACE(${trackerPath}, '.id', '')
+          )`,
+        })
+        .where(
+          and(inArray(userData.userId, batchUserIds), sql`${trackerPath} IS NOT NULL`),
         );
     }
   }
@@ -2462,6 +2491,8 @@ export const upsertQuestEntry = async (
         });
   // Promises to be executed
   const promises: Promise<unknown>[] = [];
+  // Restarting a quest must discard any stale tracker from prior attempts before recomputing.
+  user.questData = removeQuestTrackerByQuestId(user.questData, quest.id);
   // Check if the quest has already been started
   if (entry) {
     const startedAt = new Date();
@@ -2687,6 +2718,10 @@ export const commitQuestObjectiveRewards = async (info: {
   } = info;
 
   user.questData = filterQuestTrackersForDbPersist(trackers, user);
+  // Once a quest resolves, remove its tracker so replayed assignments cannot inherit done goals.
+  if (resolved && userQuest) {
+    user.questData = removeQuestTrackerByQuestId(user.questData, userQuest.questId);
+  }
 
   // Persist completion before snapshot CAS so we cannot commit questData/updatedAt and then
   // lose the completion race; if snapshot claim fails, revert completion below.

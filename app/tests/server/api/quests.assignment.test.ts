@@ -205,4 +205,107 @@ describe("assignQuestToUser compatibility", () => {
     expect(insert).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });
+
+  it("clears reused daily tracker progress during bulk reassignment", async () => {
+    const sets: Record<string, unknown>[] = [];
+    const update = vi.fn(() => ({
+      set: (value: Record<string, unknown>) => {
+        sets.push(value);
+        return { where: vi.fn().mockResolvedValue({ rowsAffected: 1 }) };
+      },
+    }));
+    const select = vi
+      .fn()
+      .mockReturnValueOnce({
+        from: vi.fn(() => ({
+          leftJoin: vi.fn(() => ({ where: vi.fn().mockResolvedValue([]) })),
+        })),
+      })
+      .mockReturnValueOnce({
+        from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([{ userId: user.userId }]) })),
+      });
+    const client = { select, update } as never;
+
+    await upsertQuestEntries(
+      client,
+      { ...quest, questType: "daily" } as never,
+      undefined as never,
+    );
+
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(sets[0]).toMatchObject({ completed: 0, endAt: null });
+    expect(sets[1]?.questData).toBeTruthy();
+  });
+
+  it("resets stale tracker state when restarting an already-attempted quest", async () => {
+    const objectiveQuest = {
+      ...quest,
+      content: {
+        objectives: [
+          {
+            id: "obj-1",
+            task: "items_crafted",
+            value: 2,
+            description: "",
+            successDescription: "",
+          },
+        ],
+        reward: {},
+        sceneBackground: "",
+        sceneCharacters: [],
+      },
+    };
+    const staleTracker = {
+      id: objectiveQuest.id,
+      goals: [{ id: "obj-1", done: true, value: 2 }],
+      startAt: new Date().toISOString(),
+    };
+    const existingEntry = {
+      id: "history-1",
+      userId: user.userId,
+      questId: objectiveQuest.id,
+      questType: objectiveQuest.questType,
+      completed: 1,
+      endAt: new Date(),
+      previousAttempts: 1,
+    };
+
+    const sets: Record<string, unknown>[] = [];
+    const update = vi.fn(() => ({
+      set: (value: Record<string, unknown>) => {
+        sets.push(value);
+        return { where: vi.fn().mockResolvedValue({ rowsAffected: 1 }) };
+      },
+    }));
+    const client = {
+      update,
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({ onDuplicateKeyUpdate: vi.fn().mockResolvedValue(undefined) })),
+      })),
+      query: { questHistory: { findFirst: vi.fn().mockResolvedValue(existingEntry) } },
+    } as never;
+
+    await upsertQuestEntry(
+      client,
+      {
+        ...user,
+        questData: [staleTracker],
+        userQuests: [{ ...existingEntry, quest: objectiveQuest }],
+      } as never,
+      objectiveQuest as never,
+      "system",
+      existingEntry as never,
+    );
+
+    const questDataWrite = sets.find((set) => "questData" in set);
+    expect(questDataWrite).toBeTruthy();
+    const trackers = (questDataWrite?.questData ?? []) as {
+      id: string;
+      goals: { id: string; done?: boolean; value?: number }[];
+    }[];
+    const tracker = trackers.find((t) => t.id === objectiveQuest.id);
+    const goal = tracker?.goals.find((g) => g.id === "obj-1");
+    expect(goal?.done).toBe(false);
+    expect(goal?.value).toBe(0);
+  });
 });
