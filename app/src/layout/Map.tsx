@@ -712,7 +712,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       // Quest pins breathe as well as pulse: the tile tint alone is easy to miss
       // on a first visit, and the scroll is what a new player is told to press.
       const questIconScale = { value: 1 };
-      const QUEST_ICON_SCALE_MAX = 1.3;
+      const QUEST_ICON_SCALE_MAX = 1.15;
 
       const sectorsToHighlight: {
         sector: number;
