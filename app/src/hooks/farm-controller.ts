@@ -374,6 +374,7 @@ export function useFarmController() {
     selectedPlot,
     setSelectedSlotIndex,
     summary,
+    now,
     pendingPlotSlots,
     pendingInventoryKeys,
     pendingBulkAction,

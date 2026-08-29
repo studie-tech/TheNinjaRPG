@@ -84,6 +84,7 @@ describe("FarmPlotInspector", () => {
       <FarmPlotInspector
         plot={plot()}
         farmState={farmState}
+        now={new Date()}
         pending={false}
         {...handlers}
       />,
@@ -120,6 +121,7 @@ describe("FarmPlotInspector", () => {
           growthStage: 2,
         })}
         farmState={farmState}
+        now={new Date()}
         pending
         {...handlers}
       />,
@@ -145,6 +147,7 @@ describe("FarmPlotInspector", () => {
           harvestExperience: 4,
         })}
         farmState={farmState}
+        now={new Date()}
         pending={false}
         {...handlers}
       />,
