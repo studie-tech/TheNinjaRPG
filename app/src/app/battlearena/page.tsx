@@ -274,85 +274,142 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
         be at your level.
       </p>
 
-      {/* OPPONENT PICKER */}
+      {/* Picker on the left, setup and the enter button on the right once the
+          centre column is wide enough for two (the village sidebars eat most of
+          the width below xl, where a rail would squeeze the grid to a sliver).
+          Stacked, the opponent grid alone is tall enough to push the primary
+          action below the fold on a short screen — side by side the two are as
+          tall as the taller one, so the button stays in view, which the
+          tutorial step highlighting it depends on. */}
       {canDoArena && (
-        <div>
-          <div className="mb-2 flex flex-row items-end justify-between">
-            <p className="font-semibold">Choose your opponent</p>
-            <p className="text-muted-foreground text-xs">Sorted by level match</p>
-          </div>
-          <div className="grid max-h-64 grid-cols-3 gap-2 overflow-y-auto rounded-lg border bg-popover/30 p-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-            {sortedAis?.map((opponent) => {
-              const isSelected = opponent.userId === aiId;
-              return (
-                <div key={opponent.userId} className="group relative">
-                  <button
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() => setAiId(opponent.userId)}
-                    className={`flex w-full flex-col items-center rounded-lg border-2 p-2 transition-colors hover:bg-popover ${
-                      isSelected
-                        ? "border-amber-500 bg-popover shadow-md"
-                        : "border-transparent"
-                    }`}
-                  >
-                    <Image
-                      alt={opponent.username}
-                      src={opponent.avatar ?? IMG_AVATAR_DEFAULT}
-                      width={80}
-                      height={80}
-                      className="aspect-square w-full rounded-md object-cover"
-                    />
-                    <p className="w-full truncate text-center font-semibold text-xs">
-                      {opponent.username}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      Level {opponent.level}
-                    </p>
-                  </button>
-                  {opponent.userId === bestMatchId && (
-                    <Badge className="pointer-events-none absolute -top-1 -right-1 px-1 py-0 text-[9px]">
-                      Best match
-                    </Badge>
-                  )}
-                  <OpponentInfoButton aiId={opponent.userId} alwaysShow={isSelected} />
-                </div>
-              );
-            })}
-            {!sortedAis && <Loader explanation="Loading opponents" />}
-          </div>
-        </div>
-      )}
-
-      {/* BATTLE OPTIONS */}
-      {canDoArena && (
-        <div className="flex flex-col gap-3 rounded-lg border p-3">
-          <p className="font-semibold text-[10px] text-muted-foreground uppercase">
-            Battle setup
-          </p>
-          <div className="flex flex-row gap-3">
-            <JutsuLoadoutSelector variant="dropdown" label="Jutsu loadout" />
-            <ItemLoadoutSelector variant="dropdown" label="Item loadout" />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="flex items-center gap-2 font-semibold text-sm">
-                <Bot className="h-4 w-4" /> Auto combat
-              </p>
-              <p className="text-muted-foreground text-xs">
-                Your{" "}
-                <Link href="/profile/edit" className="underline hover:text-orange-500">
-                  AI profile
-                </Link>{" "}
-                fights for you while you watch the battle live. You can take back
-                control at any time.
-              </p>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+          {/* OPPONENT PICKER */}
+          <div className="xl:min-w-0 xl:flex-1">
+            <div className="mb-2 flex flex-row items-end justify-between">
+              <p className="font-semibold">Choose your opponent</p>
+              <p className="text-muted-foreground text-xs">Sorted by level match</p>
             </div>
-            <Switch
-              checked={autoCombat}
-              onCheckedChange={setAutoCombat}
-              aria-label="Toggle auto combat"
-            />
+            {/* Cap against the window, not just a fixed height: stacked on a
+                short screen the grid scrolls internally rather than growing the
+                page and pushing "Enter arena" out of sight. */}
+            <div className="grid max-h-[min(16rem,26vh)] grid-cols-3 gap-2 overflow-y-auto rounded-lg border bg-popover/30 p-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-4 2xl:grid-cols-5">
+              {sortedAis?.map((opponent) => {
+                const isSelected = opponent.userId === aiId;
+                return (
+                  <div key={opponent.userId} className="group relative">
+                    <button
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => setAiId(opponent.userId)}
+                      className={`flex w-full flex-col items-center rounded-lg border-2 p-2 transition-colors hover:bg-popover ${
+                        isSelected
+                          ? "border-amber-500 bg-popover shadow-md"
+                          : "border-transparent"
+                      }`}
+                    >
+                      <Image
+                        alt={opponent.username}
+                        src={opponent.avatar ?? IMG_AVATAR_DEFAULT}
+                        width={80}
+                        height={80}
+                        className="aspect-square w-full rounded-md object-cover"
+                      />
+                      <p className="w-full truncate text-center font-semibold text-xs">
+                        {opponent.username}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Level {opponent.level}
+                      </p>
+                    </button>
+                    {opponent.userId === bestMatchId && (
+                      <Badge className="pointer-events-none absolute -top-1 -right-1 px-1 py-0 text-[9px]">
+                        Best match
+                      </Badge>
+                    )}
+                    <OpponentInfoButton
+                      aiId={opponent.userId}
+                      alwaysShow={isSelected}
+                    />
+                  </div>
+                );
+              })}
+              {!sortedAis && <Loader explanation="Loading opponents" />}
+            </div>
+          </div>
+
+          {/* BATTLE SETUP + PRIMARY ACTION */}
+          <div className="flex flex-col gap-3 rounded-lg border p-3 xl:w-80 xl:shrink-0">
+            <p className="font-semibold text-[10px] text-muted-foreground uppercase">
+              Battle setup
+            </p>
+            <div className="flex flex-row gap-3">
+              <JutsuLoadoutSelector variant="dropdown" label="Jutsu loadout" />
+              <ItemLoadoutSelector variant="dropdown" label="Item loadout" />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col">
+                <p className="flex items-center gap-2 font-semibold text-sm">
+                  <Bot className="h-4 w-4" /> Auto combat
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  Your{" "}
+                  <Link
+                    href="/profile/edit"
+                    className="underline hover:text-orange-500"
+                  >
+                    AI profile
+                  </Link>{" "}
+                  fights for you while you watch the battle live. You can take back
+                  control at any time.
+                </p>
+              </div>
+              <Switch
+                checked={autoCombat}
+                onCheckedChange={setAutoCombat}
+                aria-label="Toggle auto combat"
+              />
+            </div>
+
+            {/* WAKE UP / ENTER CTA */}
+            {isAsleep && (
+              <div className="flex flex-col items-center border-t pt-3">
+                {isTogglingSleep ? (
+                  <Loader explanation="Waking up..." />
+                ) : (
+                  <Button
+                    size="xl"
+                    decoration="gold"
+                    animation="pulse"
+                    className="w-full text-2xl italic"
+                    onClick={() => toggleSleep()}
+                  >
+                    <Sun className="mr-4 h-10 w-10" />
+                    Wake up!
+                  </Button>
+                )}
+              </div>
+            )}
+            {!isAttacking && !isAsleep && (
+              <div className="flex flex-col items-center gap-2 border-t pt-3">
+                <Button
+                  id="tutorial-battlearena-challenge-ai-enter"
+                  size="xl"
+                  decoration="gold"
+                  animation="pulse"
+                  className="w-full text-2xl italic"
+                  onClick={() => aiId && attack({ aiId, autoCombat })}
+                >
+                  <Swords className="mr-4 h-10 w-10" />
+                  Enter arena
+                </Button>
+                {autoCombat && (
+                  <p className="text-center text-muted-foreground text-xs">
+                    <Bot className="mr-1 inline h-3 w-3" />
+                    Auto combat is on — your AI profile will fight this battle
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -367,46 +424,6 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
         </div>
       )}
 
-      {/* WAKE UP / ENTER CTA */}
-      {isAsleep && canDoArena && (
-        <div className="flex flex-col items-center p-3">
-          {isTogglingSleep ? (
-            <Loader explanation="Waking up..." />
-          ) : (
-            <Button
-              size="xl"
-              decoration="gold"
-              animation="pulse"
-              className="text-2xl italic"
-              onClick={() => toggleSleep()}
-            >
-              <Sun className="mr-4 h-10 w-10" />
-              Wake up!
-            </Button>
-          )}
-        </div>
-      )}
-      {!isAttacking && canDoArena && !isAsleep && (
-        <div className="flex flex-col items-center gap-2 p-3">
-          <Button
-            id="tutorial-battlearena-challenge-ai-enter"
-            size="xl"
-            decoration="gold"
-            animation="pulse"
-            className="text-2xl italic"
-            onClick={() => aiId && attack({ aiId, autoCombat })}
-          >
-            <Swords className="mr-4 h-10 w-10" />
-            Enter arena
-          </Button>
-          {autoCombat && (
-            <p className="text-muted-foreground text-xs">
-              <Bot className="mr-1 inline h-3 w-3" />
-              Auto combat is on — your AI profile will fight this battle
-            </p>
-          )}
-        </div>
-      )}
       {isAttacking && (
         <div className="min-h-64">
           <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">

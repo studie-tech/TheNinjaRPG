@@ -433,9 +433,14 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       // interval, the scroll listener and a body-wide MutationObserver, so
       // without the per-target guard the page would snap back every time the
       // player scrolls the highlight off screen.
+      //
+      // The guard is only armed once a scroll actually happens. Marking the
+      // target revealed on the first sighting instead would strand steps whose
+      // page is still filling in: the element gets measured while the page is
+      // short and on screen, then async content lands underneath it and pushes
+      // it below the fold with the reveal already spent.
       const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}`;
       if (hasRevealedTargetRef.current !== targetKey) {
-        hasRevealedTargetRef.current = targetKey;
         const before = highlightInfo.element.getBoundingClientRect();
         const isCompactTarget = before.height < window.innerHeight * 0.55;
         const isOffscreen =
@@ -444,8 +449,12 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
           before.right < 0 ||
           before.left > window.innerWidth;
         if (isOffscreen && isCompactTarget) {
+          hasRevealedTargetRef.current = targetKey;
+          // Centred, not "nearest": nearest parks the target flush against the
+          // edge it came from, which on the way down is exactly where the
+          // assistant dialog sits.
           highlightInfo.element.scrollIntoView({
-            block: "nearest",
+            block: "center",
             inline: "nearest",
             behavior: "auto",
           });
