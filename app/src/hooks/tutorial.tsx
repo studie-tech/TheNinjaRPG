@@ -465,6 +465,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     elementIds: ["tutorial-townhall-alliance"],
     page: "/townhall#Alliance",
     proceedOnHighlightClick: true,
+    // The highlight here is a ContentBox the player is already looking at, not
+    // something to navigate to, so clicking it is not an action they would think
+    // to take -- unlike the building/tab steps, which are told to click.
+    showNextButton: true,
   },
   {
     id: "gsfgsdfg-kage-tab",
@@ -510,6 +514,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     elementIds: ["tutorial-bloodline-purchase"],
     page: "/blackmarket#Bloodline",
     proceedOnHighlightClick: true,
+    showNextButton: true,
   },
   {
     id: "vsdffdsiugvd",
@@ -528,6 +533,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     elementIds: ["tutorial-ryo-shop"],
     page: "/blackmarket#Ryo",
     proceedOnHighlightClick: true,
+    showNextButton: true,
   },
   {
     id: "YP5PEaCvfhJfdsl37V-wrapup-1",
