@@ -18,7 +18,13 @@ import type { FarmStateResponse } from "@/validators/farming";
 
 type FarmHUDProps = {
   state: FarmStateResponse;
-  summary: { ready: number; growing: number; empty: number; waterable: number };
+  summary: {
+    ready: number;
+    growing: number;
+    empty: number;
+    waterable: number;
+    fertilizable: number;
+  };
   pendingAction: string | null;
   onPlantAll: (seedItemId: string) => void;
   onWaterAll: () => void;
@@ -48,9 +54,7 @@ export function FarmHUD({
     () => getFarmingLevelProgress(state.farmingExperience),
     [state.farmingExperience],
   );
-  const fertilizableCount = state.plots.filter(
-    (plot) => plot.seedItemId && !plot.isReady && !plot.fertilizerApplied,
-  ).length;
+  const fertilizableCount = summary.fertilizable;
 
   useEffect(() => {
     if (!eligibleSeeds.some((seed) => seed.itemId === selectedSeedId)) {

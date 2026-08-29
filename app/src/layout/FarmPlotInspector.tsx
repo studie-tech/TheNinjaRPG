@@ -1,7 +1,7 @@
 "use client";
 
 import { Droplets, Leaf, PackageOpen, Shovel, Wheat, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -19,6 +19,7 @@ import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 type FarmPlotInspectorProps = {
   plot: FarmPlotState | null;
   farmState: FarmStateResponse;
+  now: Date;
   pending: boolean;
   onClose: () => void;
   onPlant: (plot: FarmPlotState, seedItemId: string) => void;
@@ -38,6 +39,7 @@ const formatDuration = (seconds: number) => {
 export function FarmPlotInspector({
   plot,
   farmState,
+  now,
   pending,
   onClose,
   onPlant,
@@ -55,7 +57,6 @@ export function FarmPlotInspector({
     setSelectedFertilizerId(null);
   }, [plot?.id]);
 
-  const now = useMemo(() => new Date(Date.now() - timeDiff), [timeDiff, plot]);
   if (!plot) {
     return (
       <Card className="lg:sticky lg:top-4">

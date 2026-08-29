@@ -209,12 +209,13 @@ export const getFarmPlotStatus = (
 };
 
 export const summarizeFarmPlots = (plots: FarmPlotState[], now = new Date()) => {
-  const summary = { ready: 0, growing: 0, empty: 0, waterable: 0 };
+  const summary = { ready: 0, growing: 0, empty: 0, waterable: 0, fertilizable: 0 };
   for (const plot of plots) {
     const status = getFarmPlotStatus(plot, now);
     summary[status] += 1;
-    if (status === "growing" && canWaterPlot(plot.lastWateredAt, now)) {
-      summary.waterable += 1;
+    if (status === "growing") {
+      if (canWaterPlot(plot.lastWateredAt, now)) summary.waterable += 1;
+      if (!plot.fertilizerApplied) summary.fertilizable += 1;
     }
   }
   return summary;

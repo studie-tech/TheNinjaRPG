@@ -1,4 +1,4 @@
-import { patchFarmPlot } from "@/libs/farming";
+import { getFarmingLevel, patchFarmPlot } from "@/libs/farming";
 import type { FarmMutationResponse, FarmStateResponse } from "@/validators/farming";
 
 const patchInventory = (
@@ -28,12 +28,15 @@ export const applyFarmMutationPatch = (
   state: FarmStateResponse,
   result: FarmMutationResponse,
 ): FarmStateResponse => {
+  const farmingExperience =
+    state.farmingExperience + (result.farmingExperienceDelta ?? 0);
   let next = {
     ...state,
     plots: result.updatedPlot
       ? patchFarmPlot(state.plots, result.updatedPlot)
       : state.plots,
-    farmingExperience: state.farmingExperience + (result.farmingExperienceDelta ?? 0),
+    farmingExperience,
+    farmingLevel: getFarmingLevel(farmingExperience),
     farmCurrency: state.farmCurrency + (result.farmCurrencyDelta ?? 0),
     totalPlots: result.totalPlots ?? state.totalPlots,
     farmPlotsPurchased:

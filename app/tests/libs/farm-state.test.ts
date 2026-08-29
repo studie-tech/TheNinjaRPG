@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyFarmMutationPatch } from "@/libs/farm-state";
+import { getFarmingLevel } from "@/libs/farming";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
 const emptyPlot: FarmPlotState = {
@@ -78,5 +79,19 @@ describe("applyFarmMutationPatch", () => {
     expect(result.farmPlotsPurchased).toBe(1);
     expect(result.availableSeeds[0]?.quantity).toBe(2);
     expect(state.plots[0]).toBe(emptyPlot);
+  });
+
+  it("keeps the farming level in step with patched experience", () => {
+    const levelUpExperience = 5_000;
+    const result = applyFarmMutationPatch(
+      { ...state, farmingLevel: getFarmingLevel(state.farmingExperience) },
+      { success: true, message: "Harvested", farmingExperienceDelta: levelUpExperience },
+    );
+
+    expect(result.farmingExperience).toBe(state.farmingExperience + levelUpExperience);
+    expect(result.farmingLevel).toBe(getFarmingLevel(result.farmingExperience));
+    expect(result.farmingLevel).toBeGreaterThan(
+      getFarmingLevel(state.farmingExperience),
+    );
   });
 });

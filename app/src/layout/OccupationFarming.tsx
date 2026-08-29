@@ -124,6 +124,7 @@ export default function OccupationFarming({
           <FarmPlotInspector
             plot={selectedPlot}
             farmState={farmState}
+            now={controller.now}
             pending={
               selectedSlotIndex !== null &&
               controller.pendingPlotSlots.has(selectedSlotIndex)

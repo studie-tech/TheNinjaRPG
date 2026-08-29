@@ -247,6 +247,7 @@ describe("farming", () => {
       growing: 1,
       ready: 1,
       waterable: 1,
+      fertilizable: 1,
     });
     expect(getFarmPlotStatus(plots[2]!, now)).toBe("ready");
     expect(getFarmPrimaryAction(plots[2]!, false, now)).toBe("harvest");
