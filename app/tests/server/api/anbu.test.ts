@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
 
 type AnbuTestMocks = {
@@ -37,12 +37,6 @@ vi.mock("@/libs/pusher", () => ({
   }),
 }));
 
-vi.mock("@/routers/profile", () => ({
-  fetchUser: (...args: unknown[]) =>
-    (getAnbuTestMocks().fetchUser as (...values: unknown[]) => unknown)(...args),
-  updateNindo: vi.fn(),
-}));
-
 vi.mock("@/routers/sparring", () => ({
   fetchRequest: (...args: unknown[]) =>
     (getAnbuTestMocks().fetchRequest as (...values: unknown[]) => unknown)(...args),
@@ -52,6 +46,7 @@ vi.mock("@/routers/sparring", () => ({
     (getAnbuTestMocks().insertRequest as (...values: unknown[]) => unknown)(...args),
 }));
 
+import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
 import {
   acceptAnbuRequest,
   createAnbuRequest,
@@ -92,7 +87,12 @@ function describeSql(node: unknown): string {
 }
 
 describe("ANBU request squad identity", () => {
+  afterEach(resetServerModuleStubs);
   beforeEach(() => {
+    stubProfile("fetchUser", (...args: never[]) =>
+      (getAnbuTestMocks().fetchUser as unknown as (...a: never[]) => unknown)(...args),
+    );
+    stubProfile("updateNindo", (() => undefined) as never);
     vi.clearAllMocks();
   });
 
@@ -342,7 +342,12 @@ function makeDrizzleMock(
 }
 
 describe("ANBU router request permissions and concurrency", () => {
+  afterEach(resetServerModuleStubs);
   beforeEach(() => {
+    stubProfile("fetchUser", (...args: never[]) =>
+      (getAnbuTestMocks().fetchUser as unknown as (...a: never[]) => unknown)(...args),
+    );
+    stubProfile("updateNindo", (() => undefined) as never);
     vi.clearAllMocks();
   });
 
@@ -685,7 +690,12 @@ describe("ANBU router request permissions and concurrency", () => {
 });
 
 describe("ANBU membership invariants", () => {
+  afterEach(resetServerModuleStubs);
   beforeEach(() => {
+    stubProfile("fetchUser", (...args: never[]) =>
+      (getAnbuTestMocks().fetchUser as unknown as (...a: never[]) => unknown)(...args),
+    );
+    stubProfile("updateNindo", (() => undefined) as never);
     vi.clearAllMocks();
   });
 

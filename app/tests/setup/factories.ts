@@ -3,7 +3,7 @@
  * leaves the rest to their defaults, so a test only states the fields it is actually about.
  */
 import { nanoid } from "nanoid";
-import { quest, questHistory, userData } from "@/drizzle/schema";
+import { item, quest, questHistory, userData, userItem } from "@/drizzle/schema";
 import { getTestDatabase } from "./testDatabase";
 
 type Insert<T> = Partial<T> & Record<string, unknown>;
@@ -46,5 +46,38 @@ export const insertQuestHistory = async (
     ...entry,
   }));
   await database.insert(questHistory).values(rows as never);
+  return rows;
+};
+
+export const insertItems = async (items: Insert<typeof item.$inferInsert>[]) => {
+  const database = await getTestDatabase();
+  const rows = items.map((entry, index) => ({
+    id: `item-${index}`,
+    name: `Item ${index}`,
+    image: "/item.png",
+    description: "test item",
+    itemType: "MATERIAL",
+    rarity: "COMMON",
+    slot: "ITEM",
+    target: "CHARACTER",
+    effects: [],
+    ...entry,
+  }));
+  await database.insert(item).values(rows as never);
+  return rows;
+};
+
+export const insertUserItems = async (
+  userItems: Insert<typeof userItem.$inferInsert>[],
+) => {
+  const database = await getTestDatabase();
+  const rows = userItems.map((entry, index) => ({
+    id: `user-item-${index}`,
+    userId: "user-0",
+    quantity: 1,
+    equipped: "NONE",
+    ...entry,
+  }));
+  await database.insert(userItem).values(rows as never);
   return rows;
 };

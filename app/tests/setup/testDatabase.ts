@@ -164,3 +164,16 @@ export const closeTestDatabase = async () => {
   connection = undefined;
   client = undefined;
 };
+
+/**
+ * Build a tRPC caller for `router`, backed by the throwaway database and acting as `userId`.
+ *
+ * Routers are worth testing directly: the guards, level gates and compare-and-swap
+ * predicates live in the procedures rather than in the helpers they call, and a mocked
+ * client would only prove which query was written, not which row the engine ends up with.
+ */
+export const callerFor = async <Context, Caller>(
+  router: { createCaller: (context: Context) => Caller },
+  userId: string,
+): Promise<Caller> =>
+  router.createCaller({ drizzle: await getTestDatabase(), userId } as Context);
