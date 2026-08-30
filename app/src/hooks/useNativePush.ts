@@ -39,6 +39,10 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
   const registerDevice = api.push.registerDevice.useMutation();
   const unregisterDevice = api.push.unregisterDevice.useMutation();
   const { mutateAsync: sendToken } = registerDevice;
+  // Bumped on unregister. A registration already in flight when the player signs out
+  // would otherwise resolve afterwards and write the old account's widget token back,
+  // handing whoever picks the phone up next a credential for someone else's status.
+  const registrationEpoch = useRef(0);
 
   // Attach listeners before register() — the token arrives as an event, not a return
   // value, so a listener attached afterwards can miss it entirely.
@@ -48,6 +52,7 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
     const unsubscribeRegistration = push.onRegistration(({ token, platform }) => {
       if (registeredToken.current === token) return;
       registeredToken.current = token;
+      const epoch = registrationEpoch.current;
       void sendToken({
         token,
         platform,
@@ -55,6 +60,9 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
         locale: navigator.language.slice(0, 16),
       })
         .then((result) => {
+          // Signed out while this was in flight: the device has already been detached, so
+          // writing the token back would undo that.
+          if (epoch !== registrationEpoch.current) return;
           safeLocalStorageSetItem(LAST_TOKEN_KEY, token);
           if (result.widgetToken) {
             safeLocalStorageSetItem(WIDGET_TOKEN_KEY, result.widgetToken);
@@ -87,6 +95,9 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
 
   /** Detach this device from the account. Call when the player signs out. */
   const unregister = useCallback(async () => {
+    // Invalidate first, so a registration racing this cannot write its result back after
+    // the row has been deleted.
+    registrationEpoch.current += 1;
     const token = registeredToken.current ?? safeLocalStorageGetItem(LAST_TOKEN_KEY);
     if (!token) return;
     registeredToken.current = null;

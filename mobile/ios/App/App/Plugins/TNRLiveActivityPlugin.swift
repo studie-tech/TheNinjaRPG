@@ -42,7 +42,7 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         guard let state = contentState(from: call) else {
-            call.reject("endsAt is required and must be an ISO-8601 timestamp")
+            call.reject("endsAtEpochMs is required")
             return
         }
 
@@ -85,7 +85,7 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         guard let state = contentState(from: call) else {
-            call.reject("endsAt is required and must be an ISO-8601 timestamp")
+            call.reject("endsAtEpochMs is required")
             return
         }
         guard let activity = Self.activity(with: activityId) else {
@@ -147,18 +147,21 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             call.resolve([:])
             return
         }
+        // pushToStartTokenUpdates never completes, and on a build where APNs registration
+        // has not finished it may never yield either. Without the timeout the JavaScript
+        // promise would stay pending for the life of the process, holding on to `call`.
+        let delivery = TokenDelivery(call: call)
         Task { [weak self] in
-            var delivered = false
             for await tokenData in Activity<TNRActivityAttributes>.pushToStartTokenUpdates {
                 let token = tokenData.map { String(format: "%02x", $0) }.joined()
-                if !delivered {
-                    delivered = true
-                    call.resolve(["token": token])
-                } else {
-                    // Apple rotates this token; later values reach the server as events.
-                    self?.notifyListeners("pushToStartToken", data: ["token": token])
-                }
+                if await delivery.deliver(token) { continue }
+                // Apple rotates this token; later values reach the server as events.
+                self?.notifyListeners("pushToStartToken", data: ["token": token])
             }
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 10 * 1_000_000_000)
+            await delivery.timeout()
         }
         #else
         call.resolve([:])
@@ -173,25 +176,44 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         Activity<TNRActivityAttributes>.activities.first { $0.id == id }
     }
 
+    /// Epoch milliseconds, matching what the Android plugin takes and what the server
+    /// sends in a Live Activity push. One numeric format across all three removes every
+    /// question about which ISO variant a given decoder accepts.
     @available(iOS 16.1, *)
     private func contentState(from call: CAPPluginCall) -> TNRActivityAttributes.ContentState? {
-        guard let endsAtRaw = call.getString("endsAt"),
-              let endsAt = Self.parseDate(endsAtRaw) else { return nil }
+        guard let endsAtMs = call.getDouble("endsAtEpochMs") else { return nil }
         return .init(
             title: call.getString("title") ?? "TheNinja-RPG",
             subtitle: call.getString("subtitle"),
-            endsAt: endsAt,
+            endsAt: Date(timeIntervalSince1970: endsAtMs / 1000),
             progress: call.getDouble("progress")
         )
     }
     #endif
+}
 
-    /// `Date.toISOString()` includes milliseconds, which the plain formatter rejects.
-    private static func parseDate(_ raw: String) -> Date? {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return withFraction.date(from: raw) ?? plain.date(from: raw)
+/// Serialises the first-token hand-off between the token stream and the timeout, so the
+/// call is resolved exactly once from whichever arrives first.
+private actor TokenDelivery {
+    private var call: CAPPluginCall?
+
+    init(call: CAPPluginCall) {
+        self.call = call
+    }
+
+    /// Returns true when this token was the one that resolved the call.
+    func deliver(_ token: String) -> Bool {
+        guard let pending = call else { return false }
+        call = nil
+        pending.resolve(["token": token])
+        return true
+    }
+
+    /// Resolving empty rather than rejecting keeps this a capability check on the web
+    /// side, matching how an iOS version below 17.2 is reported.
+    func timeout() {
+        guard let pending = call else { return }
+        call = nil
+        pending.resolve([:])
     }
 }

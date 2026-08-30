@@ -107,6 +107,26 @@ if Dir.exist?(widget_assets)
   end
 end
 
+# --- Clean up what new_target adds ---------------------------------------------------------
+
+# The gem seeds a new target with an explicit Foundation.framework whose path is pinned to
+# whichever iPhoneOS SDK was installed at the time. Swift links Foundation implicitly, so
+# the reference buys nothing and breaks on any machine with a different Xcode.
+project.targets.each do |target|
+  target.frameworks_build_phase.files.dup.each do |build_file|
+    path = build_file.file_ref&.path.to_s
+    next unless path.include?("Platforms/iPhoneOS.platform")
+
+    build_file.file_ref.remove_from_project
+    build_file.remove_from_project
+    puts "Removed SDK-pinned #{File.basename(path)} from #{target.name}"
+  end
+end
+
+# ...and the empty group it left behind.
+frameworks_group = project.main_group.children.find { |child| child.display_name == "Frameworks" }
+frameworks_group.remove_from_project if frameworks_group && frameworks_group.children.empty?
+
 # --- Embed the extension in the app ------------------------------------------------------
 
 embed_phase = app.copy_files_build_phases.find { |phase| phase.name == "Embed App Extensions" }

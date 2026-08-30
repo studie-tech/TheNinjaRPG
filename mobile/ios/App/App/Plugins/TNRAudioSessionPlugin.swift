@@ -21,6 +21,10 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private var remoteCommandsEnabled = false
     private var artworkTask: URLSessionDataTask?
+    /// Identifies the newest artwork request. `URLSessionTask.cancel()` does not stop a
+    /// completion handler that has already been scheduled, so cancellation alone would
+    /// still let a stale image land on top of a newer track.
+    private var artworkRequestId = 0
 
     @objc func activate(_ call: CAPPluginCall) {
         do {
@@ -108,10 +112,13 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func loadArtwork(from url: URL) {
         artworkTask?.cancel()
-        artworkTask = URLSession.shared.dataTask(with: url) { data, _, _ in
+        artworkRequestId += 1
+        let requestId = artworkRequestId
+        artworkTask = URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
             guard let data, let image = UIImage(data: data) else { return }
             let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
             DispatchQueue.main.async {
+                guard let self, requestId == self.artworkRequestId else { return }
                 // Re-read rather than capturing: the track may have changed while this
                 // download was in flight, and overwriting the whole dictionary would
                 // wipe the newer title.

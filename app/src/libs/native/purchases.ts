@@ -12,12 +12,18 @@ import { hasPlugin, invoke, invokeSafe, isNative } from "./bridge";
 
 const PLUGIN = "Purchases";
 
+/**
+ * A product as RevenueCat returned it. Passed back to `purchase` unchanged rather than
+ * reconstructed from its identifier: the Android SDK also reads `productCategory` off it
+ * and rejects a partial object before the purchase sheet opens.
+ */
 export interface StoreProduct {
   identifier: string;
   /** Localised, with the player's own currency symbol. Never format this yourself. */
   priceString: string;
   title: string;
   description: string;
+  [key: string]: unknown;
 }
 
 export interface CustomerInfo {
@@ -75,12 +81,12 @@ export type PurchaseOutcome =
  * Present the store's purchase sheet. Cancellation is reported separately because it is
  * the player changing their mind, not something to show an error for.
  */
-export const purchase = async (productId: string): Promise<PurchaseOutcome> => {
+export const purchase = async (product: StoreProduct): Promise<PurchaseOutcome> => {
   try {
     const result = await invoke<{
       transaction?: { transactionIdentifier?: string };
       userCancelled?: boolean;
-    }>(PLUGIN, "purchaseStoreProduct", { product: { identifier: productId } });
+    }>(PLUGIN, "purchaseStoreProduct", { product });
     if (result.userCancelled) return { status: "cancelled" };
     return {
       status: "purchased",

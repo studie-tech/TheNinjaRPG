@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		100B9D4E3E51C2FFA88A5DE8 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B40CFE62F1DA7F13DF9B77C4 /* Foundation.framework */; };
 		1C8083588A083F1FC03B7951 /* TNRSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899CEDBA5E6D382BF26DE003 /* TNRSnapshot.swift */; };
 		1FC4635F0B216E212AFDA10C /* TNRWidgetSyncPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D066DBD0D1840E451A3EA2B5 /* TNRWidgetSyncPlugin.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
@@ -81,7 +80,6 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		99E7DEDDF35E641214B5D944 /* TNRWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TNRWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9CEEF1E86AD365AD0F0E8397 /* TNRAppleAuthPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TNRAppleAuthPlugin.swift; sourceTree = "<group>"; };
-		B40CFE62F1DA7F13DF9B77C4 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		B98FA7FE72BF8191FED2697D /* StatusWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StatusWidget.swift; sourceTree = "<group>"; };
 		D066DBD0D1840E451A3EA2B5 /* TNRWidgetSyncPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TNRWidgetSyncPlugin.swift; sourceTree = "<group>"; };
 		D3282FB2C7BEBBBB0654433C /* VillageWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VillageWidget.swift; sourceTree = "<group>"; };
@@ -103,7 +101,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				100B9D4E3E51C2FFA88A5DE8 /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,7 +118,6 @@
 		184E642D066CD16E4F4842E4 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
-				B40CFE62F1DA7F13DF9B77C4 /* Foundation.framework */,
 			);
 			name = iOS;
 			sourceTree = "<group>";

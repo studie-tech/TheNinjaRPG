@@ -7,7 +7,7 @@
  * SFSafariViewController / Chrome Custom Tabs and let the deep link bring the player back.
  */
 
-import { invoke, invokeSafe, isNative } from "./bridge";
+import { addNativeListener, invoke, invokeSafe, isNative } from "./bridge";
 
 const PLUGIN = "Browser";
 
@@ -47,3 +47,13 @@ export const open = async (url: string): Promise<void> => {
 export const close = async (): Promise<void> => {
   await invokeSafe(PLUGIN, "close");
 };
+
+/**
+ * The player dismissed the browser sheet.
+ *
+ * Without this a cancelled sign-in never settles: the deep link the caller is waiting for
+ * only arrives when the provider redirects, so closing the sheet leaves the promise
+ * pending and the UI stuck. Returns an unsubscribe that is safe to call unconditionally.
+ */
+export const onFinished = (callback: () => void): (() => void) =>
+  addNativeListener(PLUGIN, "browserFinished", () => callback());

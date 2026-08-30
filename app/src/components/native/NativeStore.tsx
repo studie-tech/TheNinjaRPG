@@ -85,43 +85,57 @@ export default function NativeStore() {
     [refetchRecent, utils],
   );
 
-  const buy = async (productId: string) => {
+  const buy = async (product: purchases.StoreProduct) => {
     const previousNewestId = recent?.[0]?.id;
-    setBusyProduct(productId);
-    const result = await purchases.purchase(productId);
-    if (result.status === "cancelled") {
+    setBusyProduct(product.identifier);
+    try {
+      const result = await purchases.purchase(product);
+      if (result.status === "cancelled") return;
+      if (result.status === "error") {
+        showMutationToast({ success: false, message: result.message });
+        return;
+      }
+      showMutationToast({
+        success: true,
+        message: "Purchase complete. Crediting your account...",
+      });
+      // Held busy across the wait so the player cannot buy the same tier twice while the
+      // first grant is still in flight.
+      await settleAfterPurchase(previousNewestId);
+    } catch (error) {
+      showMutationToast({
+        success: false,
+        message: error instanceof Error ? error.message : "The purchase failed",
+      });
+    } finally {
+      // In `finally` because anything that escapes above would otherwise leave the button
+      // disabled until the component remounts.
       setBusyProduct(null);
-      return;
     }
-    if (result.status === "error") {
-      setBusyProduct(null);
-      showMutationToast({ success: false, message: result.message });
-      return;
-    }
-    showMutationToast({
-      success: true,
-      message: "Purchase complete. Crediting your account...",
-    });
-    // Held busy across the wait so the player cannot buy the same tier twice while the
-    // first grant is still in flight.
-    await settleAfterPurchase(previousNewestId);
-    setBusyProduct(null);
   };
 
   const restore = async () => {
     const previousNewestId = recent?.[0]?.id;
     setIsRestoring(true);
-    const info = await purchases.restore();
-    showMutationToast({
-      success: true,
-      message: info?.activeEntitlements.length
-        ? "Purchases restored."
-        : "No previous purchases found for this store account.",
-    });
-    // A restore replays the same webhooks, so it waits on the same signal. When there was
-    // nothing to restore the poll simply runs out and refetches anyway.
-    await settleAfterPurchase(previousNewestId);
-    setIsRestoring(false);
+    try {
+      const info = await purchases.restore();
+      showMutationToast({
+        success: true,
+        message: info?.activeEntitlements.length
+          ? "Purchases restored."
+          : "No previous purchases found for this store account.",
+      });
+      // A restore replays the same webhooks, so it waits on the same signal. When there
+      // was nothing to restore the poll simply runs out and refetches anyway.
+      await settleAfterPurchase(previousNewestId);
+    } catch (error) {
+      showMutationToast({
+        success: false,
+        message: error instanceof Error ? error.message : "The restore failed",
+      });
+    } finally {
+      setIsRestoring(false);
+    }
   };
 
   if (!isNativeShell) return null;
@@ -166,7 +180,7 @@ export default function NativeStore() {
                 <Button
                   size="sm"
                   disabled={busyProduct !== null || !listed}
-                  onClick={() => void buy(product.productId)}
+                  onClick={() => listed && void buy(listed)}
                 >
                   {busyProduct === product.productId ? (
                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />

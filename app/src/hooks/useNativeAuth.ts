@@ -108,15 +108,22 @@ export const useNativeAuth = () => {
         }
 
         // Subscribe before opening: on a fast provider the deep link can arrive before
-        // the browser sheet has finished animating in.
-        const returned = new Promise<void>((resolve) => {
-          stopListening = appEvents.onUrlOpen((url) => {
-            if (url.startsWith(OAUTH_REDIRECT)) resolve();
+        // the browser sheet has finished animating in. Dismissal is raced against the
+        // redirect because only one of the two will ever happen — waiting on the redirect
+        // alone leaves a cancelled sign-in pending forever, with the buttons disabled.
+        const outcome = await new Promise<"redirected" | "dismissed">((resolve) => {
+          const stopUrl = appEvents.onUrlOpen((url) => {
+            if (url.startsWith(OAUTH_REDIRECT)) resolve("redirected");
           });
+          const stopFinished = oauthBrowser.onFinished(() => resolve("dismissed"));
+          stopListening = () => {
+            stopUrl();
+            stopFinished();
+          };
+          void oauthBrowser.open(target.toString()).catch(() => resolve("dismissed"));
         });
 
-        await oauthBrowser.open(target.toString());
-        await returned;
+        if (outcome === "dismissed") return { status: "cancelled" };
         await oauthBrowser.close();
 
         // The sign-in was advanced by the browser, not by this page, so the local copy is

@@ -65,20 +65,33 @@ export const useLiveActivity = (
 
     isStarting.current = true;
     endsAtRef.current = endsAt;
+    let cancelled = false;
     void liveActivity
       .start("hospital", {
         title: "Recovering",
         subtitle: userData.village?.name
           ? `${userData.village.name} hospital`
           : undefined,
-        endsAt: endsAt.toISOString(),
+        endsAt,
       })
       .then((started) => {
+        if (cancelled) {
+          // The player left hospital while the start was in flight. The cleanup below
+          // could not end an activity that had no id yet, so it is ended here instead —
+          // otherwise it sits on the Lock Screen counting down to nothing.
+          if (started) void liveActivity.end(started.activityId);
+          endsAtRef.current = null;
+          return;
+        }
         activeId.current = started?.activityId ?? null;
         if (!started) endsAtRef.current = null;
       })
       .finally(() => {
         isStarting.current = false;
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [endActivity, isHospitalised, timeDiff, userData]);
 };

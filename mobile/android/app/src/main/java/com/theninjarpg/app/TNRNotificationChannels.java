@@ -13,7 +13,7 @@ import java.util.List;
  *
  * Channels have been mandatory since Android 8, and a notification sent to a channel that
  * does not exist is dropped silently. The ids here must match PUSH_CATEGORIES in
- * app/src/drizzle/constants.ts, because the server sends the category as the FCM
+ * app/drizzle/constants.ts, because the server sends the category as the FCM
  * channel_id -- adding a category there means adding it here.
  *
  * Having one channel per category is also what makes the in-app toggles and the OS

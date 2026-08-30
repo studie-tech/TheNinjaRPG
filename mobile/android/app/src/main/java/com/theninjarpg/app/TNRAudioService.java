@@ -187,7 +187,15 @@ public class TNRAudioService extends Service {
         }
     }
 
-    static void start(Context context, String title, String artist) {
+    /**
+     * Returns false when the system refused the start.
+     *
+     * From Android 12 startForegroundService throws ForegroundServiceStartNotAllowedException
+     * if the app is in the background, and this service is START_NOT_STICKY, so it can be
+     * killed and then asked to start again from exactly that state. Letting the exception
+     * escape would crash the app for the sake of background music.
+     */
+    static boolean start(Context context, String title, String artist) {
         Intent intent = new Intent(context, TNRAudioService.class).setAction(ACTION_START);
         if (title != null) {
             intent.putExtra(EXTRA_TITLE, title);
@@ -195,10 +203,17 @@ public class TNRAudioService extends Service {
         if (artist != null) {
             intent.putExtra(EXTRA_ARTIST, artist);
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
+            return true;
+        } catch (IllegalStateException | SecurityException error) {
+            // ForegroundServiceStartNotAllowedException extends IllegalStateException and
+            // only exists from API 31, so it cannot be caught by name at this minSdk.
+            return false;
         }
     }
 

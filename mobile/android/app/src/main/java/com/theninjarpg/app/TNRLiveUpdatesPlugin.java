@@ -42,7 +42,7 @@ public class TNRLiveUpdatesPlugin extends Plugin {
         }
         Long endsAt = parseEndsAt(call);
         if (endsAt == null) {
-            call.reject("endsAt is required and must be an ISO-8601 timestamp");
+            call.reject("endsAtEpochMs is required");
             return;
         }
 
@@ -68,7 +68,7 @@ public class TNRLiveUpdatesPlugin extends Plugin {
         }
         Long endsAt = parseEndsAt(call);
         if (endsAt == null) {
-            call.reject("endsAt is required and must be an ISO-8601 timestamp");
+            call.reject("endsAtEpochMs is required");
             return;
         }
         post(notificationId, call, endsAt);
@@ -146,17 +146,19 @@ public class TNRLiveUpdatesPlugin extends Plugin {
         manager().notify(notificationId, builder.build());
     }
 
-    /** ISO-8601, with or without the milliseconds Date.toISOString() emits. */
+    /**
+     * Epoch milliseconds, not an ISO-8601 string.
+     *
+     * minSdkVersion is 24 and core library desugaring is not enabled, so java.time is not
+     * available on API 24-25 -- referencing it there throws NoClassDefFoundError at
+     * runtime. A number needs no date library at all, and the web side sends one.
+     */
     private Long parseEndsAt(PluginCall call) {
-        String raw = call.getString("endsAt");
+        Double raw = call.getDouble("endsAtEpochMs");
         if (raw == null) {
             return null;
         }
-        try {
-            return java.time.Instant.parse(raw).toEpochMilli();
-        } catch (java.time.format.DateTimeParseException error) {
-            return null;
-        }
+        return raw.longValue();
     }
 
     private NotificationManager manager() {

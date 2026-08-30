@@ -36,6 +36,16 @@ export type GrantOutcome =
   | { status: "duplicate" }
   | { status: "ignored"; reason: string };
 
+/**
+ * PlanetScale surfaces a unique-key collision as a `DatabaseError` whose message carries
+ * MySQL's 1062 "Duplicate entry" text; there is no structured code to switch on.
+ */
+const isDuplicateKeyError = (error: unknown): boolean => {
+  const message =
+    error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  return /duplicate entry|1062/i.test(message);
+};
+
 const repProduct = (productId: string) =>
   STORE_REP_PRODUCTS.find((product) => product.productId === productId);
 
@@ -56,6 +66,24 @@ export const grantStorePurchase = async (
     return { status: "ignored", reason: `Unknown product ${grant.productId}` };
   }
 
+  // A purchase recorded against an account that does not exist would be marked granted
+  // while crediting nobody, and the retry would then be rejected as a duplicate — the
+  // player pays and never receives it. Checking first costs one read on a low-volume path.
+  const recipient = await client.query.userData.findFirst({
+    columns: { userId: true },
+    where: eq(userData.userId, grant.userId),
+  });
+  if (!recipient) {
+    // Throwing makes the webhook return 5xx so RevenueCat retries, which covers replica
+    // lag; the alert covers an app_user_id that will never resolve.
+    Sentry.captureException(new Error("Store purchase for an unknown user"), {
+      level: "error",
+      tags: { source: "grantStorePurchase" },
+      extra: { transactionId: grant.transactionId, userId: grant.userId },
+    });
+    throw new Error(`No user ${grant.userId} for transaction ${grant.transactionId}`);
+  }
+
   try {
     // Losing this insert means another delivery of the same transaction already ran.
     await client.insert(storePurchase).values({
@@ -69,7 +97,11 @@ export const grantStorePurchase = async (
       isSandbox: grant.isSandbox,
       rawData: grant.raw as never,
     });
-  } catch {
+  } catch (error) {
+    // Only a unique-key collision means "already handled". Swallowing anything else would
+    // acknowledge the webhook, stop RevenueCat retrying, and lose a paid grant to what
+    // may have been a momentary connection failure.
+    if (!isDuplicateKeyError(error)) throw error;
     return { status: "duplicate" };
   }
 
@@ -98,17 +130,19 @@ export const grantStorePurchase = async (
       .where(eq(userData.userId, grant.userId));
     return { status: "granted", federalStatus: federal?.federalStatus };
   } catch (error) {
-    // The purchase row is already in place, so a retry would be treated as a duplicate
-    // and the player would never get what they paid for. Loud on purpose.
+    // The purchase row is what makes a retry a no-op, so leaving it behind after a failed
+    // grant would permanently lock the player out of what they paid for. Removing it puts
+    // the transaction back to un-processed, and rethrowing gets RevenueCat to try again.
+    await client
+      .delete(storePurchase)
+      .where(eq(storePurchase.transactionId, grant.transactionId))
+      .catch(() => undefined);
     Sentry.captureException(error, {
       level: "error",
       tags: { source: "grantStorePurchase" },
       extra: { transactionId: grant.transactionId, productId: grant.productId },
     });
-    return {
-      status: "ignored",
-      reason: "Grant failed after the purchase was recorded",
-    };
+    throw error;
   }
 };
 

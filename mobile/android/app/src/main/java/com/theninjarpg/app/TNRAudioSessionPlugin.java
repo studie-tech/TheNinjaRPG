@@ -33,7 +33,13 @@ public class TNRAudioSessionPlugin extends Plugin {
 
     @PluginMethod
     public void activate(PluginCall call) {
-        TNRAudioService.start(getContext(), title, artist);
+        // The system refuses a foreground service start from the background on Android 12+.
+        // Reporting it lets the web side stop claiming background audio is on.
+        if (!TNRAudioService.start(getContext(), title, artist)) {
+            running = false;
+            call.reject("The system would not allow background audio to start right now");
+            return;
+        }
         running = true;
         call.resolve();
     }
@@ -52,7 +58,7 @@ public class TNRAudioSessionPlugin extends Plugin {
         // Only restart the service if it is already showing something, otherwise setting
         // metadata would start background playback the player never asked for.
         if (running) {
-            TNRAudioService.start(getContext(), title, artist);
+            running = TNRAudioService.start(getContext(), title, artist);
         }
         call.resolve();
     }

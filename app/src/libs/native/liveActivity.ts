@@ -12,8 +12,13 @@ import { addNativeListener, hasPlugin, invokeSafe, isNative } from "./bridge";
 const PLUGIN = "TNRLiveActivity";
 
 export interface LiveActivityState {
-  /** Wall-clock ISO timestamp the countdown ends at. */
-  endsAt: string;
+  /**
+   * When the countdown ends. Sent to the plugins as epoch milliseconds rather than an
+   * ISO string: Android would need `java.time` to parse one, which is unavailable below
+   * API 26 without core library desugaring, and ActivityKit's own decoder has its own
+   * opinions about dates.
+   */
+  endsAt: Date;
   /** Headline shown on the Lock Screen, e.g. "Recovering" or "Training Ninjutsu". */
   title: string;
   /** Secondary line — the stat being trained, the village being defended. */
@@ -29,17 +34,24 @@ export interface StartedActivity {
 /** Whether this shell can host Live Activities at all. */
 export const isSupported = (): boolean => isNative() && hasPlugin(PLUGIN);
 
+const toPayload = (state: LiveActivityState) => ({
+  title: state.title,
+  subtitle: state.subtitle,
+  endsAtEpochMs: state.endsAt.getTime(),
+  progress: state.progress,
+});
+
 export const start = async (
   kind: LiveActivityKind,
   state: LiveActivityState,
 ): Promise<StartedActivity | undefined> =>
-  invokeSafe<StartedActivity>(PLUGIN, "start", { kind, ...state });
+  invokeSafe<StartedActivity>(PLUGIN, "start", { kind, ...toPayload(state) });
 
 export const update = async (
   activityId: string,
   state: LiveActivityState,
 ): Promise<void> => {
-  await invokeSafe(PLUGIN, "update", { activityId, ...state });
+  await invokeSafe(PLUGIN, "update", { activityId, ...toPayload(state) });
 };
 
 export const end = async (activityId: string): Promise<void> => {
