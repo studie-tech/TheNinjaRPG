@@ -7,11 +7,14 @@
  * `@capacitor/*` and `./bridge` from being imported anywhere else under `src/`.
  */
 
-import { isNative } from "./bridge";
-
 export * as appleAuth from "./appleAuth";
 export * as audioSession from "./audioSession";
-export { hasPlugin, isNative, NativeBridgeError } from "./bridge";
+export {
+  getPlatform as platform,
+  hasPlugin,
+  isNative,
+  NativeBridgeError,
+} from "./bridge";
 export * as haptics from "./haptics";
 export * as liveActivity from "./liveActivity";
 export * as oauthBrowser from "./oauthBrowser";
@@ -26,16 +29,3 @@ export {
 export * as widgets from "./widgetBridge";
 
 export type NativePlatform = "ios" | "android" | "web";
-
-interface CapacitorPlatformProbe {
-  getPlatform?: () => string;
-}
-
-/** Which platform the page is running on. Always `"web"` during SSR. */
-export const platform = (): NativePlatform => {
-  if (typeof window === "undefined") return "web";
-  const reported = (
-    window as Window & { Capacitor?: CapacitorPlatformProbe }
-  ).Capacitor?.getPlatform?.();
-  return reported === "ios" || reported === "android" ? reported : "web";
-};

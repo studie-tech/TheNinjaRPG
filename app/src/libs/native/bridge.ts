@@ -52,6 +52,15 @@ const getPlugin = (name: string): CapacitorPlugin | undefined =>
 /** True only inside the native shell; false on the web and during SSR. */
 export const isNative = (): boolean => getBridge()?.isNativePlatform?.() === true;
 
+/**
+ * Which platform the page is running on, according to the shell. Always `"web"` during
+ * SSR and in a browser. This is the only reliable source — plugin events do not carry it.
+ */
+export const getPlatform = (): "ios" | "android" | "web" => {
+  const reported = getBridge()?.getPlatform?.();
+  return reported === "ios" || reported === "android" ? reported : "web";
+};
+
 /** Whether the shell exposes a given plugin. Useful for progressive rollout of a new build. */
 export const hasPlugin = (name: string): boolean =>
   isNative() && getPlugin(name) !== undefined;

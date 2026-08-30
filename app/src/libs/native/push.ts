@@ -8,7 +8,7 @@
  */
 
 import type { PushPlatform } from "@/drizzle/constants";
-import { addNativeListener, invoke, isNative } from "./bridge";
+import { addNativeListener, getPlatform, invoke, isNative } from "./bridge";
 
 const PLUGIN = "PushNotifications";
 
@@ -78,12 +78,13 @@ export const onRegistration = (
 ): (() => void) =>
   addNativeListener(PLUGIN, "registration", (data) => {
     const token = (data as { value?: unknown } | null)?.value;
-    const platform = (data as { platform?: unknown } | null)?.platform;
     if (typeof token !== "string" || token.length === 0) return;
-    callback({
-      token,
-      platform: platform === "android" ? "android" : "ios",
-    });
+    // The event itself carries only the token. Asking the shell which platform it is
+    // matters because the two transports are not interchangeable: an FCM token sent to
+    // APNs comes back as BadDeviceToken and the device gets pruned.
+    const platform = getPlatform();
+    if (platform === "web") return;
+    callback({ token, platform });
   });
 
 export const onRegistrationError = (callback: (error: string) => void): (() => void) =>
