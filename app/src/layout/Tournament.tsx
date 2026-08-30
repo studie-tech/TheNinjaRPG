@@ -86,7 +86,9 @@ const Tournament: React.FC<TournamentProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         await utils.tournament.getTournament.invalidate();
-        pushToCombat(router, data.battleId);
+        // A match can be joined without a battle starting — the opponent no-showed and this
+        // player took the round — so there is nothing to go to combat for
+        if (data.success && data.battleId) pushToCombat(router, data.battleId);
       },
     });
 
