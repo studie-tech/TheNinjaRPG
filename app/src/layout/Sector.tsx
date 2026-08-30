@@ -52,6 +52,7 @@ import Modal2 from "@/layout/Modal2";
 import RaidBrowser from "@/layout/RaidBrowser";
 import SliderField from "@/layout/SliderField";
 import WebGlError from "@/layout/WebGLError";
+import { getWorldCycleBrightness } from "@/libs/dayNight";
 import type { HexagonalFaceMesh, TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
@@ -265,6 +266,8 @@ const Sector: React.FC<SectorProps> = (props) => {
   const pathFinderRef = useRef<PathCalculator | null>(null);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const usersRef = useRef<SectorUser[]>([]);
+  // Server-clock offset for the render loop, which must not re-subscribe when it changes.
+  const timeDiffRef = useRef(0);
   const showUsersRef = useRef<boolean>(showActive);
   const showSorroundingRef = useRef<boolean>(props.showSorrounding);
   const ignoreMapClicksUntilRef = useRef<number>(0);
@@ -392,6 +395,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   // Data from db
   const { data: userData, pusher, timeDiff, updateUser } = useRequiredUserData();
+  timeDiffRef.current = timeDiff;
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },
     {
@@ -2542,7 +2546,12 @@ const Sector: React.FC<SectorProps> = (props) => {
 
         // Render the scene (skip if WebGL context is lost)
         const endRender = profiler.mark("animate_render");
-        applyCanvasDayNightBrightness(renderer?.domElement);
+        // Corrected clock, so the map does not dim on a skewed browser while the rest of
+        // the page is still in day.
+        applyCanvasDayNightBrightness(
+          renderer?.domElement,
+          getWorldCycleBrightness(new Date(Date.now() - timeDiffRef.current)),
+        );
         if (!contextHandlers.isContextLost() && renderer) {
           renderer.render(scene, camera);
         }

@@ -198,7 +198,10 @@ const FarmCanvasInner = ({ initialState, onPlotClick, ref }: FarmCanvasProps) =>
     }
     refreshPlotVisuals(null);
     dayNightOverlayRef.current = createGroundDayNightOverlay(groups.ui);
-    updateDayNightOverlay(dayNightOverlayRef.current);
+    updateDayNightOverlay(
+      dayNightOverlayRef.current,
+      getWorldCycleBrightness(new Date(Date.now() - timeDiffRef.current)),
+    );
 
     mount.appendChild(renderer.domElement);
 

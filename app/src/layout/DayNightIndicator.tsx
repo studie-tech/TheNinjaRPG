@@ -3,6 +3,7 @@
 import { Moon, Sun } from "lucide-react";
 import { useDayNightCycle } from "@/hooks/day-night-cycle";
 import Countdown from "@/layout/Countdown";
+import { useUserData } from "@/utils/UserContext";
 
 type DayNightIndicatorProps = {
   className?: string;
@@ -10,6 +11,7 @@ type DayNightIndicatorProps = {
 
 export function DayNightIndicator({ className }: DayNightIndicatorProps) {
   const dayNightCycle = useDayNightCycle();
+  const { timeDiff } = useUserData();
 
   return (
     <div
@@ -28,7 +30,7 @@ export function DayNightIndicator({ className }: DayNightIndicatorProps) {
       </div>
       <div className="text-muted-foreground text-xs">
         {dayNightCycle.phase === "day" ? "Night" : "Day"} in{" "}
-        <Countdown targetDate={dayNightCycle.nextPhaseAt} />
+        <Countdown targetDate={dayNightCycle.nextPhaseAt} timeDiff={timeDiff} />
       </div>
     </div>
   );
