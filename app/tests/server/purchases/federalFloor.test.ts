@@ -6,87 +6,50 @@ import {
   storeFederalFloor,
 } from "@/server/utils/purchases/grant";
 
-/** Just enough client for the two reads these helpers make. */
-const stub = (opts: {
-  current?: FederalStatus | null;
-  purchases?: (FederalStatus | null)[];
-}) =>
+/**
+ * Just enough client for the one read these helpers make. `revoked` receipts are filtered
+ * out in SQL, so a stub that returns only live ones is the honest shape.
+ */
+const stub = (live: (FederalStatus | null)[]) =>
   ({
     query: {
-      userData: {
-        findFirst: async () =>
-          opts.current === null ? undefined : { federalStatus: opts.current ?? "NONE" },
-      },
       storePurchase: {
-        findMany: async () =>
-          (opts.purchases ?? []).map((federalStatus) => ({ federalStatus })),
+        findMany: async () => live.map((federalStatus) => ({ federalStatus })),
       },
     },
   }) as unknown as DrizzleClient;
 
 describe("storeFederalFloor", () => {
-  it("vouches for the highest tier the stores still show a receipt for", async () => {
-    const floor = await storeFederalFloor(
-      stub({ purchases: ["NORMAL", "GOLD", "SILVER"] }),
-      "u",
-      "GOLD",
-    );
-    expect(floor).toBe("GOLD");
+  it("vouches for the highest tier a live receipt shows", async () => {
+    expect(await storeFederalFloor(stub(["NORMAL", "GOLD", "SILVER"]), "u")).toBe("GOLD");
   });
 
-  it("cannot resurrect a tier that was revoked", async () => {
-    // The subscription expired, revokeFederalStatus dropped the player to NONE, but the
-    // receipt for the last renewal is still inside the window.
-    const floor = await storeFederalFloor(stub({ purchases: ["GOLD"] }), "u", "NONE");
-    expect(floor).toBe("NONE");
+  it("vouches for nothing once the receipts are retired", async () => {
+    // revokeFederalStatus stamps revokedAt, so the query returns no rows at all.
+    expect(await storeFederalFloor(stub([]), "u")).toBe("NONE");
   });
 
-  it("never claims more than the player currently holds", async () => {
-    const floor = await storeFederalFloor(stub({ purchases: ["GOLD"] }), "u", "NORMAL");
-    expect(floor).toBe("NORMAL");
-  });
-
-  it("is NONE for a player with no federal store purchases", async () => {
-    expect(await storeFederalFloor(stub({ purchases: [] }), "u", "GOLD")).toBe("NONE");
-    // Reputation bundles carry a null federalStatus and must not hold a tier open.
-    expect(await storeFederalFloor(stub({ purchases: [null] }), "u", "GOLD")).toBe("NONE");
+  it("ignores reputation bundles, which carry no tier", async () => {
+    expect(await storeFederalFloor(stub([null]), "u")).toBe("NONE");
   });
 });
 
 describe("federalStatusWithStoreFloor", () => {
-  it("leaves a store subscription alone when PayPal decides NONE", async () => {
-    const next = await federalStatusWithStoreFloor(
-      stub({ current: "GOLD", purchases: ["GOLD"] }),
-      "u",
-      "NONE",
-    );
-    expect(next).toBe("GOLD");
+  it("leaves a live store subscription alone when PayPal decides NONE", async () => {
+    expect(await federalStatusWithStoreFloor(stub(["GOLD"]), "u", "NONE")).toBe("GOLD");
   });
 
   it("still expires a player whose only source was PayPal", async () => {
-    const next = await federalStatusWithStoreFloor(
-      stub({ current: "NORMAL", purchases: [] }),
-      "u",
-      "NONE",
-    );
-    expect(next).toBe("NONE");
+    expect(await federalStatusWithStoreFloor(stub([]), "u", "NONE")).toBe("NONE");
   });
 
   it("lets PayPal raise the tier above the store's", async () => {
-    const next = await federalStatusWithStoreFloor(
-      stub({ current: "SILVER", purchases: ["SILVER"] }),
-      "u",
-      "GOLD",
-    );
-    expect(next).toBe("GOLD");
+    expect(await federalStatusWithStoreFloor(stub(["SILVER"]), "u", "GOLD")).toBe("GOLD");
   });
 
-  it("does not re-grant a store tier that was already revoked", async () => {
-    const next = await federalStatusWithStoreFloor(
-      stub({ current: "NONE", purchases: ["GOLD"] }),
-      "u",
-      "NONE",
-    );
-    expect(next).toBe("NONE");
+  it("takes the tier away once the store subscription has been revoked too", async () => {
+    // The case the earlier clamp got wrong: with both sources finished, nothing should
+    // hold the tier open just because a spent receipt is still inside the window.
+    expect(await federalStatusWithStoreFloor(stub([]), "u", "NONE")).toBe("NONE");
   });
 });

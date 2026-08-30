@@ -7,16 +7,15 @@
  * exactly the behaviour a duplicate needs. The same reason the PayPal path inserts its
  * transaction row before touching the balance.
  *
- * A failed *reputation* grant is therefore at-most-once: the row stays, the webhook 500s,
- * and the retry is refused as a duplicate, leaving an alert and an audit row for an
- * operator to credit by hand. Removing the row instead would turn every write that
- * committed but failed to acknowledge into duplicated currency, which is silent and
- * unrepairable. A failed *federal* grant drops its row, because setting a status twice is
- * the same as setting it once and there is nothing for the guard to protect.
+ * A failed grant is therefore at-most-once: the row stays, the webhook 500s, and the retry
+ * is refused as a duplicate, leaving an alert and an audit row for an operator to credit by
+ * hand. Removing the row instead would turn every write that committed but failed to
+ * acknowledge into duplicated currency, and would also throw away the receipt the federal
+ * reconciliation reads.
  */
 
 import * as Sentry from "@sentry/node";
-import { and, eq, gte, isNotNull, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   type FederalStatus,
@@ -148,20 +147,13 @@ export const grantStorePurchase = async (
       .where(eq(userData.userId, grant.userId));
     return { status: "granted", federalStatus: next };
   } catch (error) {
-    // Which way to fail depends on what the grant does. Reputation is an increment, and a
-    // write that commits but fails to acknowledge is indistinguishable from one that never
-    // ran — so the row stays and blocks the retry, leaving an alert and an audit row to
-    // credit by hand. Duplicated currency would be silent and unrepairable; this is not.
-    //
-    // Federal status is a SET of one column to one value. Applying it twice is the same as
-    // applying it once, so there is nothing to protect against and no reason to make the
-    // player wait for a human: drop the row and let the retry finish the job.
-    if (federal) {
-      await client
-        .delete(storePurchase)
-        .where(eq(storePurchase.transactionId, grant.transactionId))
-        .catch(() => undefined);
-    }
+    // The row stays, whichever kind of grant failed. For reputation it is what stops the
+    // retry applying the increment twice, since a write that commits but fails to
+    // acknowledge is indistinguishable from one that never ran. For federal status it is
+    // also the receipt that vouches for the tier to /api/cleaner and to every PayPal
+    // writer, so deleting it to let a retry through would hand the reconciliation a player
+    // who looks like they never paid. Either way the row and this alert carry what an
+    // operator needs, which is a repairable failure.
     Sentry.captureException(error, {
       level: "error",
       tags: { source: "grantStorePurchase" },
@@ -183,6 +175,20 @@ export const revokeFederalStatus = async (
   client: DrizzleClient,
   userId: string,
 ): Promise<void> => {
+  // Retire the receipts first. They are what vouches for the tier to /api/cleaner and to
+  // every PayPal writer, and a receipt outlives the subscription that produced it — left
+  // unstamped they would go on claiming the player is a subscriber for the rest of the
+  // window, and would block a later PayPal revocation from taking anything away.
+  await client
+    .update(storePurchase)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(
+        eq(storePurchase.userId, userId),
+        isNotNull(storePurchase.federalStatus),
+        isNull(storePurchase.revokedAt),
+      ),
+    );
   const floor = await paypalFederalFloor(client, userId);
   await client
     .update(userData)
@@ -216,11 +222,10 @@ const highest = (statuses: FederalStatus[]): FederalStatus =>
 /**
  * The tier PayPal still vouches for, or `NONE`.
  *
- * Every row inside the window counts, not only the ACTIVE ones: `updateSubscription`
- * already writes `NONE` onto any row PayPal reports as finished, so a row that still
- * carries a tier is one the player either paid for or cancelled while keeping the time
- * they had bought. The 31-day window is the one `/api/cleaner` uses, so the two agree on
- * when PayPal stops vouching.
+ * ACTIVE and inside the window, because `/api/subscriptions` writes the plan's tier onto a
+ * row whatever PayPal says its status is, and refreshes `updatedAt` while doing it — so a
+ * cancelled subscription still looks current if you go by the tier and the timestamp
+ * alone.
  *
  * The maximum rather than an arbitrary row: a player can hold more than one subscription,
  * and picking whichever the database returned first could hand back the cheaper tier and
@@ -234,6 +239,7 @@ const paypalFederalFloor = async (
     columns: { federalStatus: true },
     where: and(
       eq(paypalSubscription.affectedUserId, userId),
+      eq(paypalSubscription.status, "ACTIVE"),
       gte(paypalSubscription.updatedAt, new Date(Date.now() - PAYPAL_WINDOW_MS)),
     ),
   });
@@ -241,31 +247,30 @@ const paypalFederalFloor = async (
 };
 
 /**
- * The tier a store subscription still vouches for, clamped by what the player holds now.
+ * The tier a store subscription still vouches for, or `NONE`.
  *
- * The clamp is the whole point. `StorePurchase` has no active flag — a row is a receipt,
- * and the row for a subscription that has since expired sits there for the rest of the
- * window. `revokeFederalStatus` has already lowered the player's status when that
- * happened, so taking the lower of the two means an expired store subscription cannot
- * reach back and resurrect the tier it used to grant.
+ * A receipt outlives the subscription it paid for, so the row alone cannot say whether the
+ * player is still a subscriber — `revokedAt` is what separates the two, stamped by
+ * `revokeFederalStatus` when the store reports the subscription has ended. Reading it here
+ * rather than inferring from the player's current status is what lets the PayPal writers
+ * take a tier away once both sources have finished, while still refusing to take one away
+ * from a store subscription that is very much alive.
  */
 export const storeFederalFloor = async (
   client: DrizzleClient,
   userId: string,
-  current: FederalStatus,
 ): Promise<FederalStatus> => {
-  if (current === "NONE") return "NONE";
   const rows = await client.query.storePurchase.findMany({
     columns: { federalStatus: true },
     where: and(
       eq(storePurchase.userId, userId),
       eq(storePurchase.isSandbox, false),
       isNotNull(storePurchase.federalStatus),
+      isNull(storePurchase.revokedAt),
       gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
     ),
   });
-  const vouched = highest(rows.map((row) => row.federalStatus ?? "NONE"));
-  return rankOf(vouched) < rankOf(current) ? vouched : current;
+  return highest(rows.map((row) => row.federalStatus ?? "NONE"));
 };
 
 /**
@@ -280,11 +285,6 @@ export const federalStatusWithStoreFloor = async (
   userId: string,
   paypalStatus: FederalStatus,
 ): Promise<FederalStatus> => {
-  const user = await client.query.userData.findFirst({
-    columns: { federalStatus: true },
-    where: eq(userData.userId, userId),
-  });
-  if (!user) return paypalStatus;
-  const floor = await storeFederalFloor(client, userId, user.federalStatus);
+  const floor = await storeFederalFloor(client, userId);
   return rankOf(paypalStatus) >= rankOf(floor) ? paypalStatus : floor;
 };

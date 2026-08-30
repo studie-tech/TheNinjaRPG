@@ -5643,6 +5643,15 @@ export const storePurchase = mysqlTable(
     federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses),
     /** Sandbox receipts are recorded for debugging but never move a balance. */
     isSandbox: boolean("isSandbox").default(false).notNull(),
+    /**
+     * When the store told us the subscription this receipt paid for had ended.
+     *
+     * A receipt outlives the thing it bought, so on its own it cannot say whether the
+     * player is still a subscriber. Everything that asks "does a store subscription still
+     * vouch for this tier" — the reconciliation in /api/cleaner and the floor the PayPal
+     * writers apply — reads this to tell a live subscription from a spent one.
+     */
+    revokedAt: datetime("revokedAt", { mode: "date", fsp: 3 }),
     rawData: json("rawData").notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
