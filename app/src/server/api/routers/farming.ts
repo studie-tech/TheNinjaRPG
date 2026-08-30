@@ -1855,6 +1855,20 @@ const settleFarmExtractions = async (
     const settledUserItems = await fetchUserItems(client, userId);
     await Promise.all(
       completedExtractions.map(async (extraction) => {
+        // Delete first: the delete is the claim. Two getFarmState calls can both read this
+        // row as complete, so granting first pays it out twice. The row also has to go even
+        // when the seed item is missing, or the extractor slot stays occupied forever --
+        // extractSeeds only asks whether a row exists for that slot.
+        const claimed = await client
+          .delete(farmExtraction)
+          .where(
+            and(
+              eq(farmExtraction.id, extraction.id),
+              eq(farmExtraction.userId, userId),
+              lte(farmExtraction.finishAt, now),
+            ),
+          );
+        if (Number(claimed.rowsAffected ?? 0) !== 1) return;
         if (extraction.seedItem && extraction.seedQuantity > 0) {
           await awardItemToUser(
             client,
@@ -1864,18 +1878,6 @@ const settleFarmExtractions = async (
             settledUserItems,
           );
         }
-        // Clear the row even when the seed item has gone missing. Leaving it behind keeps
-        // the extractor slot occupied forever, because extractSeeds only asks whether a row
-        // exists for that slot.
-        await client
-          .delete(farmExtraction)
-          .where(
-            and(
-              eq(farmExtraction.id, extraction.id),
-              eq(farmExtraction.userId, userId),
-              lte(farmExtraction.finishAt, now),
-            ),
-          );
       }),
     );
   }
@@ -2127,7 +2129,7 @@ type FarmingQuestTask =
 const fetchFarmingQuestState = async (client: DrizzleClient, userId: string) => {
   return await client.query.userData.findFirst({
     where: eq(userData.userId, userId),
-    columns: { userId: true, questData: true },
+    columns: { userId: true, questData: true, updatedAt: true },
     with: {
       userQuests: {
         where: or(
@@ -2262,10 +2264,14 @@ const awardFarmingProgress = async (
         return Number(result.rowsAffected ?? 0) >= 1;
       }
     }
+    // The guard has to come from the same read as the payload. fetchUser and
+    // fetchFarmingQuestState are separate queries, so a write landing between them
+    // pairs a current timestamp with a stale document, and the CAS waves it through.
+    if (!snapshotQuests) return false;
     const claim = await claimUserSnapshot({
       client,
       userId: user.userId,
-      updatedAt: snapshotUser.updatedAt,
+      updatedAt: snapshotQuests.updatedAt,
       set: {
         ...(xpGain > 0
           ? { farmingExperience: sql`${userData.farmingExperience} + ${xpGain}` }
