@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
 import { useNativePush } from "@/hooks/useNativePush";
-import { isNative, widgets } from "@/libs/native";
+import {
+  isNative,
+  isOutdatedNativeClient,
+  parseNativeUserAgent,
+  platform,
+  widgets,
+} from "@/libs/native";
 import { useUserData } from "@/utils/UserContext";
 
 /**
@@ -13,8 +20,16 @@ import { useUserData } from "@/utils/UserContext";
  */
 export default function NativeBridge() {
   const { data: userData } = useUserData();
+  const [isOutdated, setIsOutdated] = useState(false);
 
   useNativePush({ enabled: !!userData });
+
+  // The shell version is only knowable in the browser, so this runs after mount rather
+  // than during render — checking it inline would break hydration.
+  useEffect(() => {
+    const client = parseNativeUserAgent(navigator.userAgent);
+    setIsOutdated(isOutdatedNativeClient(client, MIN_NATIVE_APP_VERSION));
+  }, []);
 
   // Home screen widgets read a snapshot from the shared container rather than the API, so
   // they stay correct while the app is closed. Refresh it whenever the player's vitals
@@ -42,5 +57,25 @@ export default function NativeBridge() {
     });
   }, [userData]);
 
-  return null;
+  if (!isOutdated) return null;
+  return <UpdateWall />;
 }
+
+/**
+ * Shown when the installed binary is older than `MIN_NATIVE_APP_VERSION`. There is no
+ * dismiss: the point is that the site is about to use something this build cannot do, and
+ * letting the player through would only produce confusing failures.
+ */
+const UpdateWall: React.FC = () => {
+  const store = platform() === "ios" ? "the App Store" : "Google Play";
+  return (
+    <div className="fixed inset-0 z-100 flex flex-col items-center justify-center gap-4 bg-background p-8 text-center">
+      <p className="text-6xl">🥷</p>
+      <h1 className="font-bold text-2xl">Time to update</h1>
+      <p className="max-w-sm text-muted-foreground text-sm">
+        This version of TheNinja-RPG is too old to connect. Update the app from {store}{" "}
+        to keep playing.
+      </p>
+    </div>
+  );
+};

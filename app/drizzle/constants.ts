@@ -3069,6 +3069,13 @@ export const PUSH_TOKEN_STALE_DAYS = 90;
 export const PUSH_MAX_DEVICES_PER_USER = 10;
 
 /**
+ * Oldest shell build the site still supports. Raise it when a release depends on a plugin
+ * or a native behaviour an older binary cannot provide; anything below is shown an update
+ * wall instead of a half-working game.
+ */
+export const MIN_NATIVE_APP_VERSION = "1.0.0";
+
+/**
  * Marker appended to the WebView user agent by the native shell, e.g.
  * `... TNR-Native/1.0.0 (ios)`. The server branches on this to hide web-only
  * purchase flows that would breach App Store guideline 3.1.1.

@@ -118,6 +118,29 @@ The combat system has strict performance requirements. The data flow should be:
 
 **NEVER add intermediate fetch queries during `performAction`**. If you need data during combat that isn't available, add it to the battle state during `initiateBattle` instead. This ensures combat endpoints remain performant.
 
+## Native Apps (iOS / Android)
+
+The native shells live in `mobile/` — a Capacitor project alongside `soketi/` and
+`spacetimedb-towerdefense/`, with its own `package.json`. See `mobile/README.md` for build
+prerequisites and store setup.
+
+- **`app/src/libs/native/` is the only bridge to the shell.** Every export there no-ops off
+  device, so call sites need no platform checks: `haptics.impact("HEAVY")` simply does
+  nothing in a browser. A biome `noRestrictedImports` rule blocks `@capacitor/*` and the
+  raw `bridge` module everywhere else under `src/`.
+- **Capacitor packages are installed in `mobile/`, not `app/`.** `cap sync` needs them next
+  to the native projects, and the web app reaches plugins through the `window.Capacitor`
+  bridge the shell injects. Adding a plugin means installing it in `mobile/` *and* adding a
+  wrapper in `libs/native/`.
+- **Push goes through `sendPushToUsers` in `@/server/utils/push`** — nothing else should
+  talk to APNs or FCM. It resolves devices, honours per-category opt-outs, fans out to both
+  transports and prunes dead tokens. It never throws.
+- **The `Notification` table is a global announcement feed, not per-user delivery.** Its
+  `userId` is the author; recipients are whoever the accompanying `unreadNotifications`
+  increment targets. Push is genuinely per-user, so the two are separate systems.
+- **`isNativeUserAgent(ctx.userAgent)`** branches server-side, for surfaces that must
+  differ in the app (App Store guideline 3.1.1 forbids the web purchase flow there).
+
 ## Database Patterns
 
 - Uses Drizzle ORM with MySQL hosted on **PlanetScale**

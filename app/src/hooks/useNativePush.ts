@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
-import { isNative, push } from "@/libs/native";
+import { isNative, parseNativeUserAgent, push } from "@/libs/native";
 
 /** Token last handed to the server, so a resume does not re-register the same value. */
 const LAST_TOKEN_KEY = "native-push-token";
@@ -42,7 +42,7 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
       void sendToken({
         token,
         platform,
-        appVersion: navigator.userAgent.match(/TNR-Native\/(\d+(?:\.\d+)*)/)?.[1],
+        appVersion: parseNativeUserAgent(navigator.userAgent)?.version,
         locale: navigator.language.slice(0, 16),
       })
         .then(() => safeLocalStorageSetItem(LAST_TOKEN_KEY, token))
