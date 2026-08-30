@@ -111,7 +111,11 @@ export default function NativeBridge() {
   // they stay correct while the app is closed. `sync` is a no-op when the shell has no
   // widget plugin.
   useEffect(() => {
-    if (!isNative() || !userData) return;
+    // `isSignedOut` and not just `userData`: the profile query stays cached after Clerk
+    // drops the session, so without this the sign-out clearing of `widgetToken` would
+    // re-trigger this effect and write the previous player's stats straight back over
+    // the `widgets.clear()` above.
+    if (!isNative() || !userData || isSignedOut) return;
     const quest = activeQuest(userData);
     const snapshot = {
       widgetToken,
@@ -141,7 +145,7 @@ export default function NativeBridge() {
     if (signature === lastSnapshot.current) return;
     lastSnapshot.current = signature;
     void widgets.sync({ ...snapshot, updatedAt: new Date().toISOString() });
-  }, [userData, timeDiff, widgetToken]);
+  }, [isSignedOut, userData, timeDiff, widgetToken]);
 
   if (!isOutdated) return null;
   return <UpdateWall />;
