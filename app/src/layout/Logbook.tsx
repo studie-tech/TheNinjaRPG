@@ -41,6 +41,9 @@ import Post from "./Post";
 const tabs = ["Active", "History", "Battles", "Achievements"] as const;
 type tabType = (typeof tabs)[number];
 
+/** Matches the interval `profile.getUser` refreshes its own achievement progress on. */
+const CATALOGUE_REFRESH_MS = 5 * 60 * 1000;
+
 const Logbook: React.FC = () => {
   // State
   const [tab, setTab] = useState<tabType | null>(null);
@@ -79,11 +82,19 @@ const LogbookAchievements: React.FC = () => {
   const [activeElement, setActiveElement] = useState<string>("");
 
   // Achievement definitions are the same for every player and change only when staff edit
-  // content, so profile.getUser sends progress alone and they are fetched here instead. The
-  // staleTime overrides the app-wide Infinity so an edit to an existing achievement is picked up
-  // the next time this remounts or the window regains focus; it does not schedule a fetch of its
-  // own, which is what the unresolved-row effect below is for. isLoading rather than isPending: a
-  // disabled query never stops being pending, which would leave the tab on its spinner forever.
+  // content, so profile.getUser sends progress alone and they are fetched here instead.
+  //
+  // The refresh knobs together cover the three ways the cache can fall behind. An achievement
+  // published or hidden since the last fetch shows up as a progress row with no definition, which
+  // the effect below reacts to at once. An edit to an existing one changes no ids and so is
+  // invisible to that check, which is what refetchInterval is for; staleTime covers the same case
+  // on remount and refocus, since an interval only runs while this is mounted and focused.
+  //
+  // Polling this costs less than the code it replaces rather than eating into the saving: it runs
+  // only while the Achievements tab is open, on the same cadence profile.getUser already polls at
+  // (UserContext), and that poll used to carry these very definitions for every player on every
+  // page. isLoading rather than isPending: a disabled query never stops being pending, which would
+  // leave the tab on its spinner forever.
   const {
     data: catalogue,
     isFetched,
@@ -92,7 +103,8 @@ const LogbookAchievements: React.FC = () => {
     refetch,
   } = api.quests.getAchievementCatalogue.useQuery(undefined, {
     enabled: !!userData,
-    staleTime: 5 * 60 * 1000,
+    staleTime: CATALOGUE_REFRESH_MS,
+    refetchInterval: CATALOGUE_REFRESH_MS,
   });
 
   const definitions = useMemo(
