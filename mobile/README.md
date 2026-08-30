@@ -136,7 +136,14 @@ black.
 ## Not verified yet
 
 None of the native code has been compiled or run — it was written on a machine with no
-Xcode and no Android SDK. Swift is syntax-checked with `swiftc -parse`, every plist passes
-`plutil -lint`, all XML parses, and the Xcode project round-trips through the `xcodeproj`
-gem. That catches syntax and structure, not types or linking. Expect to fix compile errors
-on the first real build.
+Xcode and no Android SDK. What has been checked:
+
+- every Swift file passes `swiftc -parse` (syntax only, no type checking)
+- every plist passes `plutil -lint`, and all Android XML parses
+- `App.xcodeproj` round-trips through the `xcodeproj` gem, with the widget target,
+  entitlements, capabilities and the Sentry package all present afterwards
+- `configure-xcode.rb` is idempotent across repeated runs
+
+That catches syntax and structure, not types or linking. Expect to fix compile errors on
+the first real build, and run the three device checks in
+[`docs/StoreSubmission.md`](../docs/StoreSubmission.md) before trusting the shell.
