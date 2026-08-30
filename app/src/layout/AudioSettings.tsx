@@ -21,6 +21,7 @@ import {
 import { useAudio } from "@/hooks/useAudio";
 import { useIframeMute } from "@/hooks/useIframeMute";
 import { UncontrolledSliderField } from "@/layout/SliderField";
+import { audioSession } from "@/libs/native";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 
@@ -99,6 +100,34 @@ export const GlobalAudioProvider: React.FC<{
       void setAudioEnabled(getInitialMusicState());
     }
   }, [isClient, userData]);
+
+  // In the native shell, claiming an AVAudioSession (iOS) or starting the media service
+  // (Android) is what keeps the soundtrack playing once the screen locks. Released as
+  // soon as music is off, so we are not holding other apps' audio ducked for nothing.
+  // No-ops on the web.
+  useEffect(() => {
+    if (!isClient) return;
+    if (!audioEnabled) {
+      void audioSession.deactivate();
+      return;
+    }
+    void audioSession.activate();
+    void audioSession.setNowPlaying({
+      title: "TheNinja-RPG",
+      artist: userData?.village?.name ?? "Seichi",
+    });
+  }, [audioEnabled, isClient, userData?.village?.name]);
+
+  // Lock Screen and headset controls. Mirrors the in-game toggle rather than driving the
+  // audio element directly, so both routes end in the same state.
+  useEffect(() => {
+    if (!isClient) return;
+    return audioSession.onRemoteCommand((command) => {
+      if (command === "play") void setAudioEnabled(true);
+      else if (command === "pause") void setAudioEnabled(false);
+      else void setAudioEnabled(!audioEnabled);
+    });
+  }, [audioEnabled, isClient, setAudioEnabled]);
 
   const contextValue: AudioContextValue = {
     audioEnabled,

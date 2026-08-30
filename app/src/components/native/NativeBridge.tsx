@@ -1,9 +1,11 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
 import { useNativePush } from "@/hooks/useNativePush";
 import {
+  appEvents,
   isNative,
   isOutdatedNativeClient,
   parseNativeUserAgent,
@@ -19,7 +21,9 @@ import { useUserData } from "@/utils/UserContext";
  * for every visitor.
  */
 export default function NativeBridge() {
-  const { data: userData, userId, isClerkLoaded } = useUserData();
+  const { data: userData, userId, isClerkLoaded, pusher } = useUserData();
+  const router = useRouter();
+  const pathname = usePathname();
   const [isOutdated, setIsOutdated] = useState(false);
   const isSignedOut = isClerkLoaded && !userId;
 
@@ -31,6 +35,46 @@ export default function NativeBridge() {
     const client = parseNativeUserAgent(navigator.userAgent);
     setIsOutdated(isOutdatedNativeClient(client, MIN_NATIVE_APP_VERSION));
   }, []);
+
+  // Capacitor's default for the Android back button is to exit the app from wherever the
+  // player happens to be, which drops them out of the game from three menus deep. Play
+  // reviewers check this too.
+  useEffect(() => {
+    if (!isNative()) return;
+    return appEvents.onBackButton((canGoBack) => {
+      if (canGoBack && pathname !== "/") {
+        router.back();
+      } else {
+        void appEvents.exitApp();
+      }
+    });
+  }, [pathname, router]);
+
+  // Universal Links and App Links arrive here rather than as a page load. OAuth returns
+  // are handled by useNativeAuth, which is listening for its own redirect.
+  useEffect(() => {
+    if (!isNative()) return;
+    return appEvents.onUrlOpen((url) => {
+      try {
+        const parsed = new URL(url);
+        if (!parsed.hostname.endsWith("theninja-rpg.com")) return;
+        router.push(`${parsed.pathname}${parsed.search}${parsed.hash}`);
+      } catch {
+        // A malformed deep link is not worth reacting to.
+      }
+    });
+  }, [router]);
+
+  // The WebSocket is dropped while the app is backgrounded and the client does not always
+  // notice, which leaves the player looking at a world that has stopped updating.
+  useEffect(() => {
+    if (!isNative() || !pusher) return;
+    return appEvents.onStateChange((isActive) => {
+      if (isActive && pusher.connection.state !== "connected") {
+        pusher.connect();
+      }
+    });
+  }, [pusher]);
 
   // Leaving a token bound to a signed-out account would send the next person to pick up
   // the phone somebody else's alerts, and leave their stats on the home screen. Gated on

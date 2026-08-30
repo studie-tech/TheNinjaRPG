@@ -2,6 +2,8 @@
 
 import { SignIn } from "@clerk/nextjs";
 import { useState } from "react";
+import NativeSignIn from "@/components/native/NativeSignIn";
+import { useNativeShell } from "@/hooks/useNativeShell";
 import { useWebGL2Detection } from "@/hooks/webgl";
 import ContentBox from "@/layout/ContentBox";
 import WebGL2Warning, { WebGL2WarningBanner } from "@/layout/WebGL2Warning";
@@ -9,6 +11,7 @@ import WebGL2Warning, { WebGL2WarningBanner } from "@/layout/WebGL2Warning";
 export default function LoginUser() {
   const { webglError, isChecking } = useWebGL2Detection();
   const [proceedAnyway, setProceedAnyway] = useState<boolean>(false);
+  const isNativeShell = useNativeShell();
 
   if (isChecking) {
     return null;
@@ -26,6 +29,7 @@ export default function LoginUser() {
       defaultBackHref="/"
     >
       {webglError && <WebGL2WarningBanner />}
+      <NativeSignIn />
       <div className="flex flex-row items-center justify-center">
         <SignIn
           path="/login"
@@ -35,6 +39,11 @@ export default function LoginUser() {
             elements: {
               rootBox: "!w-full",
               cardBox: "!w-full",
+              // Clerk's social buttons open in the WebView, which Google rejects and
+              // Apple will not accept. NativeSignIn replaces them in the shell.
+              ...(isNativeShell
+                ? { socialButtons: "hidden", dividerRow: "hidden" }
+                : {}),
             },
           }}
         />

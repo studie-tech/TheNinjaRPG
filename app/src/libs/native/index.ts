@@ -7,6 +7,7 @@
  * `@capacitor/*` and `./bridge` from being imported anywhere else under `src/`.
  */
 
+export * as appEvents from "./appEvents";
 export * as appleAuth from "./appleAuth";
 export * as audioSession from "./audioSession";
 export {

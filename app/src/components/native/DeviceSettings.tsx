@@ -1,14 +1,14 @@
 "use client";
 
 import { BellRing, Send } from "lucide-react";
-import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { PushCategory } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNativePushPermission } from "@/hooks/useNativePush";
-import { haptics, isNative } from "@/libs/native";
+import { useNativeShell } from "@/hooks/useNativeShell";
+import { haptics } from "@/libs/native";
 import { showMutationToast } from "@/libs/toast";
 
 /** Player-facing wording for each push category. */
@@ -28,17 +28,12 @@ const CATEGORY_LABELS: Record<PushCategory, string> = {
  * it can sit unconditionally in the shared settings panel.
  */
 export default function DeviceSettings() {
-  // Mount flag keeps SSR and the first client render in agreement: the Capacitor bridge
-  // only exists in the browser, so `isNative()` is always false on the server.
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => setIsClient(true), []);
-
   const [hapticsOn, setHapticsOn] = useLocalStorage<boolean>(
     haptics.HAPTICS_STORAGE_KEY,
     true,
   );
 
-  const native = isClient && isNative();
+  const native = useNativeShell();
   const { permission, requestPermission } = useNativePushPermission();
 
   const { data: preferences, refetch } = api.push.getPreferences.useQuery(undefined, {
