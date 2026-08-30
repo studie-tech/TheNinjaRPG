@@ -59,6 +59,9 @@ if widget.nil?
   puts "Created #{WIDGET_TARGET} target"
 end
 
+# The gem does not set this on a new target, and without it the extension builds to a
+# nameless ".appex" that collides with its own create-directory command.
+set_setting(widget, "PRODUCT_NAME", "$(TARGET_NAME)")
 set_setting(widget, "PRODUCT_BUNDLE_IDENTIFIER", "#{BUNDLE_ID}.widgets")
 set_setting(widget, "INFOPLIST_FILE", "#{WIDGET_TARGET}/Info.plist")
 set_setting(widget, "CODE_SIGN_ENTITLEMENTS", "#{WIDGET_TARGET}/#{WIDGET_TARGET}.entitlements")
