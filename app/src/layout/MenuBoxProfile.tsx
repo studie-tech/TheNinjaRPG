@@ -115,7 +115,6 @@ const MenuBoxProfile: React.FC = () => {
   // State
   const { data: userData, timeDiff } = useUserData();
   const [, setState] = useState<number>(0);
-  const [gameTime, setGameTime] = useState<string>(() => getGameTime());
   const battle = useAtomValue(userBattleAtom);
   const utils = api.useUtils();
   const state = useFiltering();
@@ -179,14 +178,6 @@ const MenuBoxProfile: React.FC = () => {
     }
     return best;
   }, [userItems]);
-
-  // Update the gameTime with the UTC HH:MM:SS timestring every second
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setGameTime(getGameTime());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Get location of user
   const { location } = useGameMenu(userData);
@@ -376,7 +367,7 @@ const MenuBoxProfile: React.FC = () => {
             </TooltipProvider>
           )}
           <p suppressHydrationWarning>
-            <b>Time: </b> {gameTime}
+            <b>Time: </b> <GameClock />
           </p>
         </div>
         {/* ACTIVE EFFECTS */}
@@ -678,6 +669,20 @@ const MenuBoxProfile: React.FC = () => {
 };
 
 export default MenuBoxProfile;
+
+/**
+ * The UTC clock owns its per-second state so a tick re-renders this leaf alone. Held one level
+ * up it would re-render the whole profile menu — status rows, pools, objectives, avatars — once
+ * a second on every page of the game, since the sidebar is part of the root layout.
+ */
+const GameClock: React.FC = () => {
+  const [gameTime, setGameTime] = useState<string>(() => getGameTime());
+  useEffect(() => {
+    const interval = setInterval(() => setGameTime(getGameTime()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+  return <>{gameTime}</>;
+};
 
 /**
  * Anchors an expiry countdown for a `Cooldown`. Returns a memoized (createdAt, totalSeconds) pair

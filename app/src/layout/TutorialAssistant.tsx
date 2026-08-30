@@ -547,13 +547,18 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
         }
       }
       const rect = highlightInfo.element.getBoundingClientRect();
-      setHighlight({
+      const next = {
         isPrimaryElement: highlightInfo.isPrimaryElement,
         top: rect.top,
         left: rect.left,
         width: rect.width,
         height: rect.height,
-      });
+      };
+      setHighlight((prev) =>
+        prev && prev.isPrimaryElement === next.isPrimaryElement && isSameBox(prev, next)
+          ? prev
+          : next,
+      );
       // no-op
     } else {
       setHighlight(null);
@@ -672,12 +677,13 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       );
 
       if (highlightInfo) {
-        setGameMenuHighlight({
+        const next = {
           top: highlightInfo.top,
           left: highlightInfo.left,
           width: highlightInfo.width,
           height: highlightInfo.height,
-        });
+        };
+        setGameMenuHighlight((prev) => (prev && isSameBox(prev, next) ? prev : next));
       } else {
         setGameMenuHighlight(null);
       }
@@ -1391,6 +1397,17 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
 };
 
 export default TutorialAssistant;
+
+/**
+ * The highlight is re-measured four times a second so it follows an element that moves. Almost
+ * none of those measurements differ, and storing an equal box would re-render the whole assistant
+ * overlay for nothing, so the position setters keep the previous object when it has not moved.
+ */
+const isSameBox = (
+  a: { top: number; left: number; width: number; height: number },
+  b: { top: number; left: number; width: number; height: number },
+) =>
+  a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
 
 // Helper function to find element to highlight based on current tutorial step
 const getUsableHighlightElement = (id: string | undefined) => {
