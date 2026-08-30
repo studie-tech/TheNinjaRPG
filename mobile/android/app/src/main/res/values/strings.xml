@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TheNinja-RPG</string>
+    <string name="title_activity_main">TheNinja-RPG</string>
+    <string name="package_name">com.theninjarpg.app</string>
+    <string name="custom_url_scheme">com.theninjarpg.app</string>
+</resources>
