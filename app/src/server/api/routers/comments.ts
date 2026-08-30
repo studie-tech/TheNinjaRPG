@@ -490,6 +490,8 @@ export const commentsRouter = createTRPCRouter({
           role: posterUser.role,
           customTitle: posterUser.customTitle,
           federalStatus: posterUser.federalStatus,
+          tavernUsernameColor: posterUser.tavernUsernameColor,
+          tavernTitleColor: posterUser.tavernTitleColor,
           nRecruited: posterUser.nRecruited,
           tavernMessages: posterUser.tavernMessages,
           isStaffOnly: conversationComment.isStaffOnly,
@@ -620,6 +622,8 @@ export const commentsRouter = createTRPCRouter({
             role: userData.role,
             customTitle: userData.customTitle,
             federalStatus: userData.federalStatus,
+            tavernUsernameColor: userData.tavernUsernameColor,
+            tavernTitleColor: userData.tavernTitleColor,
             nRecruited: userData.nRecruited,
             tavernMessages: userData.tavernMessages,
             isStaffOnly: conversationComment.isStaffOnly,
@@ -770,12 +774,7 @@ export const commentsRouter = createTRPCRouter({
         .filter((id): id is string => !!id);
 
       const [notifiedUserIds] = await Promise.all([
-        fetchUsersToNotify(
-          ctx.drizzle,
-          ctx.userId,
-          mentionedUserNames,
-          quotedUserIds,
-        ),
+        fetchUsersToNotify(ctx.drizzle, ctx.userId, mentionedUserNames, quotedUserIds),
         // Insert into DB
         ctx.drizzle.insert(conversationComment).values({
           id: commentId,

@@ -22,6 +22,7 @@ import {
 } from "@/drizzle/constants";
 import { actionLog, ryoTrade, userData } from "@/drizzle/schema";
 import { filterValidElementsTypeguard } from "@/libs/train";
+import { fetchVillages } from "@/routers/village";
 import type { DrizzleClient } from "@/server/db";
 import { getRandomElement } from "@/utils/array";
 import { round } from "@/utils/math";
@@ -34,6 +35,11 @@ import { secondsFromDate } from "@/utils/time";
 import type { DatabasePromiseReturn } from "@/utils/typeutils";
 import { statSchema } from "@/validators/combat";
 import { genders } from "@/validators/register";
+import {
+  isReservedCustomTitle,
+  RESERVED_CUSTOM_TITLE_MESSAGE,
+} from "@/validators/reservedName";
+import { titleChangeSchema } from "@/validators/user";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -364,11 +370,14 @@ export const blackMarketRouter = createTRPCRouter({
   // Update custom title
   updateCustomTitle: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Update user's custom title" } })
-    .input(z.object({ title: z.string().min(1).max(15) }))
+    .input(titleChangeSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, villages] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchVillages(ctx.drizzle),
+      ]);
       // Guard
       if (user.reputationPoints < COST_CUSTOM_TITLE) {
         return errorResponse("Not enough reputation points");
@@ -377,6 +386,14 @@ export const blackMarketRouter = createTRPCRouter({
         return errorResponse("Custom title is the same");
       }
       if (user.isBanned) return errorResponse("You are banned");
+      if (
+        isReservedCustomTitle(
+          input.title,
+          villages.map((village) => village.name),
+        )
+      ) {
+        return errorResponse(RESERVED_CUSTOM_TITLE_MESSAGE);
+      }
       // Mutate
       const result = await ctx.drizzle
         .update(userData)

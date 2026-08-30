@@ -4,16 +4,28 @@ import {
   GeneralTypes,
   SEICHI_SILVER_ADJUST_LIMIT,
   StatTypes,
+  TavernColorPresets,
   UserRanks,
   UserRoles,
 } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 import type { ZodAllTags } from "@/validators/combat";
 import { genders, usernameSchema } from "@/validators/register";
+import {
+  isReservedCustomTitle,
+  RESERVED_CUSTOM_TITLE_MESSAGE,
+} from "@/validators/reservedName";
 
 export const updateUserSchema = z.object({
   username: usernameSchema,
-  customTitle: z.string().min(0).max(199).optional(),
+  customTitle: z
+    .string()
+    .min(0)
+    .max(199)
+    .optional()
+    .refine((title) => !title || !isReservedCustomTitle(title), {
+      message: RESERVED_CUSTOM_TITLE_MESSAGE,
+    }),
   bloodlineId: z.string().nullable(),
   bloodlineReskinId: z.string().nullable().optional(),
   /** Staff-assigned equipped mode. Empty / "None" become null (unequip). */
@@ -183,11 +195,26 @@ export const updateUserPreferencesSchema = z
 export type UpdateUserPreferencesSchema = z.infer<typeof updateUserPreferencesSchema>;
 
 // Profile edit schemas
-export const titleChangeSchema = z.object({ title: z.string().min(1).max(15) });
+export const titleChangeSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(1)
+    .max(15)
+    .refine((title) => !isReservedCustomTitle(title), {
+      message: RESERVED_CUSTOM_TITLE_MESSAGE,
+    }),
+});
 export type TitleChangeSchema = z.infer<typeof titleChangeSchema>;
 
 export const genderChangeSchema = z.object({ gender: z.enum(genders) });
 export type GenderChangeSchema = z.infer<typeof genderChangeSchema>;
+
+export const tavernColorChangeSchema = z.object({
+  target: z.enum(["username", "title"]),
+  color: z.enum(TavernColorPresets),
+});
+export type TavernColorChangeSchema = z.infer<typeof tavernColorChangeSchema>;
 
 export const adjustSeichiSilverSchema = z.object({
   userId: z.string(),

@@ -27,6 +27,7 @@ import {
   ALLIANCEHALL_LONG,
   BasicElementName,
   COST_CHANGE_USERNAME,
+  getTavernColorChangeCost,
   getUserCaps,
   IMG_AVATAR_DEFAULT,
   KAGE_MIN_PRESTIGE,
@@ -129,7 +130,7 @@ import { fetchSquad, removeFromSquad } from "@/routers/anbu";
 import { fetchClan, removeFromClan } from "@/routers/clan";
 import { fetchKageReplacement } from "@/routers/kage";
 import { handleQuestConsequences, insertNextQuest } from "@/routers/quests";
-import { fetchVillage } from "@/routers/village";
+import { fetchVillage, fetchVillages } from "@/routers/village";
 import { deleteUser } from "@/server/api/routers/staff";
 import type { DrizzleClient } from "@/server/db";
 import { scopedRead } from "@/server/requestScope";
@@ -173,10 +174,15 @@ import { getShrineBoost } from "@/utils/village";
 import { createStatSchema } from "@/validators/combat";
 import { mutateContentSchema } from "@/validators/comments";
 import { attributes, colors, skin_colors, usernameSchema } from "@/validators/register";
+import {
+  isReservedCustomTitle,
+  RESERVED_CUSTOM_TITLE_MESSAGE,
+} from "@/validators/reservedName";
 import type { GetPublicUsersSchema } from "@/validators/user";
 import {
   adjustSeichiSilverSchema,
   getPublicUsersSchema,
+  tavernColorChangeSchema,
   updateUserPreferencesSchema,
   updateUserSchema,
 } from "@/validators/user";
@@ -1190,7 +1196,7 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const [user, target, village, sageExists] = await Promise.all([
+      const [user, target, village, sageExists, villages] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.userData.findFirst({
           where: eq(userData.userId, input.id),
@@ -1203,6 +1209,7 @@ export const profileRouter = createTRPCRouter({
               columns: { id: true },
             })
           : Promise.resolve(null),
+        fetchVillages(ctx.drizzle),
       ]);
       // Basic existence guards
       if (!village) return errorResponse("Village not found");
@@ -1231,6 +1238,16 @@ export const profileRouter = createTRPCRouter({
         input.data.customTitle !== target.customTitle;
       if (customTitleChanged && !canEditCustomTitle(user.role)) {
         return errorResponse("Not allowed to change custom title");
+      }
+      if (
+        customTitleChanged &&
+        input.data.customTitle &&
+        isReservedCustomTitle(
+          input.data.customTitle,
+          villages.map((v) => v.name),
+        )
+      ) {
+        return errorResponse(RESERVED_CUSTOM_TITLE_MESSAGE);
       }
 
       const bloodlineChanged = input.data.bloodlineId !== target.bloodlineId;
@@ -1416,11 +1433,14 @@ export const profileRouter = createTRPCRouter({
       input.data.customTitle = input.data.customTitle ?? "";
 
       // Queries
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const ai = await ctx.drizzle.query.userData.findFirst({
-        where: eq(userData.userId, input.id),
-        with: { jutsus: true, items: true },
-      });
+      const [user, ai, villages] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.userData.findFirst({
+          where: eq(userData.userId, input.id),
+          with: { jutsus: true, items: true },
+        }),
+        fetchVillages(ctx.drizzle),
+      ]);
 
       // Guards
       if (user.isBanned)
@@ -1428,6 +1448,16 @@ export const profileRouter = createTRPCRouter({
       if (!ai) return errorResponse("AI not found");
       if (!ai.isAi) return errorResponse("Not an AI");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      if (
+        input.data.customTitle &&
+        input.data.customTitle !== ai.customTitle &&
+        isReservedCustomTitle(
+          input.data.customTitle,
+          villages.map((v) => v.name),
+        )
+      ) {
+        return errorResponse(RESERVED_CUSTOM_TITLE_MESSAGE);
+      }
 
       // Update jutsus & items
       // Extract new item ids from ids-with-number array
@@ -1560,6 +1590,83 @@ export const profileRouter = createTRPCRouter({
         });
         return { success: true, message: "Username updated" };
       }
+    }),
+  updateTavernColor: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Change a controlled tavern username or title color",
+      },
+    })
+    .input(tavernColorChangeSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const currentColor =
+        input.target === "username" ? user.tavernUsernameColor : user.tavernTitleColor;
+      const cost = getTavernColorChangeCost(input.color);
+
+      if (user.isBanned) return errorResponse("You are banned");
+      if (currentColor === input.color) {
+        return errorResponse(`Tavern ${input.target} color is unchanged`);
+      }
+      if (cost > user.reputationPoints) {
+        return errorResponse("Not enough reputation points");
+      }
+
+      const colorUpdate =
+        input.target === "username"
+          ? { tavernUsernameColor: input.color }
+          : { tavernTitleColor: input.color };
+      const result = await ctx.drizzle
+        .update(userData)
+        .set({
+          ...colorUpdate,
+          ...(cost > 0
+            ? {
+                reputationPoints: sql`${userData.reputationPoints} - ${cost}`,
+              }
+            : {}),
+        })
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.isBanned, false),
+            eq(
+              input.target === "username"
+                ? userData.tavernUsernameColor
+                : userData.tavernTitleColor,
+              currentColor ?? "DEFAULT",
+            ),
+            ...(cost > 0 ? [gte(userData.reputationPoints, cost)] : []),
+          ),
+        );
+
+      if (result.rowsAffected === 0) {
+        return errorResponse(
+          "Could not update tavern color; your selection or reputation changed",
+        );
+      }
+
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "user",
+        changes: [
+          `Tavern ${input.target} color changed from ${currentColor} to ${input.color}${cost === 0 ? " (free default)" : ` (-${cost} reputation)`}`,
+        ],
+        relatedId: ctx.userId,
+        relatedMsg: `${user.username} changed their tavern ${input.target} color`,
+        relatedImage: user.avatarLight,
+      });
+
+      return {
+        success: true,
+        message:
+          cost === 0
+            ? `Tavern ${input.target} color returned to default for free`
+            : `Tavern ${input.target} color updated for ${cost} reputation points`,
+      };
     }),
   // Use earned experience points for stats
   useUnusedExperiencePoints: protectedProcedure
@@ -1760,6 +1867,8 @@ export const profileRouter = createTRPCRouter({
           role: true,
           federalStatus: true,
           isAi: true,
+          tavernUsernameColor: true,
+          tavernTitleColor: true,
         },
         where: and(
           like(userData.username, `%${input.username}%`),

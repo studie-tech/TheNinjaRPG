@@ -972,6 +972,7 @@ export const STARTING_REPUTATION_POINTS = 11;
 export const COST_CHANGE_USERNAME = 5;
 export const COST_CUSTOM_TITLE = 5;
 export const COST_CHANGE_GENDER = 5;
+export const COST_TAVERN_COLOR_CHANGE = 10;
 export const COST_SWAP_BLOODLINE = 50;
 export const COST_SWAP_VILLAGE = 0;
 export const COST_RESET_STATS = 15;
@@ -987,6 +988,28 @@ export const BATTLE_LOG_FULL_LIMIT = 1000;
 export const BATTLE_LOG_DEFAULT_LIMIT = 30;
 export const MAX_EXTRA_RESKIN_SLOTS = 255;
 export const MAX_MARRIAGE_SLOTS = 7;
+
+/**
+ * User-selectable tavern colours. These semantic IDs are persisted instead of
+ * arbitrary colour values so the server remains the source of truth for the palette.
+ */
+export const TavernColorPresets = [
+  "DEFAULT",
+  "MIDNIGHT",
+  "NAVY",
+  "COBALT",
+  "YELLOW",
+  "SLATE",
+  "CHARCOAL",
+  "GOLD",
+  "CRIMSON",
+  "FUCHSIA",
+  "MINT",
+  "LIME",
+] as const;
+export type TavernColorPreset = (typeof TavernColorPresets)[number];
+export const getTavernColorChangeCost = (color: TavernColorPreset) =>
+  color === "DEFAULT" ? 0 : COST_TAVERN_COLOR_CHANGE;
 export const BLOODLINE_ROLL_TYPES = [
   "NATURAL",
   "ITEM",

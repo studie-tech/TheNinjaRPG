@@ -3,6 +3,7 @@ import {
   CoreVillages,
   FederalStatuses,
   LegacyVillageNames,
+  TavernColorPresets,
   UserRanks,
 } from "@/drizzle/constants";
 import { createReservedNameField } from "@/validators/reservedName";
@@ -138,6 +139,8 @@ export const getSearchValidator = (props: { max: number }) => {
           rank: z.enum(UserRanks),
           level: z.number(),
           federalStatus: z.enum(FederalStatuses),
+          tavernUsernameColor: z.enum(TavernColorPresets).optional(),
+          tavernTitleColor: z.enum(TavernColorPresets).optional(),
         }),
       )
       .min(1)

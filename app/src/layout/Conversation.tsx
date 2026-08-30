@@ -52,6 +52,8 @@ interface ConversationProps {
   onBack?: () => void;
   /** When set, banned/silenced users may only compose if they created this ticket */
   supportTicketCreatedByUserId?: string;
+  /** Enables persisted username/title colors only for tavern conversations. */
+  tavernStyling?: boolean;
 }
 
 export const ConversationSkeleton: React.FC<ConversationProps> = (props) => {
@@ -416,6 +418,13 @@ const Conversation: React.FC<ConversationProps> = (props) => {
         })
         .join("") || "";
 
+    const posterTavernUsernameColor = senderUser
+      ? (senderUser.tavernUsernameColor ?? "DEFAULT")
+      : userData.tavernUsernameColor;
+    const posterTavernTitleColor = senderUser
+      ? (senderUser.tavernTitleColor ?? "DEFAULT")
+      : userData.tavernTitleColor;
+
     // Build optimistic comment in component scope so types narrow without `!`.
     // Temp id is only present when we insert; success/failure reconcile by it.
     const optimisticComment =
@@ -443,6 +452,8 @@ const Conversation: React.FC<ConversationProps> = (props) => {
             role: userData.role,
             customTitle: userData.customTitle,
             federalStatus: userData.federalStatus,
+            tavernUsernameColor: posterTavernUsernameColor,
+            tavernTitleColor: posterTavernTitleColor,
             nRecruited: userData.nRecruited,
             tavernMessages: userData.tavernMessages,
           };
@@ -762,6 +773,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                     hover_effect={false}
                     comment={comment}
                     quoteIds={quoteIds}
+                    tavernStyling={props.tavernStyling}
                     color={
                       comment.content.includes(`quote author="${userData?.username}`) ||
                       comment.content.includes(`@${userData?.username}`)
