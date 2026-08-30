@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
 import { useLiveActivity } from "@/hooks/useLiveActivity";
 import { readWidgetToken, useNativePush } from "@/hooks/useNativePush";
@@ -39,19 +39,25 @@ export default function NativeBridge() {
     setIsOutdated(isOutdatedNativeClient(client, MIN_NATIVE_APP_VERSION));
   }, []);
 
+  // Read through a ref so the listener is attached once. Attaching and removing it on
+  // every navigation would round-trip the bridge each time, and rapid navigation could
+  // briefly leave zero or two listeners on the button.
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+
   // Capacitor's default for the Android back button is to exit the app from wherever the
   // player happens to be, which drops them out of the game from three menus deep. Play
   // reviewers check this too.
   useEffect(() => {
     if (!isNative()) return;
     return appEvents.onBackButton((canGoBack) => {
-      if (canGoBack && pathname !== "/") {
+      if (canGoBack && pathnameRef.current !== "/") {
         router.back();
       } else {
         void appEvents.exitApp();
       }
     });
-  }, [pathname, router]);
+  }, [router]);
 
   // Universal Links and App Links arrive here rather than as a page load. OAuth returns
   // are handled by useNativeAuth, which is listening for its own redirect.
@@ -85,12 +91,12 @@ export default function NativeBridge() {
   }, [isSignedOut, unregister]);
 
   // Home screen widgets read a snapshot from the shared container rather than the API, so
-  // they stay correct while the app is closed. Refresh it whenever the player's vitals
-  // change; `sync` is a no-op when the shell has no widget plugin.
+  // they stay correct while the app is closed. `sync` is a no-op when the shell has no
+  // widget plugin.
+  const lastSnapshot = useRef<string | null>(null);
   useEffect(() => {
     if (!isNative() || !userData) return;
-    void widgets.sync({
-      updatedAt: new Date().toISOString(),
+    const snapshot = {
       widgetToken: readWidgetToken(),
       username: userData.username,
       avatar: userData.avatar ?? undefined,
@@ -104,7 +110,15 @@ export default function NativeBridge() {
       curStamina: Math.round(userData.curStamina),
       maxStamina: Math.round(userData.maxStamina),
       unreadNotifications: userData.unreadNotifications,
-    });
+    };
+    // userData changes on every regeneration tick, and WidgetKit budgets timeline reloads
+    // per app per day — spending them on writes that redraw the same numbers is how a
+    // widget ends up throttled and stale. `updatedAt` is deliberately not part of the
+    // comparison, since it changes every time by definition.
+    const signature = JSON.stringify(snapshot);
+    if (signature === lastSnapshot.current) return;
+    lastSnapshot.current = signature;
+    void widgets.sync({ ...snapshot, updatedAt: new Date().toISOString() });
   }, [userData]);
 
   if (!isOutdated) return null;
