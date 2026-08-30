@@ -130,14 +130,28 @@ the rounded-rect stroke so the launcher's own mask does not sit inside a second 
   both orientations. The launch screen aspect-fills, so only the middle ~46% of the width
   survives on a tall phone: keep the wordmark inside that band or it will be cropped.
 
-Two things the generator overwrites, which have to be put back after running it:
+The generator's Android launcher output is not usable as-is, and running it overwrites
+the corrections. After every run, restore:
 
-- `mipmap-anydpi-v26/ic_launcher*.xml` — it points the background at the generated bitmap
-  and insets it by 16.7% along with the foreground, which leaves the 18dp the system
-  reserves on each side for parallax fully transparent, so a launcher animation shows a
-  bite out of the icon. Point it at `@color/ic_launcher_background` instead.
-- `mobile/icons/` — a PWA set this project does not use. The web app's icons live in
-  `app/public/icons/`. Delete it.
+- `mipmap-anydpi-v26/ic_launcher*.xml` — it points the background at a bitmap and insets
+  both layers by 16.7%, which leaves the 18dp the system reserves on each side for
+  parallax fully transparent, so a launcher animation shows a bite out of the icon. The
+  background should be `@color/ic_launcher_background` and the foreground should not be
+  inset, because the foreground below is already a full 108dp canvas.
+- `mipmap-*/ic_launcher_foreground.png` — the generator emits the *whole tile*, character
+  on an opaque yellow square, at the legacy launcher sizes. Two things go wrong: the
+  square's edge shows as a pale outline drawn across the icon, and once inset the
+  character covers only 41% of the tile where iOS shows 72%. It has to be the character
+  alone on transparency, on a 108dp canvas (81/108/162/216/324/432 px), sized so its
+  bounding circle sits just inside the 72dp the mask reveals.
+- `mipmap-*/ic_launcher.png` and `ic_launcher_round.png` — the generator pads these by a
+  flat 8px at every density, so the same icon covers 56% of the tile on ldpi and 92% on
+  xxxhdpi. They should be the full tile masked to a rounded square and a circle, drawn
+  edge to edge, so the geometry is identical at every density. These are only used below
+  API 26, which `minSdkVersion 24` still admits.
+- `mipmap-*/ic_launcher_background.png` — unused once the background layer is a colour.
+- `mobile/icons/` and `www/manifest.json` — a PWA set this project does not use; the web
+  app's icons and manifest live in `app/public/icons/` and `app/src/libs/pwaManifest.ts`.
 
 On the web side, `app/public/icons/` also carries maskable variants inset to Android's 80%
 safe zone, and a flattened `icon-180x180.png` because iOS renders transparent corners
