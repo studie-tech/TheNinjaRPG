@@ -100,7 +100,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
             utils.shrine.getShrineBattles.invalidate(),
             utils.profile.getUser.invalidate(),
           ]);
-          pushToCombat(router, data.battleId);
+          if (data.battleId) pushToCombat(router, data.battleId);
         }
       },
     });

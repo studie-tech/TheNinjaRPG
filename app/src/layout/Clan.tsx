@@ -367,7 +367,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
             utils.profile.getUser.invalidate(),
             utils.clan.getClanBattles.invalidate(),
           ]);
-          pushToCombat(router, data.battleId);
+          if (data.battleId) pushToCombat(router, data.battleId);
         }
       },
     });
