@@ -36,6 +36,7 @@ import type {
 } from "@/libs/combat/types";
 import { getTurnControl, resolveControlledActorId } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
+import { haptics } from "@/libs/native";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import {
   drawCombatBackground,
@@ -312,6 +313,14 @@ const Combat: React.FC<CombatProps> = (props) => {
         if (prevControlled !== nextControlled) {
           setCombatActionId(undefined);
         }
+      }
+      // Physical feedback for the two moments worth feeling: an action landing, and the
+      // battle ending. Both no-op on the web and when the player has haptics off, so
+      // there is nothing to branch on here.
+      if (data.result) {
+        void haptics.notify(data.result.outcome === "Won" ? "SUCCESS" : "ERROR");
+      } else if (data.updateClient && data.battleUpdate) {
+        void haptics.impact("LIGHT");
       }
       // Notifications (if any)
       if (data.notification) {
