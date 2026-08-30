@@ -167,9 +167,15 @@ export default function Travel() {
   const { data: villageData } = api.village.getAll.useQuery(undefined, {
     enabled: !!userData,
   });
-  const { data: sectorData } = api.travel.getSectorData.useQuery(
+  // Sector.tsx observes this same key on a 10s refetchInterval, and the payload carries Dates,
+  // which defeat structural sharing — so the whole page re-rendered on every poll for the one
+  // string it reads. Selecting that string keeps the poll inside the sector scene.
+  const { data: sectorVillageName } = api.travel.getSectorData.useQuery(
     { sector: userData?.sector ?? -1 },
-    { enabled: !!userData && userData.sector !== undefined },
+    {
+      enabled: !!userData && userData.sector !== undefined,
+      select: (data) => data?.sectorData?.village?.name ?? null,
+    },
   );
   // The decoration + terrain libraries change rarely; fetch them once and keep
   // them for the whole session instead of shipping copies with every window
@@ -318,8 +324,7 @@ export default function Travel() {
   const currentSectorMap = sectorWindow?.sectors.find(
     (entry) => entry.sector === userData?.sector,
   )?.map;
-  // Memoize villages to prevent re-creating array reference on every render
-  // This is important because useLiveCountdown triggers re-renders every second
+  // Memoized so the array reference survives a re-render, since it feeds the map scene
   const villages = useMemo(() => {
     if (!villageData) return undefined;
     if (userData?.isOutlaw) return villageData;
@@ -750,7 +755,7 @@ export default function Travel() {
   // subtitle silently fell back to the world name while on the sector view.
   const subtitle =
     hasCurrentSector && userData && !isGlobal
-      ? `Sector ${currentSector} ${sectorData?.sectorData?.village ? `(${sectorData.sectorData.village.name})` : ""}`
+      ? `Sector ${currentSector} ${sectorVillageName ? `(${sectorVillageName})` : ""}`
       : "The world of Seichi";
   const consumableItems = userItems?.filter(
     (i) =>

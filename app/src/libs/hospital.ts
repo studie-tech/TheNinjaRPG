@@ -219,3 +219,16 @@ export const calcHowMuchToHeal = (
   const toHeal = Math.max(...poolHealReqs);
   return { toHeal, pools };
 };
+
+/**
+ * Snaps a healing capacity down to the largest value in `thresholds` that it still covers.
+ *
+ * The heal buttons only ever ask whether the capacity clears a threshold, so a value snapped this
+ * way answers every one of those questions identically to the raw capacity — while changing only
+ * when a button actually becomes usable, instead of on every tick of the regen clock.
+ */
+export const snapToThresholds = (capacity: number, thresholds: number[]) =>
+  thresholds.reduce(
+    (best, threshold) => (threshold <= capacity && threshold > best ? threshold : best),
+    0,
+  );
