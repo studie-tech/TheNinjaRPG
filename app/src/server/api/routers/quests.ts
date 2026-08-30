@@ -2026,6 +2026,12 @@ export const fetchUncompletedQuests = async (
 /** Row locks the bulk quest reset may hold in one statement. */
 const QUEST_RESET_BATCH_SIZE = 100;
 
+/**
+ * Ceiling on the repeated tracker-removal passes per batch. Above the largest questData array
+ * seen in production, so it only ever stops a pass that is somehow not shrinking the document.
+ */
+const QUEST_RESET_MAX_TRACKER_PASSES = 50;
+
 /** Upsert quest entries for all users by selector. NOTE: selector determined which users get updated/inserted entries */
 export const upsertQuestEntries = async (
   client: DrizzleClient,
@@ -2085,8 +2091,10 @@ export const upsertQuestEntries = async (
       '#',
       '$[*].id'
     ))`;
+    // A user with several QuestHistory rows for this quest fans the LEFT JOIN out; dedupe so a
+    // batch still covers QUEST_RESET_BATCH_SIZE distinct users.
     const batches = chunkArray(
-      candidates.map((row) => row.userId),
+      [...new Set(candidates.map((row) => row.userId))],
       QUEST_RESET_BATCH_SIZE,
     );
     for (const batchUserIds of batches) {
@@ -2096,17 +2104,28 @@ export const upsertQuestEntries = async (
       // active with last run's fully-done tracker, which getReward reads as resolved and pays
       // out again. Removing it in SQL (rather than read-modify-write) also keeps progress a
       // concurrent request recorded for an unrelated active quest.
-      await client
-        .update(userData)
-        .set({
-          questData: sql`JSON_REMOVE(
-            ${userData.questData},
-            TRIM(TRAILING '.id' FROM ${trackerPath})
-          )`,
-        })
-        .where(
-          and(inArray(userData.userId, batchUserIds), sql`${trackerPath} IS NOT NULL`),
-        );
+      //
+      // JSON_SEARCH 'one' finds a single tracker, and questData is not guaranteed to hold only
+      // one per quest — duplicates exist in production. Repeat until a pass changes nothing, or
+      // the survivor becomes the tracker getNewTrackers reads and the quest still opens done.
+      // Each pass strictly shrinks the array, so the cap is only a guard against a wedged cron.
+      for (let pass = 0; pass < QUEST_RESET_MAX_TRACKER_PASSES; pass++) {
+        const removed = await client
+          .update(userData)
+          .set({
+            questData: sql`JSON_REMOVE(
+              ${userData.questData},
+              TRIM(TRAILING '.id' FROM ${trackerPath})
+            )`,
+          })
+          .where(
+            and(
+              inArray(userData.userId, batchUserIds),
+              sql`${trackerPath} IS NOT NULL`,
+            ),
+          );
+        if (removed.rowsAffected === 0) break;
+      }
 
       await client
         .update(questHistory)
