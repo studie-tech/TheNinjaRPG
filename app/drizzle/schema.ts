@@ -2349,6 +2349,15 @@ export const userData = mysqlTable(
     federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses)
       .default("NONE")
       .notNull(),
+    tavernUsernameColor: mysqlEnum(
+      "tavernUsernameColor",
+      consts.TavernColorPresets,
+    )
+      .default("DEFAULT")
+      .notNull(),
+    tavernTitleColor: mysqlEnum("tavernTitleColor", consts.TavernColorPresets)
+      .default("DEFAULT")
+      .notNull(),
     approvedTos: boolean("approvedTos").default(false).notNull(),
     avatar: varchar("avatar", { length: 191 }),
     avatarLight: varchar("avatarLight", { length: 191 }),

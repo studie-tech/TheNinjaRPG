@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CoreVillages, LegacyVillageNames } from "@/drizzle/constants";
+import { CoreVillages, LegacyVillageNames, UserRoles } from "@/drizzle/constants";
 
 /**
  * Names that are reserved against being used as clan, faction, or ANBU squad names.
@@ -60,3 +60,34 @@ export const createReservedNameField = ({
  * actually changes.
  */
 export const looseFactionNameField = z.string().trim().min(3).max(88);
+
+/** Village and faction names users must not use as custom titles. */
+export const RESERVED_CUSTOM_TITLE_VILLAGE_NAMES = [
+  "Syndicate",
+  ...RESERVED_FACTION_NAMES,
+] as const;
+
+const STAFF_ROLE_KEYS = new Set(
+  UserRoles.filter((role) => role !== "USER").map(normalizeReservedName),
+);
+
+export const RESERVED_CUSTOM_TITLE_MESSAGE =
+  "Custom titles cannot match a village name or staff role.";
+
+/** Rejects titles that collide with staff roles or village/faction names. */
+export const isReservedCustomTitle = (
+  title: string,
+  extraVillageNames: readonly string[] = [],
+): boolean => {
+  const normalized = normalizeReservedName(title);
+  if (!normalized) return false;
+  if (STAFF_ROLE_KEYS.has(normalized)) return true;
+  if (
+    RESERVED_CUSTOM_TITLE_VILLAGE_NAMES.some(
+      (name) => normalizeReservedName(name) === normalized,
+    )
+  ) {
+    return true;
+  }
+  return extraVillageNames.some((name) => normalizeReservedName(name) === normalized);
+};

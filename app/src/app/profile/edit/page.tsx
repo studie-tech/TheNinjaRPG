@@ -11,6 +11,7 @@ import {
   Heart,
   History,
   Mail,
+  Palette,
   PenLine,
   RotateCcw,
   SendHorizontal,
@@ -58,7 +59,11 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
+import type {
+  ContentType,
+  IMG_ORIENTATION,
+  TavernColorPreset,
+} from "@/drizzle/constants";
 import {
   BLOODLINE_SWAP_COOLDOWN_HOURS,
   BLOODLINE_SWAP_FREE_DAYS,
@@ -70,6 +75,9 @@ import {
   COST_SKILL_RESET,
   COST_SWAP_BLOODLINE,
   COST_SWAP_VILLAGE,
+  COST_TAVERN_COLOR_CHANGE,
+  getTavernColorChangeCost,
+  TavernColorPresets,
 } from "@/drizzle/constants";
 import type { Bloodline, Village } from "@/drizzle/schema";
 import { useAutoCombatSetting } from "@/hooks/combat";
@@ -102,6 +110,11 @@ import {
   normalizeMobileNavConfig,
 } from "@/libs/mobileNavConfig";
 import { useInfinitePagination } from "@/libs/pagination";
+import {
+  getTavernTitleClass,
+  getTavernUsernameClass,
+  TAVERN_COLOR_STYLES,
+} from "@/libs/tavernColors";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import type { BaseServerResponse } from "@/server/api/trpc";
@@ -252,6 +265,16 @@ export default function EditProfile() {
           onClick={setActiveElement}
         >
           <CustomTitle />
+        </Accordion>
+        <Accordion
+          title="Tavern Colors"
+          selectedTitle={activeElement}
+          unselectedSubtitle="Customize your tavern username and title colors"
+          selectedSubtitle={`Each custom color costs ${COST_TAVERN_COLOR_CHANGE} reputation points. Returning to Default is free. You have ${userData.reputationPoints} reputation points.`}
+          icon={Palette}
+          onClick={setActiveElement}
+        >
+          <TavernColors />
         </Accordion>
         <Accordion
           title="Change Gender"
@@ -1852,6 +1875,169 @@ const CustomTitle: React.FC = () => {
           </Confirm2>
         </form>
       </Form>
+    </div>
+  );
+};
+
+/** Preset-only tavern styling controls. Username and title are separate purchases. */
+const TavernColors: React.FC = () => {
+  const { data: userData } = useRequiredUserData();
+  const utils = api.useUtils();
+  const [usernameColor, setUsernameColor] = useState<TavernColorPreset>(
+    userData?.tavernUsernameColor ?? "DEFAULT",
+  );
+  const [titleColor, setTitleColor] = useState<TavernColorPreset>(
+    userData?.tavernTitleColor ?? "DEFAULT",
+  );
+
+  useEffect(() => {
+    if (userData) {
+      setUsernameColor(userData.tavernUsernameColor);
+      setTitleColor(userData.tavernTitleColor);
+    }
+  }, [userData?.tavernUsernameColor, userData?.tavernTitleColor]);
+
+  const updateColor = api.profile.updateTavernColor.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) await utils.profile.getUser.invalidate();
+    },
+  });
+
+  if (!userData) return <Loader explanation="Loading tavern colors" />;
+
+  const controls: Array<{
+    target: "username" | "title";
+    label: string;
+    value: TavernColorPreset;
+    current: TavernColorPreset;
+    setValue: (value: TavernColorPreset) => void;
+  }> = [
+    {
+      target: "username",
+      label: "Username color",
+      value: usernameColor,
+      current: userData.tavernUsernameColor,
+      setValue: setUsernameColor,
+    },
+    {
+      target: "title",
+      label: "Title badge color",
+      value: titleColor,
+      current: userData.tavernTitleColor,
+      setValue: setTitleColor,
+    },
+  ];
+
+  return (
+    <div className="grid gap-6 p-4 md:grid-cols-2">
+      {controls.map((control) => {
+        const cost = getTavernColorChangeCost(control.value);
+        const unchanged = control.value === control.current;
+        const canAfford = cost === 0 || userData.reputationPoints >= cost;
+        const isThisPending =
+          updateColor.isPending && updateColor.variables?.target === control.target;
+        const disabled = unchanged || !canAfford || updateColor.isPending;
+
+        return (
+          <section key={control.target} className="space-y-4 rounded-lg border p-4">
+            <fieldset>
+              <legend className="font-semibold text-lg">{control.label}</legend>
+              <p className="mb-3 text-muted-foreground text-sm">
+                Current: {TAVERN_COLOR_STYLES[control.current].label}. Custom presets
+                cost {COST_TAVERN_COLOR_CHANGE} reputation; Default is free.
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {TavernColorPresets.map((preset) => {
+                  const style = TAVERN_COLOR_STYLES[preset];
+                  const selected = control.value === preset;
+                  return (
+                    <label
+                      key={preset}
+                      className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-left text-sm transition-colors hover:bg-poppopover ${
+                        selected ? "ring-2 ring-primary" : ""
+                      } ${updateColor.isPending ? "cursor-not-allowed opacity-50" : ""}`}
+                    >
+                      <input
+                        type="radio"
+                        name={`tavern-${control.target}-color`}
+                        value={preset}
+                        checked={selected}
+                        aria-label={`${control.label}: ${style.label}`}
+                        className="sr-only"
+                        onChange={() => control.setValue(preset)}
+                        disabled={updateColor.isPending}
+                      />
+                      <span
+                        aria-hidden="true"
+                        className={`h-6 w-6 shrink-0 rounded-full border ${style.swatchClass}`}
+                      />
+                      {style.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <div className="rounded-md bg-popover p-3 text-center">
+              <p className="mb-2 text-muted-foreground text-xs">Live preview</p>
+              {control.target === "username" ? (
+                <span
+                  className={`${
+                    control.value === "DEFAULT"
+                      ? "text-popover-foreground"
+                      : getTavernUsernameClass(control.value)
+                  } font-bold`}
+                >
+                  {userData.username}
+                </span>
+              ) : (
+                <span
+                  className={`m-1 rounded-md p-1 ${getTavernTitleClass(control.value)}`}
+                >
+                  {userData.customTitle || "Custom title preview"}
+                </span>
+              )}
+            </div>
+
+            <Confirm2
+              title={`Confirm ${control.label}`}
+              disabled={disabled}
+              button={
+                <Button type="button" className="w-full" disabled={disabled}>
+                  {isThisPending ? (
+                    <Loader size={5} />
+                  ) : unchanged ? (
+                    "Already selected"
+                  ) : !canAfford ? (
+                    `Need ${cost - userData.reputationPoints} More Reps`
+                  ) : cost === 0 ? (
+                    "Return to Default (Free)"
+                  ) : (
+                    `Apply for ${cost} Reps`
+                  )}
+                </Button>
+              }
+              onAccept={(event) => {
+                event.preventDefault();
+                updateColor.mutate({
+                  target: control.target,
+                  color: control.value,
+                });
+              }}
+            >
+              {cost === 0
+                ? `Return your tavern ${control.target} color to Default for free?`
+                : `Change your tavern ${control.target} color to ${TAVERN_COLOR_STYLES[control.value].label} for ${cost} reputation points?`}
+            </Confirm2>
+          </section>
+        );
+      })}
+      <p className="text-muted-foreground text-sm md:col-span-2">
+        Username and title choices are purchased independently. Tavern colors never
+        appear in inbox, support, forums, or other posts. Staff role styling remains
+        authoritative, while Default keeps the existing supporter username style.
+      </p>
     </div>
   );
 };

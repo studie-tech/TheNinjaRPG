@@ -106,7 +106,7 @@ export const getReadableVillageHexColor = (hex: string): string => {
 };
 
 /** WCAG contrast ratio between two relative luminances (0–1) */
-const contrastRatio = (a: number, b: number) => {
+export const contrastRatio = (a: number, b: number) => {
   const lighter = Math.max(a, b);
   const darker = Math.min(a, b);
   return (lighter + 0.05) / (darker + 0.05);

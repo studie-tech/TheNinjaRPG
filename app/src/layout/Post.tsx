@@ -1,9 +1,15 @@
 import Link from "next/link";
 import type React from "react";
-import type { FederalStatus, UserRank, UserRole } from "@/drizzle/constants";
+import type {
+  FederalStatus,
+  TavernColorPreset,
+  UserRank,
+  UserRole,
+} from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
+import { resolveTavernColorClasses } from "@/libs/tavernColors";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 
 export interface PostProps {
@@ -21,6 +27,8 @@ export interface PostProps {
     villageHexColor?: string | null;
     nRecruited?: number | null;
     federalStatus: FederalStatus;
+    tavernUsernameColor?: TavernColorPreset;
+    tavernTitleColor?: TavernColorPreset;
     tavernMessages?: number | null;
   };
   className?: string;
@@ -34,6 +42,7 @@ export interface PostProps {
   href?: string;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  tavernStyling?: boolean;
 }
 
 const Post: React.FC<PostProps> = (props) => {
@@ -41,6 +50,7 @@ const Post: React.FC<PostProps> = (props) => {
   let userRole = "bg-slate-300";
   let color = "bg-popover text-popover-foreground";
   let hover = "hover:bg-poppopover";
+  let titleColor = "bg-gray-500 text-white";
 
   switch (props.color) {
     case "green":
@@ -142,6 +152,19 @@ const Post: React.FC<PostProps> = (props) => {
       break;
   }
 
+  if (props.user) {
+    const tavernColors = resolveTavernColorClasses({
+      tavernStyling: props.tavernStyling ?? false,
+      role: props.user.role,
+      usernamePreset: props.user.tavernUsernameColor ?? "DEFAULT",
+      titlePreset: props.user.tavernTitleColor ?? "DEFAULT",
+      baseUsernameClass: userColor,
+      baseTitleClass: titleColor,
+    });
+    userColor = tavernColors.usernameClass;
+    titleColor = tavernColors.titleClass;
+  }
+
   // Blocks
   const UsernameBlock = props.user && (
     <div className="basis-1/4">
@@ -154,7 +177,7 @@ const Post: React.FC<PostProps> = (props) => {
           {showUserRank(props.user)}
         </span>
         {props.user.customTitle && (
-          <span className="m-1 rounded-md bg-gray-500 p-1 text-white">
+          <span className={`${titleColor} m-1 rounded-md p-1`}>
             {props.user.customTitle}
           </span>
         )}
