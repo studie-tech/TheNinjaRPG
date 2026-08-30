@@ -18,9 +18,11 @@ const SOURCE_ROOT = join(REPO_ROOT, "app/src");
 
 /** Any receiver, since `api.useUtils()` is stored as both `utils` and `util` across the app. */
 const CACHE_CALL =
-  /^\s*await\s+[\w$]+(?:\.[\w$]+)+\.(?:invalidate|refetch|prefetch|reset|fetch|ensureData)\(/;
+  /^await\s+[\w$]+(?:\.[\w$]+)+\.(?:invalidate|refetch|prefetch|reset|fetch|ensureData)\(/;
 const IGNORABLE = /^\s*(\/\/|\/\*|\*|$)/;
 const OPT_OUT = "serial-invalidation-ok";
+/** Enough for any real call; a bracket inside a string literal must not swallow the file. */
+const MAX_STATEMENT_LINES = 15;
 
 const sourceFiles = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -29,48 +31,56 @@ const sourceFiles = (directory: string): string[] =>
     return /\.tsx?$/.test(entry.name) ? [path] : [];
   });
 
-/** Line indices where a cache call starts, skipping over calls whose arguments wrap. */
-const cacheCalls = (lines: string[]) => {
-  const starts: number[] = [];
-  const ends: number[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    if (!CACHE_CALL.test(lines[i] ?? "")) continue;
-    let depth = 0;
-    let end = i;
-    for (; end < lines.length; end++) {
-      const line = lines[end] ?? "";
-      depth += (line.match(/\(/g)?.length ?? 0) - (line.match(/\)/g)?.length ?? 0);
-      if (depth <= 0) break;
+/**
+ * Awaited statements as single logical lines, so neither a wrapped argument list nor a member
+ * chain broken across lines can hide a call.
+ */
+const awaitedStatements = (lines: string[]) => {
+  const statements: { start: number; end: number; text: string }[] = [];
+  let start = -1;
+  let depth = 0;
+  let text = "";
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (start < 0) {
+      if (!trimmed.startsWith("await ")) return;
+      start = index;
+      text = "";
     }
-    starts.push(i);
-    ends.push(end);
-    i = end;
-  }
-  return { starts, ends };
+    // Drop a trailing comment, or a statement carrying one would never look finished
+    const code = trimmed.replace(/(^|[^:])\/\/.*$/, "$1").trim();
+    text += code;
+    depth += (code.match(/[([]/g)?.length ?? 0) - (code.match(/[)\]]/g)?.length ?? 0);
+    if ((depth <= 0 && text.endsWith(";")) || index - start >= MAX_STATEMENT_LINES) {
+      statements.push({ start, end: index, text });
+      start = -1;
+      depth = 0;
+    }
+  });
+  return statements;
 };
 
-const serialRuns = (path: string) => {
-  const lines = readFileSync(path, "utf8").split("\n");
-  const { starts, ends } = cacheCalls(lines);
+const serialRuns = (lines: string[], label: string) => {
+  const calls = awaitedStatements(lines).filter((one) => CACHE_CALL.test(one.text));
   const runs: string[] = [];
   let runStart = 0;
-  for (let call = 1; call <= starts.length; call++) {
+  for (let call = 1; call <= calls.length; call++) {
     // A blank line or a comment between two awaits does not make them any less serial
+    const previous = calls[call - 1];
+    const next = calls[call];
     const continues =
-      call < starts.length &&
-      lines
-        .slice((ends[call - 1] ?? 0) + 1, starts[call])
-        .every((line) => IGNORABLE.test(line));
+      next !== undefined &&
+      previous !== undefined &&
+      lines.slice(previous.end + 1, next.start).every((line) => IGNORABLE.test(line));
     if (continues) continue;
-    const first = starts[runStart] ?? 0;
-    const last = ends[call - 1] ?? first;
-    const excused = lines
-      .slice(Math.max(first - 1, 0), last + 1)
-      .some((line) => line.includes(OPT_OUT));
-    if (call - runStart >= 2 && !excused) {
-      runs.push(
-        `${relative(REPO_ROOT, path)}:${first + 1} (${call - runStart} awaits in a row)`,
-      );
+    const first = calls[runStart];
+    if (call - runStart >= 2 && first !== undefined && previous !== undefined) {
+      const excused = lines
+        .slice(Math.max(first.start - 1, 0), previous.end + 1)
+        .some((line) => line.includes(OPT_OUT));
+      if (!excused) {
+        runs.push(`${label}:${first.start + 1} (${call - runStart} awaits in a row)`);
+      }
     }
     runStart = call;
   }
@@ -79,10 +89,39 @@ const serialRuns = (path: string) => {
 
 describe("client cache invalidation", () => {
   it("never awaits invalidations one at a time", () => {
-    const offenders = sourceFiles(SOURCE_ROOT).flatMap(serialRuns);
+    const offenders = sourceFiles(SOURCE_ROOT).flatMap((path) =>
+      serialRuns(readFileSync(path, "utf8").split("\n"), relative(REPO_ROOT, path)),
+    );
     expect(
       offenders,
       `Batch these into one await Promise.all([...]) so the refetches share a request:\n${offenders.join("\n")}`,
     ).toEqual([]);
+  });
+
+  // The scan above is only worth as much as what it can see, so pin down every shape it must
+  // catch — and every one it must not, since a guard that cries wolf gets deleted
+  const found = (source: string) => serialRuns(source.split("\n"), "fixture").length;
+  const user = "await utils.profile.getUser.invalidate();";
+  const clan = "await utils.clan.get.invalidate();";
+
+  it.each([
+    ["back to back", `${user}\n${clan}`],
+    ["under the `util` alias", `await util.profile.getUser.invalidate();\n${clan}`],
+    ["with a blank line between", `${user}\n\n${clan}`],
+    ["with a comment between", `${user}\n// why\n${clan}`],
+    ["with a wrapped argument list", `await utils.clan.get.invalidate({\n  id,\n});\n${clan}`],
+    ["with a wrapped member chain", `await utils.profile.getUser\n.invalidate();\n${clan}`],
+    ["with trailing comments", `${user} // the user\n${clan} // the clan`],
+  ])("catches two invalidations %s", (_shape, source) => {
+    expect(found(source)).toBe(1);
+  });
+
+  it.each([
+    ["one invalidation on its own", user],
+    ["a statement between them", `${user}\nrouter.push("/");\n${clan}`],
+    ["a cancel before an invalidate", `await utils.profile.getUser.cancel();\n${user}`],
+    ["an opt-out", `// ${OPT_OUT}: the second reads what the first wrote\n${user}\n${clan}`],
+  ])("leaves %s alone", (_shape, source) => {
+    expect(found(source)).toBe(0);
   });
 });
