@@ -5453,6 +5453,8 @@ export const farmExtraction = mysqlTable(
     seedQuantity: int("seedQuantity").notNull(),
     startedAt: datetime("startedAt", { mode: "date", fsp: 3 }).notNull(),
     finishAt: datetime("finishAt", { mode: "date", fsp: 3 }).notNull(),
+    /** Set while a request is paying this extraction out; see settleFarmExtractions. */
+    claimedAt: datetime("claimedAt", { mode: "date", fsp: 3 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),

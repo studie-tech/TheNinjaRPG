@@ -3884,6 +3884,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "claimedAt": {
+          "name": "claimedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "datetime(3)",
