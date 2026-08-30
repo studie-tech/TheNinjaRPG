@@ -3086,10 +3086,14 @@ export const fetchPublicUsers = async (info: {
       limit: input.limit,
       orderBy: getOrder(),
     }),
+    // Only the caller's role is read, to decide whether IPs may be seen. This runs
+    // on most page loads (the online-players sidebar), so it selects that one column
+    // rather than the whole ~90-column row.
     ...(userId
       ? [
           client.query.userData.findFirst({
             where: eq(userData.userId, userId),
+            columns: { role: true },
           }),
         ]
       : [null]),
