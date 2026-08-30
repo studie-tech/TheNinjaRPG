@@ -133,17 +133,66 @@ On the web side, `app/public/icons/` also carries maskable variants inset to And
 safe zone, and a flattened `icon-180x180.png` because iOS renders transparent corners
 black.
 
-## Not verified yet
+## Toolchain
 
-None of the native code has been compiled or run — it was written on a machine with no
-Xcode and no Android SDK. What has been checked:
+Versions matter here; these are the ones both apps have actually been built with.
 
-- every Swift file passes `swiftc -parse` (syntax only, no type checking)
-- every plist passes `plutil -lint`, and all Android XML parses
-- `App.xcodeproj` round-trips through the `xcodeproj` gem, with the widget target,
-  entitlements, capabilities and the Sentry package all present afterwards
-- `configure-xcode.rb` is idempotent across repeated runs
+**iOS** — Xcode 26.6 with the iOS 26.5 SDK. The simulator runtime is a separate download:
 
-That catches syntax and structure, not types or linking. Expect to fix compile errors on
-the first real build, and run the three device checks in
-[`docs/StoreSubmission.md`](../docs/StoreSubmission.md) before trusting the shell.
+```bash
+xcodebuild -downloadPlatform iOS
+```
+
+If `xcrun simctl list runtimes` stays empty afterwards, check `xcrun simctl runtime list`
+for an entry marked `Unusable - Duplicate`. A duplicate blocks the good image from
+mounting, and deleting it removes the shared backing asset, so the fix is to delete every
+iOS image and download once more.
+
+**Android** — **JDK 21**, not the latest. Gradle 8.14.3 supports up to Java 24, and JDK 26
+fails at configuration time with `Unsupported class file major version 70`:
+
+```bash
+brew install --cask temurin@21
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
+```
+
+The SDK needs `platforms;android-36` to match `compileSdkVersion`, plus a system image for
+the emulator. `avdmanager` resolves the SDK root from its own location rather than from
+`ANDROID_HOME`, so the command-line tools have to live *inside* the SDK — a symlink is not
+enough, because the launcher script resolves symlinks before deriving the root:
+
+```bash
+export ANDROID_HOME=~/Library/Android/sdk
+cp -R "$(dirname "$(which sdkmanager)")/.." "$ANDROID_HOME/cmdline-tools/latest"
+sdkmanager "platforms;android-36" "system-images;android-36;google_apis;arm64-v8a"
+avdmanager create avd -n TNR-Pixel -k "system-images;android-36;google_apis;arm64-v8a"
+```
+
+## Verified
+
+Both shells build, install and launch:
+
+- **iOS** — `xcodebuild ... -sdk iphonesimulator` succeeds with zero errors and zero
+  warnings in our sources. The app installs with `TNRWidgets.appex` embedded and runs on
+  an iPhone 17 / iOS 26.5 simulator.
+- **Android** — `./gradlew assembleDebug` succeeds. The APK installs and launches on an
+  API 36 emulator, the adaptive launcher icon renders, and `libsentry-android.so` loads,
+  so native crash reporting is live.
+
+On both, the bundled entry point paints immediately and the offline screen appears when
+the connectivity preflight fails — which it currently does against production, because the
+CORS header the preflight needs is part of this PR and is not deployed yet. Verified
+locally against this branch:
+
+```
+access-control-allow-origin: https://localhost
+```
+
+with `capacitor://localhost` allowed, an arbitrary origin refused, and `OPTIONS` answering
+204.
+
+What is still unverified is everything that needs a signed build or a real account: push
+delivery, Live Activities, in-app purchase, and Sign in with Apple. Stage 0's three device
+checks in [`docs/StoreSubmission.md`](../docs/StoreSubmission.md) also still stand — the
+offline cold launch is now covered, but Clerk session persistence across cold launches and
+the three.js memory ceiling need a signed build against a reachable origin.
