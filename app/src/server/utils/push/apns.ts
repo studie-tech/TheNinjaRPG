@@ -13,6 +13,7 @@
 
 import { type ClientHttp2Session, connect, constants } from "node:http2";
 import { env } from "@/env/server.mjs";
+import { mapWithConcurrency } from "./batch";
 import { signJwt } from "./jwt";
 import { apnsAlertPayload } from "./payloads";
 import { isDeadApnsToken, type PushMessage, type PushResult } from "./types";
@@ -201,8 +202,8 @@ export const sendBatch = async (requests: ApnsRequest[]): Promise<PushResult[]> 
   session.setTimeout(SESSION_TIMEOUT_MS, () => session.close());
 
   try {
-    return await Promise.all(
-      requests.map((request) => sendOne(session, providerToken, request)),
+    return await mapWithConcurrency(requests, (request) =>
+      sendOne(session, providerToken, request),
     );
   } finally {
     session.close();

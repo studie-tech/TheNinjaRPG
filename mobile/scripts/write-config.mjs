@@ -8,8 +8,12 @@ import { fileURLToPath } from "node:url";
 
 const ORIGIN = process.env.TNR_ORIGIN ?? "https://www.theninja-rpg.com";
 
-// Fail loudly rather than baking a malformed origin into the binary.
-new URL(ORIGIN);
+// Fail loudly rather than baking a bad origin into the binary: a malformed one breaks
+// the shell, and a cleartext one would silently downgrade every request the app makes.
+const origin = new URL(ORIGIN);
+if (origin.protocol !== "https:") {
+  throw new Error(`TNR_ORIGIN must be https, got ${origin.protocol}`);
+}
 
 const target = join(dirname(fileURLToPath(import.meta.url)), "..", "www", "config.js");
 writeFileSync(

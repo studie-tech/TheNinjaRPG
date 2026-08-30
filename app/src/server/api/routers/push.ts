@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -10,11 +10,13 @@ import {
 import {
   PUSH_CATEGORIES,
   PUSH_MAX_DEVICES_PER_USER,
+  PUSH_TOKEN_STALE_DAYS,
   type PushCategory,
 } from "@/drizzle/constants";
 import { userDevice, userLiveActivity, userPushPreference } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { deliveryTest, isPushEnabled, sendPushToUsers } from "@/server/utils/push";
+import { secondsFromNow } from "@/utils/time";
 import {
   endActivitySchema,
   registerActivitySchema,
@@ -107,7 +109,17 @@ export const pushRouter = createTRPCRouter({
         ctx.drizzle
           .select({ id: userDevice.id })
           .from(userDevice)
-          .where(eq(userDevice.userId, ctx.userId)),
+          .where(
+            and(
+              eq(userDevice.userId, ctx.userId),
+              // Same window sendPushToUsers uses, so the count cannot promise a delivery
+              // the fan-out would skip.
+              gte(
+                userDevice.lastSeenAt,
+                secondsFromNow(-PUSH_TOKEN_STALE_DAYS * 86400),
+              ),
+            ),
+          ),
       ]);
       const stored = new Map<PushCategory, boolean>(
         preferences.map((row) => [row.category, row.enabled]),

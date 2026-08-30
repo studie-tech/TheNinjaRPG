@@ -66,10 +66,13 @@ export const isDeadApnsToken = (status: number, reason: string): boolean =>
   status === 410 || DEAD_APNS_REASONS.has(reason);
 
 /**
- * FCM codes that mean the registration token is gone. `INVALID_ARGUMENT` is excluded: it
- * covers a malformed payload as well as a malformed token, and a bad payload is sent to
- * every device in the batch.
+ * FCM codes that mean the registration token is gone.
+ *
+ * `UNREGISTERED` is the only one that says so specifically. `INVALID_ARGUMENT` covers a
+ * malformed payload as well as a malformed token, and `NOT_FOUND` is the HTTP status
+ * behind several unrelated failures including a wrong project id — both would be returned
+ * for every device in the batch at once.
  */
-const DEAD_FCM_CODES = new Set(["UNREGISTERED", "NOT_FOUND"]);
+const DEAD_FCM_CODES = new Set(["UNREGISTERED"]);
 
 export const isDeadFcmToken = (code: string): boolean => DEAD_FCM_CODES.has(code);

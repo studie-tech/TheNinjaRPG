@@ -89,11 +89,33 @@ describe("dead-token classification", () => {
 
   it("does not treat an FCM payload error as a dead token", async () => {
     const { isDeadFcmToken } = await import("@/server/utils/push/types");
+    // UNREGISTERED is the only code that specifically means this token is gone.
     expect(isDeadFcmToken("UNREGISTERED")).toBe(true);
-    expect(isDeadFcmToken("NOT_FOUND")).toBe(true);
-    // INVALID_ARGUMENT covers a malformed payload, which is sent to every device.
+    // INVALID_ARGUMENT covers a malformed payload and NOT_FOUND is the status behind
+    // several unrelated failures including a wrong project id. Both would come back for
+    // every device in the batch, so pruning on either empties the table.
     expect(isDeadFcmToken("INVALID_ARGUMENT")).toBe(false);
+    expect(isDeadFcmToken("NOT_FOUND")).toBe(false);
     expect(isDeadFcmToken("UNAVAILABLE")).toBe(false);
     expect(isDeadFcmToken("INTERNAL")).toBe(false);
+  });
+});
+
+describe("numeric character references", () => {
+  it("decodes decimal and hexadecimal apostrophes", () => {
+    // Most editors emit these rather than &apos;, so a named-entity table alone leaves
+    // raw markup in the notification body.
+    expect(toPlainText("Tom&#39;s squad")).toBe("Tom's squad");
+    expect(toPlainText("Tom&#039;s squad")).toBe("Tom's squad");
+    expect(toPlainText("Tom&#x27;s squad")).toBe("Tom's squad");
+    expect(toPlainText("Tom&#X27;s squad")).toBe("Tom's squad");
+  });
+
+  it("leaves references it cannot safely decode as written", () => {
+    expect(toPlainText("lone surrogate &#xD800; here")).toBe(
+      "lone surrogate &#xD800; here",
+    );
+    expect(toPlainText("out of range &#1114112;")).toBe("out of range &#1114112;");
+    expect(toPlainText("null &#0;")).toBe("null &#0;");
   });
 });

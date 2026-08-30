@@ -7,6 +7,7 @@
  */
 
 import { env } from "@/env/server.mjs";
+import { mapWithConcurrency } from "./batch";
 import { signJwt } from "./jwt";
 import { fcmMessage } from "./payloads";
 import { isDeadFcmToken, type PushMessage, type PushResult } from "./types";
@@ -151,5 +152,5 @@ export const sendAlerts = async (
       retryable: true,
     }));
   }
-  return Promise.all(tokens.map((token) => sendOne(accessToken, token, message)));
+  return mapWithConcurrency(tokens, (token) => sendOne(accessToken, token, message));
 };

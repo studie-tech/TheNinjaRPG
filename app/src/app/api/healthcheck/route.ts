@@ -21,6 +21,23 @@ const corsHeaders = async (): Promise<Record<string, string>> => {
   return { "Access-Control-Allow-Origin": origin, Vary: "Origin" };
 };
 
+/**
+ * Answered so a preflight can never be what stops the native shell from launching. The
+ * request the shell makes is a simple one and should not trigger this at all, but a shell
+ * is expensive to fix once shipped and this costs nothing.
+ */
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      ...(await corsHeaders()),
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Cache-Control, Pragma",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
+}
+
 export async function GET() {
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
   await cookies();

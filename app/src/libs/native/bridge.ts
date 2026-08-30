@@ -117,17 +117,26 @@ export const addNativeListener = (
   }
   let handle: PluginListenerHandle | undefined;
   let cancelled = false;
-  void Promise.resolve(
-    (listen as PluginListener).call(plugin, eventName, callback),
-  ).then((resolved) => {
-    if (cancelled) {
-      void resolved.remove();
-      return;
+  // Everything in this module is best-effort, so a shell that cannot attach the listener
+  // leaves the caller with a no-op unsubscribe rather than an unhandled rejection.
+  void (async () => {
+    try {
+      const resolved = await (listen as PluginListener).call(
+        plugin,
+        eventName,
+        callback,
+      );
+      if (cancelled) {
+        await resolved.remove();
+        return;
+      }
+      handle = resolved;
+    } catch {
+      handle = undefined;
     }
-    handle = resolved;
-  });
+  })();
   return () => {
     cancelled = true;
-    void handle?.remove();
+    void handle?.remove().catch(() => undefined);
   };
 };

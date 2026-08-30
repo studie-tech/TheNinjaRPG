@@ -135,9 +135,12 @@
           var timer = setTimeout(function () {
             controller.abort();
           }, TIMEOUT_MS);
-          return fetch(HEALTH, {
+          // A cache-busting query rather than cache: "no-store". That cache mode makes
+          // the engine append Cache-Control and Pragma request headers, which are not
+          // CORS-safelisted, and a preflight the route did not answer would leave the app
+          // stuck on the offline screen forever.
+          return fetch(HEALTH + "?t=" + String(new Date().getTime()), {
             method: "GET",
-            cache: "no-store",
             signal: controller.signal,
           })
             .then(function (response) {
