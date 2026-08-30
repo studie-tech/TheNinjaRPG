@@ -3,6 +3,7 @@
 import { Volume2, VolumeX } from "lucide-react";
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import DeviceSettings from "@/components/native/DeviceSettings";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -347,6 +348,8 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
           />
         </div>
       </div>
+
+      <DeviceSettings />
 
       {requiresInteraction && audioEnabled && (
         <p className="text-muted-foreground text-xs italic">

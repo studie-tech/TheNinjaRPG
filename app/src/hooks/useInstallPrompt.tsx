@@ -2,6 +2,21 @@
 
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
+import { isNative } from "@/libs/native";
+
+/** Delay before the prompt appears, so it never lands on top of a page still loading. */
+const AUTO_SHOW_DELAY_MS = 3000;
+const SHORT_DISMISSAL_MS = 7 * 24 * 60 * 60 * 1000;
+const LONG_DISMISSAL_MS = 60 * 24 * 60 * 60 * 1000;
+
+const isRecentlyDismissed = (): boolean => {
+  const longTerm = safeLocalStorageGetItem("pwa-install-dismissed-long");
+  if (longTerm && Date.now() - parseInt(longTerm, 10) < LONG_DISMISSAL_MS) return true;
+  const shortTerm = safeLocalStorageGetItem("pwa-install-dismissed");
+  return Boolean(
+    shortTerm && Date.now() - parseInt(shortTerm, 10) < SHORT_DISMISSAL_MS,
+  );
+};
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -52,43 +67,27 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
       (window.navigator as { standalone?: boolean }).standalone === true;
     setIsStandalone(standalone);
 
+    // Already inside the native app: there is nothing to add to a home screen.
+    if (isNative()) return;
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const scheduleAutoShow = () => {
+      if (standalone || !mobile || timeoutId !== undefined) return;
+      timeoutId = setTimeout(() => {
+        if (isRecentlyDismissed()) return;
+        setIsVisible(true);
+      }, AUTO_SHOW_DELAY_MS);
+    };
+
     // Listen for beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-
-      // Auto-show install prompt after delay if not already installed and on mobile
-      if (!standalone && mobile) {
-        const timeoutId = setTimeout(() => {
-          // Check for long-term dismissal (60 days)
-          const dismissedLongTime = safeLocalStorageGetItem(
-            "pwa-install-dismissed-long",
-          );
-          if (
-            dismissedLongTime &&
-            Date.now() - parseInt(dismissedLongTime, 10) < 60 * 24 * 60 * 60 * 1000
-          ) {
-            return; // Don't show for 60 days after long-term dismissal
-          }
-
-          // Check for short-term dismissal (7 days)
-          const dismissedTime = safeLocalStorageGetItem("pwa-install-dismissed");
-          if (
-            dismissedTime &&
-            Date.now() - parseInt(dismissedTime, 10) < 7 * 24 * 60 * 60 * 1000
-          ) {
-            return; // Don't show for 7 days after dismissal
-          }
-
-          setIsVisible(true);
-        }, 3000);
-        return () => clearTimeout(timeoutId);
-      }
+      scheduleAutoShow();
     };
 
     // Listen for app installed event
     const handleAppInstalled = () => {
-      console.log("PWA was installed");
       setIsInstalled(true);
       setIsVisible(false);
       setDeferredPrompt(null);
@@ -97,14 +96,19 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
 
+    // Safari never fires beforeinstallprompt, so without its own trigger the iOS
+    // "Add to Home Screen" instructions in InstallPrompt were unreachable.
+    if (iOS) scheduleAutoShow();
+
     return () => {
+      clearTimeout(timeoutId);
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
 
   const showPrompt = () => {
-    if (isMobile && !isStandalone && !isInstalled) {
+    if (isMobile && !isStandalone && !isInstalled && !isNative()) {
       setIsVisible(true);
     }
   };

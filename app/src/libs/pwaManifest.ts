@@ -1,7 +1,10 @@
 import type { MetadataRoute } from "next";
 
 export const createPwaManifest = (): MetadataRoute.Manifest => ({
-  id: "https://theninja-rpg.com",
+  // Relative so it resolves against whichever origin serves the manifest. The previous
+  // absolute value pointed at the apex domain while the site runs on www, which made it
+  // cross-origin and therefore ignored — every deploy looked like a brand new app.
+  id: "/",
   name: "TheNinja-RPG",
   short_name: "TNR",
   description: "A free browser game with ninja set in the world of Seichi",
@@ -62,6 +65,20 @@ export const createPwaManifest = (): MetadataRoute.Manifest => ({
       sizes: "512x512",
       type: "image/png",
       purpose: "any",
+    },
+    // Android and ChromeOS crop the launcher icon to their own shape. Without a maskable
+    // variant they letterbox the "any" icon inside a white circle instead.
+    {
+      src: "/icons/icon-maskable-192x192.png",
+      sizes: "192x192",
+      type: "image/png",
+      purpose: "maskable",
+    },
+    {
+      src: "/icons/icon-maskable-512x512.png",
+      sizes: "512x512",
+      type: "image/png",
+      purpose: "maskable",
     },
   ],
   screenshots: [
