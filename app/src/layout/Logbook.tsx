@@ -84,10 +84,20 @@ const LogbookAchievements: React.FC = () => {
   // refetch, and a definition that stayed cached past that point would leave a freshly published
   // achievement rendering nothing. isLoading rather than isPending: a disabled query never stops
   // being pending, which would leave the tab on its spinner forever.
-  const { data: catalogue, isLoading } = api.quests.getAchievementCatalogue.useQuery(
-    undefined,
-    { enabled: !!userData, staleTime: 5 * 60 * 1000 },
-  );
+  const {
+    data: catalogue,
+    isLoading,
+    refetch,
+  } = api.quests.getAchievementCatalogue.useQuery(undefined, {
+    enabled: !!userData,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Progress rows arrived but their definitions did not, so the list below is missing entries.
+  // Keyed on the data itself rather than on `isError`, which flickers false between the query's
+  // retries: what matters to the player is whether anything is missing, not how it went wrong.
+  const missingDefinitions =
+    !isLoading && !catalogue && (achievementProgress?.length ?? 0) > 0;
 
   const quests = useMemo(() => {
     const definitions = new Map(catalogue?.map((q) => [q.id, q]));
@@ -118,6 +128,18 @@ const LogbookAchievements: React.FC = () => {
 
   return (
     <div className="">
+      {/* Say so, and keep whatever did arrive on screen: a list that looks complete but is not
+          hides achievements, and one that never renders never auto-claims either. */}
+      {missingDefinitions && (
+        <div className="flex flex-row items-center gap-3 p-3">
+          <span className="text-muted-foreground text-sm">
+            Could not load the achievement list. Your progress is safe.
+          </span>
+          <Button type="button" variant="info" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
       {quests
         .filter((uq) => uq.completed === 0)
         .map((uq) => {
