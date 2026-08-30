@@ -313,6 +313,26 @@ describe("assignQuestToUser compatibility", () => {
     expect(sets.slice(0, 3).every((set) => "questData" in set)).toBe(true);
   });
 
+  it("leaves the quest shut when the removal never finishes clearing a batch", async () => {
+    // questData has no length limit, so a batch can in principle outlast the pass cap. Reopening
+    // then would produce exactly what the removal prevents: an active quest whose tracker still
+    // reads complete.
+    const { client, sets, update } = makeBulkClient(
+      [{ userId: user.userId, historyId: "history-1" }],
+      Array.from({ length: 80 }, () => 1),
+    );
+
+    await upsertQuestEntries(
+      client,
+      { ...quest, questType: "daily" } as never,
+      undefined as never,
+    );
+
+    expect(sets.every((set) => "questData" in set)).toBe(true);
+    expect(sets.some((set) => "completed" in set)).toBe(false);
+    expect(update).toHaveBeenCalledTimes(50);
+  });
+
   it("batches distinct users when a quest has duplicate history rows", async () => {
     const daily = { ...quest, questType: "daily" };
     const { client, wheres } = makeBulkClient([

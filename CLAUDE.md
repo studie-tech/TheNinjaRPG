@@ -10,7 +10,7 @@ All make commands should be run from the root directory `/`, not from `/app`.
 **Primary Development:**
 
 - `make build` - Build the Next.js application. Only run if explicitly asked.
-- `make test` - Run unit tests with vitest. Suites that execute real SQL skip unless `TEST_MYSQL_URL` points at a throwaway database (CI supplies one; locally the dev stack's MySQL works: `TEST_MYSQL_URL='mysql://root:placeholder@127.0.0.1:3307/tnr_test'`).
+- `make test` - Run unit tests with vitest. Suites that execute real SQL skip unless a throwaway database is configured; every table in it is truncated, so the opt-in is explicit. CI supplies one, and locally the dev stack's MySQL works: `TEST_MYSQL_ALLOW_DESTRUCTIVE=1 TEST_MYSQL_URL='mysql://root:placeholder@127.0.0.1:3307/tnr_test' make test`.
 - `make lint` - Run biome on the codebase
 - `make typecheck` - Run typechecking on the codebase
 

@@ -3,11 +3,12 @@
  *
  * The schema is pushed straight from `drizzle/schema.ts`, so tests run against the same tables,
  * types, indexes and constraints as production instead of a hand-rolled subset that drifts.
- * Setup and teardown happen once per `bun test` run; suites only reset the tables they touch.
+ * Setup happens once per `bun test` run; suites only reset the tables they touch.
  *
- * Point TEST_MYSQL_URL at a database you are happy to lose — setup drops every table in it:
+ * Every table in the target database is truncated, so both variables are required:
+ *   TEST_MYSQL_ALLOW_DESTRUCTIVE=1 \
  *   TEST_MYSQL_URL='mysql://root:placeholder@127.0.0.1:3307/tnr_test' bun test
- * Without it, `describeWithDatabase` skips and nothing here connects.
+ * With neither set, `describeWithDatabase` skips and nothing here connects.
  */
 import { execFileSync } from "node:child_process";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -17,13 +18,22 @@ import type { DrizzleClient } from "@/server/db";
 import * as schema from "@/drizzle/schema";
 
 const url = process.env.TEST_MYSQL_URL;
-const databaseName = url ? new URL(url).pathname.replace(/^\//, "") : "";
+const allowDestructive = process.env.TEST_MYSQL_ALLOW_DESTRUCTIVE === "1";
 
 /**
- * Setup drops every table, so refuse anything whose name does not read as disposable. A typo
- * pointing this at a real database would otherwise be unrecoverable.
+ * Setup truncates every table in the target database, so the caller has to say out loud that it
+ * is disposable. Naming heuristics were not enough: `production_test` and `contest` both read as
+ * test databases. Configuring a URL without the opt-in is a mistake worth surfacing rather than
+ * silently skipping, so it throws.
  */
-export const hasTestDatabase = !!url && /test/i.test(databaseName);
+if (url && !allowDestructive) {
+  throw new Error(
+    "TEST_MYSQL_URL is set but TEST_MYSQL_ALLOW_DESTRUCTIVE is not '1'. Every table in that " +
+      "database will be truncated, so opt in explicitly and only for a database you can lose.",
+  );
+}
+
+export const hasTestDatabase = !!url && allowDestructive;
 
 /** `describe` that skips wholesale when no test database is configured. */
 export const describeWithDatabase = hasTestDatabase ? describe : describe.skip;
