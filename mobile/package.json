@@ -1,0 +1,32 @@
+{
+  "name": "tnr-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Native iOS and Android shells for TheNinja-RPG",
+  "scripts": {
+    "add:ios": "cap add ios",
+    "add:android": "cap add android",
+    "prepare:web": "node scripts/write-config.mjs",
+    "sync": "bun run prepare:web && cap sync",
+    "open:ios": "cap open ios",
+    "open:android": "cap open android",
+    "run:ios": "cap run ios",
+    "run:android": "cap run android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/browser": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/haptics": "^8.0.0",
+    "@capacitor/ios": "^8.0.0",
+    "@capacitor/keyboard": "^8.0.0",
+    "@capacitor/network": "^8.0.0",
+    "@capacitor/push-notifications": "^8.0.0",
+    "@capacitor/splash-screen": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.0"
+  }
+}

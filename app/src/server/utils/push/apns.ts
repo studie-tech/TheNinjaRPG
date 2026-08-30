@@ -11,9 +11,10 @@
  * minutes, so it is cached in module scope and refreshed on a 40-minute clock.
  */
 
-import { createPrivateKey, sign as cryptoSign } from "node:crypto";
-import { connect, constants, type ClientHttp2Session } from "node:http2";
+import { type ClientHttp2Session, connect, constants } from "node:http2";
 import { env } from "@/env/server.mjs";
+import { signJwt } from "./jwt";
+import { apnsAlertPayload } from "./payloads";
 import type { PushMessage, PushResult } from "./types";
 
 const PRODUCTION_HOST = "https://api.push.apple.com";
@@ -37,34 +38,17 @@ export const isConfigured = (): boolean =>
     env.APNS_KEY_ID && env.APNS_TEAM_ID && env.APNS_PRIVATE_KEY && env.APNS_BUNDLE_ID,
   );
 
-const base64url = (input: Buffer | string): string =>
-  Buffer.from(input).toString("base64url");
-
-/**
- * Secret stores are overwhelmingly single-line, so the .p8 usually arrives with its
- * newlines escaped. Restore them before the PEM parser sees it.
- */
-const normalisePrivateKey = (key: string): string => key.replace(/\\n/g, "\n");
-
 const buildProviderToken = (): string => {
   const now = Date.now();
   if (cachedToken && now - cachedToken.createdAt < TOKEN_TTL_MS) {
     return cachedToken.jwt;
   }
-  const header = base64url(
-    JSON.stringify({ alg: "ES256", kid: env.APNS_KEY_ID, typ: "JWT" }),
-  );
-  const claims = base64url(
-    JSON.stringify({ iss: env.APNS_TEAM_ID, iat: Math.floor(now / 1000) }),
-  );
-  const signingInput = `${header}.${claims}`;
-  const key = createPrivateKey(normalisePrivateKey(env.APNS_PRIVATE_KEY ?? ""));
-  // Node emits DER-encoded ECDSA signatures by default; JOSE requires the raw r||s pair.
-  const signature = cryptoSign("sha256", Buffer.from(signingInput), {
-    key,
-    dsaEncoding: "ieee-p1363",
+  const jwt = signJwt({
+    algorithm: "ES256",
+    header: { kid: env.APNS_KEY_ID ?? "" },
+    claims: { iss: env.APNS_TEAM_ID ?? "", iat: Math.floor(now / 1000) },
+    privateKey: env.APNS_PRIVATE_KEY ?? "",
   });
-  const jwt = `${signingInput}.${base64url(signature)}`;
   cachedToken = { jwt, createdAt: now };
   return jwt;
 };
@@ -100,18 +84,6 @@ interface ApnsRequest {
   expiration?: number;
   priority?: 5 | 10;
 }
-
-/** Build the `aps` payload for an ordinary alert. */
-export const alertPayload = (message: PushMessage): Record<string, unknown> => ({
-  aps: {
-    alert: { title: message.title, body: message.body },
-    sound: "default",
-    "thread-id": message.category,
-    ...(message.badge === undefined ? {} : { badge: message.badge }),
-  },
-  ...(message.url ? { url: message.url } : {}),
-  ...(message.data ?? {}),
-});
 
 const sendOne = (
   session: ClientHttp2Session,
@@ -256,7 +228,7 @@ export const sendAlerts = async (
   sendBatch(
     tokens.map((token) => ({
       token,
-      payload: alertPayload(message),
+      payload: apnsAlertPayload(message),
       pushType: "alert" as const,
       collapseId: message.collapseId,
     })),

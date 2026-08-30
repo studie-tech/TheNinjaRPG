@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <title>TheNinja-RPG</title>
+    <style>
+      :root {
+        --tile: #f0c84c;
+        --ink: #23180a;
+        --muted: #6b5a33;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding: env(safe-area-inset-top) 28px env(safe-area-inset-bottom);
+        background: var(--tile);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        text-align: center;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.35rem;
+        letter-spacing: -0.02em;
+      }
+      p {
+        margin: 0;
+        max-width: 32ch;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.5;
+      }
+      .spinner {
+        width: 34px;
+        height: 34px;
+        border: 3px solid rgba(35, 24, 10, 0.2);
+        border-top-color: var(--ink);
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner {
+          animation-duration: 2.4s;
+        }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 26px;
+        background: var(--ink);
+        color: var(--tile);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.55;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading">
+      <div class="spinner" role="status" aria-label="Connecting"></div>
+    </div>
+
+    <div id="offline" hidden>
+      <h1>No connection</h1>
+      <p>
+        TheNinja-RPG is a live world, so it needs a connection to play. Check your network
+        and try again.
+      </p>
+      <p style="margin-top: 20px">
+        <button id="retry" type="button">Try again</button>
+      </p>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+      // The whole point of this page is that it is bundled in the binary: it paints
+      // instantly on a cold launch with no network, where a WebView pointed straight at
+      // the site would show nothing at all. It hands over to the live origin as soon as
+      // the server answers.
+      (function () {
+        var ORIGIN = window.TNR_ORIGIN || "https://www.theninja-rpg.com";
+        var HEALTH = ORIGIN + "/api/healthcheck";
+        var TIMEOUT_MS = 8000;
+        var RETRY_DELAYS = [1000, 2000, 4000];
+
+        var loading = document.getElementById("loading");
+        var offline = document.getElementById("offline");
+        var retry = document.getElementById("retry");
+        var attempt = 0;
+        var checking = false;
+
+        function showOffline() {
+          loading.hidden = true;
+          offline.hidden = false;
+          retry.disabled = false;
+        }
+
+        function showLoading() {
+          offline.hidden = true;
+          loading.hidden = false;
+        }
+
+        function reachable() {
+          var controller = new AbortController();
+          var timer = setTimeout(function () {
+            controller.abort();
+          }, TIMEOUT_MS);
+          return fetch(HEALTH, {
+            method: "GET",
+            cache: "no-store",
+            signal: controller.signal,
+          })
+            .then(function (response) {
+              clearTimeout(timer);
+              return response.ok;
+            })
+            .catch(function () {
+              clearTimeout(timer);
+              return false;
+            });
+        }
+
+        function check() {
+          if (checking) return;
+          checking = true;
+          showLoading();
+          reachable().then(function (ok) {
+            checking = false;
+            if (ok) {
+              // replace(), not assign(), so the back gesture cannot land on this page.
+              window.location.replace(ORIGIN);
+              return;
+            }
+            var delay = RETRY_DELAYS[attempt];
+            attempt += 1;
+            if (delay === undefined) {
+              showOffline();
+              return;
+            }
+            setTimeout(check, delay);
+          });
+        }
+
+        retry.addEventListener("click", function () {
+          retry.disabled = true;
+          attempt = 0;
+          check();
+        });
+
+        // Coming back into range should recover on its own, without a tap.
+        window.addEventListener("online", function () {
+          attempt = 0;
+          check();
+        });
+
+        check();
+      })();
+    </script>
+  </body>
+</html>

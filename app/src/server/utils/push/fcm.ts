@@ -6,8 +6,9 @@
  * token, which is cached until shortly before it expires.
  */
 
-import { createPrivateKey, sign as cryptoSign } from "node:crypto";
 import { env } from "@/env/server.mjs";
+import { signJwt } from "./jwt";
+import { fcmMessage } from "./payloads";
 import type { PushMessage, PushResult } from "./types";
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -26,11 +27,6 @@ let cachedAccessToken: CachedAccessToken | null = null;
 export const isConfigured = (): boolean =>
   Boolean(env.FCM_PROJECT_ID && env.FCM_CLIENT_EMAIL && env.FCM_PRIVATE_KEY);
 
-const base64url = (input: Buffer | string): string =>
-  Buffer.from(input).toString("base64url");
-
-const normalisePrivateKey = (key: string): string => key.replace(/\\n/g, "\n");
-
 /** Drop the cached access token. Used by tests and after a 401. */
 export const resetAccessToken = (): void => {
   cachedAccessToken = null;
@@ -38,20 +34,17 @@ export const resetAccessToken = (): void => {
 
 const buildAssertion = (): string => {
   const issuedAt = Math.floor(Date.now() / 1000);
-  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claims = base64url(
-    JSON.stringify({
-      iss: env.FCM_CLIENT_EMAIL,
+  return signJwt({
+    algorithm: "RS256",
+    claims: {
+      iss: env.FCM_CLIENT_EMAIL ?? "",
       scope: SCOPE,
       aud: TOKEN_ENDPOINT,
       iat: issuedAt,
       exp: issuedAt + 3600,
-    }),
-  );
-  const signingInput = `${header}.${claims}`;
-  const key = createPrivateKey(normalisePrivateKey(env.FCM_PRIVATE_KEY ?? ""));
-  const signature = cryptoSign("sha256", Buffer.from(signingInput), key);
-  return `${signingInput}.${base64url(signature)}`;
+    },
+    privateKey: env.FCM_PRIVATE_KEY ?? "",
+  });
 };
 
 const getAccessToken = async (): Promise<string> => {
@@ -91,35 +84,6 @@ const getAccessToken = async (): Promise<string> => {
  */
 const EXPIRED_CODES = new Set(["UNREGISTERED", "INVALID_ARGUMENT", "NOT_FOUND"]);
 
-/**
- * FCM's `data` payload only carries strings, so every value is stringified before it is
- * handed over — a number here silently fails the whole send.
- */
-const buildMessage = (
-  token: string,
-  message: PushMessage,
-): Record<string, unknown> => ({
-  message: {
-    token,
-    notification: { title: message.title, body: message.body },
-    data: {
-      category: message.category,
-      ...(message.url ? { url: message.url } : {}),
-      ...(message.data ?? {}),
-    },
-    android: {
-      priority: "HIGH",
-      ...(message.collapseId ? { collapse_key: message.collapseId } : {}),
-      notification: {
-        // Channels are declared by the shell; one per category in PUSH_CATEGORIES.
-        channel_id: message.category,
-        click_action: "TNR_NOTIFICATION_CLICK",
-        ...(message.badge === undefined ? {} : { notification_count: message.badge }),
-      },
-    },
-  },
-});
-
 const sendOne = async (
   accessToken: string,
   token: string,
@@ -134,7 +98,7 @@ const sendOne = async (
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(buildMessage(token, message)),
+        body: JSON.stringify({ message: fcmMessage(token, message) }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       },
     );
