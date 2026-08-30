@@ -197,6 +197,16 @@ mobile-sync: # Copy web config and plugins into the native projects
 	@echo "${GREEN}mobile-sync${RESET}"
 	cd mobile && bun run sync
 
+.PHONY: mobile-configure
+mobile-configure: # Apply capabilities and the widget target to the generated Xcode project
+	@echo "${GREEN}mobile-configure${RESET}"
+	cd mobile && bun run configure:ios
+
+.PHONY: mobile-beta
+mobile-beta: mobile-sync # Upload builds to TestFlight and the Play internal track
+	@echo "${GREEN}mobile-beta${RESET}"
+	cd mobile && bun run beta:ios && bun run beta:android
+
 .PHONY: mobile-ios
 mobile-ios: mobile-sync # Build and run the iOS shell in the simulator
 	@echo "${GREEN}mobile-ios${RESET}"

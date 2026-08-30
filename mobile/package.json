@@ -12,7 +12,10 @@
     "open:ios": "cap open ios",
     "open:android": "cap open android",
     "run:ios": "cap run ios",
-    "run:android": "cap run android"
+    "run:android": "cap run android",
+    "beta:ios": "bundle exec fastlane ios beta",
+    "beta:android": "bundle exec fastlane android beta",
+    "configure:ios": "ruby scripts/configure-xcode.rb"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
