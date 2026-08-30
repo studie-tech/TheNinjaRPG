@@ -120,6 +120,49 @@ unless embed_phase.files_references.include?(widget.product_reference)
 end
 app.add_dependency(widget) unless app.dependencies.any? { |d| d.target == widget }
 
+# --- Swift packages ----------------------------------------------------------------------
+
+# Native crash reporting. Added here rather than to CapApp-SPM/Package.swift, which
+# `cap sync` regenerates from the installed plugins and would overwrite. AppDelegate guards
+# the call on `canImport(Sentry)`, so a project where this has not resolved still builds.
+SWIFT_PACKAGES = [
+  {
+    url: "https://github.com/getsentry/sentry-cocoa.git",
+    requirement: { kind: "upToNextMajorVersion", minimumVersion: "8.44.0" },
+    products: ["Sentry"],
+  },
+].freeze
+
+SWIFT_PACKAGES.each do |spec|
+  # The project already carries a local package reference for CapApp-SPM, which has no
+  # repositoryURL at all.
+  reference = project.root_object.package_references.find do |ref|
+    ref.is_a?(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference) &&
+      ref.repositoryURL == spec[:url]
+  end
+  if reference.nil?
+    reference = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
+    reference.repositoryURL = spec[:url]
+    project.root_object.package_references << reference
+    puts "Added Swift package #{spec[:url]}"
+  end
+  reference.requirement = spec[:requirement]
+
+  spec[:products].each do |product_name|
+    next if app.package_product_dependencies.any? { |dep| dep.product_name == product_name }
+
+    dependency = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+    dependency.package = reference
+    dependency.product_name = product_name
+    app.package_product_dependencies << dependency
+    # Without an entry in the link phase the product resolves but never links, and
+    # `canImport` quietly reports false.
+    build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+    build_file.product_ref = dependency
+    app.frameworks_build_phase.files << build_file
+  end
+end
+
 # --- Capabilities ------------------------------------------------------------------------
 
 # Xcode reads these from the target attributes; without them it shows the capability as

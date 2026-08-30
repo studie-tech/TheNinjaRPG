@@ -53,6 +53,13 @@
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_status_info" />
         </receiver>
 
+        <!-- sentry-android initialises itself from these, so the shell needs no init code.
+             The DSN is public by design; it identifies the project and nothing else. -->
+        <meta-data android:name="io.sentry.dsn" android:value="@string/sentry_dsn" />
+        <meta-data android:name="io.sentry.auto-init" android:value="true" />
+        <meta-data android:name="io.sentry.traces.sample-rate" android:value="0.05" />
+        <meta-data android:name="io.sentry.send-default-pii" android:value="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

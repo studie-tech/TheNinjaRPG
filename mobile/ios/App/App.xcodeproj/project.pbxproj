@@ -23,6 +23,7 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		5DD68A08D1D00ED3A02D2320 /* TNRSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899CEDBA5E6D382BF26DE003 /* TNRSnapshot.swift */; };
 		65AA16B3BB8587CBD75444B9 /* SnapshotProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEEE63858F156FE5FDA69B40 /* SnapshotProvider.swift */; };
+		8D9FF00A30175EF55B969974 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 5F66428BBB0DDFBFF0AF014D /* Sentry */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		AE1298BE506C5AC46DC224A1 /* TNRAudioSessionPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F7172005B14E3D726CE3128 /* TNRAudioSessionPlugin.swift */; };
 		BC0DAD1846EE103C1CC53A55 /* QuestWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 456523F6A3B3CB4CB4BB6E32 /* QuestWidget.swift */; };
@@ -94,6 +95,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				8D9FF00A30175EF55B969974 /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -236,6 +238,7 @@
 			name = App;
 			packageProductDependencies = (
 				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
+				5F66428BBB0DDFBFF0AF014D /* Sentry */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
@@ -292,6 +295,7 @@
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
+				9E06412F1C15A4B201518D4D /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -622,11 +626,27 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		9E06412F1C15A4B201518D4D /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.44.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
 			productName = "CapApp-SPM";
+		};
+		5F66428BBB0DDFBFF0AF014D /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9E06412F1C15A4B201518D4D /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
