@@ -1046,7 +1046,7 @@ export const shrineRouter = createTRPCRouter({
   initiateShrineBattle: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Start a shrine battle" } })
     .input(z.object({ shrineBattleId: z.string() }))
-    .output(baseServerResponse)
+    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const shrineLobbyStaleBefore = shrineLobbyFreshAfter();
 
@@ -1217,7 +1217,11 @@ export const shrineRouter = createTRPCRouter({
           });
         });
 
-        return { success: true, message: "Shrine battle initiated!" };
+        return {
+          success: true,
+          message: "Shrine battle initiated!",
+          battleId: result.battleId,
+        };
       }
 
       // If initiateBattle failed, release the claim so others can try

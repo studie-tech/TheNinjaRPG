@@ -20,6 +20,7 @@ import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { AppRouter } from "@/server/api/root";
+import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { secondsFromDate } from "@/utils/time";
 
@@ -99,7 +100,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
             utils.shrine.getShrineBattles.invalidate(),
             utils.profile.getUser.invalidate(),
           ]);
-          router.push("/combat");
+          pushToCombat(router, data.battleId);
         }
       },
     });
