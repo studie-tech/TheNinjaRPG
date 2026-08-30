@@ -4,13 +4,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
 import { useLiveActivity } from "@/hooks/useLiveActivity";
-import { useNativePush } from "@/hooks/useNativePush";
+import { readWidgetToken, useNativePush } from "@/hooks/useNativePush";
 import {
   appEvents,
   isNative,
   isOutdatedNativeClient,
   parseNativeUserAgent,
   platform,
+  toInternalPath,
   widgets,
 } from "@/libs/native";
 import { useUserData } from "@/utils/UserContext";
@@ -57,13 +58,8 @@ export default function NativeBridge() {
   useEffect(() => {
     if (!isNative()) return;
     return appEvents.onUrlOpen((url) => {
-      try {
-        const parsed = new URL(url);
-        if (!parsed.hostname.endsWith("theninja-rpg.com")) return;
-        router.push(`${parsed.pathname}${parsed.search}${parsed.hash}`);
-      } catch {
-        // A malformed deep link is not worth reacting to.
-      }
+      const path = toInternalPath(url);
+      if (path) router.push(path);
     });
   }, [router]);
 
@@ -95,6 +91,7 @@ export default function NativeBridge() {
     if (!isNative() || !userData) return;
     void widgets.sync({
       updatedAt: new Date().toISOString(),
+      widgetToken: readWidgetToken(),
       username: userData.username,
       avatar: userData.avatar ?? undefined,
       village: userData.village?.name,

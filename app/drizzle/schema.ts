@@ -5517,6 +5517,12 @@ export const userDevice = mysqlTable(
     platform: mysqlEnum("platform", consts.PUSH_PLATFORMS).notNull(),
     appVersion: varchar("appVersion", { length: 32 }),
     locale: varchar("locale", { length: 16 }),
+    /**
+     * Bearer credential for `/api/widget/status`. Home screen widgets run outside the
+     * WebView and cannot see the Clerk session, so they need something of their own; it
+     * is scoped to one device and grants nothing but that device's own status.
+     */
+    widgetToken: varchar("widgetToken", { length: 191 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -5529,6 +5535,7 @@ export const userDevice = mysqlTable(
       // A device that signs into a second account must move, not duplicate: the
       // token is the identity, so re-registering it rebinds the row.
       tokenKey: uniqueIndex("UserDevice_token_key").on(table.token),
+      widgetTokenKey: uniqueIndex("UserDevice_widgetToken_key").on(table.widgetToken),
       userIdIdx: index("UserDevice_userId_idx").on(table.userId),
       lastSeenAtIdx: index("UserDevice_lastSeenAt_idx").on(table.lastSeenAt),
     };

@@ -72,3 +72,30 @@ describe("isOutdatedNativeClient", () => {
     expect(isOutdatedNativeClient(client, "1.0.0")).toBe(false);
   });
 });
+
+describe("toInternalPath", () => {
+  it("accepts the site and its subdomains", async () => {
+    const { toInternalPath } = await import("@/libs/native/deepLink");
+    expect(toInternalPath("https://www.theninja-rpg.com/battlearena")).toBe(
+      "/battlearena",
+    );
+    expect(toInternalPath("https://theninja-rpg.com/profile?tab=nindo#top")).toBe(
+      "/profile?tab=nindo#top",
+    );
+  });
+
+  it("rejects a host that merely ends with ours", async () => {
+    // The whole point: endsWith would open eviltheninja-rpg.com inside the app, which is
+    // an attacker-controlled page rendered as if it were the game.
+    const { toInternalPath } = await import("@/libs/native/deepLink");
+    expect(toInternalPath("https://eviltheninja-rpg.com/steal")).toBeNull();
+    expect(toInternalPath("https://theninja-rpg.com.attacker.dev/steal")).toBeNull();
+  });
+
+  it("rejects non-https and malformed links", async () => {
+    const { toInternalPath } = await import("@/libs/native/deepLink");
+    expect(toInternalPath("http://www.theninja-rpg.com/profile")).toBeNull();
+    expect(toInternalPath("javascript:alert(1)")).toBeNull();
+    expect(toInternalPath("not a url")).toBeNull();
+  });
+});

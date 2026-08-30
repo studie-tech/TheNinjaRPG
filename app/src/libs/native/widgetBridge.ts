@@ -13,6 +13,13 @@ const PLUGIN = "TNRWidgetSync";
 export interface WidgetSnapshot {
   /** ISO timestamp the snapshot was taken, so the widget can age out stale data. */
   updatedAt: string;
+  /**
+   * Bearer credential for `/api/widget/status`, which the widget uses when this snapshot
+   * has gone stale. It rides along in the same payload because it lives in the same
+   * protected container and the widget needs both together; it is scoped to one device
+   * and grants nothing but that device's own status.
+   */
+  widgetToken?: string;
   username: string;
   avatar?: string;
   village?: string;

@@ -31,9 +31,12 @@ export const pushRouter = createTRPCRouter({
    */
   registerDevice: protectedProcedure
     .input(registerDeviceSchema)
-    .output(baseServerResponse)
+    .output(baseServerResponse.extend({ widgetToken: z.string().nullish() }))
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
+      // Rotated on every registration, so a device that changes hands cannot keep reading
+      // the previous account's status.
+      const widgetToken = nanoid(32);
       await ctx.drizzle
         .insert(userDevice)
         .values({
@@ -43,6 +46,7 @@ export const pushRouter = createTRPCRouter({
           platform: input.platform,
           appVersion: input.appVersion,
           locale: input.locale,
+          widgetToken,
           createdAt: now,
           lastSeenAt: now,
         })
@@ -52,11 +56,16 @@ export const pushRouter = createTRPCRouter({
             platform: input.platform,
             appVersion: input.appVersion,
             locale: input.locale,
+            widgetToken,
             lastSeenAt: now,
           },
         });
       await evictExcessDevices(ctx.drizzle, ctx.userId);
-      return { success: true, message: "Device registered for notifications" };
+      return {
+        success: true,
+        message: "Device registered for notifications",
+        widgetToken,
+      };
     }),
 
   /** Called on sign-out so the next player on this phone does not inherit the alerts. */

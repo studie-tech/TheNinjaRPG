@@ -12,6 +12,8 @@ import { isNative, parseNativeUserAgent, push } from "@/libs/native";
 
 /** Token last handed to the server, so a resume does not re-register the same value. */
 const LAST_TOKEN_KEY = "native-push-token";
+/** Widget credential the server minted for this device, kept for the snapshot writes. */
+const WIDGET_TOKEN_KEY = "native-widget-token";
 
 interface UseNativePushOptions {
   /** Register only once the player is signed in; tokens are bound to an account. */
@@ -52,7 +54,12 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
         appVersion: parseNativeUserAgent(navigator.userAgent)?.version,
         locale: navigator.language.slice(0, 16),
       })
-        .then(() => safeLocalStorageSetItem(LAST_TOKEN_KEY, token))
+        .then((result) => {
+          safeLocalStorageSetItem(LAST_TOKEN_KEY, token);
+          if (result.widgetToken) {
+            safeLocalStorageSetItem(WIDGET_TOKEN_KEY, result.widgetToken);
+          }
+        })
         .catch(() => {
           // Leave the ref cleared so the next resume retries the handoff.
           registeredToken.current = null;
@@ -84,11 +91,16 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
     if (!token) return;
     registeredToken.current = null;
     safeLocalStorageRemoveItem(LAST_TOKEN_KEY);
+    safeLocalStorageRemoveItem(WIDGET_TOKEN_KEY);
     await unregisterDevice.mutateAsync({ token }).catch(() => undefined);
   }, [unregisterDevice]);
 
   return { unregister };
 };
+
+/** The widget credential minted at registration, if this device has one yet. */
+export const readWidgetToken = (): string | undefined =>
+  safeLocalStorageGetItem(WIDGET_TOKEN_KEY) ?? undefined;
 
 /**
  * Permission state only — no listeners, so it is safe to mount alongside `useNativePush`.
