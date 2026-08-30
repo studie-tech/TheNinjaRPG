@@ -76,17 +76,25 @@ const makeClient = (assignedQuest: { questId: string } | null = { questId: quest
  */
 const render = (fragment: unknown) => new MySqlDialect().sqlToQuery(fragment as SQL);
 
-/** Client for the bulk reset: one LEFT JOIN select, then insert + batched updates. */
-const makeBulkClient = (rows: { userId: string; historyId: string | null }[]) => {
+/**
+ * Client for the bulk reset: one LEFT JOIN select, then insert + batched updates.
+ * `rowsAffected` is consumed in statement order; the removal repeats while it stays non-zero,
+ * so the default models one removal, its terminating no-op pass, and the history reopen.
+ */
+const makeBulkClient = (
+  rows: { userId: string; historyId: string | null }[],
+  rowsAffected: number[] = [1, 0, 1],
+) => {
   const sets: Record<string, unknown>[] = [];
   const wheres: unknown[] = [];
   const update = vi.fn(() => ({
     set: (value: Record<string, unknown>) => {
+      const affected = rowsAffected[sets.length] ?? 0;
       sets.push(value);
       return {
         where: vi.fn((condition: unknown) => {
           wheres.push(condition);
-          return Promise.resolve({ rowsAffected: rows.length });
+          return Promise.resolve({ rowsAffected: affected });
         }),
       };
     },
@@ -263,10 +271,14 @@ describe("assignQuestToUser compatibility", () => {
     // Both branches share the one LEFT JOIN pass; nobody is missing a history row here.
     expect(select).toHaveBeenCalledOnce();
     expect(insert).not.toHaveBeenCalled();
-    expect(update).toHaveBeenCalledTimes(2);
 
     // The tracker must be gone before the quest reopens, or the window in between hands out a
     // free daily: the quest is active while last run's fully-done tracker still reads resolved.
+    const reopenIndex = sets.findIndex((set) => "completed" in set);
+    expect(reopenIndex).toBeGreaterThan(0);
+    expect(sets.slice(0, reopenIndex).every((set) => "questData" in set)).toBe(true);
+    expect(reopenIndex).toBe(sets.length - 1);
+
     const removal = render(sets[0]?.questData);
     expect(removal.sql).toContain("JSON_REMOVE");
     // Scoped to this one tracker, not the whole document, and matched on the top-level id only.
@@ -279,7 +291,41 @@ describe("assignQuestToUser compatibility", () => {
     // Rows with no tracker for this quest are skipped rather than written with a NULL document.
     expect(render(wheres[0]).sql).toContain("IS NOT NULL");
 
-    expect(sets[1]).toMatchObject({ completed: 0, endAt: null });
+    expect(sets[reopenIndex]).toMatchObject({ completed: 0, endAt: null });
+  });
+
+  it("repeats the removal until a pass finds no tracker left to drop", async () => {
+    // JSON_SEARCH 'one' drops a single tracker per statement, and production questData holds
+    // duplicate ids; stopping after one pass leaves the survivor for getNewTrackers to reuse.
+    const { client, sets } = makeBulkClient(
+      [{ userId: user.userId, historyId: "history-1" }],
+      [1, 1, 0, 1],
+    );
+
+    await upsertQuestEntries(
+      client,
+      { ...quest, questType: "daily" } as never,
+      undefined as never,
+    );
+
+    const reopenIndex = sets.findIndex((set) => "completed" in set);
+    expect(reopenIndex).toBe(3);
+    expect(sets.slice(0, 3).every((set) => "questData" in set)).toBe(true);
+  });
+
+  it("batches distinct users when a quest has duplicate history rows", async () => {
+    const daily = { ...quest, questType: "daily" };
+    const { client, wheres } = makeBulkClient([
+      { userId: "user-1", historyId: "history-1" },
+      { userId: "user-1", historyId: "history-2" },
+      { userId: "user-2", historyId: "history-3" },
+    ]);
+
+    await upsertQuestEntries(client, daily as never, undefined as never);
+
+    const params = render(wheres[0]).params;
+    expect(params.filter((param) => param === "user-1")).toHaveLength(1);
+    expect(params).toContain("user-2");
   });
 
   it("reuses one history row lookup and inserts only for users missing a row", async () => {
