@@ -13,15 +13,28 @@ public struct TNRActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         public let title: String
         public let subtitle: String?
-        /// When the countdown reaches zero.
-        public let endsAt: Date
+        /// When the countdown reaches zero, as Unix epoch seconds.
+        ///
+        /// Deliberately a number rather than a `Date`. Remote updates arrive as JSON that
+        /// ActivityKit decodes with a stock `JSONDecoder`, whose default strategy reads a
+        /// `Date` as seconds since the 2001 reference date -- so a plain epoch timestamp
+        /// would land 31 years in the past, and an ISO string would fail to decode at all.
+        /// Carrying the number and converting here removes the ambiguity.
+        public let endsAtEpoch: Double
         /// 0-1, for activities that show progress rather than only time remaining.
         public let progress: Double?
 
-        public init(title: String, subtitle: String? = nil, endsAt: Date, progress: Double? = nil) {
+        public var endsAt: Date { Date(timeIntervalSince1970: endsAtEpoch) }
+
+        public init(
+            title: String,
+            subtitle: String? = nil,
+            endsAt: Date,
+            progress: Double? = nil
+        ) {
             self.title = title
             self.subtitle = subtitle
-            self.endsAt = endsAt
+            self.endsAtEpoch = endsAt.timeIntervalSince1970
             self.progress = progress
         }
     }

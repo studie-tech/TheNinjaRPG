@@ -71,3 +71,54 @@ describe("fcmMessage", () => {
     expect(collapsing.android.collapse_key).toBe("war-42");
   });
 });
+
+describe("live activity content state", () => {
+  const load = () => import("@/server/utils/push/liveActivity");
+
+  it("sends the end time as a number, not a Date or an ISO string", async () => {
+    // ActivityKit decodes remote updates with a stock JSONDecoder, whose default date
+    // strategy reads a number as seconds since 2001 and rejects an ISO string outright.
+    // Carrying epoch seconds and converting in Swift is what keeps the two in step.
+    const { buildActivityPayload } = await load();
+    const endsAt = new Date("2026-08-30T12:00:00.000Z");
+    const { aps } = buildActivityPayload({ title: "Recovering", endsAt }, "update") as {
+      aps: { "content-state": Record<string, unknown>; event: string };
+    };
+    expect(aps["content-state"].endsAtEpoch).toBe(Math.floor(endsAt.getTime() / 1000));
+    expect(typeof aps["content-state"].endsAtEpoch).toBe("number");
+    expect(aps.event).toBe("update");
+  });
+
+  it("carries the optional fields explicitly so the Swift decoder always matches", async () => {
+    const { buildActivityPayload } = await load();
+    const bare = buildActivityPayload(
+      { title: "Recovering", endsAt: new Date() },
+      "update",
+    ) as { aps: { "content-state": Record<string, unknown> } };
+    expect(bare.aps["content-state"].subtitle).toBeNull();
+    expect(bare.aps["content-state"].progress).toBeNull();
+
+    const full = buildActivityPayload(
+      {
+        title: "Training",
+        subtitle: "Ninjutsu",
+        endsAt: new Date(),
+        progress: 0.42,
+      },
+      "update",
+    ) as { aps: { "content-state": Record<string, unknown> } };
+    expect(full.aps["content-state"].subtitle).toBe("Ninjutsu");
+    expect(full.aps["content-state"].progress).toBe(0.42);
+  });
+
+  it("gives an ended activity a dismissal date so it does not vanish mid-glance", async () => {
+    const { buildActivityPayload } = await load();
+    const { aps } = buildActivityPayload(
+      { title: "Recovered", endsAt: new Date() },
+      "end",
+    ) as { aps: { event: string; "dismissal-date"?: number } };
+    expect(aps.event).toBe("end");
+    expect(typeof aps["dismissal-date"]).toBe("number");
+    expect(aps["dismissal-date"]).toBeGreaterThan(Math.floor(Date.now() / 1000));
+  });
+});

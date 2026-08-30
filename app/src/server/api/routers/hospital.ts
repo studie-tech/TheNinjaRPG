@@ -28,6 +28,7 @@ import {
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
+import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
 import { findRelationship } from "@/utils/alliance";
 import { getStrucBoost } from "@/utils/village";
 
@@ -294,6 +295,16 @@ export const hospitalRouter = createTRPCRouter({
         void updateUserOnMap(pusher, user.sector, user);
       }
       if (result.rowsAffected === 1) {
+        // The Lock Screen countdown is driven from here once it has started, so leaving
+        // hospital early has to close it; otherwise it keeps counting down to a recovery
+        // that already happened.
+        await pushActivityUpdate(
+          ctx.drizzle,
+          [ctx.userId],
+          "hospital",
+          { title: "Recovered", endsAt: new Date() },
+          "end",
+        );
         return {
           success: true,
           message: "You have been healed",

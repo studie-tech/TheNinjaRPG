@@ -12,10 +12,12 @@ import {
   PUSH_MAX_DEVICES_PER_USER,
   type PushCategory,
 } from "@/drizzle/constants";
-import { userDevice, userPushPreference } from "@/drizzle/schema";
+import { userDevice, userLiveActivity, userPushPreference } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { deliveryTest, isPushEnabled, sendPushToUsers } from "@/server/utils/push";
 import {
+  endActivitySchema,
+  registerActivitySchema,
   registerDeviceSchema,
   setPushPreferenceSchema,
   unregisterDeviceSchema,
@@ -131,6 +133,53 @@ export const pushRouter = createTRPCRouter({
         success: true,
         message: `${input.category} notifications ${input.enabled ? "enabled" : "disabled"}`,
       };
+    }),
+
+  /**
+   * Record a Live Activity the device just started, so the server can push updates to it.
+   * One per kind per player: a second hospital countdown would only replace the first on
+   * screen, so re-registering rebinds rather than accumulating dead tokens.
+   */
+  registerActivity: protectedProcedure
+    .input(registerActivitySchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.drizzle
+        .insert(userLiveActivity)
+        .values({
+          id: nanoid(),
+          userId: ctx.userId,
+          activityId: input.activityId,
+          kind: input.kind,
+          pushToken: input.pushToken,
+          endsAt: input.endsAt,
+          createdAt: new Date(),
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            activityId: input.activityId,
+            pushToken: input.pushToken,
+            endsAt: input.endsAt,
+            createdAt: new Date(),
+          },
+        });
+      return { success: true, message: "Activity registered" };
+    }),
+
+  /** Called when the device ends an activity locally, so we stop pushing to a dead token. */
+  endActivity: protectedProcedure
+    .input(endActivitySchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.drizzle
+        .delete(userLiveActivity)
+        .where(
+          and(
+            eq(userLiveActivity.userId, ctx.userId),
+            eq(userLiveActivity.kind, input.kind),
+          ),
+        );
+      return { success: true, message: "Activity ended" };
     }),
 
   /** Send a test alert to the player's own devices, so they can confirm delivery. */

@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
+import { useLiveActivity } from "@/hooks/useLiveActivity";
 import { useNativePush } from "@/hooks/useNativePush";
 import {
   appEvents,
@@ -21,13 +22,14 @@ import { useUserData } from "@/utils/UserContext";
  * for every visitor.
  */
 export default function NativeBridge() {
-  const { data: userData, userId, isClerkLoaded, pusher } = useUserData();
+  const { data: userData, userId, isClerkLoaded, pusher, timeDiff } = useUserData();
   const router = useRouter();
   const pathname = usePathname();
   const [isOutdated, setIsOutdated] = useState(false);
   const isSignedOut = isClerkLoaded && !userId;
 
   const { unregister } = useNativePush({ enabled: !!userData });
+  useLiveActivity(userData, timeDiff);
 
   // The shell version is only knowable in the browser, so this runs after mount rather
   // than during render — checking it inline would break hydration.

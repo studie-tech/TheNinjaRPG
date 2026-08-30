@@ -7,7 +7,7 @@
  */
 
 import type { LiveActivityKind } from "@/drizzle/constants";
-import { hasPlugin, invokeSafe, isNative } from "./bridge";
+import { addNativeListener, hasPlugin, invokeSafe, isNative } from "./bridge";
 
 const PLUGIN = "TNRLiveActivity";
 
@@ -24,8 +24,6 @@ export interface LiveActivityState {
 
 export interface StartedActivity {
   activityId: string;
-  /** APNs token for this activity. Send it to the server or updates cannot be pushed. */
-  pushToken?: string;
 }
 
 /** Whether this shell can host Live Activities at all. */
@@ -52,6 +50,23 @@ export const end = async (activityId: string): Promise<void> => {
 export const endAll = async (): Promise<void> => {
   await invokeSafe(PLUGIN, "endAll");
 };
+
+/**
+ * The APNs token for a started activity, which is what lets the server push updates.
+ *
+ * It arrives after `start` resolves and Apple may reissue it at any time, so this is an
+ * event rather than a return value: a token captured once and cached would silently stop
+ * working.
+ */
+export const onToken = (
+  callback: (activity: { activityId: string; pushToken: string }) => void,
+): (() => void) =>
+  addNativeListener(PLUGIN, "activityToken", (data) => {
+    const payload = data as { activityId?: unknown; pushToken?: unknown } | null;
+    if (typeof payload?.activityId !== "string") return;
+    if (typeof payload?.pushToken !== "string") return;
+    callback({ activityId: payload.activityId, pushToken: payload.pushToken });
+  });
 
 /**
  * The push-to-start token (iOS 17.2+), which lets the server open an activity the player

@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { PUSH_CATEGORIES, PUSH_PLATFORMS } from "@/drizzle/constants";
+import {
+  LIVE_ACTIVITY_KINDS,
+  PUSH_CATEGORIES,
+  PUSH_PLATFORMS,
+} from "@/drizzle/constants";
 
 /**
  * APNs tokens are 64 hex characters; FCM registration tokens are longer and documented as
@@ -22,3 +26,15 @@ export const setPushPreferenceSchema = z.object({
   enabled: z.boolean(),
 });
 export type SetPushPreferenceInput = z.infer<typeof setPushPreferenceSchema>;
+
+export const registerActivitySchema = z.object({
+  activityId: z.string().min(1).max(191),
+  kind: z.enum(LIVE_ACTIVITY_KINDS),
+  /** APNs token addressing this one activity, not the device. */
+  pushToken: z.string().min(32).max(512),
+  endsAt: z.date(),
+});
+
+export const endActivitySchema = z.object({
+  kind: z.enum(LIVE_ACTIVITY_KINDS),
+});

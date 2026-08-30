@@ -5576,3 +5576,44 @@ export const userPushPreferenceRelations = relations(userPushPreference, ({ one 
     references: [userData.userId],
   }),
 }));
+
+/**
+ * Live Activities the device has started and the server can push updates to.
+ *
+ * One row per (user, kind): a second hospital countdown would just replace the first on
+ * screen, so the unique index makes that explicit rather than accumulating dead tokens.
+ */
+export const userLiveActivity = mysqlTable(
+  "UserLiveActivity",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    /** ActivityKit's identifier, so the device and the server agree which one this is. */
+    activityId: varchar("activityId", { length: 191 }).notNull(),
+    kind: mysqlEnum("kind", consts.LIVE_ACTIVITY_KINDS).notNull(),
+    /** APNs token for this specific activity. Distinct from the device's push token. */
+    pushToken: varchar("pushToken", { length: 512 }).notNull(),
+    endsAt: datetime("endsAt", { mode: "date", fsp: 3 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userKindKey: uniqueIndex("UserLiveActivity_userId_kind_key").on(
+        table.userId,
+        table.kind,
+      ),
+      activityIdIdx: index("UserLiveActivity_activityId_idx").on(table.activityId),
+      endsAtIdx: index("UserLiveActivity_endsAt_idx").on(table.endsAt),
+    };
+  },
+);
+export type UserLiveActivity = InferSelectModel<typeof userLiveActivity>;
+
+export const userLiveActivityRelations = relations(userLiveActivity, ({ one }) => ({
+  user: one(userData, {
+    fields: [userLiveActivity.userId],
+    references: [userData.userId],
+  }),
+}));
