@@ -4,4 +4,6 @@
     <string name="title_activity_main">TheNinja-RPG</string>
     <string name="package_name">com.theninjarpg.app</string>
     <string name="custom_url_scheme">com.theninjarpg.app</string>
+    <string name="widget_signed_out">Open TheNinja-RPG</string>
+    <string name="widget_status_description">Health, chakra and stamina at a glance.</string>
 </resources>

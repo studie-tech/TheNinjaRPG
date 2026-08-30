@@ -22,7 +22,43 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- App Links. android:autoVerify makes Play check
+                 /.well-known/assetlinks.json at install time; without a match the links
+                 fall back to the browser and the disambiguation dialog reappears. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="www.theninja-rpg.com" />
+                <data android:scheme="https" android:host="theninja-rpg.com" />
+            </intent-filter>
+
+            <!-- Return leg for social sign-in, which has to run in the system browser:
+                 Google rejects OAuth from embedded user agents. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tnr" />
+            </intent-filter>
+
         </activity>
+
+        <service
+            android:name=".TNRAudioService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <receiver
+            android:name=".TNRStatusWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_status_info" />
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -38,4 +74,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Required from Android 13 to show any notification at all. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Keeps the soundtrack playing once the app is backgrounded. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

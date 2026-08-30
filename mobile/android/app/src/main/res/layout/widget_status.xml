@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RemoteViews supports only a fixed set of layouts and widgets, which is why this is
+     LinearLayout and ProgressBar rather than anything more expressive. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:baselineAligned="true">
+
+        <TextView
+            android:id="@+id/widget_username"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:textColor="@color/widget_ink"
+            android:text="@string/widget_signed_out" />
+
+        <TextView
+            android:id="@+id/widget_level"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="@color/widget_ink_muted" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_health_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textSize="10sp"
+        android:textColor="@color/widget_ink_muted" />
+
+    <ProgressBar
+        android:id="@+id/widget_health"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:progressTint="@color/widget_health" />
+
+    <TextView
+        android:id="@+id/widget_chakra_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textSize="10sp"
+        android:textColor="@color/widget_ink_muted" />
+
+    <ProgressBar
+        android:id="@+id/widget_chakra"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:progressTint="@color/widget_chakra" />
+
+    <TextView
+        android:id="@+id/widget_stamina_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textSize="10sp"
+        android:textColor="@color/widget_ink_muted" />
+
+    <ProgressBar
+        android:id="@+id/widget_stamina"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:progressTint="@color/widget_stamina" />
+</LinearLayout>
