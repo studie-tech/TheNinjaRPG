@@ -35,6 +35,7 @@ import { overworldAiRouter } from "./routers/overworldAi";
 import { paypalRouter } from "./routers/paypal";
 import { pollRouter } from "./routers/poll";
 import { profileRouter } from "./routers/profile";
+import { purchasesRouter } from "./routers/purchases";
 import { pushRouter } from "./routers/push";
 import { pvpRankRouter } from "./routers/pvprank";
 import { questsRouter } from "./routers/quests";
@@ -95,6 +96,7 @@ export const appRouter = createTRPCRouter({
   poll: pollRouter,
   profile: profileRouter,
   push: pushRouter,
+  purchases: purchasesRouter,
   quests: questsRouter,
   register: registerRouter,
   reports: reportsRouter,

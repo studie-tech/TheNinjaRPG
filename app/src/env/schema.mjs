@@ -48,6 +48,8 @@ export const serverSchema = z.object({
   // Deep link association files served from /.well-known.
   ANDROID_PACKAGE_NAME: z.string().optional(),
   ANDROID_CERT_FINGERPRINTS: z.string().optional(),
+  // Shared secret sent by RevenueCat in the Authorization header of every webhook.
+  REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
 });
 
 /**
@@ -99,6 +101,8 @@ export const serverEnv = {
   // Deep link association files
   ANDROID_PACKAGE_NAME: process.env.ANDROID_PACKAGE_NAME,
   ANDROID_CERT_FINGERPRINTS: process.env.ANDROID_CERT_FINGERPRINTS,
+  // RevenueCat
+  REVENUECAT_WEBHOOK_SECRET: process.env.REVENUECAT_WEBHOOK_SECRET,
 };
 
 /**
@@ -117,6 +121,9 @@ export const clientSchema = z.object({
   NEXT_PUBLIC_SPACETIMEDB_MODULE: z.string().optional(),
   // MCP Server (disabled by default, enable for MCP-enabled deployments)
   NEXT_PUBLIC_MCP_ENABLED: z.enum(["true", "false"]).optional().prefault("false"),
+  // RevenueCat public SDK keys. Public by design -- they only identify the app.
+  NEXT_PUBLIC_REVENUECAT_IOS_KEY: z.string().optional(),
+  NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: z.string().optional(),
 });
 
 /**
@@ -137,4 +144,7 @@ export const clientEnv = {
   // MCP Server
   NEXT_PUBLIC_MCP_ENABLED:
     /** @type {"true" | "false" | undefined} */ (process.env.NEXT_PUBLIC_MCP_ENABLED),
+  // RevenueCat
+  NEXT_PUBLIC_REVENUECAT_IOS_KEY: process.env.NEXT_PUBLIC_REVENUECAT_IOS_KEY,
+  NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: process.env.NEXT_PUBLIC_REVENUECAT_ANDROID_KEY,
 };

@@ -5617,3 +5617,45 @@ export const userLiveActivityRelations = relations(userLiveActivity, ({ one }) =
     references: [userData.userId],
   }),
 }));
+
+/**
+ * In-app purchases from the App Store and Play Billing.
+ *
+ * The unique index on `transactionId` is the idempotency guard: PlanetScale has no
+ * transactions, so the insert itself is what stops a replayed webhook from granting twice.
+ */
+export const storePurchase = mysqlTable(
+  "StorePurchase",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    transactionId: varchar("transactionId", { length: 191 }).notNull(),
+    productId: varchar("productId", { length: 191 }).notNull(),
+    store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
+    reputationPoints: int("reputationPoints").default(0).notNull(),
+    federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses),
+    /** Sandbox receipts are recorded for debugging but never move a balance. */
+    isSandbox: boolean("isSandbox").default(false).notNull(),
+    rawData: json("rawData").notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      transactionKey: uniqueIndex("StorePurchase_transactionId_key").on(
+        table.transactionId,
+      ),
+      userIdIdx: index("StorePurchase_userId_idx").on(table.userId),
+      createdAtIdx: index("StorePurchase_createdAt_idx").on(table.createdAt),
+    };
+  },
+);
+export type StorePurchase = InferSelectModel<typeof storePurchase>;
+
+export const storePurchaseRelations = relations(storePurchase, ({ one }) => ({
+  user: one(userData, {
+    fields: [storePurchase.userId],
+    references: [userData.userId],
+  }),
+}));

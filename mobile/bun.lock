@@ -16,6 +16,7 @@
         "@capacitor/push-notifications": "^8.0.0",
         "@capacitor/splash-screen": "^8.0.0",
         "@capacitor/status-bar": "^8.0.0",
+        "@revenuecat/purchases-capacitor": "^13.4.2",
       },
       "devDependencies": {
         "@capacitor/cli": "^8.0.0",
@@ -65,6 +66,10 @@
     "@ionic/utils-terminal": ["@ionic/utils-terminal@2.3.5", "", { "dependencies": { "@types/slice-ansi": "^4.0.0", "debug": "^4.0.0", "signal-exit": "^3.0.3", "slice-ansi": "^4.0.0", "string-width": "^4.1.0", "strip-ansi": "^6.0.0", "tslib": "^2.0.1", "untildify": "^4.0.0", "wrap-ansi": "^7.0.0" } }, "sha512-3cKScz9Jx2/Pr9ijj1OzGlBDfcmx7OMVBt4+P1uRR0SSW4cm1/y3Mo4OY3lfkuaYifMNBW8Wz6lQHbs1bihr7A=="],
 
     "@isaacs/fs-minipass": ["@isaacs/fs-minipass@4.0.1", "", { "dependencies": { "minipass": "^7.0.4" } }, "sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w=="],
+
+    "@revenuecat/purchases-capacitor": ["@revenuecat/purchases-capacitor@13.4.2", "", { "dependencies": { "@revenuecat/purchases-typescript-internal-esm": "18.32.1" }, "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-fdewWFCHBscNc10pwqnlpoA5mzQC9QcerV5XWnLblOTqCxYfy6JhJOt7VfRHFfUWfMHCtrZkN11fN9UVNpY+yw=="],
+
+    "@revenuecat/purchases-typescript-internal-esm": ["@revenuecat/purchases-typescript-internal-esm@18.32.1", "", {}, "sha512-eevn4M374ARaK7praFB5526iHqMdXOGpSq6bs5tECa4wGSa9xcVPw8SvxnAAJYBtxbcKCq6l8DCH285EuPJ8nw=="],
 
     "@types/fs-extra": ["@types/fs-extra@8.1.5", "", { "dependencies": { "@types/node": "*" } }, "sha512-0dzKcwO+S8s2kuF5Z9oUWatQJj5Uq/iqphEtE3GQJVRRYm/tD1LglU2UnXi2A8jLq5umkGouOXOR9y0n613ZwQ=="],
 

@@ -19,6 +19,7 @@ export {
 export * as haptics from "./haptics";
 export * as liveActivity from "./liveActivity";
 export * as oauthBrowser from "./oauthBrowser";
+export * as purchases from "./purchases";
 export * as push from "./push";
 export {
   compareVersions,

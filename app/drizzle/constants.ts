@@ -3081,3 +3081,42 @@ export const MIN_NATIVE_APP_VERSION = "1.0.0";
  * purchase flows that would breach App Store guideline 3.1.1.
  */
 export const NATIVE_UA_MARKER = "TNR-Native/";
+
+// ---------------------------------------------------------------------------
+// In-app purchases (App Store / Play Billing)
+// ---------------------------------------------------------------------------
+
+/** Which store a purchase came through. */
+export const STORE_PLATFORMS = ["APPLE", "GOOGLE"] as const;
+export type StorePlatform = (typeof STORE_PLATFORMS)[number];
+
+/**
+ * Consumable reputation bundles.
+ *
+ * Store purchases need fixed price points, so these replace the web's free-form amount.
+ * The rep totals are `dollars2reps(usd)` at the current web rate, which means in-app and
+ * web buy the same reputation for the same dollars and the store's cut is absorbed rather
+ * than passed on. A test asserts they stay in step; change `usd` and the test tells you
+ * the new rep figure. Product ids must match App Store Connect and the Play Console.
+ */
+export const STORE_REP_PRODUCTS = [
+  { productId: "tnr_reps_tier1", usd: 4.99, reputationPoints: 8 },
+  { productId: "tnr_reps_tier2", usd: 9.99, reputationPoints: 20 },
+  { productId: "tnr_reps_tier3", usd: 19.99, reputationPoints: 49 },
+  { productId: "tnr_reps_tier4", usd: 49.99, reputationPoints: 164 },
+  { productId: "tnr_reps_tier5", usd: 99.99, reputationPoints: 407 },
+] as const;
+
+/**
+ * Federal status subscriptions. On Apple these belong to one subscription group so
+ * upgrades and downgrades are handled by the system; Play models the same thing as base
+ * plans on a single subscription.
+ */
+export const STORE_FEDERAL_PRODUCTS = [
+  { productId: "tnr_federal_normal", federalStatus: "NORMAL" },
+  { productId: "tnr_federal_silver", federalStatus: "SILVER" },
+  { productId: "tnr_federal_gold", federalStatus: "GOLD" },
+] as const;
+
+/** RevenueCat entitlement that grants federal status, whichever plan is active. */
+export const STORE_FEDERAL_ENTITLEMENT = "federal";

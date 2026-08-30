@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api, onError } from "@/app/_trpc/client";
+import NativeStore from "@/components/native/NativeStore";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -60,6 +61,7 @@ import {
   SKILL_TREE_RESET_FREE_NORMAL,
   SKILL_TREE_RESET_FREE_SILVER,
 } from "@/drizzle/constants";
+import { useNativeShell } from "@/hooks/useNativeShell";
 import BanInfo from "@/layout/BanInfo";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
@@ -112,8 +114,14 @@ const isPayPalCleanupError = (err: unknown): boolean => {
  */
 export default function PaypalShop() {
   const { data: userData } = useRequiredUserData();
+  const isNativeShell = useNativeShell();
 
   if (!userData) return <Loader explanation="Loading userdata" />;
+
+  // App Store guideline 3.1.1 requires digital goods to be sold through in-app purchase,
+  // and both stores treat a web checkout inside the app as a violation. The native shell
+  // therefore never sees the PayPal flow.
+  if (isNativeShell) return <NativeStore />;
 
   return (
     <>
