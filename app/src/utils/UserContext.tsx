@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import type Pusher from "pusher-js";
 import type React from "react";
 import { createContext, useContext, useEffect, useState } from "react";
-import type { UserWithRelations } from "@/api/routers/profile";
+import type { AchievementProgress, UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import type { StructureRoute } from "@/drizzle/constants";
 import { usePusherHandler } from "@/layout/PusherHandler";
@@ -41,6 +41,12 @@ export const blockingPopupOpenAtom = atom<boolean>(false);
  */
 export const UserContext = createContext<{
   data: UserWithRelations;
+  /**
+   * Achievement progress, carried beside `data` rather than inside `data.userQuests`: the
+   * definitions these rows belong to are static and are fetched once from
+   * `quests.getAchievementCatalogue`. The logbook joins the two.
+   */
+  achievementProgress: AchievementProgress[] | undefined;
   notifications: NavBarDropdownLink[] | undefined;
   userAgent: string | undefined;
   status: string;
@@ -54,6 +60,7 @@ export const UserContext = createContext<{
   ) => Promise<void>;
 }>({
   data: undefined,
+  achievementProgress: undefined,
   notifications: undefined,
   userAgent: undefined,
   status: "unknown",
@@ -166,6 +173,7 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
     <UserContext
       value={{
         data: data?.userData,
+        achievementProgress: data?.achievementProgress,
         notifications: data?.notifications,
         userAgent: data?.userAgent,
         pusher: pusher,
@@ -230,9 +238,9 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
   // would keep the access check below from ever running.
   const { data: sectorVillage, isLoading: isLoadingSector } =
     api.travel.getVillageInSector.useQuery(
-    { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
-    { enabled: userData?.sector != null },
-  );
+      { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
+      { enabled: userData?.sector != null },
+    );
   const ownVillage = userData?.village?.sector === sectorVillage?.sector;
   const router = useRouter();
   useEffect(() => {

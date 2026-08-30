@@ -1549,6 +1549,28 @@ export const mockAchievementHistoryEntries = (
 };
 
 /**
+ * Whether any of a quest's objectives is something the overworld has to draw or act on: a map
+ * location, an ambush, a bound NPC placement, or a dialog. The sector and world-map views scan
+ * `userQuests[].quest.content.objectives` for exactly these.
+ *
+ * Achievements are lifetime counters and normally carry none of it, which is what lets
+ * `profile.getUser` ship them as progress rows plus a cached catalogue. An authored exception
+ * keeps its full `Quest` row on the user object instead, since a catalogue shared by every
+ * player cannot carry the per-user location state `controlShownQuestLocationInformation` applies.
+ */
+export const questHasOverworldObjectives = (quest: Quest) =>
+  quest.content.objectives.some(
+    (objective) =>
+      ("sector" in objective && !!objective.sector) ||
+      ("longitude" in objective && !!objective.longitude) ||
+      ("latitude" in objective && !!objective.latitude) ||
+      ("attackers" in objective && (objective.attackers?.length ?? 0) > 0) ||
+      ("overworldPlacementId" in objective && !!objective.overworldPlacementId) ||
+      ("hideLocation" in objective && !!objective.hideLocation) ||
+      objective.task === "dialog",
+  );
+
+/**
  * Hides the location information of quest objectives if certain conditions are met.
  *
  * @param quest - The quest object containing objectives.

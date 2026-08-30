@@ -87,10 +87,14 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     api.sageMode.getAllNames.useQuery(undefined);
 
   // Mutation for updating item
+  const utils = api.useUtils();
   const { mutate: updateQuest } = api.quests.update.useMutation({
     onSuccess: (data) => {
       showMutationToast(data);
       refetch();
+      // Players hold the achievement definitions for the whole session, so an edit to one has
+      // to drop that cache or it keeps rendering the version staff just replaced.
+      void utils.quests.getAchievementCatalogue.invalidate();
     },
   });
 
