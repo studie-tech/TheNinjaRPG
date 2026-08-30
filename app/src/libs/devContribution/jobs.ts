@@ -36,6 +36,17 @@ export const isJobTerminal = (status: ExistingJob["status"]) =>
 // Label / eligibility
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Is this "issue" payload actually a pull request?
+ *
+ * GitHub's REST issue list and the `issues` webhook both describe pull requests
+ * as issues, marking them with a `pull_request` member. Both paths must skip
+ * them — a PR that slipped through the webhook became an ISSUE_TRIAGE job that
+ * paid for commenting on it. Shared so the two cannot disagree again.
+ */
+export const isPullRequestPayload = (issue: { pull_request?: unknown }): boolean =>
+  issue.pull_request != null;
+
 export const hasLabel = (labels: string[], label: string) => {
   const target = normalizeLabel(label);
   return labels.some((l) => normalizeLabel(l) === target);

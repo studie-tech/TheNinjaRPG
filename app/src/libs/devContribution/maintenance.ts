@@ -29,6 +29,7 @@ import {
   computeBackfillJobs,
   isClaimStale,
   isJobActive,
+  isPullRequestPayload,
   releaseJobStatus,
 } from "./jobs";
 import { grantContributionReward } from "./rewards";
@@ -388,7 +389,7 @@ export const fetchOpenIssues = async (
     if (!res.ok) throw new Error(`GitHub issues fetch failed: ${res.status}`);
     const items = (await res.json()) as GitHubIssue[];
     for (const item of items) {
-      if (item.pull_request) continue;
+      if (isPullRequestPayload(item)) continue;
       issues.push({
         number: item.number,
         title: item.title,

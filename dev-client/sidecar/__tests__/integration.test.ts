@@ -360,7 +360,12 @@ async function call(
   path: string,
   body?: unknown,
   opts: { auth?: boolean; origin?: string } = {},
-): Promise<{ status: number; text: string; json: <T>() => T }> {
+): Promise<{
+  status: number;
+  text: string;
+  headers: Headers;
+  json: <T>() => T;
+}> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["content-type"] = "application/json";
   if (opts.auth !== false) headers.authorization = `Bearer ${sidecar.authToken}`;
@@ -374,6 +379,7 @@ async function call(
   return {
     status: res.status,
     text,
+    headers: res.headers,
     json: () => JSON.parse(text) as never,
   };
 }
@@ -698,9 +704,17 @@ test("the GitHub verification flow is reachable from the client", async () => {
   // Settings copy just told them to invoke a tRPC procedure themselves.
   expect((await status()).auth.githubLogin).toBeNull();
 
-  const requested = await call("POST", "/github/verify/request", {
-    githubLogin: "octocat",
-  });
+  const requested = await call(
+    "POST",
+    "/github/verify/request",
+    { githubLogin: "octocat" },
+    { origin: "tauri://localhost" },
+  );
+  // The UI reaches these cross-origin from the Tauri webview, so omitting
+  // Access-Control-Allow-Origin leaves the flow just as unreachable as before.
+  expect(requested.headers.get("access-control-allow-origin")).toBe(
+    "tauri://localhost",
+  );
   expect(requested.json<{ nonce: string }>().nonce).toBe("nonce-xyz");
   expect(recorded.verifyRequests).toContain("octocat");
 

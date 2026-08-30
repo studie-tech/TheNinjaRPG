@@ -607,27 +607,31 @@ export function startServer(port: number, log: (line: string) => void): Server {
         if (req.method === "POST" && path === "/github/verify/request") {
           const body = await readJson<{ githubLogin?: string }>(req);
           const login = body?.githubLogin?.trim();
-          if (!login) return json({ error: "githubLogin is required" }, 400);
-          return json(await ctx.api.requestGithubVerification({ githubLogin: login }));
+          if (!login) return json({ error: "githubLogin is required" }, 400, origin);
+          return json(
+            await ctx.api.requestGithubVerification({ githubLogin: login }),
+            200,
+            origin,
+          );
         }
         if (req.method === "POST" && path === "/github/verify/confirm") {
           const body = await readJson<{ githubLogin?: string; gistId?: string }>(req);
           const login = body?.githubLogin?.trim();
           const gistId = body?.gistId?.trim();
           if (!login || !gistId) {
-            return json({ error: "githubLogin and gistId are required" }, 400);
+            return json({ error: "githubLogin and gistId are required" }, 400, origin);
           }
           const result = await ctx.api.confirmGithubVerification({
             githubLogin: login,
             gistId,
           });
           await refreshVerifiedLogin(ctx, true);
-          return json(result);
+          return json(result, 200, origin);
         }
         if (req.method === "POST" && path === "/github/unlink") {
           const result = await ctx.api.unlinkGithubAccount();
           await refreshVerifiedLogin(ctx, true);
-          return json(result);
+          return json(result, 200, origin);
         }
         if (req.method === "POST" && path === "/auth/signout") {
           return json(await handleSignOut(ctx), 200, origin);

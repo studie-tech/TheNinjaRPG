@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { GITHUB_REPO_SLUG } from "@/drizzle/constants";
 import { supportTicket } from "@/drizzle/schema";
+import { isPullRequestPayload } from "@/libs/devContribution/jobs";
 import {
   processContributionIssueEvent,
   processContributionPullRequestEvent,
@@ -23,6 +24,8 @@ interface GitHubWebhookPayload {
     labels?: Array<{ name: string }>;
     user?: { login: string };
     closed_at: string | null;
+    /** Present when this "issue" is really a pull request. */
+    pull_request?: unknown;
   };
   pull_request?: {
     number: number;
@@ -120,7 +123,16 @@ export async function POST(request: NextRequest) {
     // because that both skips handleIssueClosed below and makes GitHub redeliver
     // the event, replaying the contribution processing.
     try {
-      if (isContributionRepo && data.issue && eventType === "issues") {
+      // GitHub fires `issues` for pull requests too, marking the payload with
+      // issue.pull_request. Without this an opened or labeled PR also creates an
+      // ISSUE_TRIAGE job that pays for a comment on it; the backfill already
+      // skips the marker, so the two paths disagreed.
+      if (
+        isContributionRepo &&
+        data.issue &&
+        !isPullRequestPayload(data.issue) &&
+        eventType === "issues"
+      ) {
         await processContributionIssueEvent(drizzleDB, {
           number: data.issue.number,
           title: data.issue.title ?? `Issue #${data.issue.number}`,

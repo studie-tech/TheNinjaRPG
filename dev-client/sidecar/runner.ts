@@ -158,13 +158,22 @@ const IMPLEMENT_TOOLS = ["Read", "Grep", "Glob", "Edit", "Write"].join(",");
 // Never pre-approved for implementation: execution, network egress, notebooks.
 const IMPLEMENT_DENIED = "Bash,WebFetch,WebSearch,NotebookEdit";
 
-// Paths an agent has no business reading on a contributor's machine. Deny rules
-// are consulted before allow rules, so these hold even though Read is allowed.
+// Paths an agent has no business touching on a contributor's machine.
+//
+// Applied to the write tools as well as the read ones: an injected prompt that
+// can Write to ~/.ssh/authorized_keys or rewrite the client's own token.json is
+// worse than one that can read them, and --permission-mode acceptEdits
+// pre-approves edits without scoping them to the worktree.
+//
+// Note this deliberately does NOT deny the whole of ~/.tnr-dev-client: job
+// worktrees are created under ~/.tnr-dev-client/jobs, so blanket-denying the
+// directory would stop the agent reading the very repository it is checked out
+// to work on. Only the client's own state files are listed.
 //
 // This enumerates known-bad targets and therefore cannot be complete — it raises
-// the cost of a prompt-injection read, it does not prevent one. Treat it as the
-// last line, not the boundary.
-const SENSITIVE_READ_DENY = [
+// the cost of a prompt-injection read or write, it does not prevent one. Treat
+// it as the last line, not the boundary.
+const SENSITIVE_PATHS = [
   "~/.ssh/**",
   "~/.aws/**",
   "~/.config/gh/**",
@@ -173,10 +182,17 @@ const SENSITIVE_READ_DENY = [
   "~/.npmrc",
   "~/.netrc",
   "~/.git-credentials",
-  "~/.tnr-dev-client/**",
+  "~/.tnr-dev-client/token.json",
+  "~/.tnr-dev-client/settings.json",
+  "~/.tnr-dev-client/usage.json",
+  "~/.tnr-dev-client/history.json",
   "**/.env",
   "**/.env.*",
-].flatMap((path) => [`Read(${path})`, `Grep(${path})`, `Glob(${path})`]);
+];
+const SENSITIVE_TOOLS = ["Read", "Grep", "Glob", "Edit", "Write", "NotebookEdit"];
+const SENSITIVE_READ_DENY = SENSITIVE_PATHS.flatMap((path) =>
+  SENSITIVE_TOOLS.map((tool) => `${tool}(${path})`),
+);
 
 // Runs the agent CLI headlessly with a scrubbed environment: no GitHub
 // credentials, no git credential prompts. The agent's own LLM auth (stored in

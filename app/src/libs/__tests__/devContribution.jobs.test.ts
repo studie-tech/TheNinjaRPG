@@ -7,6 +7,7 @@ import {
   isClaimStale,
   isImplementationCandidate,
   isJobActive,
+  isPullRequestPayload,
   isResultVerified,
   isTokenCapExceeded,
   isTriageCandidate,
@@ -438,5 +439,19 @@ describe("regression: unverified work must not retire the ref", () => {
     // Nothing live at all -> the ref is offered again.
     const fresh = planIssueJob(issue, []);
     expect(fresh.create).toBe("ISSUE_IMPLEMENT");
+  });
+});
+
+describe("regression: pull requests must not be treated as issues", () => {
+  it("recognises the pull_request marker both paths key off", () => {
+    // GitHub describes pull requests as issues in the REST issue list AND in
+    // the `issues` webhook. The backfill skipped the marker; the webhook did
+    // not, so an opened or labeled PR also produced an ISSUE_TRIAGE job that
+    // paid for commenting on it. One predicate now serves both.
+    expect(isPullRequestPayload({ pull_request: {} })).toBe(true);
+    expect(isPullRequestPayload({ pull_request: { url: "..." } })).toBe(true);
+    expect(isPullRequestPayload({})).toBe(false);
+    expect(isPullRequestPayload({ pull_request: undefined })).toBe(false);
+    expect(isPullRequestPayload({ pull_request: null })).toBe(false);
   });
 });
