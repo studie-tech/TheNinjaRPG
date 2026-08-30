@@ -14,6 +14,12 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/libs/shadui";
 
+export const modalViewportClassName =
+  "max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden";
+
+export const modalScrollableBodyClassName =
+  "min-h-0 space-y-2 overflow-y-auto overscroll-contain py-4";
+
 interface Modal2Props {
   id?: string;
   title: string;
@@ -108,7 +114,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
         id={props.id ? `${props.id}-content` : undefined}
         className={cn(
           props.className || "",
-          "max-h-screen overflow-y-scroll",
+          modalViewportClassName,
           "!top-4 !translate-y-0 sm:!top-[50%] sm:!-translate-y-1/2",
           "data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-top-0",
           "sm:data-[state=open]:slide-in-from-top-[48%] sm:data-[state=closed]:slide-out-to-top-[48%]",
@@ -126,7 +132,7 @@ const Modal2: React.FC<Modal2Props> = (props) => {
 
         <div
           className={cn(
-            "space-y-2 py-4",
+            modalScrollableBodyClassName,
             props.bodyClassName,
             props.centerText && "text-center",
           )}
