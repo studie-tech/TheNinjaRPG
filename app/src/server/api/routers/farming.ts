@@ -1888,13 +1888,20 @@ const fetchUserExtractions = async (client: DrizzleClient, userId: string) =>
 const FARM_EXTRACTION_CLAIM_TIMEOUT_SECONDS = 60;
 
 /**
- * Pays out finished extractions exactly once.
+ * Pays out finished extractions, at most once except for one known window.
  *
  * Each row is claimed before anything is granted, so two concurrent settlements cannot both
  * award it. The claim is a mark rather than a delete: the row has to outlive the grant, or a
  * failed item write would take the extraction down with it and the player would lose both.
  * A grant that fails releases its claim and is retried by the next settlement; a claim left
  * behind by a request that died is taken over once it goes stale.
+ *
+ * The window: settledAt is written after the seeds land, so a failure of that one statement
+ * leaves a granted payout looking unpaid, and the stale-claim takeover grants it again. This
+ * is not exactly-once and should not be described as such. Closing it needs either a
+ * transaction, which PlanetScale does not give us, or a grant keyed to the extraction id so
+ * a replay collides -- and an insert-only grant cannot top up a partial stack, which is what
+ * keeps settlement inside the material cap. The duplicate is the accepted side of that trade.
  *
  * Grants are aggregated per seed item because they share one inventory snapshot. Two
  * extractions of the same seed would otherwise both measure the same partial stack, and the
