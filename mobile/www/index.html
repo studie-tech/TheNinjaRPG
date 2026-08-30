@@ -22,7 +22,13 @@
         height: 100%;
         margin: 0;
       }
+      html {
+        /* The WebView paints behind the page; without this the area outside the safe
+           inset flashes white against the splash. */
+        background: var(--tile);
+      }
       body {
+        min-height: 100dvh;
         display: flex;
         flex-direction: column;
         align-items: center;

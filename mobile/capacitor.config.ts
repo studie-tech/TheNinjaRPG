@@ -34,11 +34,15 @@ const config: CapacitorConfig = {
   },
 
   ios: {
+    // Matches the bundled entry point and the splash, so the strip outside the safe area
+    // is never a white flash on launch.
+    backgroundColor: "#f0c84c",
     contentInset: "always",
     appendUserAgent: `TNR-Native/${APP_VERSION} (ios)`,
   },
 
   android: {
+    backgroundColor: "#f0c84c",
     appendUserAgent: `TNR-Native/${APP_VERSION} (android)`,
     allowMixedContent: false,
   },
