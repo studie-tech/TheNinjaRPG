@@ -1,10 +1,12 @@
 // @vitest-environment node
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { commitQuestObjectiveRewards } from "../../../src/server/api/routers/quests";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 
 const rewards = () => PostProcessedRewardSchema.parse({});
+
+afterEach(() => vi.restoreAllMocks());
 
 /** Builds the minimum hydrated user shape exercised by the shared reward commit path. */
 const makeUser = (retryDelay: "none" | "daily" = "none") => {
@@ -102,6 +104,38 @@ const makeClient = (
     },
   };
   return { client: client as never, sets, update, deleteFrom, deleteWhere };
+};
+
+/**
+ * Client for the gathering payout: updateRewards fetches gatherable items, then writes the
+ * dropped items and the userData row. Every other reward branch stays empty and issues no query.
+ */
+const makeGatheringClient = () => {
+  const sets: Record<string, unknown>[] = [];
+  const update = vi.fn(() => ({
+    set: (value: Record<string, unknown>) => {
+      sets.push(value);
+      return { where: vi.fn().mockResolvedValue({ rowsAffected: 1 }) };
+    },
+  }));
+  const select = vi.fn(() => ({
+    from: vi.fn(() => ({
+      where: vi.fn().mockResolvedValue([{ id: "herb-1", name: "Herb", rarity: "COMMON" }]),
+    })),
+  }));
+  const insert = vi.fn(() => ({
+    values: vi.fn(() => ({ onDuplicateKeyUpdate: vi.fn().mockResolvedValue(undefined) })),
+  }));
+  return {
+    client: {
+      update,
+      select,
+      insert,
+      delete: vi.fn(() => ({ where: vi.fn().mockResolvedValue({ rowsAffected: 0 }) })),
+      query: { questHistory: { findFirst: vi.fn().mockResolvedValue(null) } },
+    } as never,
+    sets,
+  };
 };
 
 describe("commitQuestObjectiveRewards compatibility", () => {
@@ -249,5 +283,36 @@ describe("commitQuestObjectiveRewards compatibility", () => {
     expect(result.outcome).toBe("claimed");
     expect(sets[1]).toMatchObject({ questData: [] });
     expect(sets[2]).toMatchObject({ questData: [] });
+  });
+
+  it("keeps the resolved tracker dropped when the payout also folds in gathering drops", async () => {
+    // The user snapshot still reads the quest as active (the completion CAS only touched the
+    // DB row), so updateRewards' herbs_gathered fold would otherwise rebuild the tracker that
+    // was just removed and hand the replayed quest a head start.
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const { user, missionHistory } = makeUser();
+    const { client, sets } = makeGatheringClient();
+
+    const result = await commitQuestObjectiveRewards({
+      client,
+      userId: user.userId,
+      user: { ...user, occupation: "GATHERING" } as never,
+      rewards: PostProcessedRewardSchema.parse({ reward_gathering_items: true }),
+      trackers: [
+        { id: missionHistory.questId, goals: [{ id: "obj-1", done: true, value: 1 }] },
+      ] as never,
+      userQuest: missionHistory as never,
+      resolved: true,
+      notifications: [],
+      consequences: [],
+      existingHistory: missionHistory,
+    });
+
+    expect(result.outcome).toBe("claimed");
+    // The fold still runs (the tier quest keeps its tracker) — only the finished quest is gone.
+    const payout = sets.find((set) => "money" in set);
+    const persisted = (payout?.questData ?? []) as { id: string }[];
+    expect(persisted.map((tracker) => tracker.id)).not.toContain(missionHistory.questId);
+    expect(persisted.length).toBeGreaterThan(0);
   });
 });

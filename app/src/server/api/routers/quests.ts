@@ -112,7 +112,7 @@ import { periodStart, secondsFromNow } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { canAccessStructure } from "@/utils/village";
-import type { AllObjectivesType } from "@/validators/objectives";
+import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import { QuestTracker, QuestValidator } from "@/validators/objectives";
 import { questFilteringSchema } from "@/validators/quest";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
@@ -1322,6 +1322,12 @@ export const questsRouter = createTRPCRouter({
 /**
  * COMMON QUERIES WHICH ARE REUSED
  */
+/** Drop one quest's tracker so a restarted/reassigned quest always starts fresh. */
+const removeQuestTrackerByQuestId = (
+  trackers: QuestTrackerType[] | null | undefined,
+  questId: string,
+) => (trackers ?? []).filter((tracker) => tracker.id !== questId);
+
 /**
  * Callers must win an endpoint-specific idempotency / CAS claim before invoking
  * this helper. `updateRewards` itself does not provide replay protection.
@@ -1348,6 +1354,10 @@ export const updateRewards = async (info: {
   // same round-trip instead of a trailing sequential write. Values may be raw scalars or `sql`
   // expressions and win over the reward keys on any name clash.
   postClaimUserDataPatch?: Record<string, unknown>;
+  // Quest this payout terminally completes, if any. The herbs fold below recomputes trackers
+  // from `questUser`, whose in-memory history row still reads active (the completion CAS only
+  // touched the DB), so without this it would rebuild a tracker the caller just dropped.
+  dropTrackerForQuestId?: string;
 }) => {
   // Destructure
   const {
@@ -1358,6 +1368,7 @@ export const updateRewards = async (info: {
     reason,
     questUser,
     postClaimUserDataPatch,
+    dropTrackerForQuestId,
   } = info;
   // Check if we need to fetch war data
   const hasWarRewards =
@@ -1541,7 +1552,10 @@ export const updateRewards = async (info: {
     const { trackers } = getNewTrackers({ ...questUser, questData: user.questData }, [
       { task: "herbs_gathered", increment: droppedGatheringItems.length },
     ]);
-    user.questData = filterQuestTrackersForDbPersist(trackers, questUser);
+    const persisted = filterQuestTrackersForDbPersist(trackers, questUser);
+    user.questData = dropTrackerForQuestId
+      ? removeQuestTrackerByQuestId(persisted, dropTrackerForQuestId)
+      : persisted;
   }
 
   // Update userdata
@@ -2012,12 +2026,6 @@ export const fetchUncompletedQuests = async (
 /** Row locks the bulk quest reset may hold in one statement. */
 const QUEST_RESET_BATCH_SIZE = 100;
 
-/** Drop one quest's tracker so a restarted/reassigned quest always starts fresh. */
-const removeQuestTrackerByQuestId = (
-  trackers: z.infer<typeof QuestTracker>[] | null | undefined,
-  questId: string,
-) => (trackers ?? []).filter((tracker) => tracker.id !== questId);
-
 /** Upsert quest entries for all users by selector. NOTE: selector determined which users get updated/inserted entries */
 export const upsertQuestEntries = async (
   client: DrizzleClient,
@@ -2030,22 +2038,25 @@ export const upsertQuestEntries = async (
       "Overworld quests cannot be assigned to users in bulk.",
     );
   }
-  // Users to insert for
-  const users = await client
-    .select({ userId: userData.userId, username: userData.username })
+  // One pass over the selector for both branches: the LEFT JOIN already tells us who lacks a
+  // QuestHistory row, so splitting the rows in JS costs one extra column instead of a second
+  // round-trip that re-scans the same users.
+  const candidates = await client
+    .select({ userId: userData.userId, historyId: questHistory.id })
     .from(userData)
     .leftJoin(
       questHistory,
       and(eq(questHistory.userId, userData.userId), eq(questHistory.questId, quest.id)),
     )
-    .where(and(updateSelector, isNull(questHistory.id)));
-  if (users.length > 0) {
+    .where(updateSelector);
+  const missingHistory = candidates.filter((row) => row.historyId === null);
+  if (missingHistory.length > 0) {
     await client
       .insert(questHistory)
       .values(
-        users.map((user) => ({
+        missingHistory.map((row) => ({
           id: nanoid(),
-          userId: user.userId,
+          userId: row.userId,
           questId: quest.id,
           questType: quest.questType,
         })),
@@ -2055,50 +2066,56 @@ export const upsertQuestEntries = async (
       });
   }
   // Users to update for (including those we just inserted for)
-  const allUsers = await client
-    .select({ userId: userData.userId })
-    .from(userData)
-    .where(updateSelector);
-  if (allUsers.length > 0) {
+  if (candidates.length > 0) {
     // One statement over every eligible user held hundreds of QuestHistory row locks
     // while ordinary quest traffic wrote the same table through its unique key, and the
     // daily reset lost the resulting lock cycle. Bounded batches run sequentially so the
     // reset never contends with itself either, and share one timestamp so a batch that
     // has to be retried still stamps what the rest of the reset did.
     const startedAt = new Date();
-    const batches = chunkArray(allUsers, QUEST_RESET_BATCH_SIZE);
-    for (const batch of batches) {
-      const batchUserIds = batch.map((user) => user.userId);
-      const trackerPath = sql`JSON_UNQUOTE(JSON_SEARCH(
-        ${userData.questData},
-        'one',
-        REPLACE(REPLACE(REPLACE(${quest.id}, '#', '##'), '%', '#%'), '_', '#_'),
-        '#',
-        '$[*].id'
-      ))`;
+    // Bound as a parameter, never interpolated: `quest` here is the row argument, not the table.
+    const questId = quest.id;
+    // Path of this quest's tracker inside the questData array, e.g. `$[2].id`. JSON_SEARCH
+    // matches with LIKE semantics, so the id must be escaped first — nanoid ids contain `_`,
+    // which would otherwise match any single character and drop the wrong tracker.
+    const trackerPath = sql`JSON_UNQUOTE(JSON_SEARCH(
+      ${userData.questData},
+      'one',
+      REPLACE(REPLACE(REPLACE(${questId}, '#', '##'), '%', '#%'), '_', '#_'),
+      '#',
+      '$[*].id'
+    ))`;
+    const batches = chunkArray(
+      candidates.map((row) => row.userId),
+      QUEST_RESET_BATCH_SIZE,
+    );
+    for (const batchUserIds of batches) {
+      // Drop the tracker BEFORE reopening the history row, and never in parallel with it: the
+      // caller has already closed every daily, so while the quest is shut a request cannot
+      // rebuild a tracker for it. Reopening first would leave a window where the quest is
+      // active with last run's fully-done tracker, which getReward reads as resolved and pays
+      // out again. Removing it in SQL (rather than read-modify-write) also keeps progress a
+      // concurrent request recorded for an unrelated active quest.
+      await client
+        .update(userData)
+        .set({
+          questData: sql`JSON_REMOVE(
+            ${userData.questData},
+            TRIM(TRAILING '.id' FROM ${trackerPath})
+          )`,
+        })
+        .where(
+          and(inArray(userData.userId, batchUserIds), sql`${trackerPath} IS NOT NULL`),
+        );
+
       await client
         .update(questHistory)
         .set({ completed: 0, endAt: null, startedAt })
         .where(
           and(
             inArray(questHistory.userId, batchUserIds),
-            eq(questHistory.questId, quest.id),
+            eq(questHistory.questId, questId),
           ),
-        );
-
-      // Remove only this quest's tracker in SQL. Updating the JSON document atomically avoids
-      // overwriting progress another request may have recorded for an unrelated active quest
-      // after this reset selected its users.
-      await client
-        .update(userData)
-        .set({
-          questData: sql`JSON_REMOVE(
-            ${userData.questData},
-            REPLACE(${trackerPath}, '.id', '')
-          )`,
-        })
-        .where(
-          and(inArray(userData.userId, batchUserIds), sql`${trackerPath} IS NOT NULL`),
         );
     }
   }
@@ -2875,6 +2892,7 @@ export const commitQuestObjectiveRewards = async (info: {
       // here is the fully-hydrated row (with quest relations).
       questUser: user,
       postClaimUserDataPatch: mergedUserDataPatch,
+      dropTrackerForQuestId: resolved ? userQuest?.questId : undefined,
     }),
     // Credit the sensei their per-mission ryo bonus
     ...(senseiId
