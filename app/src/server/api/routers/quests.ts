@@ -2102,6 +2102,7 @@ export const upsertQuestEntries = async (
       // quest. JSON_SEARCH 'one' drops a single tracker and questData is not guaranteed to hold
       // only one per quest, so repeat until a pass changes nothing; each pass shrinks the
       // array, making the cap a guard against a wedged cron rather than a real bound.
+      let cleared = false;
       for (let pass = 0; pass < QUEST_RESET_MAX_TRACKER_PASSES; pass++) {
         const removed = await client
           .update(userData)
@@ -2117,8 +2118,17 @@ export const upsertQuestEntries = async (
               sql`${trackerPath} IS NOT NULL`,
             ),
           );
-        if (removed.rowsAffected === 0) break;
+        if (removed.rowsAffected === 0) {
+          cleared = true;
+          break;
+        }
       }
+
+      // Only a pass that found nothing left proves every tracker is gone. Reopening on an
+      // exhausted cap would hand this batch the state the removal exists to prevent: an active
+      // quest still carrying last run's completed goals. Leave them shut instead; each pass has
+      // shortened the arrays, so the next run finishes the job.
+      if (!cleared) continue;
 
       await client
         .update(questHistory)

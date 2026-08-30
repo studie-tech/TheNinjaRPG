@@ -4,8 +4,9 @@ jobs:
   test_build:
     name: test_build
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    # Database for tests that need to execute real SQL. 8.0 matches PlanetScale. Suites that use
-    # it skip when TEST_MYSQL_URL is unset, so a local `bun test` needs no database.
+    # Database for tests that need to execute real SQL. 8.0 matches PlanetScale. Every table in
+    # it is truncated on setup, hence the explicit opt-in below. Suites that use it skip when
+    # the variables are unset, so a local `bun test` needs no database.
     services:
       mysql:
         image: mysql:8.0
@@ -47,3 +48,4 @@ jobs:
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       NODE_OPTIONS: "--max-old-space-size=4096"
       TEST_MYSQL_URL: "mysql://root@127.0.0.1:3306/tnr_test"
+      TEST_MYSQL_ALLOW_DESTRUCTIVE: "1"
