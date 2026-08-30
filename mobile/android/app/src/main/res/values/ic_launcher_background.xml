@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The adaptive icon's background layer.
+         A colour rather than the generated bitmap: that bitmap is inset to the inner 72dp
+         along with the foreground, which leaves the 18dp the system reserves on each side
+         for parallax and press animations fully transparent. A launcher that shifts or
+         scales the layers then shows a bite out of the icon. A colour fills the whole
+         108dp canvas whatever the mask and the animation do. -->
+    <color name="ic_launcher_background">#F0C84C</color>
+</resources>

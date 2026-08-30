@@ -127,7 +127,17 @@ the rounded-rect stroke so the launcher's own mask does not sit inside a second 
 - `icon-foreground.png` / `icon-background.png` — Android adaptive layers, foreground at
   66% because the launcher crops hard.
 - `splash.png` / `splash-dark.png` — square at 2732 so one image covers every device in
-  both orientations.
+  both orientations. The launch screen aspect-fills, so only the middle ~46% of the width
+  survives on a tall phone: keep the wordmark inside that band or it will be cropped.
+
+Two things the generator overwrites, which have to be put back after running it:
+
+- `mipmap-anydpi-v26/ic_launcher*.xml` — it points the background at the generated bitmap
+  and insets it by 16.7% along with the foreground, which leaves the 18dp the system
+  reserves on each side for parallax fully transparent, so a launcher animation shows a
+  bite out of the icon. Point it at `@color/ic_launcher_background` instead.
+- `mobile/icons/` — a PWA set this project does not use. The web app's icons live in
+  `app/public/icons/`. Delete it.
 
 On the web side, `app/public/icons/` also carries maskable variants inset to Android's 80%
 safe zone, and a flattened `icon-180x180.png` because iOS renders transparent corners
