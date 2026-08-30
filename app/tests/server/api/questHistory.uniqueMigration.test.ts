@@ -205,6 +205,33 @@ describe.skipIf(!enabled)("QuestHistory unique (userId, questId) migration", () 
     expect(indexes.every((row) => row.Non_unique === 0)).toBe(true);
   });
 
+  it("keeps a survivor whose id contains the characters used to build the sort key", async () => {
+    // id is varchar(191); a separator-based key would truncate here, match no row, and delete
+    // the entire group. The key is fixed width instead, so the id is recovered whole.
+    await seed([
+      {
+        id: "open|attempt 2026",
+        userId: "u1",
+        questId: "q1",
+        completed: 0,
+        endedAt: null,
+        startedAt: "2026-01-01 00:00:00.000",
+      },
+      {
+        id: "loser",
+        userId: "u1",
+        questId: "q1",
+        completed: 1,
+        endedAt: new Date("2026-05-02T00:00:00Z"),
+        startedAt: "2026-05-01 00:00:00.000",
+      },
+    ]);
+
+    await migrate();
+
+    expect((await survivors()).map((row) => row.id)).toEqual(["open|attempt 2026"]);
+  });
+
   it("is a no-op when the table already holds one row per pair", async () => {
     await seed([
       { id: "a", userId: "u1", questId: "q1", startedAt: "2026-01-01 00:00:00.000" },
