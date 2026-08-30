@@ -16,7 +16,24 @@ describe("toPlainText", () => {
   });
 
   it("decodes the entities that reach the feed", () => {
-    expect(toPlainText("Tsukimori &amp; Syndicate &lt;3")).toBe("Tsukimori & Syndicate <3");
+    expect(toPlainText("Tsukimori &amp; Syndicate &lt;3")).toBe(
+      "Tsukimori & Syndicate <3",
+    );
+  });
+
+  it("decodes each entity once, so an escaped entity survives as text", () => {
+    expect(toPlainText("Write &amp;lt; for a less-than sign")).toBe(
+      "Write &lt; for a less-than sign",
+    );
+  });
+
+  it("leaves unknown entities alone rather than mangling them", () => {
+    expect(toPlainText("100&percnt; done")).toBe("100&percnt; done");
+  });
+
+  it("strips to a fixpoint, so a nested tag cannot reassemble itself", () => {
+    expect(toPlainText("<<b>b>bold<<\/b>\/b>")).toBe("bold");
+    expect(toPlainText("<<script>script>alert(1)")).toBe("alert(1)");
   });
 });
 

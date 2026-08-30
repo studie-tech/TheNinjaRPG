@@ -19,10 +19,11 @@ import { useUserData } from "@/utils/UserContext";
  * for every visitor.
  */
 export default function NativeBridge() {
-  const { data: userData } = useUserData();
+  const { data: userData, userId, isClerkLoaded } = useUserData();
   const [isOutdated, setIsOutdated] = useState(false);
+  const isSignedOut = isClerkLoaded && !userId;
 
-  useNativePush({ enabled: !!userData });
+  const { unregister } = useNativePush({ enabled: !!userData });
 
   // The shell version is only knowable in the browser, so this runs after mount rather
   // than during render — checking it inline would break hydration.
@@ -31,15 +32,21 @@ export default function NativeBridge() {
     setIsOutdated(isOutdatedNativeClient(client, MIN_NATIVE_APP_VERSION));
   }, []);
 
+  // Leaving a token bound to a signed-out account would send the next person to pick up
+  // the phone somebody else's alerts, and leave their stats on the home screen. Gated on
+  // Clerk having resolved, because userData is undefined during load for a signed-in
+  // player too.
+  useEffect(() => {
+    if (!isNative() || !isSignedOut) return;
+    void unregister();
+    void widgets.clear();
+  }, [isSignedOut, unregister]);
+
   // Home screen widgets read a snapshot from the shared container rather than the API, so
   // they stay correct while the app is closed. Refresh it whenever the player's vitals
   // change; `sync` is a no-op when the shell has no widget plugin.
   useEffect(() => {
-    if (!isNative()) return;
-    if (!userData) {
-      void widgets.clear();
-      return;
-    }
+    if (!isNative() || !userData) return;
     void widgets.sync({
       updatedAt: new Date().toISOString(),
       username: userData.username,

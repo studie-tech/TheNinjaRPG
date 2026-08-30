@@ -3,7 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
+import {
+  safeLocalStorageGetItem,
+  safeLocalStorageRemoveItem,
+  safeLocalStorageSetItem,
+} from "@/hooks/localstorage";
 import { isNative, parseNativeUserAgent, push } from "@/libs/native";
 
 /** Token last handed to the server, so a resume does not re-register the same value. */
@@ -17,6 +21,10 @@ interface UseNativePushOptions {
 /**
  * Keeps the device's push token in sync with the account and routes notification taps.
  *
+ * Mount this exactly once — `NativeBridge` does — because it attaches the plugin
+ * listeners. Anything that only needs the permission state should use
+ * `useNativePushPermission` instead.
+ *
  * Registration is deliberately passive: it asks the OS for a token only when permission
  * has already been granted. Prompting is left to the notification settings panel, because
  * iOS allows the system prompt exactly once and burning it on app launch means a player
@@ -24,7 +32,6 @@ interface UseNativePushOptions {
  */
 export const useNativePush = ({ enabled }: UseNativePushOptions) => {
   const router = useRouter();
-  const [permission, setPermission] = useState<push.PermissionState>("prompt");
   const registeredToken = useRef<string | null>(null);
 
   const registerDevice = api.push.registerDevice.useMutation();
@@ -61,7 +68,6 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
     });
 
     void push.checkPermissions().then(async (state) => {
-      setPermission(state);
       if (state === "granted") await push.register();
     });
 
@@ -72,7 +78,33 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
     };
   }, [enabled, router, sendToken]);
 
-  /** Show the system prompt and register on approval. Call from a deliberate action. */
+  /** Detach this device from the account. Call when the player signs out. */
+  const unregister = useCallback(async () => {
+    const token = registeredToken.current ?? safeLocalStorageGetItem(LAST_TOKEN_KEY);
+    if (!token) return;
+    registeredToken.current = null;
+    safeLocalStorageRemoveItem(LAST_TOKEN_KEY);
+    await unregisterDevice.mutateAsync({ token }).catch(() => undefined);
+  }, [unregisterDevice]);
+
+  return { unregister };
+};
+
+/**
+ * Permission state only — no listeners, so it is safe to mount alongside `useNativePush`.
+ */
+export const useNativePushPermission = () => {
+  const [permission, setPermission] = useState<push.PermissionState>("prompt");
+
+  useEffect(() => {
+    if (!isNative()) return;
+    void push.checkPermissions().then(setPermission);
+  }, []);
+
+  /**
+   * Show the system prompt and ask for a token on approval. The token itself arrives on
+   * the `registration` event that `useNativePush` is already listening for.
+   */
   const requestPermission = useCallback(async () => {
     if (!isNative()) return "denied" as const;
     const state = await push.requestPermissions();
@@ -81,18 +113,5 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
     return state;
   }, []);
 
-  /** Detach this device from the account. Call before signing out. */
-  const unregister = useCallback(async () => {
-    const token = registeredToken.current ?? safeLocalStorageGetItem(LAST_TOKEN_KEY);
-    if (!token) return;
-    registeredToken.current = null;
-    await unregisterDevice.mutateAsync({ token }).catch(() => undefined);
-  }, [unregisterDevice]);
-
-  return {
-    isSupported: isNative(),
-    permission,
-    requestPermission,
-    unregister,
-  };
+  return { isSupported: isNative(), permission, requestPermission };
 };

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { PushCategory } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
-import { useNativePush } from "@/hooks/useNativePush";
+import { useNativePushPermission } from "@/hooks/useNativePush";
 import { haptics, isNative } from "@/libs/native";
 import { showMutationToast } from "@/libs/toast";
 
@@ -39,7 +39,7 @@ export default function DeviceSettings() {
   );
 
   const native = isClient && isNative();
-  const { permission, requestPermission } = useNativePush({ enabled: native });
+  const { permission, requestPermission } = useNativePushPermission();
 
   const { data: preferences, refetch } = api.push.getPreferences.useQuery(undefined, {
     enabled: native,

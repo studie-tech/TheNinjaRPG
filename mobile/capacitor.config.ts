@@ -36,7 +36,6 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: "always",
     appendUserAgent: `TNR-Native/${APP_VERSION} (ios)`,
-    limitsNavigationsToAppBoundDomains: false,
   },
 
   android: {
