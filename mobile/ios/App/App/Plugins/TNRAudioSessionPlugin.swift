@@ -49,6 +49,11 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
                 options: [.notifyOthersOnDeactivation]
             )
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            // An artwork download started before this can still complete, and it re-reads
+            // nowPlayingInfo — leaving the Lock Screen showing an image with no title
+            // after audio was released. Bumping the version drops that completion.
+            artworkTask?.cancel()
+            artworkRequestId += 1
             call.resolve()
         } catch {
             call.reject("Could not release the audio session", nil, error)

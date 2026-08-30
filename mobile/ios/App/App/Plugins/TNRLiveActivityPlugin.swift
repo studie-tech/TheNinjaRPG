@@ -26,8 +26,10 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func start(_ call: CAPPluginCall) {
         #if canImport(ActivityKit)
-        guard #available(iOS 16.1, *) else {
-            call.reject("Live Activities need iOS 16.1")
+        guard #available(iOS 16.2, *) else {
+            // 16.1 could host an activity, but the ActivityContent APIs used below arrived
+            // in 16.2 and the app target still supports iOS 15.
+            call.reject("Live Activities need iOS 16.2")
             return
         }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
@@ -76,8 +78,10 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func update(_ call: CAPPluginCall) {
         #if canImport(ActivityKit)
-        guard #available(iOS 16.1, *) else {
-            call.reject("Live Activities need iOS 16.1")
+        guard #available(iOS 16.2, *) else {
+            // 16.1 could host an activity, but the ActivityContent APIs used below arrived
+            // in 16.2 and the app target still supports iOS 15.
+            call.reject("Live Activities need iOS 16.2")
             return
         }
         guard let activityId = call.getString("activityId") else {
@@ -103,8 +107,10 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func end(_ call: CAPPluginCall) {
         #if canImport(ActivityKit)
-        guard #available(iOS 16.1, *) else {
-            call.reject("Live Activities need iOS 16.1")
+        guard #available(iOS 16.2, *) else {
+            // 16.1 could host an activity, but the ActivityContent APIs used below arrived
+            // in 16.2 and the app target still supports iOS 15.
+            call.reject("Live Activities need iOS 16.2")
             return
         }
         guard let activityId = call.getString("activityId"),
@@ -124,7 +130,7 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func endAll(_ call: CAPPluginCall) {
         #if canImport(ActivityKit)
-        guard #available(iOS 16.1, *) else {
+        guard #available(iOS 16.2, *) else {
             call.resolve()
             return
         }

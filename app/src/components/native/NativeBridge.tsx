@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
 import { useLiveActivity } from "@/hooks/useLiveActivity";
-import { readWidgetToken, useNativePush } from "@/hooks/useNativePush";
+import { useNativePush } from "@/hooks/useNativePush";
 import { calcHealFinish } from "@/libs/hospital";
 import {
   appEvents,
@@ -36,7 +36,7 @@ export default function NativeBridge() {
   // the widget renders does not spend a WidgetKit reload.
   const lastSnapshot = useRef<string | null>(null);
 
-  const { unregister } = useNativePush({ enabled: !!userData });
+  const { unregister, widgetToken } = useNativePush({ enabled: !!userData });
   useLiveActivity(userData, timeDiff);
 
   // The shell version is only knowable in the browser, so this runs after mount rather
@@ -114,7 +114,7 @@ export default function NativeBridge() {
     if (!isNative() || !userData) return;
     const quest = activeQuest(userData);
     const snapshot = {
-      widgetToken: readWidgetToken(),
+      widgetToken,
       username: userData.username,
       avatar: userData.avatar ?? undefined,
       village: userData.village?.name,
@@ -141,7 +141,7 @@ export default function NativeBridge() {
     if (signature === lastSnapshot.current) return;
     lastSnapshot.current = signature;
     void widgets.sync({ ...snapshot, updatedAt: new Date().toISOString() });
-  }, [userData]);
+  }, [userData, timeDiff, widgetToken]);
 
   if (!isOutdated) return null;
   return <UpdateWall />;

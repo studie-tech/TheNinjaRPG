@@ -43,6 +43,11 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
   // would otherwise resolve afterwards and write the old account's widget token back,
   // handing whoever picks the phone up next a credential for someone else's status.
   const registrationEpoch = useRef(0);
+  // State, not just localStorage: the widget snapshot effect has to re-run once this
+  // exists, and a ref would not wake it.
+  const [widgetToken, setWidgetToken] = useState<string | undefined>(
+    () => safeLocalStorageGetItem(WIDGET_TOKEN_KEY) ?? undefined,
+  );
 
   // Attach listeners before register() — the token arrives as an event, not a return
   // value, so a listener attached afterwards can miss it entirely.
@@ -66,6 +71,7 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
           safeLocalStorageSetItem(LAST_TOKEN_KEY, token);
           if (result.widgetToken) {
             safeLocalStorageSetItem(WIDGET_TOKEN_KEY, result.widgetToken);
+            setWidgetToken(result.widgetToken);
           }
         })
         .catch(() => {
@@ -98,6 +104,7 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
     // Invalidate first, so a registration racing this cannot write its result back after
     // the row has been deleted.
     registrationEpoch.current += 1;
+    setWidgetToken(undefined);
     const token = registeredToken.current ?? safeLocalStorageGetItem(LAST_TOKEN_KEY);
     if (!token) return;
     registeredToken.current = null;
@@ -106,12 +113,8 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
     await unregisterDevice.mutateAsync({ token }).catch(() => undefined);
   }, [unregisterDevice]);
 
-  return { unregister };
+  return { unregister, widgetToken };
 };
-
-/** The widget credential minted at registration, if this device has one yet. */
-export const readWidgetToken = (): string | undefined =>
-  safeLocalStorageGetItem(WIDGET_TOKEN_KEY) ?? undefined;
 
 /**
  * Permission state only — no listeners, so it is safe to mount alongside `useNativePush`.

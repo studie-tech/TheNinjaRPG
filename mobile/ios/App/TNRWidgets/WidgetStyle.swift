@@ -11,6 +11,20 @@ enum TNRStyle {
     static let stamina = Color(red: 0.25, green: 0.65, blue: 0.35)
 }
 
+extension View {
+    /// `containerBackground` is iOS 17, and this extension deploys to 16.1. On 17 and
+    /// later the system needs the container form to lay the widget out correctly; before
+    /// that a plain background is the equivalent.
+    @ViewBuilder
+    func tnrWidgetBackground(_ color: Color) -> some View {
+        if #available(iOS 17.0, *) {
+            containerBackground(color, for: .widget)
+        } else {
+            background(color)
+        }
+    }
+}
+
 /// A labelled bar. Reads at a glance as a colour and a length, with the numbers there for
 /// anyone who wants them.
 struct StatBar: View {

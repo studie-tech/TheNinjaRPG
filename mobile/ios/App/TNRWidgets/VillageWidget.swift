@@ -6,7 +6,7 @@ struct VillageWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "TNRVillageWidget", provider: SnapshotProvider()) { entry in
             VillageWidgetView(entry: entry)
-                .containerBackground(TNRStyle.tile.opacity(0.18), for: .widget)
+                .tnrWidgetBackground(TNRStyle.tile.opacity(0.18))
         }
         .configurationDisplayName("Village")
         .description("Your village, rank and unread notifications.")

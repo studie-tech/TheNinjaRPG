@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { calcHealFinish } from "@/libs/hospital";
 import { liveActivity } from "@/libs/native";
@@ -30,19 +30,35 @@ export const useLiveActivity = (
   // Read inside the start callback rather than captured, because `userData` changes on
   // every profile refresh and the effect re-runs with it.
   const shouldBeRunning = useRef(false);
+  const endsAtRef = useRef<Date | null>(null);
+
+  // The plugin subscribes to pushTokenUpdates before `start` resolves, so a token can
+  // arrive while `activeId` is still null. Held here and claimed once the id is known,
+  // rather than dropped — a discarded token means the server can never update that
+  // activity, and Apple will not reissue one just because we missed it.
+  const pendingToken = useRef<{ activityId: string; pushToken: string } | null>(null);
+
+  const submitToken = useCallback(
+    (activityId: string, pushToken: string) => {
+      const endsAt = endsAtRef.current;
+      if (!endsAt) return;
+      registerActivity({ activityId, kind: "hospital", pushToken, endsAt });
+    },
+    [registerActivity],
+  );
 
   // Apple reissues the token, so this stays subscribed rather than reading it once.
   useEffect(() => {
     if (!liveActivity.isSupported()) return;
     return liveActivity.onToken(({ activityId, pushToken }) => {
-      if (activityId !== activeId.current) return;
-      const endsAt = endsAtRef.current;
-      if (!endsAt) return;
-      registerActivity({ activityId, kind: "hospital", pushToken, endsAt });
+      if (activityId === activeId.current) {
+        submitToken(activityId, pushToken);
+        return;
+      }
+      pendingToken.current = { activityId, pushToken };
     });
-  }, [registerActivity]);
+  }, [submitToken]);
 
-  const endsAtRef = useRef<Date | null>(null);
   const isHospitalised = userData?.status === "HOSPITALIZED";
   // Signed out counts as "stop", not "no opinion": leaving the countdown up would show
   // the previous player's recovery on the Lock Screen of a signed-out phone.
@@ -91,7 +107,16 @@ export const useLiveActivity = (
           return;
         }
         activeId.current = started?.activityId ?? null;
-        if (!started) endsAtRef.current = null;
+        if (!started) {
+          endsAtRef.current = null;
+          return;
+        }
+        // Claim a token that arrived before the id was known.
+        const held = pendingToken.current;
+        if (held?.activityId === started.activityId) {
+          pendingToken.current = null;
+          submitToken(held.activityId, held.pushToken);
+        }
       })
       .finally(() => {
         isStarting.current = false;

@@ -5,13 +5,13 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -30,8 +30,9 @@ import java.util.Map;
 public class TNRLiveUpdatesPlugin extends Plugin {
 
     private static final String CHANNEL_ID = "recovery";
-    private final Map<String, Integer> activities = new HashMap<>();
-    private int nextNotificationId = 8000;
+    private static final String PREFS = "tnr_live_updates";
+    private static final String KEY_NEXT_ID = "nextNotificationId";
+    private static final int FIRST_NOTIFICATION_ID = 8000;
 
     @PluginMethod
     public void start(PluginCall call) {
@@ -46,9 +47,9 @@ public class TNRLiveUpdatesPlugin extends Plugin {
             return;
         }
 
-        String activityId = kind + "-" + nextNotificationId;
-        int notificationId = nextNotificationId++;
-        activities.put(activityId, notificationId);
+        int notificationId = nextNotificationId();
+        String activityId = kind + "-" + notificationId;
+        rememberActivity(activityId, notificationId);
         post(notificationId, call, endsAt);
 
         JSObject result = new JSObject();
@@ -61,7 +62,7 @@ public class TNRLiveUpdatesPlugin extends Plugin {
     @PluginMethod
     public void update(PluginCall call) {
         String activityId = call.getString("activityId");
-        Integer notificationId = activityId == null ? null : activities.get(activityId);
+        Integer notificationId = activityId == null ? null : notificationIdFor(activityId);
         if (notificationId == null) {
             call.reject("No such activity");
             return;
@@ -78,7 +79,7 @@ public class TNRLiveUpdatesPlugin extends Plugin {
     @PluginMethod
     public void end(PluginCall call) {
         String activityId = call.getString("activityId");
-        Integer notificationId = activityId == null ? null : activities.remove(activityId);
+        Integer notificationId = activityId == null ? null : forgetActivity(activityId);
         if (notificationId != null) {
             manager().cancel(notificationId);
         }
@@ -88,10 +89,17 @@ public class TNRLiveUpdatesPlugin extends Plugin {
 
     @PluginMethod
     public void endAll(PluginCall call) {
-        for (Integer notificationId : activities.values()) {
-            manager().cancel(notificationId);
+        SharedPreferences prefs = prefs();
+        for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
+            if (KEY_NEXT_ID.equals(entry.getKey())) {
+                continue;
+            }
+            if (entry.getValue() instanceof Integer) {
+                manager().cancel((Integer) entry.getValue());
+            }
         }
-        activities.clear();
+        int nextId = prefs.getInt(KEY_NEXT_ID, FIRST_NOTIFICATION_ID);
+        prefs.edit().clear().putInt(KEY_NEXT_ID, nextId).apply();
         call.resolve();
     }
 
@@ -163,5 +171,42 @@ public class TNRLiveUpdatesPlugin extends Plugin {
 
     private NotificationManager manager() {
         return (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+    }
+
+    /**
+     * The activity-to-notification mapping lives in SharedPreferences rather than in a
+     * field.
+     *
+     * Android keeps posted notifications outside the app process, so after the process is
+     * recreated an in-memory map would leave update() rejecting ids that are still on
+     * screen, and end() with no id to cancel -- an ongoing notification nothing can
+     * remove.
+     */
+    private SharedPreferences prefs() {
+        return getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    private int nextNotificationId() {
+        SharedPreferences prefs = prefs();
+        int next = prefs.getInt(KEY_NEXT_ID, FIRST_NOTIFICATION_ID);
+        prefs.edit().putInt(KEY_NEXT_ID, next + 1).apply();
+        return next;
+    }
+
+    private void rememberActivity(String activityId, int notificationId) {
+        prefs().edit().putInt(activityId, notificationId).apply();
+    }
+
+    private Integer notificationIdFor(String activityId) {
+        SharedPreferences prefs = prefs();
+        return prefs.contains(activityId) ? prefs.getInt(activityId, -1) : null;
+    }
+
+    private Integer forgetActivity(String activityId) {
+        Integer notificationId = notificationIdFor(activityId);
+        if (notificationId != null) {
+            prefs().edit().remove(activityId).apply();
+        }
+        return notificationId;
     }
 }

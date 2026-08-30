@@ -6,7 +6,7 @@ struct QuestWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "TNRQuestWidget", provider: SnapshotProvider()) { entry in
             QuestWidgetView(entry: entry)
-                .containerBackground(TNRStyle.tile.opacity(0.18), for: .widget)
+                .tnrWidgetBackground(TNRStyle.tile.opacity(0.18))
         }
         .configurationDisplayName("Quest")
         .description("Your active mission and its progress.")

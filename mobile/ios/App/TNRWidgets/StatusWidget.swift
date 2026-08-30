@@ -7,7 +7,7 @@ struct StatusWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "TNRStatusWidget", provider: SnapshotProvider()) { entry in
             StatusWidgetView(entry: entry)
-                .containerBackground(TNRStyle.tile.opacity(0.18), for: .widget)
+                .tnrWidgetBackground(TNRStyle.tile.opacity(0.18))
         }
         .configurationDisplayName("Status")
         .description("Health, chakra and stamina at a glance.")

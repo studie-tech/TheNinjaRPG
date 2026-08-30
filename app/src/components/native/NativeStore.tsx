@@ -50,7 +50,13 @@ export default function NativeStore() {
   // Binding the SDK to the player's own id is what lets the webhook know who to credit;
   // without it a purchase is validated and then dropped.
   useEffect(() => {
-    if (!isNativeShell || !apiKey || !userData?.userId) return;
+    if (!isNativeShell || !userData?.userId) return;
+    if (!apiKey) {
+      // isConfigured only reflects the server's webhook secret, so a build with that set
+      // and the public SDK key missing would otherwise spin forever with no explanation.
+      setProducts([]);
+      return;
+    }
     void purchases
       .configure(apiKey, userData.userId)
       .then(() => purchases.getProducts())
