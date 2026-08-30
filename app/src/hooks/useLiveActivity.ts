@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
-import { calcHealFinish } from "@/libs/hospital";
+import { hospitalRecoveryAt } from "@/libs/hospital";
 import { liveActivity } from "@/libs/native";
 import type { UserWithRelations } from "@/routers/profile";
 
@@ -83,7 +83,7 @@ export const useLiveActivity = (
     // Already showing one; the server pushes the updates from here.
     if (activeId.current || isStarting.current || !userData) return;
 
-    const endsAt = calcHealFinish({ user: userData, timeDiff });
+    const endsAt = hospitalRecoveryAt(userData, timeDiff);
     // A countdown that has already finished would show as stale the moment it appeared.
     if (endsAt.getTime() <= Date.now()) return;
 
