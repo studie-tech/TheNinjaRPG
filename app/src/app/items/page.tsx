@@ -725,9 +725,11 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         showMutationToast({ success: true, message });
       }
       if (data.success) {
-        await utils.profile.getUser.invalidate();
-        await utils.item.getUserItemsWithVariants.invalidate();
-        await utils.bloodline.getItemRolls.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.item.getUserItemsWithVariants.invalidate(),
+          utils.bloodline.getItemRolls.invalidate(),
+        ]);
       }
     },
     onSettled,

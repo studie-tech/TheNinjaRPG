@@ -41,8 +41,10 @@ export default function Clans() {
     {
       onSuccess: async (data) => {
         showMutationToast(data);
-        await utils.clan.getAll.invalidate();
-        await utils.profile.getUser.invalidate();
+        await Promise.all([
+          utils.clan.getAll.invalidate(),
+          utils.profile.getUser.invalidate(),
+        ]);
       },
     },
   );

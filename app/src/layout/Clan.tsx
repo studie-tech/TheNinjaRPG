@@ -325,8 +325,10 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getUser.invalidate();
-        await utils.clan.getClanBattles.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.clan.getClanBattles.invalidate(),
+        ]);
       }
     },
   });
@@ -335,8 +337,10 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getUser.invalidate();
-        await utils.clan.getClanBattles.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.clan.getClanBattles.invalidate(),
+        ]);
       }
     },
   });
@@ -345,8 +349,10 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getUser.invalidate();
-        await utils.clan.getClanBattles.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.clan.getClanBattles.invalidate(),
+        ]);
       }
     },
   });
@@ -356,8 +362,10 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
-          await utils.clan.getClanBattles.invalidate();
+          await Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.clan.getClanBattles.invalidate(),
+          ]);
           router.push("/combat");
         }
       },
@@ -664,8 +672,10 @@ export const ClanRequests: React.FC<ClanRequestsProps> = (props) => {
   const onSuccess = async (data: BaseServerResponse) => {
     showMutationToast(data);
     if (data.success) {
-      await utils.clan.get.invalidate();
-      await utils.clan.getRequests.invalidate();
+      await Promise.all([
+        utils.clan.get.invalidate(),
+        utils.clan.getRequests.invalidate(),
+      ]);
     }
   };
 
@@ -793,9 +803,11 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getUser.invalidate();
-        await utils.clan.get.invalidate();
-        await utils.clan.getRequests.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.clan.get.invalidate(),
+          utils.clan.getRequests.invalidate(),
+        ]);
         router.push("/clanhall");
       }
     },
@@ -805,8 +817,10 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.clan.get.invalidate();
-        await utils.clan.getRequests.invalidate();
+        await Promise.all([
+          utils.clan.get.invalidate(),
+          utils.clan.getRequests.invalidate(),
+        ]);
       }
     },
   });
@@ -858,8 +872,10 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getUser.invalidate();
-        await utils.clan.get.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.clan.get.invalidate(),
+        ]);
         toBankForm.reset();
       }
     },
@@ -870,8 +886,10 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getUser.invalidate();
-        await utils.clan.get.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.clan.get.invalidate(),
+        ]);
         router.push("/clanhall");
       }
     },
@@ -881,8 +899,10 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.clan.get.invalidate();
-        await utils.clan.getRequests.invalidate();
+        await Promise.all([
+          utils.clan.get.invalidate(),
+          utils.clan.getRequests.invalidate(),
+        ]);
       }
     },
   });
@@ -1466,9 +1486,11 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
   const onSuccess = async (data: BaseServerResponse) => {
     showMutationToast(data);
     if (data.success) {
-      await utils.profile.getUser.invalidate();
-      await utils.clan.get.invalidate();
-      await utils.clan.getRequests.invalidate();
+      await Promise.all([
+        utils.profile.getUser.invalidate(),
+        utils.clan.get.invalidate(),
+        utils.clan.getRequests.invalidate(),
+      ]);
     }
   };
 

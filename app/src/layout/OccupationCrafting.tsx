@@ -98,8 +98,10 @@ export default function OccupationCrafting() {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.item.getUserItems.invalidate();
-        await utils.profile.getUser.invalidate();
+        await Promise.all([
+          utils.item.getUserItems.invalidate(),
+          utils.profile.getUser.invalidate(),
+        ]);
       }
     },
   });
@@ -108,8 +110,10 @@ export default function OccupationCrafting() {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.item.getUserItems.invalidate();
-        await utils.profile.getUser.invalidate();
+        await Promise.all([
+          utils.item.getUserItems.invalidate(),
+          utils.profile.getUser.invalidate(),
+        ]);
       }
     },
   });

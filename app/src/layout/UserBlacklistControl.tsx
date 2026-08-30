@@ -27,9 +27,11 @@ const UserBlacklistControl: React.FC = () => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getBlacklist.invalidate();
-          await utils.comments.getConversationComments.invalidate();
-          await utils.comments.getUserConversations.invalidate();
+          await Promise.all([
+            utils.profile.getBlacklist.invalidate(),
+            utils.comments.getConversationComments.invalidate(),
+            utils.comments.getUserConversations.invalidate(),
+          ]);
         }
       },
     });

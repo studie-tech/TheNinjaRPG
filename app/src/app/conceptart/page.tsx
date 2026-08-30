@@ -129,8 +129,10 @@ export default function ConceptArt() {
           filterForm?.setValue("only_own", true);
           filterForm?.setValue("sort", "Most Recent");
           router.push(`/conceptart/${result.imageId}`);
-          await utils.conceptart.getAll.refetch();
-          await utils.profile.getUser.refetch();
+          await Promise.all([
+            utils.conceptart.getAll.refetch(),
+            utils.profile.getUser.refetch(),
+          ]);
         }
       },
       onError: (error) => {
@@ -154,8 +156,10 @@ export default function ConceptArt() {
           filterForm?.setValue("sort", "Most Recent");
           // Navigate to video page where polling will show progress
           router.push(`/conceptart/${result.videoId}`);
-          await utils.conceptart.getAll.refetch();
-          await utils.profile.getUser.refetch();
+          await Promise.all([
+            utils.conceptart.getAll.refetch(),
+            utils.profile.getUser.refetch(),
+          ]);
         }
       },
       onError: (error) => {

@@ -143,8 +143,10 @@ const ApproveButton: React.FC<{ applicationId: string }> = ({ applicationId }) =
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.applications.get.invalidate({ id: applicationId });
-        await utils.applications.list.invalidate();
+        await Promise.all([
+          utils.applications.get.invalidate({ id: applicationId }),
+          utils.applications.list.invalidate(),
+        ]);
       }
     },
   });
@@ -162,8 +164,10 @@ const RejectButton: React.FC<{ applicationId: string }> = ({ applicationId }) =>
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.applications.get.invalidate({ id: applicationId });
-        await utils.applications.list.invalidate();
+        await Promise.all([
+          utils.applications.get.invalidate({ id: applicationId }),
+          utils.applications.list.invalidate(),
+        ]);
       }
     },
   });

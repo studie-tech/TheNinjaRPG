@@ -502,8 +502,10 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getAi.invalidate();
-        await utils.profile.getPublicUser.invalidate();
+        await Promise.all([
+          utils.profile.getAi.invalidate(),
+          utils.profile.getPublicUser.invalidate(),
+        ]);
       }
     },
   });
@@ -755,8 +757,10 @@ const Marriage: React.FC = () => {
   const onSuccess = async (data: BaseServerResponse) => {
     showMutationToast(data);
     if (data.success) {
-      await utils.marriage.getMarriedUsers.invalidate();
-      await utils.marriage.getRequests.invalidate();
+      await Promise.all([
+        utils.marriage.getMarriedUsers.invalidate(),
+        utils.marriage.getRequests.invalidate(),
+      ]);
     }
   };
 
@@ -862,8 +866,10 @@ const NewAiAvatar: React.FC = () => {
   const createAvatar = api.avatar.createAvatar.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      await utils.profile.getUser.invalidate();
-      await utils.avatar.getHistoricalAvatars.invalidate();
+      await Promise.all([
+        utils.profile.getUser.invalidate(),
+        utils.avatar.getHistoricalAvatars.invalidate(),
+      ]);
     },
   });
   const userAttributes = api.profile.getUserAttributes.useQuery(undefined, {
@@ -2044,8 +2050,10 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
-          await utils.skillTree.getUserSkills.invalidate();
+          await Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.skillTree.getUserSkills.invalidate(),
+          ]);
         }
       },
     });

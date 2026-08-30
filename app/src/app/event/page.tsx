@@ -237,8 +237,10 @@ const NotificationSystem: React.FC = () => {
     api.misc.submitNotification.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        await utils.profile.getUser.invalidate();
-        await utils.misc.getPreviousNotifications.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.misc.getPreviousNotifications.invalidate(),
+        ]);
       },
     });
 

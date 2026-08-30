@@ -544,9 +544,11 @@ export default function Travel() {
         showMutationToast(data);
       }
       if (data.success) {
-        await utils.profile.getUser.invalidate();
-        await utils.item.getUserItems.invalidate();
-        await utils.bloodline.getItemRolls.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.item.getUserItems.invalidate(),
+          utils.bloodline.getItemRolls.invalidate(),
+        ]);
       }
     },
     onSettled: () => {
