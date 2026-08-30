@@ -2528,7 +2528,15 @@ export const upsertQuestEntry = async (
   // Promises to be executed
   const promises: Promise<unknown>[] = [];
   // Restarting a quest must discard any stale tracker from prior attempts before recomputing.
-  user.questData = removeQuestTrackerByQuestId(user.questData, quest.id);
+  // An attempt that is still open is being re-entered, not restarted — a `start_quest`
+  // objective consequence can name a quest the player is already working through — so keep its
+  // tracker. Every genuine restart arrives here with the row closed (completed, or ended by the
+  // daily reset / abandon), and the mission-hall and overworld paths reject a quest that is
+  // still open before they ever call this.
+  const isOpenAttempt = !!entry && entry.completed === 0 && entry.endAt === null;
+  if (!isOpenAttempt) {
+    user.questData = removeQuestTrackerByQuestId(user.questData, quest.id);
+  }
   // Check if the quest has already been started
   if (entry) {
     const startedAt = new Date();

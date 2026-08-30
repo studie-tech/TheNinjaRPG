@@ -344,6 +344,79 @@ describe("assignQuestToUser compatibility", () => {
     ]);
   });
 
+  it("keeps tracker progress when re-entering a quest attempt that is still open", async () => {
+    // A `start_quest` objective consequence can name a quest the player is already working
+    // through. Restart semantics would silently throw that progress away.
+    const objectiveQuest = {
+      ...quest,
+      content: {
+        objectives: [
+          {
+            id: "obj-1",
+            task: "items_crafted",
+            value: 2,
+            description: "",
+            successDescription: "",
+          },
+        ],
+        reward: {},
+        sceneBackground: "",
+        sceneCharacters: [],
+      },
+    };
+    const openTracker = {
+      id: objectiveQuest.id,
+      goals: [{ id: "obj-1", done: false, value: 1 }],
+      startAt: new Date().toISOString(),
+    };
+    const openEntry = {
+      id: "history-1",
+      userId: user.userId,
+      questId: objectiveQuest.id,
+      questType: objectiveQuest.questType,
+      completed: 0,
+      endAt: null,
+      previousAttempts: 1,
+    };
+
+    const sets: Record<string, unknown>[] = [];
+    const update = vi.fn(() => ({
+      set: (value: Record<string, unknown>) => {
+        sets.push(value);
+        return { where: vi.fn().mockResolvedValue({ rowsAffected: 1 }) };
+      },
+    }));
+    const client = {
+      update,
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({ onDuplicateKeyUpdate: vi.fn().mockResolvedValue(undefined) })),
+      })),
+      query: { questHistory: { findFirst: vi.fn().mockResolvedValue(openEntry) } },
+    } as never;
+
+    await upsertQuestEntry(
+      client,
+      {
+        ...user,
+        questData: [openTracker],
+        userQuests: [{ ...openEntry, quest: objectiveQuest }],
+      } as never,
+      objectiveQuest as never,
+      "quest_objective",
+      openEntry as never,
+    );
+
+    const questDataWrite = sets.find((set) => "questData" in set);
+    const trackers = (questDataWrite?.questData ?? []) as {
+      id: string;
+      goals: { id: string; value?: number }[];
+    }[];
+    const goal = trackers
+      .find((tracker) => tracker.id === objectiveQuest.id)
+      ?.goals.find((g) => g.id === "obj-1");
+    expect(goal?.value).toBe(1);
+  });
+
   it("resets stale tracker state when restarting an already-attempted quest", async () => {
     const objectiveQuest = {
       ...quest,

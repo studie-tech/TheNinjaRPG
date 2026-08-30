@@ -4,6 +4,23 @@ jobs:
   test_build:
     name: test_build
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    # The daily quest reset clears trackers with raw JSON_SEARCH/JSON_REMOVE surgery. Asserting
+    # the rendered statement cannot show whether the engine drops the element we meant, so
+    # tests/server/api/quests.trackerSql.test.ts executes it here for real. 8.0 matches
+    # PlanetScale. Without TEST_MYSQL_URL that suite skips, so local runs stay dependency-free.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: tnr_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -31,3 +48,4 @@ jobs:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       NODE_OPTIONS: "--max-old-space-size=4096"
+      TEST_MYSQL_URL: "mysql://root@127.0.0.1:3306/tnr_test"
