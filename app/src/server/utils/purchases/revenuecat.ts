@@ -24,26 +24,49 @@ export const revenueCatEventSchema = z.object({
     /** Absent on some event types, in which case the event id stands in. */
     transaction_id: z.string().nullish(),
     store: z.string().nullish(),
+    cancel_reason: z.string().nullish(),
     environment: z.string().nullish(),
     entitlement_ids: z.array(z.string()).nullish(),
   }),
 });
 export type RevenueCatEvent = z.infer<typeof revenueCatEventSchema>["event"];
 
-/** Events that mean the player now owns something. */
+/**
+ * Events that mean the player now owns something.
+ *
+ * PRODUCT_CHANGE is deliberately absent. It is informative: it announces a switch that
+ * has not taken effect yet, and on the App Store its `product_id` is the tier being
+ * *left*, not the one being moved to. Granting on it would credit the old product and,
+ * for a scheduled downgrade, cut short a month already paid for. The change arrives on
+ * its own once it is real — RENEWAL on the App Store, INITIAL_PURCHASE on Play — and
+ * both of those are already here.
+ */
 const GRANTING_EVENTS = new Set([
   "INITIAL_PURCHASE",
   "NON_RENEWING_PURCHASE",
   "RENEWAL",
   "UNCANCELLATION",
-  "PRODUCT_CHANGE",
 ]);
 
 /**
- * Events that mean access has ended. CANCELLATION is deliberately absent: it means
- * auto-renew was switched off, and the player keeps what they paid for until EXPIRATION.
+ * Events that mean access has ended. CANCELLATION is deliberately absent: for the usual
+ * reason — the player switched auto-renew off — they keep what they paid for until
+ * EXPIRATION, and revoking here would cut a paid month short.
+ *
+ * A refund is the exception, and it arrives as a CANCELLATION too. See `isRefund`.
  */
 const REVOKING_EVENTS = new Set(["EXPIRATION"]);
+
+/**
+ * Whether a CANCELLATION is a refund rather than a lapse.
+ *
+ * The money has gone back to the player, so whatever it bought should come back too. That
+ * is not automated here: reputation points are spent the moment they land, so clawing them
+ * back can leave a negative balance or unwind a purchase two owners later. The event is
+ * recorded and raised for a human, which is how the PayPal side already handles refunds.
+ */
+export const isRefund = (event: RevenueCatEvent): boolean =>
+  event.type === "CANCELLATION" && event.cancel_reason === "CUSTOMER_SUPPORT";
 
 export type EventAction = "grant" | "revoke" | "ignore";
 

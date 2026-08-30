@@ -10,6 +10,7 @@ import {
   classifyEvent,
   idempotencyKey,
   isAuthorized,
+  isRefund,
   isSandbox,
   revenueCatEventSchema,
   toStorePlatform,
@@ -44,6 +45,11 @@ export async function POST(request: Request) {
 
   try {
     if (action === "revoke") {
+      // A sandbox subscription never granted anything, so letting its expiry through
+      // would strip a real status a tester also holds on the same account.
+      if (isSandbox(event.environment)) {
+        return Response.json({ handled: "ignored" });
+      }
       await revokeFederalStatus(drizzleDB, event.app_user_id);
       return Response.json({ handled: "revoked" });
     }
@@ -57,6 +63,19 @@ export async function POST(request: Request) {
         raw: body,
       });
       return Response.json({ handled: outcome.status });
+    }
+    if (isRefund(event) && !isSandbox(event.environment)) {
+      // Deliberately not reversed automatically — see isRefund. Raised so a human can.
+      Sentry.captureException(new Error("Store purchase refunded"), {
+        level: "warning",
+        tags: { source: "revenuecatWebhook" },
+        extra: {
+          appUserId: event.app_user_id,
+          productId: event.product_id,
+          transactionId: idempotencyKey(event),
+        },
+      });
+      return Response.json({ handled: "refund-flagged" });
     }
     return Response.json({ handled: "ignored" });
   } catch (error) {

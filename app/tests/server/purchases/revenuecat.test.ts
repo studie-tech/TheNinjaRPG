@@ -8,6 +8,7 @@ import {
   classifyEvent,
   idempotencyKey,
   isAuthorized,
+  isRefund,
   isSandbox,
   toStorePlatform,
 } from "@/server/utils/purchases/revenuecat";
@@ -44,19 +45,37 @@ describe("revenuecat webhook classification", () => {
       "NON_RENEWING_PURCHASE",
       "RENEWAL",
       "UNCANCELLATION",
-      "PRODUCT_CHANGE",
     ]) {
       expect(classifyEvent(type)).toBe("grant");
     }
   });
 
+  it("ignores a product change, which only announces a switch that has not happened", () => {
+    // On the App Store its product_id is the tier being left; the switch arrives as its
+    // own RENEWAL or INITIAL_PURCHASE once it actually takes effect.
+    expect(classifyEvent("PRODUCT_CHANGE")).toBe("ignore");
+  });
+
   it("revokes only once access has actually ended", () => {
     expect(classifyEvent("EXPIRATION")).toBe("revoke");
-    // CANCELLATION means auto-renew was switched off. The player keeps what they paid
-    // for until it expires, so revoking here would cut a paid month short.
+    // A plain CANCELLATION means auto-renew was switched off. The player keeps what they
+    // paid for until it expires, so revoking here would cut a paid month short. A refund
+    // also arrives as a CANCELLATION and is picked out separately by isRefund.
     expect(classifyEvent("CANCELLATION")).toBe("ignore");
     expect(classifyEvent("BILLING_ISSUE")).toBe("ignore");
     expect(classifyEvent("TEST")).toBe("ignore");
+  });
+
+  it("tells a refund apart from an ordinary cancellation", () => {
+    const event = (type: string, reason?: string) =>
+      ({ type, id: "e", app_user_id: "u", cancel_reason: reason }) as Parameters<
+        typeof isRefund
+      >[0];
+    expect(isRefund(event("CANCELLATION", "CUSTOMER_SUPPORT"))).toBe(true);
+    expect(isRefund(event("CANCELLATION", "UNSUBSCRIBE"))).toBe(false);
+    expect(isRefund(event("CANCELLATION"))).toBe(false);
+    // Only a cancellation can be a refund; an expiry is a lapse.
+    expect(isRefund(event("EXPIRATION", "CUSTOMER_SUPPORT"))).toBe(false);
   });
 
   it("maps the store and environment", () => {
