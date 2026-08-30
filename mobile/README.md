@@ -109,10 +109,29 @@ both stores require.
 
 ## Icons and splash screens
 
-Source artwork lives in `app/public/icons/`. The maskable variants are inset to the 80%
-safe zone Android crops to, and `icon-180x180.png` is flattened because iOS renders
-transparent corners black. The launcher and splash assets in the native projects come from
-the 1024px source via `@capacitor/assets`.
+`assets/` holds the 1024px sources `@capacitor/assets` generates from; regenerate the
+native sets with:
+
+```bash
+npx @capacitor/assets generate \
+  --iconBackgroundColor '#F0C84C' --iconBackgroundColorDark '#F0C84C' \
+  --splashBackgroundColor '#F0C84C' --splashBackgroundColorDark '#23180A'
+```
+
+The sources themselves are derived from `app/public/icons/icon-512x512.png`, cropped past
+the rounded-rect stroke so the launcher's own mask does not sit inside a second border:
+
+- `icon.png` — artwork at 78% on the tile colour, flattened. Both stores reject an app
+  icon with transparency, and edge-to-edge artwork reads as cropped once iOS applies its
+  corner mask.
+- `icon-foreground.png` / `icon-background.png` — Android adaptive layers, foreground at
+  66% because the launcher crops hard.
+- `splash.png` / `splash-dark.png` — square at 2732 so one image covers every device in
+  both orientations.
+
+On the web side, `app/public/icons/` also carries maskable variants inset to Android's 80%
+safe zone, and a flattened `icon-180x180.png` because iOS renders transparent corners
+black.
 
 ## Not verified yet
 
