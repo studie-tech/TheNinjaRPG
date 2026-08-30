@@ -99,6 +99,7 @@ import type { ClanRouter } from "@/routers/clan";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import { parseHtml } from "@/utils/parse";
 import { canEditClans } from "@/utils/permissions";
+import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { secondsFromDate } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -366,7 +367,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
             utils.profile.getUser.invalidate(),
             utils.clan.getClanBattles.invalidate(),
           ]);
-          router.push("/combat");
+          pushToCombat(router, data.battleId);
         }
       },
     });

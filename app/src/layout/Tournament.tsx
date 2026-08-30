@@ -27,6 +27,7 @@ import { Reward } from "@/layout/Objective";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { groupBy } from "@/utils/grouping";
+import { pushToCombat } from "@/utils/routing";
 import { secondsFromDate } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
 import { UploadButton } from "@/utils/uploadthing";
@@ -85,7 +86,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         await utils.tournament.getTournament.invalidate();
-        router.push("/combat");
+        pushToCombat(router, data.battleId);
       },
     });
 

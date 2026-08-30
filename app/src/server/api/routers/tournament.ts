@@ -140,7 +140,7 @@ export const tournamentRouter = createTRPCRouter({
   joinMatch: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Join a tournament match" } })
     .input(z.object({ matchId: z.string(), tournamentId: z.string() }))
-    .output(baseServerResponse)
+    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, matchData, tournamentData] = await Promise.all([
@@ -172,7 +172,7 @@ export const tournamentRouter = createTRPCRouter({
           inArray(userData.userId, [matchData.userId1 ?? "", matchData.userId2 ?? ""]),
         );
       // Start the battle
-      let result: BaseServerResponse | undefined;
+      let result: Awaited<ReturnType<typeof initiateBattle>> | undefined;
       if (matchData.userId1 && matchData.userId2) {
         result = await initiateBattle(
           {
@@ -190,7 +190,7 @@ export const tournamentRouter = createTRPCRouter({
       } else {
       }
       // Return
-      return { success: true, message: "Joined Match" };
+      return { success: true, message: "Joined Match", battleId: result?.battleId };
     }),
 });
 
