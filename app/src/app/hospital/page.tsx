@@ -192,9 +192,6 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
     enabled: !!userData,
   });
 
-  // Every question the heal buttons ask of the capacity is "does it clear this threshold", so the
-  // capacity below is only re-sampled when the answer to one of them changes. Regenerating chakra
-  // then re-renders this table when a button becomes usable, rather than once a second.
   const healThresholds = useMemo(
     () =>
       (hospitalized ?? []).flatMap((user) =>
@@ -202,16 +199,18 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
       ),
     [hospitalized],
   );
-  const [capacity, setCapacity] = useState(() =>
-    currentHealCapacity(userData, timeDiff),
-  );
-  // Snapped during render, not stored, so the paint that first shows the table already compares
-  // against the thresholds that arrived with it
-  const maxHeal = snapToThresholds(capacity, healThresholds);
+  // What the buttons compare against, read fresh: the hospitalized list is re-randomised on every
+  // five-second poll, so a threshold can arrive that falls between a stored sample and the real
+  // capacity, and an affordable button would render disabled until an effect caught up.
+  const maxHeal = currentHealCapacity(userData, timeDiff);
+  // The sample is not rendered — it exists to schedule a re-render, and only when the answer to
+  // one of those threshold questions changes, so regenerating chakra repaints this table when a
+  // button becomes usable rather than once a second.
+  const [, setCapacitySample] = useState(() => currentHealCapacity(userData, timeDiff));
   useEffect(() => {
     const sync = () => {
       const next = currentHealCapacity(userData, timeDiff);
-      setCapacity((previous) =>
+      setCapacitySample((previous) =>
         snapToThresholds(next, healThresholds) ===
         snapToThresholds(previous, healThresholds)
           ? previous
