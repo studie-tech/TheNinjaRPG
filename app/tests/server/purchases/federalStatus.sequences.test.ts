@@ -1,0 +1,149 @@
+// @vitest-environment node
+
+import { eq } from "drizzle-orm";
+import { beforeEach, expect, it } from "vitest";
+import { nanoid } from "nanoid";
+import {
+  paypalSubscription,
+  storePurchase,
+  userData,
+} from "@/drizzle/schema";
+import type { FederalStatus } from "@/drizzle/constants";
+import {
+  federalStatusWithStoreFloor,
+  grantStorePurchase,
+  revokeFederalStatus,
+} from "@/server/utils/purchases/grant";
+import { insertUsers } from "../../setup/factories";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../setup/testDatabase";
+
+/**
+ * federalStatus is one column with two paying sources and five writers, and the ordering
+ * between them is where every bug in it has lived. These drive real webhook sequences
+ * against real tables rather than checking a helper in isolation.
+ */
+const USER = "federal-seq-user";
+const DAY = 24 * 60 * 60 * 1000;
+
+const db = () => getTestDatabase();
+
+const statusOf = async (): Promise<FederalStatus> => {
+  const database = await db();
+  const row = await database.query.userData.findFirst({
+    columns: { federalStatus: true },
+    where: eq(userData.userId, USER),
+  });
+  return row?.federalStatus ?? "NONE";
+};
+
+/** A store purchase as the webhook would have written it, optionally backdated. */
+const buyFederal = async (tier: FederalStatus, agoMs = 0) => {
+  const database = await db();
+  await grantStorePurchase(database, {
+    userId: USER,
+    transactionId: nanoid(),
+    productId:
+      tier === "GOLD"
+        ? "tnr_federal_gold"
+        : tier === "SILVER"
+          ? "tnr_federal_silver"
+          : "tnr_federal_normal",
+    store: "APPLE",
+    isSandbox: false,
+    raw: {},
+  });
+  if (agoMs > 0) {
+    await database
+      .update(storePurchase)
+      .set({ createdAt: new Date(Date.now() - agoMs) })
+      .where(eq(storePurchase.userId, USER));
+  }
+};
+
+const givePaypal = async (tier: FederalStatus, status = "ACTIVE") => {
+  const database = await db();
+  await database.insert(paypalSubscription).values({
+    id: nanoid(),
+    createdById: USER,
+    affectedUserId: USER,
+    subscriptionId: nanoid(),
+    federalStatus: tier,
+    status,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+};
+
+describeWithDatabase("federal status across real webhook sequences", () => {
+  beforeEach(async () => {
+    await resetTables(storePurchase, paypalSubscription, userData);
+    await insertUsers([{ userId: USER, username: "seq", federalStatus: "NONE" }]);
+  });
+
+  it("grants, then gives the tier back on expiry", async () => {
+    await buyFederal("GOLD");
+    expect(await statusOf()).toBe("GOLD");
+    await revokeFederalStatus(await db(), USER, new Date());
+    expect(await statusOf()).toBe("NONE");
+  });
+
+  it("does not strip a web subscription when the store one lapses", async () => {
+    await givePaypal("NORMAL");
+    await buyFederal("GOLD");
+    expect(await statusOf()).toBe("GOLD");
+    await revokeFederalStatus(await db(), USER, new Date());
+    expect(await statusOf()).toBe("NORMAL");
+  });
+
+  it("keeps the tier when a late expiry lands after a resubscribe", async () => {
+    // The subscription ended an hour ago and the player has already bought back in; the
+    // expiry for the OLD period is only now being delivered.
+    const endedAt = new Date(Date.now() - 60 * 60 * 1000);
+    await buyFederal("GOLD", 2 * 60 * 60 * 1000); // the receipt that expired
+    await buyFederal("GOLD"); // bought back in, just now
+    await revokeFederalStatus(await db(), USER, endedAt);
+    expect(await statusOf()).toBe("GOLD");
+  });
+
+  it("lets a PayPal writer take the tier away once both sources have ended", async () => {
+    await givePaypal("NORMAL");
+    await buyFederal("GOLD");
+    await revokeFederalStatus(await db(), USER, new Date());
+    expect(await statusOf()).toBe("NORMAL");
+    // now PayPal ends too: the spent store receipt must not hold the tier open
+    const next = await federalStatusWithStoreFloor(await db(), USER, "NONE");
+    expect(next).toBe("NONE");
+  });
+
+  it("keeps a live store subscription safe from a PayPal writer", async () => {
+    await buyFederal("GOLD");
+    const next = await federalStatusWithStoreFloor(await db(), USER, "NONE");
+    expect(next).toBe("GOLD");
+  });
+
+  it("stops vouching once the receipt is older than the grace window", async () => {
+    await buyFederal("GOLD", 70 * DAY);
+    const next = await federalStatusWithStoreFloor(await db(), USER, "NONE");
+    expect(next).toBe("NONE");
+  });
+
+  it("still vouches inside the billing-retry grace window", async () => {
+    // A renewal that failed 40 days ago is still within the store's retry period.
+    await buyFederal("GOLD", 40 * DAY);
+    const next = await federalStatusWithStoreFloor(await db(), USER, "NONE");
+    expect(next).toBe("GOLD");
+  });
+
+  it("is idempotent when the same expiry is delivered twice", async () => {
+    await givePaypal("NORMAL");
+    await buyFederal("GOLD");
+    const at = new Date();
+    await revokeFederalStatus(await db(), USER, at);
+    await revokeFederalStatus(await db(), USER, at);
+    expect(await statusOf()).toBe("NORMAL");
+  });
+});
