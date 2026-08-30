@@ -164,12 +164,15 @@ export const grantStorePurchase = async (
 };
 
 /**
- * Drop federal status when a store subscription lapses. Idempotent, and only ever
- * downgrades.
+ * Retire a store subscription that has ended, and re-derive the status from what is left.
  *
- * Falls back to what PayPal still entitles the player to rather than clearing outright:
- * the same column backs both, so a store lapse must not cancel a web subscription that is
- * still being paid for.
+ * Not a downgrade, and deliberately not a write of `NONE`: the same column backs PayPal
+ * and the stores, so this settles the tier from every source that still vouches for one.
+ * Usually that is a strict drop, but a player who resubscribed before a late expiry
+ * arrived keeps the tier their new receipt paid for, and one whose grant failed part way
+ * has it completed here rather than left short.
+ *
+ * Idempotent: running it twice retires nothing new and computes the same tier.
  */
 export const revokeFederalStatus = async (
   client: DrizzleClient,
@@ -196,10 +199,14 @@ export const revokeFederalStatus = async (
         lte(storePurchase.createdAt, occurredAt),
       ),
     );
-  const floor = await paypalFederalFloor(client, userId);
+  // Then fall back to whatever still vouches — which is both sources, not just PayPal.
+  // The bound above deliberately spares a receipt bought after the expiry, and reading
+  // only PayPal here would drop the tier anyway and leave a paying subscriber with a live
+  // receipt and nothing to show for it, until their next renewal.
+  const paypal = await paypalFederalFloor(client, userId);
   await client
     .update(userData)
-    .set({ federalStatus: floor })
+    .set({ federalStatus: await federalStatusWithStoreFloor(client, userId, paypal) })
     .where(eq(userData.userId, userId));
 };
 

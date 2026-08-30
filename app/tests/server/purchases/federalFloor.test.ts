@@ -47,6 +47,12 @@ describe("federalStatusWithStoreFloor", () => {
     expect(await federalStatusWithStoreFloor(stub(["SILVER"]), "u", "GOLD")).toBe("GOLD");
   });
 
+  it("keeps the tier when a receipt bought after the expiry is still live", async () => {
+    // What revokeFederalStatus falls back to after a late expiry spared a newer receipt:
+    // reading PayPal alone would drop a subscriber who has already bought back in.
+    expect(await federalStatusWithStoreFloor(stub(["GOLD"]), "u", "NONE")).toBe("GOLD");
+  });
+
   it("takes the tier away once the store subscription has been revoked too", async () => {
     // The case the earlier clamp got wrong: with both sources finished, nothing should
     // hold the tier open just because a spent receipt is still inside the window.
