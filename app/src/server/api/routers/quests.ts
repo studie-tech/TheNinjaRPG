@@ -83,6 +83,7 @@ import {
   getReward,
   getUserQuests,
   isAvailableUserQuests,
+  questHasOverworldObjectives,
   verifyQuestContentForSave,
 } from "@/libs/quest";
 import { sageQuestFilters } from "@/libs/sageMode";
@@ -92,7 +93,11 @@ import { extendWarParticipantSql } from "@/libs/war";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUserItems } from "@/routers/item";
 import type { UserWithRelations } from "@/routers/profile";
-import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import {
+  fetchAchievementCatalogue,
+  fetchUpdatedUser,
+  fetchUser,
+} from "@/routers/profile";
 import { deleteRequests } from "@/routers/sensei";
 import { fetchSectorVillage } from "@/routers/village";
 import { fetchActiveWars } from "@/routers/war";
@@ -191,6 +196,18 @@ export const questsRouter = createTRPCRouter({
         data: hideNpcOnlyQuestsFrom(viewerRole, results),
         nextCursor: nextCursor,
       };
+    }),
+  getAchievementCatalogue: protectedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get the static achievement definitions" },
+    })
+    .query(async ({ ctx }) => {
+      // Achievement definitions are the same for every player and change only when staff edit
+      // content, so `profile.getUser` sends progress alone and the client holds these instead of
+      // re-downloading them on every page load. The overworld exception is withheld here for the
+      // same reason it stays on the user object: its locations are resolved per player.
+      const achievements = await fetchAchievementCatalogue(ctx.drizzle);
+      return achievements.filter((a) => !questHasOverworldObjectives(a));
     }),
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a single quest by ID" } })

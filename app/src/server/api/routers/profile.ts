@@ -113,6 +113,7 @@ import {
   getNewTrackers,
   isAvailableUserQuests,
   mockAchievementHistoryEntries,
+  questHasOverworldObjectives,
 } from "@/libs/quest";
 import { getRaidObjectiveData } from "@/libs/raids";
 import { createThumbnail } from "@/libs/replicate";
@@ -479,6 +480,8 @@ export const profileRouter = createTRPCRouter({
           // forceRegen: true, // This should be disabled in prod to save on DB calls
         },
       );
+      // Ship achievement progress on its own; the definitions come from the catalogue query
+      const achievementProgress = user ? splitAchievementProgress(user) : [];
       // Figure out notifications
       const notifications: NavBarDropdownLink[] = [];
 
@@ -969,6 +972,7 @@ export const profileRouter = createTRPCRouter({
       }
       return {
         userData: user,
+        achievementProgress: achievementProgress,
         notifications: notifications,
         serverTime: Date.now(),
         userAgent: ctx.userAgent,
@@ -2876,7 +2880,7 @@ const persistPassiveRegenToDb = async ({
  * callers in the same request therefore inherit a cutoff that is milliseconds old,
  * which is well inside the minute-scale windows both filters describe.
  */
-const fetchAchievementCatalogue = (client: DrizzleClient) =>
+export const fetchAchievementCatalogue = (client: DrizzleClient) =>
   scopedRead("achievements", () =>
     client
       .select()
@@ -2952,6 +2956,43 @@ const fetchActiveRaids = (client: DrizzleClient, now: Date) =>
       ),
     }),
   );
+
+/** A user's progress on one quest, without the static definition it belongs to. */
+export type AchievementProgress = Omit<UserQuest, "quest">;
+
+/**
+ * Move a user's achievement rows out of `user.userQuests` and return them without their `quest`.
+ *
+ * Achievements are global static content: every player is handed the same definitions, and
+ * `mockAchievementHistoryEntries` attaches the whole `Quest` row - every objective with its
+ * description, scene assets and reward spec - to a progress row that is otherwise a handful of
+ * counters. Sending that from `profile.getUser` re-serialised, re-transferred and re-parsed tens
+ * of kilobytes of unchanging catalogue JSON on every page load. The client joins the returned
+ * progress against `quests.getAchievementCatalogue`, which it holds for the session.
+ *
+ * A row is only moved when the catalogue is certain to carry its definition, since the client
+ * renders nothing for a progress row it cannot resolve. That rules out two cases, both of which
+ * keep travelling on the user object: a hidden achievement, which the catalogue does not publish
+ * and only content staff can see at all, and one whose objectives reach into the overworld - the
+ * sector and world-map views read those straight off `userQuests`, and a catalogue shared by every
+ * player cannot carry the per-user location state they depend on.
+ */
+export const splitAchievementProgress = (user: NonNullable<UserWithRelations>) => {
+  const progress: AchievementProgress[] = [];
+  user.userQuests = user.userQuests.filter((userQuest) => {
+    if (
+      userQuest.quest?.questType !== "achievement" ||
+      userQuest.quest.hidden ||
+      questHasOverworldObjectives(userQuest.quest)
+    ) {
+      return true;
+    }
+    const { quest: _definition, ...rest } = userQuest;
+    progress.push(rest);
+    return false;
+  });
+  return progress;
+};
 
 export const fetchPublicUsers = async (info: {
   client: DrizzleClient;

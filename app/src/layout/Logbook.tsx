@@ -1,6 +1,6 @@
 import { Loader2, Sparkles, X } from "lucide-react";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -75,14 +75,36 @@ const Logbook: React.FC = () => {
  * ```
  */
 const LogbookAchievements: React.FC = () => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, achievementProgress } = useRequiredUserData();
   const [activeElement, setActiveElement] = useState<string>("");
-  const quests = userData?.userQuests?.filter((uq) =>
-    ["tier", "achievement"].includes(uq.quest.questType),
+
+  // Achievement definitions are the same for every player and change only when staff edit
+  // content, so profile.getUser sends progress alone and they are fetched once here instead -
+  // the query client keeps them for the session. isLoading rather than isPending: a disabled
+  // query never stops being pending, which would leave the tab on its spinner forever.
+  const { data: catalogue, isLoading } = api.quests.getAchievementCatalogue.useQuery(
+    undefined,
+    { enabled: !!userData },
   );
 
+  const quests = useMemo(() => {
+    const definitions = new Map(catalogue?.map((q) => [q.id, q]));
+    return [
+      // Tier quests, plus any achievement whose objectives kept it on the user object.
+      ...(userData?.userQuests?.filter((uq) =>
+        ["tier", "achievement"].includes(uq.quest.questType),
+      ) ?? []),
+      // A progress row whose definition is missing - staff hid or deleted the achievement
+      // between the two queries - renders nothing rather than throwing on `uq.quest`.
+      ...(achievementProgress ?? []).flatMap((progress) => {
+        const quest = definitions.get(progress.questId);
+        return quest ? [{ ...progress, quest }] : [];
+      }),
+    ];
+  }, [userData?.userQuests, achievementProgress, catalogue]);
+
   useEffect(() => {
-    if (quests && quests.length > 0 && !activeElement) {
+    if (quests.length > 0 && !activeElement) {
       const firstAchievement = quests[0];
       if (firstAchievement) {
         setActiveElement(firstAchievement.quest.name);
@@ -90,12 +112,13 @@ const LogbookAchievements: React.FC = () => {
     }
   }, [quests, activeElement]);
 
+  if (isLoading) return <Loader explanation="Loading achievements..." />;
+
   return (
     <div className="">
-      {userData?.userQuests
-        ?.filter((uq) => ["tier", "achievement"].includes(uq.quest.questType))
+      {quests
         .filter((uq) => uq.completed === 0)
-        ?.map((uq) => {
+        .map((uq) => {
           const tracker = userData?.questData?.find((q) => q.id === uq.questId);
 
           return (
