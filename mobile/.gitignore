@@ -33,7 +33,9 @@ android/app/src/main/assets/capacitor.plugins.json
 # Firebase config carries project identifiers and is environment-specific.
 android/app/google-services.json
 
-# Signing material must never enter the repository.
+# Signing material must never enter the repository. The Play service account is a JSON
+# key, so it is named rather than covered by an extension.
+play-service-account*.json
 *.p8
 *.p12
 *.mobileprovision

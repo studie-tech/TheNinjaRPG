@@ -56,11 +56,21 @@ platform :android do
   lane :beta do
     sync_web
 
+    # Play rejects an upload whose versionCode it has already seen, and build.gradle
+    # carries a fixed one — so every upload after the first would be refused. Take the
+    # highest code the track has and go one past it. The guard matters on the very first
+    # run, when the track has no releases and the call returns nothing to compare.
+    codes = google_play_track_version_codes(track: "internal")
+    next_version_code = ((codes || []).max || 0) + 1
+
     gradle(
       project_dir: "android",
       task: "bundle",
       build_type: "Release",
       properties: {
+        # An AGP-level override applied after configuration, so it supersedes the value in
+        # defaultConfig without build.gradle needing a second knob for it.
+        "android.injected.version.code" => next_version_code,
         "android.injected.signing.store.file" => ENV.fetch("ANDROID_KEYSTORE_PATH"),
         "android.injected.signing.store.password" => ENV.fetch("ANDROID_KEYSTORE_PASSWORD"),
         "android.injected.signing.key.alias" => ENV.fetch("ANDROID_KEY_ALIAS"),
