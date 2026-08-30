@@ -1,5 +1,7 @@
 // @vitest-environment node
 
+import type { SQL } from "drizzle-orm";
+import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { describe, expect, it, vi } from "vitest";
 import {
   assignQuestToUser,
@@ -64,6 +66,50 @@ const makeClient = (assignedQuest: { questId: string } | null = { questId: quest
     update,
     insert,
     findFirst,
+  };
+};
+
+/**
+ * Renders a drizzle `sql` fragment to its statement + bound params. The bulk reset removes the
+ * tracker with raw JSON surgery, so asserting on the SET payload object alone cannot tell
+ * "drop this one tracker" apart from "wipe every tracker of every user the daily cron touches".
+ */
+const render = (fragment: unknown) => new MySqlDialect().sqlToQuery(fragment as SQL);
+
+/** Client for the bulk reset: one LEFT JOIN select, then insert + batched updates. */
+const makeBulkClient = (rows: { userId: string; historyId: string | null }[]) => {
+  const sets: Record<string, unknown>[] = [];
+  const wheres: unknown[] = [];
+  const update = vi.fn(() => ({
+    set: (value: Record<string, unknown>) => {
+      sets.push(value);
+      return {
+        where: vi.fn((condition: unknown) => {
+          wheres.push(condition);
+          return Promise.resolve({ rowsAffected: rows.length });
+        }),
+      };
+    },
+  }));
+  const onDuplicateKeyUpdate = vi.fn().mockResolvedValue(undefined);
+  const values = vi.fn((inserted: { userId: string }[]) => {
+    void inserted;
+    return { onDuplicateKeyUpdate };
+  });
+  const insert = vi.fn(() => ({ values }));
+  const select = vi.fn(() => ({
+    from: vi.fn(() => ({
+      leftJoin: vi.fn(() => ({ where: vi.fn().mockResolvedValue(rows) })),
+    })),
+  }));
+  return {
+    client: { select, update, insert } as never,
+    sets,
+    wheres,
+    update,
+    insert,
+    values,
+    select,
   };
 };
 
@@ -207,34 +253,49 @@ describe("assignQuestToUser compatibility", () => {
   });
 
   it("clears reused daily tracker progress during bulk reassignment", async () => {
-    const sets: Record<string, unknown>[] = [];
-    const update = vi.fn(() => ({
-      set: (value: Record<string, unknown>) => {
-        sets.push(value);
-        return { where: vi.fn().mockResolvedValue({ rowsAffected: 1 }) };
-      },
-    }));
-    const select = vi
-      .fn()
-      .mockReturnValueOnce({
-        from: vi.fn(() => ({
-          leftJoin: vi.fn(() => ({ where: vi.fn().mockResolvedValue([]) })),
-        })),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([{ userId: user.userId }]) })),
-      });
-    const client = { select, update } as never;
+    const daily = { ...quest, questType: "daily" };
+    const { client, sets, wheres, update, select, insert } = makeBulkClient([
+      { userId: user.userId, historyId: "history-1" },
+    ]);
 
-    await upsertQuestEntries(
-      client,
-      { ...quest, questType: "daily" } as never,
-      undefined as never,
-    );
+    await upsertQuestEntries(client, daily as never, undefined as never);
 
+    // Both branches share the one LEFT JOIN pass; nobody is missing a history row here.
+    expect(select).toHaveBeenCalledOnce();
+    expect(insert).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledTimes(2);
-    expect(sets[0]).toMatchObject({ completed: 0, endAt: null });
-    expect(sets[1]?.questData).toBeTruthy();
+
+    // The tracker must be gone before the quest reopens, or the window in between hands out a
+    // free daily: the quest is active while last run's fully-done tracker still reads resolved.
+    const removal = render(sets[0]?.questData);
+    expect(removal.sql).toContain("JSON_REMOVE");
+    // Scoped to this one tracker, not the whole document, and matched on the top-level id only.
+    expect(removal.sql).toContain("JSON_SEARCH");
+    expect(removal.sql).toContain("$[*].id");
+    expect(removal.params).toContain(daily.id);
+    // JSON_SEARCH matches with LIKE semantics and nanoid ids contain `_`, so the id has to be
+    // escaped or the reset drops some other quest's tracker.
+    expect(removal.sql).toContain("REPLACE(REPLACE(REPLACE(?, '#', '##'), '%', '#%'), '_', '#_')");
+    // Rows with no tracker for this quest are skipped rather than written with a NULL document.
+    expect(render(wheres[0]).sql).toContain("IS NOT NULL");
+
+    expect(sets[1]).toMatchObject({ completed: 0, endAt: null });
+  });
+
+  it("reuses one history row lookup and inserts only for users missing a row", async () => {
+    const daily = { ...quest, questType: "daily" };
+    const { client, select, insert, values } = makeBulkClient([
+      { userId: "user-1", historyId: "history-1" },
+      { userId: "user-2", historyId: null },
+    ]);
+
+    await upsertQuestEntries(client, daily as never, undefined as never);
+
+    expect(select).toHaveBeenCalledOnce();
+    expect(insert).toHaveBeenCalledOnce();
+    expect(values.mock.calls[0]?.[0]).toMatchObject([
+      { userId: "user-2", questId: daily.id, questType: "daily" },
+    ]);
   });
 
   it("resets stale tracker state when restarting an already-attempted quest", async () => {
