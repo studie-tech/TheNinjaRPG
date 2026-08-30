@@ -81,80 +81,101 @@ const sendOne = (
   request: ApnsRequest,
 ): Promise<PushResult> =>
   new Promise((resolve) => {
-    const body = Buffer.from(JSON.stringify(request.payload));
-    // Live Activity updates address a different topic than the app itself.
-    const topic =
-      request.pushType === "liveactivity"
-        ? `${env.APNS_BUNDLE_ID}.push-type.liveactivity`
-        : env.APNS_BUNDLE_ID;
-
-    const stream = session.request({
-      [constants.HTTP2_HEADER_METHOD]: "POST",
-      [constants.HTTP2_HEADER_PATH]: `/3/device/${request.token}`,
-      [constants.HTTP2_HEADER_AUTHORIZATION]: `bearer ${providerToken}`,
-      [constants.HTTP2_HEADER_CONTENT_TYPE]: "application/json",
-      [constants.HTTP2_HEADER_CONTENT_LENGTH]: body.length,
-      "apns-topic": topic,
-      "apns-push-type": request.pushType,
-      "apns-priority": String(request.priority ?? 10),
-      ...(request.expiration === undefined
-        ? {}
-        : { "apns-expiration": String(request.expiration) }),
-      ...(request.collapseId ? { "apns-collapse-id": request.collapseId } : {}),
-    });
-
-    let status = 0;
-    const chunks: Buffer[] = [];
-    let settled = false;
-    const settle = (result: PushResult) => {
-      if (settled) return;
-      settled = true;
-      resolve(result);
-    };
-
-    stream.setTimeout(REQUEST_TIMEOUT_MS, () => {
-      stream.close(constants.NGHTTP2_CANCEL);
-      settle({
+    // A synchronous failure here — most likely `session.request` on a session that has
+    // already closed — resolves this one token as retryable rather than rejecting the
+    // whole batch and discarding the results of every token that already succeeded.
+    try {
+      sendOverSession(session, providerToken, request, resolve);
+    } catch (error) {
+      resolve({
         token: request.token,
         status: "failed",
-        reason: "Timed out",
+        reason: error instanceof Error ? error.message : "Session unavailable",
         retryable: true,
       });
-    });
-    stream.on("response", (headers) => {
-      status = Number(headers[constants.HTTP2_HEADER_STATUS] ?? 0);
-    });
-    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-    stream.on("error", (error: Error) => {
-      settle({
-        token: request.token,
-        status: "failed",
-        reason: error.message,
-        retryable: true,
-      });
-    });
-    stream.on("end", () => {
-      if (status === 200) {
-        settle({ token: request.token, status: "sent" });
-        return;
-      }
-      const reason = parseReason(Buffer.concat(chunks).toString("utf8"));
-      if (isDeadApnsToken(status, reason)) {
-        settle({ token: request.token, status: "expired", reason });
-        return;
-      }
-      // A rejected provider token is worth retrying once with a fresh one.
-      if (status === 403) resetProviderToken();
-      settle({
-        token: request.token,
-        status: "failed",
-        reason: `${status} ${reason}`,
-        retryable: status === 429 || status >= 500,
-      });
-    });
-
-    stream.end(body);
+    }
   });
+
+const sendOverSession = (
+  session: ClientHttp2Session,
+  providerToken: string,
+  request: ApnsRequest,
+  resolve: (result: PushResult) => void,
+): void => {
+  const body = Buffer.from(JSON.stringify(request.payload));
+  // Live Activity updates address a different topic than the app itself.
+  const topic =
+    request.pushType === "liveactivity"
+      ? `${env.APNS_BUNDLE_ID}.push-type.liveactivity`
+      : env.APNS_BUNDLE_ID;
+
+  const stream = session.request({
+    [constants.HTTP2_HEADER_METHOD]: "POST",
+    [constants.HTTP2_HEADER_PATH]: `/3/device/${request.token}`,
+    [constants.HTTP2_HEADER_AUTHORIZATION]: `bearer ${providerToken}`,
+    [constants.HTTP2_HEADER_CONTENT_TYPE]: "application/json",
+    [constants.HTTP2_HEADER_CONTENT_LENGTH]: body.length,
+    "apns-topic": topic,
+    "apns-push-type": request.pushType,
+    "apns-priority": String(request.priority ?? 10),
+    ...(request.expiration === undefined
+      ? {}
+      : { "apns-expiration": String(request.expiration) }),
+    ...(request.collapseId ? { "apns-collapse-id": request.collapseId } : {}),
+  });
+
+  let status = 0;
+  const chunks: Buffer[] = [];
+  let settled = false;
+  const settle = (result: PushResult) => {
+    if (settled) return;
+    settled = true;
+    resolve(result);
+  };
+
+  stream.setTimeout(REQUEST_TIMEOUT_MS, () => {
+    stream.close(constants.NGHTTP2_CANCEL);
+    settle({
+      token: request.token,
+      status: "failed",
+      reason: "Timed out",
+      retryable: true,
+    });
+  });
+  stream.on("response", (headers) => {
+    status = Number(headers[constants.HTTP2_HEADER_STATUS] ?? 0);
+  });
+  stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+  stream.on("error", (error: Error) => {
+    settle({
+      token: request.token,
+      status: "failed",
+      reason: error.message,
+      retryable: true,
+    });
+  });
+  stream.on("end", () => {
+    if (status === 200) {
+      settle({ token: request.token, status: "sent" });
+      return;
+    }
+    const reason = parseReason(Buffer.concat(chunks).toString("utf8"));
+    if (isDeadApnsToken(status, reason)) {
+      settle({ token: request.token, status: "expired", reason });
+      return;
+    }
+    // A rejected provider token is worth retrying once with a fresh one.
+    if (status === 403) resetProviderToken();
+    settle({
+      token: request.token,
+      status: "failed",
+      reason: `${status} ${reason}`,
+      retryable: status === 429 || status >= 500,
+    });
+  });
+
+  stream.end(body);
+};
 
 const parseReason = (raw: string): string => {
   if (!raw) return "Unknown";
