@@ -22,7 +22,8 @@ import { useUserData } from "@/utils/UserContext";
  */
 export default function NativeStore() {
   const isNativeShell = useNativeShell();
-  const { data: userData, updateUser } = useUserData();
+  const { data: userData } = useUserData();
+  const utils = api.useUtils();
   const [products, setProducts] = useState<purchases.StoreProduct[] | null>(null);
   const [busyProduct, setBusyProduct] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -53,12 +54,15 @@ export default function NativeStore() {
 
   /**
    * The grant arrives by webhook moments later, so the balance is refetched rather than
-   * assumed. Nothing here writes to the player's account.
+   * assumed. Nothing on this screen writes to the player's account.
+   *
+   * `invalidate`, not the optimistic `updateUser`: the new balance is whatever the
+   * webhook wrote, so there is nothing to write optimistically and every reason to go
+   * and read it.
    */
   const settle = useCallback(async () => {
-    await refetchRecent();
-    await updateUser({});
-  }, [refetchRecent, updateUser]);
+    await Promise.all([refetchRecent(), utils.profile.getUser.invalidate()]);
+  }, [refetchRecent, utils]);
 
   const buy = async (productId: string) => {
     setBusyProduct(productId);
