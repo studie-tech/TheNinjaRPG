@@ -8,11 +8,11 @@ import { questHistory, userData } from "@/drizzle/schema";
 import { upsertQuestEntries } from "../../../src/server/api/routers/quests";
 
 /**
- * The bulk daily reset clears a tracker with raw JSON surgery (JSON_SEARCH + JSON_REMOVE).
- * Every other test asserts the statement drizzle renders; these run it on a real MySQL, because
- * the rendered string tells you nothing about whether the engine drops the element you meant.
+ * The bulk daily reset clears a tracker with raw JSON surgery (JSON_SEARCH + JSON_REMOVE). The
+ * other suites assert the statement drizzle renders; these run it on a real MySQL, because the
+ * rendered string says nothing about whether the engine drops the element you meant.
  *
- * Set TEST_MYSQL_URL to a THROWAWAY database — this creates and drops `UserData` /
+ * Set TEST_MYSQL_URL to a THROWAWAY database — this creates and drops `UserData` and
  * `QuestHistory` in it. CI provides one; locally the dev stack's MySQL works:
  *   TEST_MYSQL_URL='mysql://root:placeholder@127.0.0.1:3307/tnr_test' bun test
  */
@@ -137,8 +137,8 @@ describe.skipIf(!enabled)("bulk daily reset against a real MySQL", () => {
   });
 
   it("clears every copy when questData holds duplicate tracker ids", async () => {
-    // 181 production users carry two copies of the same daily tracker; one pass would promote
-    // the survivor to the one getNewTrackers reads and the daily would still open completed.
+    // One pass would promote the survivor to the tracker getNewTrackers reads, and the daily
+    // would still open completed.
     await connection.query("INSERT INTO UserData (userId, questData) VALUES (?,?),(?,?)", [
       "twice", JSON.stringify([tracker("q_a", false), tracker("q_b", true), tracker("q_b", true)]),
       "thrice", JSON.stringify([tracker("q_b", true), tracker("q_b", true), tracker("q_b", true)]),
@@ -170,7 +170,7 @@ describe.skipIf(!enabled)("bulk daily reset against a real MySQL", () => {
   });
 
   it("reopens every duplicate history row without inserting another", async () => {
-    // Production has 593 duplicate (userId, questId) pairs because there is no unique key.
+    // Rows that predate the uniqueUserIdQuestId constraint can still pair up this way.
     await connection.query("INSERT INTO UserData (userId, questData) VALUES (?,?)", [
       "dupe", JSON.stringify([tracker("q_b", true)]),
     ]);
