@@ -53,7 +53,13 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
     const interval = setInterval(() => {
       // If not in focus, nothing
       if (!document.hasFocus() && process.env.NODE_ENV !== "development") {
-        setState({ label: `Not in Focus`, canAct: false, waiting: false });
+        // Keep the previous object, or an unfocused tab re-renders ten times a second
+        // to say the same thing
+        setState((prev) =>
+          prev.label === "Not in Focus" && !prev.canAct && !prev.waiting
+            ? prev
+            : { label: `Not in Focus`, canAct: false, waiting: false },
+        );
         return;
       }
       // Set label
