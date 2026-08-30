@@ -4,10 +4,8 @@ jobs:
   test_build:
     name: test_build
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    # The daily quest reset clears trackers with raw JSON_SEARCH/JSON_REMOVE surgery. Asserting
-    # the rendered statement cannot show whether the engine drops the element we meant, so
-    # tests/server/api/quests.trackerSql.test.ts executes it here for real. 8.0 matches
-    # PlanetScale. Without TEST_MYSQL_URL that suite skips, so local runs stay dependency-free.
+    # Database for tests that need to execute real SQL. 8.0 matches PlanetScale. Suites that use
+    # it skip when TEST_MYSQL_URL is unset, so a local `bun test` needs no database.
     services:
       mysql:
         image: mysql:8.0

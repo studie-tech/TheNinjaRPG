@@ -72,7 +72,7 @@ const makeClient = (assignedQuest: { questId: string } | null = { questId: quest
 /**
  * Renders a drizzle `sql` fragment to its statement + bound params. The bulk reset removes the
  * tracker with raw JSON surgery, so asserting on the SET payload object alone cannot tell
- * "drop this one tracker" apart from "wipe every tracker of every user the daily cron touches".
+ * "drop this one tracker" apart from "wipe every tracker this user has".
  */
 const render = (fragment: unknown) => new MySqlDialect().sqlToQuery(fragment as SQL);
 
@@ -295,8 +295,8 @@ describe("assignQuestToUser compatibility", () => {
   });
 
   it("repeats the removal until a pass finds no tracker left to drop", async () => {
-    // JSON_SEARCH 'one' drops a single tracker per statement, and production questData holds
-    // duplicate ids; stopping after one pass leaves the survivor for getNewTrackers to reuse.
+    // JSON_SEARCH 'one' drops a single tracker per statement; with duplicate ids in questData,
+    // stopping after one pass leaves the survivor for getNewTrackers to reuse.
     const { client, sets } = makeBulkClient(
       [{ userId: user.userId, historyId: "history-1" }],
       [1, 1, 0, 1],
