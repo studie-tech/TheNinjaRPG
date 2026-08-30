@@ -18,11 +18,23 @@ import java.util.List;
  *
  * Having one channel per category is also what makes the in-app toggles and the OS
  * notification settings agree: muting "Village wars" in either place mutes the same thing.
+ *
+ * The one channel that is not a category is LIVE_UPDATES_CHANNEL, which carries the
+ * ongoing countdown cards this app posts locally rather than anything the server sends.
  */
 final class TNRNotificationChannels {
 
     /** Categories that should interrupt: something is happening to the player right now. */
     private static final List<String> HIGH_IMPORTANCE = Arrays.asList("combat", "war");
+
+    /**
+     * The ongoing countdown cards, which are a status display rather than an alert.
+     *
+     * Not a push category -- the server never targets it -- so it carries no badge and
+     * makes no sound. Posting a hospital countdown to "recovery" would chime and badge
+     * every time the player is hospitalised, and again on every update.
+     */
+    static final String LIVE_UPDATES_CHANNEL = "live";
 
     private static final Channel[] CHANNELS = {
         new Channel("combat", "Battles", "Attacks, duels and battle results"),
@@ -33,6 +45,7 @@ final class TNRNotificationChannels {
         new Channel("trade", "Trades", "Auctions, bids and completed trades"),
         new Channel("social", "Social", "Messages, mentions and marriage"),
         new Channel("system", "Announcements", "Game news and server notices"),
+        new Channel(LIVE_UPDATES_CHANNEL, "Ongoing activity", "Hospital, training and war countdowns"),
     };
 
     private TNRNotificationChannels() {}
@@ -47,12 +60,18 @@ final class TNRNotificationChannels {
         }
         List<NotificationChannel> channels = new ArrayList<>(CHANNELS.length);
         for (Channel channel : CHANNELS) {
-            int importance = HIGH_IMPORTANCE.contains(channel.id)
-                ? NotificationManager.IMPORTANCE_HIGH
-                : NotificationManager.IMPORTANCE_DEFAULT;
+            boolean isLive = LIVE_UPDATES_CHANNEL.equals(channel.id);
+            int importance;
+            if (isLive) {
+                importance = NotificationManager.IMPORTANCE_LOW;
+            } else if (HIGH_IMPORTANCE.contains(channel.id)) {
+                importance = NotificationManager.IMPORTANCE_HIGH;
+            } else {
+                importance = NotificationManager.IMPORTANCE_DEFAULT;
+            }
             NotificationChannel created = new NotificationChannel(channel.id, channel.name, importance);
             created.setDescription(channel.description);
-            created.setShowBadge(true);
+            created.setShowBadge(!isLive);
             channels.add(created);
         }
         // createNotificationChannels is idempotent: an existing channel keeps whatever

@@ -13,21 +13,40 @@ public class TNRAudioSessionPlugin extends Plugin {
     private String title = "TheNinja-RPG";
     private String artist = "Seichi";
     private boolean running = false;
+    /**
+     * This instance's listener, kept so teardown can tell whether it is still the current
+     * one. The field on the service is static and shared, and on an activity recreation
+     * Android builds the replacement plugin before destroying the old one -- so the old
+     * instance must not clear a listener its successor has already installed.
+     */
+    private TNRAudioService.RemoteCommandListener mine;
 
     @Override
     public void load() {
-        TNRAudioService.listener = command -> {
+        mine = command -> {
             JSObject payload = new JSObject();
             payload.put("command", command);
             notifyListeners("remoteCommand", payload);
         };
+        TNRAudioService.listener = mine;
     }
 
     @Override
     protected void handleOnDestroy() {
-        // The service outlives the activity, so a stale listener would hold a reference to
-        // a dead bridge.
-        TNRAudioService.listener = null;
+        // The service outlives the activity by design -- that is what keeps the soundtrack
+        // playing while the app is backgrounded -- but nothing is left to control it once
+        // the shell is gone, so the task being swiped away must take the notification with
+        // it rather than leaving a permanent card with dead transport controls.
+        //
+        // Only when this instance is still the current one: on an activity recreation the
+        // replacement has already installed its own listener and restarted playback.
+        if (TNRAudioService.listener == mine) {
+            TNRAudioService.listener = null;
+            if (running) {
+                TNRAudioService.stop(getContext());
+                running = false;
+            }
+        }
         super.handleOnDestroy();
     }
 

@@ -20,6 +20,9 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private var remoteCommandsEnabled = false
+    /// Targets installed on the shared command centre, kept so teardown can remove exactly
+    /// the ones this plugin added.
+    private var commandTokens: [Any] = []
     private var artworkTask: URLSessionDataTask?
     /// Identifies the newest artwork request. `URLSessionTask.cancel()` does not stop a
     /// completion handler that has already been scheduled, so cancellation alone would
@@ -34,6 +37,10 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
             // music is worse than one that pauses it, and the player can just mute ours.
             try session.setCategory(.playback, mode: .default)
             try session.setActive(true)
+            // Nothing else calls this, and without it the Lock Screen buttons are inert:
+            // AudioSettings subscribes to `remoteCommand` but no target was ever installed
+            // to emit one.
+            setRemoteCommands(enabled: true)
             call.resolve()
         } catch {
             call.reject("Could not activate the audio session", nil, error)
@@ -54,6 +61,7 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
             // after audio was released. Bumping the version drops that completion.
             artworkTask?.cancel()
             artworkRequestId += 1
+            setRemoteCommands(enabled: false)
             call.resolve()
         } catch {
             call.reject("Could not release the audio session", nil, error)
@@ -77,7 +85,17 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func setRemoteCommandsEnabled(_ call: CAPPluginCall) {
-        let enabled = call.getBool("enabled") ?? true
+        setRemoteCommands(enabled: call.getBool("enabled") ?? true)
+        call.resolve()
+    }
+
+    /// Install or remove the Lock Screen transport targets.
+    ///
+    /// Targets are removed by the token `addTarget` returned, never with `removeTarget(nil)`
+    /// — the command centre is process-wide, and passing nil would also strip the targets
+    /// WebKit installs for the WebView's own media, leaving the player with controls that
+    /// genuinely do nothing.
+    private func setRemoteCommands(enabled: Bool) {
         let center = MPRemoteCommandCenter.shared()
 
         center.playCommand.isEnabled = enabled
@@ -90,25 +108,29 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
         center.changePlaybackPositionCommand.isEnabled = false
 
         if enabled && !remoteCommandsEnabled {
-            center.playCommand.addTarget { [weak self] _ in
-                self?.emit("play")
-                return .success
-            }
-            center.pauseCommand.addTarget { [weak self] _ in
-                self?.emit("pause")
-                return .success
-            }
-            center.togglePlayPauseCommand.addTarget { [weak self] _ in
-                self?.emit("toggle")
-                return .success
-            }
+            commandTokens = [
+                center.playCommand.addTarget { [weak self] _ in
+                    self?.emit("play")
+                    return .success
+                },
+                center.pauseCommand.addTarget { [weak self] _ in
+                    self?.emit("pause")
+                    return .success
+                },
+                center.togglePlayPauseCommand.addTarget { [weak self] _ in
+                    self?.emit("toggle")
+                    return .success
+                }
+            ]
         } else if !enabled && remoteCommandsEnabled {
-            center.playCommand.removeTarget(nil)
-            center.pauseCommand.removeTarget(nil)
-            center.togglePlayPauseCommand.removeTarget(nil)
+            if commandTokens.count == 3 {
+                center.playCommand.removeTarget(commandTokens[0])
+                center.pauseCommand.removeTarget(commandTokens[1])
+                center.togglePlayPauseCommand.removeTarget(commandTokens[2])
+            }
+            commandTokens = []
         }
         remoteCommandsEnabled = enabled
-        call.resolve()
     }
 
     private func emit(_ command: String) {

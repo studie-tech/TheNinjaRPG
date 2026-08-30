@@ -29,7 +29,7 @@ import java.util.Map;
 @CapacitorPlugin(name = "TNRLiveActivity")
 public class TNRLiveUpdatesPlugin extends Plugin {
 
-    private static final String CHANNEL_ID = "recovery";
+    private static final String CHANNEL_ID = TNRNotificationChannels.LIVE_UPDATES_CHANNEL;
     private static final String PREFS = "tnr_live_updates";
     private static final String KEY_NEXT_ID = "nextNotificationId";
     private static final int FIRST_NOTIFICATION_ID = 8000;
@@ -47,9 +47,20 @@ public class TNRLiveUpdatesPlugin extends Plugin {
             return;
         }
 
-        int notificationId = nextNotificationId();
-        String activityId = kind + "-" + notificationId;
-        rememberActivity(activityId, notificationId);
+        // A notification of this kind outlives the process that posted it, so after a
+        // cold start the web side has no id for one that is still on screen. Reusing it
+        // keeps a single card per kind; posting under the same id replaces its contents.
+        // Without this, every relaunch during a hospital stay leaves another ongoing
+        // notification behind that nothing holds an id for any more.
+        String activityId = existingActivityFor(kind);
+        int notificationId;
+        if (activityId != null) {
+            notificationId = notificationIdFor(activityId);
+        } else {
+            notificationId = nextNotificationId();
+            activityId = kind + "-" + notificationId;
+            rememberActivity(activityId, notificationId);
+        }
         post(notificationId, call, endsAt);
 
         JSObject result = new JSObject();
@@ -191,6 +202,43 @@ public class TNRLiveUpdatesPlugin extends Plugin {
         int next = prefs.getInt(KEY_NEXT_ID, FIRST_NOTIFICATION_ID);
         prefs.edit().putInt(KEY_NEXT_ID, next + 1).apply();
         return next;
+    }
+
+    /**
+     * The stored activity id for this kind, or null when none is live.
+     *
+     * Ids are "kind-notificationId", so the prefix identifies the kind. KEY_NEXT_ID is the
+     * allocator's own counter and is not an activity.
+     *
+     * Any further entries for the same kind are cancelled and forgotten on the way past.
+     * There should never be more than one, but a build installed over one that stacked
+     * them would otherwise leave ongoing notifications on screen that nothing holds an id
+     * for and the player cannot swipe away.
+     */
+    private String existingActivityFor(String kind) {
+        String prefix = kind + "-";
+        String found = null;
+        SharedPreferences.Editor editor = prefs().edit();
+        boolean cancelled = false;
+        for (Map.Entry<String, ?> entry : prefs().getAll().entrySet()) {
+            String key = entry.getKey();
+            if (KEY_NEXT_ID.equals(key)
+                || !key.startsWith(prefix)
+                || !(entry.getValue() instanceof Integer)) {
+                continue;
+            }
+            if (found == null) {
+                found = key;
+            } else {
+                manager().cancel((Integer) entry.getValue());
+                editor.remove(key);
+                cancelled = true;
+            }
+        }
+        if (cancelled) {
+            editor.apply();
+        }
+        return found;
     }
 
     private void rememberActivity(String activityId, int notificationId) {

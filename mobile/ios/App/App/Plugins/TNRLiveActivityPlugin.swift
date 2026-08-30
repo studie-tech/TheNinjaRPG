@@ -48,25 +48,28 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
+        // An activity of this kind outlives the process that started it, so after a cold
+        // start the web side has no id for one that is still on the Lock Screen. Adopting
+        // it instead of requesting a second keeps one card per kind and rebinds the push
+        // token to the activity the player can actually see. Matching on kind alone is
+        // deliberate: another kind's countdown is a separate card and must be left alone.
+        if let existing = Activity<TNRActivityAttributes>.activities
+            .first(where: { $0.attributes.kind == kind }) {
+            Task { [weak self] in
+                await existing.update(.init(state: state, staleDate: state.endsAt))
+                self?.observeToken(of: existing)
+                call.resolve(["activityId": existing.id])
+            }
+            return
+        }
+
         do {
             let activity = try Activity.request(
                 attributes: TNRActivityAttributes(kind: kind, startedAt: Date()),
                 content: .init(state: state, staleDate: state.endsAt),
                 pushType: .token
             )
-
-            // The token arrives asynchronously and can be re-issued at any time, so it is
-            // pushed to the WebView as an event as well as returned once here.
-            Task { [weak self] in
-                for await tokenData in activity.pushTokenUpdates {
-                    let token = tokenData.map { String(format: "%02x", $0) }.joined()
-                    self?.notifyListeners(
-                        "activityToken",
-                        data: ["activityId": activity.id, "pushToken": token]
-                    )
-                }
-            }
-
+            observeToken(of: activity)
             call.resolve(["activityId": activity.id])
         } catch {
             call.reject("Could not start the activity", nil, error)
@@ -74,6 +77,23 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         #else
         call.reject("ActivityKit is unavailable")
         #endif
+    }
+
+    /// Forward this activity's push token to the WebView.
+    ///
+    /// The token arrives asynchronously and can be re-issued at any time, so it is pushed
+    /// as an event rather than only returned from `start`.
+    @available(iOS 16.2, *)
+    private func observeToken(of activity: Activity<TNRActivityAttributes>) {
+        Task { [weak self] in
+            for await tokenData in activity.pushTokenUpdates {
+                let token = tokenData.map { String(format: "%02x", $0) }.joined()
+                self?.notifyListeners(
+                    "activityToken",
+                    data: ["activityId": activity.id, "pushToken": token]
+                )
+            }
+        }
     }
 
     @objc func update(_ call: CAPPluginCall) {

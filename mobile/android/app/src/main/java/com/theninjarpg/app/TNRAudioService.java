@@ -68,6 +68,13 @@ public class TNRAudioService extends Service {
                 }
             }
         );
+        // Required before API 26 for the session to receive media buttons and transport
+        // controls at all; from 26 the platform infers both and the call is a no-op. The
+        // callback above is otherwise never invoked on API 24-25, leaving the lock-screen
+        // controls inert on exactly the versions this app still supports.
+        session.setFlags(
+            MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+        );
         session.setActive(true);
     }
 
