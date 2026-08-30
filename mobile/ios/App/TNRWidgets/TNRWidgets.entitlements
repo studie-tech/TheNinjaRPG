@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The same container the app writes its snapshot into. The extension only reads. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.theninjarpg.app</string>
+	</array>
+</dict>
+</plist>

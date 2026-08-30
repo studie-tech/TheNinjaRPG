@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Xcode rewrites this to "production" for distribution builds. -->
+	<key>aps-environment</key>
+	<string>development</string>
+
+	<!-- applinks makes theninja-rpg.com URLs open in the app; webcredentials lets the app
+	     and the site share saved passwords and Sign in with Apple. Both are verified
+	     against /.well-known/apple-app-site-association. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:www.theninja-rpg.com</string>
+		<string>applinks:theninja-rpg.com</string>
+		<string>webcredentials:www.theninja-rpg.com</string>
+	</array>
+
+	<!-- The container the app writes its widget snapshot into and the extension reads. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.theninjarpg.app</string>
+	</array>
+
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+</dict>
+</plist>
