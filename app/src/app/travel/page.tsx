@@ -557,57 +557,6 @@ export default function Travel() {
     },
   });
 
-  // Stealth and sensory - derived from userData
-  const stealthStatus = getStealthStatus(
-    userData,
-    STEALTH_SENSORY_CAP,
-    STEALTH_TRAIN_GAIN_PER_MINUTE,
-    timeDiff,
-  );
-
-  // Live countdown hooks for stealth/sensory cooldowns
-  const sensoryCooldown = useLiveCountdown(stealthStatus?.sensoryCooldownRemaining);
-  const stealthCooldown = useLiveCountdown(stealthStatus?.stealthCooldownRemaining);
-  const stealthDuration = useLiveCountdown(stealthStatus?.stealthDurationRemaining);
-
-  const { mutate: activateStealth, isPending: isActivatingStealth } =
-    api.stealth.activateStealth.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success && data.data) {
-          await updateUser({
-            stealthActive: true,
-            stealthActivatedAt: data.data.stealthActivatedAt,
-          });
-        }
-      },
-    });
-
-  const { mutate: deactivateStealth, isPending: isDeactivatingStealth } =
-    api.stealth.deactivateStealth.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await updateUser({ stealthActive: false, stealthActivatedAt: null });
-        }
-      },
-    });
-
-  const { mutate: scanSensory, isPending: isScanningSensory } =
-    api.stealth.useSensory.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success && data.data) {
-          await updateUser({ lastSensoryAt: data.data.lastSensoryAt });
-          await utils.travel.getSectorData.invalidate();
-          if (data.data.detectedUsers.length > 0) {
-            setRevealedPlayers(data.data.detectedUsers);
-            setShowRevealedPlayersModal(true);
-          }
-        }
-      },
-    });
-
   const { mutate: attackRevealedUser, isPending: isAttackingRevealed } =
     api.combat.attackUser.useMutation({
       onSuccess: async (data) => {
@@ -833,56 +782,12 @@ export default function Travel() {
                       onClick={() => setShowAutoAttackModal(true)}
                     />
                   ))}
-                {/* Stealth Toggle */}
-                <TooltipProvider delayDuration={50}>
-                  <Tooltip>
-                    <TooltipTrigger
-                      onClick={() => {
-                        if (isActivatingStealth || isDeactivatingStealth) return;
-                        if (stealthStatus?.isCurrentlyStealthed) {
-                          deactivateStealth();
-                        } else if (stealthCooldown <= 0) {
-                          activateStealth();
-                        }
-                      }}
-                    >
-                      <Ghost
-                        className={`mr-2 h-7 w-7 ${stealthStatus?.isCurrentlyStealthed ? "text-purple-500" : stealthCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-purple-500"}`}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {stealthStatus?.isCurrentlyStealthed
-                        ? `Stealth Active (${Math.ceil(stealthDuration)}s remaining)`
-                        : stealthCooldown > 0
-                          ? `Stealth Cooldown (${Math.ceil(stealthCooldown)}s)`
-                          : "Activate Stealth"}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                {/* Sensory Scan */}
-                <TooltipProvider delayDuration={50}>
-                  <Tooltip>
-                    <TooltipTrigger
-                      onClick={() => {
-                        if (isScanningSensory) return;
-                        if (sensoryCooldown <= 0) {
-                          if (currentSector !== undefined) {
-                            scanSensory({ sector: currentSector });
-                          }
-                        }
-                      }}
-                    >
-                      <Radar
-                        className={`mr-2 h-7 w-7 ${sensoryCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-blue-500"}`}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {sensoryCooldown > 0
-                        ? `Sensory Cooldown (${Math.ceil(sensoryCooldown)}s)`
-                        : `Scan for Hidden Enemies (${(stealthStatus?.sensoryDetectChance ?? 5).toFixed(0)}% chance)`}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <StealthControls
+                  onRevealed={(players) => {
+                    setRevealedPlayers(players);
+                    setShowRevealedPlayersModal(true);
+                  }}
+                />
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
                     <TooltipTrigger
@@ -1289,6 +1194,124 @@ export default function Travel() {
     </>
   );
 }
+
+/**
+ * Stealth and sensory controls for the sector view.
+ *
+ * The three cooldowns tick once a second each. Held on the travel page they re-rendered it — and
+ * with it the whole 3D sector scene — up to three times a second for as long as any cooldown was
+ * running, which is why the page already memoizes `villages` against exactly this. Owning the
+ * countdowns here keeps every tick inside these two buttons.
+ */
+const StealthControls: React.FC<{
+  onRevealed: (players: RevealedPlayer[]) => void;
+}> = ({ onRevealed }) => {
+  const { data: userData, timeDiff, updateUser } = useRequiredUserData();
+  const utils = api.useUtils();
+  const currentSector = userData?.sector;
+
+  const stealthStatus = getStealthStatus(
+    userData,
+    STEALTH_SENSORY_CAP,
+    STEALTH_TRAIN_GAIN_PER_MINUTE,
+    timeDiff,
+  );
+  const sensoryCooldown = useLiveCountdown(stealthStatus?.sensoryCooldownRemaining);
+  const stealthCooldown = useLiveCountdown(stealthStatus?.stealthCooldownRemaining);
+  const stealthDuration = useLiveCountdown(stealthStatus?.stealthDurationRemaining);
+
+  const { mutate: activateStealth, isPending: isActivatingStealth } =
+    api.stealth.activateStealth.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success && data.data) {
+          await updateUser({
+            stealthActive: true,
+            stealthActivatedAt: data.data.stealthActivatedAt,
+          });
+        }
+      },
+    });
+
+  const { mutate: deactivateStealth, isPending: isDeactivatingStealth } =
+    api.stealth.deactivateStealth.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await updateUser({ stealthActive: false, stealthActivatedAt: null });
+        }
+      },
+    });
+
+  const { mutate: scanSensory, isPending: isScanningSensory } =
+    api.stealth.useSensory.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success && data.data) {
+          await updateUser({ lastSensoryAt: data.data.lastSensoryAt });
+          await utils.travel.getSectorData.invalidate();
+          if (data.data.detectedUsers.length > 0) {
+            onRevealed(data.data.detectedUsers);
+          }
+        }
+      },
+    });
+
+  return (
+    <>
+      {/* Stealth Toggle */}
+      <TooltipProvider delayDuration={50}>
+        <Tooltip>
+          <TooltipTrigger
+            onClick={() => {
+              if (isActivatingStealth || isDeactivatingStealth) return;
+              if (stealthStatus?.isCurrentlyStealthed) {
+                deactivateStealth();
+              } else if (stealthCooldown <= 0) {
+                activateStealth();
+              }
+            }}
+          >
+            <Ghost
+              className={`mr-2 h-7 w-7 ${stealthStatus?.isCurrentlyStealthed ? "text-purple-500" : stealthCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-purple-500"}`}
+            />
+          </TooltipTrigger>
+          <TooltipContent>
+            {stealthStatus?.isCurrentlyStealthed
+              ? `Stealth Active (${Math.ceil(stealthDuration)}s remaining)`
+              : stealthCooldown > 0
+                ? `Stealth Cooldown (${Math.ceil(stealthCooldown)}s)`
+                : "Activate Stealth"}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {/* Sensory Scan */}
+      <TooltipProvider delayDuration={50}>
+        <Tooltip>
+          <TooltipTrigger
+            onClick={() => {
+              if (isScanningSensory) return;
+              if (sensoryCooldown <= 0) {
+                if (currentSector !== undefined) {
+                  scanSensory({ sector: currentSector });
+                }
+              }
+            }}
+          >
+            <Radar
+              className={`mr-2 h-7 w-7 ${sensoryCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-blue-500"}`}
+            />
+          </TooltipTrigger>
+          <TooltipContent>
+            {sensoryCooldown > 0
+              ? `Sensory Cooldown (${Math.ceil(sensoryCooldown)}s)`
+              : `Scan for Hidden Enemies (${(stealthStatus?.sensoryDetectChance ?? 5).toFixed(0)}% chance)`}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </>
+  );
+};
 
 /**
  * Revealed Player Card
