@@ -440,6 +440,239 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     expect(remaining).toHaveLength(0);
   });
 
+  it("counts seeds already promised by the other extractors when admitting a job", async () => {
+    await farmer({ farmExtractorsOwned: 2 });
+    const database = await getTestDatabase();
+    // Materials sit exactly at the cap, with one seed of room left in the existing stack.
+    const fillers = Array.from({ length: 23 }, (_, index) =>
+      cropItemRow({ id: `filler-${index}`, name: `Filler ${index}` }),
+    );
+    await database.insert(item).values(fillers as never);
+    await database.insert(userItem).values(
+      fillers.map((filler, index) => ({
+        id: `ui-filler-${index}`,
+        userId: "farm-user",
+        itemId: filler.id,
+        quantity: 1,
+        equipped: "NONE",
+      })) as never,
+    );
+    await database
+      .update(item)
+      .set({ farmExtractSeedItemId: "seed-1", farmExtractSeedCount: 1 })
+      .where(eq(item.id, "crop-1"));
+    await giveItem("ui-crop", "crop-1", 2);
+    await giveItem("ui-seed-stack", "seed-1", 49);
+    const api = await caller("farm-user");
+
+    const first = await api.extractSeeds({
+      extractorSlot: 0,
+      userItemId: "ui-crop",
+      quantity: 1,
+    });
+    expect(first.success).toBe(true);
+
+    // The first extractor is already holding the one seed that fits. Sizing this job
+    // against the inventory alone admits it, and both land on a full stack at settlement.
+    const second = await api.extractSeeds({
+      extractorSlot: 1,
+      userItemId: "ui-crop",
+      quantity: 1,
+    });
+    expect(second.success).toBe(false);
+    expect(second.message).toContain("Materials inventory is full");
+    expect(await database.select().from(farmExtraction)).toHaveLength(1);
+  });
+
+  it("merges two extractions of the same seed into one stack", async () => {
+    await farmer();
+    const database = await getTestDatabase();
+    await giveItem("ui-seed-stack", "seed-1", 48);
+    await database.insert(farmExtraction).values(
+      [0, 1].map((extractorSlot) => ({
+        id: `extraction-${extractorSlot}`,
+        userId: "farm-user",
+        extractorSlot,
+        cropItemId: "crop-1",
+        seedItemId: "seed-1",
+        cropQuantity: 1,
+        seedQuantity: 1,
+        startedAt: new Date(Date.now() - 120_000),
+        finishAt: new Date(Date.now() - 60_000),
+      })) as never,
+    );
+
+    await (await caller("farm-user")).getFarmState();
+
+    // Both extractions are valid and both must pay, but they share one inventory snapshot.
+    // Granted separately, each measures the same 48-seed stack and the second opens a row
+    // for a seed that belonged in the first.
+    const stacks = await database
+      .select()
+      .from(userItem)
+      .where(eq(userItem.itemId, "seed-1"));
+    expect(stacks).toHaveLength(1);
+    expect(stacks[0]?.quantity).toBe(50);
+    expect(await database.select().from(farmExtraction)).toHaveLength(0);
+  });
+
+  it("fills the real stack when the inventory snapshot went stale under it", async () => {
+    await farmer();
+    const database = await getTestDatabase();
+    await giveItem("ui-seed-stack", "seed-1", 48);
+    await database.insert(farmExtraction).values({
+      id: "extraction-s",
+      userId: "farm-user",
+      extractorSlot: 0,
+      cropItemId: "crop-1",
+      seedItemId: "seed-1",
+      cropQuantity: 1,
+      seedQuantity: 2,
+      startedAt: new Date(Date.now() - 120_000),
+      finishAt: new Date(Date.now() - 60_000),
+    } as never);
+
+    // Stand in for a grant that landed on this stack after settlement read its snapshot.
+    // Aggregation cannot help here -- the staleness comes from another request.
+    const staleClient = new Proxy(database as object, {
+      get(target, property) {
+        if (property === "query") {
+          const query = Reflect.get(target, property) as Record<string, unknown>;
+          const userItemQuery = query.userItem as {
+            findMany: (args: unknown) => Promise<{ quantity: number }[]>;
+            findFirst: (args: unknown) => unknown;
+          };
+          return {
+            ...query,
+            userItem: {
+              findFirst: (args: unknown) => userItemQuery.findFirst(args),
+              findMany: async (args: unknown) =>
+                (await userItemQuery.findMany(args)).map((row) => ({
+                  ...row,
+                  quantity: 40,
+                })),
+            },
+          };
+        }
+        return Reflect.get(target, property);
+      },
+    });
+    await farmingRouter
+      .createCaller({ drizzle: staleClient, userId: "farm-user" } as never)
+      .getFarmState();
+
+    // The two seeds belong in the existing stack. Opening a row for them because the
+    // snapshot said 40 puts the player a row closer to the cap for nothing.
+    const stacks = await database
+      .select()
+      .from(userItem)
+      .where(eq(userItem.itemId, "seed-1"));
+    expect(stacks).toHaveLength(1);
+    expect(stacks[0]?.quantity).toBe(50);
+  });
+
+  it("holds a payout that would open a row past the material cap", async () => {
+    await farmer();
+    const database = await getTestDatabase();
+    // Fill materials to the cap: 24 filler rows plus a seed stack one short of full.
+    const fillers = Array.from({ length: 24 }, (_, index) =>
+      cropItemRow({ id: `filler-${index}`, name: `Filler ${index}` }),
+    );
+    await database.insert(item).values(fillers as never);
+    await database.insert(userItem).values(
+      fillers.map((filler, index) => ({
+        id: `ui-filler-${index}`,
+        userId: "farm-user",
+        itemId: filler.id,
+        quantity: 1,
+        equipped: "NONE",
+      })) as never,
+    );
+    await giveItem("ui-seed-stack", "seed-1", 49);
+    await database.insert(farmExtraction).values(
+      [0, 1].map((extractorSlot) => ({
+        id: `extraction-${extractorSlot}`,
+        userId: "farm-user",
+        extractorSlot,
+        cropItemId: "crop-1",
+        seedItemId: "seed-1",
+        cropQuantity: 1,
+        seedQuantity: 1,
+        startedAt: new Date(Date.now() - 120_000),
+        finishAt: new Date(Date.now() - 60_000),
+      })) as never,
+    );
+
+    const state = await (await caller("farm-user")).getFarmState();
+
+    // 25 rows is the cap and the two seeds need a 26th. Nothing may be spent to get there:
+    // the seeds stay in the extractors, which keep showing them, until space is freed.
+    expect(await database.select().from(userItem)).toHaveLength(25);
+    const [stack] = await database
+      .select()
+      .from(userItem)
+      .where(eq(userItem.id, "ui-seed-stack"));
+    expect(stack?.quantity).toBe(49);
+    const held = await database.select().from(farmExtraction);
+    expect(held).toHaveLength(2);
+    expect(held.every((row) => row.claimedAt === null)).toBe(true);
+    expect(
+      (state as { activeSeedExtractions: unknown[] }).activeSeedExtractions,
+    ).toHaveLength(2);
+  });
+
+  it("keeps a finished extraction when its payout write fails, and settles it later", async () => {
+    await farmer();
+    const database = await getTestDatabase();
+    await database.insert(farmExtraction).values({
+      id: "extraction-f",
+      userId: "farm-user",
+      extractorSlot: 0,
+      cropItemId: "crop-1",
+      seedItemId: "seed-1",
+      cropQuantity: 1,
+      seedQuantity: 3,
+      startedAt: new Date(Date.now() - 120_000),
+      finishAt: new Date(Date.now() - 60_000),
+    } as never);
+
+    // Stand in for the item write failing after the extraction has been claimed.
+    const failingClient = new Proxy(database as object, {
+      get(target, property) {
+        if (property === "insert") {
+          return (table: unknown) => {
+            if (table === userItem) throw new Error("simulated item write failure");
+            return (Reflect.get(target, property) as (arg: unknown) => unknown).call(
+              target,
+              table,
+            );
+          };
+        }
+        return Reflect.get(target, property);
+      },
+    });
+    await farmingRouter
+      .createCaller({ drizzle: failingClient, userId: "farm-user" } as never)
+      .getFarmState();
+
+    // The reward must not go down with the row: the claim is released and the next
+    // settlement pays it out.
+    const kept = await database.select().from(farmExtraction);
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.claimedAt).toBeNull();
+    expect(await database.select().from(userItem)).toHaveLength(0);
+
+    await (await caller("farm-user")).getFarmState();
+
+    const stacks = await database
+      .select()
+      .from(userItem)
+      .where(eq(userItem.itemId, "seed-1"));
+    expect(stacks).toHaveLength(1);
+    expect(stacks[0]?.quantity).toBe(3);
+    expect(await database.select().from(farmExtraction)).toHaveLength(0);
+  });
+
   it("refuses every farming mutation for a banned user", async () => {
     await farmer({ isBanned: true });
     await giveItem("ui-seed", "seed-1", 3);

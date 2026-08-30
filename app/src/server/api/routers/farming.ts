@@ -1162,16 +1162,14 @@ export const farmingRouter = createTRPCRouter({
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
-      const [user, userItems, activeExtraction] = await Promise.all([
+      const [user, userItems, extractions] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
-        ctx.drizzle.query.farmExtraction.findFirst({
-          where: and(
-            eq(farmExtraction.userId, ctx.userId),
-            eq(farmExtraction.extractorSlot, input.extractorSlot),
-          ),
-        }),
+        fetchUserExtractions(ctx.drizzle, ctx.userId),
       ]);
+      const activeExtraction = extractions.find(
+        (extraction) => extraction.extractorSlot === input.extractorSlot,
+      );
 
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
@@ -1216,12 +1214,18 @@ export const farmingRouter = createTRPCRouter({
       });
       if (!seedItem) return errorResponse("Seed item not found");
 
-      const inventoryGuard = guardItemAwardInventoryCapacity(
-        user,
-        userItems,
-        seedItem,
-        seedsToGrant,
-      );
+      // The other extractors' seeds land in this same inventory. Sizing this job against
+      // today's free rows alone lets two of them each fit on their own and overflow the
+      // material cap together when they settle.
+      const inventoryGuard = guardBulkItemAwardInventoryCapacity(user, userItems, [
+        ...extractions
+          .filter((extraction) => extraction.seedItem && extraction.seedQuantity > 0)
+          .map((extraction) => ({
+            item: extraction.seedItem as Item,
+            quantity: extraction.seedQuantity,
+          })),
+        { item: seedItem, quantity: seedsToGrant },
+      ]);
       if (inventoryGuard) return inventoryGuard;
 
       const claim = await claimUserSnapshot({
@@ -1839,53 +1843,23 @@ const settleFarmExtractions = async (
   userId: string,
   now: Date,
 ): Promise<FarmStateResponse["activeSeedExtractions"]> => {
-  const extractions = await client.query.farmExtraction.findMany({
-    where: eq(farmExtraction.userId, userId),
-    orderBy: (extraction, { asc }) => [asc(extraction.extractorSlot)],
-    with: { cropItem: true, seedItem: true },
-  });
+  const extractions = await fetchUserExtractions(client, userId);
 
   const completedExtractions = extractions.filter(
     (extraction) => extraction.finishAt <= now,
   );
-  if (completedExtractions.length > 0) {
-    // Settlement fills an existing partial stack before opening a new one, the same way
-    // admission counted the slots back when the job was accepted. Inserting unconditionally
-    // would push a player who was at the cap one row past it.
-    const settledUserItems = await fetchUserItems(client, userId);
-    await Promise.all(
-      completedExtractions.map(async (extraction) => {
-        // Delete first: the delete is the claim. Two getFarmState calls can both read this
-        // row as complete, so granting first pays it out twice. The row also has to go even
-        // when the seed item is missing, or the extractor slot stays occupied forever --
-        // extractSeeds only asks whether a row exists for that slot.
-        const claimed = await client
-          .delete(farmExtraction)
-          .where(
-            and(
-              eq(farmExtraction.id, extraction.id),
-              eq(farmExtraction.userId, userId),
-              lte(farmExtraction.finishAt, now),
-            ),
-          );
-        if (Number(claimed.rowsAffected ?? 0) !== 1) return;
-        if (extraction.seedItem && extraction.seedQuantity > 0) {
-          await awardItemToUser(
-            client,
-            userId,
-            extraction.seedItem,
-            extraction.seedQuantity,
-            settledUserItems,
-          );
-        }
-      }),
-    );
-  }
+  const settledIds =
+    completedExtractions.length > 0
+      ? await payOutExtractions(client, userId, completedExtractions, now)
+      : new Set<string>();
 
+  // Anything still on the books is still the player's, finished or not. A payout held back
+  // for want of inventory space keeps its row, and showing it keeps the extractor from
+  // looking empty while it is in fact still holding seeds.
   return extractions
     .filter(
       (extraction) =>
-        extraction.finishAt > now && extraction.cropItem && extraction.seedItem,
+        !settledIds.has(extraction.id) && extraction.cropItem && extraction.seedItem,
     )
     .map((extraction) => ({
       id: extraction.id,
@@ -1901,6 +1875,155 @@ const settleFarmExtractions = async (
       startedAt: extraction.startedAt,
       finishAt: extraction.finishAt,
     }));
+};
+
+const fetchUserExtractions = async (client: DrizzleClient, userId: string) =>
+  await client.query.farmExtraction.findMany({
+    where: eq(farmExtraction.userId, userId),
+    orderBy: (extraction, { asc }) => [asc(extraction.extractorSlot)],
+    with: { cropItem: true, seedItem: true },
+  });
+
+/** How long a settlement claim is honoured before another request may take it over. */
+const FARM_EXTRACTION_CLAIM_TIMEOUT_SECONDS = 60;
+
+/**
+ * Pays out finished extractions exactly once.
+ *
+ * Each row is claimed before anything is granted, so two concurrent settlements cannot both
+ * award it. The claim is a mark rather than a delete: the row has to outlive the grant, or a
+ * failed item write would take the extraction down with it and the player would lose both.
+ * A grant that fails releases its claim and is retried by the next settlement; a claim left
+ * behind by a request that died is taken over once it goes stale.
+ *
+ * Grants are aggregated per seed item because they share one inventory snapshot. Two
+ * extractions of the same seed would otherwise both measure the same partial stack, and the
+ * one that lost the fill would open a row past the material cap.
+ */
+const payOutExtractions = async (
+  client: DrizzleClient,
+  userId: string,
+  completedExtractions: Awaited<ReturnType<typeof fetchUserExtractions>>,
+  now: Date,
+): Promise<Set<string>> => {
+  const staleClaim = new Date(
+    now.getTime() - FARM_EXTRACTION_CLAIM_TIMEOUT_SECONDS * 1000,
+  );
+  const claimed = (
+    await Promise.all(
+      completedExtractions.map(async (extraction) => {
+        const claim = await client
+          .update(farmExtraction)
+          .set({ claimedAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(farmExtraction.id, extraction.id),
+              eq(farmExtraction.userId, userId),
+              lte(farmExtraction.finishAt, now),
+              or(
+                isNull(farmExtraction.claimedAt),
+                lt(farmExtraction.claimedAt, staleClaim),
+              ),
+            ),
+          );
+        return Number(claim.rowsAffected ?? 0) === 1 ? extraction : null;
+      }),
+    )
+  ).filter((extraction) => extraction !== null);
+  if (claimed.length === 0) return new Set();
+
+  const grants = new Map<string, { item: Item; quantity: number; ids: string[] }>();
+  // Rows with nothing left to pay out still have to go, or the extractor slot stays
+  // occupied forever -- extractSeeds only asks whether a row exists for that slot.
+  const emptyIds: string[] = [];
+  for (const extraction of claimed) {
+    if (!extraction.seedItem || extraction.seedQuantity <= 0) {
+      emptyIds.push(extraction.id);
+      continue;
+    }
+    const grant = grants.get(extraction.seedItemId);
+    if (grant) {
+      grant.quantity += extraction.seedQuantity;
+      grant.ids.push(extraction.id);
+    } else {
+      grants.set(extraction.seedItemId, {
+        item: extraction.seedItem,
+        quantity: extraction.seedQuantity,
+        ids: [extraction.id],
+      });
+    }
+  }
+
+  const [settlingUser, settledUserItems] = await Promise.all([
+    fetchUser(client, userId),
+    fetchUserItems(client, userId),
+  ]);
+
+  // Admission sized every extraction against the inventory as it stood then, so a player
+  // who has filled up since can still arrive here with more seeds than rows to hold them.
+  // Hold the whole payout rather than opening a row past the cap: the seeds stay in the
+  // extractor, and the next settlement pays out once there is space.
+  const overCapacity =
+    grants.size > 0 &&
+    guardBulkItemAwardInventoryCapacity(
+      settlingUser,
+      settledUserItems,
+      [...grants.values()].map((grant) => ({
+        item: grant.item,
+        quantity: grant.quantity,
+      })),
+    ) !== null;
+
+  const results = overCapacity
+    ? [...grants.values()].map((grant) => ({ ids: grant.ids, granted: false }))
+    : await Promise.all(
+        [...grants.values()].map(async (grant) => {
+          try {
+            const granted = await awardItemToUser(
+              client,
+              userId,
+              grant.item,
+              grant.quantity,
+              settledUserItems,
+            );
+            return { ids: grant.ids, granted };
+          } catch {
+            return { ids: grant.ids, granted: false };
+          }
+        }),
+      );
+
+  const settledIds = [
+    ...emptyIds,
+    ...results.filter((result) => result.granted).flatMap((result) => result.ids),
+  ];
+  const releasedIds = results
+    .filter((result) => !result.granted)
+    .flatMap((result) => result.ids);
+  await Promise.all([
+    settledIds.length > 0
+      ? client
+          .delete(farmExtraction)
+          .where(
+            and(
+              eq(farmExtraction.userId, userId),
+              inArray(farmExtraction.id, settledIds),
+            ),
+          )
+      : undefined,
+    releasedIds.length > 0
+      ? client
+          .update(farmExtraction)
+          .set({ claimedAt: null })
+          .where(
+            and(
+              eq(farmExtraction.userId, userId),
+              inArray(farmExtraction.id, releasedIds),
+            ),
+          )
+      : undefined,
+  ]);
+  return new Set(settledIds);
 };
 
 export const ensureFarmPlots = async (
@@ -2000,7 +2123,16 @@ const guardBulkItemAwardInventoryCapacity = (
   const requiredStacks = { event: 0, material: 0, regular: 0 };
   const now = new Date();
 
+  // Fold repeat awards of the same item together. Sized separately they would each claim
+  // the same partial stack's free space, and a pair that does not fit would look like it does.
+  const merged = new Map<string, { item: Item; quantity: number }>();
   for (const award of awards) {
+    const existing = merged.get(award.item.id);
+    if (existing) existing.quantity += award.quantity;
+    else merged.set(award.item.id, { item: award.item, quantity: award.quantity });
+  }
+
+  for (const award of merged.values()) {
     const stackSize = award.item.canStack ? Math.max(1, award.item.stackSize) : 1;
     const existingStack = award.item.canStack
       ? userItems.find(
@@ -2045,6 +2177,9 @@ const guardBulkItemAwardInventoryCapacity = (
   return null;
 };
 
+/** Max attempts to fill a partial stack before giving up and opening a new row. */
+const STACK_FILL_ATTEMPTS = 3;
+
 const awardItemToUser = async (
   client: DrizzleClient,
   userId: string,
@@ -2053,8 +2188,8 @@ const awardItemToUser = async (
   /**
    * Inventory snapshot from the caller's opening fetch. Re-reading it here would
    * add a full inventory join per grant, which harvestAll multiplies by the number
-   * of distinct crops. The stack-fill update below is guarded on the observed
-   * quantity, so a stale snapshot fails the CAS instead of overfilling a stack.
+   * of distinct crops. Callers must aggregate repeat grants of the same item into
+   * one call, so that two grants never measure the same stack from this snapshot.
    */
   userItems: Awaited<ReturnType<typeof fetchUserItems>>,
 ): Promise<boolean> => {
@@ -2074,27 +2209,40 @@ const awardItemToUser = async (
         ui.item.canStack &&
         (!ui.craftingFinishedAt || ui.craftingFinishedAt < new Date()),
     );
-    if (existing) {
-      const space = Math.max(0, stackSize - existing.quantity);
-      if (space > 0) {
-        const toAdd = Math.min(remaining, space);
-        const fillResult = await client
-          .update(userItem)
-          .set({
-            quantity: sql`${userItem.quantity} + ${toAdd}`,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(userItem.id, existing.id),
-              eq(userItem.quantity, existing.quantity),
-              sql`${userItem.quantity} + ${toAdd} <= ${stackSize}`,
-            ),
-          );
-        if (fillResult.rowsAffected === 1) {
-          remaining -= toAdd;
-        }
+    // A lost CAS means the snapshot went stale under a concurrent grant. Re-read that one
+    // stack and try again rather than falling through to the insert: opening a fresh row
+    // for a quantity that belongs in the existing stack puts the player past the cap.
+    let quantityOnRecord = existing?.quantity;
+    for (
+      let attempt = 0;
+      existing && quantityOnRecord !== undefined && attempt < STACK_FILL_ATTEMPTS;
+      attempt++
+    ) {
+      const space = Math.max(0, stackSize - quantityOnRecord);
+      if (space <= 0) break;
+      const toAdd = Math.min(remaining, space);
+      const fillResult = await client
+        .update(userItem)
+        .set({
+          quantity: sql`${userItem.quantity} + ${toAdd}`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(userItem.id, existing.id),
+            eq(userItem.quantity, quantityOnRecord),
+            sql`${userItem.quantity} + ${toAdd} <= ${stackSize}`,
+          ),
+        );
+      if (fillResult.rowsAffected === 1) {
+        remaining -= toAdd;
+        break;
       }
+      const fresh = await client.query.userItem.findFirst({
+        where: eq(userItem.id, existing.id),
+        columns: { quantity: true },
+      });
+      quantityOnRecord = fresh?.quantity;
     }
   }
 
