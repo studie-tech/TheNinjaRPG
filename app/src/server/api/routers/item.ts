@@ -2517,8 +2517,10 @@ export const itemRouter = createTRPCRouter({
       if (!info.inShop) return errorResponse("Item is not for sale");
       if (isEvolution(info.parentItemId))
         return errorResponse("Evolution items cannot be bought; they must be evolved");
-      if (info.isFarmSeed) {
-        return errorResponse("Farm seeds are purchased from the farm shop");
+      // Farm produce is priced in farm coins, so buying it for ryo here would let a
+      // player mint farm currency from the ryo economy (buy cheap, sell at the farm).
+      if (info.isFarmSeed || info.farmSellValue > 0) {
+        return errorResponse("Farm items are traded at the farm, not the item shop");
       }
       if (user.isBanned) return errorResponse("You are banned");
       if (info.hidden && !canChangeContent(user.role)) {
