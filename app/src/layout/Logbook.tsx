@@ -79,12 +79,14 @@ const LogbookAchievements: React.FC = () => {
   const [activeElement, setActiveElement] = useState<string>("");
 
   // Achievement definitions are the same for every player and change only when staff edit
-  // content, so profile.getUser sends progress alone and they are fetched once here instead -
-  // the query client keeps them for the session. isLoading rather than isPending: a disabled
-  // query never stops being pending, which would leave the tab on its spinner forever.
+  // content, so profile.getUser sends progress alone and they are fetched here instead. The
+  // staleTime overrides the app-wide Infinity: progress arrives on getUser's own five-minute
+  // refetch, and a definition that stayed cached past that point would leave a freshly published
+  // achievement rendering nothing. isLoading rather than isPending: a disabled query never stops
+  // being pending, which would leave the tab on its spinner forever.
   const { data: catalogue, isLoading } = api.quests.getAchievementCatalogue.useQuery(
     undefined,
-    { enabled: !!userData },
+    { enabled: !!userData, staleTime: 5 * 60 * 1000 },
   );
 
   const quests = useMemo(() => {

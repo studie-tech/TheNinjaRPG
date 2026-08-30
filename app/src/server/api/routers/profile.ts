@@ -481,7 +481,9 @@ export const profileRouter = createTRPCRouter({
         },
       );
       // Ship achievement progress on its own; the definitions come from the catalogue query
-      const achievementProgress = user ? splitAchievementProgress(user) : [];
+      const achievementProgress = user
+        ? splitAchievementProgress(user, await fetchPublishedAchievements(ctx.drizzle))
+        : [];
       // Figure out notifications
       const notifications: NavBarDropdownLink[] = [];
 
@@ -2888,6 +2890,24 @@ export const fetchAchievementCatalogue = (client: DrizzleClient) =>
       .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
   );
 
+/**
+ * The achievements whose definitions `quests.getAchievementCatalogue` publishes for the client to
+ * cache, and therefore exactly the ones `profile.getUser` may send as progress alone.
+ *
+ * Both sides read this one list rather than re-deciding with a predicate: by the time `getUser`
+ * runs, `fetchUpdatedUser` has rewritten the objectives on its own copy of these quests - trackers
+ * write resolved coordinates back onto them, and location hiding rewrites them again - so a
+ * predicate applied there and a predicate applied to the raw row can disagree, and a progress row
+ * whose definition the catalogue withholds renders nothing at all.
+ *
+ * Inside a request scope the underlying read is memoized, so a caller that has already gone
+ * through `fetchUpdatedUser` pays nothing for this.
+ */
+export const fetchPublishedAchievements = async (client: DrizzleClient) =>
+  (await fetchAchievementCatalogue(client)).filter(
+    (achievement) => !questHasOverworldObjectives(achievement),
+  );
+
 const fetchAllGameSettings = (client: DrizzleClient) =>
   scopedRead("gameSettings", () => client.select().from(gameSetting));
 
@@ -2970,23 +2990,19 @@ export type AchievementProgress = Omit<UserQuest, "quest">;
  * of kilobytes of unchanging catalogue JSON on every page load. The client joins the returned
  * progress against `quests.getAchievementCatalogue`, which it holds for the session.
  *
- * A row is only moved when the catalogue is certain to carry its definition, since the client
- * renders nothing for a progress row it cannot resolve. That rules out two cases, both of which
- * keep travelling on the user object: a hidden achievement, which the catalogue does not publish
- * and only content staff can see at all, and one whose objectives reach into the overworld - the
- * sector and world-map views read those straight off `userQuests`, and a catalogue shared by every
- * player cannot carry the per-user location state they depend on.
+ * A row moves exactly when `published` carries its definition, which makes the two halves a
+ * partition by construction: nothing is sent twice, and nothing is stranded as a progress row the
+ * client cannot resolve. Everything else - a hidden achievement, one the overworld still needs,
+ * an orphaned row whose quest was deleted - stays on the user object untouched.
  */
-export const splitAchievementProgress = (user: NonNullable<UserWithRelations>) => {
+export const splitAchievementProgress = (
+  user: NonNullable<UserWithRelations>,
+  published: Quest[],
+) => {
+  const publishedIds = new Set(published.map((achievement) => achievement.id));
   const progress: AchievementProgress[] = [];
   user.userQuests = user.userQuests.filter((userQuest) => {
-    if (
-      userQuest.quest?.questType !== "achievement" ||
-      userQuest.quest.hidden ||
-      questHasOverworldObjectives(userQuest.quest)
-    ) {
-      return true;
-    }
+    if (!publishedIds.has(userQuest.questId)) return true;
     const { quest: _definition, ...rest } = userQuest;
     progress.push(rest);
     return false;

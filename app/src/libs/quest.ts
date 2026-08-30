@@ -1550,23 +1550,30 @@ export const mockAchievementHistoryEntries = (
 
 /**
  * Whether any of a quest's objectives is something the overworld has to draw or act on: a map
- * location, an ambush, a bound NPC placement, or a dialog. The sector and world-map views scan
- * `userQuests[].quest.content.objectives` for exactly these.
+ * location, an ambush, a bound NPC placement, or a dialog. The sector view, the world map and
+ * `getActiveObjectives` scan `userQuests[].quest.content.objectives` for exactly these.
  *
  * Achievements are lifetime counters and normally carry none of it, which is what lets
- * `profile.getUser` ship them as progress rows plus a cached catalogue. An authored exception
- * keeps its full `Quest` row on the user object instead, since a catalogue shared by every
- * player cannot carry the per-user location state `controlShownQuestLocationInformation` applies.
+ * `quests.getAchievementCatalogue` publish them for the client to cache instead of `getUser`
+ * re-sending them. An authored exception is withheld from the catalogue and keeps travelling on
+ * the user object, so the overworld still sees it.
+ *
+ * A stored coordinate counts even when it is zero. Sector 0 is a real sector
+ * (`MAP_SECTOR_ID_MIN`) and (0, 0) is a real tile, so the test is whether the objective carries
+ * the field at all - a counter objective has no coordinate keys whatsoever. `attackers` and
+ * `opponentAIs` are the other way round: nearly every objective serialises them as empty arrays,
+ * so only a populated one means anything.
  */
 export const questHasOverworldObjectives = (quest: Quest) =>
   quest.content.objectives.some(
     (objective) =>
-      ("sector" in objective && !!objective.sector) ||
-      ("longitude" in objective && !!objective.longitude) ||
-      ("latitude" in objective && !!objective.latitude) ||
-      ("attackers" in objective && (objective.attackers?.length ?? 0) > 0) ||
+      "sector" in objective ||
+      "longitude" in objective ||
+      "latitude" in objective ||
+      "hideLocation" in objective ||
       ("overworldPlacementId" in objective && !!objective.overworldPlacementId) ||
-      ("hideLocation" in objective && !!objective.hideLocation) ||
+      ("attackers" in objective && (objective.attackers?.length ?? 0) > 0) ||
+      ("opponentAIs" in objective && (objective.opponentAIs?.length ?? 0) > 0) ||
       objective.task === "dialog",
   );
 
