@@ -5455,6 +5455,8 @@ export const farmExtraction = mysqlTable(
     finishAt: datetime("finishAt", { mode: "date", fsp: 3 }).notNull(),
     /** Set while a request is paying this extraction out; see settleFarmExtractions. */
     claimedAt: datetime("claimedAt", { mode: "date", fsp: 3 }),
+    /** Set once the seeds are in the inventory. A settled row is only ever cleaned up. */
+    settledAt: datetime("settledAt", { mode: "date", fsp: 3 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),

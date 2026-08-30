@@ -18,6 +18,7 @@ CREATE TABLE `FarmExtraction` (
 	`startedAt` datetime(3) NOT NULL,
 	`finishAt` datetime(3) NOT NULL,
 	`claimedAt` datetime(3),
+	`settledAt` datetime(3),
 	`createdAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
 	`updatedAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
 	CONSTRAINT `FarmExtraction_id` PRIMARY KEY(`id`),

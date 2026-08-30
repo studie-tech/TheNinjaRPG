@@ -621,6 +621,62 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     ).toHaveLength(2);
   });
 
+  it("does not pay twice when the delete fails and the claim later goes stale", async () => {
+    await farmer();
+    const database = await getTestDatabase();
+    await database.insert(farmExtraction).values({
+      id: "extraction-d",
+      userId: "farm-user",
+      extractorSlot: 0,
+      cropItemId: "crop-1",
+      seedItemId: "seed-1",
+      cropQuantity: 1,
+      seedQuantity: 3,
+      startedAt: new Date(Date.now() - 120_000),
+      finishAt: new Date(Date.now() - 60_000),
+    } as never);
+
+    // The seed grant commits, then the delete of the settled row fails transiently.
+    const failingDelete = new Proxy(database as object, {
+      get(target, property) {
+        if (property === "delete") {
+          return (table: unknown) => {
+            if (table === farmExtraction) throw new Error("simulated delete failure");
+            return (Reflect.get(target, property) as (arg: unknown) => unknown).call(
+              target,
+              table,
+            );
+          };
+        }
+        return Reflect.get(target, property);
+      },
+    });
+    await farmingRouter
+      .createCaller({ drizzle: failingDelete, userId: "farm-user" } as never)
+      .getFarmState();
+
+    const [afterGrant] = await database.select().from(farmExtraction);
+    expect(afterGrant?.settledAt).not.toBeNull();
+    expect((await database.select().from(userItem))[0]?.quantity).toBe(3);
+
+    // Age the claim past the takeover window: a row that has already paid must be cleaned
+    // up, never re-granted, however stale its claim looks.
+    await database
+      .update(farmExtraction)
+      .set({ claimedAt: new Date(Date.now() - 3_600_000) })
+      .where(eq(farmExtraction.id, "extraction-d"));
+
+    await (await caller("farm-user")).getFarmState();
+
+    const stacks = await database
+      .select()
+      .from(userItem)
+      .where(eq(userItem.itemId, "seed-1"));
+    expect(stacks).toHaveLength(1);
+    expect(stacks[0]?.quantity).toBe(3);
+    expect(await database.select().from(farmExtraction)).toHaveLength(0);
+  });
+
   it("keeps a finished extraction when its payout write fails, and settles it later", async () => {
     await farmer();
     const database = await getTestDatabase();
