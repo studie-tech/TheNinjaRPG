@@ -75,8 +75,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getAi.invalidate();
-          await utils.profile.getPublicUser.invalidate();
+          await Promise.all([
+            utils.profile.getAi.invalidate(),
+            utils.profile.getPublicUser.invalidate(),
+          ]);
         }
       },
     });
@@ -86,8 +88,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getAi.invalidate();
-          await utils.profile.getPublicUser.invalidate();
+          await Promise.all([
+            utils.profile.getAi.invalidate(),
+            utils.profile.getPublicUser.invalidate(),
+          ]);
         }
       },
     });

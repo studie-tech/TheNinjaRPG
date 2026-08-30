@@ -220,9 +220,11 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
-          await utils.sensei.getRequests.invalidate();
-          await utils.sensei.getStudents.invalidate();
+          await Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.sensei.getRequests.invalidate(),
+            utils.sensei.getStudents.invalidate(),
+          ]);
         }
       },
     });
@@ -232,8 +234,10 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
-          await utils.sensei.getRequests.invalidate();
+          await Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.sensei.getRequests.invalidate(),
+          ]);
         }
       },
     });
@@ -243,9 +247,11 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
-          await utils.sensei.getRequests.invalidate();
-          await utils.sensei.getStudents.invalidate();
+          await Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.sensei.getRequests.invalidate(),
+            utils.sensei.getStudents.invalidate(),
+          ]);
         }
       },
     });

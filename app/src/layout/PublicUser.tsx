@@ -1275,8 +1275,10 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
-        await utils.jutsu.getPublicUserJutsus.invalidate();
+        await Promise.all([
+          utils.profile.getPublicUser.invalidate(),
+          utils.jutsu.getPublicUserJutsus.invalidate(),
+        ]);
       }
     },
   });
@@ -2104,8 +2106,10 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
-        await utils.logs.getContentChanges.invalidate();
+        await Promise.all([
+          utils.profile.getPublicUser.invalidate(),
+          utils.logs.getContentChanges.invalidate(),
+        ]);
       }
     },
   });
@@ -2114,8 +2118,10 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
-        await utils.logs.getContentChanges.invalidate();
+        await Promise.all([
+          utils.profile.getPublicUser.invalidate(),
+          utils.logs.getContentChanges.invalidate(),
+        ]);
       }
     },
   });

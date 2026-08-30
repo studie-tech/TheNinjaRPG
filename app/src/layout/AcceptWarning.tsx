@@ -33,8 +33,10 @@ const AcceptWarning: React.FC = () => {
       showMutationToast(data);
       if (data.success) {
         setIsModalOpen(false);
-        await utils.profile.getUser.invalidate();
-        await utils.reports.getBan.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.reports.getBan.invalidate(),
+        ]);
       }
     },
   });

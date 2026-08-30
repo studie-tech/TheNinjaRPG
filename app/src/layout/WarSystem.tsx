@@ -125,9 +125,11 @@ export const WarRoom: React.FC<{
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.war.getActiveWars.invalidate();
-          await utils.war.getEndedWars.invalidate();
-          await utils.war.getAllyOffers.invalidate();
+          await Promise.all([
+            utils.war.getActiveWars.invalidate(),
+            utils.war.getEndedWars.invalidate(),
+            utils.war.getAllyOffers.invalidate(),
+          ]);
         }
       },
     });
@@ -640,8 +642,10 @@ export const SectorWar: React.FC<{
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.war.getActiveWars.invalidate();
-        await utils.war.getEndedWars.invalidate();
+        await Promise.all([
+          utils.war.getActiveWars.invalidate(),
+          utils.war.getEndedWars.invalidate(),
+        ]);
       }
     },
   });
@@ -1214,8 +1218,10 @@ export const VillageWar: React.FC<{
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.war.getActiveWars.invalidate();
-          await utils.war.getAllyOffers.invalidate();
+          await Promise.all([
+            utils.war.getActiveWars.invalidate(),
+            utils.war.getAllyOffers.invalidate(),
+          ]);
         }
       },
     });
@@ -1267,8 +1273,10 @@ export const VillageWar: React.FC<{
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.war.getActiveWars.invalidate();
-        await utils.war.getEndedWars.invalidate();
+        await Promise.all([
+          utils.war.getActiveWars.invalidate(),
+          utils.war.getEndedWars.invalidate(),
+        ]);
       }
     },
   });

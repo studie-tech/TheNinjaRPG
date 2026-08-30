@@ -253,9 +253,11 @@ export default function MyJutsu() {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success && userData) {
-          await utils.jutsu.getUserJutsus.invalidate(); // Refresh Jutsu list
-          await utils.jutsu.getRecentTransfers.invalidate(); // 🔹 Refresh free transfers
-          await utils.profile.getUser.invalidate(); // Refresh user profile to update free transfer count
+          await Promise.all([
+            utils.jutsu.getUserJutsus.invalidate(), // Refresh Jutsu list
+            utils.jutsu.getRecentTransfers.invalidate(), // 🔹 Refresh free transfers
+            utils.profile.getUser.invalidate(), // Refresh user profile to update free transfer count
+          ]);
           if (usedTransfers >= freeTransfers && transferCost > 0) {
             await updateUser({
               reputationPoints: userData.reputationPoints - transferCost,

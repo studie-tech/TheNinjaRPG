@@ -36,8 +36,10 @@ const DeleteUserButton: React.FC<DeleteUserButtonProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
-          await utils.profile.getPublicUser.invalidate();
+          await Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.profile.getPublicUser.invalidate(),
+          ]);
           router.push("/");
         }
       },
@@ -52,8 +54,10 @@ const DeleteUserButton: React.FC<DeleteUserButtonProps> = (props) => {
             event: "toggle_deletion",
             character: userData.userId,
           });
-          await utils.profile.getUser.invalidate();
-          await utils.profile.getPublicUser.invalidate();
+          await Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.profile.getPublicUser.invalidate(),
+          ]);
         }
       },
     });

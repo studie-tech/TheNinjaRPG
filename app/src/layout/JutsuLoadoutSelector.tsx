@@ -35,9 +35,11 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getUser.invalidate();
-        await utils.item.getUserItems.invalidate();
-        await utils.jutsu.getUserJutsus.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.item.getUserItems.invalidate(),
+          utils.jutsu.getUserJutsus.invalidate(),
+        ]);
       }
     },
   });

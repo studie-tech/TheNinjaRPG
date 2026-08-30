@@ -122,10 +122,12 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
   const onSuccess = async (data: BaseServerResponse) => {
     showMutationToast(data);
     if (data.success) {
-      await utils.reports.getAll.invalidate();
-      await utils.reports.get.invalidate();
-      await utils.comments.getReportComments.invalidate();
-      await utils.profile.getUser.invalidate();
+      await Promise.all([
+        utils.reports.getAll.invalidate(),
+        utils.reports.get.invalidate(),
+        utils.comments.getReportComments.invalidate(),
+        utils.profile.getUser.invalidate(),
+      ]);
       reset();
     }
   };

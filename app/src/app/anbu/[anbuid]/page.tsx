@@ -216,8 +216,10 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   const onSuccess = async (data: BaseServerResponse) => {
     showMutationToast(data);
     if (data.success) {
-      await utils.anbu.get.invalidate();
-      await utils.anbu.getRequests.invalidate();
+      await Promise.all([
+        utils.anbu.get.invalidate(),
+        utils.anbu.getRequests.invalidate(),
+      ]);
     }
   };
 

@@ -174,8 +174,10 @@ const PityBloodlineRoll: React.FC<{
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getUser.invalidate();
-        await utils.bloodline.getItemRolls.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.bloodline.getItemRolls.invalidate(),
+        ]);
       }
     },
   });
@@ -294,8 +296,10 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
-          await utils.blackmarket.getRyoOffers.invalidate();
+          await Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.blackmarket.getRyoOffers.invalidate(),
+          ]);
         }
       },
     });
@@ -305,8 +309,10 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
-          await utils.blackmarket.getRyoOffers.invalidate();
+          await Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.blackmarket.getRyoOffers.invalidate(),
+          ]);
         }
       },
     });
@@ -316,8 +322,10 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
-          await utils.blackmarket.getRyoOffers.invalidate();
+          await Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.blackmarket.getRyoOffers.invalidate(),
+          ]);
         }
       },
     });
