@@ -164,8 +164,15 @@ emptymigration: ensure-env # Create database migration file
 test: # Push schema to db without creating migrations
 	@echo "${YELLOW}Running unit tests ${RESET}"
 	cd app && bun test
-	@echo "${YELLOW}Running database-backed suites (own process) ${RESET}"
-	cd app && bun test ./tests/server/api/farming.router.dbtest.ts
+# Suites named *.dbtest.ts drive real tRPC routers, so they cannot share a process with
+# the suites that globally mock "@/server/api/trpc" and "@/routers/profile" -- bun keeps
+# one module registry for the whole run, and those mocks would leave a router with no
+# createCaller and a fetchUser returning undefined. They are excluded from bun's default
+# glob and run here instead. Without TEST_MYSQL_URL they skip, exactly like the other
+# database-backed suites.
+	@echo "${YELLOW}Running router suites in a clean module registry ${RESET}"
+	@cd app && files=$$(find ./tests -name '*.dbtest.ts'); \
+		if [ -n "$$files" ]; then bun test $$files; else echo "  (none)"; fi
 
 .PHONY: lint
 lint: # Run linting of the project
