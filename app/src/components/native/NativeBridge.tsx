@@ -18,6 +18,7 @@ import {
   widgets,
 } from "@/libs/native";
 import { useUserData } from "@/utils/UserContext";
+import { getStrucBoost } from "@/utils/village";
 
 /**
  * Everything the native shell needs wired up once, mounted from the root layout.
@@ -128,10 +129,7 @@ export default function NativeBridge() {
       unreadNotifications: userData.unreadNotifications,
       // Without these the Quest widget and the Status widget's hospital line have
       // nothing to render, even though the snapshot type declares them.
-      hospitalUntil:
-        userData.status === "HOSPITALIZED"
-          ? calcHealFinish({ user: userData, timeDiff }).toISOString()
-          : undefined,
+      hospitalUntil: hospitalFinishesAt(userData, timeDiff),
       activeQuest: quest?.name,
       questProgress: quest?.progress,
     };
@@ -187,4 +185,26 @@ const activeQuest = (
   if (!goals || goals.length === 0) return { name: entry.quest.name };
   const done = goals.filter((goal) => goal.done).length;
   return { name: entry.quest.name, progress: done / goals.length };
+};
+
+/**
+ * When the player leaves hospital, or undefined if they are not in one.
+ *
+ * Two things this has to get right that a bare `calcHealFinish` does not. The village
+ * hospital speed structure shortens the stay, exactly as the hospital screen applies it —
+ * without it the widget would keep counting after the player was already healed. And the
+ * result is rounded to the minute, because `calcHealFinish` derives its timestamp from
+ * `Date.now()` and would otherwise produce a different value on every regeneration tick,
+ * defeating the snapshot deduplication and spending WidgetKit's daily reload budget on
+ * writes that change nothing anyone can see.
+ */
+const hospitalFinishesAt = (
+  userData: NonNullable<ReturnType<typeof useUserData>["data"]>,
+  timeDiff: number,
+): string | undefined => {
+  if (userData.status !== "HOSPITALIZED") return undefined;
+  const boost = getStrucBoost("hospitalSpeedupPerLvl", userData.village?.structures);
+  const finish = calcHealFinish({ user: userData, timeDiff, boost });
+  const rounded = Math.round(finish.getTime() / 60_000) * 60_000;
+  return new Date(rounded).toISOString();
 };
