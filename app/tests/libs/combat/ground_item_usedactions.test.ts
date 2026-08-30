@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 // "used the item but it didn't count" objective targets a GROUND consumable, so this pins down
 // whether the real action pipeline captures such usage.
 
-vi.mock("@/server/db", () => ({ drizzleDB: {} }));
 // Override ONLY checkFriendlyFire — do NOT stub applyEffects (it leaks process-globally under
 // `bun test` into the real-applyEffects damage-credit suites and crashes them). insertAction
 // never calls applyEffects here, so leaving it real is inert.

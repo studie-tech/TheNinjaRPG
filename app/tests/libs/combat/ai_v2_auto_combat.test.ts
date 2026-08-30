@@ -12,7 +12,6 @@ import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
  * for auto-combat humans — they wait out the turn instead of dying.
  */
 
-vi.mock("@/server/db", () => ({ drizzleDB: {} }));
 import { TerrainHex } from "@/libs/hexgrid";
 
 const DAMAGE_JUTSU = "j-damage";

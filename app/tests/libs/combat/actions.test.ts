@@ -19,10 +19,6 @@ vi.mock("@/libs/hexgrid", () => ({
 }));
 
 /** Avoid executing real db/env when transitive imports touch `@/server/db`. */
-vi.mock("@/server/db", () => ({
-  drizzleDB: {},
-}));
-
 import {
   actionPointsAfterAction,
   getActionPointCost,

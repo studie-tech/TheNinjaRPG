@@ -11,7 +11,9 @@
  * back with `resetServerModuleStubs`, so nothing leaks to the suites that never asked.
  */
 import { vi } from "vitest";
+import * as actualDb from "@/server/db";
 import * as actualProfile from "@/routers/profile";
+import { peekTestDatabase } from "./testDatabase";
 
 type AnyFn = (...args: never[]) => unknown;
 
@@ -30,6 +32,34 @@ const delegating = <T extends object>(actual: T) =>
 
 vi.mock("@/routers/profile", () => delegating(actualProfile));
 
+/**
+ * `drizzleDB` is a module-level singleton, so suites that exercise cron routes cannot inject a
+ * client and used to replace the whole module -- globally, for everyone. Reads now resolve, in
+ * order: whatever the current suite passed to `stubDatabase`, the throwaway database once it is
+ * connected, and only then the real export. A suite that never opts in therefore talks to the
+ * test database rather than the developer's own, and a suite that does opt in keeps its stub to
+ * itself.
+ */
+let databaseStub: object | null = null;
+
+const databaseProxy = new Proxy(
+  {},
+  {
+    get(_target, property) {
+      const source =
+        databaseStub ?? peekTestDatabase() ?? (actualDb.drizzleDB as unknown as object);
+      return (source as Record<string | symbol, unknown>)[property];
+    },
+  },
+);
+
+vi.mock("@/server/db", () => ({ ...actualDb, drizzleDB: databaseProxy }));
+
+/** Route `drizzleDB` to `stub` for the current suite. */
+export const stubDatabase = (stub: object) => {
+  databaseStub = stub;
+};
+
 /** Route one `@/routers/profile` export to `implementation` for the current suite. */
 export const stubProfile = (
   name: keyof typeof actualProfile & string,
@@ -41,4 +71,5 @@ export const stubProfile = (
 /** Hand every stubbed export back to its real implementation. */
 export const resetServerModuleStubs = () => {
   stubs.clear();
+  databaseStub = null;
 };

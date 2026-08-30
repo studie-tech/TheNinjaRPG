@@ -1,6 +1,7 @@
 // @vitest-environment node
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type DailyOverworldTestMocks = {
   authenticate: ReturnType<typeof vi.fn>;
@@ -53,17 +54,6 @@ vi.mock("@/libs/overworldAi", () => ({
 vi.mock("@/server/utils/sectorMap", () => ({
   fetchPublishedSectorMaps: getDailyOverworldTestMocks().fetchMaps,
 }));
-vi.mock("@/server/db", () => ({
-  drizzleDB: {
-    query: {
-      overworldAiPlacement: {
-        findMany: getDailyOverworldTestMocks().findMany,
-      },
-    },
-    update: getDailyOverworldTestMocks().update,
-  },
-}));
-
 import { GET } from "@/app/api/daily-overworld-ai/route";
 
 const request = () => new Request("https://example.com/api/daily-overworld-ai");
@@ -78,7 +68,17 @@ const placement = (id: string, sector: number) => ({
 });
 
 describe("daily-overworld-ai route", () => {
+  afterEach(resetServerModuleStubs);
+
   beforeEach(() => {
+    stubDatabase({
+      query: {
+        overworldAiPlacement: {
+          findMany: getDailyOverworldTestMocks().findMany,
+        },
+      },
+      update: getDailyOverworldTestMocks().update,
+    });
     vi.clearAllMocks();
     mocks.updateSets.length = 0;
     mocks.authenticate.mockReturnValue(null);

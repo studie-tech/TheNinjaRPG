@@ -13,8 +13,6 @@ import type { CompleteBattle, BattleUserState } from "@/libs/combat/types";
  */
 
 // Avoid loading the real DB/env when transitive imports touch @/server/db.
-vi.mock("@/server/db", () => ({ drizzleDB: {} }));
-
 import { TerrainHex } from "@/libs/hexgrid";
 
 const mkUser = (over: Partial<BattleUserState>): BattleUserState =>
