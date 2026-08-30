@@ -211,10 +211,6 @@ export const devContributionRouter = createTRPCRouter({
     }),
 
   /**
-   * Step 2: confirm the gist exists, is owned by the claimed login, and holds
-   * the nonce we issued to this game account.
-   */
-  /**
    * Unlink the caller's verified GitHub login.
    *
    * githubLogin is unique, so without this a login verified on one account
@@ -250,6 +246,10 @@ export const devContributionRouter = createTRPCRouter({
       return { success: true, message: "GitHub account unlinked" };
     }),
 
+  /**
+   * Step 2: confirm the gist exists, is owned by the claimed login, and holds
+   * the nonce we issued to this game account.
+   */
   confirmGithubVerification: protectedProcedure
     .input(confirmGithubVerificationInput)
     .output(baseServerResponse)

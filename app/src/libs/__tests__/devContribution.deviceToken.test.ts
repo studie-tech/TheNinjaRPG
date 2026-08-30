@@ -19,9 +19,10 @@ describe("device tokens", () => {
       ok: true,
       userId: "user_123",
       jti: "jti-1",
-      // iat is returned so the caller can compare it against the per-user
-      // revocation epoch.
-      iat: Math.floor(NOW / 1000),
+      // Milliseconds, not the second-precision `iat` claim: the caller compares
+      // this against the per-user revocation epoch, and a token minted in the
+      // same second as a revoke-all has to be orderable against it.
+      iatMs: NOW,
       exp: Math.floor(NOW / 1000) + Math.floor(DEVICE_TOKEN_TTL_MS / 1000),
     });
   });
@@ -102,5 +103,31 @@ describe("PKCE + connect codes", () => {
   it("hashes connect codes deterministically", () => {
     expect(hashConnectCode("code-1")).toBe(hashConnectCode("code-1"));
     expect(hashConnectCode("code-1")).not.toBe(hashConnectCode("code-2"));
+  });
+});
+
+describe("revocation ordering within a second", () => {
+  it("keeps issuance orderable against a revoke-all in the same second", () => {
+    // iat is floored to a second, so a token minted at T+100ms and a revoke-all
+    // at T+900ms both reduce to T and "issued before the revocation" cannot be
+    // decided. Changing the comparison to <= is not a fix either: it would then
+    // reject a legitimate replacement token minted just after the revocation in
+    // that same second. Millisecond issuance separates both cases.
+    const second = 1_700_000_000_000;
+    const before = verifyDeviceToken(
+      SECRET,
+      signDeviceToken(SECRET, "u", second + 100, "a"),
+      second + 2000,
+    );
+    const after = verifyDeviceToken(
+      SECRET,
+      signDeviceToken(SECRET, "u", second + 950, "b"),
+      second + 2000,
+    );
+    if (!before.ok || !after.ok) throw new Error("expected both tokens to verify");
+
+    const revokedAt = second + 900;
+    expect(before.iatMs < revokedAt).toBe(true); // leaked token is revoked
+    expect(after.iatMs < revokedAt).toBe(false); // replacement survives
   });
 });

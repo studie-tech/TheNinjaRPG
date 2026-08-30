@@ -17,6 +17,7 @@ import {
   pullRequestDiff,
   pushBranch,
   removeWorktree,
+  setGitAbortSignal,
   slugFromUrl,
 } from "./git";
 import { jobsDir, loadSettings } from "./state";
@@ -107,6 +108,8 @@ export interface RunnerDeps {
   log: (line: string) => void;
   isAborted: () => boolean;
   abort: () => void;
+  /** Aborts the git/gh processes that publish, not just the agent. */
+  signal?: AbortSignal;
 }
 
 export interface RunnerResult {
@@ -129,46 +132,51 @@ interface AgentRun {
 // justifies handing an agent write or execute access, and the prompt they are
 // given is built from attacker-authored GitHub text.
 //
-// The allowlist is the actual boundary: a tool that is not listed is not
-// pre-approved, and in headless mode there is nobody to approve it, so the call
-// fails instead of running. The denylist is belt-and-braces for the read-only
-// case, where an escape would be the most damaging.
+// What the allowlist bounds is WHICH TOOLS run unprompted, not which paths they
+// touch. Read/Grep/Glob are not path-scoped, so this does not stop an injected
+// prompt reading files elsewhere on the machine; SENSITIVE_READ_DENY below
+// enumerates the worst targets, which is mitigation rather than a boundary. A
+// real boundary needs an OS/container sandbox around the agent process — codex
+// has one (--sandbox), the Claude CLI does not expose one here.
 const READ_ONLY_TOOLS = "Read,Grep,Glob";
 const READ_ONLY_DENIED = "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch";
 
-// Implementation work needs to edit files and run the project's checks. A bare
-// "Bash" entry would pre-approve *every* shell command, which against a prompt
-// built from an attacker-authored issue is barely better than the permission
-// bypass this replaced — so Bash is pre-approved only for the specific commands
-// the job description asks for. Anything else still has to ask, and headless
-// runs have nobody to ask, so it fails instead of running.
-const IMPLEMENT_BASH = [
-  "Bash(bun test:*)",
-  "Bash(bun run test:*)",
-  "Bash(bun run lint:*)",
-  "Bash(bun run typecheck:*)",
-  "Bash(bun install)",
-  "Bash(npm test:*)",
-  "Bash(npm run test:*)",
-  "Bash(npm run lint:*)",
-  "Bash(pnpm test:*)",
-  "Bash(yarn test:*)",
-  "Bash(make test)",
-  "Bash(make lint)",
-  "Bash(make typecheck)",
-  "Bash(git status:*)",
-  "Bash(git diff:*)",
-];
-const IMPLEMENT_TOOLS = [
-  "Read",
-  "Grep",
-  "Glob",
-  "Edit",
-  "Write",
-  ...IMPLEMENT_BASH,
-].join(",");
-// Never pre-approved for implementation either: network egress and notebooks.
-const IMPLEMENT_DENIED = "WebFetch,WebSearch,NotebookEdit";
+// Implementation work needs to edit files. It is deliberately given NO shell.
+//
+// An earlier version pre-approved a list of "safe" commands (bun test, make
+// test, ...). That is not a boundary: the agent also holds Edit and Write, so it
+// can rewrite the package script, the Makefile target or the test file that an
+// allowlisted command then executes. The outer string still matches the
+// allowlist while arbitrary host code runs as its child — prompt injection in an
+// attacker-authored issue regains execution.
+//
+// Matching on command strings cannot fix that, because the thing being matched
+// is not the thing being run. So implementation jobs edit files and stop; the
+// pull request they open is what runs the project's checks, in CI, where the
+// definitions are trusted.
+const IMPLEMENT_TOOLS = ["Read", "Grep", "Glob", "Edit", "Write"].join(",");
+// Never pre-approved for implementation: execution, network egress, notebooks.
+const IMPLEMENT_DENIED = "Bash,WebFetch,WebSearch,NotebookEdit";
+
+// Paths an agent has no business reading on a contributor's machine. Deny rules
+// are consulted before allow rules, so these hold even though Read is allowed.
+//
+// This enumerates known-bad targets and therefore cannot be complete — it raises
+// the cost of a prompt-injection read, it does not prevent one. Treat it as the
+// last line, not the boundary.
+const SENSITIVE_READ_DENY = [
+  "~/.ssh/**",
+  "~/.aws/**",
+  "~/.config/gh/**",
+  "~/.gnupg/**",
+  "~/.kube/**",
+  "~/.npmrc",
+  "~/.netrc",
+  "~/.git-credentials",
+  "~/.tnr-dev-client/**",
+  "**/.env",
+  "**/.env.*",
+].flatMap((path) => [`Read(${path})`, `Grep(${path})`, `Glob(${path})`]);
 
 // Runs the agent CLI headlessly with a scrubbed environment: no GitHub
 // credentials, no git credential prompts. The agent's own LLM auth (stored in
@@ -185,11 +193,15 @@ function runAgent(
   isAborted: () => boolean,
   readOnly: boolean,
 ): Promise<AgentRun> {
+  // The prompt goes in on stdin, never in argv. A PR review carries the diff, and
+  // Windows caps an entire command line at 32767 characters (CreateProcessW), so
+  // a perfectly ordinary pull request would otherwise stop the agent launching
+  // at all. Keeping argv to small control flags also keeps the untrusted text
+  // out of process listings.
   const args =
     agent === "CLAUDE"
       ? [
           "-p",
-          prompt,
           "--output-format",
           "stream-json",
           "--verbose",
@@ -197,6 +209,10 @@ function runAgent(
           readOnly ? READ_ONLY_TOOLS : IMPLEMENT_TOOLS,
           "--disallowed-tools",
           readOnly ? READ_ONLY_DENIED : IMPLEMENT_DENIED,
+          // Deny rules are consulted first, so these hold despite Read being
+          // allowed. Mitigation, not a boundary — see SENSITIVE_READ_DENY.
+          "--settings",
+          JSON.stringify({ permissions: { deny: SENSITIVE_READ_DENY } }),
           ...(readOnly
             ? []
             : // Implementation work has to edit files in its worktree.
@@ -211,7 +227,8 @@ function runAgent(
           // must ask for write access explicitly or it cannot change a file.
           "--sandbox",
           readOnly ? "read-only" : "workspace-write",
-          prompt,
+          // Read the prompt from stdin rather than argv.
+          "-",
         ];
 
   const env: NodeJS.ProcessEnv = { ...process.env };
@@ -234,9 +251,15 @@ function runAgent(
     const child = spawn(cliPath, args, {
       cwd,
       env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
       detached: true,
     });
+    // Feed the prompt and close, so the CLI sees end-of-input and starts.
+    child.stdin?.on("error", () => {
+      // The child can exit before the write drains (a bad flag, a missing
+      // binary); the close/error handlers below own that outcome.
+    });
+    child.stdin?.end(prompt, "utf8");
     activeChild = child;
     // "exit" fires when the process itself is gone. "close" additionally waits
     // for its stdio to drain, which a grandchild that inherited the pipe can
@@ -494,7 +517,8 @@ export function buildPrompt(job: SerializedJob): string {
         header,
         "",
         "Implement the fix in this repository. Make focused, minimal changes.",
-        "Run the project's tests and linters if they are set up, and make sure they pass.",
+        "You have no shell: edit files only. The pull request opened from your work",
+        "runs the project's checks in CI, so make the change correct by inspection.",
         "Do not push or open pull requests yourself; commit your work and stop.",
       ].join("\n");
     case "PR_REVIEW":
@@ -556,6 +580,10 @@ export async function runJob(deps: RunnerDeps): Promise<RunnerResult> {
   // Everything after a successful agent run is publicly visible (a pushed
   // branch, a cross-fork PR, a review, a comment). A Stop that lands in that
   // window must still take effect, so re-check immediately before publishing.
+  // Publication runs as separate git/gh processes; give them the signal so Stop
+  // terminates the one in flight instead of only being noticed between them.
+  setGitAbortSignal(deps.signal);
+
   const assertNotAborted = () => {
     if (deps.isAborted()) throw new Error("Aborted by user");
   };
@@ -575,7 +603,8 @@ export async function runJob(deps: RunnerDeps): Promise<RunnerResult> {
 
       const worktree = join(jobsDir(), `job-${job.id}-${Date.now()}`);
       mkdirSync(worktree, { recursive: true });
-      const created = await createWorktree(repoPath, worktree);
+      const created = await createWorktree(repoPath, worktree, slug);
+      assertNotAborted();
       if (!created.ok) {
         await removeWorktree(repoPath, worktree);
         throw new Error(`Failed to create worktree: ${created.stderr}`);
@@ -607,6 +636,7 @@ export async function runJob(deps: RunnerDeps): Promise<RunnerResult> {
           worktree,
           `Fix ${slug} #${job.refNumber}\n\nTheNinja-RPG dev job ${job.id}`,
         );
+        assertNotAborted();
         if (!committed.ok) throw new Error(`Commit failed: ${committed.stderr}`);
         await checkoutBranch(worktree, branch);
 
@@ -620,11 +650,15 @@ export async function runJob(deps: RunnerDeps): Promise<RunnerResult> {
         // still leaves nothing behind on GitHub.
         assertNotAborted();
         const pushed = await pushBranch(worktree, branch, login);
+        assertNotAborted();
         if (!pushed.ok) {
           throw new Error(
             `Push failed: ${pushed.stderr}. Add a remote pointing at your fork of ${slug}.`,
           );
         }
+        // The push may have completed just before Stop was observed. The branch
+        // is on the contributor's own fork and harmless there; what must not
+        // follow is a public pull request against upstream.
         assertNotAborted();
         const pr = await createPullRequest({
           slug,
@@ -637,7 +671,9 @@ export async function runJob(deps: RunnerDeps): Promise<RunnerResult> {
             "Generated by a TheNinja-RPG dev contribution run.",
           ].join("\n"),
         });
+        assertNotAborted();
         if (!pr.ok) throw new Error(pr.error);
+        assertNotAborted();
         resultUrl = pr.url;
         log(`PR created: ${resultUrl}`);
       } finally {
@@ -649,7 +685,8 @@ export async function runJob(deps: RunnerDeps): Promise<RunnerResult> {
       if (!repoPath) throw new Error("No repository path configured");
       const worktree = join(jobsDir(), `job-${job.id}-${Date.now()}`);
       mkdirSync(worktree, { recursive: true });
-      const created = await createWorktree(repoPath, worktree);
+      const created = await createWorktree(repoPath, worktree, slug);
+      assertNotAborted();
       if (!created.ok) {
         await removeWorktree(repoPath, worktree);
         throw new Error(`Failed to create worktree: ${created.stderr}`);
@@ -706,7 +743,9 @@ export async function runJob(deps: RunnerDeps): Promise<RunnerResult> {
               slug,
               body: `## Dev-client triage\n\n${text}`,
             });
+        assertNotAborted();
         if (!post.ok) throw new Error(post.error);
+        assertNotAborted();
         resultUrl = post.url;
         log(`${isReview ? "Review" : "Triage comment"} posted: ${resultUrl}`);
       } finally {
@@ -751,6 +790,7 @@ export async function runJob(deps: RunnerDeps): Promise<RunnerResult> {
       error: message,
     };
   } finally {
+    setGitAbortSignal(undefined);
     stopHeartbeat();
   }
 }

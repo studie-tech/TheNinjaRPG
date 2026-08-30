@@ -115,6 +115,32 @@ function publicRun(run: RunState): RunState {
   return { ...run, log: run.log.slice(-300) };
 }
 
+/**
+ * The verified GitHub login, cached from getProfile.
+ *
+ * /status is polled every few seconds, so it must not make a network call each
+ * time; but the login lives on the server profile (the connect flow never writes
+ * it locally), so it has to come from there rather than from the token file.
+ */
+let verifiedLogin: string | null = null;
+let verifiedLoginAt = 0;
+const VERIFIED_LOGIN_TTL_MS = 30_000;
+
+const refreshVerifiedLogin = async (ctx: SidecarContext, force = false) => {
+  if (!loadToken()?.deviceToken) {
+    verifiedLogin = null;
+    return;
+  }
+  if (!force && Date.now() - verifiedLoginAt < VERIFIED_LOGIN_TTL_MS) return;
+  try {
+    const profile = await ctx.api.getProfile();
+    verifiedLogin = profile.profile?.githubLogin ?? null;
+    verifiedLoginAt = Date.now();
+  } catch {
+    // A stale token or an unreachable server must not break /status.
+  }
+};
+
 function buildStatus(ctx: SidecarContext): StatusResponse {
   const settings = loadSettings();
   const token = loadToken();
@@ -137,7 +163,7 @@ function buildStatus(ctx: SidecarContext): StatusResponse {
       connected: Boolean(token?.deviceToken),
       // Mirrors what the server last told us; it is only ever set by the
       // verified challenge flow on the website, never locally.
-      githubLogin: token?.githubLogin ?? null,
+      githubLogin: verifiedLogin,
       tokenExpiresAt: token?.expiresAt ?? null,
       tokenExpired: token ? token.expiresAt < now : false,
     },
@@ -177,6 +203,7 @@ async function cachedClis(): Promise<{
 }
 
 async function handleStatus(ctx: SidecarContext): Promise<StatusResponse> {
+  await refreshVerifiedLogin(ctx);
   const status = buildStatus(ctx);
   status.clis = await cachedClis();
   return status;
@@ -396,6 +423,7 @@ async function handleClaim(
         },
         isAborted: () => ctx.abortController?.signal.aborted ?? false,
         abort: () => ctx.abortController?.abort(),
+        signal: ctx.abortController?.signal,
       });
 
       const entry: HistoryEntry = {
@@ -575,6 +603,31 @@ export function startServer(port: number, log: (line: string) => void): Server {
         }
         if (req.method === "POST" && path === "/auth/signin") {
           return json(handleSignIn(ctx), 200, origin);
+        }
+        if (req.method === "POST" && path === "/github/verify/request") {
+          const body = await readJson<{ githubLogin?: string }>(req);
+          const login = body?.githubLogin?.trim();
+          if (!login) return json({ error: "githubLogin is required" }, 400);
+          return json(await ctx.api.requestGithubVerification({ githubLogin: login }));
+        }
+        if (req.method === "POST" && path === "/github/verify/confirm") {
+          const body = await readJson<{ githubLogin?: string; gistId?: string }>(req);
+          const login = body?.githubLogin?.trim();
+          const gistId = body?.gistId?.trim();
+          if (!login || !gistId) {
+            return json({ error: "githubLogin and gistId are required" }, 400);
+          }
+          const result = await ctx.api.confirmGithubVerification({
+            githubLogin: login,
+            gistId,
+          });
+          await refreshVerifiedLogin(ctx, true);
+          return json(result);
+        }
+        if (req.method === "POST" && path === "/github/unlink") {
+          const result = await ctx.api.unlinkGithubAccount();
+          await refreshVerifiedLogin(ctx, true);
+          return json(result);
         }
         if (req.method === "POST" && path === "/auth/signout") {
           return json(await handleSignOut(ctx), 200, origin);

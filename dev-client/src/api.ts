@@ -76,6 +76,20 @@ export const sidecar = {
   claim: (agent: Agent) =>
     request<{ claimed: boolean; message?: string }>("/jobs/claim", postJson({ agent })),
   abort: () => request<{ aborted: boolean }>("/jobs/abort", postJson({})),
+  requestGithubVerification: (githubLogin: string) =>
+    request<{
+      success: boolean;
+      message?: string;
+      nonce?: string;
+      instructions?: string;
+    }>("/github/verify/request", postJson({ githubLogin })),
+  confirmGithubVerification: (githubLogin: string, gistId: string) =>
+    request<{ success: boolean; message?: string }>(
+      "/github/verify/confirm",
+      postJson({ githubLogin, gistId }),
+    ),
+  unlinkGithubAccount: () =>
+    request<{ success: boolean; message?: string }>("/github/unlink", postJson({})),
 };
 
 // Tauri commands; resolve to null when running outside the shell.

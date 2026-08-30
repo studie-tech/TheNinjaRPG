@@ -145,6 +145,27 @@ export class GameApi {
     return this.call<BaseOutput>("mutation", "updateProfile", input);
   }
 
+  requestGithubVerification(input: {
+    githubLogin: string;
+  }): Promise<RequestGithubVerificationOutput> {
+    return this.call<RequestGithubVerificationOutput>(
+      "mutation",
+      "requestGithubVerification",
+      input,
+    );
+  }
+
+  confirmGithubVerification(input: {
+    githubLogin: string;
+    gistId: string;
+  }): Promise<BaseOutput> {
+    return this.call<BaseOutput>("mutation", "confirmGithubVerification", input);
+  }
+
+  unlinkGithubAccount(): Promise<BaseOutput> {
+    return this.call<BaseOutput>("mutation", "unlinkGithubAccount");
+  }
+
   revokeDeviceToken(): Promise<BaseOutput> {
     return this.call<BaseOutput>("mutation", "revokeDeviceToken");
   }
@@ -182,6 +203,11 @@ export class GameApi {
 export interface BaseOutput {
   success: boolean;
   message?: string;
+}
+
+export interface RequestGithubVerificationOutput extends BaseOutput {
+  nonce?: string;
+  instructions?: string;
 }
 
 export interface ExchangeConnectCodeOutput extends BaseOutput {

@@ -92,7 +92,7 @@ export const createAppTRPCContext = async (options: {
             active = await isDeviceTokenActive({
               jti: verified.jti,
               userId: verified.userId,
-              iat: verified.iat,
+              iatMs: verified.iatMs,
             });
           } catch {
             active = false;

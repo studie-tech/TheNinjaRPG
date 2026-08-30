@@ -17,6 +17,67 @@ export function SettingsView({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ghLogin, setGhLogin] = useState("");
+  const [ghNonce, setGhNonce] = useState<string | null>(null);
+  const [ghInstructions, setGhInstructions] = useState("");
+  const [gistId, setGistId] = useState("");
+  const [ghBusy, setGhBusy] = useState(false);
+  const [ghMessage, setGhMessage] = useState<string | null>(null);
+
+  // Step 1: ask the server for a one-time code bound to (game account, login).
+  const requestCode = async () => {
+    setGhBusy(true);
+    setGhMessage(null);
+    try {
+      const res = await sidecar.requestGithubVerification(ghLogin.trim());
+      if (!res.success) {
+        setGhMessage(res.message ?? "Could not start verification");
+        return;
+      }
+      setGhNonce(res.nonce ?? null);
+      setGhInstructions(res.instructions ?? "");
+    } catch (e) {
+      setGhMessage(e instanceof Error ? e.message : "Could not start verification");
+    } finally {
+      setGhBusy(false);
+    }
+  };
+
+  // Step 2: the server re-reads the gist and checks owner + code itself.
+  const confirmCode = async () => {
+    setGhBusy(true);
+    setGhMessage(null);
+    try {
+      const res = await sidecar.confirmGithubVerification(
+        ghLogin.trim(),
+        gistId.trim(),
+      );
+      setGhMessage(res.message ?? (res.success ? "Verified" : "Could not verify"));
+      if (res.success) {
+        setGhNonce(null);
+        setGistId("");
+        onRefresh();
+      }
+    } catch (e) {
+      setGhMessage(e instanceof Error ? e.message : "Could not verify");
+    } finally {
+      setGhBusy(false);
+    }
+  };
+
+  const unlinkGithub = async () => {
+    setGhBusy(true);
+    setGhMessage(null);
+    try {
+      const res = await sidecar.unlinkGithubAccount();
+      setGhMessage(res.message ?? null);
+      if (res.success) onRefresh();
+    } catch (e) {
+      setGhMessage(e instanceof Error ? e.message : "Could not unlink");
+    } finally {
+      setGhBusy(false);
+    }
+  };
 
   const save = async () => {
     setBusy(true);
@@ -80,15 +141,63 @@ export function SettingsView({
         />
 
         <div className="label">GitHub account</div>
-        <p className="muted small">
-          {status.auth.githubLogin
-            ? `Verified as @${status.auth.githubLogin}.`
-            : "Not linked yet."}{" "}
-          Rewards are paid against this account, so it can only be set by proving
-          ownership: run <code>devContribution.requestGithubVerification</code> from the
-          website, publish the code it gives you in a public gist, then confirm it. The
-          desktop client cannot set it directly.
-        </p>
+        {status.auth.githubLogin ? (
+          <>
+            <p className="muted small">
+              Verified as @{status.auth.githubLogin}. Rewards are paid against this
+              account.
+            </p>
+            <button type="button" onClick={() => void unlinkGithub()} disabled={ghBusy}>
+              Unlink GitHub account
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="muted small">
+              Not linked yet. Rewards are paid against this account, so it can only be
+              set by proving you own it: publish a one-time code in a public gist, then
+              confirm it here.
+            </p>
+            <label htmlFor="ghlogin">Your GitHub login</label>
+            <input
+              id="ghlogin"
+              value={ghLogin}
+              placeholder="octocat"
+              onChange={(e) => setGhLogin(e.target.value)}
+            />
+            {!ghNonce ? (
+              <button
+                type="button"
+                onClick={() => void requestCode()}
+                disabled={ghBusy || !ghLogin.trim()}
+              >
+                Get verification code
+              </button>
+            ) : (
+              <>
+                <p className="muted small">
+                  Publish this code in a public gist, then paste the gist id below.
+                </p>
+                <pre className="code-block">{ghInstructions}</pre>
+                <label htmlFor="gistid">Gist id</label>
+                <input
+                  id="gistid"
+                  value={gistId}
+                  placeholder="a1b2c3d4..."
+                  onChange={(e) => setGistId(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => void confirmCode()}
+                  disabled={ghBusy || !gistId.trim()}
+                >
+                  Confirm ownership
+                </button>
+              </>
+            )}
+          </>
+        )}
+        {ghMessage && <p className="muted small">{ghMessage}</p>}
 
         <div className="grid-2">
           <div>

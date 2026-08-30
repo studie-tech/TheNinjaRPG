@@ -43,8 +43,18 @@ export interface DeviceTokenClaims {
   sub: string;
   /** Unique token id, used for revocation. */
   jti: string;
-  /** Issued-at, unix seconds. */
+  /** Issued-at, unix seconds. Standard claim, kept for interoperability. */
   iat: number;
+  /**
+   * Issued-at in milliseconds.
+   *
+   * `iat` is floored to a second, so a token minted at T+100ms and a revoke-all
+   * at T+900ms both reduce to T and the "issued before the revocation" test
+   * cannot separate them. Comparing at millisecond precision can, without the
+   * `<=` workaround that would also reject a legitimate replacement token minted
+   * in the same second as the revocation.
+   */
+  iatMs: number;
   /** Expiry, unix seconds. */
   exp: number;
   /** Issuer marker. */
@@ -90,6 +100,7 @@ export const signDeviceToken = (
     sub: userId,
     jti,
     iat,
+    iatMs: nowMs,
     exp: iat + Math.floor(DEVICE_TOKEN_TTL_MS / 1000),
     iss: DEVICE_TOKEN_ISSUER,
   };
@@ -102,7 +113,7 @@ export const signDeviceToken = (
 };
 
 export type DeviceTokenVerification =
-  | { ok: true; userId: string; jti: string; iat: number; exp: number }
+  | { ok: true; userId: string; jti: string; iatMs: number; exp: number }
   | { ok: false; error: string };
 
 /**
@@ -169,7 +180,9 @@ export const verifyDeviceToken = (
     ok: true,
     userId: payload.sub,
     jti: payload.jti,
-    iat: payload.iat,
+    // Fall back to the second-precision claim when iatMs is absent, erring
+    // towards treating the token as older (so revocation wins).
+    iatMs: typeof payload.iatMs === "number" ? payload.iatMs : payload.iat * 1000,
     exp: payload.exp,
   };
 };
@@ -327,7 +340,7 @@ export const revokeAllDeviceTokensForUser = async (
   nowMs: number = Date.now(),
 ): Promise<void> => {
   const redis = Redis.fromEnv();
-  await redis.set(`${EPOCH_PREFIX}${userId}`, Math.floor(nowMs / 1000), {
+  await redis.set(`${EPOCH_PREFIX}${userId}`, nowMs, {
     ex: Math.ceil(DEVICE_TOKEN_TTL_MS / 1000) + 60,
   });
 };
@@ -343,7 +356,7 @@ export const revokeAllDeviceTokensForUser = async (
 export const isDeviceTokenActive = async (params: {
   jti: string;
   userId: string;
-  iat: number;
+  iatMs: number;
 }): Promise<boolean> => {
   try {
     const redis = Redis.fromEnv();
@@ -352,8 +365,8 @@ export const isDeviceTokenActive = async (params: {
       `${EPOCH_PREFIX}${params.userId}`,
     );
     if (revoked) return false;
-    const epochSec = typeof epoch === "number" ? epoch : Number(epoch);
-    if (Number.isFinite(epochSec) && params.iat < epochSec) return false;
+    const epochMs = typeof epoch === "number" ? epoch : Number(epoch);
+    if (Number.isFinite(epochMs) && params.iatMs < epochMs) return false;
     return true;
   } catch (error) {
     if (nodeEnv() === "development") {

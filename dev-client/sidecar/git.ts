@@ -34,10 +34,25 @@ export interface CmdResult {
 // surfaced as "Could not read the pull request diff" on big PRs.
 const EXEC_MAX_BUFFER_BYTES = 32 * 1024 * 1024;
 
+/**
+ * The abort signal for the git/gh work of the current run.
+ *
+ * Publication is several separate processes (push, then `gh pr create`, then the
+ * review or comment post). Checking a flag between them only closes the gaps;
+ * Stop landing *during* a push still published the branch. Passing the signal to
+ * execFile lets Node terminate the child itself, so cancellation lands inside
+ * the call rather than after it.
+ */
+let activeGitSignal: AbortSignal | undefined;
+
+export const setGitAbortSignal = (signal: AbortSignal | undefined): void => {
+  activeGitSignal = signal;
+};
+
 export const execFileAsync = (
   file: string,
   args: string[],
-  opts?: { timeout?: number; cwd?: string },
+  opts?: { timeout?: number; cwd?: string; signal?: AbortSignal },
 ): Promise<CmdResult> =>
   new Promise((resolve) => {
     execFile(
@@ -47,6 +62,7 @@ export const execFileAsync = (
         timeout: opts?.timeout ?? 120_000,
         cwd: opts?.cwd,
         maxBuffer: EXEC_MAX_BUFFER_BYTES,
+        signal: opts?.signal ?? activeGitSignal,
       },
       (error, stdout, stderr) => {
         resolve({
@@ -77,12 +93,50 @@ export async function ghLogin(): Promise<string | null> {
   return ok && stdout.trim() ? stdout.trim() : null;
 }
 
+// Base the worktree on the UPSTREAM repository's default branch, fetched by URL
+// into a dedicated ref.
+//
+// Setup asks the contributor for a clone of their fork, so `origin` is the fork
+// and `origin/main` is whatever state it was last synced to. Building on that
+// produces work against a stale base while the pull request targets upstream —
+// avoidable conflicts, and sometimes a fix for code that has already changed.
+//
+// The fetch must succeed. Falling back to a pre-existing ref would silently
+// reintroduce exactly the staleness this exists to avoid.
+/**
+ * Clone URL for the job's upstream repository.
+ *
+ * Overridable so the integration tests can stand a local repository in for
+ * github.com; production always resolves to the real host.
+ */
+export const upstreamRemoteUrl = (slug: string): string => {
+  const base = process.env.TNR_DEV_CLIENT_GIT_BASE;
+  if (base) return `${base.replace(/\/+$/, "")}/${slug}`;
+  return `https://github.com/${slug}.git`;
+};
+
 export async function createWorktree(
   repoPath: string,
   target: string,
+  upstreamSlug: string,
+  baseBranch = "main",
 ): Promise<CmdResult> {
-  await git(repoPath, ["fetch", "origin", "main"]);
-  return git(repoPath, ["worktree", "add", "--detach", target, "origin/main"]);
+  const ref = "refs/tnr-dev/base";
+  const fetched = await git(repoPath, [
+    "fetch",
+    "--no-tags",
+    upstreamRemoteUrl(upstreamSlug),
+    `+refs/heads/${baseBranch}:${ref}`,
+  ]);
+  if (!fetched.ok) {
+    return {
+      ok: false,
+      stdout: fetched.stdout,
+      stderr:
+        `Could not fetch ${baseBranch} from ${upstreamSlug}: ${fetched.stderr}`.trim(),
+    };
+  }
+  return git(repoPath, ["worktree", "add", "--detach", target, ref]);
 }
 
 export async function removeWorktree(repoPath: string, target: string): Promise<void> {

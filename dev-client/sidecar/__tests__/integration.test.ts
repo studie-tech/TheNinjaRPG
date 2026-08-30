@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import {
   chmodSync,
+  cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -51,6 +53,7 @@ type Recorded = {
   fails: FailInput[];
   revokes: string[];
   authViolations: string[];
+  verifyRequests: string[];
 };
 
 const recorded: Recorded = {
@@ -63,6 +66,7 @@ const recorded: Recorded = {
   fails: [],
   revokes: [],
   authViolations: [],
+  verifyRequests: [],
 };
 
 let nextClaim: (() => SerializedJob) | null = null;
@@ -99,6 +103,33 @@ function handleFake(
   auth: string | null,
 ): { data: unknown } | { error: { message: string; code: string } } {
   switch (proc) {
+    case "getProfile":
+      return { data: { success: true, profile: { githubLogin: fakeVerifiedLogin } } };
+    case "requestGithubVerification": {
+      const { githubLogin } = input as { githubLogin: string };
+      recorded.verifyRequests.push(githubLogin);
+      return {
+        data: {
+          success: true,
+          nonce: "nonce-xyz",
+          instructions: 'echo "nonce-xyz" | gh gist create --public -',
+        },
+      };
+    }
+    case "confirmGithubVerification": {
+      const { githubLogin, gistId } = input as {
+        githubLogin: string;
+        gistId: string;
+      };
+      if (gistId !== "good-gist") {
+        return { data: { success: false, message: "Could not verify GitHub account" } };
+      }
+      fakeVerifiedLogin = githubLogin;
+      return { data: { success: true, message: `Verified as @${githubLogin}` } };
+    }
+    case "unlinkGithubAccount":
+      fakeVerifiedLogin = null;
+      return { data: { success: true, message: "GitHub account unlinked" } };
     case "exchangeConnectCode": {
       const { code, codeVerifier } = input as { code: string; codeVerifier: string };
       recorded.exchanges.push({
@@ -153,6 +184,8 @@ let home: string;
 let fakeDir: string;
 let fakePort: number;
 let repoDir: string;
+let upstreamDir: string;
+let fakeVerifiedLogin: string | null = null;
 let sidecar: Server;
 
 const FAKE_CLAUDE = `#!/bin/sh
@@ -161,6 +194,9 @@ for a in "$@"; do
   [ "$a" = "--version" ] && { echo "9.9.9-fake (Claude Code)"; exit 0; }
 done
 echo "fake-claude args: $*" >> "$TNR_FAKE_DIR/claude-calls.log"
+# The prompt arrives on stdin (argv would blow the Windows command-line cap),
+# so record it separately for the tests that assert on prompt content.
+cat >> "$TNR_FAKE_DIR/claude-stdin.log"
 [ -f "$TNR_FAKE_DIR/hang" ] && { sleep 30; exit 0; }
 # Stubborn mode: ignore SIGTERM so only SIGKILL can stop this process.
 if [ -f "$TNR_FAKE_DIR/stubborn" ]; then
@@ -240,6 +276,14 @@ beforeAll(async () => {
   run(["commit", "-m", "init"]);
   // A self-referencing origin gives the worktree an origin/main to base on.
   run(["remote", "add", "origin", repoDir]);
+  // createWorktree fetches the UPSTREAM base by URL rather than trusting the
+  // fork's origin/main; point that at this fixture instead of github.com.
+  upstreamDir = mkdtempSync(join(tmpdir(), "tnr-dev-client-upstream-"));
+  mkdirSync(join(upstreamDir, "studie-tech"), { recursive: true });
+  cpSync(repoDir, join(upstreamDir, "studie-tech", "TheNinjaRPG"), {
+    recursive: true,
+  });
+  process.env.TNR_DEV_CLIENT_GIT_BASE = upstreamDir;
   run(["fetch", "origin", "main"]);
 
   const fake = Bun.serve({
@@ -301,6 +345,7 @@ afterAll(async () => {
   // would otherwise delete these directories out from under a live agent.
   await sidecar?.stop();
   rmSync(repoDir, { recursive: true, force: true });
+  rmSync(upstreamDir, { recursive: true, force: true });
   delete process.env.TNR_DEV_CLIENT_HOME;
   delete process.env.TNR_DEV_CLIENT_NO_BROWSER;
   delete process.env.TNR_FAKE_DIR;
@@ -504,10 +549,13 @@ test("end-to-end ISSUE_TRIAGE: fake agent runs, triage comment posted, reward pa
 
   const ghLog = readLog("gh-calls.log");
   expect(ghLog).toContain("issue comment 7 --repo studie-tech/TheNinjaRPG --body-file");
-  const claudeLog = readLog("claude-calls.log");
-  expect(claudeLog).toContain("-p");
-  expect(claudeLog).toContain("Triage this issue");
-  expect(claudeLog).toContain("Ninja stuck in tree");
+  // Control flags stay in argv; the prompt itself arrives on stdin.
+  const claudeArgs = readLog("claude-calls.log");
+  expect(claudeArgs).toContain("-p");
+  expect(claudeArgs).not.toContain("Triage this issue");
+  const claudePrompt = readLog("claude-stdin.log");
+  expect(claudePrompt).toContain("Triage this issue");
+  expect(claudePrompt).toContain("Ninja stuck in tree");
 
   // 1000 seeded + (111 input + 389 cache-create + 1000 cache-read + 222 output).
   expect(tokensUsedToday("CLAUDE")).toBe(2722);
@@ -644,6 +692,40 @@ test("shutdown kills an agent that ignores SIGTERM", async () => {
   );
 });
 
+test("the GitHub verification flow is reachable from the client", async () => {
+  // claimNextJob refuses an unverified profile, so without a client path for
+  // this the desktop app is unusable for a new contributor — the previous
+  // Settings copy just told them to invoke a tRPC procedure themselves.
+  expect((await status()).auth.githubLogin).toBeNull();
+
+  const requested = await call("POST", "/github/verify/request", {
+    githubLogin: "octocat",
+  });
+  expect(requested.json<{ nonce: string }>().nonce).toBe("nonce-xyz");
+  expect(recorded.verifyRequests).toContain("octocat");
+
+  // A gist the server cannot verify leaves the profile unlinked.
+  const bad = await call("POST", "/github/verify/confirm", {
+    githubLogin: "octocat",
+    gistId: "wrong-gist",
+  });
+  expect(bad.json<{ success: boolean }>().success).toBe(false);
+  expect((await status()).auth.githubLogin).toBeNull();
+
+  const good = await call("POST", "/github/verify/confirm", {
+    githubLogin: "octocat",
+    gistId: "good-gist",
+  });
+  expect(good.json<{ success: boolean }>().success).toBe(true);
+  // Status reflects the server's profile, not a field the connect flow never
+  // wrote — previously this stayed null forever.
+  expect((await status()).auth.githubLogin).toBe("octocat");
+
+  const unlinked = await call("POST", "/github/unlink");
+  expect(unlinked.json<{ success: boolean }>().success).toBe(true);
+  expect((await status()).auth.githubLogin).toBeNull();
+});
+
 test("sign-out revokes the token on the server and clears local state", async () => {
   const res = await call("POST", "/auth/signout");
   expect(res.json<{ revoked: boolean }>().revoked).toBe(true);
@@ -727,7 +809,7 @@ test("a PR review job is given the pull request diff, not just its metadata", ()
   // diff the agent would be reviewing an unchanged tree.
   const ghLog = readLog("gh-calls.log");
   expect(ghLog).toContain("pr diff 5");
-  const claudeLog = readLog("claude-calls.log");
+  const claudeLog = readLog("claude-stdin.log");
   expect(claudeLog).toContain("untrusted_pull_request_diff");
   expect(claudeLog).toContain("const a = 2;");
 });
