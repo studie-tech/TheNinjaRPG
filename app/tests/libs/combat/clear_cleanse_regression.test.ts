@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/server/db", () => ({
-  drizzleDB: {},
-}));
-
 import { battleScenario } from "./helpers/battleScenario";
 
 describe("Clear/Cleanse damage modifier regressions", () => {

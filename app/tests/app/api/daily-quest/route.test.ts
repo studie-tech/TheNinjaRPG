@@ -1,6 +1,7 @@
 // @vitest-environment node
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type DailyQuestTestMocks = {
   lock: ReturnType<typeof vi.fn>;
@@ -44,17 +45,6 @@ vi.mock("@/libs/gamesettings", () => ({
 vi.mock("@/routers/quests", () => ({
   upsertQuestEntries: getDailyQuestTestMocks().upsertQuestEntries,
 }));
-vi.mock("@/server/db", () => ({
-  drizzleDB: {
-    query: {
-      quest: { findMany: getDailyQuestTestMocks().findQuests },
-      village: { findMany: getDailyQuestTestMocks().findVillages },
-    },
-    select: getDailyQuestTestMocks().select,
-    update: getDailyQuestTestMocks().update,
-  },
-}));
-
 import { GET } from "@/app/api/daily-quest/route";
 
 const daily = {
@@ -105,7 +95,17 @@ const seedHappyPath = () => {
 };
 
 describe("daily-quest cron", () => {
+  afterEach(resetServerModuleStubs);
+
   beforeEach(() => {
+    stubDatabase({
+      query: {
+        quest: { findMany: getDailyQuestTestMocks().findQuests },
+        village: { findMany: getDailyQuestTestMocks().findVillages },
+      },
+      select: getDailyQuestTestMocks().select,
+      update: getDailyQuestTestMocks().update,
+    });
     for (const mock of [
       mocks.lock,
       mocks.rollback,

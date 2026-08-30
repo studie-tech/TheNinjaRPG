@@ -14,7 +14,6 @@ import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
  * for unrelated reasons, that test fails too and this file cannot go vacuous.
  */
 
-vi.mock("@/server/db", () => ({ drizzleDB: {} }));
 import { TerrainHex } from "@/libs/hexgrid";
 
 const SUMMON_JUTSU = "j-summon";

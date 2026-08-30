@@ -15,10 +15,6 @@ vi.mock("@/libs/hexgrid", () => ({
   })),
 }));
 
-vi.mock("@/server/db", () => ({
-  drizzleDB: {},
-}));
-
 import { userItemToAction } from "@/libs/combat/actions";
 import { dmgConfig } from "@/libs/combat/constants";
 import { damageCalc, getPower } from "@/libs/combat/tags";

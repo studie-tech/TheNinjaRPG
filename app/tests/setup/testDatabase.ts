@@ -136,6 +136,12 @@ export const getTestDatabase = async (): Promise<DrizzleClient> => {
   return client;
 };
 
+/**
+ * The connected client, or null before the first `getTestDatabase()`. For callers that must
+ * stay synchronous -- the `@/server/db` stand-in in serverModules.ts, which cannot await.
+ */
+export const peekTestDatabase = (): DrizzleClient | null => client ?? null;
+
 /** Empty the given tables. Call in `beforeEach` for the tables a suite writes. */
 export const resetTables = async (...tables: { _: { name: string } }[]) => {
   const database = await getTestDatabase();

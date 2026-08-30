@@ -16,10 +16,6 @@ vi.mock("@/server/api/routers/village", () => ({
   fetchVillages: vi.fn(),
 }));
 
-vi.mock("@/server/db", () => ({
-  drizzleDB: {},
-}));
-
 import { runStaleShrineLobbyCleanup } from "@/app/api/shrine-maintenance/route";
 
 function createSelectChain<T>(rows: T[]) {

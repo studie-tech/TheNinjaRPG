@@ -11,8 +11,6 @@ import { describe, expect, it, vi } from "vitest";
  */
 
 /** Avoid executing real db/env when transitive imports touch `@/server/db`. */
-vi.mock("@/server/db", () => ({ drizzleDB: {} }));
-
 /**
  * insertAction only needs `checkFriendlyFire` (force pass) from process; it never calls
  * applyEffects. Override ONLY checkFriendlyFire — do NOT stub applyEffects. Under `bun test`
