@@ -1,7 +1,8 @@
 // @vitest-environment node
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tournament, tournamentMatch, tournamentRecord } from "@/drizzle/schema";
+import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
 
 type TournamentTestGlobals = {
   pusherTrigger: ReturnType<typeof vi.fn>;
@@ -43,24 +44,12 @@ vi.mock("@/libs/pusher", () => ({
   }),
 }));
 
-vi.mock("@/server/api/trpc", () => ({
-  baseServerResponse: {},
-  createTRPCRouter: (router: unknown) => router,
-  errorResponse: (message: string) => ({ success: false, message }),
-  protectedProcedure: getTournamentTestMocks().procedureStub,
-}));
-
 vi.mock("@/routers/clan", () => ({
   fetchClan: vi.fn(),
 }));
 
 vi.mock("@/routers/combat", () => ({
   initiateBattle: vi.fn(),
-}));
-
-vi.mock("@/routers/profile", () => ({
-  fetchUser: (...args: unknown[]) =>
-    (getTournamentTestMocks().fetchUserMock as (...a: unknown[]) => unknown)(...args),
 }));
 
 import { syncTournamentState } from "@/routers/tournament";
@@ -166,6 +155,8 @@ const createClient = ({
 };
 
 describe("syncTournamentState", () => {
+  afterEach(resetServerModuleStubs);
+
   let pusherTrigger: ReturnType<typeof vi.fn>;
   let fetchUserMock: ReturnType<typeof vi.fn>;
   let updateRewardsMock: ReturnType<typeof vi.fn>;
@@ -185,6 +176,9 @@ describe("syncTournamentState", () => {
     updateRewardsMock = mocks.updateRewardsMock;
     rewardWinner = updateRewardsMock as unknown as typeof rewardWinner;
 
+    stubProfile("fetchUser", (...args: never[]) =>
+      (fetchUserMock as unknown as (...a: never[]) => unknown)(...args),
+    );
     fetchUserMock.mockResolvedValue({
       userId: "winner-1",
       username: "Winner",

@@ -5,7 +5,14 @@ import { beforeEach, expect, it } from "vitest";
 import { FARM_MAX_PLOTS, FARM_PLOT_PURCHASE_COST, FARM_STARTING_PLOTS } from "@/drizzle/constants";
 import { farmCollectionLog, farmExtraction, farmPlot, item, userData, userItem } from "@/drizzle/schema";
 import { insertUsers } from "../../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { farmingRouter } from "@/server/api/routers/farming";
+import { itemRouter } from "@/server/api/routers/item";
+import {
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../setup/testDatabase";
 
 /**
  * The farming router carries the economy: level gates, purchase caps, compare-and-swap
@@ -14,24 +21,7 @@ import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/
  * a real database -- a mocked client would assert the query we wrote, not the row the
  * engine ends up with.
  */
-/**
- * Named `.dbtest.ts` so bun's default glob skips it, and run as its own process by
- * `make test`. Other suites globally mock "@/server/api/trpc" and "@/routers/profile",
- * and bun shares one module registry across files -- in a shared run this suite would
- * get a router with no createCaller and a fetchUser that returns undefined.
- */
-const loadRouters = async () => {
-  const [{ farmingRouter }, { itemRouter }] = await Promise.all([
-    import("../../../src/server/api/routers/farming"),
-    import("../../../src/server/api/routers/item"),
-  ]);
-  return { farmingRouter, itemRouter };
-};
-
-const caller = async (userId: string) => {
-  const { farmingRouter } = await loadRouters();
-  return farmingRouter.createCaller({ drizzle: await getTestDatabase(), userId } as never);
-};
+const caller = (userId: string) => callerFor(farmingRouter, userId);
 
 const seedItemRow = (overrides: Record<string, unknown> = {}) => ({
   id: "seed-1",
@@ -208,11 +198,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     // A crop priced in farm coins but flagged for the ryo shop: buying it for ryo and
     // selling it at the farm would mint farm currency out of the ryo economy.
     await database.update(item).set({ inShop: true, cost: 1 }).where(eq(item.id, "crop-1"));
-    const { itemRouter } = await loadRouters();
-    const shop = itemRouter.createCaller({
-      drizzle: database,
-      userId: "farm-user",
-    } as never);
+    const shop = await callerFor(itemRouter, "farm-user");
     const result = await shop.buy({ itemId: "crop-1", stack: 1, villageId: null } as never);
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/farm/i);
