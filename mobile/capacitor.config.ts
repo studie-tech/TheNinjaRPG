@@ -44,15 +44,17 @@ const config: CapacitorConfig = {
   },
 
   ios: {
-    // Matches the bundled entry point and the splash, so the strip outside the safe area
-    // is never a white flash on launch.
-    backgroundColor: "#f0c84c",
+    // Between the launch image's daytime sky and its dusk variant. The WebView paints
+    // this in the gap before the entry point's first frame, and the setting takes a single
+    // value for both themes — so a middle blue is a short, quiet step either way, where
+    // the tile yellow this used to be was a full second of the wrong colour.
+    backgroundColor: "#4e6f80",
     contentInset: "always",
     appendUserAgent: `TNR-Native/${APP_VERSION} (ios)`,
   },
 
   android: {
-    backgroundColor: "#f0c84c",
+    backgroundColor: "#4e6f80",
     appendUserAgent: `TNR-Native/${APP_VERSION} (android)`,
     allowMixedContent: false,
   },
@@ -67,7 +69,7 @@ const config: CapacitorConfig = {
       // The bundled entry point draws its own splash, so the native one only needs to
       // cover the very first frame.
       launchShowDuration: 0,
-      backgroundColor: "#f0c84c",
+      backgroundColor: "#4e6f80",
       showSpinner: false,
     },
     Keyboard: {

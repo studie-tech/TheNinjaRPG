@@ -9,6 +9,24 @@
     <meta name="color-scheme" content="light dark" />
     <title>TheNinja-RPG</title>
     <style>
+      /* Deliberately first and deliberately tiny. The main stylesheet below carries the
+         embedded artwork, and nothing in a <style> applies until the whole block has
+         parsed — so these few rules are what stop the launch showing the WebView's own
+         colour while that happens. */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #8bbccf;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #2a374a;
+        }
+      }
+    </style>
+    <style>
       :root {
         --tile: #f0c84c;
         --ink: #23180a;
