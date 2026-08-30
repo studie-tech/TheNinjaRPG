@@ -86,8 +86,9 @@ const LogbookAchievements: React.FC = () => {
   // disabled query never stops being pending, which would leave the tab on its spinner forever.
   const {
     data: catalogue,
-    isLoading,
+    isFetched,
     isFetching,
+    isLoading,
     refetch,
   } = api.quests.getAchievementCatalogue.useQuery(undefined, {
     enabled: !!userData,
@@ -116,9 +117,11 @@ const LogbookAchievements: React.FC = () => {
   // Staleness alone never refetches a query that stays mounted, so a definition published after
   // this was cached would otherwise never arrive. Pull again as soon as a row cannot be resolved,
   // keyed on the ids themselves: a refetch that comes back with the same rows leaves the key
-  // unchanged and does not fire a second time.
+  // unchanged and does not fire a second time. `cancelRefetch: false` because progress can land
+  // before the first catalogue fetch does, and the default would abort that request and reissue
+  // it; joining it instead keeps a healthy mount at a single round-trip.
   useEffect(() => {
-    if (unresolvedIds) void refetch();
+    if (unresolvedIds) void refetch({ cancelRefetch: false });
   }, [unresolvedIds, refetch]);
 
   const quests = useMemo(() => {
@@ -151,8 +154,9 @@ const LogbookAchievements: React.FC = () => {
     <div className="">
       {/* Say so, and keep whatever did arrive on screen: a list that looks complete but is not
           hides achievements, and one that never renders never auto-claims either. Held back while
-          a fetch is in flight so the refetch above can fix it without the banner flashing. */}
-      {!isFetching && unresolvedIds && (
+          fetch is in flight, or has yet to happen at all, so the refetch above can fix it
+          without the banner flashing in between. */}
+      {isFetched && !isFetching && unresolvedIds && (
         <div className="flex flex-row items-center gap-3 p-3">
           <span className="text-muted-foreground text-sm">
             Could not load every achievement. Your progress is safe.
