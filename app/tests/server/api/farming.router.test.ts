@@ -204,6 +204,84 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     expect(result.message).toMatch(/farm/i);
   });
 
+  it("refuses a fertilizer stack that is stored at home", async () => {
+    await farmer();
+    const database = await getTestDatabase();
+    await database.insert(item).values(
+      seedItemRow({ id: "fert-1", name: "Compost", isFarmSeed: false, isFarmFertilizer: true,
+        farmTimeReductionSeconds: 600, farmYieldItemId: null }) as never,
+    );
+    await database.insert(userItem).values({
+      id: "ui-fert", userId: "farm-user", itemId: "fert-1", quantity: 2,
+      equipped: "NONE", storedAtHome: true,
+    } as never);
+    const finishAt = new Date(Date.now() + 3_600_000);
+    await database.insert(farmPlot).values({
+      id: "plot-f", userId: "farm-user", slotIndex: 0, seedItemId: "seed-1",
+      plantedAt: new Date(Date.now() - 60_000), finishAt,
+    } as never);
+    const api = await caller("farm-user");
+    const result = await api.applyFertilizer({ plotId: "plot-f", userItemId: "ui-fert" });
+    expect(result.success).toBe(false);
+    const [stack] = await database.select().from(userItem).where(eq(userItem.id, "ui-fert"));
+    expect(stack?.quantity).toBe(2);
+    const [plot] = await database.select().from(farmPlot).where(eq(farmPlot.id, "plot-f"));
+    expect(plot?.fertilizerApplied).toBe(false);
+    expect(plot?.finishAt?.getTime()).toBe(finishAt.getTime());
+  });
+
+  it("does not let a stale watering overwrite a timer that moved underneath it", async () => {
+    await farmer();
+    const database = await getTestDatabase();
+    const original = new Date(Date.now() + 3_600_000);
+    const moved = new Date(original.getTime() - 600_000);
+    await database.insert(farmPlot).values({
+      id: "plot-w",
+      userId: "farm-user",
+      slotIndex: 0,
+      seedItemId: "seed-1",
+      plantedAt: new Date(Date.now() - 60_000),
+      finishAt: moved,
+    } as never);
+
+    // Stand in for a request that read the plot before something else pulled the timer in:
+    // reads answer with the pre-move row, writes go to the real database.
+    const stalePlot = {
+      id: "plot-w",
+      userId: "farm-user",
+      slotIndex: 0,
+      seedItemId: "seed-1",
+      plantedAt: new Date(Date.now() - 60_000),
+      finishAt: original,
+      lastWateredAt: null,
+      fertilizerApplied: false,
+      seedItem: null,
+      yieldItem: null,
+    };
+    const staleClient = new Proxy(database as object, {
+      get(target, property) {
+        if (property === "query") {
+          const query = Reflect.get(target, property) as Record<string, unknown>;
+          return {
+            ...query,
+            farmPlot: { findFirst: async () => stalePlot, findMany: async () => [stalePlot] },
+          };
+        }
+        return Reflect.get(target, property);
+      },
+    });
+    const { farmingRouter: router } = { farmingRouter };
+    const api = router.createCaller({ drizzle: staleClient, userId: "farm-user" } as never);
+
+    const result = await api.waterPlot({ plotId: "plot-w" });
+
+    // The reduction was derived from `original`; applying it would resurrect the longer timer.
+    expect(result.success).toBe(false);
+    const [plot] = await database.select().from(farmPlot).where(eq(farmPlot.id, "plot-w"));
+    expect(plot?.finishAt?.getTime()).toBe(moved.getTime());
+    expect(plot?.lastWateredAt).toBeNull();
+  });
+
   it("refuses every farming mutation for a banned user", async () => {
     await farmer({ isBanned: true });
     await giveItem("ui-seed", "seed-1", 3);

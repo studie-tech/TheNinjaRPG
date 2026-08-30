@@ -19,6 +19,7 @@ import {
 import { FARM_PLOT_COLUMNS } from "@/drizzle/constants";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import WebGlError from "@/layout/WebGLError";
+import { getWorldCycleBrightness } from "@/libs/dayNight";
 import { getPlotGrowthStage, isPlotReady } from "@/libs/farming";
 import {
   createGroundDayNightOverlay,
@@ -253,7 +254,12 @@ const FarmCanvasInner = ({ initialState, onPlotClick, ref }: FarmCanvasProps) =>
       animateFarmEffects(groups.effects, delta);
 
       if (dayNightOverlayRef.current) {
-        updateDayNightOverlay(dayNightOverlayRef.current);
+        // Same server-corrected clock the plot state uses. Left on the raw client clock the
+        // overlay can show night while the rest of the page is still in day.
+        updateDayNightOverlay(
+          dayNightOverlayRef.current,
+          getWorldCycleBrightness(new Date(Date.now() - timeDiffRef.current)),
+        );
       }
 
       // Refresh growth stages periodically without full React re-render
