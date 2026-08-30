@@ -32,6 +32,7 @@ import type { BattleType } from "@/drizzle/constants";
 import {
   AdjustableBasicActions,
   AutoBattleTypes,
+  AutoCombatBattleTypes,
   BATTLE_ARENA_DAILY_LIMIT,
   BattleTypes,
   COMBAT_BIOMES,
@@ -276,17 +277,33 @@ export const combatRouter = createTRPCRouter({
 
           // Calculate if the battle is over for this user, and if so update user DB
           // Fetch game settings for multipliers
-          const result = calcBattleResult(
+          let result = calcBattleResult(
             userBattle,
             ctx.userId,
             userBattle.extraState.settings,
           );
+
+          // The state this poll actually settles on. applyEffects hands back a
+          // clone rather than mutating in place, so everything downstream of it
+          // -- the result, the reward writes, the response -- has to read from
+          // that clone or it disagrees with what was just persisted.
+          let settledBattle = userBattle;
 
           // Check if the battle is over, or state was updated
           const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
           if (battleOver || progressRound || changedActor) {
             if (!hadActivity && actId && activeUser) {
               const { newBattle, actionEffects } = applyEffects(userBattle, actId);
+              settledBattle = newBattle;
+              // Effects ticking on this poll can end the fight -- a lingering
+              // damage tag finishing the last opponent -- so the result computed
+              // above is stale here, and persisting it would store a decided
+              // battle as an unfinished one nobody can ever act in again.
+              // calcBattleResult only mutates when it returns a result, so
+              // re-running it after a null costs nothing.
+              result =
+                result ??
+                calcBattleResult(newBattle, ctx.userId, newBattle.extraState.settings);
 
               // Remove expired ground effects after applyEffects has processed them
               // This ensures summon despawning logic runs before effects are removed
@@ -336,15 +353,15 @@ export const combatRouter = createTRPCRouter({
           // Update user
           if (result) {
             await Promise.all([
-              updateUser(ctx.drizzle, pusher, userBattle, result, ctx.userId),
-              updateWars(ctx.drizzle, pusher, userBattle, result, ctx.userId),
-              updateKage(ctx.drizzle, userBattle, result), // no ctx.userId needed
-              updateRaidProgress(ctx.drizzle, userBattle, ctx.userId),
+              updateUser(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+              updateWars(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+              updateKage(ctx.drizzle, settledBattle, result), // no ctx.userId needed
+              updateRaidProgress(ctx.drizzle, settledBattle, ctx.userId),
             ]);
           }
 
           // Hide private state of non-session user
-          const newMaskedBattle = maskBattle(userBattle, ctx.userId);
+          const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
 
           // Return the new battle + result state if applicable
           return { battle: newMaskedBattle, result: result };
@@ -567,8 +584,21 @@ export const combatRouter = createTRPCRouter({
         // Create the grid for the battle
         const grid = getBattleGrid(1, battle);
 
-        // For kage battles, only allow one move per action
-        const maxActions = AutoBattleTypes.includes(battle.battleType) ? 1 : 5;
+        // For kage battles, only allow one move per action. Same whenever any
+        // still-fighting human is on auto combat — they are watching, so every
+        // driving client (not just their own) must deliver one animated action
+        // per poll instead of a whole exchange. Dead/fled/left players no
+        // longer watch a live fight, so they stop capping the batch.
+        const anyHumanOnAutoCombat = battle.usersState.some(
+          (u) =>
+            !u.isAi &&
+            !u.isSummon &&
+            u.isAutoCombat &&
+            !u.leftBattle &&
+            stillInBattle(u, battle.usersEffects),
+        );
+        const maxActions =
+          AutoBattleTypes.includes(battle.battleType) || anyHumanOnAutoCombat ? 1 : 5;
 
         // Instantiate new state variables
         const history: {
@@ -753,8 +783,13 @@ export const combatRouter = createTRPCRouter({
             continue;
           }
 
-          // If battle state didn't change, just return without updating battle version
+          // If battle state didn't change, just return without updating battle
+          // version. A battle that is already decided is the exception: it has
+          // to be settled below even when nobody could act, or a player whose
+          // last opponent is already dead keeps polling a fight that can never
+          // end.
           if (
+            !result &&
             !actionPerformed &&
             newBattle.round === originalRound &&
             newBattle.activeUserId === originalActiveUserId
@@ -862,7 +897,13 @@ export const combatRouter = createTRPCRouter({
     })
     .use(ratelimitMiddleware)
     .use(hasUserMiddleware)
-    .input(z.object({ aiId: z.string(), stats: statSchema.nullish() }))
+    .input(
+      z.object({
+        aiId: z.string(),
+        stats: statSchema.nullish(),
+        autoCombat: z.boolean().nullish(),
+      }),
+    )
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information
@@ -901,6 +942,10 @@ export const combatRouter = createTRPCRouter({
             client: ctx.drizzle,
             targetStatDistribution: input.stats ?? undefined,
             biome: "default",
+            // Callers that do not state a preference (e.g. MCP) fall back to
+            // the player's stored default rather than silently to manual.
+            autoCombatUserIds:
+              (input.autoCombat ?? user.defaultAutoCombat) ? [user.userId] : undefined,
           },
           input.stats ? "TRAINING" : "ARENA",
         );
@@ -1355,6 +1400,107 @@ export const combatRouter = createTRPCRouter({
       }
       return errorResponse("Failed to update battle state after multiple attempts");
     }),
+  toggleAutoCombat: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Hand battle turns to own AI profile or take back control",
+      },
+    })
+    .use(ratelimitMiddleware)
+    .use(hasUserMiddleware)
+    .input(z.object({ battleId: z.string(), enabled: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      // Maximum number of retry attempts
+      const MAX_RETRIES = 3;
+      let attempts = 0;
+
+      // Toggling mid-battle also becomes the player's default for future
+      // battles, but only once the battle itself has flipped — a toggle the
+      // player saw fail must not silently change what their next battle does.
+      const rememberPreference = () =>
+        ctx.drizzle
+          .update(userData)
+          .set({ defaultAutoCombat: input.enabled })
+          .where(eq(userData.userId, ctx.userId));
+
+      // Retry loop
+      while (attempts < MAX_RETRIES) {
+        attempts++;
+
+        // Fetch
+        const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
+        const user = userBattle?.usersState.find((u) => u.userId === ctx.userId);
+
+        // Guard. Kage/clan challenges are always fully AI-driven — there is no
+        // manual control to hand over or take back there.
+        if (!userBattle) return errorResponse("You are not in a battle");
+        if (!user) return errorResponse("You are not in this battle");
+        if (user.isAi)
+          return errorResponse("Only human players can toggle auto combat");
+        if (AutoBattleTypes.includes(userBattle.battleType)) {
+          return errorResponse("This battle is always fought by your AI profile");
+        }
+        if (user.leftBattle || user.fledBattle || user.curHealth <= 0) {
+          return errorResponse("You are no longer fighting in this battle");
+        }
+
+        // Check if user is already in the requested state. Nothing to guard
+        // with a version here — the battle already reads the way the player
+        // asked for, so their choice is safe to remember.
+        if (!!user.isAutoCombat === input.enabled) {
+          await rememberPreference();
+          return {
+            success: true,
+            message: "",
+            battle: maskBattle(userBattle, ctx.userId),
+          };
+        }
+
+        // Pre-Mutate. Piloted summons follow their master: while the master is
+        // on auto combat the action panel is hidden, so a piloted summon would
+        // otherwise have no driver at all and stall its turns to the timer.
+        user.isAutoCombat = input.enabled;
+        userBattle.usersState.forEach((u) => {
+          if (u.isSummon && u.isPiloted && u.controllerId === ctx.userId) {
+            u.isAutoCombat = input.enabled;
+          }
+        });
+        userBattle.updatedAt = new Date();
+        userBattle.version = userBattle.version + 1;
+
+        // Mutate
+        const result = await ctx.drizzle
+          .update(battle)
+          .set({
+            usersState: userBattle.usersState,
+            version: userBattle.version,
+            updatedAt: userBattle.updatedAt,
+          })
+          .where(
+            and(
+              eq(battle.id, input.battleId),
+              eq(battle.version, userBattle.version - 1),
+            ),
+          );
+
+        if (result.rowsAffected > 0) {
+          await rememberPreference();
+          void pusher.trigger(userBattle.id, "event", {
+            version: userBattle.version + 1,
+          });
+          return {
+            success: true,
+            message: input.enabled
+              ? "Your AI profile has taken over the battle"
+              : "You have taken back control of the battle",
+            battle: maskBattle(userBattle, ctx.userId),
+          };
+        }
+        // Version conflict (e.g. an action resolved meanwhile) — refetch and retry
+      }
+      return errorResponse("Failed to update battle state after multiple attempts");
+    }),
   startShrineBattle: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Start battle at war shrine" } })
     .use(ratelimitMiddleware)
@@ -1582,6 +1728,8 @@ export const initiateBattle = async (
     forceKeepPools?: boolean;
     raidQuestId?: string;
     topPlayersLP?: number[];
+    /** Human users whose turns should be driven by their own AI profile (auto combat) */
+    autoCombatUserIds?: string[];
   },
   battleType: BattleType,
   scaleGains = 1,
@@ -2157,6 +2305,20 @@ export const initiateBattle = async (
       leftSideUserIds: userIds,
       isSummon: false,
     });
+
+  // Hand requested users' turns to their own AI profile (auto combat). Gated on
+  // AutoCombatBattleTypes so callers cannot enable it for unsupported battles.
+  if (info.autoCombatUserIds?.length && AutoCombatBattleTypes.includes(battleType)) {
+    usersState.forEach((user) => {
+      if (
+        !user.isAi &&
+        !user.isSummon &&
+        info.autoCombatUserIds?.includes(user.controllerId)
+      ) {
+        user.isAutoCombat = true;
+      }
+    });
+  }
 
   // Apply pool adjustments to base values for all users with pool effects at battle start
   usersState.forEach((user) => {

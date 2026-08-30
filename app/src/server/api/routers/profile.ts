@@ -287,6 +287,9 @@ export const profileRouter = createTRPCRouter({
           ...(input.iframesMuted !== undefined
             ? { iframesMuted: input.iframesMuted }
             : {}),
+          ...(input.defaultAutoCombat !== undefined
+            ? { defaultAutoCombat: input.defaultAutoCombat }
+            : {}),
           ...(input.preferredStat !== undefined
             ? { preferredStat: input.preferredStat }
             : {}),
@@ -1240,10 +1243,11 @@ export const profileRouter = createTRPCRouter({
         if (target.clanId) return errorResponse(`Leave ${clanName} first`);
         if (target.status !== "AWAKE") return errorResponse("AWAKE to change village");
       }
-      // Update jutsus & items
-      const { jutsuChanges, itemChanges } = await updateUserContent({
+      // Compute jutsu & item changes (read-only; the writes run after the AI
+      // check below — PlanetScale has no transactions, so a rejected reason
+      // must not leave partially applied jutsu/item rows behind)
+      const contentChanges = await computeUserContentChanges({
         client: ctx.drizzle,
-        userId: target.userId,
         oldJutsuIds,
         newJutsuIds,
         oldItemIds,
@@ -1258,8 +1262,8 @@ export const profileRouter = createTRPCRouter({
         ),
         input.data,
       )
-        .concat(jutsuChanges)
-        .concat(itemChanges);
+        .concat(contentChanges.jutsuChanges)
+        .concat(contentChanges.itemChanges);
       // AI moderation of reason
       const aiCheck = await validateUserUpdateReason(
         diff.join(". "),
@@ -1280,6 +1284,14 @@ export const profileRouter = createTRPCRouter({
 
       // Update database
       await Promise.all([
+        applyUserContentChanges({
+          client: ctx.drizzle,
+          userId: target.userId,
+          deletedJutsuIds: contentChanges.deletedJutsuIds,
+          deletedItemIds: contentChanges.deletedItemIds,
+          insertedJutsuIds: contentChanges.insertedJutsuIds,
+          insertedItemIds: contentChanges.insertedItemIds,
+        }),
         ctx.drizzle
           .update(userData)
           .set({
@@ -2241,27 +2253,37 @@ export const fetchUser = async (client: DrizzleClient, userId: string) => {
   return user;
 };
 
-export const updateUserContent = async (props: {
+/**
+ * Compute human-readable jutsu/item diffs and the id sets to delete/insert.
+ * Read-only, so callers can run moderation or other guards on the diff before
+ * committing anything (PlanetScale has no transactions to roll back with).
+ */
+export const computeUserContentChanges = async (props: {
   client: DrizzleClient;
-  userId: string;
   oldJutsuIds: string[];
   newJutsuIds: string[];
   oldItemIds: string[];
   newItemIds: string[];
 }) => {
-  // Destructure
-  const { client, userId, oldJutsuIds, newJutsuIds, oldItemIds, newItemIds } = props;
+  const { client } = props;
 
-  // Store any new jutsus
-  const newJ = oldJutsuIds.sort().join(",") !== newJutsuIds.sort().join(",");
-  const newI = oldItemIds.sort().join(",") !== newItemIds.sort().join(",");
+  // The diff is positional (deep-object-diff walks array indices), so compare
+  // and render in a canonical order — without mutating the caller's arrays.
+  const oldJutsuIds = props.oldJutsuIds.slice().sort();
+  const newJutsuIds = props.newJutsuIds.slice().sort();
+  const oldItemIds = props.oldItemIds.slice().sort();
+  const newItemIds = props.newItemIds.slice().sort();
+
+  const changed =
+    oldJutsuIds.join(",") !== newJutsuIds.join(",") ||
+    oldItemIds.join(",") !== newItemIds.join(",");
 
   // difference arrays
   let jutsuChanges: string[] = [];
   let itemChanges: string[] = [];
 
-  // If jutsus are different, then update with jutsu names for diff calculation only
-  if (newJ || newI) {
+  // Resolve names for the diff shown to users & the action log
+  if (changed) {
     const [jutsuData, itemData] = await Promise.all([
       client.query.jutsu.findMany({
         where: inArray(jutsu.id, oldJutsuIds.concat(newJutsuIds).concat(["non-empty"])),
@@ -2280,66 +2302,115 @@ export const updateUserContent = async (props: {
       { items: oldItemIds.map((id) => itemData.find((j) => j.id === id)?.name) },
       { items: newItemIds.map((id) => itemData.find((j) => j.id === id)?.name) },
     );
-
-    // Updated content
-    const deletedJ = oldJutsuIds.filter((id) => !newJutsuIds.includes(id));
-    const deletedI = oldItemIds.filter((id) => !newItemIds.includes(id));
-    const insertedJ = newJutsuIds.filter((id) => !oldJutsuIds.includes(id));
-    const insertedI = newItemIds.filter((id) => !oldItemIds.includes(id));
-
-    // Run updates
-    await Promise.all([
-      ...(deletedJ.length > 0
-        ? [
-            client
-              .delete(userJutsu)
-              .where(
-                and(eq(userJutsu.userId, userId), inArray(userJutsu.jutsuId, deletedJ)),
-              ),
-          ]
-        : []),
-      ...(deletedI.length > 0
-        ? [
-            client
-              .delete(userItem)
-              .where(
-                and(eq(userItem.userId, userId), inArray(userItem.itemId, deletedI)),
-              ),
-          ]
-        : []),
-      // Use onDuplicateKeyUpdate to handle race conditions
-      ...(insertedJ.length > 0
-        ? [
-            client
-              .insert(userJutsu)
-              .values(
-                insertedJ.map((jutsuId) => ({
-                  id: nanoid(),
-                  userId: userId,
-                  jutsuId: jutsuId,
-                  level: 1,
-                  equipped: true,
-                })),
-              )
-              .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
-          ]
-        : []),
-      ...(insertedI.length > 0
-        ? [
-            client.insert(userItem).values(
-              insertedI.map((itemId) => ({
-                id: nanoid(),
-                userId: userId,
-                itemId: itemId,
-                equipped: "CHEST" as const,
-              })),
-            ),
-          ]
-        : []),
-    ]);
   }
 
-  return { jutsuChanges, itemChanges };
+  return {
+    jutsuChanges,
+    itemChanges,
+    deletedJutsuIds: changed
+      ? oldJutsuIds.filter((id) => !newJutsuIds.includes(id))
+      : [],
+    deletedItemIds: changed ? oldItemIds.filter((id) => !newItemIds.includes(id)) : [],
+    insertedJutsuIds: changed
+      ? newJutsuIds.filter((id) => !oldJutsuIds.includes(id))
+      : [],
+    insertedItemIds: changed ? newItemIds.filter((id) => !oldItemIds.includes(id)) : [],
+  };
+};
+
+/** Apply the delete/insert sets produced by computeUserContentChanges. */
+export const applyUserContentChanges = async (props: {
+  client: DrizzleClient;
+  userId: string;
+  deletedJutsuIds: string[];
+  deletedItemIds: string[];
+  insertedJutsuIds: string[];
+  insertedItemIds: string[];
+}) => {
+  const {
+    client,
+    userId,
+    deletedJutsuIds,
+    deletedItemIds,
+    insertedJutsuIds,
+    insertedItemIds,
+  } = props;
+  await Promise.all([
+    ...(deletedJutsuIds.length > 0
+      ? [
+          client
+            .delete(userJutsu)
+            .where(
+              and(
+                eq(userJutsu.userId, userId),
+                inArray(userJutsu.jutsuId, deletedJutsuIds),
+              ),
+            ),
+        ]
+      : []),
+    ...(deletedItemIds.length > 0
+      ? [
+          client
+            .delete(userItem)
+            .where(
+              and(
+                eq(userItem.userId, userId),
+                inArray(userItem.itemId, deletedItemIds),
+              ),
+            ),
+        ]
+      : []),
+    // Use onDuplicateKeyUpdate to handle race conditions
+    ...(insertedJutsuIds.length > 0
+      ? [
+          client
+            .insert(userJutsu)
+            .values(
+              insertedJutsuIds.map((jutsuId) => ({
+                id: nanoid(),
+                userId: userId,
+                jutsuId: jutsuId,
+                level: 1,
+                equipped: true,
+              })),
+            )
+            .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
+        ]
+      : []),
+    ...(insertedItemIds.length > 0
+      ? [
+          client.insert(userItem).values(
+            insertedItemIds.map((itemId) => ({
+              id: nanoid(),
+              userId: userId,
+              itemId: itemId,
+              equipped: "CHEST" as const,
+            })),
+          ),
+        ]
+      : []),
+  ]);
+};
+
+export const updateUserContent = async (props: {
+  client: DrizzleClient;
+  userId: string;
+  oldJutsuIds: string[];
+  newJutsuIds: string[];
+  oldItemIds: string[];
+  newItemIds: string[];
+}) => {
+  const { client, userId, ...idSets } = props;
+  const changes = await computeUserContentChanges({ client, ...idSets });
+  await applyUserContentChanges({
+    client,
+    userId,
+    deletedJutsuIds: changes.deletedJutsuIds,
+    deletedItemIds: changes.deletedItemIds,
+    insertedJutsuIds: changes.insertedJutsuIds,
+    insertedItemIds: changes.insertedItemIds,
+  });
+  return { jutsuChanges: changes.jutsuChanges, itemChanges: changes.itemChanges };
 };
 
 /**

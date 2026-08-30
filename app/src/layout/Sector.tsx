@@ -42,6 +42,7 @@ import {
 import type { UserData, VillageStructure } from "@/drizzle/schema";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
+import { useTutorialStep } from "@/hooks/tutorial";
 import AvatarImage from "@/layout/Avatar";
 import HealingPopover from "@/layout/HealingPopover";
 import Image from "@/layout/Image";
@@ -89,6 +90,7 @@ import type { GlobalTile, SectorPoint, SectorUser } from "@/libs/threejs/types";
 import {
   cleanUp,
   disposeGroupPreservingShared,
+  isObjectChainVisible,
   isRendererContextValid,
   pickSpriteAvatar,
   profiler,
@@ -101,6 +103,7 @@ import {
 import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import { getBiomeAtSectorAnchor } from "@/libs/travel";
+import { isTutorialCaptureStep } from "@/libs/tutorial";
 import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
@@ -192,6 +195,11 @@ const findNearestWalkableEdgeTile = (
  * crossings animate client-side and reconcile with the server afterwards;
  * window changes patch the live scene in place instead of rebuilding it.
  */
+/** Most zoomed-out the sector camera may go: about half a neighbouring sector. */
+const SECTOR_MIN_ZOOM = 0.8;
+/** Most zoomed-in the sector camera may go. */
+const SECTOR_MAX_ZOOM = 3;
+
 const Sector: React.FC<SectorProps> = (props) => {
   // Incoming props
   const { sector, sectorWindow, target, showActive, autoAttackMode } = props;
@@ -220,6 +228,13 @@ const Sector: React.FC<SectorProps> = (props) => {
     -1,
   );
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("sectorZoom", 2);
+  // Global travel lands a tutorial player within a few tiles of the capture
+  // target, so that step opens zoomed right in: the puppy and its marker fill
+  // the view rather than being a speck somewhere on a 26x26 map. Only the
+  // opening view -- zooming back out afterwards sticks, as it does anywhere
+  // else, and every other step keeps the player's stored zoom.
+  const { currentStep } = useTutorialStep();
+  const openSectorZoomedIn = isTutorialCaptureStep(currentStep);
   const [currentStructure, setCurrentStructure] = useState<VillageStructure | null>(
     null,
   );
@@ -2059,7 +2074,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
       // Setup camara
       const camera = new OrthographicCamera(0, WIDTH, HEIGHT, 0, -10, 10);
-      camera.zoom = prevZoom ?? storedZoom;
+      camera.zoom = prevZoom ?? (openSectorZoomedIn ? SECTOR_MAX_ZOOM : storedZoom);
       camera.updateProjectionMatrix();
       cameraRef.current = camera;
 
@@ -2135,8 +2150,8 @@ const Sector: React.FC<SectorProps> = (props) => {
       // half a neighboring sector in every direction
       controls.enablePan = false;
       controls.zoomSpeed = 1.0;
-      controls.minZoom = 0.8;
-      controls.maxZoom = 3;
+      controls.minZoom = SECTOR_MIN_ZOOM;
+      controls.maxZoom = SECTOR_MAX_ZOOM;
       controls.enabled = !showSorroundingRef.current;
       controlsRef.current = controls;
 
@@ -2214,7 +2229,7 @@ const Sector: React.FC<SectorProps> = (props) => {
           group_quest,
         ]);
         intersects
-          .filter((i) => i.object.visible)
+          .filter((i) => isObjectChainVisible(i.object))
           .every((i) => {
             if (i.object.userData.type === "tile") {
               const target = i.object.userData.tile as TerrainHex;
@@ -2247,18 +2262,43 @@ const Sector: React.FC<SectorProps> = (props) => {
                 targetEntry.dy - currentEntry.dy,
               );
               return false;
-            } else if (showUsersRef.current && i.object.userData.type === "talk") {
-              handleNpcTileInteraction(
-                i.object.userData.npcPlacementId as string | undefined,
-              );
-              return false;
-            } else if (showUsersRef.current && i.object.userData.type === "attack") {
+            } else if (
+              showUsersRef.current &&
+              i.object.userData.type === "avatar" &&
+              i.object.userData.npcPlacementId
+            ) {
+              // An NPC's body is a click target like its interaction icon;
+              // without this, the click would fall through the sprite onto
+              // the tile visually behind the NPC and walk the player there.
               if (
                 handleNpcTileInteraction(
                   i.object.userData.npcPlacementId as string | undefined,
                 )
               ) {
                 return false;
+              }
+              return true;
+            } else if (showUsersRef.current && i.object.userData.type === "talk") {
+              if (
+                handleNpcTileInteraction(
+                  i.object.userData.npcPlacementId as string | undefined,
+                )
+              ) {
+                return false;
+              }
+              // Stale sprite (placement despawned): keep the tile clickable
+              return true;
+            } else if (showUsersRef.current && i.object.userData.type === "attack") {
+              const npcPlacementId = i.object.userData.npcPlacementId as
+                | string
+                | undefined;
+              if (npcPlacementId) {
+                if (handleNpcTileInteraction(npcPlacementId)) {
+                  return false;
+                }
+                // Stale NPC sprite: fall through to the tile rather than
+                // re-targeting whatever user shares the template's userId
+                return true;
               }
               const target = usersRef.current?.find(
                 (u) => u.userId === i.object.userData.userId,

@@ -21,6 +21,7 @@ import {
   resolveActivityStreakPopupOpen,
 } from "@/libs/activityStreak";
 import { cn } from "@/libs/shadui";
+import { isTutorialActive } from "@/libs/tutorial";
 import { getDateKey } from "@/utils/time";
 import { blockingPopupOpenAtom, useUserData } from "@/utils/UserContext";
 
@@ -49,6 +50,10 @@ const ActivityStreakPopup: React.FC = () => {
   // Query
   const { data: userData } = useUserData();
 
+  // Read off userData rather than a shared atom so the suppression holds from
+  // the very first render, with no window where both can be on screen.
+  const tutorialActive = isTutorialActive(userData);
+
   // Always query streaks if we have a user (we check dismissedToday separately)
   const { data: userStreaks, isLoading } = api.activityStreak.getUserStreaks.useQuery(
     undefined,
@@ -73,9 +78,10 @@ const ActivityStreakPopup: React.FC = () => {
         shouldShowPopup,
         dismissedToday,
         userClosed,
+        tutorialActive,
       }),
     );
-  }, [isLoading, shouldShowPopup, dismissedToday, userClosed]);
+  }, [isLoading, shouldShowPopup, dismissedToday, userClosed, tutorialActive]);
 
   // This popup blocks the overworld arrival prompt while it is on screen OR while its
   // show-decision is still loading — the latter closes a fresh-login race where the arrival
@@ -87,6 +93,7 @@ const ActivityStreakPopup: React.FC = () => {
     shouldShowPopup,
     dismissedToday,
     userClosed,
+    tutorialActive,
   });
   useEffect(() => {
     setBlockingPopupOpen(isBlocking);

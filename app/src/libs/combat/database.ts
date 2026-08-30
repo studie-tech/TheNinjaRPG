@@ -44,6 +44,7 @@ import { stillInBattle } from "@/libs/combat/actions";
 import type { ActionEffect, CombatResult, CompleteBattle } from "@/libs/combat/types";
 import {
   buildCombatTrackerTasks,
+  didKageChallengerWin,
   getItem,
   getVillage,
   getWarsArray,
@@ -436,6 +437,12 @@ export const updateKage = async (
   if (!challenger.villageId || !kage.villageId) return;
   if (challenger.villageId !== kage.villageId) return;
 
+  const challengerDidWin = didKageChallengerWin(
+    challenger,
+    kage,
+    curBattle.usersEffects,
+  );
+
   // Lost items for both sides
   const deleteItems = [
     ...kage.items.filter((ui) => ui.quantity <= 0).map((i) => i.id),
@@ -448,13 +455,35 @@ export const updateKage = async (
   ];
 
   await Promise.all([
-    // Move the hat only if the challenger actually wins
-    ...(result.didWin > 0
+    // Both PvP clients can finalize the same battle. The unique battleId makes
+    // this insert idempotent; the no-op update preserves the first canonical row.
+    client
+      .insert(kageDefendedChallenges)
+      .values({
+        id: nanoid(),
+        battleId: curBattle.id,
+        villageId: challenger.villageId,
+        userId: challenger.userId,
+        kageId: kage.userId,
+        didWin: challengerDidWin ? 1 : 0,
+        rounds: curBattle.round,
+      })
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } }),
+
+    // Move the hat only if the challenger actually wins. CAS on the kage this
+    // battle defeated: a delayed second finalization of an old battle must not
+    // re-seat its challenger over a kage legitimately installed in the meantime.
+    ...(challengerDidWin
       ? [
           client
             .update(village)
             .set({ kageId: challenger.userId, leaderUpdatedAt: new Date() })
-            .where(eq(village.id, challenger.villageId)),
+            .where(
+              and(
+                eq(village.id, challenger.villageId),
+                eq(village.kageId, kage.userId),
+              ),
+            ),
         ]
       : []),
 
@@ -479,15 +508,6 @@ export const updateKage = async (
             .where(and(eq(userItem.id, ui.id), gt(userItem.quantity, 0))),
         )
       : []),
-
-    client.insert(kageDefendedChallenges).values({
-      id: nanoid(),
-      villageId: challenger.villageId,
-      userId: challenger.userId,
-      kageId: kage.userId,
-      didWin: result.didWin,
-      rounds: curBattle.round,
-    }),
   ]);
 };
 

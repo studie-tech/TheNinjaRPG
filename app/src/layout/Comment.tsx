@@ -281,6 +281,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
             {userData && (isAuthor || canSeeSecretData(userData.role)) && (
               <ModerationSummary
                 userId={props.user.userId}
+                username={props.user.username}
                 trigger={
                   <BarChart2 className="h-6 w-6 cursor-pointer hover:text-orange-500" />
                 }

@@ -2413,6 +2413,7 @@ export const userData = mysqlTable(
     preferredGeneral1: mysqlEnum("preferredGeneral1", consts.GeneralTypes),
     preferredGeneral2: mysqlEnum("preferredGeneral2", consts.GeneralTypes),
     showBattleDescription: boolean("showBattleDescription").default(true).notNull(),
+    defaultAutoCombat: boolean("defaultAutoCombat").default(true).notNull(),
     // Statistics
     pvpFights: int("pvpFights").default(0).notNull(),
     pveFights: int("pveFights").default(0).notNull(),
@@ -3490,6 +3491,7 @@ export const kageDefendedChallenges = mysqlTable(
   "KageDefendedChallenges",
   {
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    battleId: varchar("battleId", { length: 191 }),
     villageId: varchar("villageId", { length: 191 }).notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     kageId: varchar("kageId", { length: 191 }).notNull(),
@@ -3501,6 +3503,9 @@ export const kageDefendedChallenges = mysqlTable(
   },
   (table) => {
     return {
+      battleIdKey: uniqueIndex("KageDefendedChallenges_battleId_key").on(
+        table.battleId,
+      ),
       villageIdIdx: index("VillageKageChallenges_villageId_idx").on(table.villageId),
       userIdIdx: index("VillageKageChallenges_userId_idx").on(table.userId),
       kageIDIdx: index("VillageKageChallenges_kageID_idx").on(table.kageId),

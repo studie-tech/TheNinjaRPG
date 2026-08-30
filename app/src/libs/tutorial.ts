@@ -1,7 +1,30 @@
+import { TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
 import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
+
+/**
+ * True while the tutorial still has a step left to show. A switched-off
+ * tutorial has no current step, and a step index past the last step means the
+ * player finished it. Kept here rather than in the tutorial hook so that code
+ * outside the tutorial (e.g. auto-opening popups that must not cover it) can
+ * ask the question without pulling in the whole step list.
+ */
+export const isTutorialActive = (
+  user?: { tutorialOn?: boolean | null; tutorialStep?: number | null } | null,
+) =>
+  !!user &&
+  user.tutorialOn !== false &&
+  (user.tutorialStep ?? 0) < TUTORIAL_STEPS_COUNT;
 
 /** Step that asks the player to start training a jutsu (Sonic Slash). */
 export const TUTORIAL_JUTSU_PICK_STEP_ID = "eSBZJXRN_MCSYM90z3d5f";
+
+/**
+ * Step that sends the player after the starter quest's puppy. The step's text
+ * promises a marker in the sector, which only exists once the quest's opening
+ * dialog has been answered, so the tutorial answers it and opens the sector
+ * zoomed out far enough to see where the marker actually is.
+ */
+export const TUTORIAL_CAPTURE_STEP_ID = "eRw6ObsRONhzY7AUMO3vm";
 
 /** Step that asks the player to buy the starter shuriken. */
 export const TUTORIAL_ITEM_BUY_STEP_ID = "KvGkDox06od5iiFaGAzkM";
@@ -9,9 +32,10 @@ export const TUTORIAL_ITEM_BUY_STEP_ID = "KvGkDox06od5iiFaGAzkM";
 /**
  * Starter-quest puppy fight. Mirrors the `defeat_opponents` objective of the
  * live "Getting Started" quest; the sector lives in quest content, so it is not
- * derivable here and must be re-checked if that objective moves.
+ * derivable here and must be re-checked if that objective moves. Moved from
+ * 293 to 227 by migration 0038, which carries the reasoning.
  */
-export const TUTORIAL_CAPTURE_SECTOR = 293;
+export const TUTORIAL_CAPTURE_SECTOR = 227;
 
 /** Horizon's current world sector — not the pre-remap 296 value. */
 export const TUTORIAL_HOME_SECTOR =
@@ -36,6 +60,9 @@ export const isTutorialJutsuPickStep = (step?: { id?: string } | null) =>
 
 export const isTutorialItemBuyStep = (step?: { id?: string } | null) =>
   step?.id === TUTORIAL_ITEM_BUY_STEP_ID;
+
+export const isTutorialCaptureStep = (step?: { id?: string } | null) =>
+  step?.id === TUTORIAL_CAPTURE_STEP_ID;
 
 /** Take-quest id from a step like `tutorial-take-quest-<questId>`. */
 export const getTutorialTakeQuestId = (step?: { elementIds?: string[] } | null) =>

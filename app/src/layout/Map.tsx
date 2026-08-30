@@ -1,4 +1,3 @@
-import * as TWEEN from "@tweenjs/tween.js";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -352,7 +351,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       const setHoverOutline = (sector: number | null) => {
         setOwnershipLabelEmphasis(sector);
         const tile = sector !== null ? hexasphere?.tiles[sector] : null;
-        if (!tile || tile.b.length !== 4) {
+        if (tile?.b.length !== 4) {
           hoverOutline.visible = false;
           return;
         }
@@ -684,12 +683,37 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       scene.add(group_highlights);
       scene.add(group_tiles);
 
-      // Add tweening highlights
-      const questTweenColor = { r: 0.8, g: 0.6, b: 0.0 };
-      // Three.js stores colors in its linear working color space. Constructing
-      // from the configured CSS hex performs the required sRGB conversion.
-      const warTweenColor = new Color(MAP_WAR_TORN_BATTLEGROUND_COLOR);
-      const focusTweenColor = { r: 0.66, g: 0.33, b: 0.97 }; // Purple color for focus sector
+      // Highlight pulses are driven straight from the clock in the render loop
+      // rather than through tween.js. Its yoyo emits the opposite endpoint for a
+      // single frame on each repeat boundary, which showed up as the marker
+      // snapping full size for one frame at both ends of its travel; a cosine
+      // phase has no boundary to glitch on. (The tweens were also never
+      // animating at all before: v25 only registers a tween with a group when
+      // one is passed to the constructor, so the global update advanced an empty
+      // set and every colour sat on its opening value.)
+      //
+      // These multiply the tile's terrain colour, so a channel left at 0 erases
+      // that channel rather than tinting it -- which is why the quest sector
+      // used to read as a shadow next to the focus sector's purple. Warm amber
+      // for quests against the cool purple of a focus, matching the orange and
+      // purple the legend uses for them.
+      const PULSE_PERIOD_MS = 2000;
+      const questPulseFrom = { r: 1.0, g: 0.55, b: 0.2 };
+      const questPulseTo = { r: 0.5, g: 0.28, b: 0.1 };
+      const warBase = new Color(MAP_WAR_TORN_BATTLEGROUND_COLOR);
+      const warPulseFrom = { r: warBase.r, g: warBase.g, b: warBase.b };
+      const warPulseTo = { r: 0.4, g: 0.0, b: 0.0 };
+      const focusPulseFrom = { r: 0.66, g: 0.33, b: 0.97 };
+      const focusPulseTo = { r: 0.33, g: 0.17, b: 0.5 };
+      // Live values the render loop rewrites each frame and the pulse code reads
+      const questTweenColor = { ...questPulseFrom };
+      const warTweenColor = { ...warPulseFrom };
+      const focusTweenColor = { ...focusPulseFrom };
+      // Quest pins breathe as well as pulse: the tile tint alone is easy to miss
+      // on a first visit, and the scroll is what a new player is told to press.
+      const questIconScale = { value: 1 };
+      const QUEST_ICON_SCALE_MAX = 1.15;
+
       const sectorsToHighlight: {
         sector: number;
         color: typeof questTweenColor;
@@ -750,25 +774,26 @@ const GlobalMap: React.FC<MapProps> = (props) => {
             }
           });
         });
-        new TWEEN.Tween(questTweenColor)
-          .to({ r: 0.0, g: 0.0, b: 0.0 }, 1000)
-          .repeat(Infinity)
-          .easing(TWEEN.Easing.Cubic.InOut)
-          .start();
-        new TWEEN.Tween(warTweenColor)
-          .to({ r: 0.4, g: 0.0, b: 0.0 }, 1000)
-          .repeat(Infinity)
-          .easing(TWEEN.Easing.Cubic.InOut)
-          .start();
-        new TWEEN.Tween(focusTweenColor)
-          .to({ r: 0.33, g: 0.17, b: 0.5 }, 1000)
-          .repeat(Infinity)
-          .easing(TWEEN.Easing.Cubic.InOut)
-          .start();
       }
 
+      // One pin per sector. A sector can be a quest target, a war zone and the
+      // focused sector at once -- the tutorial deliberately focuses the sector
+      // its quest is in -- and pushing all three stacks their icons on the same
+      // point, which just reads as a smudge. The quest scroll wins because it is
+      // the marker the player has to act on; losing the focus pin costs nothing,
+      // since focusing still centres the camera and names the sector in the
+      // legend either way.
+      const highlightPriority = { quest: 0, war: 1, focus: 2 } as const;
+      const pinnedSectors = [...sectorsToHighlight]
+        .sort((a, b) => highlightPriority[a.type] - highlightPriority[b.type])
+        .filter(
+          (highlight, index, all) =>
+            all.findIndex((other) => other.sector === highlight.sector) === index,
+        );
+
       // Highlighted GPS pins for quests and wars
-      sectorsToHighlight.forEach((highlight) => {
+      const questIconSprites: Sprite[] = [];
+      pinnedSectors.forEach((highlight) => {
         const hasLabel = props.highlights?.find((h) => h.sector === highlight.sector);
         const sector = hexasphere?.tiles[highlight.sector]?.c;
         if (!hasLabel && sector) {
@@ -808,6 +833,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           // Explicit order so quest/war pins always draw after the sector grid
           iconSprite.renderOrder = 2;
           iconSprite.scale.set(1, 1, 1);
+          if (highlight.type === "quest") questIconSprites.push(iconSprite);
           iconSprite.position.set(sector.x / 2.5, sector.y / 2.5, sector.z / 2.5);
           iconSprite.userData.sector = highlight.sector;
           labelTargets.push(iconSprite);
@@ -815,9 +841,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         }
       });
 
-      setHasQuestMarkers(
-        sectorsToHighlight.some((highlight) => highlight.type === "quest"),
-      );
+      setHasQuestMarkers(pinnedSectors.some((highlight) => highlight.type === "quest"));
 
       // Pulsing a sector means rewriting its slice of the merged surface's
       // shared color buffer every frame. Snapshot each one's terrain colors up
@@ -826,7 +850,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       // then darken a little more each frame.
       const surfaceColors = surface.geometry.getAttribute("color") as BufferAttribute;
       const surfaceColorValues = surfaceColors.array as Float32Array;
-      const pulses = sectorsToHighlight.flatMap((highlight) => {
+      const pulses = pinnedSectors.flatMap((highlight) => {
         const start = surface.vertexRanges[highlight.sector * 2] ?? -1;
         const count = surface.vertexRanges[highlight.sector * 2 + 1] ?? 0;
         if (start < 0) return [];
@@ -951,8 +975,25 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       let lastRaycastMouseX = Number.NaN;
       let lastRaycastMouseY = Number.NaN;
       function render() {
-        // Update all TWEEN animations (color pulsing, etc.)
-        TWEEN.update();
+        // One cosine phase, 0 -> 1 -> 0, drives every highlight pulse. Continuous
+        // at both ends by construction, so nothing jumps on the turnaround.
+        const phase =
+          (1 -
+            Math.cos(
+              ((Date.now() % PULSE_PERIOD_MS) / PULSE_PERIOD_MS) * Math.PI * 2,
+            )) /
+          2;
+        const lerp = (from: number, to: number) => from + (to - from) * phase;
+        questTweenColor.r = lerp(questPulseFrom.r, questPulseTo.r);
+        questTweenColor.g = lerp(questPulseFrom.g, questPulseTo.g);
+        questTweenColor.b = lerp(questPulseFrom.b, questPulseTo.b);
+        warTweenColor.r = lerp(warPulseFrom.r, warPulseTo.r);
+        warTweenColor.g = lerp(warPulseFrom.g, warPulseTo.g);
+        warTweenColor.b = lerp(warPulseFrom.b, warPulseTo.b);
+        focusTweenColor.r = lerp(focusPulseFrom.r, focusPulseTo.r);
+        focusTweenColor.g = lerp(focusPulseFrom.g, focusPulseTo.g);
+        focusTweenColor.b = lerp(focusPulseFrom.b, focusPulseTo.b);
+        questIconScale.value = lerp(1, QUEST_ICON_SCALE_MAX);
 
         // Nothing below reaches the GPU while the context is lost, and queueing
         // buffer update ranges that never get uploaded would grow unbounded.
@@ -978,6 +1019,15 @@ const GlobalMap: React.FC<MapProps> = (props) => {
             surfaceColors.addUpdateRange(pulse.offset, pulse.terrain.length);
           }
           surfaceColors.needsUpdate = true;
+        }
+
+        // Breathe the quest pins in step with their tile tint. Sprite scale is
+        // in world units and the sprite always faces the camera, so this stays
+        // an even pulse at every zoom without any per-frame maths of its own.
+        if (canRender && questIconSprites.length > 0) {
+          for (const sprite of questIconSprites) {
+            sprite.scale.set(questIconScale.value, questIconScale.value, 1);
+          }
         }
         // Intersections with mouse: https://threejs.org/docs/index.html#api/en/core/Raycaster
         const cameraOrPointerMoved =

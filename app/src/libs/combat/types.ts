@@ -187,6 +187,13 @@ export type CombatUserFields = {
    * accounting/identity reclassification.
    */
   isPiloted?: boolean;
+  /**
+   * True while this human player has handed their turns to their own AI profile
+   * (auto combat). The mirror image of isPiloted: isAi stays false so rewards,
+   * result calculation, and DB write-back treat them as a normal player —
+   * strictly a turn-routing / UI signal.
+   */
+  isAutoCombat?: boolean;
   /** Transient: true only for the hidden clone-source summon template. Set at
    *  load, cleared on spawn/clone. Server-internal — not in publicState. */
   isSummonTemplate?: boolean;

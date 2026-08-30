@@ -8,7 +8,7 @@
  *
  * Env vars consumed:
  *   GH_TOKEN (or GITHUB_TOKEN), GITHUB_REPOSITORY, GITHUB_RUN_ID,
- *   PR_NUMBER, SCREENSHOTS_DIR (defaults to .artifacts/screenshots)
+ *   PR_NUMBER or ISSUE_NUMBER, SCREENSHOTS_DIR (defaults to .artifacts/screenshots)
  *
  * Outputs (via GITHUB_OUTPUT):
  *   screenshot_markdown — rendered markdown with ![caption](raw-url) blocks
@@ -19,16 +19,17 @@ import { setOutput, createGithubClient } from "./ci-helpers.mjs";
 
 const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
 const repo = process.env.GITHUB_REPOSITORY;
-const prNumber = process.env.PR_NUMBER;
+const targetNumber = process.env.PR_NUMBER || process.env.ISSUE_NUMBER;
 const runId = process.env.GITHUB_RUN_ID;
 const screenshotsDir = process.env.SCREENSHOTS_DIR || ".artifacts/screenshots";
+const targetKind = process.env.PR_NUMBER ? "pr" : "issue";
 
 if (!token || !repo) {
   console.log("Missing token or GITHUB_REPOSITORY — skipping screenshot upload");
   process.exit(0);
 }
 
-const BRANCH = `tnr-screenshots/pr-${prNumber}/${runId}`;
+const BRANCH = `tnr-screenshots/${targetKind}-${targetNumber}/${runId}`;
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
 
 const apiRequest = createGithubClient(token);
@@ -78,7 +79,7 @@ const main = async () => {
   const commit = await apiRequest(`/repos/${repo}/git/commits`, {
     method: "POST",
     body: JSON.stringify({
-      message: `TNR review screenshots for PR #${prNumber} (run ${runId})`,
+      message: `TNR review screenshots for ${targetKind} #${targetNumber} (run ${runId})`,
       tree: tree.sha,
       parents: [],
     }),

@@ -1,11 +1,14 @@
 "use client";
 
 import { useAtom, useSetAtom } from "jotai";
+import { Bot, Hand } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AutoBattleTypes } from "@/drizzle/constants";
 import { type CombatLayoutComponentId, useCombatPreferences } from "@/hooks/combat";
 import { useTutorialStep } from "@/hooks/tutorial";
 import ActionTimer from "@/layout/ActionTimer";
@@ -17,6 +20,7 @@ import { UserCombatSettings } from "@/layout/UserCombatSettings";
 import { availableUserActions } from "@/libs/combat/actions";
 import type { BattleState } from "@/libs/combat/types";
 import { resolveControlledActorId } from "@/libs/combat/util";
+import { showMutationToast } from "@/libs/toast";
 import {
   combatActionIdAtom,
   useRequiredUserData,
@@ -36,11 +40,21 @@ export default function CombatPage() {
 
   // Data from the DB
   const setBattleAtom = useSetAtom(userBattleAtom);
+  const utils = api.useUtils();
   const { data: userData } = useRequiredUserData();
   const { data, isLoading } = api.combat.getBattle.useQuery(
     { battleId: userData?.battleId },
     { enabled: !!userData?.battleId },
   );
+
+  // Mutation for handing turns to / taking them back from the user's AI profile
+  const { mutate: toggleAutoCombat, isPending: isTogglingAutoCombat } =
+    api.combat.toggleAutoCombat.useMutation({
+      onSuccess: async (result) => {
+        if (result.message) showMutationToast(result);
+        await utils.combat.getBattle.invalidate();
+      },
+    });
 
   // Derived variables
   const userId = userData?.userId;
@@ -51,6 +65,20 @@ export default function CombatPage() {
   // on the summon's turn (control is sequential -> exactly one).
   const controlledActorId = resolveControlledActorId(battle, userId);
   const user = battle?.usersState.find((u) => u.userId === controlledActorId);
+  // The session user's own battle entry (auto combat is a property of the
+  // player, not of whichever actor is currently controlled)
+  const sessionBattleUser = battle?.usersState.find((u) => u.userId === userId);
+  const isAutoCombatActive = !!sessionBattleUser?.isAutoCombat;
+  // Available in every battle except the kage/clan challenges, which are
+  // always fully AI-driven and offer no manual control to hand over.
+  const canToggleAutoCombat =
+    !!battle &&
+    !AutoBattleTypes.includes(battle.battleType) &&
+    !!sessionBattleUser &&
+    !sessionBattleUser.isAi &&
+    sessionBattleUser.curHealth > 0 &&
+    !sessionBattleUser.fledBattle &&
+    !sessionBattleUser.leftBattle;
   const actionGridClass = config.useSmallActions
     ? "grid grid-cols-7 md:grid-cols-9 gap-1"
     : undefined;
@@ -220,27 +248,56 @@ export default function CombatPage() {
 
   const renderActions = useCallback(() => {
     if (!isInBattle || !battle) return null;
+    if (isAutoCombatActive && !results) {
+      return (
+        <AutoCombatPanel
+          isToggling={isTogglingAutoCombat}
+          onTakeControl={() =>
+            toggleAutoCombat({ battleId: battle.id, enabled: false })
+          }
+        />
+      );
+    }
     return (
-      <ActionSelector
-        showInfoIcon={true}
-        items={actions}
-        currentRound={battle.round}
-        className="p-1"
-        showBgColor={true}
-        showLabels={showActionLabels}
-        selectedId={actionId}
-        combatMode={true}
-        userActionPoints={user?.actionPoints}
-        battle={battle}
-        userId={controlledActorId}
-        gridClassNameOverwrite={actionGridClass}
-        aspectRatioClass={actionAspect}
-        onClick={handleActionClick}
-      />
+      <>
+        <ActionSelector
+          showInfoIcon={true}
+          items={actions}
+          currentRound={battle.round}
+          className="p-1"
+          showBgColor={true}
+          showLabels={showActionLabels}
+          selectedId={actionId}
+          combatMode={true}
+          userActionPoints={user?.actionPoints}
+          battle={battle}
+          userId={controlledActorId}
+          gridClassNameOverwrite={actionGridClass}
+          aspectRatioClass={actionAspect}
+          onClick={handleActionClick}
+        />
+        {canToggleAutoCombat && !isAutoCombatActive && !results && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-muted-foreground"
+            disabled={isTogglingAutoCombat}
+            onClick={() => toggleAutoCombat({ battleId: battle.id, enabled: true })}
+          >
+            <Bot className="mr-2 h-4 w-4" />
+            Let my AI profile finish this battle
+          </Button>
+        )}
+      </>
     );
   }, [
     isInBattle,
     battle,
+    isAutoCombatActive,
+    results,
+    isTogglingAutoCombat,
+    toggleAutoCombat,
+    canToggleAutoCombat,
     actions,
     showActionLabels,
     actionId,
@@ -392,3 +449,31 @@ export default function CombatPage() {
     </div>
   );
 }
+
+interface AutoCombatPanelProps {
+  isToggling: boolean;
+  onTakeControl: () => void;
+}
+
+const AutoCombatPanel: React.FC<AutoCombatPanelProps> = (props) => {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-lg border bg-popover/50 p-4 text-center">
+      <p className="flex items-center gap-2 font-semibold">
+        <Bot className="h-5 w-5 animate-pulse" />
+        Auto combat active
+      </p>
+      <p className="text-muted-foreground text-sm">
+        Your AI profile is fighting this battle for you. Sit back and watch, or take
+        back control at any time.
+      </p>
+      <Button
+        variant="secondary"
+        disabled={props.isToggling}
+        onClick={props.onTakeControl}
+      >
+        <Hand className="mr-2 h-4 w-4" />
+        Take control
+      </Button>
+    </div>
+  );
+};

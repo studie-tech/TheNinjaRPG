@@ -77,6 +77,17 @@ describe("createUserSprite compatibility", () => {
       npcPlacementId: "placement-1",
       npcPositionVersion: 4,
     });
+    // The body doubles as a click target, so it must identify its placement
+    expect(group.children[0]?.userData).toMatchObject({
+      userId: "ai-template",
+      npcPlacementId: "placement-1",
+    });
+  });
+
+  it("keeps player avatar sprites free of placement identity", () => {
+    const group = createUserSprite(user(), hex, textureForPath);
+    const avatar = group.children.find((child) => child.userData.type === "avatar");
+    expect(avatar?.userData.npcPlacementId).toBeUndefined();
   });
 });
 

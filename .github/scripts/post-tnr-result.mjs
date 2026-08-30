@@ -23,6 +23,8 @@ const finalMessage = process.env.FINAL_MESSAGE ?? "";
 const artifactUrl = process.env.ARTIFACT_URL ?? "";
 const blockReason = process.env.BLOCK_REASON ?? "";
 const mode = process.env.MODE ?? "pr-review";
+const isIssueRepro = mode === "issue-repro";
+const agentLabel = isIssueRepro ? "TNR reproducer" : "TNR reviewer";
 const screenshotMarkdown = process.env.SCREENSHOT_MARKDOWN ?? "";
 
 if (!githubToken) {
@@ -63,6 +65,19 @@ const sanitizePlainText = (text, maxLen = 500) =>
     .slice(0, maxLen)
     .trim();
 
+/**
+ * The agent is handed the Vercel deployment-protection bypass secret (as a
+ * query param and a curl header) and the broker token (as a curl header).
+ * GitHub's secret masking does not apply to API-posted comment bodies, so
+ * scrub both the `param=value` and `Header: value` forms here no matter what
+ * the agent echoed into its report.
+ */
+const redactAgentSecrets = (text) =>
+  text.replace(
+    /((?:x-vercel-protection-bypass|x-tnr-reviewer-token)\s*[=:]\s*)[^&\s"')\]]+/gi,
+    "$1[redacted]",
+  );
+
 /** Build the markdown body for the PR comment based on the outcome. */
 const buildBody = () => {
   // Codex passes literal "\n" in the output — convert to real newlines
@@ -71,7 +86,7 @@ const buildBody = () => {
 
   if (result === "blocked") {
     return joinLines([
-      "## TNR reviewer blocked",
+      `## ${agentLabel} blocked`,
       "",
       `Mode: \`${mode}\``,
       blockReason ? `Reason: ${sanitizePlainText(blockReason)}` : "Reason: unknown",
@@ -92,14 +107,14 @@ const buildBody = () => {
 
   if (result === "success") {
     return joinLines([
-      cleanMessage || "## TNR reviewer completed",
+      cleanMessage || `## ${agentLabel} completed`,
       ...screenshotSection,
       ...footerLinks,
     ]);
   }
 
   return joinLines([
-    "## TNR reviewer failed",
+    `## ${agentLabel} failed`,
     "",
     `Mode: \`${mode}\``,
     cleanMessage ? ["", "Agent output:", "", cleanMessage] : null,
@@ -109,7 +124,7 @@ const buildBody = () => {
 };
 
 const main = async () => {
-  const body = buildBody();
+  const body = redactAgentSecrets(buildBody());
 
   // Preferred path: update the "started" comment in-place
   if (Number.isInteger(commentId) && commentId > 0) {

@@ -41,12 +41,61 @@ import {
   isQuestObjectiveAvailable,
 } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
-import { isTutorialPageMatch, isUsableHighlightRect } from "@/libs/tutorial";
+import {
+  isTutorialCaptureStep,
+  isTutorialPageMatch,
+  isUsableHighlightRect,
+} from "@/libs/tutorial";
 import { getMobileOperatingSystem } from "@/utils/hardware";
 import { parseHtml } from "@/utils/parse";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useUserData } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
+
+/** Marks the assistant panel so the highlight logic can measure what it covers. */
+const TUTORIAL_ASSISTANT_PANEL_ID = "tutorial-assistant-panel";
+
+/**
+ * The area of the screen the assistant panel takes clicks in. The panel is fixed
+ * to a corner, so a highlighted element can sit perfectly inside the viewport and
+ * still be impossible to press underneath it. The nameplate hangs outside the
+ * panel's own box so descendants are unioned in, but only ones that actually
+ * intercept pointer events -- the character portrait is decorative and lets
+ * clicks straight through, and counting it would push highlights further up the
+ * page than they need to go.
+ */
+const getAssistantPanelRect = (): DOMRect | null => {
+  const panel = document.getElementById(TUTORIAL_ASSISTANT_PANEL_ID);
+  if (!panel) return null;
+  const rect = panel.getBoundingClientRect();
+  let { top, left, right, bottom } = rect;
+  for (const child of panel.querySelectorAll("*")) {
+    if (getComputedStyle(child).pointerEvents === "none") continue;
+    const r = child.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    top = Math.min(top, r.top);
+    left = Math.min(left, r.left);
+    right = Math.max(right, r.right);
+    bottom = Math.max(bottom, r.bottom);
+  }
+  return new DOMRect(left, top, right - left, bottom - top);
+};
+
+const rectsOverlap = (a: DOMRect, b: DOMRect) =>
+  !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+
+/**
+ * Where a highlight of this height should end up vertically. The window's own
+ * middle is not safe: the assistant panel is fixed over the foot of the screen,
+ * so on a short viewport the middle is underneath it.
+ */
+const getPreferredHighlightCentre = (targetHeight: number) => {
+  const safeTop = 80;
+  const panel = getAssistantPanelRect();
+  const safeBottom =
+    panel && panel.top > safeTop + targetHeight ? panel.top : window.innerHeight;
+  return (safeTop + safeBottom) / 2;
+};
 
 /**
  * Reusable assistant portrait with correct styling
@@ -93,6 +142,8 @@ const AssistantDialog: React.FC<{
   characterImage?: string;
   onOpenOrderingDialog?: () => void;
   showOrderingButton?: boolean;
+  /** Anchor to the top instead, to uncover a highlight it would otherwise sit on. */
+  dodgeHighlight?: boolean;
 }> = ({
   title,
   children,
@@ -100,8 +151,17 @@ const AssistantDialog: React.FC<{
   characterImage,
   onOpenOrderingDialog,
   showOrderingButton,
+  dodgeHighlight,
 }) => (
-  <div className="pointer-events-auto fixed right-4 bottom-24 z-[60] md:right-4 md:bottom-4">
+  <div
+    id={TUTORIAL_ASSISTANT_PANEL_ID}
+    className={cn(
+      "pointer-events-auto fixed right-4 z-[60] md:right-4",
+      // The portrait hangs a long way above the panel, so the dodged position
+      // needs room for it rather than sitting flush at the top.
+      dodgeHighlight ? "top-44 md:top-52" : "bottom-24 md:bottom-4",
+    )}
+  >
     <div className="relative">
       {/* Assistant portrait positioned behind and above the dialog (top-right) */}
       <AssistantPortrait characterImage={characterImage} />
@@ -285,12 +345,18 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   // State to track if we should show the special game menu tutorial
   const [showGameMenuTutorial, setShowGameMenuTutorial] = useState<boolean>(false);
 
-  // Track if we've already scrolled for the current step to avoid repeated scrolling
-  const hasScrolledForStepRef = React.useRef<number>(-1);
-
-  // Track the step/element pair we have already scrolled into view, so the
-  // reveal happens once per target instead of on every position update
-  const hasRevealedTargetRef = React.useRef<string>("");
+  // Placement of the current highlight, keyed by step and element. One owner:
+  // this replaced two independent scrollers that each had their own idea of
+  // where a highlight belonged, so whichever ran last won.
+  const placementRef = React.useRef<{
+    key: string;
+    attempts: number;
+    settled: boolean;
+  }>({ key: "", attempts: 0, settled: false });
+  // Set while the panel would otherwise be sitting on top of the highlight, so
+  // it can step aside. Latched per target: recomputing it from the moved panel
+  // would say "no longer covered" and send it straight back.
+  const [panelDodgesHighlight, setPanelDodgesHighlight] = useState(false);
 
   // Tutorial management hook
   const {
@@ -429,26 +495,55 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     );
 
     if (highlightInfo) {
-      // Bring a freshly targeted element into view once. This runs off a 250ms
-      // interval, the scroll listener and a body-wide MutationObserver, so
-      // without the per-target guard the page would snap back every time the
-      // player scrolls the highlight off screen.
+      // Put the highlight where the player can actually see and press it. Three
+      // things can be wrong with where it is: off screen, underneath the fixed
+      // assistant panel, or just awkwardly far from where the eye expects it.
+      // All three are the same correction, so one pass owns the scrolling.
+      //
+      // It keeps correcting until the placement is good rather than firing once:
+      // a page still fetching its data lays out short, and content landing
+      // underneath the target afterwards would otherwise strand it. Once the
+      // placement is good it latches, so a player who then scrolls the highlight
+      // away is never fought. The attempt cap stops a target that can never be
+      // placed well from scrolling on every tick.
       const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}`;
-      if (hasRevealedTargetRef.current !== targetKey) {
-        hasRevealedTargetRef.current = targetKey;
-        const before = highlightInfo.element.getBoundingClientRect();
-        const isCompactTarget = before.height < window.innerHeight * 0.55;
+      if (placementRef.current.key !== targetKey) {
+        placementRef.current = { key: targetKey, attempts: 0, settled: false };
+        setPanelDodgesHighlight(false);
+      }
+      const placement = placementRef.current;
+      const before = highlightInfo.element.getBoundingClientRect();
+      const isCompactTarget = before.height < window.innerHeight * 0.55;
+      if (!placement.settled && placement.attempts < 5 && isCompactTarget) {
+        const panel = getAssistantPanelRect();
+        const preferredCentre = getPreferredHighlightCentre(before.height);
+        const centre = before.top + before.height / 2;
         const isOffscreen =
           before.bottom < 80 ||
           before.top > window.innerHeight - 80 ||
           before.right < 0 ||
           before.left > window.innerWidth;
-        if (isOffscreen && isCompactTarget) {
-          highlightInfo.element.scrollIntoView({
-            block: "nearest",
-            inline: "nearest",
-            behavior: "auto",
-          });
+        const isCovered = !!panel && rectsOverlap(before, panel);
+        const isMisplaced =
+          isOffscreen || isCovered || Math.abs(centre - preferredCentre) > 100;
+        if (!isMisplaced) {
+          placement.settled = true;
+        } else {
+          placement.attempts += 1;
+          const scroller = highlightInfo.element.ownerDocument.scrollingElement;
+          scroller?.scrollBy({ top: centre - preferredCentre, behavior: "auto" });
+          // Scrolling cannot always win: on a short page the document may already
+          // be as far down as it goes, leaving the target stuck under the panel
+          // with nothing left to scroll. Rather than stretch the page to make
+          // room, the panel gives way -- a step whose only advance action is
+          // pressing the highlight has to be pressable.
+          if (isCovered) {
+            const after = highlightInfo.element.getBoundingClientRect();
+            const stillCovered = getAssistantPanelRect()
+              ? rectsOverlap(after, getAssistantPanelRect() as DOMRect)
+              : false;
+            if (stillCovered) setPanelDodgesHighlight(true);
+          }
         }
       }
       const rect = highlightInfo.element.getBoundingClientRect();
@@ -462,7 +557,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       // no-op
     } else {
       setHighlight(null);
-      // no-op
+      setPanelDodgesHighlight(false);
     }
   };
 
@@ -639,30 +734,6 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     rightSideBarOpen,
     userData?.tutorialOn,
   ]);
-
-  // Auto-center the highlighted element when it becomes available
-  useEffect(() => {
-    // Early exit if tutorial is disabled
-    if (userData?.tutorialOn === false) return;
-    if (!highlight || !isAssistantVisible) return;
-
-    // Only scroll once per step
-    if (hasScrolledForStepRef.current === currentStepNumber) return;
-
-    const elementCenter = highlight.top + highlight.height / 2;
-    const viewportCenter = window.innerHeight / 2;
-    const currentScroll = window.scrollY;
-    const targetScroll = currentScroll + elementCenter - viewportCenter;
-
-    // Only scroll if the element is not already roughly centered
-    const scrollThreshold = 100; // pixels
-    if (Math.abs(elementCenter - viewportCenter) > scrollThreshold) {
-      window.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
-    }
-
-    // Mark that we've scrolled for this step
-    hasScrolledForStepRef.current = currentStepNumber;
-  }, [highlight, isAssistantVisible, currentStepNumber, userData?.tutorialOn]);
 
   // Add keyboard event listener for Enter and ArrowLeft keys to forward tutorial
   useEffect(() => {
@@ -852,6 +923,32 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       }
     }
   }
+
+  // The capture step tells the player to approach a marker in the sector, but
+  // that marker does not exist until the quest's opening dialog is answered --
+  // the objective it belongs to is not active before then, so the sector draws
+  // nothing and a new player reads the instruction, finds empty ground and
+  // concludes the game is broken. Answering the single option for them keeps the
+  // step's text true from the moment it appears. Tutorial only: everywhere else
+  // the dialog is the player's to read and choose from.
+  const autoAnsweredDialogRef = React.useRef<string>("");
+  const soleDialogOption =
+    dialogOptions?.options.length === 1 ? dialogOptions.options[0] : undefined;
+  const soleDialogQuestId = dialogOptions?.questId;
+  useEffect(() => {
+    // currentStep, not currentTutorialStep: once a quest supplies a dynamic step
+    // the latter carries a synthesized `quest-<id>`, so matching on the tutorial
+    // step id there succeeds only while that overlay happens to be absent.
+    if (!isTutorialCaptureStep(currentStep)) return;
+    if (!soleDialogQuestId || !soleDialogOption?.nextObjectiveId) return;
+    const key = `${soleDialogQuestId}:${soleDialogOption.nextObjectiveId}`;
+    if (autoAnsweredDialogRef.current === key) return;
+    autoAnsweredDialogRef.current = key;
+    checkRewards({
+      questId: soleDialogQuestId,
+      nextObjectiveId: soleDialogOption.nextObjectiveId,
+    });
+  }, [currentStep, soleDialogQuestId, soleDialogOption, checkRewards]);
 
   // Get character images for post-tutorial quest (no background)
   // For starter quests, skip fetching scene characters - we'll use the A/B tested assistant image instead
@@ -1094,6 +1191,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
               }
             }}
             characterImage={characterImage}
+            dodgeHighlight={panelDodgesHighlight}
             onOpenOrderingDialog={() => setShowOrderingDialog(true)}
             showOrderingButton={showPostTutorialQuest}
           >

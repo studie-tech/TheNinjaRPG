@@ -160,6 +160,7 @@ export const updateUserPreferencesSchema = z
     buttonSfxOn: z.boolean().optional(),
     iframesMuted: z.boolean().optional(),
     tutorialOn: z.boolean().optional(),
+    defaultAutoCombat: z.boolean().optional(),
   })
   .refine(
     (data) => {

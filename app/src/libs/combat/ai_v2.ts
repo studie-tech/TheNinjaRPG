@@ -56,8 +56,11 @@ export const performAIaction = (
   let nextBattle = battle;
   const returnBattle = structuredClone(nextBattle);
 
-  // Find AI users who are in control of themselves (i.e. not controlled by a player)
-  const aiUsers = nextBattle.usersState.filter((user) => user.isAi);
+  // Find users whose turns are AI-driven: actual AIs, plus humans who handed
+  // their turns to their own AI profile (auto combat)
+  const aiUsers = nextBattle.usersState.filter(
+    (user) => user.isAi || user.isAutoCombat,
+  );
 
   // Next action bookkeeping
   let nextAction: ActionWithTarget | undefined;
@@ -111,16 +114,25 @@ export const performAIaction = (
     // Derived for convenience
     const userWithDistance = { ...user, path: undefined, distance: 0 };
     const randomEnemy = enemies[Math.floor(Math.random() * enemies.length)];
-    const closestEnemy = enemies.reduce((prev, current) =>
-      prev.distance < current.distance ? prev : current,
-    );
+    // Length-guarded rather than bare reduces: a turn still routes through here
+    // once the last opponent has fallen -- the caller settles the battle on the
+    // same tick -- and reducing the now-empty list would throw instead. The
+    // targeting below already treats a missing closest-* as "no target", the
+    // same way it treats the random-* picks.
+    const closestEnemy = enemies.length
+      ? enemies.reduce((prev, current) =>
+          prev.distance < current.distance ? prev : current,
+        )
+      : undefined;
     const randomAlly = allies[Math.floor(Math.random() * allies.length)];
-    const closestAlly = allies.reduce((prev, current) =>
-      prev.distance < current.distance ? prev : current,
-    );
+    const closestAlly = allies.length
+      ? allies.reduce((prev, current) =>
+          prev.distance < current.distance ? prev : current,
+        )
+      : undefined;
     // Get barriers between user and closest enemy
     astar = new PathCalculator(resetGridFromObstacles(grid));
-    const tHex = findHex(grid, closestEnemy);
+    const tHex = closestEnemy ? findHex(grid, closestEnemy) : undefined;
     const barriers = getBarriers(astar, nextBattle.groundEffects, origin, tHex).map(
       (b) => mapDistancesToTarget(grid, astar, b, origin),
     );
@@ -139,7 +151,9 @@ export const performAIaction = (
     }
 
     // If we only have the last three actions (end turn, wait, and move),
-    // available, but more actions in total, then add wait rule
+    // available, but more actions in total, then add wait rule. Auto-combat
+    // humans always get the end-turn fallback so an unmatched rule set passes
+    // the turn instead of reaching the give-up path below.
     const nonEffectActions = [
       "basicHeal",
       "meditate",
@@ -150,7 +164,10 @@ export const performAIaction = (
       "cleanse",
       "clear",
     ];
-    if (allActions?.find((a) => !nonEffectActions.includes(a.id)) && aiProfile) {
+    if (
+      aiProfile &&
+      (user.isAutoCombat || allActions?.find((a) => !nonEffectActions.includes(a.id)))
+    ) {
       aiProfile.rules.push({
         conditions: [],
         action: ActionEndTurn.parse({}),
@@ -394,9 +411,27 @@ export const performAIaction = (
             }
           }
         } else if (rule.action.type === "end_turn") {
-          const wait = availActions.find((a) => a.id === "wait");
-          if (wait) {
-            nextAction = { action: wait, long: user.longitude, lat: user.latitude };
+          // An auto-combat human about to idle on drained pools meditates back
+          // to fighting shape instead — without this, a player whose attacks
+          // all became unaffordable would wait forever (any human would
+          // meditate here). Strategic end-turns at healthy pools are untouched.
+          // Meditate costs chakra itself, so below that cost it drops out of
+          // availActions and the turn falls through to wait — the same dead end
+          // a manual player hits, there being no cheaper recovery to reach for.
+          const drainedPools =
+            user.curStamina < 0.3 * user.maxStamina ||
+            user.curChakra < 0.3 * user.maxChakra;
+          const meditate =
+            user.isAutoCombat && drainedPools
+              ? availActions.find((a) => a.id === "meditate")
+              : undefined;
+          if (meditate) {
+            nextAction = { action: meditate, long: user.longitude, lat: user.latitude };
+          } else {
+            const wait = availActions.find((a) => a.id === "wait");
+            if (wait) {
+              nextAction = { action: wait, long: user.longitude, lat: user.latitude };
+            }
           }
         }
       }
@@ -428,7 +463,9 @@ export const performAIaction = (
     /** ******************************* */
     /** If not final action, end the AI */
     /** ******************************* */
-    if (!nextAction && !user.isPiloted) {
+    // Auto-combat humans are excluded: their turn simply times out and passes,
+    // letting the player take back control rather than dying to a stuck rule set.
+    if (!nextAction && !user.isPiloted && !user.isAutoCombat) {
       aiDescriptions.push(`${user.username} is exhausted and has to give up`);
       user.curHealth = 0;
     }

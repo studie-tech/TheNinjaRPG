@@ -54,6 +54,10 @@ TOKEN=$(grep '^AI_TEST_USER_BROKER_TOKEN=' "$(realpath app/.env)" | cut -d= -f2-
 : "${TOKEN:?set AI_TEST_USER_BROKER_TOKEN in the real app/.env}"
 ```
 
+This quote-stripping applies to EVERY value read out of `app/.env`, not just this one — several
+keys (e.g. `OPENAI_API_KEY`) are stored single-quoted. A key extracted with quotes attached
+authenticates as garbage and produces misleading 401s ("the key is dead") when the key is fine.
+
 ## 3. Provision test users
 
 Creates real users in the shared dev database, visible to every worktree's server at once.
@@ -97,8 +101,49 @@ curl -s -X POST "http://127.0.0.1:$PORT/api/ai-test-user/call-endpoint" \
 
 ## 5. Browser login
 
-Open `http://127.0.0.1:$PORT/login?__clerk_ticket=<signInToken>`. Clerk consumes the ticket and the
+Open `http://localhost:$PORT/login?__clerk_ticket=<signInToken>`. Clerk consumes the ticket and the
 session is signed in as that user. Single-use — provision a fresh user for another login.
+
+**Browser pages MUST use `localhost`, never `127.0.0.1`.** On a `127.0.0.1` origin the Next dev
+server 403s its own chunks ("Blocked cross-origin request to Next.js dev resource … from
+\"127.0.0.1\"" in the server log), so React never hydrates and clerk-js sits at
+`Clerk.status === "loading"` forever without ever calling its Frontend API — the login page stays
+blank and reloads just burn the single-use (~300 s) ticket. The symptom looks identical in the
+in-app pane, the Chrome extension, and headless drivers. Plain `curl` calls to API routes are
+unaffected (no hydration involved), which is why the earlier sections work with either host.
+
+## 5b. Headless auth for plain API routes (non-tRPC)
+
+The call-endpoint broker only reaches tRPC procedures. Next.js API routes that call Clerk's
+`auth()` directly (`/api/chat/*`, etc.) need a real Clerk session — which can be minted without a
+browser by doing what clerk-js does internally against the dev instance's Frontend API
+(`https://talented-kit-66.clerk.accounts.dev`):
+
+```js
+const FAPI = "https://talented-kit-66.clerk.accounts.dev";
+// 1. dev-browser token (dev instances only)
+const { token: dbJwt } = await (await fetch(`${FAPI}/v1/dev_browser`, { method: "POST" })).json();
+// 2. consume the broker's signInToken as a ticket sign-in
+const signIn = await (await fetch(`${FAPI}/v1/client/sign_ins?__clerk_db_jwt=${dbJwt}`, {
+  method: "POST",
+  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  body: new URLSearchParams({ strategy: "ticket", ticket: signInToken }),
+})).json();
+const sessionId = signIn.client.last_active_session_id;
+// 3. mint a session JWT (~60 s validity — mint right before each burst of calls)
+const { jwt } = await (await fetch(`${FAPI}/v1/client/sessions/${sessionId}/tokens?__clerk_db_jwt=${dbJwt}`, {
+  method: "POST",
+})).json();
+// 4. the Next server accepts it as a Bearer token
+await fetch(`http://127.0.0.1:${PORT}/api/chat/support`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+  body: JSON.stringify({ messages: [...] }),
+});
+```
+
+Chat routes expect the `useChat` wire shape: `{ messages: [{ id, role, parts: [{ type: "text",
+text }] }] }` — UIMessages with `parts`, not ModelMessages with `content`.
 
 ## 6. Cleanup
 

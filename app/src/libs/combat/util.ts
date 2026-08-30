@@ -459,6 +459,19 @@ export const wasDefeated = (u: BattleUserState, effects: UserEffect[]): boolean 
   !u.fledBattle && !stillInBattle(u, effects);
 
 /**
+ * Resolve a Kage challenge from shared battle state. CombatResult is scoped to
+ * whichever user finalized the battle, so a caller-relative didWin flips meaning
+ * depending on which client reaches combat cleanup first; this predicate reads
+ * the same persisted state at every finalization. Unlike wasDefeated, a kage who
+ * fled counts as beaten — abandoning the challenge forfeits the seat.
+ */
+export const didKageChallengerWin = (
+  challenger: BattleUserState,
+  kage: BattleUserState,
+  effects: UserEffect[],
+): boolean => stillInBattle(challenger, effects) && !stillInBattle(kage, effects);
+
+/**
  * Build the combat objective tracker tasks from pre-loaded battle state.
  *
  * Pure: reads only accumulated battle-state fields (usedActions, usedTagTypes, damageDealt)
@@ -2443,14 +2456,16 @@ export const hasNoAvailableActions = (
  * Determine whose turn the dispatch loop should treat this actor as.
  * A piloted summon (isPiloted) is human-driven on its turn even though it
  * keeps isAi=true for accounting; only its controller may act for it.
+ * The inverse also holds: a human on auto combat (isAutoCombat) keeps
+ * isAi=false for accounting but their turns are driven by their AI profile.
  */
 export const getTurnControl = (
-  actor: Pick<BattleUserState, "isAi" | "isPiloted" | "controllerId">,
+  actor: Pick<BattleUserState, "isAi" | "isPiloted" | "controllerId" | "isAutoCombat">,
   sessionUserId: string,
 ): { isUserTurn: boolean; isAITurn: boolean } => {
   const isMyActor = actor.controllerId === sessionUserId;
-  const isUserTurn = isMyActor && wantsHumanActionSet(actor);
-  const isAITurn = actor.isAi && !actor.isPiloted;
+  const isUserTurn = isMyActor && wantsHumanActionSet(actor) && !actor.isAutoCombat;
+  const isAITurn = (actor.isAi && !actor.isPiloted) || !!actor.isAutoCombat;
   return { isUserTurn, isAITurn };
 };
 

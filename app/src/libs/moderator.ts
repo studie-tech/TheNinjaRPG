@@ -460,19 +460,16 @@ export const classifyNsfwPrompt = async (
     reason: z.string(),
   });
 
+  // AI SDK 7 rejects system-role entries inside `messages`; system prompts
+  // must be passed via the top-level `system` option.
   const { object } = await generateObject({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
     schema: classificationSchema,
-    messages: [
-      {
-        role: "system",
-        content: `You are a content classifier for an anime-style RPG game's AI art generator.
+    system: `You are a content classifier for an anime-style RPG game's AI art generator.
 Analyze the user-provided prompt and determine if it is attempting to generate NSFW content.
 NSFW includes: sexual content, nudity, explicit violence/gore, content sexualizing minors, explicit drug use, hate symbols.
 Allowed: action/combat scenes, anime-style characters in appropriate clothing, fantasy violence (ninja RPG), dramatic scenes.`,
-      },
-      { role: "user", content: prompt },
-    ],
+    prompt,
   });
   return object as z.infer<typeof classificationSchema>;
 };
@@ -519,10 +516,7 @@ export const validateUserUpdateReason = async (
   const { object } = await generateObject({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
     schema: validationSchema,
-    messages: [
-      {
-        role: "system",
-        content: `You validate reasons supplied by content members for game content updates.
+    system: `You validate reasons supplied by content members for game content updates.
 Determine if the reason is descriptive and if the update should be allowed.
 Content members are tasked with testing things, helping users, etc, and thus the reason serves mostly as transparency for end users.
 You are not to judge the validity of the update, only verify that the reason is clear.
@@ -531,12 +525,7 @@ You are not to judge the validity of the update, only verify that the reason is 
 - Ignore spelling errors, this is not important to the moderation process.
 - If the reason is not valid, please provide a comment explaining why the update should not be allowed.
 - The reason does not have to include details about the update, the previous state, or new state.`,
-      },
-      {
-        role: "user",
-        content: `Reason: ${reason}\n\nUpdate: ${update}`,
-      },
-    ],
+    prompt: `Reason: ${reason}\n\nUpdate: ${update}`,
   });
   return object as z.infer<typeof validationSchema>;
 };

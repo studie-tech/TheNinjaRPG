@@ -40,8 +40,10 @@ import {
   calcGlobalTravelTime,
   calcIsInVillage,
   findGlobalTravelDestination,
+  findLandingNear,
   maxDistance,
 } from "@/libs/travel";
+import { isTutorialActive } from "@/libs/tutorial";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUser } from "@/routers/profile";
 import { breakStealth } from "@/routers/stealth";
@@ -507,7 +509,35 @@ export const travelRouter = createTRPCRouter({
         map as unknown as GlobalMapData,
       );
       const endTime = secondsFromNow(travelTime);
-      const destination = findGlobalTravelDestination(targetSectorMap, randomInt);
+      // A player still in the tutorial lands within sight of whatever objective
+      // is waiting in the destination sector, rather than anywhere in it. Travel
+      // otherwise picks a uniformly random walkable tile, which on a 26x26 map
+      // can be most of a sector from the target - and the sector camera is
+      // pinned to the player with panning disabled, so the marker is simply off
+      // screen with nothing pointing at it. The tracker carrying that location
+      // is a column on the user row already fetched above, so this costs no
+      // extra query. Falls back to the random tile when the objective is not in
+      // this sector or nothing walkable sits near it.
+      const tutorialTarget = isTutorialActive(user)
+        ? user.questData
+            ?.flatMap((quest) => quest.goals)
+            .find(
+              (goal) =>
+                !goal.done &&
+                goal.sector === input.sector &&
+                goal.longitude !== undefined &&
+                goal.latitude !== undefined,
+            )
+        : undefined;
+      const destination =
+        (tutorialTarget?.longitude !== undefined &&
+        tutorialTarget?.latitude !== undefined
+          ? findLandingNear(
+              targetSectorMap,
+              { x: tutorialTarget.longitude, y: tutorialTarget.latitude },
+              randomInt,
+            )
+          : null) ?? findGlobalTravelDestination(targetSectorMap, randomInt);
       if (!destination) {
         return errorResponse("The destination sector has no walkable tiles");
       }
