@@ -443,6 +443,8 @@ export default function Travel() {
 
   useEffect(() => {
     if (userData?.status === "BATTLE") {
+      // Not pushToCombat: this is the guard that bounces a battling player off the map, and it
+      // has to fire again every time they come back to it, including with the same battle
       void router.push(`/combat`);
     }
   }, [userData?.status, router]);
