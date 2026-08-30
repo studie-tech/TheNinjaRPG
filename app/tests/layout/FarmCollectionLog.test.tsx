@@ -1,10 +1,37 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/layout/Modal2", () => ({
-  default: ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <section aria-label={title}>{children}</section>
+vi.mock("@/components/ui/dialog", () => ({
+  Dialog: ({ open, children }: { open?: boolean; children: ReactNode }) =>
+    open ? children : null,
+  DialogContent: ({
+    className,
+    children,
+    id,
+  }: HTMLAttributes<HTMLDivElement> & { id?: string }) => (
+    <div role="dialog" id={id} className={className}>
+      {children}
+    </div>
+  ),
+  DialogHeader: ({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) => (
+    <div className={className} {...props}>
+      {children}
+    </div>
+  ),
+  DialogFooter: ({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) => (
+    <div className={className} {...props}>
+      {children}
+    </div>
+  ),
+  DialogTitle: ({
+    className,
+    children,
+    ...props
+  }: HTMLAttributes<HTMLHeadingElement>) => (
+    <h2 className={className} {...props}>
+      {children}
+    </h2>
   ),
 }));
 

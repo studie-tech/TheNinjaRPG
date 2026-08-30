@@ -1,15 +1,18 @@
 import { JSDOM } from "jsdom";
 
-export let cleanupDom = () => {};
+let installed = false;
 
-if (typeof document === "undefined") {
-  const originalGlobals = new Map(
-    ["window", "document", "navigator"].map((key) => [
-      key,
-      Object.getOwnPropertyDescriptor(globalThis, key),
-    ]),
-  );
-  const addedWindowKeys = [];
+/**
+ * Installs a jsdom environment when `document` is missing.
+ * Safe to call repeatedly — including after another suite tore globals down.
+ * Do not call cleanup between suites when tests share a process; use this instead.
+ */
+export const ensureDom = () => {
+  if (typeof document !== "undefined") {
+    installed = true;
+    return;
+  }
+
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
     url: "http://localhost/",
   });
@@ -24,21 +27,20 @@ if (typeof document === "undefined") {
     if (!(key in globalThis)) {
       const descriptor = Object.getOwnPropertyDescriptor(dom.window, key);
       if (!descriptor) continue;
-      Object.defineProperty(
-        globalThis,
-        key,
-        { ...descriptor, configurable: true },
-      );
-      addedWindowKeys.push(key);
+      Object.defineProperty(globalThis, key, { ...descriptor, configurable: true });
     }
   }
 
-  cleanupDom = () => {
-    dom.window.close();
-    for (const key of addedWindowKeys) Reflect.deleteProperty(globalThis, key);
-    for (const [key, descriptor] of originalGlobals) {
-      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-      else Reflect.deleteProperty(globalThis, key);
-    }
-  };
-}
+  installed = true;
+};
+
+/**
+ * @deprecated Shared-process suites must not tear down jsdom; another file may still
+ * need it. Prefer `ensureDom()` only. Kept as a no-op for existing imports.
+ */
+export const cleanupDom = () => {
+  // Intentionally empty: tearing down shared globals races with parallel test files.
+  void installed;
+};
+
+ensureDom();

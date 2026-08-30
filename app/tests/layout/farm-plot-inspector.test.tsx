@@ -1,6 +1,6 @@
-import { cleanupDom } from "../setup-dom.mjs";
+import { ensureDom } from "../setup-dom.mjs";
 import { fireEvent, render } from "@testing-library/react";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FarmPlotInspector } from "@/layout/FarmPlotInspector";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
@@ -76,8 +76,10 @@ const handlers = {
 };
 
 describe("FarmPlotInspector", () => {
-  beforeEach(() => vi.clearAllMocks());
-  afterAll(cleanupDom);
+  beforeEach(() => {
+    ensureDom();
+    vi.clearAllMocks();
+  });
 
   it("renders the mobile dock and plants only from the explicit primary action", () => {
     const { container, getByRole } = render(
