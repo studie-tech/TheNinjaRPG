@@ -52,7 +52,6 @@ export async function GET(request: Request) {
       maxChakra: true,
       curStamina: true,
       maxStamina: true,
-      regenAt: true,
       unreadNotifications: true,
     },
     with: { village: { columns: { name: true } } },
@@ -78,7 +77,6 @@ export async function GET(request: Request) {
       maxChakra: Math.round(user.maxChakra),
       curStamina: Math.round(user.curStamina),
       maxStamina: Math.round(user.maxStamina),
-      regenCompleteAt: user.regenAt?.toISOString(),
       unreadNotifications: user.unreadNotifications,
     },
     // Private to one device, and stale within a minute anyway.

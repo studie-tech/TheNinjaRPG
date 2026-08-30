@@ -5,12 +5,15 @@ import { useEffect, useRef, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
 import { useLiveActivity } from "@/hooks/useLiveActivity";
 import { readWidgetToken, useNativePush } from "@/hooks/useNativePush";
+import { calcHealFinish } from "@/libs/hospital";
 import {
   appEvents,
   isNative,
   isOutdatedNativeClient,
+  liveActivity,
   parseNativeUserAgent,
   platform,
+  purchases,
   toInternalPath,
   widgets,
 } from "@/libs/native";
@@ -91,6 +94,12 @@ export default function NativeBridge() {
     if (!isNative() || !isSignedOut) return;
     void unregister();
     void widgets.clear();
+    // RevenueCat stays bound to the previous appUserId until told otherwise, so a
+    // purchase or restore by the next person on this phone would credit the last account.
+    void purchases.logOut();
+    // Belt and braces alongside useLiveActivity's own cleanup: if the app was killed
+    // mid-stay, nothing holds the activity id any more, and endAll reaches it anyway.
+    void liveActivity.endAll();
     // Forget the deduplication signature too. Without this, signing back in with the same
     // vitals produces a matching signature, the write is skipped as redundant, and the
     // widget stays on the signed-out placeholder until a rounded stat happens to change.
@@ -102,6 +111,7 @@ export default function NativeBridge() {
   // widget plugin.
   useEffect(() => {
     if (!isNative() || !userData) return;
+    const quest = activeQuest(userData);
     const snapshot = {
       widgetToken: readWidgetToken(),
       username: userData.username,
@@ -116,6 +126,14 @@ export default function NativeBridge() {
       curStamina: Math.round(userData.curStamina),
       maxStamina: Math.round(userData.maxStamina),
       unreadNotifications: userData.unreadNotifications,
+      // Without these the Quest widget and the Status widget's hospital line have
+      // nothing to render, even though the snapshot type declares them.
+      hospitalUntil:
+        userData.status === "HOSPITALIZED"
+          ? calcHealFinish({ user: userData, timeDiff }).toISOString()
+          : undefined,
+      activeQuest: quest?.name,
+      questProgress: quest?.progress,
     };
     // userData changes on every regeneration tick, and WidgetKit budgets timeline reloads
     // per app per day — spending them on writes that redraw the same numbers is how a
@@ -148,4 +166,25 @@ const UpdateWall: React.FC = () => {
       </p>
     </div>
   );
+};
+
+/**
+ * The quest the widget should show, and how far through it the player is.
+ *
+ * Achievements are excluded: they are permanent background goals rather than something
+ * the player is currently on, and they would crowd out the real mission.
+ */
+const activeQuest = (
+  userData: NonNullable<ReturnType<typeof useUserData>["data"]>,
+): { name: string; progress?: number } | undefined => {
+  const entry = userData.userQuests?.find(
+    (userQuest) => userQuest.quest?.questType !== "achievement",
+  );
+  if (!entry?.quest) return undefined;
+  const goals = userData.questData?.find(
+    (tracker) => tracker.id === entry.quest.id,
+  )?.goals;
+  if (!goals || goals.length === 0) return { name: entry.quest.name };
+  const done = goals.filter((goal) => goal.done).length;
+  return { name: entry.quest.name, progress: done / goals.length };
 };

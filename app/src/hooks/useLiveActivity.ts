@@ -27,6 +27,9 @@ export const useLiveActivity = (
   // ActivityKit ids, so an activity is only ended once and only started once per stay.
   const activeId = useRef<string | null>(null);
   const isStarting = useRef(false);
+  // Read inside the start callback rather than captured, because `userData` changes on
+  // every profile refresh and the effect re-runs with it.
+  const shouldBeRunning = useRef(false);
 
   // Apple reissues the token, so this stays subscribed rather than reading it once.
   useEffect(() => {
@@ -41,23 +44,28 @@ export const useLiveActivity = (
 
   const endsAtRef = useRef<Date | null>(null);
   const isHospitalised = userData?.status === "HOSPITALIZED";
+  // Signed out counts as "stop", not "no opinion": leaving the countdown up would show
+  // the previous player's recovery on the Lock Screen of a signed-out phone.
+  const shouldRun = isHospitalised && !!userData;
+  shouldBeRunning.current = shouldRun;
 
   useEffect(() => {
-    if (!liveActivity.isSupported() || !userData) return;
+    if (!liveActivity.isSupported()) return;
 
-    if (!isHospitalised) {
+    if (!shouldRun) {
       const current = activeId.current;
       if (current) {
         activeId.current = null;
         endsAtRef.current = null;
         void liveActivity.end(current);
-        endActivity({ kind: "hospital" });
+        // Only worth telling the server while there is still a session to tell it with.
+        if (userData) endActivity({ kind: "hospital" });
       }
       return;
     }
 
     // Already showing one; the server pushes the updates from here.
-    if (activeId.current || isStarting.current) return;
+    if (activeId.current || isStarting.current || !userData) return;
 
     const endsAt = calcHealFinish({ user: userData, timeDiff });
     // A countdown that has already finished would show as stale the moment it appeared.
@@ -65,7 +73,6 @@ export const useLiveActivity = (
 
     isStarting.current = true;
     endsAtRef.current = endsAt;
-    let cancelled = false;
     void liveActivity
       .start("hospital", {
         title: "Recovering",
@@ -75,10 +82,10 @@ export const useLiveActivity = (
         endsAt,
       })
       .then((started) => {
-        if (cancelled) {
-          // The player left hospital while the start was in flight. The cleanup below
-          // could not end an activity that had no id yet, so it is ended here instead —
-          // otherwise it sits on the Lock Screen counting down to nothing.
+        // Checked through the ref rather than a cleanup flag: this effect re-runs on
+        // every profile refresh, so treating each cleanup as a cancellation would end
+        // the activity that had just started in the middle of a normal hospital stay.
+        if (!shouldBeRunning.current) {
           if (started) void liveActivity.end(started.activityId);
           endsAtRef.current = null;
           return;
@@ -89,9 +96,5 @@ export const useLiveActivity = (
       .finally(() => {
         isStarting.current = false;
       });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [endActivity, isHospitalised, timeDiff, userData]);
+  }, [endActivity, shouldRun, timeDiff, userData]);
 };

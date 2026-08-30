@@ -19,7 +19,6 @@ public struct TNRSnapshot: Codable, Equatable, Sendable {
     public let maxChakra: Int
     public let curStamina: Int
     public let maxStamina: Int
-    public let regenCompleteAt: Date?
     public let hospitalUntil: Date?
     public let unreadNotifications: Int
     public let activeQuest: String?

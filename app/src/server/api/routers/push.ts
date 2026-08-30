@@ -6,6 +6,7 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  publicProcedure,
 } from "@/api/trpc";
 import {
   PUSH_CATEGORIES,
@@ -70,16 +71,22 @@ export const pushRouter = createTRPCRouter({
       };
     }),
 
-  /** Called on sign-out so the next player on this phone does not inherit the alerts. */
-  unregisterDevice: protectedProcedure
+  /**
+   * Called on sign-out so the next player on this phone does not inherit the alerts.
+   *
+   * Public on purpose: by the time the app knows it is signed out, Clerk has already
+   * cleared the session, so a protected procedure would be rejected by both the client
+   * guard and the server at exactly the moment it is needed, leaving the device bound to
+   * the previous account. Authority comes from holding the device token, which only that
+   * device has, and the worst an attacker with a stolen token achieves is stopping
+   * notifications to a phone that recovers them by reopening the app. Listed in
+   * PUBLIC_MUTATIONS.
+   */
+  unregisterDevice: publicProcedure
     .input(unregisterDeviceSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      await ctx.drizzle
-        .delete(userDevice)
-        .where(
-          and(eq(userDevice.token, input.token), eq(userDevice.userId, ctx.userId)),
-        );
+      await ctx.drizzle.delete(userDevice).where(eq(userDevice.token, input.token));
       return { success: true, message: "Device unregistered" };
     }),
 

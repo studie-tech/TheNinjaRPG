@@ -153,7 +153,7 @@ export default function NativeStore() {
 
   return (
     <ContentBox
-      title="Reputation"
+      title="Store"
       subtitle={`You have ${userData.reputationPoints} reputation points`}
       alreadyHasH1
     >
@@ -161,6 +161,7 @@ export default function NativeStore() {
         <Loader explanation="Loading store" />
       ) : (
         <div className="flex flex-col gap-2">
+          <p className="mb-1 font-medium text-sm">Reputation</p>
           {catalogue?.reputation.map((product) => {
             // The store's own localised price, so the player sees their currency.
             const listed = products.find((p) => p.identifier === product.productId);
@@ -192,6 +193,49 @@ export default function NativeStore() {
               </div>
             );
           })}
+
+          {catalogue?.federal && catalogue.federal.length > 0 && (
+            <>
+              <p className="mt-4 mb-1 font-medium text-sm">Federal support</p>
+              {catalogue.federal.map((plan) => {
+                const listed = products.find((p) => p.identifier === plan.productId);
+                const isCurrent = userData.federalStatus === plan.federalStatus;
+                return (
+                  <div
+                    key={plan.productId}
+                    className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                  >
+                    <div>
+                      <p className="font-semibold text-sm">
+                        {plan.federalStatus.charAt(0)}
+                        {plan.federalStatus.slice(1).toLowerCase()}
+                      </p>
+                      <p className="text-muted-foreground text-xs">
+                        {listed?.priceString ?? "Monthly"}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={isCurrent ? "outline" : "default"}
+                      disabled={busyProduct !== null || !listed || isCurrent}
+                      onClick={() => listed && void buy(listed)}
+                    >
+                      {busyProduct === plan.productId ? (
+                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                      ) : (
+                        <ShoppingCart className="mr-1 h-4 w-4" />
+                      )}
+                      {isCurrent ? "Active" : "Subscribe"}
+                    </Button>
+                  </div>
+                );
+              })}
+              <p className="text-muted-foreground text-xs">
+                Changing or cancelling a subscription is done in your store account,
+                which is where it is billed.
+              </p>
+            </>
+          )}
 
           {products.length === 0 && (
             <p className="text-muted-foreground text-sm">

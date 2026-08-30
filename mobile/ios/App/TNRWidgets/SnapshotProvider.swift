@@ -25,11 +25,11 @@ struct SnapshotProvider: TimelineProvider {
         let snapshot = TNRSnapshotStore.load()
         let now = Date()
 
-        // Refresh when something is actually due to change — regeneration completing, or
-        // the player leaving hospital — and otherwise fall back to a slow poll. WidgetKit
-        // budgets refreshes per app per day, so asking every minute gets us throttled and
-        // then the widget stops updating at all.
-        let nextChange = [snapshot?.regenCompleteAt, snapshot?.hospitalUntil]
+        // Refresh when something is actually due to change — the player leaving hospital
+        // — and otherwise fall back to a slow poll. WidgetKit budgets refreshes per app
+        // per day, so asking every minute gets us throttled and the widget stops updating
+        // at all.
+        let nextChange = [snapshot?.hospitalUntil]
             .compactMap { $0 }
             .filter { $0 > now }
             .min()
@@ -57,7 +57,6 @@ extension TNRSnapshot {
         maxChakra: 900,
         curStamina: 640,
         maxStamina: 900,
-        regenCompleteAt: Date().addingTimeInterval(35 * 60),
         hospitalUntil: nil,
         unreadNotifications: 3,
         activeQuest: "Escort the Merchant",

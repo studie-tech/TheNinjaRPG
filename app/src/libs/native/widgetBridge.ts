@@ -31,8 +31,6 @@ export interface WidgetSnapshot {
   maxChakra: number;
   curStamina: number;
   maxStamina: number;
-  /** ISO timestamp regeneration completes, when the player is not already full. */
-  regenCompleteAt?: string;
   /** ISO timestamp the player leaves hospital, when hospitalised. */
   hospitalUntil?: string;
   unreadNotifications: number;

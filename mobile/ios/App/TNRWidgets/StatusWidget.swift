@@ -80,18 +80,17 @@ struct StatusWidgetView: View {
             }
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(TNRStyle.health)
-        } else if let regen = snapshot.regenCompleteAt, regen > entry.date {
-            Label {
-                Text(regen, style: .timer).monospacedDigit()
-            } icon: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(.secondary)
-        } else {
+        } else if snapshot.healthFraction >= 1 {
             Label("Ready", systemImage: "checkmark.circle.fill")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(TNRStyle.stamina)
+        } else {
+            // No regeneration ETA is shown: the value the app can supply is the last
+            // regeneration tick, not a completion time, and a wrong countdown is worse
+            // than none. The bars already say where the player is.
+            Label("Regenerating", systemImage: "arrow.clockwise")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
         }
     }
 }

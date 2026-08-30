@@ -62,6 +62,9 @@ export const PUBLIC_MUTATIONS: string[] = [
   // Email preference links are followed straight from an email, usually signed out.
   "misc.toggleEmailReminder",
   "misc.deleteEmailReminder",
+  // Called as the app signs out, by which point Clerk has already cleared the
+  // session. Authority is the device token itself.
+  "push.unregisterDevice",
 ];
 
 export const useGlobalOnMutateProtect = () => {
