@@ -3032,3 +3032,45 @@ export const DMG_SETTING_DEFAULTS: Record<string, number> = {
   DMG_ADVANTAGE_MAX,
 };
 export const DMG_SETTING_NAMES = Object.keys(DMG_SETTING_DEFAULTS);
+
+// ---------------------------------------------------------------------------
+// Native apps (iOS / Android)
+// ---------------------------------------------------------------------------
+
+/** Platforms a push token can belong to. `web` is reserved for a future Web Push transport. */
+export const PUSH_PLATFORMS = ["ios", "android", "web"] as const;
+export type PushPlatform = (typeof PUSH_PLATFORMS)[number];
+
+/**
+ * Notification categories the player can mute individually. Each maps to an Android
+ * notification channel and an APNs `thread-id`, so adding one here means adding a
+ * channel in the native shell too.
+ */
+export const PUSH_CATEGORIES = [
+  "combat",
+  "recovery",
+  "training",
+  "war",
+  "clan",
+  "trade",
+  "social",
+  "system",
+] as const;
+export type PushCategory = (typeof PUSH_CATEGORIES)[number];
+
+/** Live Activity kinds the iOS shell knows how to render. */
+export const LIVE_ACTIVITY_KINDS = ["hospital", "training", "war"] as const;
+export type LiveActivityKind = (typeof LIVE_ACTIVITY_KINDS)[number];
+
+/** Longest a device token is allowed to stay in the table without being seen again. */
+export const PUSH_TOKEN_STALE_DAYS = 90;
+
+/** Devices a single account may register before the oldest are evicted. */
+export const PUSH_MAX_DEVICES_PER_USER = 10;
+
+/**
+ * Marker appended to the WebView user agent by the native shell, e.g.
+ * `... TNR-Native/1.0.0 (ios)`. The server branches on this to hide web-only
+ * purchase flows that would breach App Store guideline 3.1.1.
+ */
+export const NATIVE_UA_MARKER = "TNR-Native/";

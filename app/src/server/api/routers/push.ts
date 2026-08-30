@@ -1,0 +1,165 @@
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { z } from "zod";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/api/trpc";
+import {
+  PUSH_CATEGORIES,
+  PUSH_MAX_DEVICES_PER_USER,
+  type PushCategory,
+} from "@/drizzle/constants";
+import { userDevice, userPushPreference } from "@/drizzle/schema";
+import type { DrizzleClient } from "@/server/db";
+import { deliveryTest, isPushEnabled, sendPushToUsers } from "@/server/utils/push";
+import {
+  registerDeviceSchema,
+  setPushPreferenceSchema,
+  unregisterDeviceSchema,
+} from "@/validators/push";
+
+export const pushRouter = createTRPCRouter({
+  /**
+   * Bind a device token to the signed-in account. The token is the unique key, so a phone
+   * that signs into a second account moves rather than duplicating, and a re-register
+   * from the same account is just a heartbeat.
+   */
+  registerDevice: protectedProcedure
+    .input(registerDeviceSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const now = new Date();
+      await ctx.drizzle
+        .insert(userDevice)
+        .values({
+          id: nanoid(),
+          userId: ctx.userId,
+          token: input.token,
+          platform: input.platform,
+          appVersion: input.appVersion,
+          locale: input.locale,
+          createdAt: now,
+          lastSeenAt: now,
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            userId: ctx.userId,
+            platform: input.platform,
+            appVersion: input.appVersion,
+            locale: input.locale,
+            lastSeenAt: now,
+          },
+        });
+      await evictExcessDevices(ctx.drizzle, ctx.userId);
+      return { success: true, message: "Device registered for notifications" };
+    }),
+
+  /** Called on sign-out so the next player on this phone does not inherit the alerts. */
+  unregisterDevice: protectedProcedure
+    .input(unregisterDeviceSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.drizzle
+        .delete(userDevice)
+        .where(
+          and(eq(userDevice.token, input.token), eq(userDevice.userId, ctx.userId)),
+        );
+      return { success: true, message: "Device unregistered" };
+    }),
+
+  /**
+   * Every category, with the player's choice applied. Only opt-outs are stored, so a
+   * category with no row reads as enabled.
+   */
+  getPreferences: protectedProcedure
+    .output(
+      z.object({
+        pushEnabled: z.boolean(),
+        categories: z.array(
+          z.object({ category: z.enum(PUSH_CATEGORIES), enabled: z.boolean() }),
+        ),
+        deviceCount: z.number(),
+      }),
+    )
+    .query(async ({ ctx }) => {
+      const [preferences, devices] = await Promise.all([
+        ctx.drizzle
+          .select({
+            category: userPushPreference.category,
+            enabled: userPushPreference.enabled,
+          })
+          .from(userPushPreference)
+          .where(eq(userPushPreference.userId, ctx.userId)),
+        ctx.drizzle
+          .select({ id: userDevice.id })
+          .from(userDevice)
+          .where(eq(userDevice.userId, ctx.userId)),
+      ]);
+      const stored = new Map<PushCategory, boolean>(
+        preferences.map((row) => [row.category, row.enabled]),
+      );
+      return {
+        pushEnabled: isPushEnabled(),
+        categories: PUSH_CATEGORIES.map((category) => ({
+          category,
+          enabled: stored.get(category) ?? true,
+        })),
+        deviceCount: devices.length,
+      };
+    }),
+
+  setPreference: protectedProcedure
+    .input(setPushPreferenceSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.drizzle
+        .insert(userPushPreference)
+        .values({
+          id: nanoid(),
+          userId: ctx.userId,
+          category: input.category,
+          enabled: input.enabled,
+          updatedAt: new Date(),
+        })
+        .onDuplicateKeyUpdate({
+          set: { enabled: input.enabled, updatedAt: new Date() },
+        });
+      return {
+        success: true,
+        message: `${input.category} notifications ${input.enabled ? "enabled" : "disabled"}`,
+      };
+    }),
+
+  /** Send a test alert to the player's own devices, so they can confirm delivery. */
+  sendTest: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
+    if (!isPushEnabled()) return errorResponse("Push is not configured on this server");
+    const summary = await sendPushToUsers(ctx.drizzle, [ctx.userId], deliveryTest());
+    if (summary.sent === 0) {
+      return errorResponse(
+        "No device received the test. Check that notifications are allowed for TheNinja-RPG.",
+      );
+    }
+    return {
+      success: true,
+      message: `Test sent to ${summary.sent} device${summary.sent === 1 ? "" : "s"}`,
+    };
+  }),
+});
+
+/**
+ * Keep the newest devices and drop the rest. Without this a player who reinstalls
+ * repeatedly accumulates dead tokens that every fan-out then has to try.
+ */
+const evictExcessDevices = async (client: DrizzleClient, userId: string) => {
+  const devices = await client
+    .select({ id: userDevice.id })
+    .from(userDevice)
+    .where(eq(userDevice.userId, userId))
+    .orderBy(desc(userDevice.lastSeenAt));
+  const excess = devices.slice(PUSH_MAX_DEVICES_PER_USER).map((device) => device.id);
+  if (excess.length === 0) return;
+  await client.delete(userDevice).where(inArray(userDevice.id, excess));
+};

@@ -5503,3 +5503,76 @@ export const farmExtractionRelations = relations(farmExtraction, ({ one }) => ({
     relationName: "farmExtractionSeedItem",
   }),
 }));
+
+// Native push notifications ---------------------------------------------------
+
+export const userDevice = mysqlTable(
+  "UserDevice",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    // APNs tokens are 64 hex chars; FCM registration tokens run to ~200 and are
+    // documented as variable length, so this is sized well above both.
+    token: varchar("token", { length: 512 }).notNull(),
+    platform: mysqlEnum("platform", consts.PUSH_PLATFORMS).notNull(),
+    appVersion: varchar("appVersion", { length: 32 }),
+    locale: varchar("locale", { length: 16 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    lastSeenAt: datetime("lastSeenAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      // A device that signs into a second account must move, not duplicate: the
+      // token is the identity, so re-registering it rebinds the row.
+      tokenKey: uniqueIndex("UserDevice_token_key").on(table.token),
+      userIdIdx: index("UserDevice_userId_idx").on(table.userId),
+      lastSeenAtIdx: index("UserDevice_lastSeenAt_idx").on(table.lastSeenAt),
+    };
+  },
+);
+export type UserDevice = InferSelectModel<typeof userDevice>;
+
+export const userDeviceRelations = relations(userDevice, ({ one }) => ({
+  user: one(userData, {
+    fields: [userDevice.userId],
+    references: [userData.userId],
+  }),
+}));
+
+/**
+ * Only opt-outs are stored. A missing row means the category is enabled, so adding a
+ * category to `PUSH_CATEGORIES` needs no migration and no backfill.
+ */
+export const userPushPreference = mysqlTable(
+  "UserPushPreference",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    category: mysqlEnum("category", consts.PUSH_CATEGORIES).notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userCategoryKey: uniqueIndex("UserPushPreference_userId_category_key").on(
+        table.userId,
+        table.category,
+      ),
+      userIdIdx: index("UserPushPreference_userId_idx").on(table.userId),
+    };
+  },
+);
+export type UserPushPreference = InferSelectModel<typeof userPushPreference>;
+
+export const userPushPreferenceRelations = relations(userPushPreference, ({ one }) => ({
+  user: one(userData, {
+    fields: [userPushPreference.userId],
+    references: [userData.userId],
+  }),
+}));
