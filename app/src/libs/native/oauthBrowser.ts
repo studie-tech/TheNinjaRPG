@@ -29,7 +29,13 @@ export const requiresSystemBrowser = (provider: string): boolean =>
     provider.replace("oauth_", ""),
   );
 
-/** Open a URL in the system browser. */
+/**
+ * Open a URL in the system browser.
+ *
+ * Rejects rather than no-opping off-device, unlike the fire-and-forget modules alongside
+ * it. The caller waits for a deep link back from this browser, so resolving without
+ * having opened anything would hang the sign-in instead of failing it.
+ */
 export const open = async (url: string): Promise<void> => {
   await invoke(PLUGIN, "open", { url, presentationStyle: "popover" });
 };
