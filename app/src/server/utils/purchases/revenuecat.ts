@@ -25,6 +25,8 @@ export const revenueCatEventSchema = z.object({
     transaction_id: z.string().nullish(),
     store: z.string().nullish(),
     cancel_reason: z.string().nullish(),
+    /** When the store says this happened, which is not when we hear about it. */
+    event_timestamp_ms: z.number().nullish(),
     environment: z.string().nullish(),
     entitlement_ids: z.array(z.string()).nullish(),
   }),
@@ -90,6 +92,15 @@ export const idempotencyKey = (event: RevenueCatEvent): string =>
   event.transaction_id ?? `event:${event.id}`;
 
 /** Constant-time comparison, so a wrong secret cannot be found a byte at a time. */
+/**
+ * When the event actually happened.
+ *
+ * RevenueCat retries for days and can deliver out of order, so "now" is not a safe stand-in
+ * for the moment an expiry took effect. Falls back to now only if the field is absent.
+ */
+export const occurredAt = (event: RevenueCatEvent): Date =>
+  event.event_timestamp_ms ? new Date(event.event_timestamp_ms) : new Date();
+
 export const isAuthorized = (
   header: string | null,
   secret: string | undefined,

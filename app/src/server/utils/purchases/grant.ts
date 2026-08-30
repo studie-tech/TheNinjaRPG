@@ -15,7 +15,7 @@
  */
 
 import * as Sentry from "@sentry/node";
-import { and, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   type FederalStatus,
@@ -174,11 +174,17 @@ export const grantStorePurchase = async (
 export const revokeFederalStatus = async (
   client: DrizzleClient,
   userId: string,
+  occurredAt: Date,
 ): Promise<void> => {
   // Retire the receipts first. They are what vouches for the tier to /api/cleaner and to
   // every PayPal writer, and a receipt outlives the subscription that produced it — left
   // unstamped they would go on claiming the player is a subscriber for the rest of the
   // window, and would block a later PayPal revocation from taking anything away.
+  //
+  // Only the receipts that predate the expiry, though. RevenueCat retries for days and can
+  // deliver out of order, so an expiry can easily arrive after the player has resubscribed
+  // — and retiring the receipt for the subscription they are currently paying for would
+  // take the tier away from someone who just bought it back.
   await client
     .update(storePurchase)
     .set({ revokedAt: new Date() })
@@ -187,6 +193,7 @@ export const revokeFederalStatus = async (
         eq(storePurchase.userId, userId),
         isNotNull(storePurchase.federalStatus),
         isNull(storePurchase.revokedAt),
+        lte(storePurchase.createdAt, occurredAt),
       ),
     );
   const floor = await paypalFederalFloor(client, userId);

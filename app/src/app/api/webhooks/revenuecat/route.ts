@@ -12,6 +12,7 @@ import {
   isAuthorized,
   isRefund,
   isSandbox,
+  occurredAt,
   revenueCatEventSchema,
   toStorePlatform,
 } from "@/server/utils/purchases/revenuecat";
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
       if (isSandbox(event.environment)) {
         return Response.json({ handled: "ignored" });
       }
-      await revokeFederalStatus(drizzleDB, event.app_user_id);
+      await revokeFederalStatus(drizzleDB, event.app_user_id, occurredAt(event));
       return Response.json({ handled: "revoked" });
     }
     if (action === "grant" && event.product_id) {

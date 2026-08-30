@@ -10,6 +10,7 @@ import {
   isAuthorized,
   isRefund,
   isSandbox,
+  occurredAt,
   toStorePlatform,
 } from "@/server/utils/purchases/revenuecat";
 
@@ -64,6 +65,18 @@ describe("revenuecat webhook classification", () => {
     expect(classifyEvent("CANCELLATION")).toBe("ignore");
     expect(classifyEvent("BILLING_ISSUE")).toBe("ignore");
     expect(classifyEvent("TEST")).toBe("ignore");
+  });
+
+  it("dates an event by when the store says it happened, not when we hear it", () => {
+    // RevenueCat retries for days: using arrival time would let a late expiry retire a
+    // receipt for a subscription the player has since bought back.
+    const at = 1_700_000_000_000;
+    expect(
+      occurredAt({ type: "EXPIRATION", id: "e", app_user_id: "u", event_timestamp_ms: at } as Parameters<typeof occurredAt>[0]).getTime(),
+    ).toBe(at);
+    // Absent only in hand-made payloads; falling back to now keeps the caller simple.
+    const fallback = occurredAt({ type: "EXPIRATION", id: "e", app_user_id: "u" } as Parameters<typeof occurredAt>[0]);
+    expect(Math.abs(fallback.getTime() - Date.now())).toBeLessThan(5000);
   });
 
   it("tells a refund apart from an ordinary cancellation", () => {
