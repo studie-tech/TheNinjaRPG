@@ -8,12 +8,23 @@ import {
   safeLocalStorageRemoveItem,
   safeLocalStorageSetItem,
 } from "@/hooks/localstorage";
-import { isNative, parseNativeUserAgent, push } from "@/libs/native";
+import { isNative, parseNativeUserAgent, push, toSafePath } from "@/libs/native";
 
 /** Token last handed to the server, so a resume does not re-register the same value. */
 const LAST_TOKEN_KEY = "native-push-token";
 /** Widget credential the server minted for this device, kept for the snapshot writes. */
 const WIDGET_TOKEN_KEY = "native-widget-token";
+
+/**
+ * Bumped on every unregister, so a registration still in flight can tell that the account
+ * it was for has since signed out.
+ *
+ * Module scope rather than a ref on purpose: signing out unmounts the tree that owns this
+ * hook, so a ref would be discarded and recreated at zero by the next mount — leaving the
+ * in-flight request free to write the previous account's widget token back and hand
+ * whoever picks the phone up next a credential for someone else's status.
+ */
+let registrationEpoch = 0;
 
 interface UseNativePushOptions {
   /** Register only once the player is signed in; tokens are bound to an account. */
@@ -39,10 +50,6 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
   const registerDevice = api.push.registerDevice.useMutation();
   const unregisterDevice = api.push.unregisterDevice.useMutation();
   const { mutateAsync: sendToken } = registerDevice;
-  // Bumped on unregister. A registration already in flight when the player signs out
-  // would otherwise resolve afterwards and write the old account's widget token back,
-  // handing whoever picks the phone up next a credential for someone else's status.
-  const registrationEpoch = useRef(0);
   // State, not just localStorage: the widget snapshot effect has to re-run once this
   // exists, and a ref would not wake it.
   const [widgetToken, setWidgetToken] = useState<string | undefined>(
@@ -57,7 +64,7 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
     const unsubscribeRegistration = push.onRegistration(({ token, platform }) => {
       if (registeredToken.current === token) return;
       registeredToken.current = token;
-      const epoch = registrationEpoch.current;
+      const epoch = registrationEpoch;
       void sendToken({
         token,
         platform,
@@ -67,7 +74,7 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
         .then((result) => {
           // Signed out while this was in flight: the device has already been detached, so
           // writing the token back would undo that.
-          if (epoch !== registrationEpoch.current) return;
+          if (epoch !== registrationEpoch) return;
           safeLocalStorageSetItem(LAST_TOKEN_KEY, token);
           if (result.widgetToken) {
             safeLocalStorageSetItem(WIDGET_TOKEN_KEY, result.widgetToken);
@@ -85,7 +92,8 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
     });
 
     const unsubscribeTap = push.onActionPerformed((payload) => {
-      if (payload.url?.startsWith("/")) router.push(payload.url);
+      const path = toSafePath(payload.url);
+      if (path) router.push(path);
     });
 
     void push.checkPermissions().then(async (state) => {
@@ -103,7 +111,7 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
   const unregister = useCallback(async () => {
     // Invalidate first, so a registration racing this cannot write its result back after
     // the row has been deleted.
-    registrationEpoch.current += 1;
+    registrationEpoch += 1;
     setWidgetToken(undefined);
     const token = registeredToken.current ?? safeLocalStorageGetItem(LAST_TOKEN_KEY);
     if (!token) return;

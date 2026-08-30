@@ -98,4 +98,19 @@ describe("toInternalPath", () => {
     expect(toInternalPath("javascript:alert(1)")).toBeNull();
     expect(toInternalPath("not a url")).toBeNull();
   });
+
+  it("cannot be talked into a protocol-relative path that leaves the app", async () => {
+    const { toInternalPath, toSafePath } = await import("@/libs/native/deepLink");
+    // Handed to the router as-is, "//evil.com/x" navigates to https://evil.com/x.
+    expect(toInternalPath("https://www.theninja-rpg.com//evil.com/x")).toBe(
+      "/evil.com/x",
+    );
+    expect(toInternalPath("https://www.theninja-rpg.com/\\evil.com/x")).toBe(
+      "/evil.com/x",
+    );
+    expect(toSafePath("//evil.com/x")).toBe("/evil.com/x");
+    expect(toSafePath("/battlearena")).toBe("/battlearena");
+    expect(toSafePath("https://evil.com/x")).toBeNull();
+    expect(toSafePath(undefined)).toBeNull();
+  });
 });

@@ -26,7 +26,7 @@ export {
   isNative,
   NativeBridgeError,
 } from "./bridge";
-export { isAppHost, toInternalPath } from "./deepLink";
+export { isAppHost, toInternalPath, toSafePath } from "./deepLink";
 export * as haptics from "./haptics";
 export * as liveActivity from "./liveActivity";
 export * as oauthBrowser from "./oauthBrowser";
