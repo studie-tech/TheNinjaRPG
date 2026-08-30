@@ -53,6 +53,7 @@ import QuestPicker from "@/layout/QuestPicker";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
+import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import type { StatSchemaType } from "@/validators/combat";
 import { createStatSchema } from "@/validators/combat";
@@ -246,7 +247,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
             battleId: result.battleId,
             updatedAt: new Date(),
           });
-          router.push("/combat");
+          pushToCombat(router, result.battleId);
           sendGTMEvent({ event: "enter_arena" });
           if (currentStep?.title === "Start Arena Match") {
             handleNextStep();
@@ -652,7 +653,7 @@ const ActiveChallenges: React.FC = () => {
             updatedAt: new Date(),
           });
           await utils.sparring.getUserChallenges.invalidate();
-          router.push("/combat");
+          pushToCombat(router, data.battleId);
         }
       },
     });
@@ -734,7 +735,7 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
             battleId: data.battleId,
             updatedAt: new Date(),
           });
-          router.push("/combat");
+          pushToCombat(router, data.battleId);
           showMutationToast({ ...data, message: "Entering the Training" });
         } else {
           showMutationToast(data);

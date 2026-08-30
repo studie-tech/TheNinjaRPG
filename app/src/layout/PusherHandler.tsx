@@ -9,6 +9,7 @@ import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
 import { env } from "@/env/client.mjs";
 import { showMutationToast } from "@/libs/toast";
+import { pushToCombat } from "@/utils/routing";
 
 // Events sent to the user from websockets
 export type UserEvent = {
@@ -88,7 +89,7 @@ export const usePusherHandler = (
                 ],
               } as typeof old;
             });
-            router.push("/combat");
+            pushToCombat(router, data.battleId);
             void utils.combat.getBattle.invalidate();
           }
         } else if (data.type === "battleEnded") {

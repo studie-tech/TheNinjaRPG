@@ -21,6 +21,7 @@ import ShrineBattleLobby from "@/layout/ShrineBattleLobby";
 import StatusBar from "@/layout/StatusBar";
 import { isRaidCurrentlyActive } from "@/libs/raids";
 import { showMutationToast } from "@/libs/toast";
+import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Shrine() {
@@ -44,7 +45,7 @@ export default function Shrine() {
             battleId: result.battleId,
             updatedAt: new Date(),
           });
-          router.push("/combat");
+          pushToCombat(router, result.battleId);
           showMutationToast({ ...result, message: "Attacking the Shrine" });
         } else {
           showMutationToast(result);
