@@ -125,6 +125,7 @@ import { handleQuestConsequences, insertNextQuest } from "@/routers/quests";
 import { fetchVillage } from "@/routers/village";
 import { deleteUser } from "@/server/api/routers/staff";
 import type { DrizzleClient } from "@/server/db";
+import { scopedRead } from "@/server/requestScope";
 import { adjustSeichiSilverAtomically } from "@/server/utils/concurrency";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { getRandomElement } from "@/utils/array";
@@ -2414,6 +2415,98 @@ export const updateUserContent = async (props: {
 };
 
 /**
+ * Global game state that `fetchUpdatedUser` needs on every call, memoized for the
+ * duration of one HTTP request by {@link scopedRead}.
+ *
+ * None of these predicates mention a user, so a tRPC batch used to re-read the same
+ * rows once per procedure - and `fetchUpdatedUser` is called by nearly every
+ * procedure the busy pages mount. Sharing them collapses that fan-out to one read
+ * each without changing what any caller sees: `scopedRead` hands out clones, so the
+ * per-user rewriting that happens downstream (hiding quest locations, attaching the
+ * user's own subset of wars/raids/lobbies) still operates on private copies.
+ *
+ * The lobby and raid cutoffs are evaluated against the first caller's `now`. Later
+ * callers in the same request therefore inherit a cutoff that is milliseconds old,
+ * which is well inside the minute-scale windows both filters describe.
+ */
+const fetchAchievementCatalogue = (client: DrizzleClient) =>
+  scopedRead("achievements", () =>
+    client
+      .select()
+      .from(quest)
+      .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
+  );
+
+const fetchAllGameSettings = (client: DrizzleClient) =>
+  scopedRead("gameSettings", () => client.select().from(gameSetting));
+
+const fetchHasUnvotedPolls = (client: DrizzleClient, userId: string, now: Date) =>
+  scopedRead(`unvotedPolls:${userId}`, () =>
+    client
+      .select({ id: poll.id })
+      .from(poll)
+      .leftJoin(
+        userPollVote,
+        and(eq(userPollVote.pollId, poll.id), eq(userPollVote.userId, userId)),
+      )
+      .where(
+        and(
+          eq(poll.isActive, true),
+          // Either endDate is null or endDate is in the future
+          or(isNull(poll.endDate), sql`${poll.endDate} > ${now}`),
+          // User hasn't voted on this poll
+          isNull(userPollVote.id),
+        ),
+      )
+      .limit(1),
+  );
+
+/** All active wars, for enemy_village sector type resolution. */
+const fetchAllActiveWars = (client: DrizzleClient) =>
+  scopedRead("allActiveWars", () =>
+    client.query.war.findMany({
+      where: isNull(war.endedAt),
+      columns: {
+        id: true,
+        type: true,
+        attackerVillageId: true,
+        defenderVillageId: true,
+        sector: true,
+      },
+      with: {
+        attackerVillage: { columns: { id: true, name: true, sector: true } },
+        defenderVillage: { columns: { id: true, name: true, sector: true } },
+        warAllies: true,
+      },
+    }),
+  );
+
+/** Shrine battle lobbies whose battle has not started and that are not yet stale. */
+const fetchActiveShrineLobbies = (client: DrizzleClient, staleBefore: Date) =>
+  scopedRead("activeShrineLobbies", () =>
+    client.query.mpvpBattleQueue.findMany({
+      where: and(
+        eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+        isNull(mpvpBattleQueue.battleId),
+        gt(mpvpBattleQueue.createdAt, staleBefore),
+      ),
+    }),
+  );
+
+/** All raids whose boss is still standing and whose window has not closed. */
+const fetchActiveRaids = (client: DrizzleClient, now: Date) =>
+  scopedRead("activeRaids", () =>
+    client.query.quest.findMany({
+      where: and(
+        eq(quest.questType, "raid"),
+        eq(quest.hidden, false),
+        gte(quest.raidBossCurrentHealth, 1),
+        or(isNull(quest.raidEndsAt), gte(quest.raidEndsAt, now)),
+      ),
+    }),
+  );
+
+/**
  * Fetch user with bloodline & village relations. Occasionally updates the user with regeneration
  * of pools, or optionally forces regeneration with forceRegen=true
  */
@@ -2445,11 +2538,8 @@ export const fetchUpdatedUser = async (props: {
     activeShrineBattles,
     activeRaids,
   ] = await Promise.all([
-    client
-      .select()
-      .from(quest)
-      .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
-    client.select().from(gameSetting),
+    fetchAchievementCatalogue(client),
+    fetchAllGameSettings(client),
     client.query.userData.findFirst({
       where: eq(userData.userId, userId),
       with: {
@@ -2497,59 +2587,10 @@ export const fetchUpdatedUser = async (props: {
         votes: true,
       },
     }),
-    client
-      .select({ id: poll.id })
-      .from(poll)
-      .leftJoin(
-        userPollVote,
-        and(eq(userPollVote.pollId, poll.id), eq(userPollVote.userId, userId)),
-      )
-      .where(
-        and(
-          eq(poll.isActive, true),
-          // Either endDate is null or endDate is in the future
-          or(isNull(poll.endDate), sql`${poll.endDate} > ${now}`),
-          // User hasn't voted on this poll
-          isNull(userPollVote.id),
-        ),
-      )
-      .limit(1),
-    // Fetch all active wars for enemy_village sector type resolution
-    client.query.war.findMany({
-      where: isNull(war.endedAt),
-      columns: {
-        id: true,
-        type: true,
-        attackerVillageId: true,
-        defenderVillageId: true,
-        sector: true,
-      },
-      with: {
-        attackerVillage: { columns: { id: true, name: true, sector: true } },
-        defenderVillage: { columns: { id: true, name: true, sector: true } },
-        warAllies: true,
-      },
-    }),
-    // Fetch all active shrine battles (only those where battle hasn't started
-    // yet AND the lobby hasn't aged past its natural lifetime — stale rows
-    // are cleaned up by the shrine-maintenance cron but we filter here too so
-    // notifications clear immediately rather than waiting on the next tick.
-    client.query.mpvpBattleQueue.findMany({
-      where: and(
-        eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
-        isNull(mpvpBattleQueue.battleId),
-        gt(mpvpBattleQueue.createdAt, shrineLobbyStaleBefore),
-      ),
-    }),
-    // Fetch all active raids (boss not defeated, not ended)
-    client.query.quest.findMany({
-      where: and(
-        eq(quest.questType, "raid"),
-        eq(quest.hidden, false),
-        gte(quest.raidBossCurrentHealth, 1),
-        or(isNull(quest.raidEndsAt), gte(quest.raidEndsAt, now)),
-      ),
-    }),
+    fetchHasUnvotedPolls(client, userId, now),
+    fetchAllActiveWars(client),
+    fetchActiveShrineLobbies(client, shrineLobbyStaleBefore),
+    fetchActiveRaids(client, now),
   ]);
 
   // Reskin bloodline if needed
