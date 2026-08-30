@@ -3,6 +3,7 @@ import type { DrizzleClient } from "@/server/db";
 import {
   buildFarmCollectionState,
   recordFirstFarmHarvests,
+  reduceActiveFarmPlotTimers,
 } from "@/server/utils/farming";
 
 const seed = (
@@ -100,5 +101,57 @@ describe("recordFirstFarmHarvests", () => {
     const duplicateSet = duplicateUpdate.set;
     expect(Object.keys(duplicateSet)).toEqual(["id"]);
     expect(duplicateSet).not.toHaveProperty("firstHarvestedAt");
+  });
+});
+
+/** Flattens a drizzle SQL fragment into text, since the object graph is cyclic. */
+const renderSql = (fragment: unknown): string => {
+  const parts: string[] = [];
+  const walk = (node: unknown, depth: number) => {
+    if (node === null || node === undefined || depth > 6) return;
+    if (typeof node === "string" || typeof node === "number") {
+      parts.push(String(node));
+      return;
+    }
+    if (node instanceof Date) return;
+    if (Array.isArray(node)) {
+      node.forEach((child) => walk(child, depth + 1));
+      return;
+    }
+    if (typeof node === "object") {
+      const obj = node as Record<string, unknown>;
+      for (const key of ["queryChunks", "value", "values", "name"]) {
+        if (key in obj) walk(obj[key], depth + 1);
+      }
+    }
+  };
+  walk(fragment, 0);
+  return parts.join(" ");
+};
+
+describe("reduceActiveFarmPlotTimers", () => {
+  it("clamps the new finish time to now and only touches plots still growing", () => {
+    const where = vi.fn(() => Promise.resolve({ rowsAffected: 2 }));
+    const set = vi.fn((_values: Record<string, unknown>) => ({ where }));
+    const client = {
+      update: vi.fn(() => ({ set })),
+    } as unknown as DrizzleClient;
+    const now = new Date("2026-08-30T12:00:00.000Z");
+
+    reduceActiveFarmPlotTimers(client, "user-1", 90, now);
+
+    const applied = set.mock.calls[0]?.[0];
+    if (!applied) throw new Error("Expected the plot timers to be updated");
+    expect(applied.updatedAt).toBe(now);
+
+    // finishAt must be pulled in by the reduction but never past `now`, so a plot
+    // that is nearly ready cannot be pushed into the past by a long win streak.
+    const rendered = renderSql(applied.finishAt);
+    expect(rendered).toContain("GREATEST");
+    expect(rendered).toContain("TIMESTAMPADD");
+    expect(rendered).toContain("90");
+
+    // Idle plots, harvest-ready plots and other users' plots must be excluded.
+    expect(where).toHaveBeenCalledTimes(1);
   });
 });

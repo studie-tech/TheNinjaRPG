@@ -1942,9 +1942,9 @@ export const IMG_OCCUPATION_HUNTER =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2xooNenMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8.webp";
 export const IMG_OCCUPATION_CRAFTING =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7YhkcAXKPBOUWGyFuM4DlL1v5HNTZhkte0z6.webp";
-// Local until uploaded to production UploadThing (same app as other occupations).
-// Source copies: assets/occupations/farming.png, assets/farming/*
-export const IMG_OCCUPATION_FARMING = "/layouts/farming/farming-home.png";
+// Source copies: assets/occupations/farming.webp, assets/farming/*
+export const IMG_OCCUPATION_FARMING =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMNdWH9tsO4cexqW2RDgkE3zZbNXSFGitmnar";
 
 // Global day/night cycle (UTC, shared across world views)
 export const WORLD_CYCLE_SECONDS = 30 * 60;
@@ -2004,9 +2004,11 @@ export const FARM_SHOP_ENTRIES: {
   },
 ];
 
-// Farm scene textures (local until production CDN upload — see IMG_OCCUPATION_FARMING)
-export const IMG_FARM_BACKGROUND = "/layouts/farming/farm-background-v2.png";
-export const IMG_FARM_PLOT_SOIL = "/layouts/farming/farm-plot-soil-v5.png";
+// Farm scene textures. Source copies: assets/farming/*
+export const IMG_FARM_BACKGROUND =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMIve8pJtsO4cexqW2RDgkE3zZbNXSFGitmna";
+export const IMG_FARM_PLOT_SOIL =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jZR4BgrYldRWJcD6vE10SjNsXHeA9pVMfQi";
 
 // Marketing constants
 export const TOTAL_PLAYERS_MILESTONE = 1000000;
