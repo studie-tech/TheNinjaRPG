@@ -32,9 +32,15 @@ SET `h`.`previousCompletes` = `d`.`keepCompletes`,
 -- The id breaks ties so the choice is deterministic on a rerun.
 --
 -- The winner is picked with MAX over a sortable string rather than ROW_NUMBER so
--- the statement needs nothing beyond grouping and string functions. Ordering the
--- period columns alongside it would let periodCompletes and periodStartAt come
--- from different rows, so those stay whole on whichever row survives.
+-- the statement needs nothing beyond grouping and string functions. The key is a
+-- 1-character flag and a 20-character timestamp (%Y%m%d%H%i%s%f is fixed width
+-- for every legal datetime) followed by the id, so the id is recovered by
+-- dropping 21 leading characters. No separator: id is varchar(191) and any
+-- delimiter it could contain would truncate the recovered value, which would
+-- match no row and delete the whole group.
+--
+-- Ordering the period columns alongside it would let periodCompletes and
+-- periodStartAt come from different rows, so those stay whole on the survivor.
 DELETE FROM `QuestHistory`
 WHERE `id` IN (
   SELECT `id` FROM (
@@ -42,13 +48,13 @@ WHERE `id` IN (
     FROM `QuestHistory` AS `h`
     JOIN (
         SELECT `userId`, `questId`,
-               SUBSTRING_INDEX(
+               SUBSTRING(
                  MAX(CONCAT(
                    IF(`completed` = 0 AND `endedAt` IS NULL, '1', '0'),
                    DATE_FORMAT(`startedAt`, '%Y%m%d%H%i%s%f'),
-                   '|', `id`
+                   `id`
                  )),
-                 '|', -1
+                 22
                ) AS `keepId`
         FROM `QuestHistory`
         GROUP BY `userId`, `questId`
