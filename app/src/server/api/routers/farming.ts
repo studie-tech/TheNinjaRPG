@@ -251,6 +251,11 @@ export const farmingRouter = createTRPCRouter({
           and(
             eq(farmPlot.id, plot.id),
             eq(farmPlot.userId, ctx.userId),
+            // Pin the crop and the timer this reduction was derived from. Without them a
+            // request that read an older finishAt can overwrite a newer one, and a plot
+            // harvested in between (which resets lastWateredAt to null) still matches.
+            eq(farmPlot.seedItemId, plot.seedItemId),
+            eq(farmPlot.finishAt, plot.finishAt),
             plot.lastWateredAt
               ? eq(farmPlot.lastWateredAt, plot.lastWateredAt)
               : isNull(farmPlot.lastWateredAt),
@@ -302,8 +307,18 @@ export const farmingRouter = createTRPCRouter({
       if (plot.fertilizerApplied) return errorResponse("Fertilizer already applied");
       if (isPlotReady(plot.finishAt)) return errorResponse("Crop is ready to harvest");
 
-      const fertilizerStack = userItems.find((ui) => ui.id === input.userItemId);
-      if (!fertilizerStack || fertilizerStack.quantity < 1) {
+      // Same availability rule as fertilizeAll: a stack that is stored at home, listed in an
+      // auction or still being crafted is not in hand, so it cannot be spent on a plot.
+      const availableAt = new Date();
+      const fertilizerStack = userItems.find(
+        (ui) =>
+          ui.id === input.userItemId &&
+          ui.quantity > 0 &&
+          !ui.storedAtHome &&
+          !ui.isInAuction &&
+          (!ui.craftingFinishedAt || ui.craftingFinishedAt < availableAt),
+      );
+      if (!fertilizerStack) {
         return errorResponse("Fertilizer not found");
       }
       if (!fertilizerStack.item.isFarmFertilizer) {
@@ -1833,44 +1848,37 @@ const settleFarmExtractions = async (
   const completedExtractions = extractions.filter(
     (extraction) => extraction.finishAt <= now,
   );
-  await Promise.all(
-    completedExtractions.map(async (extraction) => {
-      if (!extraction.seedItem || extraction.seedQuantity < 1) return;
-
-      const stackSize = extraction.seedItem.canStack
-        ? Math.max(1, extraction.seedItem.stackSize)
-        : 1;
-      let remaining = extraction.seedQuantity;
-      let stackIndex = 0;
-      const inserts = [];
-      while (remaining > 0) {
-        const quantity = Math.min(remaining, stackSize);
-        inserts.push({
-          id: `farm-extraction-${extraction.id}-${stackIndex}`,
-          userId,
-          itemId: extraction.seedItemId,
-          quantity,
-          equipped: "NONE" as const,
-        });
-        remaining -= quantity;
-        stackIndex += 1;
-      }
-
-      await client
-        .insert(userItem)
-        .values(inserts)
-        .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-      await client
-        .delete(farmExtraction)
-        .where(
-          and(
-            eq(farmExtraction.id, extraction.id),
-            eq(farmExtraction.userId, userId),
-            lte(farmExtraction.finishAt, now),
-          ),
-        );
-    }),
-  );
+  if (completedExtractions.length > 0) {
+    // Settlement fills an existing partial stack before opening a new one, the same way
+    // admission counted the slots back when the job was accepted. Inserting unconditionally
+    // would push a player who was at the cap one row past it.
+    const settledUserItems = await fetchUserItems(client, userId);
+    await Promise.all(
+      completedExtractions.map(async (extraction) => {
+        if (extraction.seedItem && extraction.seedQuantity > 0) {
+          await awardItemToUser(
+            client,
+            userId,
+            extraction.seedItem,
+            extraction.seedQuantity,
+            settledUserItems,
+          );
+        }
+        // Clear the row even when the seed item has gone missing. Leaving it behind keeps
+        // the extractor slot occupied forever, because extractSeeds only asks whether a row
+        // exists for that slot.
+        await client
+          .delete(farmExtraction)
+          .where(
+            and(
+              eq(farmExtraction.id, extraction.id),
+              eq(farmExtraction.userId, userId),
+              lte(farmExtraction.finishAt, now),
+            ),
+          );
+      }),
+    );
+  }
 
   return extractions
     .filter(
@@ -2137,6 +2145,16 @@ const fetchFarmingQuestState = async (client: DrizzleClient, userId: string) => 
 };
 
 /** Awards farming XP and advances the matching active quest objectives together. */
+/** Max read-modify-write passes before a contended quest update gives up. */
+const QUEST_PROGRESS_ATTEMPTS = 3;
+
+/**
+ * Farming XP is a SQL increment and merges on its own, but quest trackers are one JSON
+ * document rewritten wholesale. Two farming actions that each read the same trackers would
+ * both write "1", and the later write would erase the earlier one -- watering two plots left
+ * `plants_watered` at 1. So the tracker write is a compare-and-swap on the row it was derived
+ * from, and a lost race re-reads and recomputes instead of overwriting.
+ */
 const awardFarmingProgress = async (
   client: DrizzleClient,
   user: Awaited<ReturnType<typeof fetchUser>>,
@@ -2146,9 +2164,6 @@ const awardFarmingProgress = async (
   increment = 1,
   farmingCollectionCount?: number,
 ) => {
-  let questDataUpdate: {
-    questData?: ReturnType<typeof filterQuestTrackersForDbPersist>;
-  } = {};
   const emittedTasks = new Set<AllObjectiveTask>([
     task,
     ...(xpGain > 0 ? (["farming_level"] as const) : []),
@@ -2156,24 +2171,36 @@ const awardFarmingProgress = async (
       ? (["farming_collection_log"] as const)
       : []),
   ]);
-  const advancesObjective = questState?.userQuests.some((uq) =>
-    uq.quest?.content.objectives.some((objective) => {
-      if (!emittedTasks.has(objective.task)) return false;
-      const goal = questState.questData
-        ?.find((tracker) => tracker.id === uq.questId)
-        ?.goals.find((entry) => entry.id === objective.id);
-      return !goal?.done;
-    }),
-  );
 
-  if (questState && advancesObjective) {
+  /** Trackers this action would produce from one snapshot of the user's quest state. */
+  const questUpdateFor = (
+    snapshotUser: Awaited<ReturnType<typeof fetchUser>>,
+    snapshotQuests: Awaited<ReturnType<typeof fetchFarmingQuestState>>,
+  ) => {
+    const advancesObjective = snapshotQuests?.userQuests.some((uq) =>
+      uq.quest?.content.objectives.some((objective) => {
+        if (!emittedTasks.has(objective.task)) return false;
+        const goal = snapshotQuests.questData
+          ?.find((tracker) => tracker.id === uq.questId)
+          ?.goals.find((entry) => entry.id === objective.id);
+        return !goal?.done;
+      }),
+    );
+    if (!snapshotQuests || !advancesObjective) {
+      return {
+        advancesObjective: false,
+        questData: undefined as
+          | ReturnType<typeof filterQuestTrackersForDbPersist>
+          | undefined,
+      };
+    }
     const trackerUser = {
-      ...user,
-      farmingExperience: user.farmingExperience + xpGain,
+      ...snapshotUser,
+      farmingExperience: snapshotUser.farmingExperience + xpGain,
       farmingCollectionCount,
-      questData: questState.questData,
-      userQuests: questState.userQuests.filter((entry) => entry.quest),
-      completedQuests: questState.completedQuests,
+      questData: snapshotQuests.questData,
+      userQuests: snapshotQuests.userQuests.filter((entry) => entry.quest),
+      completedQuests: snapshotQuests.completedQuests,
     } as unknown as Parameters<typeof getNewTrackers>[0];
     const taskUpdates: ObjectiveTrackerTaskInput[] = [
       { task, increment },
@@ -2181,7 +2208,7 @@ const awardFarmingProgress = async (
         ? [
             {
               task: "farming_level" as const,
-              value: getFarmingLevel(user.farmingExperience + xpGain),
+              value: getFarmingLevel(snapshotUser.farmingExperience + xpGain),
             },
           ]
         : []),
@@ -2195,20 +2222,58 @@ const awardFarmingProgress = async (
         : []),
     ];
     const { trackers } = getNewTrackers(trackerUser, taskUpdates);
-    questDataUpdate = {
-      questData: filterQuestTrackersForDbPersist(trackers, trackerUser),
+    return {
+      advancesObjective: true,
+      questData: filterQuestTrackersForDbPersist(trackers, trackerUser) as
+        | ReturnType<typeof filterQuestTrackersForDbPersist>
+        | undefined,
     };
+  };
+
+  const first = questUpdateFor(user, questState);
+  if (xpGain <= 0 && !first.advancesObjective) return true;
+
+  // Nothing but XP to persist: the SQL increment is already conflict-free.
+  if (!first.advancesObjective) {
+    const result = await client
+      .update(userData)
+      .set({ farmingExperience: sql`${userData.farmingExperience} + ${xpGain}` })
+      .where(eq(userData.userId, user.userId));
+    return Number(result.rowsAffected ?? 0) >= 1;
   }
 
-  if (xpGain <= 0 && !advancesObjective) return true;
-  const result = await client
-    .update(userData)
-    .set({
-      ...(xpGain > 0
-        ? { farmingExperience: sql`${userData.farmingExperience} + ${xpGain}` }
-        : {}),
-      ...questDataUpdate,
-    })
-    .where(eq(userData.userId, user.userId));
-  return Number(result.rowsAffected ?? 0) >= 1;
+  let snapshotUser = user;
+  let snapshotQuests = questState;
+  let update = first;
+  for (let attempt = 0; attempt < QUEST_PROGRESS_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      [snapshotUser, snapshotQuests] = await Promise.all([
+        fetchUser(client, user.userId),
+        fetchFarmingQuestState(client, user.userId),
+      ]);
+      update = questUpdateFor(snapshotUser, snapshotQuests);
+      if (!update.advancesObjective) {
+        // Another action already satisfied every objective this one would have advanced;
+        // only the XP is still outstanding.
+        const result = await client
+          .update(userData)
+          .set({ farmingExperience: sql`${userData.farmingExperience} + ${xpGain}` })
+          .where(eq(userData.userId, user.userId));
+        return Number(result.rowsAffected ?? 0) >= 1;
+      }
+    }
+    const claim = await claimUserSnapshot({
+      client,
+      userId: user.userId,
+      updatedAt: snapshotUser.updatedAt,
+      set: {
+        ...(xpGain > 0
+          ? { farmingExperience: sql`${userData.farmingExperience} + ${xpGain}` }
+          : {}),
+        questData: update.questData,
+      },
+    });
+    if (claim.success) return true;
+  }
+  return false;
 };

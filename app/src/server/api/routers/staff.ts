@@ -21,6 +21,9 @@ import {
   conversation,
   conversationComment,
   damageSimulation,
+  farmCollectionLog,
+  farmExtraction,
+  farmPlot,
   forumPost,
   forumThread,
   historicalAvatar,
@@ -1182,6 +1185,9 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
   // Batch 4: Game progress & items
   await Promise.all([
     client.delete(userItem).where(eq(userItem.userId, userId)),
+    client.delete(farmPlot).where(eq(farmPlot.userId, userId)),
+    client.delete(farmExtraction).where(eq(farmExtraction.userId, userId)),
+    client.delete(farmCollectionLog).where(eq(farmCollectionLog.userId, userId)),
     client.delete(userJutsu).where(eq(userJutsu.userId, userId)),
     client.delete(userSkill).where(eq(userSkill.userId, userId)),
     client.delete(userAttribute).where(eq(userAttribute.userId, userId)),
