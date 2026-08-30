@@ -1906,12 +1906,21 @@ const payOutExtractions = async (
   completedExtractions: Awaited<ReturnType<typeof fetchUserExtractions>>,
   now: Date,
 ): Promise<Set<string>> => {
+  // A settled row has already paid out and is only ever waiting to be cleaned up. Keeping
+  // it out of the claim is what makes a failed delete replay-safe rather than a second payout.
+  const alreadySettledIds = completedExtractions
+    .filter((extraction) => extraction.settledAt !== null)
+    .map((extraction) => extraction.id);
+  const payable = completedExtractions.filter(
+    (extraction) => extraction.settledAt === null,
+  );
+
   const staleClaim = new Date(
     now.getTime() - FARM_EXTRACTION_CLAIM_TIMEOUT_SECONDS * 1000,
   );
   const claimed = (
     await Promise.all(
-      completedExtractions.map(async (extraction) => {
+      payable.map(async (extraction) => {
         const claim = await client
           .update(farmExtraction)
           .set({ claimedAt: now, updatedAt: now })
@@ -1920,6 +1929,7 @@ const payOutExtractions = async (
               eq(farmExtraction.id, extraction.id),
               eq(farmExtraction.userId, userId),
               lte(farmExtraction.finishAt, now),
+              isNull(farmExtraction.settledAt),
               or(
                 isNull(farmExtraction.claimedAt),
                 lt(farmExtraction.claimedAt, staleClaim),
@@ -1930,7 +1940,6 @@ const payOutExtractions = async (
       }),
     )
   ).filter((extraction) => extraction !== null);
-  if (claimed.length === 0) return new Set();
 
   const grants = new Map<string, { item: Item; quantity: number; ids: string[] }>();
   // Rows with nothing left to pay out still have to go, or the extractor slot stays
@@ -1954,76 +1963,87 @@ const payOutExtractions = async (
     }
   }
 
-  const [settlingUser, settledUserItems] = await Promise.all([
-    fetchUser(client, userId),
-    fetchUserItems(client, userId),
-  ]);
+  let results: { ids: string[]; granted: boolean }[] = [];
+  if (grants.size > 0) {
+    const [settlingUser, settledUserItems] = await Promise.all([
+      fetchUser(client, userId),
+      fetchUserItems(client, userId),
+    ]);
 
-  // Admission sized every extraction against the inventory as it stood then, so a player
-  // who has filled up since can still arrive here with more seeds than rows to hold them.
-  // Hold the whole payout rather than opening a row past the cap: the seeds stay in the
-  // extractor, and the next settlement pays out once there is space.
-  const overCapacity =
-    grants.size > 0 &&
-    guardBulkItemAwardInventoryCapacity(
-      settlingUser,
-      settledUserItems,
-      [...grants.values()].map((grant) => ({
-        item: grant.item,
-        quantity: grant.quantity,
-      })),
-    ) !== null;
+    // Admission sized every extraction against the inventory as it stood then, so a player
+    // who has filled up since can still arrive here with more seeds than rows to hold them.
+    // Hold the whole payout rather than opening a row past the cap: the seeds stay in the
+    // extractor, and the next settlement pays out once there is space.
+    const overCapacity =
+      guardBulkItemAwardInventoryCapacity(
+        settlingUser,
+        settledUserItems,
+        [...grants.values()].map((grant) => ({
+          item: grant.item,
+          quantity: grant.quantity,
+        })),
+      ) !== null;
 
-  const results = overCapacity
-    ? [...grants.values()].map((grant) => ({ ids: grant.ids, granted: false }))
-    : await Promise.all(
-        [...grants.values()].map(async (grant) => {
-          try {
-            const granted = await awardItemToUser(
-              client,
-              userId,
-              grant.item,
-              grant.quantity,
-              settledUserItems,
-            );
-            return { ids: grant.ids, granted };
-          } catch {
-            return { ids: grant.ids, granted: false };
-          }
-        }),
-      );
+    results = overCapacity
+      ? [...grants.values()].map((grant) => ({ ids: grant.ids, granted: false }))
+      : await Promise.all(
+          [...grants.values()].map(async (grant) => {
+            try {
+              const granted = await awardItemToUser(
+                client,
+                userId,
+                grant.item,
+                grant.quantity,
+                settledUserItems,
+              );
+              return { ids: grant.ids, granted };
+            } catch {
+              return { ids: grant.ids, granted: false };
+            }
+          }),
+        );
+  }
 
-  const settledIds = [
-    ...emptyIds,
-    ...results.filter((result) => result.granted).flatMap((result) => result.ids),
-  ];
+  const grantedIds = results
+    .filter((result) => result.granted)
+    .flatMap((result) => result.ids);
   const releasedIds = results
     .filter((result) => !result.granted)
     .flatMap((result) => result.ids);
-  await Promise.all([
-    settledIds.length > 0
-      ? client
-          .delete(farmExtraction)
-          .where(
-            and(
-              eq(farmExtraction.userId, userId),
-              inArray(farmExtraction.id, settledIds),
-            ),
-          )
-      : undefined,
-    releasedIds.length > 0
-      ? client
-          .update(farmExtraction)
-          .set({ claimedAt: null })
-          .where(
-            and(
-              eq(farmExtraction.userId, userId),
-              inArray(farmExtraction.id, releasedIds),
-            ),
-          )
-      : undefined,
-  ]);
-  return new Set(settledIds);
+
+  // Mark paid before removing anything. This write, not the delete, is what completes the
+  // payout: if it lands and the delete then fails, the leftover row is settled and gets
+  // cleaned up rather than paid a second time.
+  if (grantedIds.length > 0) {
+    await client
+      .update(farmExtraction)
+      .set({ settledAt: now })
+      .where(
+        and(eq(farmExtraction.userId, userId), inArray(farmExtraction.id, grantedIds)),
+      );
+  }
+  if (releasedIds.length > 0) {
+    await client
+      .update(farmExtraction)
+      .set({ claimedAt: null })
+      .where(
+        and(eq(farmExtraction.userId, userId), inArray(farmExtraction.id, releasedIds)),
+      );
+  }
+
+  const doneIds = [...alreadySettledIds, ...emptyIds, ...grantedIds];
+  if (doneIds.length > 0) {
+    // Cleanup only. A failure here leaves rows that the next settlement removes, so it must
+    // not fail the read that triggered it.
+    try {
+      await client
+        .delete(farmExtraction)
+        .where(
+          and(eq(farmExtraction.userId, userId), inArray(farmExtraction.id, doneIds)),
+        );
+    } catch {}
+  }
+  return new Set(doneIds);
 };
 
 export const ensureFarmPlots = async (

@@ -3891,6 +3891,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "settledAt": {
+          "name": "settledAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "datetime(3)",
