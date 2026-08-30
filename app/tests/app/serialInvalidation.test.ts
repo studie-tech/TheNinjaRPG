@@ -32,6 +32,18 @@ const sourceFiles = (directory: string): string[] =>
   });
 
 /**
+ * Strings first, then comments, so a `//` inside a string is not mistaken for one. Enough to
+ * keep a bracket or a semicolon written inside either of them out of the counting below; a
+ * literal that itself spans lines is left to the statement-length bound.
+ */
+const code = (line: string) =>
+  line
+    .replace(/(["'`])(?:\\.|(?!\1)[^\\])*\1/g, '""')
+    .replace(/\/\*.*?\*\//g, " ")
+    .replace(/\/\/.*$/, "")
+    .trim();
+
+/**
  * Awaited statements as single logical lines, so neither a wrapped argument list nor a member
  * chain broken across lines can hide a call.
  */
@@ -47,10 +59,10 @@ const awaitedStatements = (lines: string[]) => {
       start = index;
       text = "";
     }
-    // Drop a trailing comment, or a statement carrying one would never look finished
-    const code = trimmed.replace(/(^|[^:])\/\/.*$/, "$1").trim();
-    text += code;
-    depth += (code.match(/[([]/g)?.length ?? 0) - (code.match(/[)\]]/g)?.length ?? 0);
+    // Without this a statement trailed by a comment would never look finished
+    const bare = code(trimmed);
+    text += bare;
+    depth += (bare.match(/[([]/g)?.length ?? 0) - (bare.match(/[)\]]/g)?.length ?? 0);
     if ((depth <= 0 && text.endsWith(";")) || index - start >= MAX_STATEMENT_LINES) {
       statements.push({ start, end: index, text });
       start = -1;
@@ -112,6 +124,8 @@ describe("client cache invalidation", () => {
     ["with a wrapped argument list", `await utils.clan.get.invalidate({\n  id,\n});\n${clan}`],
     ["with a wrapped member chain", `await utils.profile.getUser\n.invalidate();\n${clan}`],
     ["with trailing comments", `${user} // the user\n${clan} // the clan`],
+    ["with a trailing block comment", `${user} /* the user */\n${clan}`],
+    ["with a bracket inside a string", `await utils.clan.get.invalidate("[");\n${clan}`],
   ])("catches two invalidations %s", (_shape, source) => {
     expect(found(source)).toBe(1);
   });
