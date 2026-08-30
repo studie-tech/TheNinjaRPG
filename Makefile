@@ -164,6 +164,8 @@ emptymigration: ensure-env # Create database migration file
 test: # Push schema to db without creating migrations
 	@echo "${YELLOW}Running unit tests ${RESET}"
 	cd app && bun test
+	@echo "${YELLOW}Running database-backed suites (own process) ${RESET}"
+	cd app && bun test ./tests/server/api/farming.router.dbtest.ts
 
 .PHONY: lint
 lint: # Run linting of the project
