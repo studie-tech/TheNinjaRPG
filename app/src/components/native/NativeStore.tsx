@@ -13,6 +13,12 @@ import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
 
 /**
+ * Backoff while waiting for the grant webhook: roughly 21 seconds in total, which is
+ * generous for a webhook that normally lands in one or two.
+ */
+const GRANT_POLL_DELAYS_MS = [1000, 2000, 3000, 5000, 5000, 5000];
+
+/**
  * The in-app store.
  *
  * App Store guideline 3.1.1 requires digital goods to be sold through in-app purchase, so
@@ -53,44 +59,69 @@ export default function NativeStore() {
   }, [apiKey, isNativeShell, userData?.userId]);
 
   /**
-   * The grant arrives by webhook moments later, so the balance is refetched rather than
-   * assumed. Nothing on this screen writes to the player's account.
+   * Wait for the webhook, then refetch the balance.
    *
-   * `invalidate`, not the optimistic `updateUser`: the new balance is whatever the
-   * webhook wrote, so there is nothing to write optimistically and every reason to go
-   * and read it.
+   * The store confirming a purchase does not mean the player has been credited: the
+   * grant is written by `/api/webhooks/revenuecat`, which arrives moments later.
+   * Refetching immediately would read the pre-purchase balance and leave it on screen
+   * until the next background poll — which is exactly what the toast promises will not
+   * happen.
+   *
+   * The purchase row appearing is the signal that the webhook ran, so that is what is
+   * polled. Compared by id rather than by count, because `recent` is capped and a player
+   * at the cap would never see the count grow.
    */
-  const settle = useCallback(async () => {
-    await Promise.all([refetchRecent(), utils.profile.getUser.invalidate()]);
-  }, [refetchRecent, utils]);
+  const settleAfterPurchase = useCallback(
+    async (previousNewestId: string | undefined) => {
+      for (const delay of GRANT_POLL_DELAYS_MS) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        const { data } = await refetchRecent();
+        if (data?.[0]?.id && data[0].id !== previousNewestId) break;
+      }
+      // Refetch regardless: if the webhook is slow or has failed, the player should still
+      // see whatever the truth currently is rather than a frozen screen.
+      await utils.profile.getUser.invalidate();
+    },
+    [refetchRecent, utils],
+  );
 
   const buy = async (productId: string) => {
+    const previousNewestId = recent?.[0]?.id;
     setBusyProduct(productId);
     const result = await purchases.purchase(productId);
-    setBusyProduct(null);
-    if (result.status === "cancelled") return;
+    if (result.status === "cancelled") {
+      setBusyProduct(null);
+      return;
+    }
     if (result.status === "error") {
+      setBusyProduct(null);
       showMutationToast({ success: false, message: result.message });
       return;
     }
     showMutationToast({
       success: true,
-      message: "Purchase complete. Your reputation will appear in a moment.",
+      message: "Purchase complete. Crediting your account...",
     });
-    await settle();
+    // Held busy across the wait so the player cannot buy the same tier twice while the
+    // first grant is still in flight.
+    await settleAfterPurchase(previousNewestId);
+    setBusyProduct(null);
   };
 
   const restore = async () => {
+    const previousNewestId = recent?.[0]?.id;
     setIsRestoring(true);
     const info = await purchases.restore();
-    setIsRestoring(false);
     showMutationToast({
       success: true,
       message: info?.activeEntitlements.length
         ? "Purchases restored."
         : "No previous purchases found for this store account.",
     });
-    await settle();
+    // A restore replays the same webhooks, so it waits on the same signal. When there was
+    // nothing to restore the poll simply runs out and refetches anyway.
+    await settleAfterPurchase(previousNewestId);
+    setIsRestoring(false);
   };
 
   if (!isNativeShell) return null;

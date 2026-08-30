@@ -28,6 +28,9 @@ export default function NativeBridge() {
   const pathname = usePathname();
   const [isOutdated, setIsOutdated] = useState(false);
   const isSignedOut = isClerkLoaded && !userId;
+  // Signature of the last snapshot written, so a regeneration tick that changes nothing
+  // the widget renders does not spend a WidgetKit reload.
+  const lastSnapshot = useRef<string | null>(null);
 
   const { unregister } = useNativePush({ enabled: !!userData });
   useLiveActivity(userData, timeDiff);
@@ -88,12 +91,15 @@ export default function NativeBridge() {
     if (!isNative() || !isSignedOut) return;
     void unregister();
     void widgets.clear();
+    // Forget the deduplication signature too. Without this, signing back in with the same
+    // vitals produces a matching signature, the write is skipped as redundant, and the
+    // widget stays on the signed-out placeholder until a rounded stat happens to change.
+    lastSnapshot.current = null;
   }, [isSignedOut, unregister]);
 
   // Home screen widgets read a snapshot from the shared container rather than the API, so
   // they stay correct while the app is closed. `sync` is a no-op when the shell has no
   // widget plugin.
-  const lastSnapshot = useRef<string | null>(null);
   useEffect(() => {
     if (!isNative() || !userData) return;
     const snapshot = {
