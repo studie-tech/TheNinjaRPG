@@ -15,7 +15,7 @@ import { type ClientHttp2Session, connect, constants } from "node:http2";
 import { env } from "@/env/server.mjs";
 import { signJwt } from "./jwt";
 import { apnsAlertPayload } from "./payloads";
-import type { PushMessage, PushResult } from "./types";
+import { isDeadApnsToken, type PushMessage, type PushResult } from "./types";
 
 const PRODUCTION_HOST = "https://api.push.apple.com";
 const SANDBOX_HOST = "https://api.sandbox.push.apple.com";
@@ -60,17 +60,6 @@ export const resetProviderToken = (): void => {
 
 const apnsHost = (): string =>
   env.APNS_USE_SANDBOX === "true" ? SANDBOX_HOST : PRODUCTION_HOST;
-
-/**
- * Reasons that mean the token will never work again. Everything else — Apple being down,
- * a throttle, a timeout — leaves the row alone so the next send can retry.
- */
-const EXPIRED_REASONS = new Set([
-  "BadDeviceToken",
-  "DeviceTokenNotForTopic",
-  "Unregistered",
-  "ExpiredToken",
-]);
 
 export type ApnsPushType = "alert" | "liveactivity" | "background";
 
@@ -149,7 +138,7 @@ const sendOne = (
         return;
       }
       const reason = parseReason(Buffer.concat(chunks).toString("utf8"));
-      if (status === 410 || EXPIRED_REASONS.has(reason)) {
+      if (isDeadApnsToken(status, reason)) {
         settle({ token: request.token, status: "expired", reason });
         return;
       }

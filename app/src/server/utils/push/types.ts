@@ -52,3 +52,24 @@ export const summarise = (results: PushResult[]): PushSendSummary =>
     if (result.status === "expired") summary.expiredTokens.push(result.token);
     return summary;
   }, emptySummary());
+
+/**
+ * APNs reasons that mean this specific device token is dead.
+ *
+ * Deliberately narrow. `DeviceTokenNotForTopic` is excluded because it fires when the
+ * bundle identifier is misconfigured, which would be true of every token at once —
+ * pruning on it would empty the table on a deploy with the wrong `APNS_BUNDLE_ID`.
+ */
+const DEAD_APNS_REASONS = new Set(["BadDeviceToken", "Unregistered", "ExpiredToken"]);
+
+export const isDeadApnsToken = (status: number, reason: string): boolean =>
+  status === 410 || DEAD_APNS_REASONS.has(reason);
+
+/**
+ * FCM codes that mean the registration token is gone. `INVALID_ARGUMENT` is excluded: it
+ * covers a malformed payload as well as a malformed token, and a bad payload is sent to
+ * every device in the batch.
+ */
+const DEAD_FCM_CODES = new Set(["UNREGISTERED", "NOT_FOUND"]);
+
+export const isDeadFcmToken = (code: string): boolean => DEAD_FCM_CODES.has(code);

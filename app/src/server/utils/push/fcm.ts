@@ -9,7 +9,7 @@
 import { env } from "@/env/server.mjs";
 import { signJwt } from "./jwt";
 import { fcmMessage } from "./payloads";
-import type { PushMessage, PushResult } from "./types";
+import { isDeadFcmToken, type PushMessage, type PushResult } from "./types";
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
@@ -78,12 +78,6 @@ const getAccessToken = async (): Promise<string> => {
   return cachedAccessToken.token;
 };
 
-/**
- * Error codes that mean the registration token is dead. Everything else is transient and
- * leaves the row in place.
- */
-const EXPIRED_CODES = new Set(["UNREGISTERED", "INVALID_ARGUMENT", "NOT_FOUND"]);
-
 const sendOne = async (
   accessToken: string,
   token: string,
@@ -112,7 +106,7 @@ const sendOne = async (
       body.error?.details?.find((detail) => detail.errorCode)?.errorCode ??
       body.error?.status ??
       String(response.status);
-    if (EXPIRED_CODES.has(code)) {
+    if (isDeadFcmToken(code)) {
       return { token, status: "expired", reason: code };
     }
     return {
