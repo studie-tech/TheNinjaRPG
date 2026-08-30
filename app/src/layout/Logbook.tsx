@@ -80,40 +80,61 @@ const LogbookAchievements: React.FC = () => {
 
   // Achievement definitions are the same for every player and change only when staff edit
   // content, so profile.getUser sends progress alone and they are fetched here instead. The
-  // staleTime overrides the app-wide Infinity: progress arrives on getUser's own five-minute
-  // refetch, and a definition that stayed cached past that point would leave a freshly published
-  // achievement rendering nothing. isLoading rather than isPending: a disabled query never stops
-  // being pending, which would leave the tab on its spinner forever.
+  // staleTime overrides the app-wide Infinity so an edit to an existing achievement is picked up
+  // the next time this remounts or the window regains focus; it does not schedule a fetch of its
+  // own, which is what the unresolved-row effect below is for. isLoading rather than isPending: a
+  // disabled query never stops being pending, which would leave the tab on its spinner forever.
   const {
     data: catalogue,
     isLoading,
+    isFetching,
     refetch,
   } = api.quests.getAchievementCatalogue.useQuery(undefined, {
     enabled: !!userData,
     staleTime: 5 * 60 * 1000,
   });
 
-  // Progress rows arrived but their definitions did not, so the list below is missing entries.
-  // Keyed on the data itself rather than on `isError`, which flickers false between the query's
-  // retries: what matters to the player is whether anything is missing, not how it went wrong.
-  const missingDefinitions =
-    !isLoading && !catalogue && (achievementProgress?.length ?? 0) > 0;
+  const definitions = useMemo(
+    () => new Map(catalogue?.map((q) => [q.id, q])),
+    [catalogue],
+  );
+
+  // Progress rows the cached catalogue cannot resolve, which the join below would otherwise drop
+  // in silence. Checked per row rather than as "did the catalogue arrive at all": one fetched
+  // before staff published an achievement is present but short, and a failed refresh keeps
+  // serving the older rows. Keyed on the data for the same reason `isError` is not used here - it
+  // reads false across the query's retry backoff, so a guard on it renders nothing.
+  const unresolvedIds = useMemo(
+    () =>
+      (achievementProgress ?? [])
+        .filter((progress) => !definitions.has(progress.questId))
+        .map((progress) => progress.questId)
+        .join(","),
+    [achievementProgress, definitions],
+  );
+
+  // Staleness alone never refetches a query that stays mounted, so a definition published after
+  // this was cached would otherwise never arrive. Pull again as soon as a row cannot be resolved,
+  // keyed on the ids themselves: a refetch that comes back with the same rows leaves the key
+  // unchanged and does not fire a second time.
+  useEffect(() => {
+    if (unresolvedIds) void refetch();
+  }, [unresolvedIds, refetch]);
 
   const quests = useMemo(() => {
-    const definitions = new Map(catalogue?.map((q) => [q.id, q]));
     return [
       // Tier quests, plus any achievement whose objectives kept it on the user object.
       ...(userData?.userQuests?.filter((uq) =>
         ["tier", "achievement"].includes(uq.quest.questType),
       ) ?? []),
-      // A progress row whose definition is missing - staff hid or deleted the achievement
-      // between the two queries - renders nothing rather than throwing on `uq.quest`.
+      // A progress row whose definition is missing renders nothing rather than throwing on
+      // `uq.quest`; the banner below tells the player the list is short.
       ...(achievementProgress ?? []).flatMap((progress) => {
         const quest = definitions.get(progress.questId);
         return quest ? [{ ...progress, quest }] : [];
       }),
     ];
-  }, [userData?.userQuests, achievementProgress, catalogue]);
+  }, [userData?.userQuests, achievementProgress, definitions]);
 
   useEffect(() => {
     if (quests.length > 0 && !activeElement) {
@@ -129,11 +150,12 @@ const LogbookAchievements: React.FC = () => {
   return (
     <div className="">
       {/* Say so, and keep whatever did arrive on screen: a list that looks complete but is not
-          hides achievements, and one that never renders never auto-claims either. */}
-      {missingDefinitions && (
+          hides achievements, and one that never renders never auto-claims either. Held back while
+          a fetch is in flight so the refetch above can fix it without the banner flashing. */}
+      {!isFetching && unresolvedIds && (
         <div className="flex flex-row items-center gap-3 p-3">
           <span className="text-muted-foreground text-sm">
-            Could not load the achievement list. Your progress is safe.
+            Could not load every achievement. Your progress is safe.
           </span>
           <Button type="button" variant="info" onClick={() => void refetch()}>
             Retry
