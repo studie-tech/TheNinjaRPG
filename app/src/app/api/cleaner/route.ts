@@ -431,14 +431,18 @@ export async function GET() {
     // for it. The App Store and Play bill outside PayPal entirely, so a store subscriber
     // has no PaypalSubscription row and would be reset here within the hour. Their proof
     // is the StorePurchase row, refreshed every billing period because RevenueCat sends
-    // RENEWAL as a granting event, which matches the 31-day window PayPal already uses.
+    // RENEWAL as a granting event. The window is wider than PayPal's because a failed
+    // renewal opens a billing-retry grace period of up to 30 days during which the player
+    // is still entitled and no RENEWAL arrives; a monthly cycle plus that grace outlasts
+    // 31 days. Revocation is event-driven through EXPIRATION, so this only has to be
+    // long enough not to strip a subscriber the store still recognises.
     // Reputation bundles carry a NULL federalStatus and sandbox receipts never grant, so
     // neither may hold a status open.
     await drizzleDB.execute(
       sql`UPDATE ${userData} u SET u.federalStatus = 'NONE' WHERE u.federalStatus != 'NONE' AND NOT EXISTS (
         SELECT 1 FROM ${paypalSubscription} p WHERE p.affectedUserId = u.userId AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
       ) AND NOT EXISTS (
-        SELECT 1 FROM ${storePurchase} s WHERE s.userId = u.userId AND s.federalStatus IS NOT NULL AND s.isSandbox = 0 AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
+        SELECT 1 FROM ${storePurchase} s WHERE s.userId = u.userId AND s.federalStatus IS NOT NULL AND s.isSandbox = 0 AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY
       )`,
     );
 

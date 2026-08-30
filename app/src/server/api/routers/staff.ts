@@ -49,6 +49,7 @@ import {
   ryoTrade,
   sector,
   staffApplication,
+  storePurchase,
   supportReview,
   trainingLog,
   user2conversation,
@@ -57,11 +58,14 @@ import {
   userBadge,
   userBlackList,
   userData,
+  userDevice,
   userItem,
   userJutsu,
   userLikes,
+  userLiveActivity,
   userNindo,
   userPollVote,
+  userPushPreference,
   userQuestAttempt,
   userRaidBuff,
   userReport,
@@ -883,6 +887,25 @@ export const staffRouter = createTRPCRouter({
           .update(paypalTransaction)
           .set({ createdById: input.newUserId })
           .where(eq(paypalTransaction.createdById, input.userId)),
+        // The federal-status reconciliation in /api/cleaner reads StorePurchase to decide
+        // whether a store subscription still vouches for a tier, so a receipt left behind
+        // on the old id costs the player the status they are still paying for.
+        ctx.drizzle
+          .update(storePurchase)
+          .set({ userId: input.newUserId })
+          .where(eq(storePurchase.userId, input.userId)),
+        ctx.drizzle
+          .update(userDevice)
+          .set({ userId: input.newUserId })
+          .where(eq(userDevice.userId, input.userId)),
+        ctx.drizzle
+          .update(userPushPreference)
+          .set({ userId: input.newUserId })
+          .where(eq(userPushPreference.userId, input.userId)),
+        ctx.drizzle
+          .update(userLiveActivity)
+          .set({ userId: input.newUserId })
+          .where(eq(userLiveActivity.userId, input.userId)),
         ctx.drizzle
           .update(ryoTrade)
           .set({ creatorUserId: input.newUserId })

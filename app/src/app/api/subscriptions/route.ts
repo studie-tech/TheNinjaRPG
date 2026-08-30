@@ -8,6 +8,7 @@ import {
   getPaypalSubscription,
 } from "@/server/api/routers/paypal";
 import { drizzleDB } from "@/server/db";
+import { federalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
 import { plan2FedStatus } from "@/utils/paypal";
 
 export async function GET() {
@@ -44,9 +45,18 @@ export async function GET() {
             updatedAt: new Date(),
           })
           .where(eq(paypalSubscription.id, subscription.id));
+        // PayPal decides its own tier, but not the column: a player may also be paying
+        // a store for federal status, and writing this straight over would strip a
+        // subscription Apple or Google is still billing.
         await drizzleDB
           .update(userData)
-          .set({ federalStatus: isDone ? "NONE" : newFedStatus })
+          .set({
+            federalStatus: await federalStatusWithStoreFloor(
+              drizzleDB,
+              subscription.affectedUserId,
+              isDone ? "NONE" : newFedStatus,
+            ),
+          })
           .where(eq(userData.userId, subscription.affectedUserId));
       }
     });
@@ -75,7 +85,13 @@ export async function GET() {
         .where(eq(paypalSubscription.id, subscription.id));
       await drizzleDB
         .update(userData)
-        .set({ federalStatus: isDone ? "NONE" : subscription.federalStatus })
+        .set({
+          federalStatus: await federalStatusWithStoreFloor(
+            drizzleDB,
+            subscription.affectedUserId,
+            isDone ? "NONE" : subscription.federalStatus,
+          ),
+        })
         .where(eq(userData.userId, subscription.affectedUserId));
     });
     return Response.json(`OK`);

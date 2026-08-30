@@ -51,28 +51,44 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         // An activity of this kind outlives the process that started it, so after a cold
         // start the web side has no id for one that is still on the Lock Screen. Adopting
         // it instead of requesting a second keeps one card per kind and rebinds the push
-        // token to the activity the player can actually see. Matching on kind alone is
+        // token to the activity the player can actually see. Matching on kind is
         // deliberate: another kind's countdown is a separate card and must be left alone.
-        if let existing = Activity<TNRActivityAttributes>.activities
-            .first(where: { $0.attributes.kind == kind }) {
-            Task { [weak self] in
+        //
+        // Only a card that can still be driven, though. `.ended` and `.dismissed` ones
+        // ignore every update, so adopting one would leave the player with a dead card and
+        // no countdown for the stay that just began. `.stale` is adoptable and must be:
+        // the content sets its own stale date to the recovery time, so every hospital
+        // countdown goes stale the moment it reaches zero, which is the ordinary end of a
+        // stay rather than a reason to start over.
+        let sameKind = Activity<TNRActivityAttributes>.activities
+            .filter { $0.attributes.kind == kind }
+        let adoptable = sameKind.first {
+            $0.activityState == .active || $0.activityState == .stale
+        }
+
+        Task { [weak self] in
+            if let existing = adoptable {
                 await existing.update(.init(state: state, staleDate: state.endsAt))
                 self?.observeToken(of: existing)
                 call.resolve(["activityId": existing.id])
+                return
             }
-            return
-        }
-
-        do {
-            let activity = try Activity.request(
-                attributes: TNRActivityAttributes(kind: kind, startedAt: Date()),
-                content: .init(state: state, staleDate: state.endsAt),
-                pushType: .token
-            )
-            observeToken(of: activity)
-            call.resolve(["activityId": activity.id])
-        } catch {
-            call.reject("Could not start the activity", nil, error)
+            // Clear the dead cards first, or the new countdown appears beside a finished
+            // one that nothing can remove.
+            for finished in sameKind {
+                await finished.end(nil, dismissalPolicy: .immediate)
+            }
+            do {
+                let activity = try Activity.request(
+                    attributes: TNRActivityAttributes(kind: kind, startedAt: Date()),
+                    content: .init(state: state, staleDate: state.endsAt),
+                    pushType: .token
+                )
+                self?.observeToken(of: activity)
+                call.resolve(["activityId": activity.id])
+            } catch {
+                call.reject("Could not start the activity", nil, error)
+            }
         }
         #else
         call.reject("ActivityKit is unavailable")

@@ -56,12 +56,18 @@ platform :android do
   lane :beta do
     sync_web
 
-    # Play rejects an upload whose versionCode it has already seen, and build.gradle
-    # carries a fixed one — so every upload after the first would be refused. Take the
-    # highest code the track has and go one past it. The guard matters on the very first
-    # run, when the track has no releases and the call returns nothing to compare.
-    codes = google_play_track_version_codes(track: "internal")
-    next_version_code = ((codes || []).max || 0) + 1
+    # Play rejects an upload whose versionCode it has already seen, anywhere in the app,
+    # and requires each release to carry a higher one than the release it replaces. Asking
+    # a single track for its maximum answers neither question: the moment a build is
+    # promoted out of "internal" that track no longer holds the highest code, and the next
+    # upload collides with one already used.
+    #
+    # Minutes since the epoch is unique and rises on its own, with no dependency on what
+    # Play currently reports. Override it when a specific code has to be reproduced.
+    #
+    # This is one-way: once an AAB ships with a code in the tens of millions, nothing
+    # smaller can ever be used for this app again.
+    next_version_code = Integer(ENV.fetch("ANDROID_VERSION_CODE") { Time.now.to_i / 60 })
 
     gradle(
       project_dir: "android",

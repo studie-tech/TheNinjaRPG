@@ -44,17 +44,24 @@ const config: CapacitorConfig = {
   },
 
   ios: {
-    // Between the launch image's daytime sky and its dusk variant. The WebView paints
-    // this in the gap before the entry point's first frame, and the setting takes a single
-    // value for both themes — so a middle blue is a short, quiet step either way, where
-    // the tile yellow this used to be was a full second of the wrong colour.
-    backgroundColor: "#4e6f80",
+    // Sampled from the sky at the edge of the launch image.
+    //
+    // This colour fills the second or so between the launch image going away and the
+    // WebView having a page to draw — measured at eleven frames on a simulator, and not
+    // something the page can shorten, since it is over before index.html is parsed. Any
+    // other value is a full-screen flash between two pictures of the same sky.
+    //
+    // It is also what shows behind a rubber-band overscroll on the live site, where the
+    // right answer would be the site's own background — yellow-50 in light, navy in dark.
+    // The setting takes one value and cannot follow the theme, so it goes to the case it
+    // can actually serve: a guaranteed full-screen moment beats an occasional sliver.
+    backgroundColor: "#8bbccf",
     contentInset: "always",
     appendUserAgent: `TNR-Native/${APP_VERSION} (ios)`,
   },
 
   android: {
-    backgroundColor: "#4e6f80",
+    backgroundColor: "#8bbccf",
     appendUserAgent: `TNR-Native/${APP_VERSION} (android)`,
     allowMixedContent: false,
   },
@@ -69,7 +76,7 @@ const config: CapacitorConfig = {
       // The bundled entry point draws its own splash, so the native one only needs to
       // cover the very first frame.
       launchShowDuration: 0,
-      backgroundColor: "#4e6f80",
+      backgroundColor: "#8bbccf",
       showSpinner: false,
     },
     Keyboard: {

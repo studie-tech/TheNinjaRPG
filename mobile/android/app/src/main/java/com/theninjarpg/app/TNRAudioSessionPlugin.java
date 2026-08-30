@@ -1,5 +1,6 @@
 package com.theninjarpg.app;
 
+import android.app.Activity;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -38,11 +39,16 @@ public class TNRAudioSessionPlugin extends Plugin {
         // the shell is gone, so the task being swiped away must take the notification with
         // it rather than leaving a permanent card with dead transport controls.
         //
-        // Only when this instance is still the current one: on an activity recreation the
-        // replacement has already installed its own listener and restarted playback.
+        // Not when the activity is only being rebuilt, though. A configuration this
+        // manifest does not claim -- a font size change, say -- destroys the activity and
+        // creates a new one, in that order, and stopping the service in between would cut
+        // the music off mid-song for something the player experiences as nothing at all.
+        // The replacement re-registers its own listener in load().
+        Activity activity = getActivity();
+        boolean rebuilding = activity != null && activity.isChangingConfigurations();
         if (TNRAudioService.listener == mine) {
             TNRAudioService.listener = null;
-            if (running) {
+            if (running && !rebuilding) {
                 TNRAudioService.stop(getContext());
                 running = false;
             }
