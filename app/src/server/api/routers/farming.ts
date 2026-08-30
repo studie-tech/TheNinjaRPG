@@ -452,6 +452,7 @@ export const farmingRouter = createTRPCRouter({
         ctx.userId,
         plot.yieldItem,
         1,
+        userItems,
       );
       if (!itemAwarded) {
         return errorResponse("Harvested crop but failed to grant item");
@@ -868,14 +869,21 @@ export const farmingRouter = createTRPCRouter({
         return errorResponse("Could not harvest all — please try again");
       }
 
-      for (const harvest of harvests.values()) {
-        const awarded = await awardItemToUser(
-          ctx.drizzle,
-          ctx.userId,
-          harvest.item,
-          harvest.quantity,
-        );
-        if (!awarded) return errorResponse("Harvested crops but failed to grant items");
+      // Distinct crops land in distinct stacks, so the grants do not contend and can
+      // run together instead of paying one inventory round-trip per crop type.
+      const awards = await Promise.all(
+        [...harvests.values()].map((harvest) =>
+          awardItemToUser(
+            ctx.drizzle,
+            ctx.userId,
+            harvest.item,
+            harvest.quantity,
+            userItems,
+          ),
+        ),
+      );
+      if (awards.some((awarded) => !awarded)) {
+        return errorResponse("Harvested crops but failed to grant items");
       }
       await recordFirstFarmHarvests(ctx.drizzle, ctx.userId, [...harvests.keys()], now);
       const collectionCount = await getFarmCollectionCount(ctx.drizzle, ctx.userId);
@@ -975,9 +983,13 @@ export const farmingRouter = createTRPCRouter({
     .input(farmShopPurchaseInputSchema)
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, shopEntry] = await Promise.all([
+      // The inventory is only consulted on the SEED/FERTILIZER branch, but fetching it
+      // alongside the user keeps the common purchase path at one round-trip instead of
+      // two; plot and extractor upgrades simply ignore the extra read.
+      const [user, shopEntry, userItems] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         resolveShopEntry(ctx.drizzle, input.type, input.itemId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
@@ -1080,7 +1092,6 @@ export const farmingRouter = createTRPCRouter({
       if (!input.itemId) return errorResponse("Item required");
       if (!("itemInfo" in shopEntry)) return errorResponse("Shop item not found");
 
-      const userItems = await fetchUserItems(ctx.drizzle, ctx.userId);
       const inventoryGuard = guardItemAwardInventoryCapacity(
         user,
         userItems,
@@ -1104,6 +1115,7 @@ export const farmingRouter = createTRPCRouter({
         ctx.userId,
         shopEntry.itemInfo,
         input.quantity,
+        userItems,
       );
       if (!itemAwarded) {
         return errorResponse("Purchase completed but failed to grant item");
@@ -2028,11 +2040,16 @@ const awardItemToUser = async (
   userId: string,
   itemInfo: Item | null | undefined,
   quantity: number,
+  /**
+   * Inventory snapshot from the caller's opening fetch. Re-reading it here would
+   * add a full inventory join per grant, which harvestAll multiplies by the number
+   * of distinct crops. The stack-fill update below is guarded on the observed
+   * quantity, so a stale snapshot fails the CAS instead of overfilling a stack.
+   */
+  userItems: Awaited<ReturnType<typeof fetchUserItems>>,
 ): Promise<boolean> => {
   if (quantity <= 0) return true;
   if (!itemInfo) return false;
-
-  const userItems = await fetchUserItems(client, userId);
 
   let remaining = quantity;
   const stackSize = itemInfo.canStack ? Math.max(1, itemInfo.stackSize) : 1;
