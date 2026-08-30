@@ -193,8 +193,8 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
   });
 
   // Every question the heal buttons ask of the capacity is "does it clear this threshold", so the
-  // component tracks it snapped to those thresholds. Regenerating chakra then re-renders the table
-  // when a button becomes usable, not once a second for a number nothing here shows.
+  // capacity below is only re-sampled when the answer to one of them changes. Regenerating chakra
+  // then re-renders this table when a button becomes usable, rather than once a second.
   const healThresholds = useMemo(
     () =>
       (hospitalized ?? []).flatMap((user) =>
@@ -202,17 +202,26 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
       ),
     [hospitalized],
   );
-  const [maxHeal, setMaxHeal] = useState(() =>
-    snapToThresholds(currentHealCapacity(userData, timeDiff), healThresholds),
+  const [capacity, setCapacity] = useState(() =>
+    currentHealCapacity(userData, timeDiff),
   );
+  // Snapped during render, not stored, so the paint that first shows the table already compares
+  // against the thresholds that arrived with it
+  const maxHeal = snapToThresholds(capacity, healThresholds);
   useEffect(() => {
-    const update = () =>
-      setMaxHeal(
-        snapToThresholds(currentHealCapacity(userData, timeDiff), healThresholds),
+    const sync = () => {
+      const next = currentHealCapacity(userData, timeDiff);
+      setCapacity((previous) =>
+        snapToThresholds(next, healThresholds) ===
+        snapToThresholds(previous, healThresholds)
+          ? previous
+          : next,
       );
-    update();
+    };
+    // Spending chakra has to land straight away; only regeneration waits for a tick
+    sync();
     if (userData.curChakra >= userData.maxChakra) return;
-    const interval = setInterval(update, 1000);
+    const interval = setInterval(sync, 1000);
     return () => clearInterval(interval);
   }, [userData, timeDiff, healThresholds]);
   const allHospitalized = hospitalized
