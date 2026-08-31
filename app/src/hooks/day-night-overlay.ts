@@ -64,7 +64,7 @@ export const useDayNightMapOverlays = () => {
     const serializedValue = JSON.stringify(newValue);
     safeLocalStorageSetItem(SHOW_DAY_NIGHT_MAP_OVERLAYS_KEY, serializedValue);
     window.dispatchEvent(
-      new CustomEvent("localStorageSync", {
+      new window.CustomEvent("localStorageSync", {
         detail: { key: SHOW_DAY_NIGHT_MAP_OVERLAYS_KEY, value: serializedValue },
       }),
     );

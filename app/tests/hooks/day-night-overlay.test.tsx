@@ -1,3 +1,4 @@
+import { ensureDom } from "../setup-dom.mjs";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -13,6 +14,7 @@ const OverlayProbe = () => {
 
 describe("useDayNightMapOverlays", () => {
   beforeEach(() => {
+    ensureDom();
     window.localStorage.clear();
   });
 
