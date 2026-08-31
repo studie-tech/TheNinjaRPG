@@ -84,12 +84,13 @@ export default function MyItems() {
   const utils = api.useUtils();
 
   // Data from DB
-  const { data: userItems, isFetching } = api.item.getUserItemsWithVariants.useQuery(
-    undefined,
-    {
-      enabled: !!userData,
-    },
-  );
+  const {
+    data: userItems,
+    isPending: isLoadingItems,
+    isFetching,
+  } = api.item.getUserItemsWithVariants.useQuery(undefined, {
+    enabled: !!userData,
+  });
 
   // Mutations
   const { mutate: buyItemSlot, isPending } = api.blackmarket.buyItemSlot.useMutation({
@@ -203,7 +204,7 @@ export default function MyItems() {
 
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
-  if (isFetching) return <Loader explanation="Loading items" />;
+  if (isLoadingItems) return <Loader explanation="Loading items" />;
 
   // Can afford removing
   const canAfford =
@@ -279,6 +280,7 @@ export default function MyItems() {
           </div>
         }
       >
+        {isFetching && <Loader explanation="Refreshing items" />}
         <div className="flex flex-col">
           <div className="flex flex-col sm:flex-row">
             <div className="w-full basis-1/2 p-3">
@@ -801,6 +803,8 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         showMutationToast(data);
         if (data.success) {
           setIsRepairModalOpen(false);
+          setIsOpen(false);
+          setUserItem(undefined);
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
             utils.profile.getUser.invalidate(),
@@ -1343,6 +1347,8 @@ const Character: React.FC<CharacterProps> = (props) => {
         showMutationToast(data);
         if (data.success) {
           setIsRepairModalOpen(false);
+          setShowItemDetails(false);
+          setUserItem(undefined);
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
             utils.profile.getUser.invalidate(),
@@ -1639,6 +1645,8 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
     onSuccess: async (result) => {
       showMutationToast(result);
       if (result.success) {
+        setIsOpen(false);
+        onClose();
         await Promise.all([
           utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
           utils.item.getUserItemsWithVariants.invalidate(),
