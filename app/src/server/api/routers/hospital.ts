@@ -1,5 +1,5 @@
 import type { ExecutedQuery } from "@planetscale/database";
-import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   MEDNIN_EXP_CAP,
@@ -79,7 +79,7 @@ export const hospitalRouter = createTRPCRouter({
             ? inArray(userData.villageId, uniqueVillageIds)
             : isNull(userData.villageId),
           or(...MEDNIN_HEALABLE_STATES.map((s) => eq(userData.status, s))),
-          sql`(${userData.maxHealth} - ${userData.curHealth}) > 0`,
+          lt(userData.curHealth, userData.maxHealth),
           gte(userData.updatedAt, secondsFromNow(-36000)),
         ),
         limit: 10,
