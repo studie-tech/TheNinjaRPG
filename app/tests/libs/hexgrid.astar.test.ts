@@ -70,6 +70,15 @@ const optimalCost = (grid: Grid<TerrainHex>, start: TerrainHex, goal: TerrainHex
   return Number.POSITIVE_INFINITY;
 };
 
+/**
+ * Narrows away the `undefined` a missing path would return, so the assertions that follow are
+ * reached rather than skipped — a loop over an absent path passes without checking anything.
+ */
+const found = (path: TerrainHex[] | undefined) => {
+  expect(path).toBeDefined();
+  return path as TerrainHex[];
+};
+
 /** Fixed seed: a failure has to be reproducible to be worth anything. */
 const randomiser = (seed: number): (() => number) => () =>
   ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
@@ -113,10 +122,12 @@ describe("PathCalculator.minStepCost", () => {
 describe("PathCalculator.getShortestPath", () => {
   it("returns a contiguous path from origin to target", () => {
     const grid = makeGrid(9, 9, () => 2);
-    const path = new PathCalculator(grid).getShortestPath(at(grid, 0, 0), at(grid, 8, 8));
-    expect(path?.[0]).toBe(at(grid, 0, 0));
-    expect(path?.[path.length - 1]).toBe(at(grid, 8, 8));
-    path?.slice(1).forEach((tile, index) => {
+    const path = found(
+      new PathCalculator(grid).getShortestPath(at(grid, 0, 0), at(grid, 8, 8)),
+    );
+    expect(path[0]).toBe(at(grid, 0, 0));
+    expect(path[path.length - 1]).toBe(at(grid, 8, 8));
+    path.slice(1).forEach((tile, index) => {
       expect(grid.distance(path[index] as TerrainHex, tile)).toBe(1);
     });
   });
@@ -144,8 +155,9 @@ describe("PathCalculator.getShortestPath", () => {
   it("walks around a costly tile rather than through it", () => {
     // ai_v2 marks tiles holding a user or a barrier as cost 100 instead of blocking them
     const grid = makeGrid(7, 3, (col, row) => (col === 3 && row === 1 ? 100 : 1));
-    const path = new PathCalculator(grid).getShortestPath(at(grid, 0, 1), at(grid, 6, 1));
-    expect(path).toBeDefined();
+    const path = found(
+      new PathCalculator(grid).getShortestPath(at(grid, 0, 1), at(grid, 6, 1)),
+    );
     expect(path).not.toContain(at(grid, 3, 1));
   });
 
