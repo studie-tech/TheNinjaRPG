@@ -50,6 +50,7 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
   const registerDevice = api.push.registerDevice.useMutation();
   const unregisterDevice = api.push.unregisterDevice.useMutation();
   const { mutateAsync: sendToken } = registerDevice;
+  const { mutateAsync: detachToken } = unregisterDevice;
   // State, not just localStorage: the widget snapshot effect has to re-run once this
   // exists, and a ref would not wake it.
   const [widgetToken, setWidgetToken] = useState<string | undefined>(
@@ -72,9 +73,14 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
         locale: navigator.language.slice(0, 16),
       })
         .then((result) => {
-          // Signed out while this was in flight: the device has already been detached, so
-          // writing the token back would undo that.
-          if (epoch !== registrationEpoch) return;
+          if (epoch !== registrationEpoch) {
+            // Signed out while this was in flight. Skipping the local write is not enough:
+            // the server has already upserted the row, so the phone is bound to an account
+            // that no longer owns it and would go on receiving its notifications. Undo the
+            // bind rather than just declining to remember it.
+            void detachToken({ token }).catch(() => undefined);
+            return;
+          }
           safeLocalStorageSetItem(LAST_TOKEN_KEY, token);
           if (result.widgetToken) {
             safeLocalStorageSetItem(WIDGET_TOKEN_KEY, result.widgetToken);
@@ -105,7 +111,7 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
       unsubscribeError();
       unsubscribeTap();
     };
-  }, [enabled, router, sendToken]);
+  }, [detachToken, enabled, router, sendToken]);
 
   /** Detach this device from the account. Call when the player signs out. */
   const unregister = useCallback(async () => {
@@ -113,13 +119,21 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
     // the row has been deleted.
     registrationEpoch += 1;
     setWidgetToken(undefined);
+    // The widget credential belongs to the account being left, and nothing below needs it.
+    safeLocalStorageRemoveItem(WIDGET_TOKEN_KEY);
     const token = registeredToken.current ?? safeLocalStorageGetItem(LAST_TOKEN_KEY);
     if (!token) return;
     registeredToken.current = null;
-    safeLocalStorageRemoveItem(LAST_TOKEN_KEY);
-    safeLocalStorageRemoveItem(WIDGET_TOKEN_KEY);
-    await unregisterDevice.mutateAsync({ token }).catch(() => undefined);
-  }, [unregisterDevice]);
+    try {
+      await detachToken({ token });
+      // Only once the row is actually gone. Discarding the token first and swallowing the
+      // failure would leave the device bound to the account with the one credential that
+      // could detach it already thrown away.
+      safeLocalStorageRemoveItem(LAST_TOKEN_KEY);
+    } catch {
+      // Kept, so the next sign-out or launch can try the detach again.
+    }
+  }, [detachToken]);
 
   return { unregister, widgetToken };
 };

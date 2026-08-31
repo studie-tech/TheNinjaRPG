@@ -59,6 +59,10 @@ export default function NativeStore() {
     }
     void purchases
       .configure(apiKey, userData.userId)
+      // configure binds the id only the first time it runs for this process; RevenueCat
+      // ignores a later one. Sign-out logs the SDK out, so without this the next session
+      // would purchase as an anonymous id and the webhook would have nobody to credit.
+      .then(() => purchases.logIn(userData.userId))
       .then(() => purchases.getProducts())
       .then(setProducts)
       .catch(() => setProducts([]));
