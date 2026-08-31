@@ -58,7 +58,7 @@ const isDuplicateKeyError = (error: unknown): boolean => {
  * Whether sandbox receipts count for this account.
  *
  * Set STORE_SANDBOX_USER_IDS to the demo account App Review is given before submitting;
- * `docs/StoreSubmission.md` carries it as a release step. Unset, sandbox purchases grant
+ * Set it as a release step. Unset, sandbox purchases grant
  * nothing at all, which is the safe default for an ordinary deployment.
  */
 export const isSandboxGrantee = (userId: string): boolean =>

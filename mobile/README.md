@@ -103,9 +103,9 @@ Signing material comes from `.env`; nothing account-specific is committed.
 
 ## Before the first build
 
-Account-level setup that cannot be scripted is listed in
-[`docs/StoreSubmission.md`](../docs/StoreSubmission.md), together with the review material
-both stores require.
+Account-level setup that cannot be scripted — the identifiers, capabilities and review
+material both stores require — has to be done by hand in App Store Connect and the Play
+Console before the first build will be accepted.
 
 ## Icons and splash screens
 
@@ -216,7 +216,7 @@ with `capacitor://localhost` allowed, an arbitrary origin refused, and `OPTIONS`
 204.
 
 What is still unverified is everything that needs a signed build or a real account: push
-delivery, Live Activities, in-app purchase, and Sign in with Apple. Stage 0's three device
-checks in [`docs/StoreSubmission.md`](../docs/StoreSubmission.md) also still stand — the
-offline cold launch is now covered, but Clerk session persistence across cold launches and
-the three.js memory ceiling need a signed build against a reachable origin.
+delivery, Live Activities, in-app purchase, and Sign in with Apple. Of the three device
+risks identified before any of this was written, the offline cold launch is now covered,
+but Clerk session persistence across cold launches and the three.js memory ceiling still
+need a signed build against a reachable origin.
