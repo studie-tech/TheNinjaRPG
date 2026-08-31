@@ -8,9 +8,11 @@ import {
   type SetStateAction,
   use,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { api } from "@/app/_trpc/client";
+import DeviceSettings from "@/components/native/DeviceSettings";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -37,6 +39,7 @@ import {
   LAYOUT_PREFERENCE_COOKIE,
   persistLayoutPreferenceCookie,
 } from "@/libs/layoutPreference";
+import { audioSession } from "@/libs/native";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
@@ -108,6 +111,9 @@ export const GlobalAudioProvider: React.FC<{
 }> = ({ children, userData }) => {
   // Mount flag to keep SSR/CSR output in sync
   const [isClient, setIsClient] = useState(false);
+  // Bridge calls are asynchronous. Serialising them guarantees that a late activation can
+  // never overtake the deactivation queued by a subsequent pause.
+  const audioSessionQueue = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -156,6 +162,7 @@ export const GlobalAudioProvider: React.FC<{
 
   // Initialize the single audio instance
   const {
+    isPlaying,
     requiresInteraction,
     enabled: audioEnabled,
     setEnabled: setAudioEnabled,
@@ -179,6 +186,46 @@ export const GlobalAudioProvider: React.FC<{
       setButtonSfxOn(getInitialButtonSfxState());
     }
   }, [isClient, userData]);
+
+  // Claim the native media session only while the soundtrack is actually playing. On the
+  // web these bridge methods are no-ops.
+  useEffect(() => {
+    if (!isClient) return;
+    audioSessionQueue.current = audioSessionQueue.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (!isPlaying) {
+          await audioSession.deactivate();
+          return;
+        }
+        await audioSession.activate();
+        await audioSession.setNowPlaying({
+          title: "TheNinja-RPG",
+          artist: userData?.village?.name ?? "Seichi",
+        });
+      });
+  }, [isClient, isPlaying, userData?.village?.name]);
+
+  useEffect(
+    () => () => {
+      audioSessionQueue.current = audioSessionQueue.current
+        .catch(() => undefined)
+        .then(async () => {
+          await audioSession.deactivate();
+        });
+    },
+    [],
+  );
+
+  // Lock-screen and headset controls update the same state as the in-game toggle.
+  useEffect(() => {
+    if (!isClient) return;
+    return audioSession.onRemoteCommand((command) => {
+      if (command === "play") void setAudioEnabled(true);
+      else if (command === "pause") void setAudioEnabled(false);
+      else void setAudioEnabled(!audioEnabled);
+    });
+  }, [audioEnabled, isClient, setAudioEnabled]);
 
   useEffect(() => {
     if (!isClient) return;
@@ -624,6 +671,8 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
           </div>
         )}
       </div>
+
+      <DeviceSettings />
 
       {requiresInteraction && audioEnabled && (
         <p

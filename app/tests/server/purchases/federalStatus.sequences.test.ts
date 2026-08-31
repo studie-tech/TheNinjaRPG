@@ -11,9 +11,10 @@ import {
 } from "@/drizzle/schema";
 import type { FederalStatus, StorePlatform } from "@/drizzle/constants";
 import {
-  federalStatusWithStoreFloor,
   grantStorePurchase,
   revokeFederalStatus,
+  setFederalStatusWithStoreFloor,
+  storeFederalFloor,
   transferStorePurchases,
 } from "@/server/utils/purchases/grant";
 import { insertUsers } from "../../setup/factories";
@@ -138,26 +139,35 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     await revokeFederalStatus(await db(), USER, { occurredAt: new Date() });
     expect(await statusOf()).toBe("NORMAL");
     // now PayPal ends too: the spent store receipt must not hold the tier open
-    const next = await federalStatusWithStoreFloor(await db(), USER, "NONE");
+    const next = await storeFederalFloor(await db(), USER);
     expect(next).toBe("NONE");
   });
 
   it("keeps a live store subscription safe from a PayPal writer", async () => {
     await buyFederal("GOLD");
-    const next = await federalStatusWithStoreFloor(await db(), USER, "NONE");
-    expect(next).toBe("GOLD");
+    await setFederalStatusWithStoreFloor(await db(), USER, "NONE");
+    expect(await statusOf()).toBe("GOLD");
+  });
+
+  it("keeps a simultaneous store grant safe from a PayPal writer", async () => {
+    const database = await db();
+    await Promise.all([
+      buyFederal("GOLD"),
+      setFederalStatusWithStoreFloor(database, USER, "NONE"),
+    ]);
+    expect(await statusOf()).toBe("GOLD");
   });
 
   it("stops vouching once the receipt is older than the grace window", async () => {
     await buyFederal("GOLD", 70 * DAY);
-    const next = await federalStatusWithStoreFloor(await db(), USER, "NONE");
+    const next = await storeFederalFloor(await db(), USER);
     expect(next).toBe("NONE");
   });
 
   it("still vouches inside the billing-retry grace window", async () => {
     // A renewal that failed 40 days ago is still within the store's retry period.
     await buyFederal("GOLD", 40 * DAY);
-    const next = await federalStatusWithStoreFloor(await db(), USER, "NONE");
+    const next = await storeFederalFloor(await db(), USER);
     expect(next).toBe("GOLD");
   });
 
@@ -210,7 +220,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       raw: {},
     });
     // Recorded for the audit trail, but never accepted, so nothing vouches for a tier.
-    expect(await federalStatusWithStoreFloor(await db(), USER, "NONE")).toBe("NONE");
+    expect(await storeFederalFloor(await db(), USER)).toBe("NONE");
   });
 
   it("is idempotent when the same expiry is delivered twice", async () => {

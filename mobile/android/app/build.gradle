@@ -1,10 +1,12 @@
 apply plugin: 'com.android.application'
 
+def tnrAppId = System.getenv('TNR_APP_ID') ?: 'com.theninjarpg.app'
+
 android {
     namespace = "com.theninjarpg.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.theninjarpg.app"
+        applicationId tnrAppId
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

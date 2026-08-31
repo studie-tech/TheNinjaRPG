@@ -2,13 +2,13 @@ import { TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { and, eq, isNotNull, isNull, lte } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { paypalSubscription, userData } from "@/drizzle/schema";
+import { paypalSubscription } from "@/drizzle/schema";
 import {
   getPaypalAccessToken,
   getPaypalSubscription,
 } from "@/server/api/routers/paypal";
 import { drizzleDB } from "@/server/db";
-import { federalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
+import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
 import { plan2FedStatus } from "@/utils/paypal";
 
 export async function GET() {
@@ -48,16 +48,11 @@ export async function GET() {
         // PayPal decides its own tier, but not the column: a player may also be paying
         // a store for federal status, and writing this straight over would strip a
         // subscription Apple or Google is still billing.
-        await drizzleDB
-          .update(userData)
-          .set({
-            federalStatus: await federalStatusWithStoreFloor(
-              drizzleDB,
-              subscription.affectedUserId,
-              isDone ? "NONE" : newFedStatus,
-            ),
-          })
-          .where(eq(userData.userId, subscription.affectedUserId));
+        await setFederalStatusWithStoreFloor(
+          drizzleDB,
+          subscription.affectedUserId,
+          isDone ? "NONE" : newFedStatus,
+        );
       }
     });
 
@@ -83,16 +78,11 @@ export async function GET() {
           updatedAt: new Date(),
         })
         .where(eq(paypalSubscription.id, subscription.id));
-      await drizzleDB
-        .update(userData)
-        .set({
-          federalStatus: await federalStatusWithStoreFloor(
-            drizzleDB,
-            subscription.affectedUserId,
-            isDone ? "NONE" : subscription.federalStatus,
-          ),
-        })
-        .where(eq(userData.userId, subscription.affectedUserId));
+      await setFederalStatusWithStoreFloor(
+        drizzleDB,
+        subscription.affectedUserId,
+        isDone ? "NONE" : subscription.federalStatus,
+      );
     });
     return Response.json(`OK`);
   } catch (cause) {

@@ -46,7 +46,9 @@ public struct TNRSnapshot: Codable, Equatable, Sendable {
 /// `UserDefaults` rather than a file: the payload is a couple of hundred bytes, and the
 /// suite handles the cross-process coordination that a file would need locking for.
 public enum TNRSnapshotStore {
-    public static let appGroup = "group.com.theninjarpg.app"
+    public static let appGroup =
+        Bundle.main.object(forInfoDictionaryKey: "TNRAppGroup") as? String
+        ?? "group.com.theninjarpg.app"
     private static let key = "tnr.widget.snapshot"
 
     private static var defaults: UserDefaults? {

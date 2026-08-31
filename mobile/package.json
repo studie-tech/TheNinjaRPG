@@ -9,13 +9,13 @@
     "add:android": "cap add android",
     "prepare:web": "node scripts/write-config.mjs",
     "sync": "bun run prepare:web && cap sync",
-    "open:ios": "cap open ios",
+    "open:ios": "bun run configure:ios && cap open ios",
     "open:android": "cap open android",
-    "run:ios": "cap run ios",
+    "run:ios": "bun run configure:ios && cap run ios",
     "run:android": "cap run android",
     "beta:ios": "bundle exec fastlane ios beta",
     "beta:android": "bundle exec fastlane android beta",
-    "configure:ios": "ruby scripts/configure-xcode.rb"
+    "configure:ios": "bundle exec ruby scripts/configure-xcode.rb"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

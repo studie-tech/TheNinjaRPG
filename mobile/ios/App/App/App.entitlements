@@ -19,7 +19,7 @@
 	<!-- The container the app writes its widget snapshot into and the extension reads. -->
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.theninjarpg.app</string>
+		<string>$(TNR_APP_GROUP)</string>
 	</array>
 
 	<key>com.apple.developer.applesignin</key>

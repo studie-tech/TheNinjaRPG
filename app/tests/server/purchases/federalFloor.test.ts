@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FederalStatus } from "@/drizzle/constants";
 import type { DrizzleClient } from "@/server/db";
-import {
-  federalStatusWithStoreFloor,
-  storeFederalFloor,
-} from "@/server/utils/purchases/grant";
+import { storeFederalFloor } from "@/server/utils/purchases/grant";
 
 /**
  * Just enough client for the one read these helpers make. `revoked` receipts are filtered
@@ -31,31 +28,5 @@ describe("storeFederalFloor", () => {
 
   it("ignores reputation bundles, which carry no tier", async () => {
     expect(await storeFederalFloor(stub([null]), "u")).toBe("NONE");
-  });
-});
-
-describe("federalStatusWithStoreFloor", () => {
-  it("leaves a live store subscription alone when PayPal decides NONE", async () => {
-    expect(await federalStatusWithStoreFloor(stub(["GOLD"]), "u", "NONE")).toBe("GOLD");
-  });
-
-  it("still expires a player whose only source was PayPal", async () => {
-    expect(await federalStatusWithStoreFloor(stub([]), "u", "NONE")).toBe("NONE");
-  });
-
-  it("lets PayPal raise the tier above the store's", async () => {
-    expect(await federalStatusWithStoreFloor(stub(["SILVER"]), "u", "GOLD")).toBe("GOLD");
-  });
-
-  it("keeps the tier when a receipt bought after the expiry is still live", async () => {
-    // What revokeFederalStatus falls back to after a late expiry spared a newer receipt:
-    // reading PayPal alone would drop a subscriber who has already bought back in.
-    expect(await federalStatusWithStoreFloor(stub(["GOLD"]), "u", "NONE")).toBe("GOLD");
-  });
-
-  it("takes the tier away once the store subscription has been revoked too", async () => {
-    // The case the earlier clamp got wrong: with both sources finished, nothing should
-    // hold the tier open just because a spent receipt is still inside the window.
-    expect(await federalStatusWithStoreFloor(stub([]), "u", "NONE")).toBe("NONE");
   });
 });

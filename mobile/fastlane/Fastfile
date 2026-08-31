@@ -18,6 +18,7 @@ platform :ios do
   desc "Build and upload to TestFlight"
   lane :beta do
     sync_web
+    sh("bun", "run", "configure:ios")
 
     api_key = app_store_connect_api_key(
       key_id: ENV.fetch("ASC_KEY_ID"),

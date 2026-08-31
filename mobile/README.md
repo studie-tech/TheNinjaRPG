@@ -58,6 +58,8 @@ all this widget draws.
 ```bash
 cd mobile
 bun install
+bundle config set --local path vendor/bundle
+bundle install
 cp .env.example .env       # fill in TNR_APP_ID at minimum
 bun run sync
 ```
@@ -67,10 +69,10 @@ bun run sync
 output. Do not regenerate them with `cap add`; that would discard every capability
 configured on top of the template.
 
-After a Capacitor upgrade, or if the Xcode project is ever recreated:
+The iOS run, open and release commands apply `TNR_APP_ID` to the Xcode targets and their
+shared App Group automatically. To apply it without launching Xcode:
 
 ```bash
-gem install xcodeproj
 bun run configure:ios
 ```
 

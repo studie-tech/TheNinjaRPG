@@ -40,6 +40,7 @@ end
 
 set_setting(app, "CODE_SIGN_ENTITLEMENTS", "App/App.entitlements")
 set_setting(app, "PRODUCT_BUNDLE_IDENTIFIER", BUNDLE_ID)
+set_setting(app, "TNR_APP_GROUP", APP_GROUP)
 set_setting(app, "IPHONEOS_DEPLOYMENT_TARGET", APP_DEPLOYMENT_TARGET)
 # The widget extension is Swift 5.9+ syntax; keep both targets on the same toolchain.
 set_setting(app, "SWIFT_VERSION", "5.0")
@@ -63,6 +64,7 @@ end
 # nameless ".appex" that collides with its own create-directory command.
 set_setting(widget, "PRODUCT_NAME", "$(TARGET_NAME)")
 set_setting(widget, "PRODUCT_BUNDLE_IDENTIFIER", "#{BUNDLE_ID}.widgets")
+set_setting(widget, "TNR_APP_GROUP", APP_GROUP)
 set_setting(widget, "INFOPLIST_FILE", "#{WIDGET_TARGET}/Info.plist")
 set_setting(widget, "CODE_SIGN_ENTITLEMENTS", "#{WIDGET_TARGET}/#{WIDGET_TARGET}.entitlements")
 set_setting(widget, "IPHONEOS_DEPLOYMENT_TARGET", WIDGET_DEPLOYMENT_TARGET)

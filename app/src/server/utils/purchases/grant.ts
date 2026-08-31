@@ -372,10 +372,7 @@ export const revokeFederalStatus = async (
   // only PayPal here would drop the tier anyway and leave a paying subscriber with a live
   // receipt and nothing to show for it, until their next renewal.
   const paypal = await paypalFederalFloor(client, userId);
-  await client
-    .update(userData)
-    .set({ federalStatus: await federalStatusWithStoreFloor(client, userId, paypal) })
-    .where(eq(userData.userId, userId));
+  await setFederalStatusWithStoreFloor(client, userId, paypal);
 };
 
 export interface StoreTransfer {
@@ -438,10 +435,7 @@ export const transferStorePurchases = async (
       : [];
   for (const userId of [...knownSources.map((row) => row.userId), destinationUserId]) {
     const paypal = await paypalFederalFloor(client, userId);
-    await client
-      .update(userData)
-      .set({ federalStatus: await federalStatusWithStoreFloor(client, userId, paypal) })
-      .where(eq(userData.userId, userId));
+    await setFederalStatusWithStoreFloor(client, userId, paypal);
   }
 
   return { destinationUserId, rowsAffected };
@@ -525,17 +519,37 @@ export const storeFederalFloor = async (
 };
 
 /**
- * What a PayPal writer should set, given the tier PayPal has decided on.
- *
- * `userData.federalStatus` is one column with two paying sources. The PayPal side owns
- * its own tier but not the column, so it has to leave a store subscription that is still
- * being billed alone rather than writing straight over it.
+ * Set the shared federal-status column without leaving a gap between reading the store
+ * receipts and writing the user. Store grants update the receipt and user in one statement
+ * too, so both writers serialize on the user row: whichever runs last sees the other's
+ * committed source of truth instead of applying a stale pre-read value.
  */
-export const federalStatusWithStoreFloor = async (
-  client: DrizzleClient,
+export const setFederalStatusWithStoreFloor = async (
+  client: Pick<DrizzleClient, "execute">,
   userId: string,
   paypalStatus: FederalStatus,
-): Promise<FederalStatus> => {
-  const floor = await storeFederalFloor(client, userId);
-  return rankOf(paypalStatus) >= rankOf(floor) ? paypalStatus : floor;
+) => {
+  const liveStoreReceipt = and(
+    eq(storePurchase.userId, userId),
+    isNotNull(storePurchase.acceptedAt),
+    isNull(storePurchase.revokedAt),
+    gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
+  );
+  const hasTier = (tier: FederalStatus) => sql`EXISTS (
+    SELECT 1 FROM ${storePurchase}
+    WHERE ${liveStoreReceipt}
+      AND ${storePurchase.federalStatus} = ${tier}
+  )`;
+  const paypalRank = rankOf(paypalStatus);
+
+  return await client.execute(sql`
+    UPDATE ${userData}
+    SET ${userData.federalStatus} = CASE
+      WHEN ${paypalRank >= rankOf("GOLD")} OR ${hasTier("GOLD")} THEN 'GOLD'
+      WHEN ${paypalRank >= rankOf("SILVER")} OR ${hasTier("SILVER")} THEN 'SILVER'
+      WHEN ${paypalRank >= rankOf("NORMAL")} OR ${hasTier("NORMAL")} THEN 'NORMAL'
+      ELSE 'NONE'
+    END
+    WHERE ${userData.userId} = ${userId}
+  `);
 };

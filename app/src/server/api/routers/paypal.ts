@@ -10,7 +10,7 @@ import {
   recruitmentRewards,
   userData,
 } from "@/drizzle/schema";
-import { federalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
+import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
 import {
   calcFedUgradeCost,
   dollars2reps,
@@ -425,11 +425,6 @@ export const updateSubscription = async (input: {
   status: string;
   lastPayment?: Date;
 }) => {
-  const storeAwareStatus = await federalStatusWithStoreFloor(
-    input.client,
-    input.affectedUserId,
-    input.federalStatus,
-  );
   return await input.client.transaction(async (tx) => {
     // Get the subscription in question
     const current = await tx.query.paypalSubscription.findFirst({
@@ -455,10 +450,11 @@ export const updateSubscription = async (input: {
       // otherActive only knows about PayPal. A store subscription is billed elsewhere and
       // is invisible to it, so the tier still has to be floored by what the stores vouch
       // for or a web sync would strip a subscription Apple or Google is charging for.
-      await tx
-        .update(userData)
-        .set({ federalStatus: storeAwareStatus })
-        .where(eq(userData.userId, input.affectedUserId));
+      await setFederalStatusWithStoreFloor(
+        tx,
+        input.affectedUserId,
+        input.federalStatus,
+      );
     }
     // Update subscription
     if (current) {

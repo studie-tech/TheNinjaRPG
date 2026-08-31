@@ -7,6 +7,8 @@ fastlane/Preview.html
 fastlane/screenshots/
 build/
 Gemfile.lock
+.bundle/
+vendor/bundle/
 
 # Build output. The projects themselves are committed: they carry entitlements,
 # Info.plist, the manifest and Gradle config, which are part of the app rather than
