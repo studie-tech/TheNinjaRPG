@@ -27,6 +27,7 @@ import {
  * against real tables rather than checking a helper in isolation.
  */
 const USER = "federal-seq-user";
+const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * 60 * 1000;
 
 const db = () => getTestDatabase();
@@ -93,7 +94,9 @@ describeWithDatabase("federal status across real webhook sequences", () => {
   });
 
   it("grants, then gives the tier back on expiry", async () => {
-    await buyFederal("GOLD");
+    // Backdated so the receipt plainly predates the expiry: MySQL stamps createdAt and the
+    // test stamps occurredAt, and nothing guarantees those two clocks agree to the ms.
+    await buyFederal("GOLD", MINUTE);
     expect(await statusOf()).toBe("GOLD");
     await revokeFederalStatus(await db(), USER, { occurredAt: new Date() });
     expect(await statusOf()).toBe("NONE");
@@ -101,7 +104,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
 
   it("does not strip a web subscription when the store one lapses", async () => {
     await givePaypal("NORMAL");
-    await buyFederal("GOLD");
+    await buyFederal("GOLD", MINUTE);
     expect(await statusOf()).toBe("GOLD");
     await revokeFederalStatus(await db(), USER, { occurredAt: new Date() });
     expect(await statusOf()).toBe("NORMAL");
@@ -125,7 +128,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
 
   it("lets a PayPal writer take the tier away once both sources have ended", async () => {
     await givePaypal("NORMAL");
-    await buyFederal("GOLD");
+    await buyFederal("GOLD", MINUTE);
     await revokeFederalStatus(await db(), USER, { occurredAt: new Date() });
     expect(await statusOf()).toBe("NORMAL");
     // now PayPal ends too: the spent store receipt must not hold the tier open
@@ -166,8 +169,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
   });
 
   it("retires only the product that expired, not a concurrent one", async () => {
-    // A tier change leaves the old product expiring while the new one is being billed.
-    await buyFederal("NORMAL");
+    // A tier change leaves the old product expiring while the new one is being billed, so
+    // the surviving product is by definition the newer of the two. Both are stamped from
+    // CURRENT_TIMESTAMP(3) without this, and two inserts can land in the same millisecond
+    // -- which the cutoff, being inclusive, would then treat as superseded.
+    await buyFederal("NORMAL", 1 * DAY);
     await buyFederal("GOLD");
     await revokeFederalStatus(await db(), USER, {
       occurredAt: new Date(),
@@ -202,7 +208,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
 
   it("is idempotent when the same expiry is delivered twice", async () => {
     await givePaypal("NORMAL");
-    await buyFederal("GOLD");
+    await buyFederal("GOLD", MINUTE);
     const at = new Date();
     await revokeFederalStatus(await db(), USER, { occurredAt: at });
     await revokeFederalStatus(await db(), USER, { occurredAt: at });
