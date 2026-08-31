@@ -113,6 +113,7 @@ import { fetchStructures } from "@/routers/village";
 import type { DrizzleClient } from "@/server/db";
 import {
   consumeUserItemAtomically,
+  getNextUserSnapshotAt,
   MERGE_STACK_CLAIM_TIMEOUT_MS,
   refundUserItemQuantityAtomically,
   restoreStaleUserItemMergeClaims,
@@ -2477,8 +2478,10 @@ export const itemRouter = createTRPCRouter({
       // Query
       const iid = input.itemId;
       const uid = ctx.userId;
-      const [user, info, useritems, structures, questState] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      // Read userData before inventory so the transactional updatedAt CAS below
+      // detects any capacity mutation that commits between these snapshots.
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [info, useritems, structures, questState] = await Promise.all([
         fetchItem(ctx.drizzle, iid),
         fetchUserItems(ctx.drizzle, uid),
         fetchStructures(ctx.drizzle, input.villageId),
@@ -2616,34 +2619,45 @@ export const itemRouter = createTRPCRouter({
           questData: filterQuestTrackersForDbPersist(trackers, buyer),
         };
       }
-      // Mutate — fold questData into the same CAS UPDATE so it only persists when the
-      // fund deduction succeeds (one UPDATE per row, no separate questData write).
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({
-          money: sql`${userData.money} - ${ryoCost}`,
-          reputationPoints: sql`${userData.reputationPoints} - ${repsCost}`,
-          seichiSilver: sql`${userData.seichiSilver} - ${seichiSilverCost}`,
-          ...questDataUpdate,
-        })
-        .where(
-          and(
-            eq(userData.userId, uid),
-            gte(userData.money, ryoCost),
-            gte(userData.reputationPoints, repsCost),
-            gte(userData.seichiSilver, seichiSilverCost),
-          ),
-        );
-      if (result.rowsAffected !== 1) {
-        return { success: false, message: "Insufficient funds for this purchase" };
-      }
-      await ctx.drizzle.insert(userItem).values({
-        id: nanoid(),
-        userId: uid,
-        itemId: iid,
-        quantity: input.stack,
-        equipped: equipped,
+      // Commit the user-snapshot claim, fund deduction, quest update, and item insert
+      // together. The updatedAt CAS serializes the earlier capacity read with other
+      // inventory mutations, while the transaction prevents charging without delivery.
+      const purchaseCommitted = await ctx.drizzle.transaction(async (tx) => {
+        const result = await tx
+          .update(userData)
+          .set({
+            money: sql`${userData.money} - ${ryoCost}`,
+            reputationPoints: sql`${userData.reputationPoints} - ${repsCost}`,
+            seichiSilver: sql`${userData.seichiSilver} - ${seichiSilverCost}`,
+            updatedAt: getNextUserSnapshotAt(user.updatedAt),
+            ...questDataUpdate,
+          })
+          .where(
+            and(
+              eq(userData.userId, uid),
+              eq(userData.updatedAt, user.updatedAt),
+              gte(userData.money, ryoCost),
+              gte(userData.reputationPoints, repsCost),
+              gte(userData.seichiSilver, seichiSilverCost),
+            ),
+          );
+        if (result.rowsAffected !== 1) return false;
+
+        await tx.insert(userItem).values({
+          id: nanoid(),
+          userId: uid,
+          itemId: iid,
+          quantity: input.stack,
+          equipped: equipped,
+        });
+        return true;
       });
+      if (!purchaseCommitted) {
+        return {
+          success: false,
+          message: "Inventory or funds changed, please refresh and try again",
+        };
+      }
       return { success: true, message: `You bought ${info.name}` };
     }),
   // Auto-equip optimal items based on cost

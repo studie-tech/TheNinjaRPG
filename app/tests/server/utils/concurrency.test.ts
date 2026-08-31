@@ -10,6 +10,7 @@ import {
   claimUserSnapshot,
   clearActiveNpcQuest,
   consumeUserItemAtomically,
+  getNextUserSnapshotAt,
   refundUserItemQuantityAtomically,
   restoreStaleUserItemMergeClaims,
   updateUserItemQuantityAtomically,
@@ -17,6 +18,14 @@ import {
 } from "@/server/utils/concurrency";
 
 describe("concurrency helpers", () => {
+  it("advances a snapshot when the wall clock is in the same millisecond", () => {
+    const snapshot = new Date("2026-05-01T10:00:00.123Z");
+
+    expect(getNextUserSnapshotAt(snapshot, new Date(snapshot))).toEqual(
+      new Date("2026-05-01T10:00:00.124Z"),
+    );
+  });
+
   it("claims a user snapshot by touching updatedAt", async () => {
     const where = vi.fn().mockResolvedValue({ rowsAffected: 1 });
     const set = vi.fn().mockReturnValue({ where });
