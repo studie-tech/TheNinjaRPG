@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
@@ -1682,6 +1682,9 @@ interface TrainingStatsComponentProps {
   isActive: boolean;
 }
 
+/** The x axis of the training log: one point per hour of the day. */
+const HOURS_OF_DAY = [...Array(24).keys()];
+
 const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
   userId,
   isActive,
@@ -1698,11 +1701,14 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
     { enabled: isActive },
   );
 
-  // Create dataset for each training speed
-  const x = [...Array(24).keys()];
-  const datasets =
-    logEntries &&
-    TrainingSpeeds.map((speed) => {
+  /**
+   * Create dataset for each training speed. Memoized because the draw effect below depends on
+   * it: rebuilt on every render it would destroy the chart and start a fresh async draw each
+   * time, and the canvas is left blank whenever a cleanup lands after the draw it preceded.
+   */
+  const datasets = useMemo(() => {
+    if (!logEntries) return undefined;
+    return TrainingSpeeds.map((speed) => {
       const hourlyEvents = groupBy(
         logEntries
           .filter((e) => e.speed === speed)
@@ -1714,7 +1720,7 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
       );
       return {
         label: speed,
-        data: x.map((i) => {
+        data: HOURS_OF_DAY.map((i) => {
           const entries = hourlyEvents.get(i) || [];
           return {
             x: i,
@@ -1724,6 +1730,7 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
         }),
       };
     });
+  }, [logEntries]);
 
   // Create chart
   useEffect(() => {
@@ -1805,7 +1812,7 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
             },
           },
           data: {
-            labels: x,
+            labels: HOURS_OF_DAY,
             datasets: datasets,
           },
         });
