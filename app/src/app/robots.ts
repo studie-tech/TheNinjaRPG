@@ -20,6 +20,14 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: "*",
         allow: "/",
         // API routes return JSON and never belong in search results.
+        //
+        // Build assets are deliberately left crawlable. Most of the 3,481 URLs Search
+        // Console reports as "Crawled - currently not indexed" are dead
+        // /_next/static/chunks/*.js?dpl=<id> assets from deploys that minted a fresh URL
+        // per deployment, and blocking that path would stop them being re-crawled. It
+        // would also be unsafe: production still emits chunks under that exact path, so
+        // the rule would deny Googlebot the JavaScript it needs to render any page. The
+        // cache buster is gone, so the dead URLs age out of the index on their own.
         disallow: ["/api/"],
       },
     ],
