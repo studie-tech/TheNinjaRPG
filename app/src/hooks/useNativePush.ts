@@ -29,6 +29,11 @@ let registrationEpoch = 0;
 interface UseNativePushOptions {
   /** Register only once the player is signed in; tokens are bound to an account. */
   enabled: boolean;
+  /**
+   * Whose session this is. Only a dependency: it restarts registration when one account
+   * replaces another without a signed-out gap in between, which `enabled` alone misses.
+   */
+  accountId?: string | null;
 }
 
 /**
@@ -43,7 +48,7 @@ interface UseNativePushOptions {
  * iOS allows the system prompt exactly once and burning it on app launch means a player
  * who taps "Don't Allow" can never be reached again without a trip to Settings.
  */
-export const useNativePush = ({ enabled }: UseNativePushOptions) => {
+export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
   const router = useRouter();
   const registeredToken = useRef<string | null>(null);
   /** The registration currently on the wire, so a sign-out can let it land first. */
@@ -111,7 +116,7 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
       unsubscribeError();
       unsubscribeTap();
     };
-  }, [enabled, router, sendToken]);
+  }, [accountId, enabled, router, sendToken]);
 
   /** Detach this device from the account. Call when the player signs out. */
   const unregister = useCallback(async () => {

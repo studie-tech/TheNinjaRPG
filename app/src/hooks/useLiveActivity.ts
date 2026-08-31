@@ -60,8 +60,10 @@ export const useLiveActivity = (
   }, [submitToken]);
 
   const isHospitalised = userData?.status === "HOSPITALIZED";
-  // Signed out counts as "stop", not "no opinion": leaving the countdown up would show
-  // the previous player's recovery on the Lock Screen of a signed-out phone.
+  // Absent userData counts as "stop", not "no opinion": leaving the countdown up would show
+  // the previous player's recovery on the Lock Screen of a signed-out phone. NativeBridge
+  // withholds the profile once it stops matching the Clerk session, which is what makes a
+  // sign-out reach here at all -- the query itself keeps its last result when disabled.
   const shouldRun = isHospitalised && !!userData;
   shouldBeRunning.current = shouldRun;
 

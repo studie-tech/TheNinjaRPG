@@ -42,9 +42,16 @@ export const configure = async (apiKey: string, appUserId: string): Promise<void
   await invoke(PLUGIN, "configure", { apiKey, appUserID: appUserId });
 };
 
-/** Rebind after a sign-in on the same device. */
+/**
+ * Rebind after a sign-in on the same device.
+ *
+ * Throws rather than reporting success, unlike the cleanup calls around it. A rebind that
+ * quietly failed would leave the SDK on the previous id -- or anonymous after a sign-out --
+ * while the store went on offering products, so the player could buy something the webhook
+ * then had nobody to credit. The caller shows no products instead.
+ */
 export const logIn = async (appUserId: string): Promise<void> => {
-  await invokeSafe(PLUGIN, "logIn", { appUserID: appUserId });
+  await invoke(PLUGIN, "logIn", { appUserID: appUserId });
 };
 
 /** Unbind on sign-out so the next player's purchases are not credited to the last one. */

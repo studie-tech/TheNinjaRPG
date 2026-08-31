@@ -35,8 +35,17 @@ export default function NativeBridge() {
   // the widget renders does not spend a WidgetKit reload.
   const lastSnapshot = useRef<string | null>(null);
 
-  const { unregister, widgetToken } = useNativePush({ enabled: !!userData });
-  useLiveActivity(userData, timeDiff);
+  // The profile query keeps its last result when it is disabled, so cached userData
+  // outlives the session it belongs to. Both hooks below have to know whose data this is:
+  // gated on userData alone, a sign-out leaves the previous player's profile driving them,
+  // and the next account never triggers a fresh registration.
+  const isCurrentUser = !!userId && userData?.userId === userId;
+
+  const { unregister, widgetToken } = useNativePush({
+    enabled: isCurrentUser,
+    accountId: userId,
+  });
+  useLiveActivity(isCurrentUser ? userData : undefined, timeDiff);
 
   // The shell version is only knowable in the browser, so this runs after mount rather
   // than during render — checking it inline would break hydration.
