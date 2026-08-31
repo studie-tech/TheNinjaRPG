@@ -5,6 +5,7 @@ import {
   LegacyVillageNames,
   TavernColorPresets,
   UserRanks,
+  UserRoles,
 } from "@/drizzle/constants";
 import { createReservedNameField } from "@/validators/reservedName";
 
@@ -127,23 +128,34 @@ export const userSearchSchema = z.object({
 });
 export type UserSearchSchema = z.infer<typeof userSearchSchema>;
 
+const searchUserResultSchema = z.object({
+  userId: z.string(),
+  username: usernameFormatSchema,
+  avatar: z.url().optional().nullish(),
+  rank: z.enum(UserRanks),
+  level: z.number(),
+  federalStatus: z.enum(FederalStatuses),
+  role: z.enum(UserRoles).optional(),
+  isOutlaw: z.boolean().optional(),
+  customTitle: z.string().optional(),
+  nRecruited: z.number().optional().nullish(),
+  tavernMessages: z.number().optional().nullish(),
+  tavernUsernameColor: z.enum(TavernColorPresets).optional(),
+  tavernTitleColor: z.enum(TavernColorPresets).optional(),
+  village: z
+    .object({
+      name: z.string(),
+      hexColor: z.string(),
+      kageId: z.string().nullish(),
+    })
+    .optional()
+    .nullish(),
+});
+export type UserSearchResult = z.infer<typeof searchUserResultSchema>;
+
 export const getSearchValidator = (props: { max: number }) => {
   return z.object({
     username: usernameFormatSchema,
-    users: z
-      .array(
-        z.object({
-          userId: z.string(),
-          username: usernameFormatSchema,
-          avatar: z.url().optional().nullish(),
-          rank: z.enum(UserRanks),
-          level: z.number(),
-          federalStatus: z.enum(FederalStatuses),
-          tavernUsernameColor: z.enum(TavernColorPresets).optional(),
-          tavernTitleColor: z.enum(TavernColorPresets).optional(),
-        }),
-      )
-      .min(1)
-      .max(props.max),
+    users: z.array(searchUserResultSchema).min(1).max(props.max),
   });
 };

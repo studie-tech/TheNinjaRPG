@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { TavernColorPresets } from "@/drizzle/constants";
+import {
+  COST_TAVERN_COLOR_CHANGE,
+  getTavernColorChangeCost,
+  TavernColorPresets,
+} from "@/drizzle/constants";
 import {
   resolveTavernColorClasses,
   TAVERN_COLOR_STYLES,
@@ -10,13 +14,42 @@ const isStrongUsernameColor = (className: string) =>
   className.includes("font-bold") &&
   (className.includes("text-") || className.includes("dark:text-"));
 
+const LIGHT_TAVERN_SURFACE = parseHexColor("#ffffff")!;
+const DARK_TAVERN_SURFACE = parseHexColor("#334155")!;
+
 describe("tavern color styling", () => {
+  it.each(TavernColorPresets)("charges the configured cost for %s", (preset) => {
+    expect(getTavernColorChangeCost(preset)).toBe(COST_TAVERN_COLOR_CHANGE);
+  });
+
   it.each(TavernColorPresets.filter((preset) => preset !== "DEFAULT"))(
     "styles %s usernames with bold light/dark text colors",
     (preset) => {
       expect(isStrongUsernameColor(TAVERN_COLOR_STYLES[preset].usernameClass)).toBe(
         true,
       );
+    },
+  );
+
+  it.each(TavernColorPresets.filter((preset) => preset !== "DEFAULT"))(
+    "gives %s usernames WCAG contrast in light and dark mode",
+    (preset) => {
+      const style = TAVERN_COLOR_STYLES[preset];
+      const lightForeground = parseHexColor(style.usernameLightHex)!;
+      const darkForeground = parseHexColor(style.usernameDarkHex)!;
+
+      expect(
+        contrastRatio(
+          relativeLuminance(lightForeground),
+          relativeLuminance(LIGHT_TAVERN_SURFACE),
+        ),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(
+          relativeLuminance(darkForeground),
+          relativeLuminance(DARK_TAVERN_SURFACE),
+        ),
+      ).toBeGreaterThanOrEqual(4.5);
     },
   );
 
@@ -46,7 +79,7 @@ describe("tavern color styling", () => {
       baseUsernameClass: "federal-style",
       baseTitleClass: "default-title",
     });
-    expect(classes.usernameClass).toContain("text-blue-500");
+    expect(classes.usernameClass).toContain("text-blue-700");
     expect(classes.titleClass).toContain("bg-yellow-400");
   });
 

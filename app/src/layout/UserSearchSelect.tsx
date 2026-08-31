@@ -12,8 +12,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import type { FederalStatus, UserRank } from "@/drizzle/schema";
+import type { FederalStatus } from "@/drizzle/schema";
 import { getUnique } from "@/utils/grouping";
+import type { UserSearchResult } from "@/validators/register";
 import AvatarImage from "./Avatar";
 
 type SelectedUser = {
@@ -27,14 +28,7 @@ interface UserSearchSelectProps {
   useFormMethods: UseFormReturn<
     {
       username: string;
-      users: {
-        userId: string;
-        username: string;
-        rank: UserRank;
-        level: number;
-        avatar?: string | null;
-        federalStatus: FederalStatus;
-      }[];
+      users: UserSearchResult[];
     },
     any
   >;

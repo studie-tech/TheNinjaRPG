@@ -18,14 +18,10 @@ import {
 
 export const updateUserSchema = z.object({
   username: usernameSchema,
-  customTitle: z
-    .string()
-    .min(0)
-    .max(199)
-    .optional()
-    .refine((title) => !title || !isReservedCustomTitle(title), {
-      message: RESERVED_CUSTOM_TITLE_MESSAGE,
-    }),
+  // Existing records may predate title reservations. The update handler validates
+  // reserved names only when this field actually changes, so unrelated staff edits
+  // remain possible for those legacy records.
+  customTitle: z.string().min(0).max(199).optional(),
   bloodlineId: z.string().nullable(),
   bloodlineReskinId: z.string().nullable().optional(),
   /** Staff-assigned equipped mode. Empty / "None" become null (unequip). */

@@ -51,8 +51,8 @@ describeWithDatabase("profile tavern color purchases", () => {
     expect(user?.reputationPoints).toBe(10);
   });
 
-  it("returns to DEFAULT for free", async () => {
-    await createUser({ reputationPoints: 0, tavernUsernameColor: "NAVY" });
+  it("charges 10 reputation when returning to DEFAULT", async () => {
+    await createUser({ reputationPoints: 10, tavernUsernameColor: "NAVY" });
     const result = await (await caller("color-user")).updateTavernColor({
       target: "username",
       color: "DEFAULT",
@@ -61,6 +61,17 @@ describeWithDatabase("profile tavern color purchases", () => {
     const user = await readUser();
     expect(user?.tavernUsernameColor).toBe("DEFAULT");
     expect(user?.reputationPoints).toBe(0);
+  });
+
+  it("rejects returning to DEFAULT without enough reputation", async () => {
+    await createUser({ reputationPoints: 9, tavernUsernameColor: "NAVY" });
+    const result = await (await caller("color-user")).updateTavernColor({
+      target: "username",
+      color: "DEFAULT",
+    });
+    expect(result.success).toBe(false);
+    expect(result.message).toMatch(/not enough/i);
+    expect((await readUser())?.tavernUsernameColor).toBe("NAVY");
   });
 
   it("rejects insufficient reputation without changing the setting", async () => {

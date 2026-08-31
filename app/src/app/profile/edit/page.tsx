@@ -270,7 +270,7 @@ export default function EditProfile() {
           title="Tavern Colors"
           selectedTitle={activeElement}
           unselectedSubtitle="Customize your tavern username and title colors"
-          selectedSubtitle={`Each custom color costs ${COST_TAVERN_COLOR_CHANGE} reputation points. Returning to Default is free. You have ${userData.reputationPoints} reputation points.`}
+          selectedSubtitle={`Each color change costs ${COST_TAVERN_COLOR_CHANGE} reputation points. You have ${userData.reputationPoints} reputation points.`}
           icon={Palette}
           onClick={setActiveElement}
         >
@@ -1934,7 +1934,7 @@ const TavernColors: React.FC = () => {
       {controls.map((control) => {
         const cost = getTavernColorChangeCost(control.value);
         const unchanged = control.value === control.current;
-        const canAfford = cost === 0 || userData.reputationPoints >= cost;
+        const canAfford = userData.reputationPoints >= cost;
         const isThisPending =
           updateColor.isPending && updateColor.variables?.target === control.target;
         const disabled = unchanged || !canAfford || updateColor.isPending;
@@ -1944,8 +1944,8 @@ const TavernColors: React.FC = () => {
             <fieldset>
               <legend className="font-semibold text-lg">{control.label}</legend>
               <p className="mb-3 text-muted-foreground text-sm">
-                Current: {TAVERN_COLOR_STYLES[control.current].label}. Custom presets
-                cost {COST_TAVERN_COLOR_CHANGE} reputation; Default is free.
+                Current: {TAVERN_COLOR_STYLES[control.current].label}. Every change
+                costs {COST_TAVERN_COLOR_CHANGE} reputation.
               </p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {TavernColorPresets.map((preset) => {
@@ -2011,8 +2011,6 @@ const TavernColors: React.FC = () => {
                     "Already selected"
                   ) : !canAfford ? (
                     `Need ${cost - userData.reputationPoints} More Reps`
-                  ) : cost === 0 ? (
-                    "Return to Default (Free)"
                   ) : (
                     `Apply for ${cost} Reps`
                   )}
@@ -2026,9 +2024,8 @@ const TavernColors: React.FC = () => {
                 });
               }}
             >
-              {cost === 0
-                ? `Return your tavern ${control.target} color to Default for free?`
-                : `Change your tavern ${control.target} color to ${TAVERN_COLOR_STYLES[control.value].label} for ${cost} reputation points?`}
+              Change your tavern {control.target} color to{" "}
+              {TAVERN_COLOR_STYLES[control.value].label} for {cost} reputation points?
             </Confirm2>
           </section>
         );

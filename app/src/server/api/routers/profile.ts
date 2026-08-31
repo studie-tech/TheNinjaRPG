@@ -1622,11 +1622,7 @@ export const profileRouter = createTRPCRouter({
         .update(userData)
         .set({
           ...colorUpdate,
-          ...(cost > 0
-            ? {
-                reputationPoints: sql`${userData.reputationPoints} - ${cost}`,
-              }
-            : {}),
+          reputationPoints: sql`${userData.reputationPoints} - ${cost}`,
         })
         .where(
           and(
@@ -1638,7 +1634,7 @@ export const profileRouter = createTRPCRouter({
                 : userData.tavernTitleColor,
               currentColor ?? "DEFAULT",
             ),
-            ...(cost > 0 ? [gte(userData.reputationPoints, cost)] : []),
+            gte(userData.reputationPoints, cost),
           ),
         );
 
@@ -1653,7 +1649,7 @@ export const profileRouter = createTRPCRouter({
         userId: ctx.userId,
         tableName: "user",
         changes: [
-          `Tavern ${input.target} color changed from ${currentColor} to ${input.color}${cost === 0 ? " (free default)" : ` (-${cost} reputation)`}`,
+          `Tavern ${input.target} color changed from ${currentColor} to ${input.color} (-${cost} reputation)`,
         ],
         relatedId: ctx.userId,
         relatedMsg: `${user.username} changed their tavern ${input.target} color`,
@@ -1662,10 +1658,7 @@ export const profileRouter = createTRPCRouter({
 
       return {
         success: true,
-        message:
-          cost === 0
-            ? `Tavern ${input.target} color returned to default for free`
-            : `Tavern ${input.target} color updated for ${cost} reputation points`,
+        message: `Tavern ${input.target} color updated for ${cost} reputation points`,
       };
     }),
   // Use earned experience points for stats
@@ -1867,8 +1860,16 @@ export const profileRouter = createTRPCRouter({
           role: true,
           federalStatus: true,
           isAi: true,
+          customTitle: true,
+          nRecruited: true,
+          tavernMessages: true,
           tavernUsernameColor: true,
           tavernTitleColor: true,
+        },
+        with: {
+          village: {
+            columns: { name: true, hexColor: true, kageId: true },
+          },
         },
         where: and(
           like(userData.username, `%${input.username}%`),

@@ -418,13 +418,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
         })
         .join("") || "";
 
-    const posterTavernUsernameColor = senderUser
-      ? (senderUser.tavernUsernameColor ?? "DEFAULT")
-      : userData.tavernUsernameColor;
-    const posterTavernTitleColor = senderUser
-      ? (senderUser.tavernTitleColor ?? "DEFAULT")
-      : userData.tavernTitleColor;
-
     // Build optimistic comment in component scope so types narrow without `!`.
     // Temp id is only present when we insert; success/failure reconcile by it.
     const optimisticComment =
@@ -439,23 +432,37 @@ const Conversation: React.FC<ConversationProps> = (props) => {
             isPinned: false,
             isReported: false,
             isStaffOnly: false,
-            villageName: userData.village?.name ?? null,
-            villageHexColor: userData.village?.hexColor ?? null,
-            villageKageId: userData.village?.kageId ?? null,
+            villageName: senderUser
+              ? (senderUser.village?.name ?? null)
+              : (userData.village?.name ?? null),
+            villageHexColor: senderUser
+              ? (senderUser.village?.hexColor ?? null)
+              : (userData.village?.hexColor ?? null),
+            villageKageId: senderUser
+              ? (senderUser.village?.kageId ?? null)
+              : (userData.village?.kageId ?? null),
             userId: senderUser ? senderUser.userId : userData.userId,
             authorId: userData.userId,
             username: senderUser?.username ?? userData.username,
             avatar: senderUser?.avatar ?? userData.avatar,
             rank: senderUser?.rank ?? userData.rank,
-            isOutlaw: userData.isOutlaw,
-            level: userData.level,
-            role: userData.role,
-            customTitle: userData.customTitle,
-            federalStatus: userData.federalStatus,
-            tavernUsernameColor: posterTavernUsernameColor,
-            tavernTitleColor: posterTavernTitleColor,
-            nRecruited: userData.nRecruited,
-            tavernMessages: userData.tavernMessages,
+            isOutlaw: senderUser?.isOutlaw ?? userData.isOutlaw,
+            level: senderUser?.level ?? userData.level,
+            role: senderUser?.role ?? userData.role,
+            customTitle: senderUser
+              ? (senderUser.customTitle ?? "")
+              : userData.customTitle,
+            federalStatus: senderUser?.federalStatus ?? userData.federalStatus,
+            tavernUsernameColor: senderUser
+              ? (senderUser.tavernUsernameColor ?? "DEFAULT")
+              : userData.tavernUsernameColor,
+            tavernTitleColor: senderUser
+              ? (senderUser.tavernTitleColor ?? "DEFAULT")
+              : userData.tavernTitleColor,
+            nRecruited: senderUser ? (senderUser.nRecruited ?? 0) : userData.nRecruited,
+            tavernMessages: senderUser
+              ? (senderUser.tavernMessages ?? 0)
+              : userData.tavernMessages,
           };
     // `?? newMessage` keeps MutateCommentSchema in the union; narrow explicitly.
     const next: ReturnedComment | undefined =
