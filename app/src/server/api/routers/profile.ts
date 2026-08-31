@@ -72,6 +72,7 @@ import {
   insertAiSchema,
   item,
   jutsu,
+  jutsuReskin,
   mpvpBattleQueue,
   notification,
   poll,
@@ -207,12 +208,13 @@ export const profileRouter = createTRPCRouter({
     const [jutsuTrainingRows, craftingRows, imbuementRows] = await Promise.all([
       ctx.drizzle
         .select({
-          name: jutsu.name,
+          name: sql<string>`COALESCE(${jutsuReskin.name}, ${jutsu.name})`,
           level: userJutsu.level,
           finishTraining: userJutsu.finishTraining,
         })
         .from(userJutsu)
         .innerJoin(jutsu, eq(userJutsu.jutsuId, jutsu.id))
+        .leftJoin(jutsuReskin, eq(userJutsu.reskinId, jutsuReskin.id))
         .where(and(eq(userJutsu.userId, ctx.userId), gt(userJutsu.finishTraining, now)))
         .orderBy(asc(userJutsu.finishTraining))
         .limit(1),
