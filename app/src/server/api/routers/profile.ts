@@ -2596,6 +2596,45 @@ export const updateUserContent = async (props: {
   return { jutsuChanges: changes.jutsuChanges, itemChanges: changes.itemChanges };
 };
 
+/** The quest types fetchUpdatedUser tries to start a user on when they hold none. */
+const BOOTSTRAP_QUEST_TYPES = ["tier", "exam"] as const;
+
+/**
+ * What the tier/exam bootstrap needs to know before it can decide whether starting a quest is
+ * even possible: which quests of those types exist, and which ones this user already has a
+ * history row for. `QuestHistory.completed` is `NOT NULL`, so fetchUncompletedQuests' own
+ * `isNull(completed)` on a left join matches exactly the quests with no history row — which is
+ * what `startedIds` inverts.
+ *
+ * Both reads depend only on `userId`, so they belong in fetchUpdatedUser's opening batch rather
+ * than costing round-trips of their own. `QuestHistory.questType` is denormalised from the quest,
+ * so a retyped quest could leave a history row out of `startedIds`; that can only make the guard
+ * pass where it might have skipped, never the reverse.
+ */
+export const fetchQuestBootstrap = async (client: DrizzleClient, userId: string) => {
+  const [candidates, started] = await Promise.all([
+    client
+      .select({
+        id: quest.id,
+        questType: quest.questType,
+        requiredLevel: quest.requiredLevel,
+        maxLevel: quest.maxLevel,
+      })
+      .from(quest)
+      .where(inArray(quest.questType, [...BOOTSTRAP_QUEST_TYPES])),
+    client
+      .select({ questId: questHistory.questId })
+      .from(questHistory)
+      .where(
+        and(
+          eq(questHistory.userId, userId),
+          inArray(questHistory.questType, [...BOOTSTRAP_QUEST_TYPES]),
+        ),
+      ),
+  ]);
+  return { candidates, startedIds: new Set(started.map((row) => row.questId)) };
+};
+
 /**
  * Fetch user with bloodline & village relations. Occasionally updates the user with regeneration
  * of pools, or optionally forces regeneration with forceRegen=true
@@ -2627,6 +2666,7 @@ export const fetchUpdatedUser = async (props: {
     allActiveWars,
     activeShrineBattles,
     activeRaids,
+    questBootstrap,
   ] = await Promise.all([
     fetchAchievementCatalogue(client),
     fetchAllGameSettings(client),
@@ -2681,6 +2721,7 @@ export const fetchUpdatedUser = async (props: {
     fetchAllActiveWars(client),
     fetchActiveShrineLobbies(client, shrineLobbyStaleBefore),
     fetchActiveRaids(client, now),
+    fetchQuestBootstrap(client, userId),
   ]);
 
   // Reskin bloodline if needed
@@ -2857,8 +2898,20 @@ export const fetchUpdatedUser = async (props: {
   // They run in sequence, not in parallel: insertNextQuest mutates user.userQuests and
   // persists its own questData snapshot, so concurrent inserts overwrite each other.
   if (user) {
-    for (const questType of ["tier", "exam"] as const) {
+    for (const questType of BOOTSTRAP_QUEST_TYPES) {
       if (user.userQuests?.some((q) => q.quest.questType === questType)) continue;
+      // A strict subset of fetchUncompletedQuests' own filters. Clearing none of them means that
+      // query is guaranteed to come back empty, and the round-trip buys nothing; anything that
+      // does clear them still goes through insertNextQuest, which stays the authority on whether
+      // a quest is actually startable.
+      const possible = questBootstrap.candidates.some(
+        (candidate) =>
+          candidate.questType === questType &&
+          !questBootstrap.startedIds.has(candidate.id) &&
+          candidate.requiredLevel <= user.level &&
+          candidate.maxLevel >= user.level,
+      );
+      if (!possible) continue;
       try {
         if (await insertNextQuest(client, user, questType)) {
           forceRegen = true;
