@@ -87,7 +87,6 @@
     "@vercel/mcp-adapter": "^1.0.0",
     "@vercel/og": "^1.0.1",
     "@vercel/speed-insights": "^2.0.0",
-    "abstract-astar": "0.2.0",
     "ai": "^7.0.77",
     "alea": "1.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
