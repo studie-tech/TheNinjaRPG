@@ -82,7 +82,15 @@ export const buildMetadata = ({
   return {
     title: { absolute: fullTitle },
     description,
-    alternates: { canonical: url },
+    alternates: {
+      canonical: url,
+      // The audience is overwhelmingly international -- the United States accounts for
+      // under a third of clicks, behind or alongside India, Indonesia, the Philippines
+      // and Brazil -- but every page is served in English to all of them. Declaring the
+      // English page as x-default states that explicitly instead of leaving Google to
+      // infer a country target, and gives translations somewhere to attach later.
+      languages: { en: url, "x-default": url },
+    },
     ...(noindex ? { robots: { index: false, follow: false } } : {}),
     openGraph: {
       title: fullTitle,
