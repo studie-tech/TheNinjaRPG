@@ -2596,45 +2596,6 @@ export const updateUserContent = async (props: {
   return { jutsuChanges: changes.jutsuChanges, itemChanges: changes.itemChanges };
 };
 
-/** The quest types fetchUpdatedUser tries to start a user on when they hold none. */
-const BOOTSTRAP_QUEST_TYPES = ["tier", "exam"] as const;
-
-/**
- * What the tier/exam bootstrap needs to know before it can decide whether starting a quest is
- * even possible: which quests of those types exist, and which ones this user already has a
- * history row for. `QuestHistory.completed` is `NOT NULL`, so fetchUncompletedQuests' own
- * `isNull(completed)` on a left join matches exactly the quests with no history row — which is
- * what `startedIds` inverts.
- *
- * Both reads depend only on `userId`, so they belong in fetchUpdatedUser's opening batch rather
- * than costing round-trips of their own. `QuestHistory.questType` is denormalised from the quest,
- * so a retyped quest could leave a history row out of `startedIds`; that can only make the guard
- * pass where it might have skipped, never the reverse.
- */
-export const fetchQuestBootstrap = async (client: DrizzleClient, userId: string) => {
-  const [candidates, started] = await Promise.all([
-    client
-      .select({
-        id: quest.id,
-        questType: quest.questType,
-        requiredLevel: quest.requiredLevel,
-        maxLevel: quest.maxLevel,
-      })
-      .from(quest)
-      .where(inArray(quest.questType, [...BOOTSTRAP_QUEST_TYPES])),
-    client
-      .select({ questId: questHistory.questId })
-      .from(questHistory)
-      .where(
-        and(
-          eq(questHistory.userId, userId),
-          inArray(questHistory.questType, [...BOOTSTRAP_QUEST_TYPES]),
-        ),
-      ),
-  ]);
-  return { candidates, startedIds: new Set(started.map((row) => row.questId)) };
-};
-
 /**
  * Fetch user with bloodline & village relations. Occasionally updates the user with regeneration
  * of pools, or optionally forces regeneration with forceRegen=true
@@ -3219,6 +3180,45 @@ const fetchActiveRaids = (client: DrizzleClient, now: Date) =>
 
 /** A user's progress on one quest, without the static definition it belongs to. */
 export type AchievementProgress = Omit<UserQuest, "quest">;
+
+/** The quest types fetchUpdatedUser tries to start a user on when they hold none. */
+const BOOTSTRAP_QUEST_TYPES = ["tier", "exam"] as const;
+
+/**
+ * What the tier/exam bootstrap needs to know before it can decide whether starting a quest is
+ * even possible: which quests of those types exist, and which ones this user already has a
+ * history row for. `QuestHistory.completed` is `NOT NULL`, so fetchUncompletedQuests' own
+ * `isNull(completed)` on a left join matches exactly the quests with no history row — which is
+ * what `startedIds` inverts.
+ *
+ * Both reads depend only on `userId`, so they belong in fetchUpdatedUser's opening batch rather
+ * than costing round-trips of their own. `QuestHistory.questType` is denormalised from the quest,
+ * so a retyped quest could leave a history row out of `startedIds`; that can only make the guard
+ * pass where it might have skipped, never the reverse.
+ */
+export const fetchQuestBootstrap = async (client: DrizzleClient, userId: string) => {
+  const [candidates, started] = await Promise.all([
+    client
+      .select({
+        id: quest.id,
+        questType: quest.questType,
+        requiredLevel: quest.requiredLevel,
+        maxLevel: quest.maxLevel,
+      })
+      .from(quest)
+      .where(inArray(quest.questType, [...BOOTSTRAP_QUEST_TYPES])),
+    client
+      .select({ questId: questHistory.questId })
+      .from(questHistory)
+      .where(
+        and(
+          eq(questHistory.userId, userId),
+          inArray(questHistory.questType, [...BOOTSTRAP_QUEST_TYPES]),
+        ),
+      ),
+  ]);
+  return { candidates, startedIds: new Set(started.map((row) => row.questId)) };
+};
 
 /**
  * Move a user's achievement rows out of `user.userQuests` and return them without their `quest`.
