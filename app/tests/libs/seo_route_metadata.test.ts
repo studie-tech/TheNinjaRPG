@@ -71,13 +71,13 @@ describe("route metadata coverage", () => {
 
 describe("buildMetadata", () => {
   const meta = buildMetadata({
-    title: "Ninja Game",
-    description: "A free ninja game you play in the browser.",
-    path: "/ninja-game",
+    title: "Manual",
+    description: "The game manual.",
+    path: "/manual",
   });
 
   it("sets a self-referencing canonical on the canonical origin", () => {
-    expect(meta.alternates?.canonical).toBe(`${SITE_URL}/ninja-game`);
+    expect(meta.alternates?.canonical).toBe(`${SITE_URL}/manual`);
   });
 
   it("emits no hreflang alternates, since there is only one language version", () => {
@@ -87,7 +87,7 @@ describe("buildMetadata", () => {
   });
 
   it("keeps the brand suffix on the title even below a segment layout", () => {
-    expect(meta.title).toEqual({ absolute: "Ninja Game | TheNinja-RPG" });
+    expect(meta.title).toEqual({ absolute: "Manual | TheNinja-RPG" });
   });
 
   it("keeps noindex pages crawlable so their outbound links still count", () => {

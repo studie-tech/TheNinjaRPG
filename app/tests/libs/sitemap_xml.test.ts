@@ -18,12 +18,12 @@ const entry = (url: string): SitemapEntry => ({
 
 describe("renderUrlset", () => {
   it("wraps entries in a urlset with the sitemap namespace", () => {
-    const xml = renderUrlset([entry(`${SITE_URL}/ninja-game`)]);
+    const xml = renderUrlset([entry(`${SITE_URL}/manual`)]);
     expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
     expect(xml).toContain(
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     );
-    expect(xml).toContain(`<loc>${SITE_URL}/ninja-game</loc>`);
+    expect(xml).toContain(`<loc>${SITE_URL}/manual</loc>`);
     expect(xml).toContain("<lastmod>2026-08-30T12:00:00.000Z</lastmod>");
     expect(xml).toContain("<changefreq>weekly</changefreq>");
     expect(xml).toContain("<priority>0.5</priority>");
@@ -41,7 +41,7 @@ describe("renderUrlset", () => {
 
   it("omits lastmod when an entry has no real modification time", () => {
     const xml = renderUrlset([
-      { url: `${SITE_URL}/ninja-game`, changeFrequency: "weekly", priority: 0.9 },
+      { url: `${SITE_URL}/manual`, changeFrequency: "weekly", priority: 0.9 },
     ]);
     expect(xml).not.toContain("<lastmod>");
     expect(xml).toContain("<changefreq>weekly</changefreq>");
