@@ -67,7 +67,14 @@ export default function OccupationCrafting() {
       setIsImbueModalOpen(false);
       setSelectedImbuableItem(undefined);
       setSelectedCrystalUserItem(undefined);
-      await utils.item.getUserItems.invalidate();
+      if (data.success) {
+        await Promise.all([
+          utils.item.getUserItems.invalidate(),
+          utils.profile.getSidebarTimers.invalidate(),
+        ]);
+      } else {
+        await utils.item.getUserItems.invalidate();
+      }
     },
   });
 
@@ -75,7 +82,10 @@ export default function OccupationCrafting() {
     api.occupation.finishCraftingImmediately.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        await utils.item.getUserItems.invalidate();
+        await Promise.all([
+          utils.item.getUserItems.invalidate(),
+          utils.profile.getSidebarTimers.invalidate(),
+        ]);
       },
     });
 
@@ -83,7 +93,10 @@ export default function OccupationCrafting() {
     api.occupation.finishImbuingImmediately.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        await utils.item.getUserItems.invalidate();
+        await Promise.all([
+          utils.item.getUserItems.invalidate(),
+          utils.profile.getSidebarTimers.invalidate(),
+        ]);
       },
     });
 

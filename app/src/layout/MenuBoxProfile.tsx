@@ -55,7 +55,6 @@ import AvatarImage from "@/layout/Avatar";
 import Countdown from "@/layout/Countdown";
 import ElementImage from "@/layout/ElementImage";
 import Image from "@/layout/Image";
-import { getFilter, useFiltering } from "@/layout/JutsuFiltering";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import StatusBar from "@/layout/StatusBar";
 import { sealCheck } from "@/libs/combat/tags";
@@ -117,18 +116,11 @@ const MenuBoxProfile: React.FC = () => {
   const [, setState] = useState<number>(0);
   const battle = useAtomValue(userBattleAtom);
   const utils = api.useUtils();
-  const state = useFiltering();
 
-  // Get user's jutsus
-  const { data: userJutsus } = api.jutsu.getUserJutsus.useQuery(getFilter(state), {
+  const { data: sidebarTimers } = api.profile.getSidebarTimers.useQuery(undefined, {
     enabled: !!userData,
   });
-  const { data: userItems } = api.item.getUserItems.useQuery(undefined, {
-    enabled: !!userData,
-  });
-  const trainingJutsu = userJutsus?.find(
-    (j) => j.finishTraining && j.finishTraining > new Date(),
-  );
+  const trainingJutsu = sidebarTimers?.jutsuTraining;
 
   /** Finish time for stealth or sensory training at the training grounds */
   const covertTrainingFinishAt = useMemo(() => {
@@ -143,41 +135,8 @@ const MenuBoxProfile: React.FC = () => {
     userData?.covertTrainingMinutes,
   ]);
 
-  const activeItemCraftingTimer = useMemo(() => {
-    if (!userItems?.length) return null;
-    const now = Date.now();
-    let best: { finish: Date; tooltip: string } | null = null;
-    for (const ui of userItems) {
-      if (!ui.craftingFinishedAt) continue;
-      const finish = new Date(ui.craftingFinishedAt);
-      if (finish.getTime() <= now) continue;
-      const entry = {
-        finish,
-        tooltip: `Crafting ${ui.item.name}`,
-      };
-      if (!best || finish < best.finish) best = entry;
-    }
-    return best;
-  }, [userItems]);
-
-  const activeImbuementTimer = useMemo(() => {
-    if (!userItems?.length) return null;
-    const now = Date.now();
-    let best: { finish: Date; tooltip: string } | null = null;
-    for (const ui of userItems) {
-      for (const imb of ui.imbuements ?? []) {
-        if (!imb.craftingFinishedAt) continue;
-        const finish = new Date(imb.craftingFinishedAt);
-        if (finish.getTime() <= now) continue;
-        const entry = {
-          finish,
-          tooltip: `Imbuing ${imb.item.name} onto ${ui.item.name}`,
-        };
-        if (!best || finish < best.finish) best = entry;
-      }
-    }
-    return best;
-  }, [userItems]);
+  const activeItemCraftingTimer = sidebarTimers?.crafting;
+  const activeImbuementTimer = sidebarTimers?.imbuement;
 
   // Get location of user
   const { location } = useGameMenu(userData);
@@ -485,17 +444,20 @@ const MenuBoxProfile: React.FC = () => {
                     <Atom className="mr-2 h-6 w-6" />
                     <Link href="/traininggrounds">
                       <Countdown
-                        targetDate={trainingJutsu.finishTraining || new Date()}
+                        targetDate={trainingJutsu.finishTraining}
                         timeDiff={timeDiff}
                         onFinish={async () => {
-                          await utils.jutsu.getUserJutsus.invalidate();
+                          await Promise.all([
+                            utils.jutsu.getUserJutsus.invalidate(),
+                            utils.profile.getSidebarTimers.invalidate(),
+                          ]);
                         }}
                       />
                     </Link>
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  Training {trainingJutsu.jutsu?.name} to level {trainingJutsu.level}
+                  Training {trainingJutsu.name} to level {trainingJutsu.level}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -537,16 +499,21 @@ const MenuBoxProfile: React.FC = () => {
                     <Hammer className="mr-2 h-6 w-6" />
                     <Link href="/occupation">
                       <Countdown
-                        targetDate={activeItemCraftingTimer.finish}
+                        targetDate={activeItemCraftingTimer.craftingFinishedAt}
                         timeDiff={timeDiff}
                         onFinish={async () => {
-                          await utils.item.getUserItems.invalidate();
+                          await Promise.all([
+                            utils.item.getUserItems.invalidate(),
+                            utils.profile.getSidebarTimers.invalidate(),
+                          ]);
                         }}
                       />
                     </Link>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent>{activeItemCraftingTimer.tooltip}</TooltipContent>
+                <TooltipContent>
+                  Crafting {activeItemCraftingTimer.itemName}
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
@@ -558,16 +525,22 @@ const MenuBoxProfile: React.FC = () => {
                     <Gem className="mr-2 h-6 w-6" />
                     <Link href="/occupation">
                       <Countdown
-                        targetDate={activeImbuementTimer.finish}
+                        targetDate={activeImbuementTimer.craftingFinishedAt}
                         timeDiff={timeDiff}
                         onFinish={async () => {
-                          await utils.item.getUserItems.invalidate();
+                          await Promise.all([
+                            utils.item.getUserItems.invalidate(),
+                            utils.profile.getSidebarTimers.invalidate(),
+                          ]);
                         }}
                       />
                     </Link>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent>{activeImbuementTimer.tooltip}</TooltipContent>
+                <TooltipContent>
+                  Imbuing {activeImbuementTimer.imbuedName} onto{" "}
+                  {activeImbuementTimer.targetName}
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}

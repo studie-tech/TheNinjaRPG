@@ -103,7 +103,10 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
       if (data.success) {
         setSelectedItem(null);
         setCraftQuantity(1);
-        await utils.item.getUserItems.invalidate();
+        await Promise.all([
+          utils.item.getUserItems.invalidate(),
+          utils.profile.getSidebarTimers.invalidate(),
+        ]);
       }
     },
   });
