@@ -112,10 +112,11 @@ const config = {
         headers: securityHeaders,
       },
       {
-        // The sitemap is generated per request (it reads seven tables and the build has
-        // no database), so it is cached at the edge instead. Crawlers fetch it rarely,
-        // and a stale copy for an hour is harmless.
-        source: "/sitemap.xml",
+        // The sitemaps are generated per request (they read the database and the build
+        // has none), so they are cached at the edge instead. Crawlers fetch them rarely,
+        // and a stale copy for an hour is harmless. Matches the /sitemap.xml index and
+        // every /sitemap-<section>.xml it lists.
+        source: "/:sitemap(sitemap|sitemap-[a-z]+).xml",
         headers: [
           {
             key: "Cache-Control",
