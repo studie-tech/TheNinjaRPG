@@ -46,6 +46,8 @@ interface UseNativePushOptions {
 export const useNativePush = ({ enabled }: UseNativePushOptions) => {
   const router = useRouter();
   const registeredToken = useRef<string | null>(null);
+  /** The registration currently on the wire, so a sign-out can let it land first. */
+  const inFlight = useRef<Promise<unknown> | null>(null);
 
   const registerDevice = api.push.registerDevice.useMutation();
   const unregisterDevice = api.push.unregisterDevice.useMutation();
@@ -66,21 +68,17 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
       if (registeredToken.current === token) return;
       registeredToken.current = token;
       const epoch = registrationEpoch;
-      void sendToken({
+      const pending = sendToken({
         token,
         platform,
         appVersion: parseNativeUserAgent(navigator.userAgent)?.version,
         locale: navigator.language.slice(0, 16),
       })
         .then((result) => {
-          if (epoch !== registrationEpoch) {
-            // Signed out while this was in flight. Skipping the local write is not enough:
-            // the server has already upserted the row, so the phone is bound to an account
-            // that no longer owns it and would go on receiving its notifications. Undo the
-            // bind rather than just declining to remember it.
-            void detachToken({ token }).catch(() => undefined);
-            return;
-          }
+          // Signed out while this was in flight. The detach in `unregister` waits for this
+          // promise before deleting, so the row is already gone by now and there is nothing
+          // to undo — only the local write to decline.
+          if (epoch !== registrationEpoch) return;
           safeLocalStorageSetItem(LAST_TOKEN_KEY, token);
           if (result.widgetToken) {
             safeLocalStorageSetItem(WIDGET_TOKEN_KEY, result.widgetToken);
@@ -91,6 +89,8 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
           // Leave the ref cleared so the next resume retries the handoff.
           registeredToken.current = null;
         });
+      inFlight.current = pending;
+      void pending;
     });
 
     const unsubscribeError = push.onRegistrationError((error) => {
@@ -111,7 +111,7 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
       unsubscribeError();
       unsubscribeTap();
     };
-  }, [detachToken, enabled, router, sendToken]);
+  }, [enabled, router, sendToken]);
 
   /** Detach this device from the account. Call when the player signs out. */
   const unregister = useCallback(async () => {
@@ -121,6 +121,12 @@ export const useNativePush = ({ enabled }: UseNativePushOptions) => {
     setWidgetToken(undefined);
     // The widget credential belongs to the account being left, and nothing below needs it.
     safeLocalStorageRemoveItem(WIDGET_TOKEN_KEY);
+    // Let a registration already on the wire land before deleting. Deleting first would
+    // leave the phone bound when the upsert arrived afterwards; undoing that upsert once it
+    // had is worse still, because the token identifies the phone rather than the account,
+    // so by then the row can belong to whoever signed in next.
+    await inFlight.current?.catch(() => undefined);
+    inFlight.current = null;
     const token = registeredToken.current ?? safeLocalStorageGetItem(LAST_TOKEN_KEY);
     if (!token) return;
     registeredToken.current = null;
