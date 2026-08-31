@@ -1,5 +1,4 @@
-import type { ChartTypeRegistry, TooltipItem } from "chart.js/auto";
-import { Chart as ChartJS } from "chart.js/auto";
+import type { Chart as ChartJS, ChartTypeRegistry, TooltipItem } from "chart.js/auto";
 import { AlertTriangle } from "lucide-react";
 import React, { useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
@@ -41,6 +40,9 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
 
   // Chart instance for cleanup
   const chartInstanceRef = useRef<ChartJS<keyof ChartTypeRegistry> | null>(null);
+  const chartCtorRef = useRef<typeof import("chart.js/auto").Chart | null>(null);
+  /** Bumped per draw so an import that resolves late cannot overwrite a newer chart. */
+  const chartRunRef = useRef(0);
 
   // Format data for category chart - filter out totalEntries and only include categories with values > 0
   const categoryChartData = data
@@ -54,8 +56,19 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
     : [];
 
   // Function to create or update the chart
-  const createOrUpdateChart = () => {
+  const createOrUpdateChart = async () => {
     if (!data || !categoryChartRef.current || categoryChartData.length === 0) return;
+
+    // chart.js/auto registers every controller so nothing tree-shakes, and this dialog was
+    // reachable from the root layout, so ~72 KB gzip rode along on every page for a panel
+    // opened on demand. Fetched on first draw instead, then kept for redraws.
+    const run = ++chartRunRef.current;
+    if (!chartCtorRef.current) {
+      chartCtorRef.current = (await import("chart.js/auto")).Chart;
+    }
+    // The dialog can close, or the whole component unmount, while that import is in flight
+    const canvas = categoryChartRef.current;
+    if (run !== chartRunRef.current || !canvas) return;
 
     // Clean up previous chart instance
     if (chartInstanceRef.current) {
@@ -63,9 +76,9 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
       chartInstanceRef.current = null;
     }
 
-    const ctx = categoryChartRef.current.getContext("2d");
+    const ctx = canvas.getContext("2d");
     if (ctx) {
-      chartInstanceRef.current = new ChartJS(ctx, {
+      chartInstanceRef.current = new chartCtorRef.current(ctx, {
         type: "bar",
         data: {
           labels: categoryChartData.map((item) => item.category),
@@ -110,7 +123,7 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
   useEffect(() => {
     if (data) {
       // We'll create the chart when data is available, but only render it when dialog is open
-      createOrUpdateChart();
+      void createOrUpdateChart();
     }
 
     // Cleanup function
@@ -127,7 +140,7 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
     if (open) {
       // When dialog opens, ensure chart is created if we have data
       const timeoutId = setTimeout(() => {
-        createOrUpdateChart();
+        void createOrUpdateChart();
       }, 100); // Small delay to ensure the canvas is visible
       return () => clearTimeout(timeoutId);
     }

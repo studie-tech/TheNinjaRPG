@@ -1,4 +1,5 @@
 import { BarChartBig, Box, Copy, SquarePen, Trash2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type React from "react";
@@ -16,7 +17,7 @@ import Confirm2 from "@/layout/Confirm2";
 import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
-import Model3d from "@/layout/Model3d";
+import Loader from "@/layout/Loader";
 import { getPreventTypeName } from "@/libs/combat/util";
 import { getFarmPlantExperience } from "@/libs/farming";
 import { getRewardArray } from "@/libs/objectives";
@@ -92,6 +93,17 @@ export interface ItemWithEffectsProps {
   onDelete?: (id: string) => void;
   folderName?: string;
 }
+
+/**
+ * three.js and the @react-three stack are ~296 KB gzip, and this dialog is the only thing that
+ * renders them - behind a click, on content that has a 3D model at all. Statically imported here
+ * they reached the root layout's chunk, so every visitor downloaded and parsed a WebGL engine
+ * that almost none of them would ever run.
+ */
+const Model3d = dynamic(() => import("@/layout/Model3d"), {
+  ssr: false,
+  loading: () => <Loader explanation="Loading 3D model" />,
+});
 
 const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   const {
