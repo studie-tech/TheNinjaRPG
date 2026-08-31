@@ -1,5 +1,5 @@
 import type { ExecutedQuery } from "@planetscale/database";
-import { and, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   MEDNIN_EXP_CAP,
@@ -83,6 +83,7 @@ export const hospitalRouter = createTRPCRouter({
           gte(userData.updatedAt, secondsFromNow(-36000)),
         ),
         limit: 10,
+        orderBy: [asc(userData.updatedAt), asc(userData.userId)],
       });
     }),
   // Let users heal other users if they are GENIN or above
