@@ -47,9 +47,10 @@ const buyFederal = async (
   store: StorePlatform = "APPLE",
 ) => {
   const database = await db();
+  const transactionId = nanoid();
   await grantStorePurchase(database, {
     userId: USER,
-    transactionId: nanoid(),
+    transactionId,
     productId:
       tier === "GOLD"
         ? "tnr_federal_gold"
@@ -61,10 +62,13 @@ const buyFederal = async (
     raw: {},
   });
   if (agoMs > 0) {
+    // Only the receipt just written. Backdating every row for the user would flatten the
+    // timestamps these sequences turn on, and the upgrade case would pass without ever
+    // having two receipts at different moments.
     await database
       .update(storePurchase)
       .set({ createdAt: new Date(Date.now() - agoMs) })
-      .where(eq(storePurchase.userId, USER));
+      .where(eq(storePurchase.transactionId, transactionId));
   }
 };
 
@@ -109,7 +113,13 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     const endedAt = new Date(Date.now() - 60 * 60 * 1000);
     await buyFederal("GOLD", 2 * 60 * 60 * 1000); // the receipt that expired
     await buyFederal("GOLD"); // bought back in, just now
-    await revokeFederalStatus(await db(), USER, { occurredAt: endedAt });
+    // productId and store are what the webhook actually sends; omitting them here would
+    // exercise a path production never takes.
+    await revokeFederalStatus(await db(), USER, {
+      occurredAt: endedAt,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+    });
     expect(await statusOf()).toBe("GOLD");
   });
 

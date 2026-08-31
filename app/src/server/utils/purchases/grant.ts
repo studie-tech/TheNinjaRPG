@@ -240,6 +240,10 @@ export const revokeFederalStatus = async (
           eq(storePurchase.userId, userId),
           eq(storePurchase.productId, productId),
           isNotNull(storePurchase.federalStatus),
+          // Never past the expiry itself. A player who resubscribes to the same product
+          // has a newer receipt for it, and taking that as the cutoff would let a late
+          // expiry retire the subscription they are currently paying for.
+          lte(storePurchase.createdAt, occurredAt),
           ...(store ? [eq(storePurchase.store, store)] : []),
         ),
         orderBy: desc(storePurchase.createdAt),
