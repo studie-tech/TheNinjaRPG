@@ -58,6 +58,8 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
   const unregisterDevice = api.push.unregisterDevice.useMutation();
   const { mutateAsync: sendToken } = registerDevice;
   const { mutateAsync: detachToken } = unregisterDevice;
+  /** The account the effect last ran for, so a swap can be told from a first run. */
+  const lastAccount = useRef<string | null | undefined>(undefined);
   // State, not just localStorage: the widget snapshot effect has to re-run once this
   // exists, and a ref would not wake it.
   const [widgetToken, setWidgetToken] = useState<string | undefined>(
@@ -68,6 +70,21 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
   // value, so a listener attached afterwards can miss it entirely.
   useEffect(() => {
     if (!isNative() || !enabled) return;
+
+    // One player replacing another on the same phone, with no signed-out gap to run the
+    // cleanup. The device row is keyed on the token, so the handoff has to happen again to
+    // move it — but the token is the same token, and the guard below would drop it as a
+    // repeat, leaving the row pointing at whoever was here before. Forget the previous
+    // session's token so the handoff goes through, invalidate anything still in flight for
+    // it, and drop the widget credential, which belongs to the account being left.
+    // Skipped on the first run, so a relaunch keeps the credential it already had.
+    if (lastAccount.current !== undefined && lastAccount.current !== accountId) {
+      registeredToken.current = null;
+      registrationEpoch += 1;
+      setWidgetToken(undefined);
+      safeLocalStorageRemoveItem(WIDGET_TOKEN_KEY);
+    }
+    lastAccount.current = accountId;
 
     const unsubscribeRegistration = push.onRegistration(({ token, platform }) => {
       if (registeredToken.current === token) return;
