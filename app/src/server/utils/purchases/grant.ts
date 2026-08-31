@@ -1,10 +1,9 @@
 /**
  * Turning a store purchase into reputation or federal status.
  *
- * The receipt insert and the balance/status write are one transaction. The unique index on
- * `StorePurchase.transactionId` is still the idempotency guard, but a failed balance write
- * rolls the receipt back as well, so RevenueCat can retry without either losing or doubling
- * paid value.
+ * The receipt is durable before value moves. A single multi-table UPDATE then claims its
+ * `grantedAt` marker and changes the user's balance/status atomically, so retries can finish
+ * an interrupted grant without either losing or doubling paid value on PlanetScale.
  */
 
 import * as Sentry from "@sentry/node";
@@ -44,9 +43,27 @@ export type GrantOutcome =
  * MySQL's 1062 "Duplicate entry" text; there is no structured code to switch on.
  */
 const isDuplicateKeyError = (error: unknown): boolean => {
-  const message =
-    error instanceof Error ? error.message : typeof error === "string" ? error : "";
-  return /duplicate entry|1062/i.test(message);
+  let current: unknown = error;
+  for (let depth = 0; current && depth < 5; depth++) {
+    if (typeof current === "string") return /duplicate entry|1062/i.test(current);
+    if (typeof current !== "object") return false;
+    const details = current as {
+      cause?: unknown;
+      code?: unknown;
+      errno?: unknown;
+      message?: unknown;
+    };
+    if (
+      details.code === "ER_DUP_ENTRY" ||
+      details.errno === 1062 ||
+      (typeof details.message === "string" &&
+        /duplicate entry|1062/i.test(details.message))
+    ) {
+      return true;
+    }
+    current = details.cause;
+  }
+  return false;
 };
 
 /**
@@ -91,66 +108,116 @@ export const grantStorePurchase = async (
 
   const accepted = !grant.isSandbox || isSandboxGrantee(grant.userId);
 
+  const [recipient] = await client
+    .select({ userId: userData.userId })
+    .from(userData)
+    .where(eq(userData.userId, grant.userId));
+  if (!recipient) {
+    throw new Error(`No user ${grant.userId} for transaction ${grant.transactionId}`);
+  }
+
+  let inserted = true;
   try {
-    return await client.transaction(async (tx) => {
-      // Lock the recipient before inserting the idempotency row. This both rejects an
-      // unknown user and prevents account deletion racing the grant; checking an UPDATE's
-      // affected-row count is not enough because setting an already-current federal tier
-      // legitimately reports zero changes on MySQL.
-      const [recipient] = await tx
-        .select({ userId: userData.userId })
-        .from(userData)
-        .where(eq(userData.userId, grant.userId))
-        .for("update");
-      if (!recipient) {
-        throw new Error(
-          `No user ${grant.userId} for transaction ${grant.transactionId}`,
-        );
-      }
-
-      // Losing this insert means another delivery of the same transaction already ran.
-      await tx.insert(storePurchase).values({
-        id: nanoid(),
-        userId: grant.userId,
-        transactionId: grant.transactionId,
-        productId: grant.productId,
-        store: grant.store,
-        reputationPoints: reps?.reputationPoints ?? 0,
-        federalStatus: federal?.federalStatus ?? null,
-        isSandbox: grant.isSandbox,
-        acceptedAt: accepted ? new Date() : null,
-        purchasedAt: grant.purchasedAt,
-        rawData: grant.raw as never,
-      });
-
-      // Recorded for the audit trail, but a sandbox receipt must never move real balances
-      // unless it belongs to the explicit TestFlight/App Review allowlist.
-      if (!accepted) return { status: "ignored", reason: "Sandbox purchase" };
-
-      if (reps) {
-        await tx
-          .update(userData)
-          .set({
-            reputationPoints: sql`${userData.reputationPoints} + ${reps.reputationPoints}`,
-            reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${reps.reputationPoints}`,
-          })
-          .where(eq(userData.userId, grant.userId));
-        return { status: "granted", reputationPoints: reps.reputationPoints };
-      }
-
-      // One column, two paying sources. A lower store tier must not overwrite a higher
-      // PayPal tier the player is still paying for.
-      const target = federal?.federalStatus ?? "NONE";
-      const floor = await paypalFederalFloor(tx, grant.userId);
-      const next = rankOf(target) >= rankOf(floor) ? target : floor;
-      await tx
-        .update(userData)
-        .set({ federalStatus: next })
-        .where(eq(userData.userId, grant.userId));
-      return { status: "granted", federalStatus: next };
+    await client.insert(storePurchase).values({
+      id: nanoid(),
+      userId: grant.userId,
+      transactionId: grant.transactionId,
+      productId: grant.productId,
+      store: grant.store,
+      reputationPoints: reps?.reputationPoints ?? 0,
+      federalStatus: federal?.federalStatus ?? null,
+      isSandbox: grant.isSandbox,
+      acceptedAt: accepted ? new Date() : null,
+      purchasedAt: grant.purchasedAt,
+      rawData: grant.raw as never,
     });
   } catch (error) {
-    if (isDuplicateKeyError(error)) return { status: "duplicate" };
+    if (isDuplicateKeyError(error)) inserted = false;
+    else {
+      Sentry.captureException(error, {
+        level: "error",
+        tags: { source: "grantStorePurchase" },
+        extra: { transactionId: grant.transactionId, productId: grant.productId },
+      });
+      throw error;
+    }
+  }
+
+  try {
+    const receipt = await client.query.storePurchase.findFirst({
+      columns: {
+        userId: true,
+        productId: true,
+        store: true,
+        acceptedAt: true,
+        grantedAt: true,
+      },
+      where: eq(storePurchase.transactionId, grant.transactionId),
+    });
+    if (!receipt)
+      throw new Error(`Missing receipt ${grant.transactionId} after insert`);
+    if (receipt.productId !== grant.productId || receipt.store !== grant.store) {
+      throw new Error(
+        `Transaction ${grant.transactionId} was replayed with new details`,
+      );
+    }
+    // A TRANSFER may have moved a subscription receipt before an older delivery retries.
+    // The destination reconciliation already applied its tier; never move or grant it back.
+    if (receipt.userId !== grant.userId) return { status: "duplicate" };
+    if (!receipt.acceptedAt) {
+      return inserted
+        ? { status: "ignored", reason: "Sandbox purchase" }
+        : { status: "duplicate" };
+    }
+    if (receipt.grantedAt) return { status: "duplicate" };
+
+    // PlanetScale cannot wrap the receipt and user in a transaction. Its supported
+    // multi-table UPDATE is still one atomic SQL statement: only the delivery that changes
+    // grantedAt from null can apply value, while a failed statement leaves both untouched.
+    const result = reps
+      ? await client.execute(sql`
+          UPDATE ${userData}
+          INNER JOIN ${storePurchase}
+            ON ${storePurchase.userId} = ${userData.userId}
+          SET ${storePurchase.grantedAt} = CURRENT_TIMESTAMP(3),
+              ${userData.reputationPoints} = ${userData.reputationPoints} + ${reps.reputationPoints},
+              ${userData.reputationPointsTotal} = ${userData.reputationPointsTotal} + ${reps.reputationPoints}
+          WHERE ${storePurchase.transactionId} = ${grant.transactionId}
+            AND ${storePurchase.grantedAt} IS NULL
+            AND ${storePurchase.acceptedAt} IS NOT NULL
+        `)
+      : await client.execute(sql`
+          UPDATE ${userData}
+          INNER JOIN ${storePurchase}
+            ON ${storePurchase.userId} = ${userData.userId}
+          SET ${storePurchase.grantedAt} = CURRENT_TIMESTAMP(3),
+              ${userData.federalStatus} = CASE
+                WHEN FIELD(${userData.federalStatus}, 'NONE', 'NORMAL', 'SILVER', 'GOLD') < ${rankOf(federal?.federalStatus ?? "NONE") + 1}
+                THEN ${federal?.federalStatus ?? "NONE"}
+                ELSE ${userData.federalStatus}
+              END
+          WHERE ${storePurchase.transactionId} = ${grant.transactionId}
+            AND ${storePurchase.grantedAt} IS NULL
+            AND ${storePurchase.acceptedAt} IS NOT NULL
+        `);
+
+    if (result.rowsAffected === 0) {
+      const settled = await client.query.storePurchase.findFirst({
+        columns: { grantedAt: true },
+        where: eq(storePurchase.transactionId, grant.transactionId),
+      });
+      if (settled?.grantedAt) return { status: "duplicate" };
+      throw new Error(`Could not apply store receipt ${grant.transactionId}`);
+    }
+
+    if (reps) return { status: "granted", reputationPoints: reps.reputationPoints };
+    const target = federal?.federalStatus ?? "NONE";
+    const [updated] = await client
+      .select({ federalStatus: userData.federalStatus })
+      .from(userData)
+      .where(eq(userData.userId, grant.userId));
+    return { status: "granted", federalStatus: updated?.federalStatus ?? target };
+  } catch (error) {
     Sentry.captureException(error, {
       level: "error",
       tags: { source: "grantStorePurchase" },

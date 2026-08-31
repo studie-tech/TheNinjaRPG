@@ -5633,8 +5633,9 @@ export const userLiveActivityRelations = relations(userLiveActivity, ({ one }) =
 /**
  * In-app purchases from the App Store and Play Billing.
  *
- * The unique index on `transactionId` is the idempotency guard: PlanetScale has no
- * transactions, so the insert itself is what stops a replayed webhook from granting twice.
+ * The unique index on `transactionId` is the idempotency guard. `grantedAt` is claimed in
+ * the same multi-table UPDATE that changes the user's balance/status, which gives the grant
+ * one atomic commit without relying on transactions PlanetScale cannot provide.
  */
 export const storePurchase = mysqlTable(
   "StorePurchase",
@@ -5659,6 +5660,8 @@ export const storePurchase = mysqlTable(
      * to re-derive it from the environment.
      */
     acceptedAt: datetime("acceptedAt", { mode: "date", fsp: 3 }),
+    /** Set atomically with the balance/status write; null receipts are safe to retry. */
+    grantedAt: datetime("grantedAt", { mode: "date", fsp: 3 }),
     /** Store transaction/billing-period time, independent of webhook delivery order. */
     purchasedAt: datetime("purchasedAt", { mode: "date", fsp: 3 }).notNull(),
     /**

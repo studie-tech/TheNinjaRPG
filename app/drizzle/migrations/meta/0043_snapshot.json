@@ -10359,6 +10359,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "grantedAt": {
+          "name": "grantedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "purchasedAt": {
           "name": "purchasedAt",
           "type": "datetime(3)",

@@ -257,7 +257,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(receipt?.userId).toBe(DESTINATION);
   });
 
-  it("rolls the receipt back when crediting fails, so the same transaction can retry", async () => {
+  it("leaves a failed grant pending, then applies it exactly once on retry", async () => {
     const userId = "store-grant-retry";
     const transactionId = nanoid();
     await insertUsers([{ userId, username: "retry", federalStatus: "NONE" }]);
@@ -289,15 +289,65 @@ describeWithDatabase("federal status across real webhook sequences", () => {
         sql.raw("ALTER TABLE UserData DROP CHECK fail_store_grant"),
       );
     }
-    expect(
-      await database.query.storePurchase.findFirst({
-        where: eq(storePurchase.transactionId, transactionId),
-      }),
-    ).toBeUndefined();
+    const pending = await database.query.storePurchase.findFirst({
+      columns: { grantedAt: true },
+      where: eq(storePurchase.transactionId, transactionId),
+    });
+    expect(pending?.grantedAt).toBeNull();
 
-    await expect(grantStorePurchase(database, grant)).resolves.toMatchObject({
+    const retried = await grantStorePurchase(database, grant);
+    expect(retried).toMatchObject({
       status: "granted",
       reputationPoints: 8,
     });
+    await expect(grantStorePurchase(database, grant)).resolves.toEqual({
+      status: "duplicate",
+    });
+    const [settled, user] = await Promise.all([
+      database.query.storePurchase.findFirst({
+        columns: { grantedAt: true },
+        where: eq(storePurchase.transactionId, transactionId),
+      }),
+      database.query.userData.findFirst({
+        columns: { reputationPoints: true },
+        where: eq(userData.userId, userId),
+      }),
+    ]);
+    expect(settled?.grantedAt).toBeInstanceOf(Date);
+    expect(user?.reputationPoints).toBe(blockedAt);
+  });
+
+  it("credits one of two concurrent deliveries exactly once", async () => {
+    const userId = "store-grant-concurrent";
+    const transactionId = nanoid();
+    await insertUsers([{ userId, username: "concurrent", federalStatus: "NONE" }]);
+    const database = await db();
+    const before = await database.query.userData.findFirst({
+      columns: { reputationPoints: true },
+      where: eq(userData.userId, userId),
+    });
+    const grant = {
+      userId,
+      transactionId,
+      productId: "tnr_reps_tier1",
+      store: "APPLE" as const,
+      isSandbox: false,
+      purchasedAt: new Date(),
+      raw: {},
+    };
+
+    const outcomes = await Promise.all([
+      grantStorePurchase(database, grant),
+      grantStorePurchase(database, grant),
+    ]);
+    expect(outcomes.map((outcome) => outcome.status).sort()).toEqual([
+      "duplicate",
+      "granted",
+    ]);
+    const user = await database.query.userData.findFirst({
+      columns: { reputationPoints: true },
+      where: eq(userData.userId, userId),
+    });
+    expect(user?.reputationPoints).toBe((before?.reputationPoints ?? 0) + 8);
   });
 });

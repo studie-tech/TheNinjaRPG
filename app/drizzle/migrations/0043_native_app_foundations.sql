@@ -8,6 +8,7 @@ CREATE TABLE `StorePurchase` (
 	`federalStatus` enum('NONE','NORMAL','SILVER','GOLD'),
 	`isSandbox` boolean NOT NULL DEFAULT false,
 	`acceptedAt` datetime(3),
+	`grantedAt` datetime(3),
 	`purchasedAt` datetime(3) NOT NULL,
 	`revokedAt` datetime(3),
 	`rawData` json NOT NULL,

@@ -123,6 +123,13 @@ export const getTestDatabase = async (): Promise<DrizzleClient> => {
     const database = drizzle(connection, { schema, mode: "default" });
     client = new Proxy(database, {
       get(target, property, receiver) {
+        if (property === "execute") {
+          const method = Reflect.get(target, property, receiver) as (
+            ...args: unknown[]
+          ) => Promise<unknown>;
+          return async (...args: unknown[]) =>
+            normalize(await method.apply(target, args));
+        }
         if (property === "insert" || property === "update" || property === "delete") {
           const method = Reflect.get(target, property, receiver) as (
             ...args: unknown[]
