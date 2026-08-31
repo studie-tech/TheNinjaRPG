@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 /**
  * The bridge is the one place in `libs/native` that touches `window`, so these assert the
@@ -17,7 +17,28 @@ const setWindow = (value: TestWindow | undefined) => {
   (globalThis as { window?: unknown }).window = value;
 };
 
-afterEach(() => setWindow(undefined));
+// Put the realm back exactly as each test found it, rather than leaving it cleared. These
+// files share one process and there is no `window` in the base realm, so whichever file
+// creates one is providing it for everybody: deleting it unconditionally stranded every
+// test that ran after this one, and they failed in files that never mention the bridge.
+let saved: { present: boolean; value: unknown };
+
+beforeEach(() => {
+  saved = {
+    present: "window" in globalThis,
+    value: (globalThis as { window?: unknown }).window,
+  };
+});
+
+afterEach(() => {
+  if (saved.present) {
+    // Assignment, not defineProperty: the property these tests overwrite is an ordinary
+    // writable one, and restoring a captured descriptor would freeze it for the next test.
+    (globalThis as { window?: unknown }).window = saved.value;
+  } else {
+    delete (globalThis as { window?: unknown }).window;
+  }
+});
 
 // Imported fresh per test: the module reads `window` lazily, so no cache busting is
 // needed, but each test still starts from a known global.
