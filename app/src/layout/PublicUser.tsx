@@ -366,6 +366,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         title={title}
         defaultBackHref={defaultBackHref}
         initialBreak={initialBreak}
+        isGuest={!userData}
       />
     );
   }
@@ -1188,6 +1189,8 @@ interface PublicUserSkeletonProps {
   title: string;
   defaultBackHref?: string;
   initialBreak?: boolean;
+  /** Mirrors `!userData` in the loaded render, which adds a second box for guests. */
+  isGuest: boolean;
 }
 
 /**
@@ -1196,36 +1199,53 @@ interface PublicUserSkeletonProps {
  * The profile is fetched client-side, so the server render carries none of it. A bare
  * spinner is a few dozen pixels tall and the loaded profile is several hundred, which
  * moved everything below it on arrival and put the /username/* template over the poor
- * Cumulative Layout Shift threshold in Search Console. Reserving a box roughly the size
- * of the statistics panel keeps that shift small; the panel itself grows past this once
- * the tabs render, so the reservation is deliberately conservative rather than exact.
+ * Cumulative Layout Shift threshold in Search Console.
+ *
+ * The structure below deliberately mirrors the loaded render rather than approximating
+ * it: the same guest-only intro box, the same two-column grid, and an avatar reserved at
+ * the same `w-full` the loaded one is given. A placeholder that reserves the wrong shape
+ * still shifts the page, just by less.
  */
 const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
   title,
   defaultBackHref,
   initialBreak,
+  isGuest,
 }) => (
-  <ContentBox
-    title={title}
-    subtitle="Loading profile"
-    defaultBackHref={defaultBackHref}
-    initialBreak={initialBreak}
-  >
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      <Skeleton className="m-auto aspect-square w-5/6 max-w-80 rounded-2xl" />
-      <div className="flex flex-col justify-center gap-2 sm:col-span-2">
-        {Array.from({ length: 8 }, (_, i) => (
-          <Skeleton key={i} className="h-5 w-full" />
-        ))}
+  <>
+    {isGuest && (
+      <ContentBox
+        title="Public Profile"
+        subtitle="Loading profile"
+        defaultBackHref={defaultBackHref}
+        initialBreak={initialBreak}
+      >
+        <Skeleton className="h-10 w-full" />
+      </ContentBox>
+    )}
+    <ContentBox
+      title={title}
+      subtitle="Loading profile"
+      defaultBackHref={isGuest ? undefined : defaultBackHref}
+      initialBreak={isGuest ? true : initialBreak}
+    >
+      <div className="grid grid-cols-2">
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 12 }, (_, i) => (
+            <Skeleton key={i} className="h-4 w-11/12" />
+          ))}
+        </div>
+        <div>
+          <div className="basis-1/3">
+            <div className="relative flex justify-center">
+              <Skeleton className="aspect-square w-full max-w-80 rounded-2xl" />
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div className="mt-4 flex flex-col gap-2">
-      {Array.from({ length: 4 }, (_, i) => (
-        <Skeleton key={i} className="h-8 w-full" />
-      ))}
-    </div>
-    <Loader explanation="Fetching Public User Data" />
-  </ContentBox>
+      <Loader explanation="Fetching Public User Data" />
+    </ContentBox>
+  </>
 );
 
 interface EditUserComponentProps {

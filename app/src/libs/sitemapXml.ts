@@ -57,17 +57,20 @@ export const renderUrlset = (entries: SitemapEntry[]) =>
     .join("") +
   `</urlset>\n`;
 
-export const renderSitemapIndex = (sitemaps: { url: string; lastModified: Date }[]) =>
+/**
+ * `<lastmod>` is deliberately omitted from the index entries.
+ *
+ * It is optional there, and it means "when this child sitemap last changed", which the
+ * index has no cheap way to know: the children are generated per request, so any value
+ * available here is the request time. Stamping that would tell Google every child changed
+ * on every fetch, which invites exactly the wasted crawling this split exists to reduce.
+ * The per-URL `<lastmod>` inside each child is the accurate signal and is still emitted.
+ */
+export const renderSitemapIndex = (sitemaps: { url: string }[]) =>
   `<?xml version="1.0" encoding="UTF-8"?>\n` +
   `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
   sitemaps
-    .map(
-      (entry) =>
-        `<sitemap>\n` +
-        `<loc>${escapeXml(entry.url)}</loc>\n` +
-        `<lastmod>${entry.lastModified.toISOString()}</lastmod>\n` +
-        `</sitemap>\n`,
-    )
+    .map((entry) => `<sitemap>\n<loc>${escapeXml(entry.url)}</loc>\n</sitemap>\n`)
     .join("") +
   `</sitemapindex>\n`;
 
