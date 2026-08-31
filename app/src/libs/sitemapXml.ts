@@ -20,7 +20,12 @@ export type SitemapChangeFrequency =
 
 export interface SitemapEntry {
   url: string;
-  lastModified: Date;
+  /**
+   * Omitted where there is no real modification time to report. Google only honours
+   * lastmod when it is verifiably accurate, and a request-time stamp on a page that has
+   * not changed teaches it to disregard the field for the whole submission.
+   */
+  lastModified?: Date;
   changeFrequency: SitemapChangeFrequency;
   priority: number;
 }
@@ -49,7 +54,9 @@ export const renderUrlset = (entries: SitemapEntry[]) =>
       (entry) =>
         `<url>\n` +
         `<loc>${escapeXml(entry.url)}</loc>\n` +
-        `<lastmod>${entry.lastModified.toISOString()}</lastmod>\n` +
+        (entry.lastModified
+          ? `<lastmod>${entry.lastModified.toISOString()}</lastmod>\n`
+          : "") +
         `<changefreq>${entry.changeFrequency}</changefreq>\n` +
         `<priority>${entry.priority}</priority>\n` +
         `</url>\n`,

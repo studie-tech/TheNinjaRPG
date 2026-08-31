@@ -114,9 +114,10 @@ const config = {
       {
         // The sitemaps are generated per request (they read the database and the build
         // has none), so they are cached at the edge instead. Crawlers fetch them rarely,
-        // and a stale copy for an hour is harmless. Matches the /sitemap.xml index and
-        // every /sitemap-<section>.xml it lists.
-        source: "/:sitemap(sitemap|sitemap-[a-z]+).xml",
+        // and a stale copy for an hour is harmless. The section names are listed rather
+        // than matched with a wildcard so a typo'd /sitemap-<anything>.xml does not get
+        // its 404 cached at the edge for an hour. Keep in step with SITEMAP_SECTIONS.
+        source: "/:sitemap(sitemap|sitemap-pages|sitemap-manual|sitemap-forum|sitemap-profiles).xml",
         headers: [
           {
             key: "Cache-Control",

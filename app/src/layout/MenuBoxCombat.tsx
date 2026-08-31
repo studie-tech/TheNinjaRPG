@@ -34,12 +34,19 @@ const MenuBoxCombat: React.FC = () => {
   return (
     <>
       <SideBannerTitle>
-        <Link
-          href={`/userid/${battleUser.userId}`}
-          className="inline-block flex flex-row hover:text-orange-500"
-        >
-          {battleUser.username} <Link2 className="inline-block h-5 w-5" />
-        </Link>
+        {/* AI combatants are given a synthetic id when the battle starts, so they have
+            no profile to link to. The link used to land on a "user does not exist" body
+            served with HTTP 200; it now resolves to a real 404, so do not offer it. */}
+        {battleUser.isAi ? (
+          battleUser.username
+        ) : (
+          <Link
+            href={`/userid/${battleUser.userId}`}
+            className="inline-block flex flex-row hover:text-orange-500"
+          >
+            {battleUser.username} <Link2 className="inline-block h-5 w-5" />
+          </Link>
+        )}
       </SideBannerTitle>
       <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
         <Link href="/profile">

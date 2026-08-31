@@ -30,19 +30,34 @@ describe("renderUrlset", () => {
     expect(xml.trimEnd().endsWith("</urlset>")).toBe(true);
   });
 
-  it("renders an empty but valid document when a section has no rows", () => {
+  it("still closes the document when a section has no rows", () => {
+    // The sitemap XSD requires at least one <url>, so an empty section is technically
+    // schema-invalid; what matters here is that it cannot emit a truncated document.
     const xml = renderUrlset([]);
     expect(xml).toContain("<urlset");
     expect(xml).toContain("</urlset>");
     expect(xml).not.toContain("<url>");
   });
 
+  it("omits lastmod when an entry has no real modification time", () => {
+    const xml = renderUrlset([
+      { url: `${SITE_URL}/ninja-game`, changeFrequency: "weekly", priority: 0.9 },
+    ]);
+    expect(xml).not.toContain("<lastmod>");
+    expect(xml).toContain("<changefreq>weekly</changefreq>");
+  });
+
   it("escapes characters that would otherwise break the document", () => {
-    // Usernames reach the sitemap percent-encoded, but an ampersand still arrives raw
-    // from encodeURIComponent, and an unescaped one makes the whole file unparseable.
+    // encodeURIComponent leaves the apostrophe raw and escapes the rest, but the
+    // serializer takes arbitrary strings, so it has to handle all five itself: one
+    // unescaped ampersand makes the whole file unparseable.
     const xml = renderUrlset([entry(`${SITE_URL}/username/a&b<c>"d'`)]);
     expect(xml).toContain("a&amp;b&lt;c&gt;&quot;d&apos;");
-    expect(xml).not.toMatch(/<loc>[^<]*[^;]&[^a-z]/);
+    // No bare "&" survives: every one is the start of an entity.
+    const locs = [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1] ?? "");
+    for (const loc of locs) {
+      expect(loc.replace(/&(amp|lt|gt|quot|apos);/g, "")).not.toContain("&");
+    }
   });
 });
 

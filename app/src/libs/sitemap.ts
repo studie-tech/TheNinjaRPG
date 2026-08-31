@@ -20,7 +20,7 @@ import { drizzleDB } from "@/server/db";
  */
 
 /** Caps on the tables that grow without limit, newest entries winning. */
-const MAX_PROFILES = 1000;
+const MAX_PROFILES = 2000;
 const MIN_PROFILE_LEVEL = 25;
 const PROFILE_ACTIVE_DAYS = 90;
 const MAX_THREADS = 10000;
@@ -66,29 +66,26 @@ const STATIC_ROUTES: {
 const profileActivityCutoff = () =>
   new Date(Date.now() - PROFILE_ACTIVE_DAYS * 24 * 60 * 60 * 1000);
 
-const staticEntries = (): SitemapEntry[] => {
-  const now = new Date();
-  return STATIC_ROUTES.map((route) => ({
+// No lastModified: these routes change when the code does, and the only timestamp
+// available here is the request time, which would claim every page changed on every
+// crawl. changefreq carries the same intent without asserting something false.
+const staticEntries = (): SitemapEntry[] =>
+  STATIC_ROUTES.map((route) => ({
     url: absoluteUrl(route.path),
-    lastModified: now,
     changeFrequency: route.changeFrequency,
     priority: route.priority,
   }));
-};
 
 /**
  * Landing pages built for the non-brand queries the homepage was ranking for on its own.
  * Kept beside the static routes so both live in the same submitted sitemap.
  */
-const contentEntries = (): SitemapEntry[] => {
-  const now = new Date();
-  return LANDING_ROUTES.map((path) => ({
+const contentEntries = (): SitemapEntry[] =>
+  LANDING_ROUTES.map((path) => ({
     url: absoluteUrl(path),
-    lastModified: now,
     changeFrequency: "weekly" as const,
     priority: 0.9,
   }));
-};
 
 const manualEntries = async (): Promise<SitemapEntry[]> => {
   const now = new Date();

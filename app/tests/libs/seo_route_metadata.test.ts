@@ -1,50 +1,63 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SITE_URL, buildMetadata, noindexMetadata } from "@/libs/seo";
 
 const APP_DIR = join(import.meta.dirname, "..", "..", "src", "app");
 
 /**
- * Whether a directory renders any HTML page at all. Route-handler directories -- the API,
- * the sitemap files, .well-known -- have no metadata to declare, and deriving that from
- * the presence of a page.tsx avoids an allowlist that goes stale as routes are added.
+ * Every directory holding a page.tsx, anywhere under `dir`.
  */
-const hasPage = (dir: string): boolean =>
-  readdirSync(dir, { withFileTypes: true }).some((entry) =>
-    entry.isDirectory()
-      ? hasPage(join(dir, entry.name))
-      : entry.name === "page.tsx" || entry.name === "page.ts",
+const pageDirs = (dir: string): string[] => {
+  const entries = readdirSync(dir, { withFileTypes: true });
+  const here = entries.some((e) => !e.isDirectory() && e.name === "page.tsx") ? [dir] : [];
+  return entries
+    .filter((e) => e.isDirectory())
+    .flatMap((e) => pageDirs(join(dir, e.name)))
+    .concat(here);
+};
+
+/**
+ * Whether a single directory declares metadata itself. Matching is on an export, not a
+ * bare substring, so an import or a comment mentioning generateMetadata does not count.
+ */
+const DECLARES_METADATA =
+  /export\s+(?:const\s+metadata\b|(?:async\s+)?function\s+generateMetadata\b)/;
+
+const declaresMetadata = (dir: string): boolean =>
+  readdirSync(dir, { withFileTypes: true }).some(
+    (entry) =>
+      !entry.isDirectory() &&
+      /\.(ts|tsx)$/.test(entry.name) &&
+      DECLARES_METADATA.test(readFileSync(join(dir, entry.name), "utf8")),
   );
 
-const hasMetadata = (dir: string): boolean => {
-  const entries = readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (hasMetadata(path)) return true;
-      continue;
+/**
+ * A page is covered when its own directory, or one of its ancestors up to the route
+ * root, declares metadata. Checking the ancestor chain rather than the whole subtree is
+ * what gives the guard teeth: a sibling route declaring its own metadata must not make
+ * an uncovered page look covered.
+ */
+const uncoveredPages = (routeDir: string): string[] =>
+  pageDirs(routeDir).filter((pageDir) => {
+    let dir = pageDir;
+    while (true) {
+      if (declaresMetadata(dir)) return false;
+      if (dir === routeDir) return true;
+      dir = dirname(dir);
     }
-    if (!/\.(ts|tsx)$/.test(entry.name)) continue;
-    const source = readFileSync(path, "utf8");
-    if (source.includes("export const metadata") || source.includes("generateMetadata")) {
-      return true;
-    }
-  }
-  return false;
-};
+  });
 
 describe("route metadata coverage", () => {
   it("declares metadata for every top-level route", () => {
     // Forty gated screens shipped without any, so Googlebot received the homepage's
     // title, description and no canonical for each of them and Search Console filed the
     // set under "Duplicate without user-selected canonical".
-    const missing = readdirSync(APP_DIR, { withFileTypes: true })
+    const uncovered = readdirSync(APP_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .filter((name) => hasPage(join(APP_DIR, name)))
-      .filter((name) => !hasMetadata(join(APP_DIR, name)));
-    expect(missing).toEqual([]);
+      .flatMap((entry) => uncoveredPages(join(APP_DIR, entry.name)))
+      .map((dir) => dir.slice(APP_DIR.length));
+    expect(uncovered).toEqual([]);
   });
 
   it("keeps the gated screens on noindexMetadata", () => {
@@ -67,18 +80,19 @@ describe("buildMetadata", () => {
     expect(meta.alternates?.canonical).toBe(`${SITE_URL}/ninja-game`);
   });
 
-  it("declares the English page as x-default for an English-only, global audience", () => {
-    expect(meta.alternates?.languages).toEqual({
-      en: `${SITE_URL}/ninja-game`,
-      "x-default": `${SITE_URL}/ninja-game`,
-    });
+  it("emits no hreflang alternates, since there is only one language version", () => {
+    // A page declared as an alternate of itself tells Google nothing it cannot read from
+    // <html lang>, and hreflang has never been a country-targeting signal.
+    expect(meta.alternates?.languages).toBeUndefined();
   });
 
   it("keeps the brand suffix on the title even below a segment layout", () => {
     expect(meta.title).toEqual({ absolute: "Ninja Game | TheNinja-RPG" });
   });
 
-  it("marks noindex pages as neither indexable nor followable", () => {
-    expect(noindexMetadata("Hospital").robots).toEqual({ index: false, follow: false });
+  it("keeps noindex pages crawlable so their outbound links still count", () => {
+    // follow: false here would tell Google to ignore every link on the gated screens,
+    // including the ones pointing at manual and profile URLs the sitemap advertises.
+    expect(noindexMetadata("Hospital").robots).toEqual({ index: false });
   });
 });
