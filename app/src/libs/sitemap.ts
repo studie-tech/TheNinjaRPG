@@ -7,7 +7,6 @@ import {
   jutsu,
   userData,
 } from "@/drizzle/schema";
-import { LANDING_ROUTES } from "@/libs/landingLinks";
 import { absoluteUrl } from "@/libs/seo";
 import type { SitemapEntry, SitemapSection } from "@/libs/sitemapXml";
 import { drizzleDB } from "@/server/db";
@@ -74,17 +73,6 @@ const staticEntries = (): SitemapEntry[] =>
     url: absoluteUrl(route.path),
     changeFrequency: route.changeFrequency,
     priority: route.priority,
-  }));
-
-/**
- * Landing pages built for the non-brand queries the homepage was ranking for on its own.
- * Kept beside the static routes so both live in the same submitted sitemap.
- */
-const contentEntries = (): SitemapEntry[] =>
-  LANDING_ROUTES.map((path) => ({
-    url: absoluteUrl(path),
-    changeFrequency: "weekly" as const,
-    priority: 0.9,
   }));
 
 const manualEntries = async (): Promise<SitemapEntry[]> => {
@@ -190,7 +178,7 @@ const profileEntries = async (): Promise<SitemapEntry[]> => {
 
 /** Query functions behind each child sitemap, keyed by the section name. */
 export const SITEMAP_SECTION_LOADERS = {
-  pages: async () => [...staticEntries(), ...contentEntries()],
+  pages: staticEntries,
   manual: manualEntries,
   forum: forumEntries,
   profiles: profileEntries,
