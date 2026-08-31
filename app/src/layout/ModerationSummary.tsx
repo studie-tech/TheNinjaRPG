@@ -30,6 +30,8 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
   trigger,
 }) => {
   const [open, setOpen] = React.useState(false);
+  /** A deferred chunk can 404 after a deploy; the summary above it still stands. */
+  const [chartFailed, setChartFailed] = React.useState(false);
   const { data, isLoading } = api.reports.getUserModerationSummary.useQuery(
     { userId },
     { enabled: open },
@@ -55,6 +57,23 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
         .sort((a, b) => b.count - a.count)
     : [];
 
+  /**
+   * Loads the charting library once and remembers it. Hands back the constructor rather than a
+   * flag so the caller holds a non-null value, and so the eager warm-up and the draw path share
+   * one failure route.
+   */
+  const ensureChart = async () => {
+    if (chartCtorRef.current) return chartCtorRef.current;
+    try {
+      chartCtorRef.current = (await import("chart.js/auto")).Chart;
+      return chartCtorRef.current;
+    } catch (error) {
+      console.error("Could not load the charting library", error);
+      setChartFailed(true);
+      return null;
+    }
+  };
+
   // Function to create or update the chart
   const createOrUpdateChart = async () => {
     if (!data || !categoryChartRef.current || categoryChartData.length === 0) return;
@@ -63,9 +82,8 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
     // reachable from the root layout, so ~72 KB gzip rode along on every page for a panel
     // opened on demand. Fetched on first draw instead, then kept for redraws.
     const run = ++chartRunRef.current;
-    if (!chartCtorRef.current) {
-      chartCtorRef.current = (await import("chart.js/auto")).Chart;
-    }
+    const Chart = await ensureChart();
+    if (!Chart) return;
     // The dialog can close, or the whole component unmount, while that import is in flight
     const canvas = categoryChartRef.current;
     if (run !== chartRunRef.current || !canvas) return;
@@ -78,7 +96,7 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
 
     const ctx = canvas.getContext("2d");
     if (ctx) {
-      chartInstanceRef.current = new chartCtorRef.current(ctx, {
+      chartInstanceRef.current = new Chart(ctx, {
         type: "bar",
         data: {
           labels: categoryChartData.map((item) => item.category),
@@ -138,6 +156,9 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
   // Effect to handle dialog open/close
   useEffect(() => {
     if (open) {
+      // Fetch the library alongside the query rather than after it: the draw below waits
+      // for data, and queueing the chunk behind that round-trip is a needless waterfall
+      void ensureChart();
       // When dialog opens, ensure chart is created if we have data
       const timeoutId = setTimeout(() => {
         void createOrUpdateChart();
@@ -209,7 +230,13 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
               <CardContent>
                 {categoryChartData.length > 0 ? (
                   <div className="h-80">
-                    <canvas ref={categoryChartRef} />
+                    {chartFailed ? (
+                      <p className="py-4 text-center text-muted-foreground text-sm">
+                        The chart could not be loaded. The counts above are unaffected.
+                      </p>
+                    ) : (
+                      <canvas ref={categoryChartRef} />
+                    )}
                   </div>
                 ) : (
                   <p className="py-8 text-center text-gray-500">

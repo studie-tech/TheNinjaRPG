@@ -1,3 +1,5 @@
+"use client";
+
 import { BarChartBig, Box, Copy, SquarePen, Trash2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
