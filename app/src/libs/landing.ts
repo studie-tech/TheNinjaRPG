@@ -1,3 +1,4 @@
+import { LANDING_LINKS } from "@/libs/landingLinks";
 import { absoluteUrl, SITE_NAME, SITE_URL } from "@/libs/seo";
 
 /**
@@ -51,8 +52,7 @@ const VILLAGES = "Akasumi, Akikaze, Hyorin, Shirohana and Tsukimori";
 
 export const LANDING_PAGES = {
   "ninja-game": {
-    path: "/ninja-game",
-    title: "Ninja Game",
+    ...LANDING_LINKS["ninja-game"],
     description:
       "A free ninja game you play in the browser. Train your stats, learn from 1,050 jutsu, join one of five villages and fight other players in the world of Seichi.",
     eyebrow: "Free to play",
@@ -135,8 +135,7 @@ export const LANDING_PAGES = {
     ],
   },
   "browser-rpg": {
-    path: "/browser-rpg",
-    title: "Browser RPG",
+    ...LANDING_LINKS["browser-rpg"],
     description:
       "A persistent browser RPG with no download: 1,050 techniques, deep stat building, player-driven economy and turn-based PvP. Free to play in any modern browser.",
     eyebrow: "No download",
@@ -213,8 +212,7 @@ export const LANDING_PAGES = {
     ],
   },
   "anime-ninja-online": {
-    path: "/anime-ninja-online",
-    title: "Anime Ninja Online",
+    ...LANDING_LINKS["anime-ninja-online"],
     description:
       "An anime-styled ninja MMORPG you play online in the browser. Five villages, 51 bloodlines, 1,050 jutsu and twenty years of world-building. Free, no download.",
     eyebrow: "Original world",
@@ -298,8 +296,6 @@ export const LANDING_PAGES = {
 } as const satisfies Record<string, LandingContent>;
 
 export type LandingSlug = keyof typeof LANDING_PAGES;
-
-export const LANDING_ROUTES = Object.values(LANDING_PAGES).map((page) => page.path);
 
 /**
  * Structured data for a landing page.

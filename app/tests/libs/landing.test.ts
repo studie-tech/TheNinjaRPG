@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   LANDING_PAGES,
-  LANDING_ROUTES,
   type LandingContent,
   landingStructuredData,
 } from "@/libs/landing";
+import { LANDING_LINKS, LANDING_ROUTES } from "@/libs/landingLinks";
 import { SITE_NAME, SITE_URL } from "@/libs/seo";
 import { SITEMAP_SECTIONS } from "@/libs/sitemapXml";
 
@@ -25,6 +25,7 @@ describe("landing page routes", () => {
   it("keys match their own paths, so the sitemap and the routes cannot drift", () => {
     for (const [slug, page] of Object.entries(LANDING_PAGES)) {
       expect(page.path).toBe(`/${slug}`);
+      expect(page).toMatchObject(LANDING_LINKS[slug as keyof typeof LANDING_LINKS]);
     }
   });
 

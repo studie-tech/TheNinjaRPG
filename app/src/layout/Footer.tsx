@@ -1,6 +1,6 @@
 import Link from "next/link";
 import React from "react";
-import { LANDING_PAGES } from "@/libs/landing";
+import { LANDING_LINKS } from "@/libs/landingLinks";
 import { SITE_FOOTER_LINKS } from "@/libs/legalLinks";
 
 const Footer: React.FC = () => {
@@ -9,7 +9,7 @@ const Footer: React.FC = () => {
       {/* The landing pages need an internal path from every page or they stay orphans
           that Google crawls once and drops. */}
       <p className="text-xs" data-footer-discovery>
-        {Object.values(LANDING_PAGES).map((page, index) => (
+        {Object.values(LANDING_LINKS).map((page, index) => (
           <React.Fragment key={page.path}>
             {index > 0 && <span data-footer-separator> - </span>}
             <Link href={page.path} className="hover:text-gray-500" data-footer-link>

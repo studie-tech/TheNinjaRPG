@@ -190,7 +190,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const [showActive, setShowActive] = useState("nindo");
   const [showForceAwakeModal, setShowForceAwakeModal] = useState(false);
   const [forceAwakeReason, setForceAwakeReason] = useState("");
-  const { data: userData } = useUserData();
+  const { data: userData, isSignedIn } = useUserData();
+  const isGuest = !isSignedIn;
 
   const canSeeSecrets = userData && canSeeSecretData(userData.role);
   const enableReports = showReports && canSeeSecrets;
@@ -366,7 +367,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         title={title}
         defaultBackHref={defaultBackHref}
         initialBreak={initialBreak}
-        isGuest={!userData}
+        isGuest={isGuest}
       />
     );
   }
@@ -391,7 +392,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   // Render
   return (
     <>
-      {!userData && (
+      {isGuest && (
         <ContentBox
           title="Public Profile"
           subtitle={`Profile: ${profileName}`}
@@ -404,9 +405,9 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       {/* USER STATISTICS */}
       <ContentBox
         title={title}
-        defaultBackHref={userData ? defaultBackHref : undefined}
+        defaultBackHref={isGuest ? undefined : defaultBackHref}
         subtitle={`Profile: ${profileName}`}
-        initialBreak={userData ? initialBreak : true}
+        initialBreak={isGuest ? true : initialBreak}
         topRightContent={
           <div className="flex flex-row items-center gap-1 [&_svg]:block">
             {userData && canCloneUser(userData.role) && (
@@ -1189,7 +1190,7 @@ interface PublicUserSkeletonProps {
   title: string;
   defaultBackHref?: string;
   initialBreak?: boolean;
-  /** Mirrors `!userData` in the loaded render, which adds a second box for guests. */
+  /** Mirrors the stable signed-in state used by the loaded render. */
   isGuest: boolean;
 }
 
@@ -1239,7 +1240,7 @@ const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
     >
       <div className="grid grid-cols-2">
         <div className="flex flex-col gap-2">
-          {Array.from({ length: 12 }, (_, i) => (
+          {Array.from({ length: 23 }, (_, i) => (
             <Skeleton key={i} className="h-4 w-11/12" />
           ))}
         </div>
@@ -1247,6 +1248,14 @@ const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
           <div className="basis-1/3">
             <div className="relative flex justify-center">
               <Skeleton className="aspect-square w-full max-w-80 rounded-2xl" />
+            </div>
+            <div className="mt-2">
+              {Array.from({ length: 3 }, (_, i) => (
+                <div key={i} className="group relative flex-row">
+                  <Skeleton className="h-4 w-1/3 rounded-none" />
+                  <Skeleton className="h-3 w-full rounded-none border-2 border-black" />
+                </div>
+              ))}
             </div>
           </div>
         </div>
