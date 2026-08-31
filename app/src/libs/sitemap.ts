@@ -7,7 +7,7 @@ import {
   jutsu,
   userData,
 } from "@/drizzle/schema";
-import { LANDING_ROUTES } from "@/libs/landing";
+import { LANDING_ROUTES } from "@/libs/landingLinks";
 import { absoluteUrl } from "@/libs/seo";
 import type { SitemapEntry, SitemapSection } from "@/libs/sitemapXml";
 import { drizzleDB } from "@/server/db";
