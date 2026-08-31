@@ -17,6 +17,11 @@ import {
   getEffectiveMaxImbuements,
   getTotalItemQuantity,
 } from "@/libs/crafting";
+import {
+  getInventoryBucket,
+  getInventoryBucketCapacity,
+  getInventoryBucketFullMessage,
+} from "@/libs/item";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import {
   fetchItemWithCraftingRequirements,
@@ -31,6 +36,7 @@ import {
 } from "@/server/api/trpc";
 import {
   claimUserSnapshot,
+  getNextUserSnapshotAt,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
 import { canChangeContent } from "@/utils/permissions";
@@ -96,13 +102,15 @@ export const occupationRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Run all initial queries in parallel
-      const [{ user }, itemWithRequirements, useritems] = await Promise.all([
-        // Get user data
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        // Get item to craft with its requirements
+      // Read userData before inventory. Every capacity mutation commits both rows
+      // atomically and bumps updatedAt, so this ordering gives the later CAS a
+      // consistent boundary even when another request commits between the reads.
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      const [itemWithRequirements, useritems] = await Promise.all([
         fetchItemWithCraftingRequirements(ctx.drizzle, input.itemId),
-        // Check if user is already crafting something
         fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
       // Derived
@@ -139,6 +147,25 @@ export const occupationRouter = createTRPCRouter({
       }
       if (itemWithRequirements.craftingRequirements.length === 0) {
         return errorResponse("This item cannot be crafted (no requirements defined)");
+      }
+      // Crafted output is added as new carried stacks, so reserve enough room in
+      // the dedicated cooking bucket before consuming any materials. The user
+      // snapshot claim below serializes this check with other capacity-changing
+      // mutations.
+      const outputBucket = getInventoryBucket(itemWithRequirements);
+      if (outputBucket === "cooking") {
+        const carriedCookingStacks = useritems.filter(
+          (ui) => !ui.storedAtHome && getInventoryBucket(ui.item) === "cooking",
+        ).length;
+        const newStacksRequired = Math.ceil(
+          input.quantity / Math.max(1, itemWithRequirements.stackSize),
+        );
+        if (
+          carriedCookingStacks + newStacksRequired >
+          getInventoryBucketCapacity(outputBucket, user)
+        ) {
+          return errorResponse(getInventoryBucketFullMessage(outputBucket));
+        }
       }
       // Derived
       const userCraftingRank = getCraftingRank(user.craftingExperience);
@@ -201,7 +228,9 @@ export const occupationRouter = createTRPCRouter({
 
       // Execute crafting: consume materials and create crafting item
       // Calculate consumption for each requirement
-      const allConsumptions = [];
+      const allConsumptions: ReturnType<
+        typeof calculateItemConsumption
+      >["consumptions"] = [];
       for (const requirement of itemWithRequirements.craftingRequirements) {
         const requiredQuantity = requirement.quantity * input.quantity;
         const consumption = calculateItemConsumption(
@@ -216,54 +245,19 @@ export const occupationRouter = createTRPCRouter({
         allConsumptions.push(...consumption.consumptions);
       }
 
-      // CAS + atomic material rows prevent duplicate crafts under concurrent requests.
-      const craftClaimResult = await claimUserSnapshot({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        updatedAt: user.updatedAt,
-        where: [
-          eq(userData.status, "AWAKE"),
-          or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
-        ],
-      });
-      if (!craftClaimResult.success) {
-        return errorResponse(
-          "Could not start crafting — state changed, please try again",
-        );
-      }
-
-      const materialUpdates = await Promise.all(
-        allConsumptions.map((consumption) =>
-          updateUserItemQuantityAtomically({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            userItemId: consumption.userItemId,
-            expectedQuantity: consumption.consumeQuantity + consumption.newQuantity,
-            nextQuantity: consumption.newQuantity,
-          }),
-        ),
-      );
-      if (!materialUpdates.every(Boolean)) {
-        return errorResponse(
-          "Could not start crafting — materials changed, please try again",
-        );
-      }
-
       // Create crafting item entry/entries
       // Respect stackSize limit when creating items
-      const craftingItemInserts = [];
+      const craftingItemValues: (typeof userItem.$inferInsert)[] = [];
       if (itemWithRequirements.stackSize === 1) {
         // Create separate items for non-stackable items
         for (let i = 0; i < input.quantity; i++) {
-          craftingItemInserts.push(
-            ctx.drizzle.insert(userItem).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              itemId: input.itemId,
-              quantity: 1,
-              craftingFinishedAt: finishTime,
-            }),
-          );
+          craftingItemValues.push({
+            id: nanoid(),
+            userId: ctx.userId,
+            itemId: input.itemId,
+            quantity: 1,
+            craftingFinishedAt: finishTime,
+          });
         }
       } else {
         // Create stacked items respecting stackSize limit
@@ -273,15 +267,13 @@ export const occupationRouter = createTRPCRouter({
             remainingQuantity,
             itemWithRequirements.stackSize,
           );
-          craftingItemInserts.push(
-            ctx.drizzle.insert(userItem).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              itemId: input.itemId,
-              quantity: stackQuantity,
-              craftingFinishedAt: finishTime,
-            }),
-          );
+          craftingItemValues.push({
+            id: nanoid(),
+            userId: ctx.userId,
+            itemId: input.itemId,
+            quantity: stackQuantity,
+            craftingFinishedAt: finishTime,
+          });
           remainingQuantity -= stackQuantity;
         }
       }
@@ -295,8 +287,8 @@ export const occupationRouter = createTRPCRouter({
         (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
       const expGain = Math.floor(baseExpGain * (1 + clanCraftingExpBoost));
       // Update trackers: crafting experience, total items crafted, and any
-      // craft-this-specific-item objectives. Emitted here (behind the craft CAS /
-      // expUpdate rowsAffected guard below) — NOT from the quest-reward EXP path
+      // craft-this-specific-item objectives. Emitted here (behind the transaction's
+      // craft CAS below) — NOT from the quest-reward EXP path
       // (quest.ts:367-377), which must stay experience-only to avoid double-counting.
       const { trackers } = getNewTrackers(user, [
         { task: "crafting_experience_gained", increment: expGain },
@@ -308,28 +300,62 @@ export const occupationRouter = createTRPCRouter({
         },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
-      const expUpdate = ctx.drizzle
-        .update(userData)
-        .set({
-          craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
-          questData: questDataForDb,
-        })
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            eq(userData.status, "AWAKE"),
-            or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
-          ),
-        );
+      const materialConflict = Symbol("materialConflict");
+      try {
+        const craftCommitted = await ctx.drizzle.transaction(async (tx) => {
+          const claimResult = await tx
+            .update(userData)
+            .set({
+              updatedAt: getNextUserSnapshotAt(user.updatedAt),
+              craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
+              questData: questDataForDb,
+            })
+            .where(
+              and(
+                eq(userData.userId, ctx.userId),
+                eq(userData.updatedAt, user.updatedAt),
+                eq(userData.status, "AWAKE"),
+                or(
+                  isNull(userData.sector),
+                  ne(userData.sector, MAP_WAKE_ISLAND_SECTOR),
+                ),
+              ),
+            );
+          if (claimResult.rowsAffected !== 1) return false;
 
-      const [, expResult] = await Promise.all([
-        Promise.all(craftingItemInserts),
-        expUpdate,
-      ]);
-      if (!expResult || expResult.rowsAffected !== 1) {
-        return errorResponse(
-          "Could not start crafting — you must be awake and not on Wake Island",
-        );
+          for (const consumption of allConsumptions) {
+            const expectedQuantity =
+              consumption.consumeQuantity + consumption.newQuantity;
+            const itemWhere = and(
+              eq(userItem.id, consumption.userItemId),
+              eq(userItem.userId, ctx.userId),
+              eq(userItem.quantity, expectedQuantity),
+            );
+            const materialResult =
+              consumption.newQuantity > 0
+                ? await tx
+                    .update(userItem)
+                    .set({ quantity: consumption.newQuantity })
+                    .where(itemWhere)
+                : await tx.delete(userItem).where(itemWhere);
+            if (materialResult.rowsAffected !== 1) throw materialConflict;
+          }
+
+          await tx.insert(userItem).values(craftingItemValues);
+          return true;
+        });
+        if (!craftCommitted) {
+          return errorResponse(
+            "Could not start crafting — state changed, please try again",
+          );
+        }
+      } catch (error) {
+        if (error === materialConflict) {
+          return errorResponse(
+            "Could not start crafting — materials changed, please try again",
+          );
+        }
+        throw error;
       }
 
       return {
@@ -532,7 +558,7 @@ export const occupationRouter = createTRPCRouter({
         );
 
       const [, expResult] = await Promise.all([createImbuement, expUpdate]);
-      if (!expResult || expResult.rowsAffected !== 1) {
+      if (expResult?.rowsAffected !== 1) {
         return errorResponse(
           "Could not start imbuing — you must be awake and not on Wake Island",
         );

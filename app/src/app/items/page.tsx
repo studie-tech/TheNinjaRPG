@@ -178,6 +178,23 @@ export default function MyItems() {
     (ui) => getInventoryBucket(ui.item) === "cooking",
   );
 
+  // Capacity includes every carried row, including an item that is still being
+  // crafted. Keep the heading aligned with the server-side capacity guards even
+  // though unfinished items are intentionally absent from the usable-item list.
+  const carriedItems = userItems?.filter((ui) => !ui.storedAtHome);
+  const normalItemCount = carriedItems?.filter(
+    (ui) => getInventoryBucket(ui.item) === "normal",
+  ).length;
+  const eventItemCount = carriedItems?.filter(
+    (ui) => getInventoryBucket(ui.item) === "event",
+  ).length;
+  const materialsItemCount = carriedItems?.filter(
+    (ui) => getInventoryBucket(ui.item) === "materials",
+  ).length;
+  const cookingItemCount = carriedItems?.filter(
+    (ui) => getInventoryBucket(ui.item) === "cooking",
+  ).length;
+
   // Calculate inventory limits
   const maxNormalItems = userData ? calcMaxItems(userData) : 0;
   const maxEventItems = userData ? calcMaxEventItems(userData) : 0;
@@ -219,12 +236,12 @@ export default function MyItems() {
         title="Item Management"
         subtitle={
           activeTab === "normal"
-            ? `Normal Inventory ${normalItems?.length}/${maxNormalItems}`
+            ? `Normal Inventory ${normalItemCount}/${maxNormalItems}`
             : activeTab === "event"
-              ? `Event Inventory ${eventItems?.length}/${maxEventItems}`
+              ? `Event Inventory ${eventItemCount}/${maxEventItems}`
               : activeTab === "materials"
-                ? `Materials Inventory ${materialsItems?.length}/${maxMaterials}`
-                : `Cooking Inventory ${cookingItems?.length}/${maxCookingItems}`
+                ? `Materials Inventory ${materialsItemCount}/${maxMaterials}`
+                : `Cooking Inventory ${cookingItemCount}/${maxCookingItems}`
         }
         padding={false}
         topRightContent={

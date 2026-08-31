@@ -43,6 +43,10 @@ type ClaimUserSnapshotParams = {
   set?: Record<string, unknown>;
 };
 
+/** Always advances a millisecond-precision snapshot, even within the same clock tick. */
+export const getNextUserSnapshotAt = (updatedAt: Date, now = new Date()) =>
+  new Date(Math.max(now.getTime(), updatedAt.getTime() + 1));
+
 /** CAS on `user.updatedAt`: bumps `updatedAt` and merges optional `set` columns when still fresh. */
 export const claimUserSnapshot = async ({
   client,
@@ -51,7 +55,7 @@ export const claimUserSnapshot = async ({
   where = [],
   set = {},
 }: ClaimUserSnapshotParams) => {
-  const claimedAt = new Date();
+  const claimedAt = getNextUserSnapshotAt(updatedAt);
   const result = await client
     .update(userData)
     .set({
