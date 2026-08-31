@@ -1689,6 +1689,8 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
   // State
   const chartRef = useRef<HTMLCanvasElement>(null);
   const activeLayout = useActiveLayout();
+  /** A deferred chunk can 404 after a deploy, and an empty box explains nothing. */
+  const [chartFailed, setChartFailed] = useState(false);
 
   // Query
   const { data: logEntries } = api.train.getTrainingLog.useQuery(
@@ -1735,7 +1737,14 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
       let chart: { destroy: () => void } | undefined;
       let cancelled = false;
       void (async () => {
-        const { Chart } = await import("chart.js/auto");
+        let Chart: typeof import("chart.js/auto").Chart;
+        try {
+          Chart = (await import("chart.js/auto")).Chart;
+        } catch (error) {
+          console.error("Could not load the charting library", error);
+          if (!cancelled) setChartFailed(true);
+          return;
+        }
         // The tab can close, or the theme change, while the import is in flight
         if (cancelled) return;
         // Update stats chart
@@ -1817,7 +1826,13 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
       initialBreak={true}
     >
       <div className="relative w-[99%] p-3">
-        <canvas ref={chartRef} id="chart"></canvas>
+        {chartFailed ? (
+          <p className="py-4 text-center text-muted-foreground text-sm">
+            The training chart could not be loaded.
+          </p>
+        ) : (
+          <canvas ref={chartRef} id="chart"></canvas>
+        )}
       </div>
     </ContentBox>
   );

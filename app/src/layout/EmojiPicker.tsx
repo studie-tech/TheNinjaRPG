@@ -14,6 +14,8 @@ export interface AppEmojiPickerProps {
 const DEFAULT_PER_LINE = 9;
 const DEFAULT_EMOJI_SIZE = 24;
 const DEFAULT_EMOJI_BUTTON_SIZE = 36;
+/** What emoji-mart's own grid comes out at; only used to reserve the space. */
+const PICKER_HEIGHT = 435;
 
 /**
  * The picker and its dataset load together, behind this one boundary.
@@ -39,15 +41,14 @@ const EmojiMartPicker = dynamic(
   },
   {
     ssr: false,
-    // Holds the popover's shape for the one fetch it now takes to open. Sized from the defaults
-    // below, since next/dynamic gives the placeholder no props to read the overrides from.
+    // Reserves the popover's shape for the one fetch it now takes to open. Width comes
+    // from the container rather than from perLine, because dynamicWidth makes the picker
+    // itself 100% wide and derive perLine from the measured width — so a perLine-based
+    // guess would simply be a different number, not a better one.
     loading: () => (
       <div
-        className="rounded-lg border border-border bg-popover"
-        style={{
-          width: DEFAULT_PER_LINE * DEFAULT_EMOJI_BUTTON_SIZE,
-          height: DEFAULT_PER_LINE * DEFAULT_EMOJI_BUTTON_SIZE * 1.35,
-        }}
+        className="w-full rounded-lg border border-border bg-popover"
+        style={{ height: PICKER_HEIGHT }}
       />
     ),
   },
