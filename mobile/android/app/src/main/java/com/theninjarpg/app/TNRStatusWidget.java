@@ -81,12 +81,24 @@ public class TNRStatusWidget extends AppWidgetProvider {
             JSONObject remote = new JSONObject(body.toString());
             remote.put("widgetToken", token);
             remote.put("statusUrl", endpoint.toString());
+            // The fallback refreshes vitals only. Preserve richer app-only fields rather
+            // than erasing the hospital timer and quest when this payload is persisted.
+            copyIfMissing(local, remote, "hospitalUntil");
+            copyIfMissing(local, remote, "activeQuest");
+            copyIfMissing(local, remote, "questProgress");
             TNRSnapshotStore.save(context, remote.toString());
             return true;
         } catch (Exception ignored) {
             return false;
         } finally {
             if (connection != null) connection.disconnect();
+        }
+    }
+
+    private void copyIfMissing(JSONObject source, JSONObject destination, String key)
+        throws JSONException {
+        if (!destination.has(key) && source.has(key)) {
+            destination.put(key, source.get(key));
         }
     }
 

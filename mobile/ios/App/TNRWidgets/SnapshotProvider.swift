@@ -54,6 +54,12 @@ struct SnapshotProvider: TimelineProvider {
             }
             remote.widgetToken = token
             remote.statusUrl = rawUrl
+            // The lightweight fallback endpoint refreshes vitals, but quest and hospital
+            // details are only available in the richer in-app snapshot. Keep those fields
+            // until the app can replace them; hospital rendering already expires by date.
+            remote.hospitalUntil = remote.hospitalUntil ?? snapshot.hospitalUntil
+            remote.activeQuest = remote.activeQuest ?? snapshot.activeQuest
+            remote.questProgress = remote.questProgress ?? snapshot.questProgress
             completion(remote)
         }.resume()
     }

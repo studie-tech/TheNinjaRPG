@@ -21,10 +21,10 @@ public struct TNRSnapshot: Codable, Equatable, Sendable {
     public let maxChakra: Int
     public let curStamina: Int
     public let maxStamina: Int
-    public let hospitalUntil: Date?
+    public var hospitalUntil: Date?
     public let unreadNotifications: Int
-    public let activeQuest: String?
-    public let questProgress: Double?
+    public var activeQuest: String?
+    public var questProgress: Double?
 
     public var healthFraction: Double { Self.fraction(curHealth, maxHealth) }
     public var chakraFraction: Double { Self.fraction(curChakra, maxChakra) }
