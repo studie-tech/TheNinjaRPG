@@ -37,7 +37,6 @@ export const fcmMessage = (
     notification: {
       // Channels are declared by the shell; one per entry in PUSH_CATEGORIES.
       channel_id: message.category,
-      click_action: "TNR_NOTIFICATION_CLICK",
       ...(message.badge === undefined ? {} : { notification_count: message.badge }),
     },
   },

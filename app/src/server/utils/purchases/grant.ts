@@ -25,6 +25,7 @@ import {
   type StorePlatform,
 } from "@/drizzle/constants";
 import { paypalSubscription, storePurchase, userData } from "@/drizzle/schema";
+import { env } from "@/env/server.mjs";
 import type { DrizzleClient } from "@/server/db";
 
 export interface StoreGrant {
@@ -52,6 +53,20 @@ const isDuplicateKeyError = (error: unknown): boolean => {
     error instanceof Error ? error.message : typeof error === "string" ? error : "";
   return /duplicate entry|1062/i.test(message);
 };
+
+/**
+ * Whether sandbox receipts count for this account.
+ *
+ * Set STORE_SANDBOX_USER_IDS to the demo account App Review is given before submitting;
+ * `docs/StoreSubmission.md` carries it as a release step. Unset, sandbox purchases grant
+ * nothing at all, which is the safe default for an ordinary deployment.
+ */
+const isSandboxGrantee = (userId: string): boolean =>
+  (env.STORE_SANDBOX_USER_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .includes(userId);
 
 const repProduct = (productId: string) =>
   STORE_REP_PRODUCTS.find((product) => product.productId === productId);
@@ -115,8 +130,13 @@ export const grantStorePurchase = async (
     return { status: "duplicate" };
   }
 
-  // Recorded for the audit trail, but a sandbox receipt must never move real balances.
-  if (grant.isSandbox) {
+  // Recorded for the audit trail, but a sandbox receipt must never move real balances --
+  // with one exception. TestFlight and App Review always transact in the sandbox, so a
+  // blanket refusal means the reviewer completes a purchase and is granted nothing, which
+  // is a rejection. The accounts named in STORE_SANDBOX_USER_IDS are therefore granted
+  // from sandbox receipts, and nobody else is: an allowlist cannot be reached by anyone
+  // who simply owns a sandbox tester login.
+  if (grant.isSandbox && !isSandboxGrantee(grant.userId)) {
     return { status: "ignored", reason: "Sandbox purchase" };
   }
 
@@ -174,11 +194,21 @@ export const grantStorePurchase = async (
  *
  * Idempotent: running it twice retires nothing new and computes the same tier.
  */
+export interface RevocationScope {
+  /** The moment the store says the subscription ended. */
+  occurredAt: Date;
+  /** The product that expired. Absent only on payloads that do not name one. */
+  productId?: string | null;
+  /** The store it expired on, so an Apple lapse cannot retire a Google receipt. */
+  store?: StorePlatform | null;
+}
+
 export const revokeFederalStatus = async (
   client: DrizzleClient,
   userId: string,
-  occurredAt: Date,
+  scope: RevocationScope,
 ): Promise<void> => {
+  const { occurredAt, productId, store } = scope;
   // Retire the receipts first. They are what vouches for the tier to /api/cleaner and to
   // every PayPal writer, and a receipt outlives the subscription that produced it — left
   // unstamped they would go on claiming the player is a subscriber for the rest of the
@@ -197,6 +227,12 @@ export const revokeFederalStatus = async (
         isNotNull(storePurchase.federalStatus),
         isNull(storePurchase.revokedAt),
         lte(storePurchase.createdAt, occurredAt),
+        // An expiry describes one subscription, not the player's whole history. A tier
+        // change leaves the old product expiring while the new one is being billed, and
+        // the two stores are independent — so without this a lapse on one would retire
+        // the receipt for a subscription the player is still paying for.
+        ...(productId ? [eq(storePurchase.productId, productId)] : []),
+        ...(store ? [eq(storePurchase.store, store)] : []),
       ),
     );
   // Then fall back to whatever still vouches — which is both sources, not just PayPal.

@@ -45,7 +45,7 @@ Adding a plugin means two steps: install it here, and add a wrapper in
 | --- | --- |
 | `TNRWidgetSyncPlugin` | Writes the snapshot and redraws the widget |
 | `TNRAudioSessionPlugin` / `TNRAudioService` | `mediaPlayback` foreground service and `MediaSession` |
-| `TNRLiveUpdatesPlugin` | The `ProgressStyle` counterpart to Live Activities |
+| `TNRLiveUpdatesPlugin` | The Live Activity counterpart: an ongoing progress notification |
 | `TNRNotificationChannels` | One channel per `PUSH_CATEGORIES` entry |
 | `TNRStatusWidget` | RemoteViews home screen widget |
 

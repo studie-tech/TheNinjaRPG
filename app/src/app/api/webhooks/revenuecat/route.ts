@@ -44,6 +44,28 @@ export async function POST(request: Request) {
   const { event } = parsed.data;
   const action = classifyEvent(event.type);
 
+  // TRANSFER names `transferred_from`/`transferred_to` rather than an `app_user_id`, and
+  // the Restore Purchases button can provoke one. There is nobody to credit without an
+  // account id, so acknowledge it — a 400 would only stop RevenueCat retrying an event it
+  // is never going to reshape — and raise it, because the entitlement has moved and the
+  // receipts on this side have not followed it.
+  if (!event.app_user_id) {
+    Sentry.captureException(
+      new Error(`RevenueCat ${event.type} without an app_user_id`),
+      {
+        level: "warning",
+        tags: { source: "revenuecatWebhook" },
+        extra: {
+          eventType: event.type,
+          transferredFrom: event.transferred_from,
+          transferredTo: event.transferred_to,
+        },
+      },
+    );
+    return Response.json({ handled: "ignored" });
+  }
+  const appUserId = event.app_user_id;
+
   try {
     if (action === "revoke") {
       // A sandbox subscription never granted anything, so letting its expiry through
@@ -51,12 +73,16 @@ export async function POST(request: Request) {
       if (isSandbox(event.environment)) {
         return Response.json({ handled: "ignored" });
       }
-      await revokeFederalStatus(drizzleDB, event.app_user_id, occurredAt(event));
+      await revokeFederalStatus(drizzleDB, appUserId, {
+        occurredAt: occurredAt(event),
+        productId: event.product_id,
+        store: event.store ? toStorePlatform(event.store) : null,
+      });
       return Response.json({ handled: "revoked" });
     }
     if (action === "grant" && event.product_id) {
       const outcome = await grantStorePurchase(drizzleDB, {
-        userId: event.app_user_id,
+        userId: appUserId,
         transactionId: idempotencyKey(event),
         productId: event.product_id,
         store: toStorePlatform(event.store),
@@ -83,7 +109,7 @@ export async function POST(request: Request) {
     Sentry.captureException(error, {
       level: "error",
       tags: { source: "revenuecatWebhook" },
-      extra: { eventType: event.type, appUserId: event.app_user_id },
+      extra: { eventType: event.type, appUserId },
     });
     // 5xx so RevenueCat retries something that might be transient.
     return Response.json({ error: "Internal error" }, { status: 500 });

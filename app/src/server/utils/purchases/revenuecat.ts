@@ -19,7 +19,12 @@ export const revenueCatEventSchema = z.object({
   event: z.object({
     type: z.string(),
     id: z.string(),
-    app_user_id: z.string(),
+    /**
+     * Absent on TRANSFER, which names `transferred_from`/`transferred_to` instead. Required
+     * here would make safeParse fail and the route answer 400, which tells RevenueCat to
+     * stop retrying an event it will never redeliver.
+     */
+    app_user_id: z.string().nullish(),
     product_id: z.string().nullish(),
     /** Absent on some event types, in which case the event id stands in. */
     transaction_id: z.string().nullish(),
@@ -29,6 +34,8 @@ export const revenueCatEventSchema = z.object({
     event_timestamp_ms: z.number().nullish(),
     environment: z.string().nullish(),
     entitlement_ids: z.array(z.string()).nullish(),
+    transferred_from: z.array(z.string()).nullish(),
+    transferred_to: z.array(z.string()).nullish(),
   }),
 });
 export type RevenueCatEvent = z.infer<typeof revenueCatEventSchema>["event"];

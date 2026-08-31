@@ -17,14 +17,14 @@ import java.util.Map;
 /**
  * Android's answer to Live Activities.
  *
- * Android 16 (API 36) added Notification.ProgressStyle, which renders a self-updating
- * progress card on the lock screen and a chip in the status bar. It is a different API
- * from ActivityKit rather than a port of it, so this shares only the shape of the calls
- * with the iOS plugin -- start, update, end -- which is what lets
- * app/src/libs/native/liveActivity.ts drive both.
+ * Shares only the shape of the calls with the iOS plugin -- start, update, end -- which is
+ * what lets app/src/libs/native/liveActivity.ts drive both. It is not a port of ActivityKit.
  *
- * Below API 36 there is nothing equivalent, so the same content is posted as an ordinary
- * ongoing notification with a determinate progress bar. It degrades rather than failing.
+ * Every supported release posts the countdown the same way: an ongoing notification with a
+ * determinate progress bar, on its own low-importance channel so it never makes a sound.
+ * Android 16 (API 36) added Notification.ProgressStyle, which would render this as a
+ * lock-screen card and a status-bar chip instead; adopting it is left for when the app
+ * compiles against API 36, and until then the notification is what every release gets.
  */
 @CapacitorPlugin(name = "TNRLiveActivity")
 public class TNRLiveUpdatesPlugin extends Plugin {

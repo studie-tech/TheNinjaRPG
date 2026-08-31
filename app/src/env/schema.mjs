@@ -50,6 +50,14 @@ export const serverSchema = z.object({
   ANDROID_CERT_FINGERPRINTS: z.string().optional(),
   // Shared secret sent by RevenueCat in the Authorization header of every webhook.
   REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
+  /**
+   * Accounts whose sandbox purchases still grant, comma separated.
+   *
+   * TestFlight and App Review always transact in the sandbox, so the reviewer's demo
+   * account belongs here for a submission; leaving it unset means no sandbox receipt ever
+   * moves a balance.
+   */
+  STORE_SANDBOX_USER_IDS: z.string().optional(),
 });
 
 /**
@@ -103,6 +111,7 @@ export const serverEnv = {
   ANDROID_CERT_FINGERPRINTS: process.env.ANDROID_CERT_FINGERPRINTS,
   // RevenueCat
   REVENUECAT_WEBHOOK_SECRET: process.env.REVENUECAT_WEBHOOK_SECRET,
+  STORE_SANDBOX_USER_IDS: process.env.STORE_SANDBOX_USER_IDS,
 };
 
 /**

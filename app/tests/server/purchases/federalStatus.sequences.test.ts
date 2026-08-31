@@ -8,7 +8,7 @@ import {
   storePurchase,
   userData,
 } from "@/drizzle/schema";
-import type { FederalStatus } from "@/drizzle/constants";
+import type { FederalStatus, StorePlatform } from "@/drizzle/constants";
 import {
   federalStatusWithStoreFloor,
   grantStorePurchase,
@@ -41,7 +41,11 @@ const statusOf = async (): Promise<FederalStatus> => {
 };
 
 /** A store purchase as the webhook would have written it, optionally backdated. */
-const buyFederal = async (tier: FederalStatus, agoMs = 0) => {
+const buyFederal = async (
+  tier: FederalStatus,
+  agoMs = 0,
+  store: StorePlatform = "APPLE",
+) => {
   const database = await db();
   await grantStorePurchase(database, {
     userId: USER,
@@ -52,7 +56,7 @@ const buyFederal = async (tier: FederalStatus, agoMs = 0) => {
         : tier === "SILVER"
           ? "tnr_federal_silver"
           : "tnr_federal_normal",
-    store: "APPLE",
+    store,
     isSandbox: false,
     raw: {},
   });
@@ -87,7 +91,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
   it("grants, then gives the tier back on expiry", async () => {
     await buyFederal("GOLD");
     expect(await statusOf()).toBe("GOLD");
-    await revokeFederalStatus(await db(), USER, new Date());
+    await revokeFederalStatus(await db(), USER, { occurredAt: new Date() });
     expect(await statusOf()).toBe("NONE");
   });
 
@@ -95,7 +99,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     await givePaypal("NORMAL");
     await buyFederal("GOLD");
     expect(await statusOf()).toBe("GOLD");
-    await revokeFederalStatus(await db(), USER, new Date());
+    await revokeFederalStatus(await db(), USER, { occurredAt: new Date() });
     expect(await statusOf()).toBe("NORMAL");
   });
 
@@ -105,14 +109,14 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     const endedAt = new Date(Date.now() - 60 * 60 * 1000);
     await buyFederal("GOLD", 2 * 60 * 60 * 1000); // the receipt that expired
     await buyFederal("GOLD"); // bought back in, just now
-    await revokeFederalStatus(await db(), USER, endedAt);
+    await revokeFederalStatus(await db(), USER, { occurredAt: endedAt });
     expect(await statusOf()).toBe("GOLD");
   });
 
   it("lets a PayPal writer take the tier away once both sources have ended", async () => {
     await givePaypal("NORMAL");
     await buyFederal("GOLD");
-    await revokeFederalStatus(await db(), USER, new Date());
+    await revokeFederalStatus(await db(), USER, { occurredAt: new Date() });
     expect(await statusOf()).toBe("NORMAL");
     // now PayPal ends too: the spent store receipt must not hold the tier open
     const next = await federalStatusWithStoreFloor(await db(), USER, "NONE");
@@ -138,12 +142,34 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(next).toBe("GOLD");
   });
 
+  it("retires only the product that expired, not a concurrent one", async () => {
+    // A tier change leaves the old product expiring while the new one is being billed.
+    await buyFederal("NORMAL");
+    await buyFederal("GOLD");
+    await revokeFederalStatus(await db(), USER, {
+      occurredAt: new Date(),
+      productId: "tnr_federal_normal",
+      store: "APPLE",
+    });
+    expect(await statusOf()).toBe("GOLD");
+  });
+
+  it("does not let one store's expiry retire the other store's receipt", async () => {
+    await buyFederal("GOLD", 0, "APPLE");
+    await revokeFederalStatus(await db(), USER, {
+      occurredAt: new Date(),
+      productId: "tnr_federal_gold",
+      store: "GOOGLE",
+    });
+    expect(await statusOf()).toBe("GOLD");
+  });
+
   it("is idempotent when the same expiry is delivered twice", async () => {
     await givePaypal("NORMAL");
     await buyFederal("GOLD");
     const at = new Date();
-    await revokeFederalStatus(await db(), USER, at);
-    await revokeFederalStatus(await db(), USER, at);
+    await revokeFederalStatus(await db(), USER, { occurredAt: at });
+    await revokeFederalStatus(await db(), USER, { occurredAt: at });
     expect(await statusOf()).toBe("NORMAL");
   });
 });
