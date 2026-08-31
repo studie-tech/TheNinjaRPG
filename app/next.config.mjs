@@ -78,6 +78,27 @@ const config = {
         destination: "/",
         permanent: true,
       },
+      // The PHP forum's thread and board URLs are still linked from off-site and were
+      // reported as soft 404s. Point the whole family at the current forum rather than
+      // letting them resolve to the 404 page. Note that Vercel's firewall answers some
+      // .php probe paths at the edge, so these only apply to requests that reach Next.
+      {
+        source: "/:prefix(forums|forum)/:script(showthread|forumdisplay|index).php",
+        destination: "/forum",
+        permanent: true,
+      },
+      {
+        source: "/:script(showthread|forumdisplay|forum).php",
+        destination: "/forum",
+        permanent: true,
+      },
+      // /manual/travel is linked from off-site and 404s; the travel documentation lives
+      // under the world section of the manual.
+      {
+        source: "/manual/travel",
+        destination: "/manual/world",
+        permanent: true,
+      },
     ];
   },
   async headers() {
