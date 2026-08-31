@@ -7,7 +7,6 @@
  */
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Chart as ChartJS } from "chart.js/auto";
 import {
   Award,
   BarChart2,
@@ -1728,72 +1727,85 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
   useEffect(() => {
     const ctx = chartRef?.current?.getContext("2d");
     if (ctx && datasets) {
-      // Update stats chart
-      const chartTextColor = getEffectiveThemeTextColor(activeLayout);
-      ChartJS.defaults.color = chartTextColor;
-      const myChart = new ChartJS(ctx, {
-        type: "bar",
-        options: {
-          maintainAspectRatio: false,
-          responsive: true,
-          aspectRatio: 1.1,
-          scales: {
-            y: {
-              beginAtZero: true,
-              grid: { color: "rgba(148, 163, 184, 0.16)" },
-              ticks: {
-                color: chartTextColor,
-                stepSize: 1,
+      // chart.js/auto registers every controller so nothing tree-shakes it, and this is one
+      // tab among several on a page most visitors land on. Fetched when the log is actually
+      // drawn instead of with the page.
+      // Only destroy() is ever called on it, and chart.js's own generics do not accept the
+      // custom {x, y, entries} points this dataset uses
+      let chart: { destroy: () => void } | undefined;
+      let cancelled = false;
+      void (async () => {
+        const { Chart } = await import("chart.js/auto");
+        // The tab can close, or the theme change, while the import is in flight
+        if (cancelled) return;
+        // Update stats chart
+        const chartTextColor = getEffectiveThemeTextColor(activeLayout);
+        Chart.defaults.color = chartTextColor;
+        chart = new Chart(ctx, {
+          type: "bar",
+          options: {
+            maintainAspectRatio: false,
+            responsive: true,
+            aspectRatio: 1.1,
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: { color: "rgba(148, 163, 184, 0.16)" },
+                ticks: {
+                  color: chartTextColor,
+                  stepSize: 1,
+                },
+                title: {
+                  display: false,
+                  text: "#Events",
+                },
+                stacked: true,
               },
-              title: {
-                display: false,
-                text: "#Events",
+              x: {
+                grid: { color: "rgba(148, 163, 184, 0.16)" },
+                stacked: true,
+                ticks: { color: chartTextColor },
+                title: {
+                  display: true,
+                  color: chartTextColor,
+                  text: "Hour of Day",
+                },
               },
-              stacked: true,
             },
-            x: {
-              grid: { color: "rgba(148, 163, 184, 0.16)" },
-              stacked: true,
-              ticks: { color: chartTextColor },
-              title: {
+            plugins: {
+              legend: {
+                position: "bottom",
                 display: true,
-                color: chartTextColor,
-                text: "Hour of Day",
               },
-            },
-          },
-          plugins: {
-            legend: {
-              position: "bottom",
-              display: true,
-            },
-            tooltip: {
-              callbacks: {
-                title: (tooltipItems) =>
-                  `Training at hour ${tooltipItems?.[0]?.label || "unknown"}`,
-                label: (tooltipItems) => {
-                  const raw = tooltipItems?.raw as {
-                    entries: { trainingFinishedAt: string }[];
-                  };
-                  return (
-                    raw.entries?.map((e) =>
-                      new Date(e.trainingFinishedAt).toLocaleString(),
-                    ) || []
-                  );
+              tooltip: {
+                callbacks: {
+                  title: (tooltipItems) =>
+                    `Training at hour ${tooltipItems?.[0]?.label || "unknown"}`,
+                  label: (tooltipItems) => {
+                    const raw = tooltipItems?.raw as {
+                      entries: { trainingFinishedAt: string }[];
+                    };
+                    return (
+                      raw.entries?.map((e) =>
+                        new Date(e.trainingFinishedAt).toLocaleString(),
+                      ) || []
+                    );
+                  },
                 },
               },
             },
           },
-        },
-        data: {
-          labels: x,
-          datasets: datasets,
-        },
-      });
+          data: {
+            labels: x,
+            datasets: datasets,
+          },
+        });
+      })();
 
       // Remove on unmount
       return () => {
-        myChart.destroy();
+        cancelled = true;
+        chart?.destroy();
       };
     }
   }, [activeLayout, datasets]);
