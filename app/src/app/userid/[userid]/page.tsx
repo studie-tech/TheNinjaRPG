@@ -1,10 +1,22 @@
 import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { cache } from "react";
 import { userData } from "@/drizzle/schema";
 import PublicUserComponent from "@/layout/PublicUser";
 import { showUserRank } from "@/libs/profile";
 import { absoluteUrl, buildMetadata, noindexMetadata } from "@/libs/seo";
 import { drizzleDB } from "@/server/db";
+
+// Cached so generateMetadata and the page render share a single lookup rather than
+// each issuing their own query for the same profile.
+const fetchProfile = cache(async (userid: string) => {
+  return await drizzleDB.query.userData.findFirst({
+    columns: { username: true, level: true, rank: true, isOutlaw: true, avatar: true },
+    with: { village: { columns: { name: true } } },
+    where: eq(userData.userId, userid),
+  });
+});
 
 /**
  * Every profile is reachable both here and at /username/<name>. Search Console reported
@@ -15,11 +27,7 @@ export async function generateMetadata(props: {
   params: Promise<{ userid: string }>;
 }): Promise<Metadata> {
   const params = await props.params;
-  const user = await drizzleDB.query.userData.findFirst({
-    columns: { username: true, level: true, rank: true, isOutlaw: true, avatar: true },
-    with: { village: { columns: { name: true } } },
-    where: eq(userData.userId, params.userid),
-  });
+  const user = await fetchProfile(params.userid);
   if (!user) return noindexMetadata("Player Not Found");
   const rank = showUserRank(user);
   const village = user.village?.name;
@@ -38,6 +46,8 @@ export default async function PublicProfile(props: {
   params: Promise<{ userid: string }>;
 }) {
   const params = await props.params;
+  // Matches /username/<name>: an unknown id answers 404 rather than a 200 soft 404.
+  if (!(await fetchProfile(params.userid))) notFound();
   return (
     <PublicUserComponent
       userId={params.userid}
