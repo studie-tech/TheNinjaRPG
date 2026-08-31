@@ -3174,61 +3174,55 @@ export type AchievementProgress = Omit<UserQuest, "quest">;
 const BOOTSTRAP_QUEST_TYPES = ["tier", "exam"] as const;
 
 /**
- * What the tier/exam bootstrap needs to know before it can decide whether starting a quest is
- * even possible: which quests of those types exist, and which ones this user already has a
- * history row for. `QuestHistory.completed` is `NOT NULL`, so fetchUncompletedQuests' own
- * `isNull(completed)` on a left join matches exactly the quests with no history row — which is
- * what `startedIds` inverts.
+ * What the tier/exam bootstrap needs before it can tell whether starting a quest is even
+ * possible: every quest of those types, each carrying whether this user has a history row for it.
  *
- * Both reads depend only on `userId`, so they belong in fetchUpdatedUser's opening batch rather
- * than costing round-trips of their own. `QuestHistory.questType` is denormalised from the quest,
- * so a retyped quest could leave a history row out of `startedIds`; that can only make the guard
- * pass where it might have skipped, never the reverse.
+ * Deliberately the same left join fetchUncompletedQuests itself performs — on questId and userId,
+ * with `completed` selected — so the guard below can test `completed === null` and be reading the
+ * identical condition rather than an argument that resembles it. Joining rather than reading the
+ * two tables separately also keeps `QuestHistory.questType` out of it, which is denormalised from
+ * the quest and can drift.
+ *
+ * It depends only on `userId`, so it belongs in fetchUpdatedUser's opening batch rather than
+ * costing a round-trip of its own.
  */
 export const fetchQuestBootstrap = (client: DrizzleClient, userId: string) =>
-  scopedRead(`questBootstrap:${userId}`, async () => {
-    const [candidates, started] = await Promise.all([
-      client
-        .select({
-          id: quest.id,
-          questType: quest.questType,
-          requiredLevel: quest.requiredLevel,
-          maxLevel: quest.maxLevel,
-        })
-        .from(quest)
-        .where(inArray(quest.questType, [...BOOTSTRAP_QUEST_TYPES])),
-      client
-        .select({ questId: questHistory.questId })
-        .from(questHistory)
-        .where(
-          and(
-            eq(questHistory.userId, userId),
-            inArray(questHistory.questType, [...BOOTSTRAP_QUEST_TYPES]),
-          ),
-        ),
-    ]);
-    return { candidates, startedIds: new Set(started.map((row) => row.questId)) };
-  });
+  scopedRead(`questBootstrap:${userId}`, () =>
+    client
+      .select({
+        id: quest.id,
+        questType: quest.questType,
+        requiredLevel: quest.requiredLevel,
+        maxLevel: quest.maxLevel,
+        completed: questHistory.completed,
+      })
+      .from(quest)
+      .leftJoin(
+        questHistory,
+        and(eq(questHistory.questId, quest.id), eq(questHistory.userId, userId)),
+      )
+      .where(inArray(quest.questType, [...BOOTSTRAP_QUEST_TYPES])),
+  );
 
 /**
  * Whether starting a quest of this type is even possible, from what fetchQuestBootstrap read.
  *
- * A strict subset of fetchUncompletedQuests' filters — quest type, level band, and no existing
- * history row — so a `false` means that query is guaranteed to return nothing and the round-trip
- * buys nothing. Everything else it filters on (farming level, the date window, quest rank,
- * village, bloodline, sage requirements, hidden) is deliberately not checked here: leaving a
- * filter out can only let a call through that would have been skipped, never the reverse. A
- * `true` still goes to insertNextQuest, which remains the authority.
+ * A strict subset of fetchUncompletedQuests' filters — quest type, level band, and that same
+ * `isNull(completed)` on the join — so a `false` means that query is guaranteed to return nothing
+ * and the round-trip buys nothing. Everything else it filters on (farming level, the date window,
+ * quest rank, village, bloodline, sage requirements, hidden) is deliberately not checked here:
+ * leaving a filter out can only let a call through that would have been skipped, never the
+ * reverse. A `true` still goes to insertNextQuest, which remains the authority.
  */
 export const canBootstrapQuestType = (
-  bootstrap: Awaited<ReturnType<typeof fetchQuestBootstrap>>,
+  candidates: Awaited<ReturnType<typeof fetchQuestBootstrap>>,
   questType: (typeof BOOTSTRAP_QUEST_TYPES)[number],
   level: number,
 ) =>
-  bootstrap.candidates.some(
+  candidates.some(
     (candidate) =>
       candidate.questType === questType &&
-      !bootstrap.startedIds.has(candidate.id) &&
+      candidate.completed === null &&
       candidate.requiredLevel <= level &&
       candidate.maxLevel >= level,
   );
