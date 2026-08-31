@@ -1220,12 +1220,13 @@ const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
         defaultBackHref={defaultBackHref}
         initialBreak={initialBreak}
       >
-        {/* publicUserText is four paragraphs, not a line: a token-height placeholder
-            here would shift the stats panel by hundreds of pixels on arrival, which is
-            the shift this whole component exists to avoid. */}
+        {/* publicUserText is four fixed paragraphs, not a line. Its rendered height is
+            deterministic -- only the username varies -- so it is reserved to measured
+            size rather than approximated: at 24 rows the panel matches the loaded one to
+            within a few pixels at desktop width. */}
         <div className="flex flex-col gap-2">
-          {Array.from({ length: 14 }, (_, i) => (
-            <Skeleton key={i} className="h-4 w-full" />
+          {Array.from({ length: 24 }, (_, i) => (
+            <Skeleton key={i} className={i % 7 === 6 ? "h-4 w-2/3" : "h-4 w-full"} />
           ))}
         </div>
       </ContentBox>
