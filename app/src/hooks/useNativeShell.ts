@@ -8,11 +8,11 @@ import { isNative } from "@/libs/native";
  *
  * The Capacitor bridge only exists in the browser, so calling `isNative()` during render
  * returns false on the server and true in the shell — a mismatch React reports as a
- * hydration error. This settles after mount instead, which means one render as "web"
- * before the shell-specific UI appears.
+ * hydration error. `undefined` keeps sensitive web/native alternatives unmounted until the
+ * bridge has been checked after hydration.
  */
-export const useNativeShell = (): boolean => {
-  const [isShell, setIsShell] = useState(false);
+export const useNativeShell = (): boolean | undefined => {
+  const [isShell, setIsShell] = useState<boolean | undefined>(undefined);
   useEffect(() => setIsShell(isNative()), []);
   return isShell;
 };

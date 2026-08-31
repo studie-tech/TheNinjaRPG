@@ -5704,3 +5704,30 @@ export const storePurchaseRelations = relations(storePurchase, ({ one }) => ({
     references: [userData.userId],
   }),
 }));
+
+/**
+ * Latest subscription period known to have ended for each player's store account.
+ *
+ * Unlike a receipt's `revokedAt`, this survives an EXPIRATION that arrives before the
+ * corresponding purchase webhook. A delayed older grant is compared with this watermark
+ * before it is allowed to change federal status.
+ */
+export const storeEntitlementState = mysqlTable(
+  "StoreEntitlementState",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
+    revokedThrough: datetime("revokedThrough", { mode: "date", fsp: 3 }).notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    userStoreKey: uniqueIndex("StoreEntitlementState_userId_store_key").on(
+      table.userId,
+      table.store,
+    ),
+  }),
+);
+export type StoreEntitlementState = InferSelectModel<typeof storeEntitlementState>;

@@ -73,10 +73,11 @@ export async function POST(request: Request) {
       if (isSandbox(event.environment) && !isSandboxGrantee(appUserId)) {
         return Response.json({ handled: "ignored" });
       }
+      if (!event.store) throw new Error("RevenueCat expiration has no store");
       await revokeFederalStatus(drizzleDB, appUserId, {
         occurredAt: occurredAt(event),
         productId: event.product_id,
-        store: event.store ? toStorePlatform(event.store) : null,
+        store: toStorePlatform(event.store),
       });
       return Response.json({ handled: "revoked" });
     }

@@ -12,7 +12,7 @@
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -52,6 +52,9 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_status_info" />
         </receiver>
+
+        <!-- Cancels locally posted countdowns even when the WebView process is gone. -->
+        <receiver android:name=".TNRLiveUpdateExpiryReceiver" android:exported="false" />
 
         <!-- sentry-android initialises itself from these, so the shell needs no init code.
              The DSN is public by design; it identifies the project and nothing else. -->

@@ -5,6 +5,7 @@ import { beforeEach, expect, it } from "vitest";
 import { nanoid } from "nanoid";
 import {
   paypalSubscription,
+  storeEntitlementState,
   storePurchase,
   userData,
 } from "@/drizzle/schema";
@@ -89,7 +90,12 @@ const givePaypal = async (tier: FederalStatus, status = "ACTIVE") => {
 
 describeWithDatabase("federal status across real webhook sequences", () => {
   beforeEach(async () => {
-    await resetTables(storePurchase, paypalSubscription, userData);
+    await resetTables(
+      storeEntitlementState,
+      storePurchase,
+      paypalSubscription,
+      userData,
+    );
     await insertUsers([{ userId: USER, username: "seq", federalStatus: "NONE" }]);
   });
 
@@ -402,5 +408,68 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(receipt?.grantedAt).toBeNull();
     expect(receipt?.revokedAt).toBeInstanceOf(Date);
     expect(user?.federalStatus).toBe("NONE");
+  });
+
+  it("does not grant a subscription first delivered after its expiry", async () => {
+    const userId = "store-grant-after-expiry";
+    const database = await db();
+    const endedAt = new Date(Date.now() - MINUTE);
+    await insertUsers([{ userId, username: "late-expired", federalStatus: "NONE" }]);
+
+    await revokeFederalStatus(database, userId, {
+      occurredAt: endedAt,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+    });
+    const transactionId = nanoid();
+    await expect(
+      grantStorePurchase(database, {
+        userId,
+        transactionId,
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt: new Date(endedAt.getTime() - MINUTE),
+        raw: {},
+      }),
+    ).resolves.toEqual({ status: "ignored", reason: "Expired purchase" });
+
+    const [receipt, user] = await Promise.all([
+      database.query.storePurchase.findFirst({
+        columns: { grantedAt: true, revokedAt: true },
+        where: eq(storePurchase.transactionId, transactionId),
+      }),
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, userId),
+      }),
+    ]);
+    expect(receipt?.grantedAt).toBeNull();
+    expect(receipt?.revokedAt).toBeInstanceOf(Date);
+    expect(user?.federalStatus).toBe("NONE");
+  });
+
+  it("allows a resubscription purchased after the recorded expiry", async () => {
+    const userId = "store-resubscribe-after-expiry";
+    const database = await db();
+    const endedAt = new Date(Date.now() - MINUTE);
+    await insertUsers([{ userId, username: "late-live", federalStatus: "NONE" }]);
+
+    await revokeFederalStatus(database, userId, {
+      occurredAt: endedAt,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+    });
+    await expect(
+      grantStorePurchase(database, {
+        userId,
+        transactionId: nanoid(),
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt: new Date(endedAt.getTime() + 1),
+        raw: {},
+      }),
+    ).resolves.toMatchObject({ status: "granted", federalStatus: "GOLD" });
   });
 });

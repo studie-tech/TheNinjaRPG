@@ -309,6 +309,13 @@
       "when": 1788174695602,
       "tag": "0043_native_app_foundations",
       "breakpoints": false
+    },
+    {
+      "idx": 44,
+      "version": "5",
+      "when": 1788184387512,
+      "tag": "0044_store_entitlement_state",
+      "breakpoints": false
     }
   ]
 }

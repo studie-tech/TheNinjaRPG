@@ -1,5 +1,6 @@
 package com.theninjarpg.app;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -30,9 +31,12 @@ import java.util.Map;
 public class TNRLiveUpdatesPlugin extends Plugin {
 
     private static final String CHANNEL_ID = TNRNotificationChannels.LIVE_UPDATES_CHANNEL;
-    private static final String PREFS = "tnr_live_updates";
+    static final String PREFS = "tnr_live_updates";
     private static final String KEY_NEXT_ID = "nextNotificationId";
     private static final int FIRST_NOTIFICATION_ID = 8000;
+    static final String EXPIRY_ACTION = "com.theninjarpg.app.EXPIRE_LIVE_UPDATE";
+    static final String EXTRA_ACTIVITY_ID = "activityId";
+    static final String EXTRA_NOTIFICATION_ID = "notificationId";
 
     @PluginMethod
     public void start(PluginCall call) {
@@ -61,12 +65,12 @@ public class TNRLiveUpdatesPlugin extends Plugin {
             activityId = kind + "-" + notificationId;
             rememberActivity(activityId, notificationId);
         }
-        post(notificationId, call, endsAt);
+        post(notificationId, activityId, call, endsAt);
 
         JSObject result = new JSObject();
         result.put("activityId", activityId);
-        // No push token: Android updates these through ordinary FCM messages, so the
-        // server needs nothing extra beyond the device token it already has.
+        // Android owns the countdown and its expiry locally, so there is no ActivityKit
+        // push token to register with the server.
         call.resolve(result);
     }
 
@@ -83,7 +87,7 @@ public class TNRLiveUpdatesPlugin extends Plugin {
             call.reject("endsAtEpochMs is required");
             return;
         }
-        post(notificationId, call, endsAt);
+        post(notificationId, activityId, call, endsAt);
         call.resolve();
     }
 
@@ -92,6 +96,7 @@ public class TNRLiveUpdatesPlugin extends Plugin {
         String activityId = call.getString("activityId");
         Integer notificationId = activityId == null ? null : forgetActivity(activityId);
         if (notificationId != null) {
+            cancelExpiry(activityId, notificationId);
             manager().cancel(notificationId);
         }
         // Already gone is the outcome the caller wanted, so this never rejects.
@@ -106,7 +111,9 @@ public class TNRLiveUpdatesPlugin extends Plugin {
                 continue;
             }
             if (entry.getValue() instanceof Integer) {
-                manager().cancel((Integer) entry.getValue());
+                int notificationId = (Integer) entry.getValue();
+                cancelExpiry(entry.getKey(), notificationId);
+                manager().cancel(notificationId);
             }
         }
         int nextId = prefs.getInt(KEY_NEXT_ID, FIRST_NOTIFICATION_ID);
@@ -121,7 +128,7 @@ public class TNRLiveUpdatesPlugin extends Plugin {
         call.resolve(new JSObject());
     }
 
-    private void post(int notificationId, PluginCall call, long endsAt) {
+    private void post(int notificationId, String activityId, PluginCall call, long endsAt) {
         Context context = getContext();
         String title = call.getString("title", "TheNinja-RPG");
         String subtitle = call.getString("subtitle", "");
@@ -141,6 +148,13 @@ public class TNRLiveUpdatesPlugin extends Plugin {
             // posting an update every second.
             .setUsesChronometer(true)
             .setChronometerCountDown(true);
+
+        // API 26+ lets NotificationManager enforce the same deadline itself. The alarm
+        // below covers API 24-25 and is also a belt-and-braces cleanup if notification
+        // timeout delivery is delayed by an OEM.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder.setTimeoutAfter(Math.max(0, endsAt - System.currentTimeMillis()));
+        }
 
         Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
         if (launch != null) {
@@ -163,6 +177,7 @@ public class TNRLiveUpdatesPlugin extends Plugin {
         }
 
         manager().notify(notificationId, builder.build());
+        scheduleExpiry(activityId, notificationId, endsAt);
     }
 
     /**
@@ -182,6 +197,38 @@ public class TNRLiveUpdatesPlugin extends Plugin {
 
     private NotificationManager manager() {
         return (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+    }
+
+    private PendingIntent expiryIntent(String activityId, int notificationId) {
+        Intent intent = new Intent(getContext(), TNRLiveUpdateExpiryReceiver.class)
+            .setAction(EXPIRY_ACTION)
+            .putExtra(EXTRA_ACTIVITY_ID, activityId)
+            .putExtra(EXTRA_NOTIFICATION_ID, notificationId);
+        return PendingIntent.getBroadcast(
+            getContext(),
+            notificationId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+    }
+
+    private void scheduleExpiry(String activityId, int notificationId, long endsAt) {
+        AlarmManager alarms = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+        if (alarms == null) {
+            return;
+        }
+        alarms.setAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            Math.max(System.currentTimeMillis(), endsAt),
+            expiryIntent(activityId, notificationId)
+        );
+    }
+
+    private void cancelExpiry(String activityId, int notificationId) {
+        AlarmManager alarms = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+        if (alarms != null) {
+            alarms.cancel(expiryIntent(activityId, notificationId));
+        }
     }
 
     /**
@@ -230,7 +277,9 @@ public class TNRLiveUpdatesPlugin extends Plugin {
             if (found == null) {
                 found = key;
             } else {
-                manager().cancel((Integer) entry.getValue());
+                int notificationId = (Integer) entry.getValue();
+                cancelExpiry(key, notificationId);
+                manager().cancel(notificationId);
                 editor.remove(key);
                 cancelled = true;
             }

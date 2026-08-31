@@ -37,7 +37,7 @@ export default function DeviceSettings() {
   const { permission, requestPermission } = useNativePushPermission();
 
   const { data: preferences, refetch } = api.push.getPreferences.useQuery(undefined, {
-    enabled: native,
+    enabled: native === true,
   });
 
   const { mutate: setPreference } = api.push.setPreference.useMutation({

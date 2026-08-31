@@ -16,7 +16,12 @@ import {
   STORE_REP_PRODUCTS,
   type StorePlatform,
 } from "@/drizzle/constants";
-import { paypalSubscription, storePurchase, userData } from "@/drizzle/schema";
+import {
+  paypalSubscription,
+  storeEntitlementState,
+  storePurchase,
+  userData,
+} from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
 import type { DrizzleClient } from "@/server/db";
 
@@ -108,6 +113,24 @@ export const grantStorePurchase = async (
 
   const accepted = !grant.isSandbox || isSandboxGrantee(grant.userId);
 
+  const retireIfExpired = async (): Promise<boolean> => {
+    if (!federal) return false;
+    const expired = await client.query.storeEntitlementState.findFirst({
+      columns: { revokedThrough: true },
+      where: and(
+        eq(storeEntitlementState.userId, grant.userId),
+        eq(storeEntitlementState.store, grant.store),
+        gte(storeEntitlementState.revokedThrough, grant.purchasedAt),
+      ),
+    });
+    if (!expired) return false;
+    await client
+      .update(storePurchase)
+      .set({ revokedAt: new Date() })
+      .where(eq(storePurchase.transactionId, grant.transactionId));
+    return true;
+  };
+
   const [recipient] = await client
     .select({ userId: userData.userId })
     .from(userData)
@@ -172,6 +195,9 @@ export const grantStorePurchase = async (
     }
     if (receipt.grantedAt) return { status: "duplicate" };
     if (receipt.revokedAt) return { status: "ignored", reason: "Revoked purchase" };
+    if (await retireIfExpired()) {
+      return { status: "ignored", reason: "Expired purchase" };
+    }
 
     // PlanetScale cannot wrap the receipt and user in a transaction. Its supported
     // multi-table UPDATE is still one atomic SQL statement: only the delivery that changes
@@ -203,6 +229,12 @@ export const grantStorePurchase = async (
             AND ${storePurchase.grantedAt} IS NULL
             AND ${storePurchase.acceptedAt} IS NOT NULL
             AND ${storePurchase.revokedAt} IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM ${storeEntitlementState}
+              WHERE ${storeEntitlementState.userId} = ${storePurchase.userId}
+                AND ${storeEntitlementState.store} = ${storePurchase.store}
+                AND ${storeEntitlementState.revokedThrough} >= ${storePurchase.purchasedAt}
+            )
         `);
 
     if (result.rowsAffected === 0) {
@@ -213,6 +245,9 @@ export const grantStorePurchase = async (
       if (settled?.grantedAt) return { status: "duplicate" };
       if (settled?.revokedAt) {
         return { status: "ignored", reason: "Revoked purchase" };
+      }
+      if (await retireIfExpired()) {
+        return { status: "ignored", reason: "Expired purchase" };
       }
       throw new Error(`Could not apply store receipt ${grant.transactionId}`);
     }
@@ -295,6 +330,27 @@ export const revokeFederalStatus = async (
       })
     : undefined;
   const cutoff = spent?.purchasedAt ?? occurredAt;
+
+  // Persist the cutoff before touching receipts. If the purchase webhook has not inserted
+  // its row yet, or races this handler, the grant's atomic claim checks this watermark and
+  // cannot resurrect a subscription period the store has already ended.
+  if (store) {
+    await client
+      .insert(storeEntitlementState)
+      .values({
+        id: nanoid(),
+        userId,
+        store,
+        revokedThrough: cutoff,
+        updatedAt: new Date(),
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          revokedThrough: sql`GREATEST(revokedThrough, ${cutoff})`,
+          updatedAt: new Date(),
+        },
+      });
+  }
 
   await client
     .update(storePurchase)

@@ -117,6 +117,9 @@ export default function PaypalShop() {
   const isNativeShell = useNativeShell();
 
   if (!userData) return <Loader explanation="Loading userdata" />;
+  if (isNativeShell === undefined) {
+    return <Loader explanation="Loading store" />;
+  }
 
   // App Store guideline 3.1.1 requires digital goods to be sold through in-app purchase,
   // and both stores treat a web checkout inside the app as a violation. The native shell

@@ -24,7 +24,7 @@ export default function SignupUser() {
     setIsChecking(false);
   }, []);
 
-  if (isChecking) {
+  if (isChecking || isNativeShell === undefined) {
     return null; // Or a loading spinner if preferred
   }
 

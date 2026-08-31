@@ -45,11 +45,11 @@ export default function NativeStore() {
   const [isRestoring, setIsRestoring] = useState(false);
 
   const { data: catalogue } = api.purchases.catalogue.useQuery(undefined, {
-    enabled: isNativeShell,
+    enabled: isNativeShell === true,
   });
   const { data: recent, refetch: refetchRecent } = api.purchases.recent.useQuery(
     { limit: 5 },
-    { enabled: isNativeShell },
+    { enabled: isNativeShell === true },
   );
 
   const storePlatform = platform();

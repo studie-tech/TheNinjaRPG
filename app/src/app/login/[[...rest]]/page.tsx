@@ -13,7 +13,7 @@ export default function LoginUser() {
   const [proceedAnyway, setProceedAnyway] = useState<boolean>(false);
   const isNativeShell = useNativeShell();
 
-  if (isChecking) {
+  if (isChecking || isNativeShell === undefined) {
     return null;
   }
 
