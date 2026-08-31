@@ -49,6 +49,7 @@ import {
   ryoTrade,
   sector,
   staffApplication,
+  storeEntitlementState,
   storePurchase,
   supportReview,
   trainingLog,
@@ -894,6 +895,12 @@ export const staffRouter = createTRPCRouter({
           .update(storePurchase)
           .set({ userId: input.newUserId })
           .where(eq(storePurchase.userId, input.userId)),
+        // Expiration watermarks must follow the receipts they protect. Otherwise a delayed
+        // pre-expiration webhook can re-grant federal status after the account id changes.
+        ctx.drizzle
+          .update(storeEntitlementState)
+          .set({ userId: input.newUserId })
+          .where(eq(storeEntitlementState.userId, input.userId)),
         ctx.drizzle
           .update(userDevice)
           .set({ userId: input.newUserId })

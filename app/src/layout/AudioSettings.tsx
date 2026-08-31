@@ -1,7 +1,7 @@
 "use client";
 
 import { Volume2, VolumeX } from "lucide-react";
-import { createContext, type ReactNode, use, useEffect, useState } from "react";
+import { createContext, type ReactNode, use, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import DeviceSettings from "@/components/native/DeviceSettings";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -53,6 +53,9 @@ export const GlobalAudioProvider: React.FC<{
 }> = ({ children, userData }) => {
   // Mount flag to keep SSR/CSR output in sync
   const [isClient, setIsClient] = useState(false);
+  // Bridge calls are asynchronous. Serialising them guarantees that a late activation can
+  // never overtake the deactivation queued by a subsequent pause.
+  const audioSessionQueue = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -79,6 +82,7 @@ export const GlobalAudioProvider: React.FC<{
 
   // Initialize the single audio instance
   const {
+    isPlaying,
     requiresInteraction,
     enabled: audioEnabled,
     setEnabled: setAudioEnabled,
@@ -103,20 +107,35 @@ export const GlobalAudioProvider: React.FC<{
 
   // In the native shell, claiming an AVAudioSession (iOS) or starting the media service
   // (Android) is what keeps the soundtrack playing once the screen locks. Released as
-  // soon as music is off, so we are not holding other apps' audio ducked for nothing.
+  // soon as playback pauses or fails, so we never advertise a silent media session.
   // No-ops on the web.
   useEffect(() => {
     if (!isClient) return;
-    if (!audioEnabled) {
-      void audioSession.deactivate();
-      return;
-    }
-    void audioSession.activate();
-    void audioSession.setNowPlaying({
-      title: "TheNinja-RPG",
-      artist: userData?.village?.name ?? "Seichi",
-    });
-  }, [audioEnabled, isClient, userData?.village?.name]);
+    audioSessionQueue.current = audioSessionQueue.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (!isPlaying) {
+          await audioSession.deactivate();
+          return;
+        }
+        await audioSession.activate();
+        await audioSession.setNowPlaying({
+          title: "TheNinja-RPG",
+          artist: userData?.village?.name ?? "Seichi",
+        });
+      });
+  }, [isClient, isPlaying, userData?.village?.name]);
+
+  useEffect(
+    () => () => {
+      audioSessionQueue.current = audioSessionQueue.current
+        .catch(() => undefined)
+        .then(async () => {
+          await audioSession.deactivate();
+        });
+    },
+    [],
+  );
 
   // Lock Screen and headset controls. Mirrors the in-game toggle rather than driving the
   // audio element directly, so both routes end in the same state.

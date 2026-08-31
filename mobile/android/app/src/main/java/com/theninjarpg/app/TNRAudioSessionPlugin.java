@@ -48,7 +48,10 @@ public class TNRAudioSessionPlugin extends Plugin {
         boolean rebuilding = activity != null && activity.isChangingConfigurations();
         if (TNRAudioService.listener == mine) {
             TNRAudioService.listener = null;
-            if (running && !rebuilding) {
+            // `running` belongs to this plugin instance, so it is false after an Activity
+            // recreation even though the service deliberately survived the old instance.
+            // stopService is idempotent; use lifecycle state rather than that stale flag.
+            if (!rebuilding) {
                 TNRAudioService.stop(getContext());
                 running = false;
             }

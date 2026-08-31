@@ -22,9 +22,9 @@ APP_TARGET = "App"
 WIDGET_TARGET = "TNRWidgets"
 BUNDLE_ID = ENV.fetch("TNR_APP_ID", "com.theninjarpg.app")
 APP_GROUP = "group.#{BUNDLE_ID}"
-# ActivityKit needs 16.1. The app itself stays lower so iOS 15 devices can still play;
-# the Live Activity code is behind an availability check.
-APP_DEPLOYMENT_TARGET = "15.0"
+# Capacitor 8's generated CapApp-SPM package requires iOS 16. Keep the application target
+# aligned with that package; declaring iOS 15 links code built for a newer deployment target.
+APP_DEPLOYMENT_TARGET = "16.0"
 WIDGET_DEPLOYMENT_TARGET = "16.1"
 
 abort "No Xcode project at #{PROJECT_PATH}. Run `bun run add:ios` first." unless Dir.exist?(PROJECT_PATH)

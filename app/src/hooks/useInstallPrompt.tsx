@@ -3,6 +3,7 @@
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { isNative } from "@/libs/native";
+import { isIOSInstallDevice } from "@/libs/pwaInstall";
 
 /** Delay before the prompt appears, so it never lands on top of a page still loading. */
 const AUTO_SHOW_DELAY_MS = 3000;
@@ -50,15 +51,13 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
-    // Detect iOS
-    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    // Detect iOS, including iPads using desktop-class Safari's Macintosh user agent.
+    const iOS = isIOSInstallDevice(navigator);
     setIsIOS(iOS);
 
     // Detect mobile devices (iOS or Android)
     const mobile =
-      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-        navigator.userAgent,
-      );
+      iOS || /Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     setIsMobile(mobile);
 
     // Check if app is already installed (standalone mode)

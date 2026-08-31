@@ -162,9 +162,15 @@ export default function NativeStore() {
           ? "Purchases restored."
           : "No previous purchases found for this store account.",
       });
-      // A restore replays the same webhooks, so it waits on the same signal. When there
-      // was nothing to restore the poll simply runs out and refetches anyway.
-      await settleAfterPurchase(previousNewestId);
+      if (info?.activeEntitlements.length) {
+        // Restores replay transaction ids the server may already know, so a new recent-row
+        // id is not a completion signal. Reconcile in the background without keeping the
+        // restore control disabled for the full polling window.
+        void settleAfterPurchase(previousNewestId).catch(() => undefined);
+      } else {
+        // There is no webhook to wait for. Refresh once and finish immediately.
+        await Promise.all([refetchRecent(), utils.profile.getUser.invalidate()]);
+      }
     } catch (error) {
       showMutationToast({
         success: false,
