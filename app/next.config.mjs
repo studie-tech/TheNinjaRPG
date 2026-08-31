@@ -78,6 +78,27 @@ const config = {
         destination: "/",
         permanent: true,
       },
+      // The PHP forum's thread and board URLs are still linked from off-site and were
+      // reported as soft 404s. Point the whole family at the current forum rather than
+      // letting them resolve to the 404 page. Note that Vercel's firewall answers some
+      // .php probe paths at the edge, so these only apply to requests that reach Next.
+      {
+        source: "/:prefix(forums|forum)/:script(showthread|forumdisplay|index).php",
+        destination: "/forum",
+        permanent: true,
+      },
+      {
+        source: "/:script(showthread|forumdisplay|forum).php",
+        destination: "/forum",
+        permanent: true,
+      },
+      // /manual/travel is linked from off-site and 404s; the travel documentation lives
+      // under the world section of the manual.
+      {
+        source: "/manual/travel",
+        destination: "/manual/world",
+        permanent: true,
+      },
     ];
   },
   async headers() {
@@ -91,10 +112,12 @@ const config = {
         headers: securityHeaders,
       },
       {
-        // The sitemap is generated per request (it reads seven tables and the build has
-        // no database), so it is cached at the edge instead. Crawlers fetch it rarely,
-        // and a stale copy for an hour is harmless.
-        source: "/sitemap.xml",
+        // The sitemaps are generated per request (they read the database and the build
+        // has none), so they are cached at the edge instead. Crawlers fetch them rarely,
+        // and a stale copy for an hour is harmless. The section names are listed rather
+        // than matched with a wildcard so a typo'd /sitemap-<anything>.xml does not get
+        // its 404 cached at the edge for an hour. Keep in step with SITEMAP_SECTIONS.
+        source: "/:sitemap(sitemap|sitemap-pages|sitemap-manual|sitemap-forum|sitemap-profiles).xml",
         headers: [
           {
             key: "Cache-Control",

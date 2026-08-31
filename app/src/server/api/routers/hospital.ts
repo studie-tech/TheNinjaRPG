@@ -1,5 +1,5 @@
 import type { ExecutedQuery } from "@planetscale/database";
-import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import {
@@ -31,6 +31,7 @@ import {
 } from "@/server/api/trpc";
 import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
 import { findRelationship } from "@/utils/alliance";
+import { secondsFromNow } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
 
 const pusher = getServerPusher();
@@ -79,12 +80,12 @@ export const hospitalRouter = createTRPCRouter({
           user.villageId
             ? inArray(userData.villageId, uniqueVillageIds)
             : isNull(userData.villageId),
-          lte(userData.curHealth, userData.maxHealth),
           or(...MEDNIN_HEALABLE_STATES.map((s) => eq(userData.status, s))),
-          sql`(${userData.maxHealth} - ${userData.curHealth}) > 0`,
+          lt(userData.curHealth, userData.maxHealth),
+          gte(userData.updatedAt, secondsFromNow(-36000)),
         ),
         limit: 10,
-        orderBy: sql`RAND()`,
+        orderBy: [asc(userData.updatedAt), asc(userData.userId)],
       });
     }),
   // Let users heal other users if they are GENIN or above

@@ -266,6 +266,7 @@ export default function CombatPage() {
           currentRound={battle.round}
           className="p-1"
           showBgColor={true}
+          eagerImages={true}
           showLabels={showActionLabels}
           selectedId={actionId}
           combatMode={true}

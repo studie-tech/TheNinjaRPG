@@ -82,7 +82,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           <MultisessionAppSupport>
             <TrpcClientProvider>
-              <UserContextProvider>
+              <UserContextProvider initialIsSignedIn={initialIsSignedIn}>
                 <InstallPromptProvider>
                   {env.NEXT_PUBLIC_MEASUREMENT_ID &&
                     process.env.NODE_ENV === "production" && (

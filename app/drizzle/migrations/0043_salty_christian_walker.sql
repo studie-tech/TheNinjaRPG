@@ -1,0 +1,1 @@
+CREATE INDEX `UserData_sector_updatedAt_idx` ON `UserData` (`sector`,`updatedAt`);

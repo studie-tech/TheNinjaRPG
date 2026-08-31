@@ -114,5 +114,8 @@ export const buildMetadata = ({
  */
 export const noindexMetadata = (title: string): Metadata => ({
   title: { absolute: `${title} | ${SITE_NAME}` },
-  robots: { index: false, follow: false },
+  // index only. These screens link onward to manual and profile URLs that the sitemap
+  // does advertise, and `follow: false` would tell Google to ignore those links -- a
+  // good way to strand the very pages this metadata exists to help get indexed.
+  robots: { index: false },
 });

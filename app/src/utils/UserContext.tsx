@@ -54,6 +54,8 @@ export const UserContext = createContext<{
   timeDiff: number;
   userId: string | null | undefined;
   isClerkLoaded: boolean;
+  /** Server-known auth state until Clerk finishes loading, then Clerk's live state. */
+  isSignedIn: boolean;
   updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
   updateNotifications: (
     notifications: NavBarDropdownLink[] | undefined,
@@ -68,6 +70,7 @@ export const UserContext = createContext<{
   timeDiff: 0,
   userId: null,
   isClerkLoaded: false,
+  isSignedIn: false,
   updateUser: async () => {
     // do nothing
   },
@@ -84,13 +87,19 @@ export const UserContext = createContext<{
  * @param props.children - The child components.
  * @returns The UserContextProvider component.
  */
-export function UserContextProvider(props: { children: React.ReactNode }) {
+export function UserContextProvider(props: {
+  children: React.ReactNode;
+  initialIsSignedIn: boolean;
+}) {
   // Difference between client time and server time
   const [timeDiff, setTimeDiff] = useState<number>(0);
 
   // Get logged in user
   const { isSignedIn, isLoaded, user } = useUser();
   const userId = user?.id;
+  // Preserve the server-known state through hydration. Using `!!data` as an auth signal
+  // makes signed-in pages briefly render their anonymous tree while getUser is pending.
+  const effectiveIsSignedIn = isLoaded ? !!isSignedIn : props.initialIsSignedIn;
 
   // tRPC utility
   const utils = api.useUtils();
@@ -181,6 +190,7 @@ export function UserContextProvider(props: { children: React.ReactNode }) {
         timeDiff: timeDiff,
         userId: userId,
         isClerkLoaded: isLoaded,
+        isSignedIn: effectiveIsSignedIn,
         updateUser: updateUser,
         updateNotifications: updateNotifications,
       }}

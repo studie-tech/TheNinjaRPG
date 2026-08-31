@@ -176,7 +176,7 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
   const { mutate: userHeal, isPending } = api.hospital.userHeal.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      await utils.hospital.getHospitalizedUsers.invalidate();
+      void utils.hospital.getHospitalizedUsers.invalidate();
       if (data.success && userData) {
         await updateUser({
           curChakra: userData.curChakra - (data.chakraCost || 0),
@@ -199,9 +199,9 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
       ),
     [hospitalized],
   );
-  // What the buttons compare against, read fresh: the hospitalized list is re-randomised on every
-  // five-second poll, so a threshold can arrive that falls between a stored sample and the real
-  // capacity, and an affordable button would render disabled until an effect caught up.
+  // What the buttons compare against, read fresh: a refetch can replace patients, so a threshold
+  // can arrive that falls between a stored sample and the real capacity, and an affordable button
+  // would render disabled until an effect caught up.
   const maxHeal = currentHealCapacity(userData, timeDiff);
   // The sample is not rendered — it exists to schedule a re-render, and only when the answer to
   // one of those threshold questions changes, so regenerating chakra repaints this table when a

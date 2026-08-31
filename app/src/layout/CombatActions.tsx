@@ -62,6 +62,12 @@ interface ActionSelectorSettingsProps {
   lastElement?: HTMLDivElement | null;
   setLastElement?: (el: HTMLDivElement | null) => void;
   showInfoIcon?: boolean;
+  /**
+   * Load every tile's art immediately. Only the combat action bar sets it: it is on screen the
+   * moment combat opens and holds a handful of actions, unlike the catalogs which are long and
+   * mostly below the fold.
+   */
+  eagerImages?: boolean;
   combatMode?: boolean;
   userActionPoints?: number;
   battle?: ReturnedBattle | null;
@@ -315,6 +321,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
             hideBorder={settings.hideBorder}
             frames={frames}
             speed={speed}
+            eager={settings.eagerImages}
             onClick={handleClick}
           />
         )}

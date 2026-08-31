@@ -60,6 +60,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
@@ -189,7 +190,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const [showActive, setShowActive] = useState("nindo");
   const [showForceAwakeModal, setShowForceAwakeModal] = useState(false);
   const [forceAwakeReason, setForceAwakeReason] = useState("");
-  const { data: userData } = useUserData();
+  const { data: userData, isSignedIn } = useUserData();
+  const isGuest = !isSignedIn;
 
   const canSeeSecrets = userData && canSeeSecretData(userData.role);
   const enableReports = showReports && canSeeSecrets;
@@ -359,7 +361,16 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const canChange = userData && canClearUserNindo(userData);
 
   // Loaders
-  if (isPendingProfile) return <Loader explanation="Fetching Public User Data" />;
+  if (isPendingProfile) {
+    return (
+      <PublicUserSkeleton
+        title={title}
+        defaultBackHref={defaultBackHref}
+        initialBreak={initialBreak}
+        isGuest={isGuest}
+      />
+    );
+  }
 
   // Show profile
   if (!profile) {
@@ -381,7 +392,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   // Render
   return (
     <>
-      {!userData && (
+      {isGuest && (
         <ContentBox
           title="Public Profile"
           subtitle={`Profile: ${profileName}`}
@@ -394,9 +405,9 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       {/* USER STATISTICS */}
       <ContentBox
         title={title}
-        defaultBackHref={userData ? defaultBackHref : undefined}
+        defaultBackHref={isGuest ? undefined : defaultBackHref}
         subtitle={`Profile: ${profileName}`}
-        initialBreak={userData ? initialBreak : true}
+        initialBreak={isGuest ? true : initialBreak}
         topRightContent={
           <div className="flex flex-row items-center gap-1 [&_svg]:block">
             {userData && canCloneUser(userData.role) && (
@@ -1174,6 +1185,85 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
 };
 
 export default PublicUserComponent;
+
+interface PublicUserSkeletonProps {
+  title: string;
+  defaultBackHref?: string;
+  initialBreak?: boolean;
+  /** Mirrors the stable signed-in state used by the loaded render. */
+  isGuest: boolean;
+}
+
+/**
+ * Placeholder shown while the profile query is in flight.
+ *
+ * The profile is fetched client-side, so the server render carries none of it. A bare
+ * spinner is a few dozen pixels tall and the loaded profile is several hundred, which
+ * moved everything below it on arrival and put the /username/* template over the poor
+ * Cumulative Layout Shift threshold in Search Console.
+ *
+ * The structure below deliberately mirrors the loaded render rather than approximating
+ * it: the same guest-only intro box, the same two-column grid, and an avatar reserved at
+ * the same `w-full` the loaded one is given. A placeholder that reserves the wrong shape
+ * still shifts the page, just by less.
+ */
+const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
+  title,
+  defaultBackHref,
+  initialBreak,
+  isGuest,
+}) => (
+  <>
+    {isGuest && (
+      <ContentBox
+        title="Public Profile"
+        subtitle="Loading profile"
+        defaultBackHref={defaultBackHref}
+        initialBreak={initialBreak}
+      >
+        {/* publicUserText is four fixed paragraphs, not a line. Its rendered height is
+            deterministic -- only the username varies -- so it is reserved to measured
+            size rather than approximated: at 24 rows the panel matches the loaded one to
+            within a few pixels at desktop width. */}
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 24 }, (_, i) => (
+            <Skeleton key={i} className={i % 7 === 6 ? "h-4 w-2/3" : "h-4 w-full"} />
+          ))}
+        </div>
+      </ContentBox>
+    )}
+    <ContentBox
+      title={title}
+      subtitle="Loading profile"
+      defaultBackHref={isGuest ? undefined : defaultBackHref}
+      initialBreak={isGuest ? true : initialBreak}
+    >
+      <div className="grid grid-cols-2">
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 23 }, (_, i) => (
+            <Skeleton key={i} className="h-4 w-11/12" />
+          ))}
+        </div>
+        <div>
+          <div className="basis-1/3">
+            <div className="relative flex justify-center">
+              <Skeleton className="aspect-square w-full max-w-80 rounded-2xl" />
+            </div>
+            <div className="mt-2">
+              {Array.from({ length: 3 }, (_, i) => (
+                <div key={i} className="group relative flex-row">
+                  <Skeleton className="h-4 w-1/3 rounded-none" />
+                  <Skeleton className="h-3 w-full rounded-none border-2 border-black" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      <Loader explanation="Fetching Public User Data" />
+    </ContentBox>
+  </>
+);
 
 interface EditUserComponentProps {
   userId: string;

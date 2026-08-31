@@ -4,6 +4,6 @@ apple_id ENV["APPLE_ID"]
 team_id ENV["APPLE_TEAM_ID"]
 
 for_platform :android do
-  package_name ENV.fetch("ANDROID_PACKAGE_NAME", "com.theninjarpg.app")
+  package_name ENV.fetch("TNR_APP_ID", "com.theninjarpg.app")
   json_key_file ENV["PLAY_SERVICE_ACCOUNT_JSON"]
 end

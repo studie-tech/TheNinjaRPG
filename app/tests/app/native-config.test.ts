@@ -42,6 +42,7 @@ describe("native release configuration", () => {
 
   it("propagates the configured app id through both native projects", () => {
     const android = readRepoFile("mobile/android/app/build.gradle");
+    const fastlane = readRepoFile("mobile/fastlane/Appfile");
     const configureIos = readRepoFile("mobile/scripts/configure-xcode.rb");
     const appEntitlements = readRepoFile("mobile/ios/App/App/App.entitlements");
     const widgetEntitlements = readRepoFile(
@@ -51,6 +52,8 @@ describe("native release configuration", () => {
 
     expect(android).toContain("System.getenv('TNR_APP_ID')");
     expect(android).toContain("applicationId tnrAppId");
+    expect(fastlane).toContain('package_name ENV.fetch("TNR_APP_ID"');
+    expect(fastlane).not.toContain("ANDROID_PACKAGE_NAME");
     expect(configureIos).toContain('set_setting(app, "TNR_APP_GROUP", APP_GROUP)');
     expect(configureIos).toContain('set_setting(widget, "TNR_APP_GROUP", APP_GROUP)');
     expect(appEntitlements).toContain("$(TNR_APP_GROUP)");

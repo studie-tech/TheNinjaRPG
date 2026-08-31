@@ -175,17 +175,29 @@ export const GlobalAudioProvider: React.FC<{
     autoPlay: isClient,
   });
 
-  // Sync with user data changes
+  const savedMusicOn = userData?.musicOn;
+  const savedButtonSfxOn = userData?.buttonSfxOn;
+
+  // Sync saved preferences when those preferences actually change. Lock-screen controls
+  // are transient playback commands, so an unrelated profile refresh must not overwrite
+  // the local play/pause state they selected.
   useEffect(() => {
     if (!isClient) return;
-    if (userData) {
-      void setAudioEnabled(!!userData.musicOn);
-      setButtonSfxOn(getInitialButtonSfxState());
+    if (savedMusicOn !== undefined) {
+      void setAudioEnabled(savedMusicOn);
     } else {
       void setAudioEnabled(getInitialMusicState());
+    }
+  }, [isClient, savedMusicOn]);
+
+  useEffect(() => {
+    if (!isClient) return;
+    if (savedButtonSfxOn !== undefined) {
+      setButtonSfxOn(savedButtonSfxOn);
+    } else {
       setButtonSfxOn(getInitialButtonSfxState());
     }
-  }, [isClient, userData]);
+  }, [isClient, savedButtonSfxOn]);
 
   // Claim the native media session only while the soundtrack is actually playing. On the
   // web these bridge methods are no-ops.

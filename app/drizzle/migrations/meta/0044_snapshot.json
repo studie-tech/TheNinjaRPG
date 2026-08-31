@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "04291796-4178-4b1e-b8f4-e868b3f59dc6",
-  "prevId": "9c5509eb-35ce-4e85-aeb1-a393fbc925de",
+  "id": "a3c0adeb-f4b9-435b-9212-b48b03bb7ab4",
+  "prevId": "564c721e-6432-408f-bcba-179d39f16ac6",
   "tables": {
     "AbEvent": {
       "name": "AbEvent",
@@ -13485,6 +13485,14 @@
           "name": "UserData_sector_idx",
           "columns": [
             "sector"
+          ],
+          "isUnique": false
+        },
+        "UserData_sector_updatedAt_idx": {
+          "name": "UserData_sector_updatedAt_idx",
+          "columns": [
+            "sector",
+            "updatedAt"
           ],
           "isUnique": false
         },

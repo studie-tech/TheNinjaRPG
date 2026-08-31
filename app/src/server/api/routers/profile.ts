@@ -18,6 +18,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { customAlphabet, nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -71,6 +72,7 @@ import {
   insertAiSchema,
   item,
   jutsu,
+  jutsuReskin,
   mpvpBattleQueue,
   notification,
   poll,
@@ -85,6 +87,7 @@ import {
   userBlackList,
   userData,
   userItem,
+  userItemImbuement,
   userJutsu,
   userNindo,
   userPollVote,
@@ -198,6 +201,68 @@ import {
 const pusher = getServerPusher();
 
 export const profileRouter = createTRPCRouter({
+  getSidebarTimers: protectedProcedure.query(async ({ ctx }) => {
+    const now = sql`NOW()`;
+    const imbuedItem = alias(item, "imbuedItem");
+
+    const [jutsuTrainingRows, craftingRows, imbuementRows] = await Promise.all([
+      ctx.drizzle
+        .select({
+          name: sql<string>`COALESCE(${jutsuReskin.name}, ${jutsu.name})`,
+          level: userJutsu.level,
+          finishTraining: userJutsu.finishTraining,
+        })
+        .from(userJutsu)
+        .innerJoin(jutsu, eq(userJutsu.jutsuId, jutsu.id))
+        .leftJoin(jutsuReskin, eq(userJutsu.reskinId, jutsuReskin.id))
+        .where(and(eq(userJutsu.userId, ctx.userId), gt(userJutsu.finishTraining, now)))
+        .orderBy(asc(userJutsu.finishTraining))
+        .limit(1),
+      ctx.drizzle
+        .select({
+          itemName: item.name,
+          craftingFinishedAt: userItem.craftingFinishedAt,
+        })
+        .from(userItem)
+        .innerJoin(item, eq(userItem.itemId, item.id))
+        .where(
+          and(eq(userItem.userId, ctx.userId), gt(userItem.craftingFinishedAt, now)),
+        )
+        .orderBy(asc(userItem.craftingFinishedAt))
+        .limit(1),
+      ctx.drizzle
+        .select({
+          imbuedName: imbuedItem.name,
+          targetName: item.name,
+          craftingFinishedAt: userItemImbuement.craftingFinishedAt,
+        })
+        .from(userItemImbuement)
+        .innerJoin(userItem, eq(userItemImbuement.userItemId, userItem.id))
+        .innerJoin(item, eq(userItem.itemId, item.id))
+        .innerJoin(imbuedItem, eq(userItemImbuement.imbuementItemId, imbuedItem.id))
+        .where(
+          and(
+            eq(userItem.userId, ctx.userId),
+            gt(userItemImbuement.craftingFinishedAt, now),
+          ),
+        )
+        .orderBy(asc(userItemImbuement.craftingFinishedAt))
+        .limit(1),
+    ]);
+
+    const jutsuTraining = jutsuTrainingRows[0];
+    const crafting = craftingRows[0];
+
+    return {
+      jutsuTraining: jutsuTraining?.finishTraining
+        ? { ...jutsuTraining, finishTraining: jutsuTraining.finishTraining }
+        : null,
+      crafting: crafting?.craftingFinishedAt
+        ? { ...crafting, craftingFinishedAt: crafting.craftingFinishedAt }
+        : null,
+      imbuement: imbuementRows[0] ?? null,
+    };
+  }),
   // Update battle description setting
   updateBattleDescription: protectedProcedure
     .meta({

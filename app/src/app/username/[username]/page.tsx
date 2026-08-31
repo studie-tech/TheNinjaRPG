@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { cache } from "react";
 import { userData } from "@/drizzle/schema";
 import PublicUserComponent from "@/layout/PublicUser";
@@ -49,9 +50,12 @@ export default async function PublicProfile(props: {
 }) {
   const params = await props.params;
   const user = await fetchProfile(params.username);
+  // Unresolvable profiles previously rendered a "does not exist" body under HTTP 200,
+  // which Google indexes as a soft 404. Answering with a real 404 keeps them out.
+  if (!user) notFound();
   return (
     <PublicUserComponent
-      userId={user?.userId || params.username}
+      userId={user.userId}
       title="Users"
       defaultBackHref="/users"
       showRecruited

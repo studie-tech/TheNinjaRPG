@@ -21,6 +21,15 @@ interface ContentImageProps {
   className: string;
   roundFull?: boolean;
   hideBorder?: boolean;
+  /**
+   * Load this tile immediately instead of when it scrolls into view. Only for grids that are
+   * above the fold on arrival — everything else is a catalog the player may never scroll, and
+   * eager tiles there compete with the images they can actually see.
+   *
+   * `loading` rather than `preload`: next/image's own guidance is to preload only a single LCP
+   * candidate, and every consumer of this is a grid of many equal images.
+   */
+  eager?: boolean;
   onClick?: () => void;
 }
 
@@ -100,7 +109,7 @@ const ContentImage: React.FC<ContentImageProps> = (props) => {
           alt={props.alt}
           width={125}
           height={125}
-          priority={true}
+          loading={props.eager ? "eager" : "lazy"}
           onClick={props.onClick}
         />
       );
@@ -127,7 +136,7 @@ const ContentImage: React.FC<ContentImageProps> = (props) => {
             alt={props.alt}
             width={125}
             height={125}
-            priority={true}
+            loading={props.eager ? "eager" : "lazy"}
             onClick={props.onClick}
           />
         </div>
