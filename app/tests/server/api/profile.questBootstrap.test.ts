@@ -2,7 +2,10 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { quest, questHistory, type UserData } from "@/drizzle/schema";
-import { fetchQuestBootstrap } from "../../../src/server/api/routers/profile";
+import {
+  canBootstrapQuestType,
+  fetchQuestBootstrap,
+} from "../../../src/server/api/routers/profile";
 import { fetchUncompletedQuests } from "../../../src/server/api/routers/quests";
 import { insertQuestHistory, insertQuests } from "../../setup/factories";
 import {
@@ -17,26 +20,21 @@ import {
  * overwhelming majority of players. A JS guard now skips the call when nothing could possibly
  * match.
  *
- * The guard is only safe while it stays a strict SUBSET of that query's filters, so what matters
- * is one direction: whenever the guard says "impossible", the real query must genuinely return
- * nothing. These tests assert that against a real database rather than a mock, so the day someone
- * adds a filter to `fetchUncompletedQuests` and the two drift apart, this is what notices.
+ * The guard is only safe while it stays a strict SUBSET of that query's filters, so one direction
+ * is what matters: whenever it says "impossible", the real query must genuinely return nothing.
+ * These tests assert that against a real database rather than a mock.
+ *
+ * They call the shipped `canBootstrapQuestType`, deliberately. An earlier version of this file
+ * re-implemented the predicate locally, which meant it went on passing while the real guard was
+ * broken — tightening its level check to `>` would have denied every level-50 player their tier
+ * quest with the suite still green.
+ *
+ * Note which direction each assertion protects. A filter added to `fetchUncompletedQuests` makes
+ * the query stricter, which keeps the guard a subset and is always safe. A filter added to the
+ * GUARD is what can start skipping real work, and that is what the skip-implies-empty assertion
+ * below is for.
  */
 const BAND = { requiredLevel: 10, maxLevel: 50 } as const;
-
-/** Mirrors the guard in fetchUpdatedUser. Kept here in full so a change there fails this file. */
-const guardSaysPossible = (
-  bootstrap: Awaited<ReturnType<typeof fetchQuestBootstrap>>,
-  questType: "tier" | "exam",
-  level: number,
-) =>
-  bootstrap.candidates.some(
-    (candidate) =>
-      candidate.questType === questType &&
-      !bootstrap.startedIds.has(candidate.id) &&
-      candidate.requiredLevel <= level &&
-      candidate.maxLevel >= level,
-  );
 
 const asUser = (level: number) =>
   ({
@@ -69,21 +67,22 @@ describeWithDatabase("quest bootstrap guard", () => {
     // Around, on, and well outside the quest's band
     for (const level of [1, 9, 10, 11, 30, 49, 50, 51, 80]) {
       const bootstrap = await fetchQuestBootstrap(database, "user-guard");
-      const possible = guardSaysPossible(bootstrap, "tier", level);
+      const possible = canBootstrapQuestType(bootstrap, "tier", level);
       const rows = await fetchUncompletedQuests(database, asUser(level), "tier");
-      if (possible) sawPossible = true;
-      else {
+      if (possible) {
+        sawPossible = true;
+        // Only sound because this fixture clears the filters the guard does not look at; a new
+        // filter on the query would legitimately break this without breaking the guard
+        expect(rows.length, `level ${level}: guard passed on an empty query`).toBeGreaterThan(0);
+      } else {
         sawImpossible = true;
         // The direction that matters: skipping must never lose a startable quest
         expect(rows, `level ${level}: guard skipped a non-empty query`).toHaveLength(0);
       }
-      // And when it does let the call through, the query really has something for it
-      if (possible) {
-        expect(rows.length, `level ${level}: guard passed on an empty query`).toBeGreaterThan(0);
-      }
     }
 
-    // Neither branch may be vacuous, or the loop above proves nothing
+    // Neither branch may be vacuous, or the loop above proves nothing — and a guard stuck at
+    // `true` (safe but useless) or `false` (silently skipping everyone) fails right here
     expect(sawPossible).toBe(true);
     expect(sawImpossible).toBe(true);
   });
@@ -97,7 +96,7 @@ describeWithDatabase("quest bootstrap guard", () => {
 
     // In-band with nothing started: the call has to go through
     expect(
-      guardSaysPossible(await fetchQuestBootstrap(database, "user-guard"), "tier", 30),
+      canBootstrapQuestType(await fetchQuestBootstrap(database, "user-guard"), "tier", 30),
     ).toBe(true);
 
     // A history row exists even when the quest was never finished, and
@@ -109,7 +108,7 @@ describeWithDatabase("quest bootstrap guard", () => {
     ]);
 
     const bootstrap = await fetchQuestBootstrap(database, "user-guard");
-    expect(guardSaysPossible(bootstrap, "tier", 30)).toBe(false);
+    expect(canBootstrapQuestType(bootstrap, "tier", 30)).toBe(false);
     expect(await fetchUncompletedQuests(database, asUser(30), "tier")).toHaveLength(0);
   });
 
@@ -121,7 +120,7 @@ describeWithDatabase("quest bootstrap guard", () => {
     const bootstrap = await fetchQuestBootstrap(database, "user-guard");
 
     expect(bootstrap.candidates.some((c) => c.questType === "exam")).toBe(false);
-    expect(guardSaysPossible(bootstrap, "exam", 30)).toBe(false);
+    expect(canBootstrapQuestType(bootstrap, "exam", 30)).toBe(false);
     expect(await fetchUncompletedQuests(database, asUser(30), "exam")).toHaveLength(0);
   });
 
