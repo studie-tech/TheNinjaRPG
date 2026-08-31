@@ -28,7 +28,12 @@ const GRANT_POLL_DELAYS_MS = [1000, 2000, 3000, 5000, 5000, 5000];
  */
 export default function NativeStore() {
   const isNativeShell = useNativeShell();
-  const { data: userData } = useUserData();
+  const { data: userData, userId } = useUserData();
+  // The profile query keeps its last result once it is disabled, so cached userData
+  // outlives the session. Treating it as the current player would leave the store up and
+  // buyable after a sign-out has already logged RevenueCat out, and the purchase would
+  // reach a webhook with nobody to credit.
+  const player = userId && userData?.userId === userId ? userData : undefined;
   const utils = api.useUtils();
   const [products, setProducts] = useState<purchases.StoreProduct[] | null>(null);
   const [busyProduct, setBusyProduct] = useState<string | null>(null);
@@ -50,7 +55,7 @@ export default function NativeStore() {
   // Binding the SDK to the player's own id is what lets the webhook know who to credit;
   // without it a purchase is validated and then dropped.
   useEffect(() => {
-    if (!isNativeShell || !userData?.userId) return;
+    if (!isNativeShell || !player?.userId) return;
     if (!apiKey) {
       // isConfigured only reflects the server's webhook secret, so a build with that set
       // and the public SDK key missing would otherwise spin forever with no explanation.
@@ -58,15 +63,15 @@ export default function NativeStore() {
       return;
     }
     void purchases
-      .configure(apiKey, userData.userId)
+      .configure(apiKey, player.userId)
       // configure binds the id only the first time it runs for this process; RevenueCat
       // ignores a later one. Sign-out logs the SDK out, so without this the next session
       // would purchase as an anonymous id and the webhook would have nobody to credit.
-      .then(() => purchases.logIn(userData.userId))
+      .then(() => purchases.logIn(player.userId))
       .then(() => purchases.getProducts())
       .then(setProducts)
       .catch(() => setProducts([]));
-  }, [apiKey, isNativeShell, userData?.userId]);
+  }, [apiKey, isNativeShell, player?.userId]);
 
   /**
    * Wait for the webhook, then refetch the balance.
@@ -149,7 +154,7 @@ export default function NativeStore() {
   };
 
   if (!isNativeShell) return null;
-  if (!userData) return <Loader explanation="Loading userdata" />;
+  if (!player) return <Loader explanation="Loading userdata" />;
 
   if (catalogue && !catalogue.isConfigured) {
     return (
@@ -164,7 +169,7 @@ export default function NativeStore() {
   return (
     <ContentBox
       title="Store"
-      subtitle={`You have ${userData.reputationPoints} reputation points`}
+      subtitle={`You have ${player.reputationPoints} reputation points`}
       alreadyHasH1
     >
       {products === null ? (
@@ -209,7 +214,7 @@ export default function NativeStore() {
               <p className="mt-4 mb-1 font-medium text-sm">Federal support</p>
               {catalogue.federal.map((plan) => {
                 const listed = products.find((p) => p.identifier === plan.productId);
-                const isCurrent = userData.federalStatus === plan.federalStatus;
+                const isCurrent = player.federalStatus === plan.federalStatus;
                 return (
                   <div
                     key={plan.productId}

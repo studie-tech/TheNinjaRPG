@@ -71,16 +71,21 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
   useEffect(() => {
     if (!isNative() || !enabled) return;
 
+    // A new registration session starts here, so anything still in flight belongs to one
+    // that has ended: a registration whose result would be written back, or a sign-out's
+    // detach, which deletes by token and would otherwise remove the row this session is
+    // about to create. Bumping the epoch is what tells them to stand down.
+    registrationEpoch += 1;
+
     // One player replacing another on the same phone, with no signed-out gap to run the
     // cleanup. The device row is keyed on the token, so the handoff has to happen again to
     // move it — but the token is the same token, and the guard below would drop it as a
     // repeat, leaving the row pointing at whoever was here before. Forget the previous
-    // session's token so the handoff goes through, invalidate anything still in flight for
-    // it, and drop the widget credential, which belongs to the account being left.
-    // Skipped on the first run, so a relaunch keeps the credential it already had.
+    // session's token so the handoff goes through, and drop the widget credential, which
+    // belongs to the account being left. Skipped on the first run, so a relaunch keeps the
+    // credential it already had.
     if (lastAccount.current !== undefined && lastAccount.current !== accountId) {
       registeredToken.current = null;
-      registrationEpoch += 1;
       setWidgetToken(undefined);
       safeLocalStorageRemoveItem(WIDGET_TOKEN_KEY);
     }
@@ -140,6 +145,7 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
     // Invalidate first, so a registration racing this cannot write its result back after
     // the row has been deleted.
     registrationEpoch += 1;
+    const epoch = registrationEpoch;
     setWidgetToken(undefined);
     // The widget credential belongs to the account being left, and nothing below needs it.
     safeLocalStorageRemoveItem(WIDGET_TOKEN_KEY);
@@ -152,6 +158,10 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
     const token = registeredToken.current ?? safeLocalStorageGetItem(LAST_TOKEN_KEY);
     if (!token) return;
     registeredToken.current = null;
+    // Somebody signed in while the wait above was running. Their registration has already
+    // bound this token to them, and the delete is by token rather than by account, so going
+    // ahead would unbind the session that is actually here.
+    if (epoch !== registrationEpoch) return;
     try {
       await detachToken({ token });
       // Only once the row is actually gone. Discarding the token first and swallowing the
