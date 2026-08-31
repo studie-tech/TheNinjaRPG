@@ -350,4 +350,57 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     });
     expect(user?.reputationPoints).toBe((before?.reputationPoints ?? 0) + 8);
   });
+
+  it("does not grant a pending subscription after it has expired", async () => {
+    const userId = "store-grant-expired";
+    const transactionId = nanoid();
+    await insertUsers([{ userId, username: "expired", federalStatus: "NONE" }]);
+    const database = await db();
+    const grant = {
+      userId,
+      transactionId,
+      productId: "tnr_federal_gold",
+      store: "APPLE" as const,
+      isSandbox: false,
+      purchasedAt: new Date(Date.now() - MINUTE),
+      raw: {},
+    };
+
+    // Leave the receipt pending by rejecting the atomic status/claim statement.
+    await database.execute(
+      sql.raw(
+        `ALTER TABLE UserData ADD CONSTRAINT fail_store_federal_grant CHECK (userId <> '${userId}' OR federalStatus <> 'GOLD')`,
+      ),
+    );
+    try {
+      await expect(grantStorePurchase(database, grant)).rejects.toThrow();
+    } finally {
+      await database.execute(
+        sql.raw("ALTER TABLE UserData DROP CHECK fail_store_federal_grant"),
+      );
+    }
+
+    await revokeFederalStatus(database, userId, {
+      occurredAt: new Date(),
+      productId: grant.productId,
+      store: grant.store,
+    });
+    await expect(grantStorePurchase(database, grant)).resolves.toEqual({
+      status: "ignored",
+      reason: "Revoked purchase",
+    });
+    const [receipt, user] = await Promise.all([
+      database.query.storePurchase.findFirst({
+        columns: { grantedAt: true, revokedAt: true },
+        where: eq(storePurchase.transactionId, transactionId),
+      }),
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, userId),
+      }),
+    ]);
+    expect(receipt?.grantedAt).toBeNull();
+    expect(receipt?.revokedAt).toBeInstanceOf(Date);
+    expect(user?.federalStatus).toBe("NONE");
+  });
 });

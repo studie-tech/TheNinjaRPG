@@ -151,6 +151,7 @@ export const grantStorePurchase = async (
         store: true,
         acceptedAt: true,
         grantedAt: true,
+        revokedAt: true,
       },
       where: eq(storePurchase.transactionId, grant.transactionId),
     });
@@ -170,6 +171,7 @@ export const grantStorePurchase = async (
         : { status: "duplicate" };
     }
     if (receipt.grantedAt) return { status: "duplicate" };
+    if (receipt.revokedAt) return { status: "ignored", reason: "Revoked purchase" };
 
     // PlanetScale cannot wrap the receipt and user in a transaction. Its supported
     // multi-table UPDATE is still one atomic SQL statement: only the delivery that changes
@@ -185,6 +187,7 @@ export const grantStorePurchase = async (
           WHERE ${storePurchase.transactionId} = ${grant.transactionId}
             AND ${storePurchase.grantedAt} IS NULL
             AND ${storePurchase.acceptedAt} IS NOT NULL
+            AND ${storePurchase.revokedAt} IS NULL
         `)
       : await client.execute(sql`
           UPDATE ${userData}
@@ -199,14 +202,18 @@ export const grantStorePurchase = async (
           WHERE ${storePurchase.transactionId} = ${grant.transactionId}
             AND ${storePurchase.grantedAt} IS NULL
             AND ${storePurchase.acceptedAt} IS NOT NULL
+            AND ${storePurchase.revokedAt} IS NULL
         `);
 
     if (result.rowsAffected === 0) {
       const settled = await client.query.storePurchase.findFirst({
-        columns: { grantedAt: true },
+        columns: { grantedAt: true, revokedAt: true },
         where: eq(storePurchase.transactionId, grant.transactionId),
       });
       if (settled?.grantedAt) return { status: "duplicate" };
+      if (settled?.revokedAt) {
+        return { status: "ignored", reason: "Revoked purchase" };
+      }
       throw new Error(`Could not apply store receipt ${grant.transactionId}`);
     }
 
