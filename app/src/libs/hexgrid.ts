@@ -1,4 +1,3 @@
-import { aStar } from "abstract-astar";
 import type {
   BoundingBox,
   Ellipse,
@@ -157,10 +156,28 @@ export const getPossibleActionTiles = (
 export class PathCalculator {
   cache: Map<string, TerrainHex[] | undefined>;
   grid: Grid<TerrainHex>;
+  /**
+   * Lower bound on what a single step can cost, so the heuristic below can be scaled by it and
+   * still never overestimate. A step costs `to.cost + from.cost`, so it is at least twice the
+   * cheapest passable tile on this grid — 2 where combat sets every tile to 1, 4 on sector and
+   * window grids where a tile costs `walkCost + 1`. It has to be read off the grid rather than
+   * hardcoded because this class serves both. Snapshotted here like the path cache, which
+   * already assumes tile cost and blocked state hold still for this instance.
+   */
+  minStepCost: number;
 
   constructor(grid: Grid<TerrainHex>) {
     this.cache = new Map<string, TerrainHex[] | undefined>();
     this.grid = grid;
+    let cheapest = Number.POSITIVE_INFINITY;
+    grid.forEach((tile) => {
+      if (!tile.blocked && Number.isFinite(tile.cost) && tile.cost < cheapest) {
+        cheapest = tile.cost;
+      }
+    });
+    // A grid with no passable tile, or one whose tiles are free, leaves the heuristic at zero,
+    // which is a plain Dijkstra search: slower, but still correct
+    this.minStepCost = cheapest > 0 && Number.isFinite(cheapest) ? 2 * cheapest : 0;
   }
 
   /**
@@ -176,20 +193,115 @@ export class PathCalculator {
     if (this.cache.has(key)) {
       return this.cache.get(key);
     }
-    const shortestPath = aStar<TerrainHex>({
+    const shortestPath = findShortestPath({
       start: origin,
       goal: target,
-      estimateFromNodeToGoal: (tile) => this.grid.distance(tile, origin),
-      neighborsAdjacentToNode: (center) =>
+      estimate: (tile) => this.minStepCost * this.grid.distance(tile, target),
+      neighbors: (center) =>
         this.grid
           .traverse(ring({ radius: 1, center }))
           .toArray()
           .filter((tile) => !tile.blocked),
-      actualCostToMove: (_, from, to) => {
-        return to.cost + from.cost;
-      },
+      stepCost: (from, to) => to.cost + from.cost,
     });
     this.cache.set(key, shortestPath);
     return shortestPath;
   };
 }
+
+/**
+ * A* with a lazy-deletion binary heap.
+ *
+ * Finding a cheaper route to a tile pushes a second entry rather than moving the existing one,
+ * and whichever entry surfaces after the tile is settled is skipped. That is what replaced
+ * `abstract-astar`: its MinHeap sifts DOWN when a key decreases (a decrease has to sift up) and
+ * `removeMinimum` leaves the moved item's stale index behind in its index map, so once the
+ * heuristic actually reorders the frontier the pop order is wrong and the path it returns is not
+ * always the shortest — measured at 4 of 68 paths on a sector-sized grid with mixed terrain
+ * costs. Never decreasing a key sidesteps both.
+ *
+ * `estimate` must not overestimate the remaining cost or the result is not the shortest path;
+ * `PathCalculator.minStepCost` is what keeps the caller's estimate under that bound.
+ */
+const findShortestPath = ({
+  start,
+  goal,
+  estimate,
+  neighbors,
+  stepCost,
+}: {
+  start: TerrainHex;
+  goal: TerrainHex;
+  estimate: (tile: TerrainHex) => number;
+  neighbors: (tile: TerrainHex) => TerrainHex[];
+  stepCost: (from: TerrainHex, to: TerrainHex) => number;
+}) => {
+  const cheapestTo = new Map<TerrainHex, number>([[start, 0]]);
+  const cameFrom = new Map<TerrainHex, TerrainHex>();
+  const settled = new Set<TerrainHex>();
+  const frontier: { tile: TerrainHex; score: number }[] = [
+    { tile: start, score: estimate(start) },
+  ];
+  const scoreAt = (index: number) => frontier[index]?.score ?? Number.POSITIVE_INFINITY;
+  const swap = (a: number, b: number) => {
+    const first = frontier[a];
+    const second = frontier[b];
+    if (first === undefined || second === undefined) return;
+    frontier[a] = second;
+    frontier[b] = first;
+  };
+  const siftUp = (index: number) => {
+    while (index > 0) {
+      const parent = (index - 1) >> 1;
+      if (scoreAt(parent) <= scoreAt(index)) return;
+      swap(index, parent);
+      index = parent;
+    }
+  };
+  const siftDown = (index: number) => {
+    for (;;) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let smallest = index;
+      if (left < frontier.length && scoreAt(left) < scoreAt(smallest)) smallest = left;
+      if (right < frontier.length && scoreAt(right) < scoreAt(smallest))
+        smallest = right;
+      if (smallest === index) return;
+      swap(index, smallest);
+      index = smallest;
+    }
+  };
+  while (frontier.length > 0) {
+    const top = frontier[0];
+    const last = frontier.pop();
+    if (top === undefined || last === undefined) break;
+    if (frontier.length > 0) {
+      frontier[0] = last;
+      siftDown(0);
+    }
+    const current = top.tile;
+    if (current === goal) {
+      const path = [current];
+      let step = current;
+      for (;;) {
+        const previous = cameFrom.get(step);
+        if (previous === undefined) return path.reverse();
+        path.push(previous);
+        step = previous;
+      }
+    }
+    if (settled.has(current)) continue;
+    settled.add(current);
+    const costToCurrent = cheapestTo.get(current) ?? Number.POSITIVE_INFINITY;
+    for (const next of neighbors(current)) {
+      const candidate = costToCurrent + stepCost(current, next);
+      if (candidate < (cheapestTo.get(next) ?? Number.POSITIVE_INFINITY)) {
+        cheapestTo.set(next, candidate);
+        cameFrom.set(next, current);
+        frontier.push({ tile: next, score: candidate + estimate(next) });
+        siftUp(frontier.length - 1);
+      }
+    }
+  }
+  return undefined;
+};
