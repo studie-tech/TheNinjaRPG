@@ -1,6 +1,10 @@
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
+  COOKING_BASE_SLOTS,
   DURABILITY_POINT_PRICE_PERCENT,
+  FED_COOKING_GOLD_SLOTS,
+  FED_COOKING_NORMAL_SLOTS,
+  FED_COOKING_SILVER_SLOTS,
   FED_EVENT_ITEMS_DEFAULT,
   FED_EVENT_ITEMS_GOLD,
   FED_EVENT_ITEMS_NORMAL,
@@ -115,6 +119,121 @@ export const calcMaxMaterials = (user: UserData) => {
  */
 export const calcMaxHouseMaterials = (_user: UserData, homeStorage: number) => {
   return Math.max(0, homeStorage - 10);
+};
+
+/**
+ * Calculates the maximum number of cooking items for a user.
+ * Mirrors materials: base 25 + federal bonus + purchased extra slots.
+ */
+export const calcMaxCookingItems = (user: UserData) => {
+  const status = getUserFederalStatus(user);
+  switch (status) {
+    case "NORMAL":
+      return COOKING_BASE_SLOTS + FED_COOKING_NORMAL_SLOTS + user.extraItemSlots;
+    case "SILVER":
+      return COOKING_BASE_SLOTS + FED_COOKING_SILVER_SLOTS + user.extraItemSlots;
+    case "GOLD":
+      return COOKING_BASE_SLOTS + FED_COOKING_GOLD_SLOTS + user.extraItemSlots;
+    default:
+      return COOKING_BASE_SLOTS + user.extraItemSlots;
+  }
+};
+
+/**
+ * Calculates the maximum number of cooking items that can be stored in a house.
+ * Based on home storage capacity - 10, minimum 0 (same formula as materials).
+ */
+export const calcMaxHouseCookingItems = (_user: UserData, homeStorage: number) => {
+  return Math.max(0, homeStorage - 10);
+};
+
+/** Carried inventory backpack bucket. Dedicated types take priority over event. */
+export type InventoryBucket = "normal" | "event" | "materials" | "cooking";
+
+/** Home storage bucket. Event items share ordinary (normal) home capacity. */
+export type HomeStorageBucket = "normal" | "materials" | "cooking";
+
+type BucketItemFields = {
+  itemType: string;
+  isEventItem?: boolean | null;
+};
+
+/**
+ * Classify a carried inventory item into its capacity bucket.
+ * Priority: COOKING → Cooking, MATERIAL → Materials, event → Event, else Normal.
+ */
+export const getInventoryBucket = (item: BucketItemFields): InventoryBucket => {
+  if (item.itemType === "COOKING") return "cooking";
+  if (item.itemType === "MATERIAL") return "materials";
+  if (item.isEventItem) return "event";
+  return "normal";
+};
+
+/**
+ * Classify a home-stored item into its capacity bucket.
+ * Event items use ordinary home capacity.
+ */
+export const getHomeStorageBucket = (
+  item: Pick<BucketItemFields, "itemType">,
+): HomeStorageBucket => {
+  if (item.itemType === "COOKING") return "cooking";
+  if (item.itemType === "MATERIAL") return "materials";
+  return "normal";
+};
+
+export const getInventoryBucketCapacity = (
+  bucket: InventoryBucket,
+  user: UserData,
+): number => {
+  switch (bucket) {
+    case "cooking":
+      return calcMaxCookingItems(user);
+    case "materials":
+      return calcMaxMaterials(user);
+    case "event":
+      return calcMaxEventItems(user);
+    case "normal":
+      return calcMaxItems(user);
+  }
+};
+
+export const getInventoryBucketFullMessage = (bucket: InventoryBucket): string => {
+  switch (bucket) {
+    case "cooking":
+      return "Cooking inventory is full";
+    case "materials":
+      return "Materials inventory is full";
+    case "event":
+      return "Event item inventory is full";
+    case "normal":
+      return "Inventory is full";
+  }
+};
+
+export const getHomeStorageBucketCapacity = (
+  bucket: HomeStorageBucket,
+  user: UserData,
+  homeStorage: number,
+): number => {
+  switch (bucket) {
+    case "cooking":
+      return calcMaxHouseCookingItems(user, homeStorage);
+    case "materials":
+      return calcMaxHouseMaterials(user, homeStorage);
+    case "normal":
+      return homeStorage;
+  }
+};
+
+export const getHomeStorageBucketFullMessage = (bucket: HomeStorageBucket): string => {
+  switch (bucket) {
+    case "cooking":
+      return "Your home cooking storage is full";
+    case "materials":
+      return "Your home materials storage is full";
+    case "normal":
+      return "Your home storage is full";
+  }
 };
 
 /**
@@ -473,13 +592,14 @@ export const computeLoadoutAssignments = (
   return { assignments, invalidItems };
 };
 
-/** Gear that can meaningfully level — hide badges on consumables, mats, crystals, thrown. */
+/** Gear that can meaningfully level — hide badges on consumables, mats, cooking, crystals, thrown. */
 export const showsItemLevelBadge = (item: {
   itemType: string;
   slot: string;
 }): boolean =>
   item.itemType !== "CONSUMABLE" &&
   item.itemType !== "MATERIAL" &&
+  item.itemType !== "COOKING" &&
   item.itemType !== "CRYSTAL" &&
   item.slot !== "THROWN";
 

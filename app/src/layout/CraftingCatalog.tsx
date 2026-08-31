@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, FlaskConical, Package, Shield, Sword } from "lucide-react";
+import { ArrowLeft, ChefHat, FlaskConical, Package, Shield, Sword } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -38,7 +38,7 @@ type CraftableItem = Item & {
   }[];
 };
 
-type CatalogCategory = "WEAPON" | "ARMOR" | "CONSUMABLE" | "OTHER";
+type CatalogCategory = "WEAPON" | "ARMOR" | "CONSUMABLE" | "COOKING" | "OTHER";
 
 const CATEGORY_CONFIG: Record<
   CatalogCategory,
@@ -58,6 +58,11 @@ const CATEGORY_CONFIG: Record<
     label: "Consumables",
     icon: <FlaskConical className="h-8 w-8" />,
     itemTypes: ["CONSUMABLE"],
+  },
+  COOKING: {
+    label: "Cooking",
+    icon: <ChefHat className="h-8 w-8" />,
+    itemTypes: ["COOKING"],
   },
   OTHER: {
     label: "Items",
@@ -198,6 +203,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
       WEAPON: 0,
       ARMOR: 0,
       CONSUMABLE: 0,
+      COOKING: 0,
       OTHER: 0,
     };
     if (!craftableItems) return counts;
@@ -208,6 +214,8 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
         counts.ARMOR++;
       } else if (CATEGORY_CONFIG.CONSUMABLE.itemTypes.includes(item.itemType)) {
         counts.CONSUMABLE++;
+      } else if (CATEGORY_CONFIG.COOKING.itemTypes.includes(item.itemType)) {
+        counts.COOKING++;
       } else {
         counts.OTHER++;
       }
@@ -218,7 +226,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   return (
     <>
       {/* Category Selection Grid */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
         {(
           Object.entries(CATEGORY_CONFIG) as [
             CatalogCategory,

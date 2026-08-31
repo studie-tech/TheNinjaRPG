@@ -3,6 +3,7 @@
 import {
   BadgeMinus,
   BadgePlus,
+  ChefHat,
   Hammer,
   Home,
   MinusCircle,
@@ -37,7 +38,9 @@ import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
 import Modal2 from "@/layout/Modal2";
 import {
   byItemName,
+  calcMaxHouseCookingItems,
   calcMaxHouseMaterials,
+  getHomeStorageBucket,
   showsItemLevelBadge,
   userItemActionBadges,
 } from "@/libs/item";
@@ -110,49 +113,68 @@ export default function HomePage() {
     (useritem) =>
       !useritem.craftingFinishedAt || useritem.craftingFinishedAt < new Date(),
   );
-  // Filter normal items (non-materials)
+  // Filter normal items (non-materials, non-cooking)
   const storedItems =
     filteredItems
       ?.filter(
-        (useritem) => useritem.storedAtHome && useritem.item.itemType !== "MATERIAL",
+        (useritem) =>
+          useritem.storedAtHome && getHomeStorageBucket(useritem.item) === "normal",
       )
       .sort(byItemName) ?? [];
   const nonStoredItems =
     filteredItems
       ?.filter((useritem) => !useritem.storedAtHome)
       .filter((useritem) => useritem.equipped === "NONE")
-      .filter((useritem) => useritem.item.itemType !== "MATERIAL")
+      .filter((useritem) => getHomeStorageBucket(useritem.item) === "normal")
       .sort(byItemName) ?? [];
 
   // Filter materials separately
   const storedMaterials =
     filteredItems
       ?.filter(
-        (useritem) => useritem.storedAtHome && useritem.item.itemType === "MATERIAL",
+        (useritem) =>
+          useritem.storedAtHome && getHomeStorageBucket(useritem.item) === "materials",
       )
       .sort(byItemName) ?? [];
   const nonStoredMaterials =
     filteredItems
       ?.filter((useritem) => !useritem.storedAtHome)
       .filter((useritem) => useritem.equipped === "NONE")
-      .filter((useritem) => useritem.item.itemType === "MATERIAL")
+      .filter((useritem) => getHomeStorageBucket(useritem.item) === "materials")
       .sort(byItemName) ?? [];
 
+  // Filter cooking separately
+  const storedCooking =
+    filteredItems
+      ?.filter(
+        (useritem) =>
+          useritem.storedAtHome && getHomeStorageBucket(useritem.item) === "cooking",
+      )
+      .sort(byItemName) ?? [];
+  const nonStoredCooking =
+    filteredItems
+      ?.filter((useritem) => !useritem.storedAtHome)
+      .filter((useritem) => useritem.equipped === "NONE")
+      .filter((useritem) => getHomeStorageBucket(useritem.item) === "cooking")
+      .sort(byItemName) ?? [];
+
+  const maxHouseMaterials =
+    userData && homeData ? calcMaxHouseMaterials(userData, homeData.storage) : 0;
+  const maxHouseCooking =
+    userData && homeData ? calcMaxHouseCookingItems(userData, homeData.storage) : 0;
   const canStoreMoreItems = storedItems.length < homeStorage;
-  const canStoreMoreMaterials =
-    storedMaterials.length <
-    (userData && homeData ? calcMaxHouseMaterials(userData, homeData.storage) : 0);
+  const canStoreMoreMaterials = storedMaterials.length < maxHouseMaterials;
+  const canStoreMoreCooking = storedCooking.length < maxHouseCooking;
 
   const storedItemBadges = userItemActionBadges(storedItems);
   const storedMaterialBadges = userItemActionBadges(storedMaterials);
+  const storedCookingBadges = userItemActionBadges(storedCooking);
   const inventoryItemBadges = userItemActionBadges(nonStoredItems);
   const inventoryMaterialBadges = userItemActionBadges(nonStoredMaterials);
+  const inventoryCookingBadges = userItemActionBadges(nonStoredCooking);
 
-  // Calculate total stored items (excluding materials)
-  const totalStoredItems =
-    filteredItems?.filter(
-      (useritem) => useritem.storedAtHome && useritem.item.itemType !== "MATERIAL",
-    ).length ?? 0;
+  // Calculate total stored items (excluding materials and cooking)
+  const totalStoredItems = storedItems.length;
 
   // Filter upgrades and downgrades
   const upgrades = availableUpgrades?.filter((upgrade) => upgrade.isUpgrade) || [];
@@ -258,6 +280,15 @@ export default function HomePage() {
                               <span className="ml-2">
                                 +{calcMaxHouseMaterials(userData, homeData.storage)}{" "}
                                 Material Storage
+                              </span>
+                            )}
+                          {userData &&
+                            homeData &&
+                            calcMaxHouseCookingItems(userData, homeData.storage) >
+                              0 && (
+                              <span className="ml-2">
+                                +{calcMaxHouseCookingItems(userData, homeData.storage)}{" "}
+                                Cooking Storage
                               </span>
                             )}
                         </div>
@@ -394,7 +425,7 @@ export default function HomePage() {
 
           <ContentBox
             title="Item Storage"
-            subtitle={`Items in home (${totalStoredItems}/${homeStorage} slots used) | Materials in home (${storedMaterials.length}/${userData && homeData ? calcMaxHouseMaterials(userData, homeData.storage) : 0} slots used)`}
+            subtitle={`Items in home (${totalStoredItems}/${homeStorage} slots used) | Materials in home (${storedMaterials.length}/${maxHouseMaterials} slots used) | Cooking in home (${storedCooking.length}/${maxHouseCooking} slots used)`}
             initialBreak={true}
             topRightContent={
               homeData && homeData.homeType !== "NONE" ? (
@@ -416,12 +447,15 @@ export default function HomePage() {
               </div>
             ) : (
               <Tabs defaultValue="stored" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
                   <TabsTrigger value="stored">
                     <Package className="mr-2 h-5 w-5" /> Stored Items
                   </TabsTrigger>
                   <TabsTrigger value="materials">
                     <Hammer className="mr-2 h-5 w-5" /> Materials
+                  </TabsTrigger>
+                  <TabsTrigger value="cooking">
+                    <ChefHat className="mr-2 h-5 w-5" /> Cooking
                   </TabsTrigger>
                   <TabsTrigger value="inventory">
                     <ShoppingBag className="mr-2 h-5 w-5" /> Inventory
@@ -503,8 +537,51 @@ export default function HomePage() {
                   </div>
                 </TabsContent>
 
+                <TabsContent value="cooking">
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="mb-2 font-semibold">Stored Cooking</h4>
+                      {storedCooking.length === 0 ? (
+                        <div className="p-4 text-center text-muted-foreground">
+                          No cooking items stored in your home.
+                        </div>
+                      ) : (
+                        <div className="p-3">
+                          <ActionSelector
+                            items={storedCooking?.map((useritem) => ({
+                              ...useritem.item,
+                              ...useritem,
+                            }))}
+                            counts={storedCookingBadges.counts}
+                            levels={storedCookingBadges.levels}
+                            selectedId={selectedItem?.id}
+                            showBgColor={false}
+                            showLabels={false}
+                            onClick={(id) => {
+                              if (id === selectedItem?.id) {
+                                setSelectedItem(undefined);
+                                setIsModalOpen(false);
+                              } else {
+                                const item = storedCooking?.find(
+                                  (item) => item.id === id,
+                                );
+                                if (item) {
+                                  setSelectedItem(item as UserItemWithItem);
+                                  setIsModalOpen(true);
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
+
                 <TabsContent value="inventory">
-                  {nonStoredItems.length === 0 && nonStoredMaterials.length === 0 ? (
+                  {nonStoredItems.length === 0 &&
+                  nonStoredMaterials.length === 0 &&
+                  nonStoredCooking.length === 0 ? (
                     <div className="p-4 text-center">
                       You don&apos;t have any items in your inventory.
                     </div>
@@ -545,7 +622,7 @@ export default function HomePage() {
                       )}
 
                       {nonStoredMaterials.length > 0 && (
-                        <div>
+                        <div className="mb-4">
                           <h4 className="mb-2 font-semibold">Materials</h4>
                           <ActionSelector
                             items={nonStoredMaterials?.map((useritem) => ({
@@ -560,6 +637,40 @@ export default function HomePage() {
                             greyedIds={
                               !canStoreMoreMaterials
                                 ? nonStoredMaterials?.map((useritem) => useritem.id)
+                                : undefined
+                            }
+                            onClick={(id) => {
+                              if (id === selectedItem?.id) {
+                                setSelectedItem(undefined);
+                                setIsModalOpen(false);
+                              } else {
+                                const item = userItems?.find((item) => item.id === id);
+                                if (item) {
+                                  setSelectedItem(item as UserItemWithItem);
+                                  setIsModalOpen(true);
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {nonStoredCooking.length > 0 && (
+                        <div>
+                          <h4 className="mb-2 font-semibold">Cooking</h4>
+                          <ActionSelector
+                            items={nonStoredCooking?.map((useritem) => ({
+                              ...useritem.item,
+                              ...useritem,
+                            }))}
+                            counts={inventoryCookingBadges.counts}
+                            levels={inventoryCookingBadges.levels}
+                            selectedId={selectedItem?.id}
+                            showBgColor={false}
+                            showLabels={false}
+                            greyedIds={
+                              !canStoreMoreCooking
+                                ? nonStoredCooking?.map((useritem) => useritem.id)
                                 : undefined
                             }
                             onClick={(id) => {

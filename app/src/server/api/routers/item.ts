@@ -78,11 +78,11 @@ import {
   buildItemLoadoutData,
   calcItemRepairCost,
   calcItemSellingPrice,
-  calcMaxEventItems,
-  calcMaxItems,
-  calcMaxMaterials,
   canEquipAdditional,
   computeLoadoutAssignments,
+  getInventoryBucket,
+  getInventoryBucketCapacity,
+  getInventoryBucketFullMessage,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
 } from "@/libs/item";
@@ -2484,21 +2484,19 @@ export const itemRouter = createTRPCRouter({
         fetchStructures(ctx.drizzle, input.villageId),
         fetchUserQuestState(ctx.drizzle, ctx.userId),
       ]);
-      // Derived
-      const regularItems = useritems?.filter(
-        (ui) =>
-          !ui.item.isEventItem && !ui.storedAtHome && ui.item.itemType !== "MATERIAL",
-      );
-      const eventItems = useritems?.filter(
-        (ui) => ui.item.isEventItem && !ui.storedAtHome,
-      );
-      const materials = useritems?.filter(
-        (ui) =>
-          !ui.item.isEventItem && ui.item.itemType === "MATERIAL" && !ui.storedAtHome,
-      );
-      const regularItemsCount = regularItems?.length || 0;
-      const eventItemsCount = eventItems?.length || 0;
-      const materialsCount = materials?.length || 0;
+      // Derived — capacity counts carried stacks by dedicated inventory bucket
+      const carriedItems = useritems?.filter((ui) => !ui.storedAtHome) ?? [];
+      const bucketCounts = {
+        normal: carriedItems.filter((ui) => getInventoryBucket(ui.item) === "normal")
+          .length,
+        event: carriedItems.filter((ui) => getInventoryBucket(ui.item) === "event")
+          .length,
+        materials: carriedItems.filter(
+          (ui) => getInventoryBucket(ui.item) === "materials",
+        ).length,
+        cooking: carriedItems.filter((ui) => getInventoryBucket(ui.item) === "cooking")
+          .length,
+      };
       const sDiscount = getStrucBoost("itemDiscountPerLvl", structures);
       const aDiscount = user.anbuId ? ANBU_ITEMSHOP_DISCOUNT_PERC : 0;
       const hDiscount = info?.effects.find((e) => e.type === "heal")
@@ -2526,14 +2524,11 @@ export const itemRouter = createTRPCRouter({
       if (info.hidden && !canChangeContent(user.role)) {
         return errorResponse("Item is hidden, cannot be bought");
       }
-      if (!info.isEventItem && regularItemsCount >= calcMaxItems(user)) {
-        return errorResponse("Inventory is full");
-      }
-      if (info.isEventItem && eventItemsCount >= calcMaxEventItems(user)) {
-        return errorResponse("Event item inventory is full");
-      }
-      if (info.itemType === "MATERIAL" && materialsCount >= calcMaxMaterials(user)) {
-        return errorResponse("Materials inventory is full");
+      const purchaseBucket = getInventoryBucket(info);
+      if (
+        bucketCounts[purchaseBucket] >= getInventoryBucketCapacity(purchaseBucket, user)
+      ) {
+        return errorResponse(getInventoryBucketFullMessage(purchaseBucket));
       }
       if (info.expireFromStoreAt && new Date(info.expireFromStoreAt) < new Date()) {
         return errorResponse("Item has expired");

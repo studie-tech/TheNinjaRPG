@@ -411,6 +411,7 @@ export const ItemTypes = [
   "ARMOR",
   "ACCESSORY",
   "MATERIAL",
+  "COOKING",
   "KEYSTONE",
   "CRYSTAL",
   "OTHER",
@@ -419,6 +420,7 @@ export type ItemType = (typeof ItemTypes)[number];
 
 export const NonActionItemTypes: ItemType[] = [
   "MATERIAL",
+  "COOKING",
   "CRYSTAL",
   "ARMOR",
   "ACCESSORY",
@@ -2722,6 +2724,12 @@ export const MATERIALS_BASE_SLOTS = 25;
 export const FED_MATERIALS_NORMAL_SLOTS = 5;
 export const FED_MATERIALS_SILVER_SLOTS = 10;
 export const FED_MATERIALS_GOLD_SLOTS = 15;
+
+// Cooking inventory config (mirrors materials)
+export const COOKING_BASE_SLOTS = 25;
+export const FED_COOKING_NORMAL_SLOTS = 5;
+export const FED_COOKING_SILVER_SLOTS = 10;
+export const FED_COOKING_GOLD_SLOTS = 15;
 
 /**
  * Safely get user caps based on rank, with fallback to max caps

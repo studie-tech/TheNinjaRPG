@@ -50,7 +50,8 @@ export default function ManualItemBalance() {
     ?.map((item) => {
       // Checks
       const noBattleUsage =
-        item.preventBattleUsage || ["MATERIAL", "CRYSTAL"].includes(item.itemType);
+        item.preventBattleUsage ||
+        ["MATERIAL", "COOKING", "CRYSTAL"].includes(item.itemType);
       const effects = item.effects.length === 0 && !noBattleUsage ? 1 : 0;
       const description = item.description === "New item description" ? 1 : 0;
       const missingGraphic =
