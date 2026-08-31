@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { TavernColorPresets } from "@/drizzle/constants";
-import { getPublicUsersSchema, tavernColorChangeSchema } from "@/validators/user";
+import { getSearchValidator } from "@/validators/register";
+import {
+  getPublicUsersSchema,
+  tavernColorChangeSchema,
+  updateUserSchema,
+} from "@/validators/user";
 
 describe("getPublicUsersSchema", () => {
   it("accepts farming as a public-user leaderboard order", () => {
@@ -11,6 +16,53 @@ describe("getPublicUsersSchema", () => {
     });
 
     expect(result.orderBy).toBe("Farming");
+  });
+});
+
+describe("updateUserSchema", () => {
+  it("allows unchanged legacy reserved titles through to change-aware validation", () => {
+    expect(
+      updateUserSchema.safeParse({
+        username: "LegacyUser",
+        customTitle: "Moderator",
+        bloodlineId: null,
+        sageModeId: null,
+        villageId: null,
+        role: "USER",
+        rank: "STUDENT",
+        reason: "Updating an unrelated profile field",
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe("getSearchValidator", () => {
+  it("preserves the full optimistic post-as identity", () => {
+    const user = {
+      userId: "ai-user",
+      username: "AiUser",
+      avatar: null,
+      rank: "JONIN" as const,
+      level: 42,
+      federalStatus: "NONE" as const,
+      role: "EVENT" as const,
+      isOutlaw: true,
+      customTitle: "Event Host",
+      nRecruited: 3,
+      tavernMessages: 99,
+      tavernUsernameColor: "NAVY" as const,
+      tavernTitleColor: "GOLD" as const,
+      village: {
+        name: "Syndicate",
+        hexColor: "#123456",
+        kageId: "ai-user",
+      },
+    };
+
+    expect(
+      getSearchValidator({ max: 1 }).parse({ username: "AiUser", users: [user] })
+        .users[0],
+    ).toEqual(user);
   });
 });
 
