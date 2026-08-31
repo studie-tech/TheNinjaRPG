@@ -6,6 +6,16 @@ import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
 import android.widget.RemoteViews;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -24,6 +34,76 @@ public class TNRStatusWidget extends AppWidgetProvider {
         for (int appWidgetId : appWidgetIds) {
             manager.updateAppWidget(appWidgetId, buildViews(context));
         }
+        final PendingResult pending = goAsync();
+        new Thread(() -> {
+            try {
+                if (refreshIfStale(context)) {
+                    for (int appWidgetId : appWidgetIds) {
+                        manager.updateAppWidget(appWidgetId, buildViews(context));
+                    }
+                }
+            } finally {
+                pending.finish();
+            }
+        }, "tnr-widget-refresh").start();
+    }
+
+    /** Fetch only after the instant local snapshot has aged; failure keeps the last value. */
+    private boolean refreshIfStale(Context context) {
+        String raw = TNRSnapshotStore.load(context);
+        if (raw == null) return false;
+        HttpURLConnection connection = null;
+        try {
+            JSONObject local = new JSONObject(raw);
+            Date updatedAt = parseDate(local.optString("updatedAt", ""));
+            if (updatedAt != null && System.currentTimeMillis() - updatedAt.getTime() <= 15 * 60 * 1000) {
+                return false;
+            }
+            String token = local.optString("widgetToken", "");
+            URL endpoint = new URL(local.optString("statusUrl", ""));
+            if (token.isEmpty() || !"https".equals(endpoint.getProtocol())) return false;
+
+            connection = (HttpURLConnection) endpoint.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("Authorization", "Bearer " + token);
+            // BroadcastReceiver.goAsync still has a short execution budget.
+            connection.setConnectTimeout(4_000);
+            connection.setReadTimeout(4_000);
+            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) return false;
+
+            StringBuilder body = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                connection.getInputStream(), StandardCharsets.UTF_8
+            ))) {
+                String line;
+                while ((line = reader.readLine()) != null) body.append(line);
+            }
+            JSONObject remote = new JSONObject(body.toString());
+            remote.put("widgetToken", token);
+            remote.put("statusUrl", endpoint.toString());
+            TNRSnapshotStore.save(context, remote.toString());
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private Date parseDate(String value) {
+        for (String pattern : new String[] {
+            "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+            "yyyy-MM-dd'T'HH:mm:ssX"
+        }) {
+            SimpleDateFormat parser = new SimpleDateFormat(pattern, Locale.US);
+            parser.setTimeZone(TimeZone.getTimeZone("UTC"));
+            try {
+                return parser.parse(value);
+            } catch (ParseException ignored) {
+                // Try the format without fractional seconds.
+            }
+        }
+        return null;
     }
 
     private RemoteViews buildViews(Context context) {

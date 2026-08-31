@@ -4,6 +4,7 @@ import {
   STORE_REP_PRODUCTS,
 } from "@/drizzle/constants";
 import { dollars2reps } from "@/utils/paypal";
+import { productIdForPackage } from "@/libs/native/purchases";
 import {
   classifyEvent,
   idempotencyKey,
@@ -11,6 +12,7 @@ import {
   isRefund,
   isSandbox,
   occurredAt,
+  purchasedAt,
   toStorePlatform,
 } from "@/server/utils/purchases/revenuecat";
 
@@ -28,9 +30,28 @@ describe("store catalogue", () => {
     const ids = [
       ...STORE_REP_PRODUCTS.map((p) => p.productId),
       ...STORE_FEDERAL_PRODUCTS.map((p) => p.productId),
+      ...STORE_FEDERAL_PRODUCTS.map((p) => p.androidProductId),
     ];
     expect(ids.every((id) => id.length > 0)).toBe(true);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("maps a Play offering package to the selected base plan", () => {
+    expect(
+      productIdForPackage(
+        {
+          identifier: "gold-package",
+          product: {
+            identifier: "tnr_federal",
+            priceString: "$9.99",
+            title: "Gold",
+            description: "Gold tier",
+            defaultOption: { basePlanId: "gold" },
+          },
+        },
+        "android",
+      ),
+    ).toBe("tnr_federal:gold");
   });
 
   it("offers tiers in ascending order, so the list reads as a ladder", () => {
@@ -77,6 +98,19 @@ describe("revenuecat webhook classification", () => {
     // Absent only in hand-made payloads; falling back to now keeps the caller simple.
     const fallback = occurredAt({ type: "EXPIRATION", id: "e", app_user_id: "u" } as Parameters<typeof occurredAt>[0]);
     expect(Math.abs(fallback.getTime() - Date.now())).toBeLessThan(5000);
+  });
+
+  it("uses store action timestamps rather than webhook generation time", () => {
+    const event = {
+      type: "EXPIRATION",
+      id: "e",
+      app_user_id: "u",
+      event_timestamp_ms: 1_700_000_000_000,
+      purchased_at_ms: 1_699_000_000_000,
+      expiration_at_ms: 1_701_000_000_000,
+    } as Parameters<typeof occurredAt>[0];
+    expect(purchasedAt(event).getTime()).toBe(event.purchased_at_ms);
+    expect(occurredAt(event).getTime()).toBe(event.expiration_at_ms);
   });
 
   it("tells a refund apart from an ordinary cancellation", () => {

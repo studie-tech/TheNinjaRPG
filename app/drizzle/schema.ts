@@ -5659,6 +5659,8 @@ export const storePurchase = mysqlTable(
      * to re-derive it from the environment.
      */
     acceptedAt: datetime("acceptedAt", { mode: "date", fsp: 3 }),
+    /** Store transaction/billing-period time, independent of webhook delivery order. */
+    purchasedAt: datetime("purchasedAt", { mode: "date", fsp: 3 }).notNull(),
     /**
      * When the store told us the subscription this receipt paid for had ended.
      *
@@ -5683,6 +5685,10 @@ export const storePurchase = mysqlTable(
       userIdCreatedAtIdx: index("StorePurchase_userId_createdAt_idx").on(
         table.userId,
         table.createdAt,
+      ),
+      userIdPurchasedAtIdx: index("StorePurchase_userId_purchasedAt_idx").on(
+        table.userId,
+        table.purchasedAt,
       ),
     };
   },

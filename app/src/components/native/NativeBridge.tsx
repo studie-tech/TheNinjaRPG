@@ -127,6 +127,7 @@ export default function NativeBridge() {
     const quest = activeQuest(userData);
     const snapshot = {
       widgetToken,
+      statusUrl: `${window.location.origin}/api/widget/status`,
       username: userData.username,
       avatar: userData.avatar ?? undefined,
       village: userData.village?.name,

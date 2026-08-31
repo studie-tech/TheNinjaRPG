@@ -1,21 +1,14 @@
 /**
  * Turning a store purchase into reputation or federal status.
  *
- * PlanetScale has no transactions, so idempotency comes from the unique index on
- * `StorePurchase.transactionId`: the insert is the guard. A replayed webhook — and
- * RevenueCat retries for days — loses the race to insert and grants nothing, which is
- * exactly the behaviour a duplicate needs. The same reason the PayPal path inserts its
- * transaction row before touching the balance.
- *
- * A failed grant is therefore at-most-once: the row stays, the webhook 500s, and the retry
- * is refused as a duplicate, leaving an alert and an audit row for an operator to credit by
- * hand. Removing the row instead would turn every write that committed but failed to
- * acknowledge into duplicated currency, and would also throw away the receipt the federal
- * reconciliation reads.
+ * The receipt insert and the balance/status write are one transaction. The unique index on
+ * `StorePurchase.transactionId` is still the idempotency guard, but a failed balance write
+ * rolls the receipt back as well, so RevenueCat can retry without either losing or doubling
+ * paid value.
  */
 
 import * as Sentry from "@sentry/node";
-import { and, desc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   type FederalStatus,
@@ -36,6 +29,8 @@ export interface StoreGrant {
   store: StorePlatform;
   /** Sandbox purchases are recorded but never granted. */
   isSandbox: boolean;
+  /** Start of the billing period/store transaction, not webhook delivery time. */
+  purchasedAt: Date;
   raw: unknown;
 }
 
@@ -72,10 +67,13 @@ const repProduct = (productId: string) =>
   STORE_REP_PRODUCTS.find((product) => product.productId === productId);
 
 const federalProduct = (productId: string) =>
-  STORE_FEDERAL_PRODUCTS.find((product) => product.productId === productId);
+  STORE_FEDERAL_PRODUCTS.find(
+    (product) =>
+      product.productId === productId || product.androidProductId === productId,
+  );
 
 /**
- * Apply a purchase at most once.
+ * Apply a purchase exactly once.
  *
  * Throws when the caller should retry — an unknown recipient, or a balance write that
  * failed — which the webhook turns into a 5xx. Everything it can decide for itself comes
@@ -93,93 +91,66 @@ export const grantStorePurchase = async (
 
   const accepted = !grant.isSandbox || isSandboxGrantee(grant.userId);
 
-  // A purchase recorded against an account that does not exist would be marked granted
-  // while crediting nobody, and the retry would then be rejected as a duplicate — the
-  // player pays and never receives it. Checking first costs one read on a low-volume path.
-  const recipient = await client.query.userData.findFirst({
-    columns: { userId: true },
-    where: eq(userData.userId, grant.userId),
-  });
-  if (!recipient) {
-    // Throwing makes the webhook return 5xx so RevenueCat retries, which covers replica
-    // lag; the alert covers an app_user_id that will never resolve.
-    Sentry.captureException(new Error("Store purchase for an unknown user"), {
-      level: "error",
-      tags: { source: "grantStorePurchase" },
-      extra: { transactionId: grant.transactionId, userId: grant.userId },
-    });
-    throw new Error(`No user ${grant.userId} for transaction ${grant.transactionId}`);
-  }
-
   try {
-    // Losing this insert means another delivery of the same transaction already ran.
-    await client.insert(storePurchase).values({
-      id: nanoid(),
-      userId: grant.userId,
-      transactionId: grant.transactionId,
-      productId: grant.productId,
-      store: grant.store,
-      reputationPoints: reps?.reputationPoints ?? 0,
-      federalStatus: federal?.federalStatus ?? null,
-      isSandbox: grant.isSandbox,
-      // Recorded now rather than after the balance moves: a receipt that is accepted and
-      // then fails to apply is alerted and repaired by hand, whereas one that applied but
-      // was never marked accepted would be silently stripped by the next reconciliation.
-      acceptedAt: accepted ? new Date() : null,
-      rawData: grant.raw as never,
-    });
-  } catch (error) {
-    // Only a unique-key collision means "already handled". Swallowing anything else would
-    // acknowledge the webhook, stop RevenueCat retrying, and lose a paid grant to what
-    // may have been a momentary connection failure.
-    if (!isDuplicateKeyError(error)) throw error;
-    return { status: "duplicate" };
-  }
+    return await client.transaction(async (tx) => {
+      // Lock the recipient before inserting the idempotency row. This both rejects an
+      // unknown user and prevents account deletion racing the grant; checking an UPDATE's
+      // affected-row count is not enough because setting an already-current federal tier
+      // legitimately reports zero changes on MySQL.
+      const [recipient] = await tx
+        .select({ userId: userData.userId })
+        .from(userData)
+        .where(eq(userData.userId, grant.userId))
+        .for("update");
+      if (!recipient) {
+        throw new Error(
+          `No user ${grant.userId} for transaction ${grant.transactionId}`,
+        );
+      }
 
-  // Recorded for the audit trail, but a sandbox receipt must never move real balances --
-  // with one exception. TestFlight and App Review always transact in the sandbox, so a
-  // blanket refusal means the reviewer completes a purchase and is granted nothing, which
-  // is a rejection. The accounts named in STORE_SANDBOX_USER_IDS are therefore granted
-  // from sandbox receipts, and nobody else is: an allowlist cannot be reached by anyone
-  // who simply owns a sandbox tester login.
-  if (!accepted) {
-    return { status: "ignored", reason: "Sandbox purchase" };
-  }
+      // Losing this insert means another delivery of the same transaction already ran.
+      await tx.insert(storePurchase).values({
+        id: nanoid(),
+        userId: grant.userId,
+        transactionId: grant.transactionId,
+        productId: grant.productId,
+        store: grant.store,
+        reputationPoints: reps?.reputationPoints ?? 0,
+        federalStatus: federal?.federalStatus ?? null,
+        isSandbox: grant.isSandbox,
+        acceptedAt: accepted ? new Date() : null,
+        purchasedAt: grant.purchasedAt,
+        rawData: grant.raw as never,
+      });
 
-  try {
-    if (reps) {
-      // An increment rather than a read-modify-write: two grants landing together would
-      // otherwise both apply to the same stale balance and one would be lost.
-      await client
+      // Recorded for the audit trail, but a sandbox receipt must never move real balances
+      // unless it belongs to the explicit TestFlight/App Review allowlist.
+      if (!accepted) return { status: "ignored", reason: "Sandbox purchase" };
+
+      if (reps) {
+        await tx
+          .update(userData)
+          .set({
+            reputationPoints: sql`${userData.reputationPoints} + ${reps.reputationPoints}`,
+            reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${reps.reputationPoints}`,
+          })
+          .where(eq(userData.userId, grant.userId));
+        return { status: "granted", reputationPoints: reps.reputationPoints };
+      }
+
+      // One column, two paying sources. A lower store tier must not overwrite a higher
+      // PayPal tier the player is still paying for.
+      const target = federal?.federalStatus ?? "NONE";
+      const floor = await paypalFederalFloor(tx, grant.userId);
+      const next = rankOf(target) >= rankOf(floor) ? target : floor;
+      await tx
         .update(userData)
-        .set({
-          reputationPoints: sql`${userData.reputationPoints} + ${reps.reputationPoints}`,
-          reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${reps.reputationPoints}`,
-        })
+        .set({ federalStatus: next })
         .where(eq(userData.userId, grant.userId));
-      return { status: "granted", reputationPoints: reps.reputationPoints };
-    }
-
-    // One column, two paying sources. A store tier below what a live PayPal subscription
-    // entitles the player to must not overwrite it — they are still being billed for the
-    // higher one. A store tier at or above it applies as-is, so moving down a tier within
-    // the stores still takes effect.
-    const target = federal?.federalStatus ?? "NONE";
-    const floor = await paypalFederalFloor(client, grant.userId);
-    const next = rankOf(target) >= rankOf(floor) ? target : floor;
-    await client
-      .update(userData)
-      .set({ federalStatus: next })
-      .where(eq(userData.userId, grant.userId));
-    return { status: "granted", federalStatus: next };
+      return { status: "granted", federalStatus: next };
+    });
   } catch (error) {
-    // The row stays, whichever kind of grant failed. For reputation it is what stops the
-    // retry applying the increment twice, since a write that commits but fails to
-    // acknowledge is indistinguishable from one that never ran. For federal status it is
-    // also the receipt that vouches for the tier to /api/cleaner and to every PayPal
-    // writer, so deleting it to let a retry through would hand the reconciliation a player
-    // who looks like they never paid. Either way the row and this alert carry what an
-    // operator needs, which is a repairable failure.
+    if (isDuplicateKeyError(error)) return { status: "duplicate" };
     Sentry.captureException(error, {
       level: "error",
       tags: { source: "grantStorePurchase" },
@@ -235,7 +206,7 @@ export const revokeFederalStatus = async (
   // The event's own timestamp is the fallback for a payload that names no product.
   const spent = productId
     ? await client.query.storePurchase.findFirst({
-        columns: { createdAt: true },
+        columns: { purchasedAt: true },
         where: and(
           eq(storePurchase.userId, userId),
           eq(storePurchase.productId, productId),
@@ -243,13 +214,13 @@ export const revokeFederalStatus = async (
           // Never past the expiry itself. A player who resubscribes to the same product
           // has a newer receipt for it, and taking that as the cutoff would let a late
           // expiry retire the subscription they are currently paying for.
-          lte(storePurchase.createdAt, occurredAt),
+          lte(storePurchase.purchasedAt, occurredAt),
           ...(store ? [eq(storePurchase.store, store)] : []),
         ),
-        orderBy: desc(storePurchase.createdAt),
+        orderBy: desc(storePurchase.purchasedAt),
       })
     : undefined;
-  const cutoff = spent?.createdAt ?? occurredAt;
+  const cutoff = spent?.purchasedAt ?? occurredAt;
 
   await client
     .update(storePurchase)
@@ -259,7 +230,7 @@ export const revokeFederalStatus = async (
         eq(storePurchase.userId, userId),
         isNotNull(storePurchase.federalStatus),
         isNull(storePurchase.revokedAt),
-        lte(storePurchase.createdAt, cutoff),
+        lte(storePurchase.purchasedAt, cutoff),
         // Bounded to the store the expiry came from: the two are billed independently, and
         // the product ids are the same strings on both, so a lapse on one must not retire
         // the other's receipts.
@@ -275,6 +246,75 @@ export const revokeFederalStatus = async (
     .update(userData)
     .set({ federalStatus: await federalStatusWithStoreFloor(client, userId, paypal) })
     .where(eq(userData.userId, userId));
+};
+
+export interface StoreTransfer {
+  fromUserIds: string[];
+  toUserIds: string[];
+  store: StorePlatform;
+}
+
+/**
+ * Follow a RevenueCat receipt transfer between identified application users.
+ *
+ * Only live subscription receipts move. Consumable reputation was already delivered to
+ * the purchaser and must never be granted a second time by a restore. Recomputing every
+ * affected account makes this operation idempotent when RevenueCat retries the event.
+ */
+export const transferStorePurchases = async (
+  client: DrizzleClient,
+  transfer: StoreTransfer,
+): Promise<{ destinationUserId: string; rowsAffected: number }> => {
+  const fromIds = [...new Set(transfer.fromUserIds.filter(Boolean))];
+  const toIds = [...new Set(transfer.toUserIds.filter(Boolean))];
+  if (toIds.length === 0) throw new Error("RevenueCat transfer has no destination");
+
+  const destinations = await client
+    .select({ userId: userData.userId })
+    .from(userData)
+    .where(inArray(userData.userId, toIds));
+  const [destination] = destinations;
+  if (!destination || destinations.length !== 1) {
+    throw new Error(
+      `RevenueCat transfer resolved ${destinations.length} destination users`,
+    );
+  }
+  const destinationUserId = destination.userId;
+  const sourceIds = fromIds.filter((id) => id !== destinationUserId);
+
+  let rowsAffected = 0;
+  if (sourceIds.length > 0) {
+    const result = await client
+      .update(storePurchase)
+      .set({ userId: destinationUserId })
+      .where(
+        and(
+          inArray(storePurchase.userId, sourceIds),
+          eq(storePurchase.store, transfer.store),
+          isNotNull(storePurchase.acceptedAt),
+          isNotNull(storePurchase.federalStatus),
+          isNull(storePurchase.revokedAt),
+        ),
+      );
+    rowsAffected = result.rowsAffected;
+  }
+
+  const knownSources =
+    sourceIds.length > 0
+      ? await client
+          .select({ userId: userData.userId })
+          .from(userData)
+          .where(inArray(userData.userId, sourceIds))
+      : [];
+  for (const userId of [...knownSources.map((row) => row.userId), destinationUserId]) {
+    const paypal = await paypalFederalFloor(client, userId);
+    await client
+      .update(userData)
+      .set({ federalStatus: await federalStatusWithStoreFloor(client, userId, paypal) })
+      .where(eq(userData.userId, userId));
+  }
+
+  return { destinationUserId, rowsAffected };
 };
 
 /** Where a status sits on the ladder, so two sources can be compared. */

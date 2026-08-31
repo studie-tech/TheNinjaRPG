@@ -25,6 +25,8 @@ const WIDGET_TOKEN_KEY = "native-widget-token";
  * whoever picks the phone up next a credential for someone else's status.
  */
 let registrationEpoch = 0;
+/** Serialises ownership changes for the one OS token shared by every account on a phone. */
+let registrationQueue: Promise<void> = Promise.resolve();
 
 interface UseNativePushOptions {
   /** Register only once the player is signed in; tokens are bound to an account. */
@@ -95,17 +97,24 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
       if (registeredToken.current === token) return;
       registeredToken.current = token;
       const epoch = registrationEpoch;
-      const pending = sendToken({
-        token,
-        platform,
-        appVersion: parseNativeUserAgent(navigator.userAgent)?.version,
-        locale: navigator.language.slice(0, 16),
-      })
+      const pending = registrationQueue
+        .catch(() => undefined)
+        .then(async () => {
+          // If this request has not started yet, a newer account owns the token now. Do
+          // not authenticate the old task with the new Clerk session.
+          if (epoch !== registrationEpoch) return undefined;
+          return await sendToken({
+            token,
+            platform,
+            appVersion: parseNativeUserAgent(navigator.userAgent)?.version,
+            locale: navigator.language.slice(0, 16),
+          });
+        })
         .then((result) => {
           // Signed out while this was in flight. The detach in `unregister` waits for this
           // promise before deleting, so the row is already gone by now and there is nothing
           // to undo — only the local write to decline.
-          if (epoch !== registrationEpoch) return;
+          if (epoch !== registrationEpoch || !result) return;
           safeLocalStorageSetItem(LAST_TOKEN_KEY, token);
           if (result.widgetToken) {
             safeLocalStorageSetItem(WIDGET_TOKEN_KEY, result.widgetToken);
@@ -114,8 +123,12 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
         })
         .catch(() => {
           // Leave the ref cleared so the next resume retries the handoff.
-          registeredToken.current = null;
+          if (epoch === registrationEpoch) registeredToken.current = null;
         });
+      registrationQueue = pending.then(
+        () => undefined,
+        () => undefined,
+      );
       inFlight.current = pending;
       void pending;
     });

@@ -1,10 +1,7 @@
 import WidgetKit
 
-/// Feeds every widget from the App Group snapshot the app writes on each foreground.
-///
-/// No network: a widget that has to fetch shows a spinner or stale placeholder for the
-/// first second of every refresh, and would need its own credential. Reading a local
-/// snapshot renders instantly and costs nothing.
+/// Feeds every widget immediately from the App Group snapshot and refreshes stale data with
+/// the device-scoped credential carried in that snapshot.
 struct SnapshotEntry: TimelineEntry {
     let date: Date
     let snapshot: TNRSnapshot?
@@ -22,7 +19,49 @@ struct SnapshotProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
-        let snapshot = TNRSnapshotStore.load()
+        let local = TNRSnapshotStore.load()
+        refreshIfNeeded(local) { snapshot in
+            finishTimeline(snapshot, completion: completion)
+        }
+    }
+
+    private func refreshIfNeeded(
+        _ snapshot: TNRSnapshot?,
+        completion: @escaping (TNRSnapshot?) -> Void
+    ) {
+        let now = Date()
+        guard let snapshot,
+              now.timeIntervalSince(snapshot.updatedAt) > 15 * 60,
+              let token = snapshot.widgetToken,
+              let rawUrl = snapshot.statusUrl,
+              let url = URL(string: rawUrl),
+              url.scheme == "https" else {
+            completion(snapshot)
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 10
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            guard let http = response as? HTTPURLResponse,
+                  http.statusCode == 200,
+                  let data,
+                  var remote = try? TNRSnapshotStore.makeDecoder().decode(TNRSnapshot.self, from: data)
+            else {
+                completion(snapshot)
+                return
+            }
+            remote.widgetToken = token
+            remote.statusUrl = rawUrl
+            completion(remote)
+        }.resume()
+    }
+
+    private func finishTimeline(
+        _ snapshot: TNRSnapshot?,
+        completion: @escaping (Timeline<SnapshotEntry>) -> Void
+    ) {
         let now = Date()
 
         // Refresh when something is actually due to change — the player leaving hospital
@@ -46,6 +85,8 @@ extension TNRSnapshot {
     /// Fixed values for the widget gallery and for previews.
     static let preview = TNRSnapshot(
         updatedAt: Date(),
+        widgetToken: nil,
+        statusUrl: nil,
         username: "Shinobi",
         avatar: nil,
         village: "Tsukimori",

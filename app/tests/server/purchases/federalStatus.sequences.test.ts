@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, expect, it } from "vitest";
 import { nanoid } from "nanoid";
 import {
@@ -13,6 +13,7 @@ import {
   federalStatusWithStoreFloor,
   grantStorePurchase,
   revokeFederalStatus,
+  transferStorePurchases,
 } from "@/server/utils/purchases/grant";
 import { insertUsers } from "../../setup/factories";
 import {
@@ -27,6 +28,7 @@ import {
  * against real tables rather than checking a helper in isolation.
  */
 const USER = "federal-seq-user";
+const DESTINATION = "federal-transfer-destination";
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -60,12 +62,10 @@ const buyFederal = async (
           : "tnr_federal_normal",
     store,
     isSandbox: false,
+    purchasedAt: new Date(Date.now() - agoMs),
     raw: {},
   });
   if (agoMs > 0) {
-    // Only the receipt just written. Backdating every row for the user would flatten the
-    // timestamps these sequences turn on, and the upgrade case would pass without ever
-    // having two receipts at different moments.
     await database
       .update(storePurchase)
       .set({ createdAt: new Date(Date.now() - agoMs) })
@@ -200,6 +200,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       productId: "tnr_federal_gold",
       store: "APPLE",
       isSandbox: true,
+      purchasedAt: new Date(),
       raw: {},
     });
     // Recorded for the audit trail, but never accepted, so nothing vouches for a tier.
@@ -213,5 +214,90 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     await revokeFederalStatus(await db(), USER, { occurredAt: at });
     await revokeFederalStatus(await db(), USER, { occurredAt: at });
     expect(await statusOf()).toBe("NORMAL");
+  });
+
+  it("moves a restored subscription and recomputes both accounts", async () => {
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+    ]);
+    await buyFederal("GOLD");
+
+    const first = await transferStorePurchases(await db(), {
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+    });
+    expect(first.rowsAffected).toBe(1);
+    // RevenueCat retries the same TRANSFER; the second pass must be harmless while still
+    // repairing either status write if the first response was lost.
+    const retry = await transferStorePurchases(await db(), {
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+    });
+    expect(retry.rowsAffected).toBe(0);
+
+    const database = await db();
+    const [source, destination, receipt] = await Promise.all([
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, USER),
+      }),
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, DESTINATION),
+      }),
+      database.query.storePurchase.findFirst({
+        columns: { userId: true },
+        where: eq(storePurchase.userId, DESTINATION),
+      }),
+    ]);
+    expect(source?.federalStatus).toBe("NONE");
+    expect(destination?.federalStatus).toBe("GOLD");
+    expect(receipt?.userId).toBe(DESTINATION);
+  });
+
+  it("rolls the receipt back when crediting fails, so the same transaction can retry", async () => {
+    const userId = "store-grant-retry";
+    const transactionId = nanoid();
+    await insertUsers([{ userId, username: "retry", federalStatus: "NONE" }]);
+    const database = await db();
+    const grant = {
+      userId,
+      transactionId,
+      productId: "tnr_reps_tier1",
+      store: "APPLE" as const,
+      isSandbox: false,
+      purchasedAt: new Date(),
+      raw: {},
+    };
+    // Force the balance write to fail after the receipt insert has executed.
+    const before = await database.query.userData.findFirst({
+      columns: { reputationPoints: true },
+      where: eq(userData.userId, userId),
+    });
+    const blockedAt = (before?.reputationPoints ?? 0) + 8;
+    await database.execute(
+      sql.raw(
+        `ALTER TABLE UserData ADD CONSTRAINT fail_store_grant CHECK (userId <> '${userId}' OR reputationPoints < ${blockedAt})`,
+      ),
+    );
+    try {
+      await expect(grantStorePurchase(database, grant)).rejects.toThrow();
+    } finally {
+      await database.execute(
+        sql.raw("ALTER TABLE UserData DROP CHECK fail_store_grant"),
+      );
+    }
+    expect(
+      await database.query.storePurchase.findFirst({
+        where: eq(storePurchase.transactionId, transactionId),
+      }),
+    ).toBeUndefined();
+
+    await expect(grantStorePurchase(database, grant)).resolves.toMatchObject({
+      status: "granted",
+      reputationPoints: 8,
+    });
   });
 });

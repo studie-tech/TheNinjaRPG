@@ -4,10 +4,7 @@
  * without a network round trip. The web app writes that snapshot whenever it has fresh
  * data.
  *
- * `/api/widget/status` serves the same figures over HTTP for a widget that fetches them
- * itself. Neither provider does today -- both render the last snapshot the app wrote -- so
- * what a widget shows depends on the app having run recently. That is why the snapshot is
- * written on every meaningful change rather than only at launch.
+ * `/api/widget/status` serves the same figures over HTTP when this snapshot gets stale.
  */
 
 import { invokeSafe } from "./bridge";
@@ -24,6 +21,8 @@ export interface WidgetSnapshot {
    * device and grants nothing but that device's own status.
    */
   widgetToken?: string;
+  /** Absolute HTTPS endpoint, derived from the environment the shell is currently using. */
+  statusUrl?: string;
   username: string;
   avatar?: string;
   village?: string;

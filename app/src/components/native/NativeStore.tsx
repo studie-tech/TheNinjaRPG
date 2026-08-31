@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, RotateCcw, ShoppingCart } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env/client.mjs";
@@ -35,7 +35,12 @@ export default function NativeStore() {
   // reach a webhook with nobody to credit.
   const player = userId && userData?.userId === userId ? userData : undefined;
   const utils = api.useUtils();
-  const [products, setProducts] = useState<purchases.StoreProduct[] | null>(null);
+  const [packageState, setPackageState] = useState<{
+    userId: string;
+    packages: purchases.StorePackage[];
+    bound: boolean;
+  } | null>(null);
+  const bindingGeneration = useRef(0);
   const [busyProduct, setBusyProduct] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -47,31 +52,46 @@ export default function NativeStore() {
     { enabled: isNativeShell },
   );
 
+  const storePlatform = platform();
   const apiKey =
-    platform() === "ios"
+    storePlatform === "ios"
       ? env.NEXT_PUBLIC_REVENUECAT_IOS_KEY
       : env.NEXT_PUBLIC_REVENUECAT_ANDROID_KEY;
 
   // Binding the SDK to the player's own id is what lets the webhook know who to credit;
   // without it a purchase is validated and then dropped.
   useEffect(() => {
-    if (!isNativeShell || !player?.userId) return;
+    const generation = ++bindingGeneration.current;
+    const accountId = player?.userId;
+    if (!isNativeShell || !accountId) return;
     if (!apiKey) {
       // isConfigured only reflects the server's webhook secret, so a build with that set
       // and the public SDK key missing would otherwise spin forever with no explanation.
-      setProducts([]);
+      setPackageState({ userId: accountId, packages: [], bound: false });
       return;
     }
-    void purchases
-      .configure(apiKey, player.userId)
-      // configure binds the id only the first time it runs for this process; RevenueCat
-      // ignores a later one. Sign-out logs the SDK out, so without this the next session
-      // would purchase as an anonymous id and the webhook would have nobody to credit.
-      .then(() => purchases.logIn(player.userId))
-      .then(() => purchases.getProducts())
-      .then(setProducts)
-      .catch(() => setProducts([]));
+    // The native module owns the queue, so sign-out's logOut and another mounted store
+    // participate in the same ordering rather than racing a component-local promise.
+    const binding = purchases.bind(apiKey, accountId);
+    void binding
+      .then((packages) => {
+        if (generation !== bindingGeneration.current) return;
+        setPackageState({ userId: accountId, packages, bound: true });
+      })
+      .catch(() => {
+        if (generation !== bindingGeneration.current) return;
+        setPackageState({ userId: accountId, packages: [], bound: false });
+      });
+    return () => {
+      if (generation === bindingGeneration.current) bindingGeneration.current += 1;
+    };
   }, [apiKey, isNativeShell, player?.userId]);
+
+  // Never expose packages fetched for the previous account, even for the render before
+  // the new binding effect gets a chance to clear its state.
+  const available =
+    player && packageState?.userId === player.userId ? packageState : null;
+  const packages = available?.packages ?? null;
 
   /**
    * Wait for the webhook, then refetch the balance.
@@ -100,11 +120,12 @@ export default function NativeStore() {
     [refetchRecent, utils],
   );
 
-  const buy = async (product: purchases.StoreProduct) => {
+  const buy = async (entry: purchases.StorePackage, productId: string) => {
+    if (!available?.bound || available.userId !== player?.userId) return;
     const previousNewestId = recent?.[0]?.id;
-    setBusyProduct(product.identifier);
+    setBusyProduct(productId);
     try {
-      const result = await purchases.purchase(product);
+      const result = await purchases.purchase(entry);
       if (result.status === "cancelled") return;
       if (result.status === "error") {
         showMutationToast({ success: false, message: result.message });
@@ -130,6 +151,7 @@ export default function NativeStore() {
   };
 
   const restore = async () => {
+    if (!available?.bound || available.userId !== player?.userId) return;
     const previousNewestId = recent?.[0]?.id;
     setIsRestoring(true);
     try {
@@ -172,14 +194,18 @@ export default function NativeStore() {
       subtitle={`You have ${player.reputationPoints} reputation points`}
       alreadyHasH1
     >
-      {products === null ? (
+      {packages === null ? (
         <Loader explanation="Loading store" />
       ) : (
         <div className="flex flex-col gap-2">
           <p className="mb-1 font-medium text-sm">Reputation</p>
           {catalogue?.reputation.map((product) => {
             // The store's own localised price, so the player sees their currency.
-            const listed = products.find((p) => p.identifier === product.productId);
+            const listed = packages.find(
+              (entry) =>
+                purchases.productIdForPackage(entry, storePlatform) ===
+                product.productId,
+            );
             return (
               <div
                 key={product.productId}
@@ -190,13 +216,13 @@ export default function NativeStore() {
                     {product.reputationPoints} reputation points
                   </p>
                   <p className="text-muted-foreground text-xs">
-                    {listed?.priceString ?? `$${product.usd.toFixed(2)}`}
+                    {listed?.product.priceString ?? `$${product.usd.toFixed(2)}`}
                   </p>
                 </div>
                 <Button
                   size="sm"
                   disabled={busyProduct !== null || !listed}
-                  onClick={() => listed && void buy(listed)}
+                  onClick={() => listed && void buy(listed, product.productId)}
                 >
                   {busyProduct === product.productId ? (
                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -213,7 +239,13 @@ export default function NativeStore() {
             <>
               <p className="mt-4 mb-1 font-medium text-sm">Federal support</p>
               {catalogue.federal.map((plan) => {
-                const listed = products.find((p) => p.identifier === plan.productId);
+                const expectedProductId =
+                  storePlatform === "android" ? plan.androidProductId : plan.productId;
+                const listed = packages.find(
+                  (entry) =>
+                    purchases.productIdForPackage(entry, storePlatform) ===
+                    expectedProductId,
+                );
                 const isCurrent = player.federalStatus === plan.federalStatus;
                 return (
                   <div
@@ -226,16 +258,16 @@ export default function NativeStore() {
                         {plan.federalStatus.slice(1).toLowerCase()}
                       </p>
                       <p className="text-muted-foreground text-xs">
-                        {listed?.priceString ?? "Monthly"}
+                        {listed?.product.priceString ?? "Monthly"}
                       </p>
                     </div>
                     <Button
                       size="sm"
                       variant={isCurrent ? "outline" : "default"}
                       disabled={busyProduct !== null || !listed || isCurrent}
-                      onClick={() => listed && void buy(listed)}
+                      onClick={() => listed && void buy(listed, expectedProductId)}
                     >
-                      {busyProduct === plan.productId ? (
+                      {busyProduct === expectedProductId ? (
                         <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                       ) : (
                         <ShoppingCart className="mr-1 h-4 w-4" />
@@ -252,7 +284,7 @@ export default function NativeStore() {
             </>
           )}
 
-          {products.length === 0 && (
+          {packages.length === 0 && (
             <p className="text-muted-foreground text-sm">
               The store is not responding right now. Please try again shortly.
             </p>
@@ -263,7 +295,7 @@ export default function NativeStore() {
             variant="outline"
             size="sm"
             className="mt-2"
-            disabled={isRestoring}
+            disabled={isRestoring || !available?.bound}
             onClick={() => void restore()}
           >
             {isRestoring ? (

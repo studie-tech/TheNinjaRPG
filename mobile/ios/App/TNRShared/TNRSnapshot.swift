@@ -8,6 +8,8 @@ import Foundation
 /// the other.
 public struct TNRSnapshot: Codable, Equatable, Sendable {
     public let updatedAt: Date
+    public var widgetToken: String?
+    public var statusUrl: String?
     public let username: String
     public let avatar: String?
     public let village: String?

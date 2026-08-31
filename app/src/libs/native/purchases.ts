@@ -11,11 +11,20 @@
 import { hasPlugin, invoke, invokeSafe, isNative } from "./bridge";
 
 const PLUGIN = "Purchases";
+let identityQueue: Promise<void> = Promise.resolve();
+
+const withIdentityLock = <T>(operation: () => Promise<T>): Promise<T> => {
+  const pending = identityQueue.catch(() => undefined).then(operation);
+  identityQueue = pending.then(
+    () => undefined,
+    () => undefined,
+  );
+  return pending;
+};
 
 /**
- * A product as RevenueCat returned it. Passed back to `purchase` unchanged rather than
- * reconstructed from its identifier: the Android SDK also reads `productCategory` off it
- * and rejects a partial object before the purchase sheet opens.
+ * A product as RevenueCat returned it. It remains nested in its package so Android keeps
+ * the selected base plan and offering context when the purchase sheet opens.
  */
 export interface StoreProduct {
   identifier: string;
@@ -23,6 +32,14 @@ export interface StoreProduct {
   priceString: string;
   title: string;
   description: string;
+  defaultOption?: { basePlanId?: string | null } | null;
+  [key: string]: unknown;
+}
+
+/** RevenueCat offering package. Keep it intact so Android retains its selected base plan. */
+export interface StorePackage {
+  identifier: string;
+  product: StoreProduct;
   [key: string]: unknown;
 }
 
@@ -56,14 +73,16 @@ export const logIn = async (appUserId: string): Promise<void> => {
 
 /** Unbind on sign-out so the next player's purchases are not credited to the last one. */
 export const logOut = async (): Promise<void> => {
-  await invokeSafe(PLUGIN, "logOut");
+  await withIdentityLock(async () => {
+    await invokeSafe(PLUGIN, "logOut");
+  });
 };
 
 /**
- * Products in the current offering, with store-localised prices. Returns an empty list
+ * Packages in the current offering, with store-localised prices. Returns an empty list
  * off-device or when the offering has not been configured in RevenueCat.
  */
-export const getProducts = async (): Promise<StoreProduct[]> => {
+export const getPackages = async (): Promise<StorePackage[]> => {
   const result = await invokeSafe<{ all?: Record<string, unknown> }>(
     PLUGIN,
     "getOfferings",
@@ -74,9 +93,34 @@ export const getProducts = async (): Promise<StoreProduct[]> => {
   const packages = Array.isArray(current?.availablePackages)
     ? current.availablePackages
     : [];
-  return packages
-    .map((entry) => (entry as { product?: StoreProduct }).product)
-    .filter((product): product is StoreProduct => Boolean(product?.identifier));
+  return packages.filter(
+    (entry): entry is StorePackage =>
+      typeof (entry as StorePackage)?.identifier === "string" &&
+      typeof (entry as StorePackage)?.product?.identifier === "string",
+  );
+};
+
+/** Bind the singleton SDK and fetch offerings without allowing another session to interleave. */
+export const bind = async (
+  apiKey: string,
+  appUserId: string,
+): Promise<StorePackage[]> =>
+  await withIdentityLock(async () => {
+    await configure(apiKey, appUserId);
+    await logIn(appUserId);
+    return await getPackages();
+  });
+
+/** RevenueCat's canonical product id, including the Play base-plan suffix. */
+export const productIdForPackage = (
+  entry: StorePackage,
+  store: "ios" | "android" | "web",
+): string => {
+  const identifier = entry.product.identifier;
+  const basePlanId = entry.product.defaultOption?.basePlanId;
+  return store === "android" && basePlanId && !identifier.includes(":")
+    ? `${identifier}:${basePlanId}`
+    : identifier;
 };
 
 export type PurchaseOutcome =
@@ -88,12 +132,12 @@ export type PurchaseOutcome =
  * Present the store's purchase sheet. Cancellation is reported separately because it is
  * the player changing their mind, not something to show an error for.
  */
-export const purchase = async (product: StoreProduct): Promise<PurchaseOutcome> => {
+export const purchase = async (aPackage: StorePackage): Promise<PurchaseOutcome> => {
   try {
     const result = await invoke<{
       transaction?: { transactionIdentifier?: string };
       userCancelled?: boolean;
-    }>(PLUGIN, "purchaseStoreProduct", { product });
+    }>(PLUGIN, "purchasePackage", { aPackage });
     if (result.userCancelled) return { status: "cancelled" };
     return {
       status: "purchased",
@@ -112,10 +156,7 @@ export const purchase = async (product: StoreProduct): Promise<PurchaseOutcome> 
  * subscriptions, and rejects apps that omit it.
  */
 export const restore = async (): Promise<CustomerInfo | undefined> => {
-  const result = await invokeSafe<{ customerInfo?: unknown }>(
-    PLUGIN,
-    "restorePurchases",
-  );
+  const result = await invoke<{ customerInfo?: unknown }>(PLUGIN, "restorePurchases");
   return toCustomerInfo(result?.customerInfo);
 };
 

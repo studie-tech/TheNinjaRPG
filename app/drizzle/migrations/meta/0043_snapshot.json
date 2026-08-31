@@ -10359,6 +10359,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "purchasedAt": {
+          "name": "purchasedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "revokedAt": {
           "name": "revokedAt",
           "type": "datetime(3)",
@@ -10395,6 +10402,14 @@
           "columns": [
             "userId",
             "createdAt"
+          ],
+          "isUnique": false
+        },
+        "StorePurchase_userId_purchasedAt_idx": {
+          "name": "StorePurchase_userId_purchasedAt_idx",
+          "columns": [
+            "userId",
+            "purchasedAt"
           ],
           "isUnique": false
         }

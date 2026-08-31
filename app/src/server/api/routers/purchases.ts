@@ -27,7 +27,11 @@ export const purchasesRouter = createTRPCRouter({
           }),
         ),
         federal: z.array(
-          z.object({ productId: z.string(), federalStatus: z.string() }),
+          z.object({
+            productId: z.string(),
+            androidProductId: z.string(),
+            federalStatus: z.string(),
+          }),
         ),
       }),
     )

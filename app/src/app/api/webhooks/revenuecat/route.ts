@@ -6,6 +6,7 @@ import {
   grantStorePurchase,
   isSandboxGrantee,
   revokeFederalStatus,
+  transferStorePurchases,
 } from "@/server/utils/purchases/grant";
 import {
   classifyEvent,
@@ -14,6 +15,7 @@ import {
   isRefund,
   isSandbox,
   occurredAt,
+  purchasedAt,
   revenueCatEventSchema,
   toStorePlatform,
 } from "@/server/utils/purchases/revenuecat";
@@ -45,29 +47,25 @@ export async function POST(request: Request) {
   const { event } = parsed.data;
   const action = classifyEvent(event.type);
 
-  // TRANSFER names `transferred_from`/`transferred_to` rather than an `app_user_id`, and
-  // the Restore Purchases button can provoke one. There is nobody to credit without an
-  // account id, so acknowledge it — a 400 would only stop RevenueCat retrying an event it
-  // is never going to reshape — and raise it, because the entitlement has moved and the
-  // receipts on this side have not followed it.
-  if (!event.app_user_id) {
-    Sentry.captureException(
-      new Error(`RevenueCat ${event.type} without an app_user_id`),
-      {
-        level: "warning",
-        tags: { source: "revenuecatWebhook" },
-        extra: {
-          eventType: event.type,
-          transferredFrom: event.transferred_from,
-          transferredTo: event.transferred_to,
-        },
-      },
-    );
-    return Response.json({ handled: "ignored" });
-  }
-  const appUserId = event.app_user_id;
+  const appUserId = event.app_user_id ?? event.transferred_to?.join(",") ?? "unknown";
 
   try {
+    if (event.type === "TRANSFER") {
+      if (!event.store) throw new Error("RevenueCat transfer has no store");
+      const outcome = await transferStorePurchases(drizzleDB, {
+        fromUserIds: event.transferred_from ?? [],
+        toUserIds: event.transferred_to ?? [],
+        store: toStorePlatform(event.store),
+      });
+      return Response.json({ handled: "transferred", ...outcome });
+    }
+    if (!event.app_user_id) {
+      Sentry.captureException(
+        new Error(`RevenueCat ${event.type} without an app_user_id`),
+        { level: "warning", tags: { source: "revenuecatWebhook" } },
+      );
+      return Response.json({ handled: "ignored" });
+    }
     if (action === "revoke") {
       // A sandbox subscription normally granted nothing, so letting its expiry through
       // would strip a real status a tester also holds on the same account. An allowlisted
@@ -89,6 +87,7 @@ export async function POST(request: Request) {
         productId: event.product_id,
         store: toStorePlatform(event.store),
         isSandbox: isSandbox(event.environment),
+        purchasedAt: purchasedAt(event),
         raw: body,
       });
       return Response.json({ handled: outcome.status });

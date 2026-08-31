@@ -3113,9 +3113,21 @@ export const STORE_REP_PRODUCTS = [
  * plans on a single subscription.
  */
 export const STORE_FEDERAL_PRODUCTS = [
-  { productId: "tnr_federal_normal", federalStatus: "NORMAL" },
-  { productId: "tnr_federal_silver", federalStatus: "SILVER" },
-  { productId: "tnr_federal_gold", federalStatus: "GOLD" },
+  {
+    productId: "tnr_federal_normal",
+    androidProductId: "tnr_federal:normal",
+    federalStatus: "NORMAL",
+  },
+  {
+    productId: "tnr_federal_silver",
+    androidProductId: "tnr_federal:silver",
+    federalStatus: "SILVER",
+  },
+  {
+    productId: "tnr_federal_gold",
+    androidProductId: "tnr_federal:gold",
+    federalStatus: "GOLD",
+  },
 ] as const;
 
 /** RevenueCat entitlement that grants federal status, whichever plan is active. */

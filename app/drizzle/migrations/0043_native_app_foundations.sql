@@ -8,6 +8,7 @@ CREATE TABLE `StorePurchase` (
 	`federalStatus` enum('NONE','NORMAL','SILVER','GOLD'),
 	`isSandbox` boolean NOT NULL DEFAULT false,
 	`acceptedAt` datetime(3),
+	`purchasedAt` datetime(3) NOT NULL,
 	`revokedAt` datetime(3),
 	`rawData` json NOT NULL,
 	`createdAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),
@@ -53,6 +54,7 @@ CREATE TABLE `UserPushPreference` (
 );
 
 CREATE INDEX `StorePurchase_userId_createdAt_idx` ON `StorePurchase` (`userId`,`createdAt`);
+CREATE INDEX `StorePurchase_userId_purchasedAt_idx` ON `StorePurchase` (`userId`,`purchasedAt`);
 CREATE INDEX `UserDevice_userId_lastSeenAt_idx` ON `UserDevice` (`userId`,`lastSeenAt`);
 CREATE INDEX `UserLiveActivity_activityId_idx` ON `UserLiveActivity` (`activityId`);
 CREATE INDEX `UserLiveActivity_endsAt_idx` ON `UserLiveActivity` (`endsAt`);

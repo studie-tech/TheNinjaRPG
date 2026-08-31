@@ -32,6 +32,8 @@ export const revenueCatEventSchema = z.object({
     cancel_reason: z.string().nullish(),
     /** When the store says this happened, which is not when we hear about it. */
     event_timestamp_ms: z.number().nullish(),
+    purchased_at_ms: z.number().nullish(),
+    expiration_at_ms: z.number().nullish(),
     environment: z.string().nullish(),
     entitlement_ids: z.array(z.string()).nullish(),
     transferred_from: z.array(z.string()).nullish(),
@@ -106,7 +108,19 @@ export const idempotencyKey = (event: RevenueCatEvent): string =>
  * for the moment an expiry took effect. Falls back to now only if the field is absent.
  */
 export const occurredAt = (event: RevenueCatEvent): Date =>
-  event.event_timestamp_ms ? new Date(event.event_timestamp_ms) : new Date();
+  event.expiration_at_ms
+    ? new Date(event.expiration_at_ms)
+    : event.event_timestamp_ms
+      ? new Date(event.event_timestamp_ms)
+      : new Date();
+
+/** Start of the transaction's billing period, used to order receipts across retries. */
+export const purchasedAt = (event: RevenueCatEvent): Date =>
+  event.purchased_at_ms
+    ? new Date(event.purchased_at_ms)
+    : event.event_timestamp_ms
+      ? new Date(event.event_timestamp_ms)
+      : new Date();
 
 export const isAuthorized = (
   header: string | null,
