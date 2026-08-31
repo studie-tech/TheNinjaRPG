@@ -1,6 +1,6 @@
 import { and, eq, gte } from "drizzle-orm";
 import { PUSH_TOKEN_STALE_DAYS } from "@/drizzle/constants";
-import { userData, userDevice } from "@/drizzle/schema";
+import { userDevice } from "@/drizzle/schema";
 import { drizzleDB } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
 
@@ -29,34 +29,41 @@ export async function GET(request: Request) {
   // A device that stopped checking in is treated as gone, matching what the push fan-out
   // already does with the same window.
   const freshSince = secondsFromNow(-PUSH_TOKEN_STALE_DAYS * 24 * 60 * 60);
+  // The profile comes back with the device rather than in a second hop: a widget refreshes
+  // on the system's timeline budget for every install that has one, so this is the most
+  // frequently hit new endpoint in the app. Drizzle emits this as a single statement with
+  // a lateral join, not as two queries.
   const device = await drizzleDB.query.userDevice.findFirst({
     columns: { userId: true },
     where: and(
       eq(userDevice.widgetToken, token),
       gte(userDevice.lastSeenAt, freshSince),
     ),
+    with: {
+      user: {
+        columns: {
+          username: true,
+          avatar: true,
+          rank: true,
+          level: true,
+          curHealth: true,
+          maxHealth: true,
+          curChakra: true,
+          maxChakra: true,
+          curStamina: true,
+          maxStamina: true,
+          unreadNotifications: true,
+        },
+        with: { village: { columns: { name: true } } },
+      },
+    },
   });
+  // Kept apart: an unknown or stale token is not authorised, whereas a device whose
+  // account has since gone is a device pointing at nothing.
   if (!device) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const user = await drizzleDB.query.userData.findFirst({
-    columns: {
-      username: true,
-      avatar: true,
-      rank: true,
-      level: true,
-      curHealth: true,
-      maxHealth: true,
-      curChakra: true,
-      maxChakra: true,
-      curStamina: true,
-      maxStamina: true,
-      unreadNotifications: true,
-    },
-    with: { village: { columns: { name: true } } },
-    where: eq(userData.userId, device.userId),
-  });
+  const user = device.user;
   if (!user) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }

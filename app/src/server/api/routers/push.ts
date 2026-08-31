@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -40,30 +40,44 @@ export const pushRouter = createTRPCRouter({
       // Rotated on every registration, so a device that changes hands cannot keep reading
       // the previous account's status.
       const widgetToken = nanoid(32);
-      await ctx.drizzle
-        .insert(userDevice)
-        .values({
-          id: nanoid(),
-          userId: ctx.userId,
-          token: input.token,
-          platform: input.platform,
-          appVersion: input.appVersion,
-          locale: input.locale,
-          widgetToken,
-          createdAt: now,
-          lastSeenAt: now,
-        })
-        .onDuplicateKeyUpdate({
-          set: {
+      // The eviction snapshot rides alongside the upsert rather than waiting for it. It
+      // deliberately excludes this device by token, so it does not matter whether the
+      // upsert has landed yet -- the row for the phone registering right now is the one
+      // device guaranteed to survive, being the most recently seen.
+      const [, others] = await Promise.all([
+        ctx.drizzle
+          .insert(userDevice)
+          .values({
+            id: nanoid(),
             userId: ctx.userId,
+            token: input.token,
             platform: input.platform,
             appVersion: input.appVersion,
             locale: input.locale,
             widgetToken,
+            createdAt: now,
             lastSeenAt: now,
-          },
-        });
-      await evictExcessDevices(ctx.drizzle, ctx.userId);
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              userId: ctx.userId,
+              platform: input.platform,
+              appVersion: input.appVersion,
+              locale: input.locale,
+              widgetToken,
+              lastSeenAt: now,
+            },
+          }),
+        ctx.drizzle
+          .select({ id: userDevice.id })
+          .from(userDevice)
+          .where(
+            and(eq(userDevice.userId, ctx.userId), ne(userDevice.token, input.token)),
+          )
+          .orderBy(desc(userDevice.lastSeenAt)),
+      ]);
+      // One slot is spoken for by the device above, hence the cap less one.
+      await evictExcessDevices(ctx.drizzle, others);
       return {
         success: true,
         message: "Device registered for notifications",
@@ -230,13 +244,10 @@ export const pushRouter = createTRPCRouter({
  * Keep the newest devices and drop the rest. Without this a player who reinstalls
  * repeatedly accumulates dead tokens that every fan-out then has to try.
  */
-const evictExcessDevices = async (client: DrizzleClient, userId: string) => {
-  const devices = await client
-    .select({ id: userDevice.id })
-    .from(userDevice)
-    .where(eq(userDevice.userId, userId))
-    .orderBy(desc(userDevice.lastSeenAt));
-  const excess = devices.slice(PUSH_MAX_DEVICES_PER_USER).map((device) => device.id);
+const evictExcessDevices = async (client: DrizzleClient, others: { id: string }[]) => {
+  // `others` excludes the device that just registered, so the cap it is measured against
+  // is one lower: that device holds the first slot and is never a candidate here.
+  const excess = others.slice(PUSH_MAX_DEVICES_PER_USER - 1).map((device) => device.id);
   if (excess.length === 0) return;
   await client.delete(userDevice).where(inArray(userDevice.id, excess));
 };

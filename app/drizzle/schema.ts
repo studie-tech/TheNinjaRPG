@@ -5536,8 +5536,13 @@ export const userDevice = mysqlTable(
       // token is the identity, so re-registering it rebinds the row.
       tokenKey: uniqueIndex("UserDevice_token_key").on(table.token),
       widgetTokenKey: uniqueIndex("UserDevice_widgetToken_key").on(table.widgetToken),
-      userIdIdx: index("UserDevice_userId_idx").on(table.userId),
-      lastSeenAtIdx: index("UserDevice_lastSeenAt_idx").on(table.lastSeenAt),
+      // Composite, userId first: every read here is scoped to one player and then either
+      // ranges on lastSeenAt or orders by it. A bare lastSeenAt index serves none of them,
+      // because the equality column has to lead.
+      userIdLastSeenAtIdx: index("UserDevice_userId_lastSeenAt_idx").on(
+        table.userId,
+        table.lastSeenAt,
+      ),
     };
   },
 );
@@ -5673,8 +5678,12 @@ export const storePurchase = mysqlTable(
       transactionKey: uniqueIndex("StorePurchase_transactionId_key").on(
         table.transactionId,
       ),
-      userIdIdx: index("StorePurchase_userId_idx").on(table.userId),
-      createdAtIdx: index("StorePurchase_createdAt_idx").on(table.createdAt),
+      // Same shape: every reader is one player's receipts, then a window on createdAt or
+      // a newest-first limit. Neither single-column index was serving that.
+      userIdCreatedAtIdx: index("StorePurchase_userId_createdAt_idx").on(
+        table.userId,
+        table.createdAt,
+      ),
     };
   },
 );

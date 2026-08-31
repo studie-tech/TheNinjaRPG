@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "ab714c2e-7362-431c-9f4b-0bec341e832e",
+  "id": "9c5509eb-35ce-4e85-aeb1-a393fbc925de",
   "prevId": "277bc095-7c77-4fa8-a250-3c7ec3863eee",
   "tables": {
     "AbEvent": {
@@ -10390,16 +10390,10 @@
           ],
           "isUnique": true
         },
-        "StorePurchase_userId_idx": {
-          "name": "StorePurchase_userId_idx",
+        "StorePurchase_userId_createdAt_idx": {
+          "name": "StorePurchase_userId_createdAt_idx",
           "columns": [
-            "userId"
-          ],
-          "isUnique": false
-        },
-        "StorePurchase_createdAt_idx": {
-          "name": "StorePurchase_createdAt_idx",
-          "columns": [
+            "userId",
             "createdAt"
           ],
           "isUnique": false
@@ -13543,16 +13537,10 @@
           ],
           "isUnique": true
         },
-        "UserDevice_userId_idx": {
-          "name": "UserDevice_userId_idx",
+        "UserDevice_userId_lastSeenAt_idx": {
+          "name": "UserDevice_userId_lastSeenAt_idx",
           "columns": [
-            "userId"
-          ],
-          "isUnique": false
-        },
-        "UserDevice_lastSeenAt_idx": {
-          "name": "UserDevice_lastSeenAt_idx",
-          "columns": [
+            "userId",
             "lastSeenAt"
           ],
           "isUnique": false

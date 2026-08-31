@@ -52,10 +52,8 @@ CREATE TABLE `UserPushPreference` (
 	CONSTRAINT `UserPushPreference_userId_category_key` UNIQUE(`userId`,`category`)
 );
 
-CREATE INDEX `StorePurchase_userId_idx` ON `StorePurchase` (`userId`);
-CREATE INDEX `StorePurchase_createdAt_idx` ON `StorePurchase` (`createdAt`);
-CREATE INDEX `UserDevice_userId_idx` ON `UserDevice` (`userId`);
-CREATE INDEX `UserDevice_lastSeenAt_idx` ON `UserDevice` (`lastSeenAt`);
+CREATE INDEX `StorePurchase_userId_createdAt_idx` ON `StorePurchase` (`userId`,`createdAt`);
+CREATE INDEX `UserDevice_userId_lastSeenAt_idx` ON `UserDevice` (`userId`,`lastSeenAt`);
 CREATE INDEX `UserLiveActivity_activityId_idx` ON `UserLiveActivity` (`activityId`);
 CREATE INDEX `UserLiveActivity_endsAt_idx` ON `UserLiveActivity` (`endsAt`);
 CREATE INDEX `UserPushPreference_userId_idx` ON `UserPushPreference` (`userId`);

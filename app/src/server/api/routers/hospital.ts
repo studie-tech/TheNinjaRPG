@@ -1,5 +1,6 @@
 import type { ExecutedQuery } from "@planetscale/database";
 import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { after } from "next/server";
 import { z } from "zod";
 import {
   MEDNIN_EXP_CAP,
@@ -298,12 +299,20 @@ export const hospitalRouter = createTRPCRouter({
         // The Lock Screen countdown is driven from here once it has started, so leaving
         // hospital early has to close it; otherwise it keeps counting down to a recovery
         // that already happened.
-        await pushActivityUpdate(
-          ctx.drizzle,
-          [ctx.userId],
-          "hospital",
-          { title: "Recovered", endsAt: new Date() },
-          "end",
+        //
+        // Deferred, not awaited: closing it costs a row lookup, a round-trip to Apple and
+        // a delete, and none of that is anything the player should wait behind on one of
+        // the most-clicked mutations in the game. Deferred rather than voided for the
+        // reason travel.ts gives -- nothing else keeps the invocation alive long enough to
+        // finish a bare floating promise.
+        after(() =>
+          pushActivityUpdate(
+            ctx.drizzle,
+            [ctx.userId],
+            "hospital",
+            { title: "Recovered", endsAt: new Date() },
+            "end",
+          ),
         );
         return {
           success: true,
