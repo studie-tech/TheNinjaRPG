@@ -161,6 +161,25 @@ describe("PathCalculator.getShortestPath", () => {
     expect(path).not.toContain(at(grid, 3, 1));
   });
 
+  /**
+   * A tripwire, not a contract. Many routes tie on cost and this is merely the one today's search
+   * order produces — but `getBarriersBetween` turns the route into which barriers absorb an
+   * attack, so a change here is a change to combat damage. Landing that deliberately is fine;
+   * landing it without noticing is not. Re-record the expectation when you mean to move it.
+   */
+  it("takes a stable route among the equally cheap ones", () => {
+    const grid = makeGrid(6, 6, () => 1);
+    const path = found(
+      new PathCalculator(grid).getShortestPath(at(grid, 0, 0), at(grid, 3, 0)),
+    );
+    expect(path.map((tile) => `${tile.col},${tile.row}`)).toEqual([
+      "0,0",
+      "1,0",
+      "2,1",
+      "3,0",
+    ]);
+  });
+
   it.each([
     ["combat, every tile cost 1", 13, "combat", 0.15],
     ["sector, every tile cost 2", 26, "sector", 0.15],

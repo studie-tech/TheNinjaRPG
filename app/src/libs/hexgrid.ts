@@ -152,6 +152,11 @@ export const getPossibleActionTiles = (
 
 /**
  * Uses A* algorithm to calculate the shortest path between two hexes.
+ *
+ * Only the COST of the returned path is defined. A grid usually holds many equally cheap routes
+ * between two tiles and which one comes back depends on the search order, so callers must not
+ * treat the specific tiles as stable — `getBarriersBetween` reads them to decide which barriers
+ * absorb an attack, and that answer moves whenever the search does.
  */
 export class PathCalculator {
   cache: Map<string, TerrainHex[] | undefined>;
@@ -161,8 +166,13 @@ export class PathCalculator {
    * still never overestimate. A step costs `to.cost + from.cost`, so it is at least twice the
    * cheapest passable tile on this grid — 2 where combat sets every tile to 1, 4 on sector and
    * window grids where a tile costs `walkCost + 1`. It has to be read off the grid rather than
-   * hardcoded because this class serves both. Snapshotted here like the path cache, which
-   * already assumes tile cost and blocked state hold still for this instance.
+   * hardcoded because this class serves both.
+   *
+   * Snapshotted, and it bites harder than the path cache does: a stale cache still answers a
+   * miss correctly, whereas a bound taken before a tile got CHEAPER overestimates, and then even
+   * a miss comes back with a path that is not the shortest. Lowering any tile's cost means
+   * building a new calculator, not just clearing the cache. Every site does that today — each
+   * one constructs after its mutations — which is why this is a note rather than a guard.
    */
   minStepCost: number;
 
