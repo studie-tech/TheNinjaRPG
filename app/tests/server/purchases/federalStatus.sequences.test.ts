@@ -142,6 +142,19 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(next).toBe("GOLD");
   });
 
+  it("retires the receipt an upgrade left behind", async () => {
+    // NORMAL upgraded to GOLD a day later; when GOLD expires, the leftover NORMAL receipt
+    // is spent too -- it was superseded, not merely older.
+    await buyFederal("NORMAL", 2 * DAY);
+    await buyFederal("GOLD", 1 * DAY);
+    await revokeFederalStatus(await db(), USER, {
+      occurredAt: new Date(),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+    });
+    expect(await statusOf()).toBe("NONE");
+  });
+
   it("retires only the product that expired, not a concurrent one", async () => {
     // A tier change leaves the old product expiring while the new one is being billed.
     await buyFederal("NORMAL");
@@ -162,6 +175,19 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       store: "GOOGLE",
     });
     expect(await statusOf()).toBe("GOLD");
+  });
+
+  it("does not let a sandbox receipt vouch for anything", async () => {
+    await grantStorePurchase(await db(), {
+      userId: USER,
+      transactionId: nanoid(),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: true,
+      raw: {},
+    });
+    // Recorded for the audit trail, but never accepted, so nothing vouches for a tier.
+    expect(await federalStatusWithStoreFloor(await db(), USER, "NONE")).toBe("NONE");
   });
 
   it("is idempotent when the same expiry is delivered twice", async () => {

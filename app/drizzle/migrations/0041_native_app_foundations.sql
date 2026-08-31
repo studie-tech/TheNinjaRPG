@@ -7,6 +7,7 @@ CREATE TABLE `StorePurchase` (
 	`reputationPoints` int NOT NULL DEFAULT 0,
 	`federalStatus` enum('NONE','NORMAL','SILVER','GOLD'),
 	`isSandbox` boolean NOT NULL DEFAULT false,
+	`acceptedAt` datetime(3),
 	`revokedAt` datetime(3),
 	`rawData` json NOT NULL,
 	`createdAt` datetime(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP(3)),

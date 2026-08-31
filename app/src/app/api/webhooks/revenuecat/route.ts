@@ -4,6 +4,7 @@ import { env } from "@/env/server.mjs";
 import { drizzleDB } from "@/server/db";
 import {
   grantStorePurchase,
+  isSandboxGrantee,
   revokeFederalStatus,
 } from "@/server/utils/purchases/grant";
 import {
@@ -68,9 +69,10 @@ export async function POST(request: Request) {
 
   try {
     if (action === "revoke") {
-      // A sandbox subscription never granted anything, so letting its expiry through
-      // would strip a real status a tester also holds on the same account.
-      if (isSandbox(event.environment)) {
+      // A sandbox subscription normally granted nothing, so letting its expiry through
+      // would strip a real status a tester also holds on the same account. An allowlisted
+      // account is the exception: its sandbox purchase did grant, so its expiry must land.
+      if (isSandbox(event.environment) && !isSandboxGrantee(appUserId)) {
         return Response.json({ handled: "ignored" });
       }
       await revokeFederalStatus(drizzleDB, appUserId, {

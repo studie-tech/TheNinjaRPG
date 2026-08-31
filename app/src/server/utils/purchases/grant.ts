@@ -15,7 +15,7 @@
  */
 
 import * as Sentry from "@sentry/node";
-import { and, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   type FederalStatus,
@@ -61,7 +61,7 @@ const isDuplicateKeyError = (error: unknown): boolean => {
  * `docs/StoreSubmission.md` carries it as a release step. Unset, sandbox purchases grant
  * nothing at all, which is the safe default for an ordinary deployment.
  */
-const isSandboxGrantee = (userId: string): boolean =>
+export const isSandboxGrantee = (userId: string): boolean =>
   (env.STORE_SANDBOX_USER_IDS ?? "")
     .split(",")
     .map((id) => id.trim())
@@ -90,6 +90,8 @@ export const grantStorePurchase = async (
   if (!reps && !federal) {
     return { status: "ignored", reason: `Unknown product ${grant.productId}` };
   }
+
+  const accepted = !grant.isSandbox || isSandboxGrantee(grant.userId);
 
   // A purchase recorded against an account that does not exist would be marked granted
   // while crediting nobody, and the retry would then be rejected as a duplicate — the
@@ -120,6 +122,10 @@ export const grantStorePurchase = async (
       reputationPoints: reps?.reputationPoints ?? 0,
       federalStatus: federal?.federalStatus ?? null,
       isSandbox: grant.isSandbox,
+      // Recorded now rather than after the balance moves: a receipt that is accepted and
+      // then fails to apply is alerted and repaired by hand, whereas one that applied but
+      // was never marked accepted would be silently stripped by the next reconciliation.
+      acceptedAt: accepted ? new Date() : null,
       rawData: grant.raw as never,
     });
   } catch (error) {
@@ -136,7 +142,7 @@ export const grantStorePurchase = async (
   // is a rejection. The accounts named in STORE_SANDBOX_USER_IDS are therefore granted
   // from sandbox receipts, and nobody else is: an allowlist cannot be reached by anyone
   // who simply owns a sandbox tester login.
-  if (grant.isSandbox && !isSandboxGrantee(grant.userId)) {
+  if (!accepted) {
     return { status: "ignored", reason: "Sandbox purchase" };
   }
 
@@ -218,6 +224,29 @@ export const revokeFederalStatus = async (
   // deliver out of order, so an expiry can easily arrive after the player has resubscribed
   // — and retiring the receipt for the subscription they are currently paying for would
   // take the tier away from someone who just bought it back.
+  // How far back this expiry reaches.
+  //
+  // A subscription group allows one active federal subscription per store, so everything on
+  // that store at or before the expiring subscription's latest receipt has been superseded
+  // by it — an upgrade leaves the receipt it was upgraded from sitting there, and letting
+  // that keep vouching would hand the player a free lower tier for the rest of the window.
+  // Anything bought after it is a resubscribe, and survives.
+  //
+  // The event's own timestamp is the fallback for a payload that names no product.
+  const spent = productId
+    ? await client.query.storePurchase.findFirst({
+        columns: { createdAt: true },
+        where: and(
+          eq(storePurchase.userId, userId),
+          eq(storePurchase.productId, productId),
+          isNotNull(storePurchase.federalStatus),
+          ...(store ? [eq(storePurchase.store, store)] : []),
+        ),
+        orderBy: desc(storePurchase.createdAt),
+      })
+    : undefined;
+  const cutoff = spent?.createdAt ?? occurredAt;
+
   await client
     .update(storePurchase)
     .set({ revokedAt: new Date() })
@@ -226,12 +255,10 @@ export const revokeFederalStatus = async (
         eq(storePurchase.userId, userId),
         isNotNull(storePurchase.federalStatus),
         isNull(storePurchase.revokedAt),
-        lte(storePurchase.createdAt, occurredAt),
-        // An expiry describes one subscription, not the player's whole history. A tier
-        // change leaves the old product expiring while the new one is being billed, and
-        // the two stores are independent — so without this a lapse on one would retire
-        // the receipt for a subscription the player is still paying for.
-        ...(productId ? [eq(storePurchase.productId, productId)] : []),
+        lte(storePurchase.createdAt, cutoff),
+        // Bounded to the store the expiry came from: the two are billed independently, and
+        // the product ids are the same strings on both, so a lapse on one must not retire
+        // the other's receipts.
         ...(store ? [eq(storePurchase.store, store)] : []),
       ),
     );
@@ -314,7 +341,7 @@ export const storeFederalFloor = async (
     columns: { federalStatus: true },
     where: and(
       eq(storePurchase.userId, userId),
-      eq(storePurchase.isSandbox, false),
+      isNotNull(storePurchase.acceptedAt),
       isNotNull(storePurchase.federalStatus),
       isNull(storePurchase.revokedAt),
       gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
