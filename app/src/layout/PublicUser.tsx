@@ -60,6 +60,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
@@ -359,7 +360,15 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const canChange = userData && canClearUserNindo(userData);
 
   // Loaders
-  if (isPendingProfile) return <Loader explanation="Fetching Public User Data" />;
+  if (isPendingProfile) {
+    return (
+      <PublicUserSkeleton
+        title={title}
+        defaultBackHref={defaultBackHref}
+        initialBreak={initialBreak}
+      />
+    );
+  }
 
   // Show profile
   if (!profile) {
@@ -1174,6 +1183,50 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
 };
 
 export default PublicUserComponent;
+
+interface PublicUserSkeletonProps {
+  title: string;
+  defaultBackHref?: string;
+  initialBreak?: boolean;
+}
+
+/**
+ * Placeholder shown while the profile query is in flight.
+ *
+ * The profile is fetched client-side, so the server render carries none of it. A bare
+ * spinner is a few dozen pixels tall and the loaded profile is several hundred, which
+ * moved everything below it on arrival and put the /username/* template over the poor
+ * Cumulative Layout Shift threshold in Search Console. Reserving a box roughly the size
+ * of the statistics panel keeps that shift small; the panel itself grows past this once
+ * the tabs render, so the reservation is deliberately conservative rather than exact.
+ */
+const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
+  title,
+  defaultBackHref,
+  initialBreak,
+}) => (
+  <ContentBox
+    title={title}
+    subtitle="Loading profile"
+    defaultBackHref={defaultBackHref}
+    initialBreak={initialBreak}
+  >
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <Skeleton className="m-auto aspect-square w-5/6 max-w-80 rounded-2xl" />
+      <div className="flex flex-col justify-center gap-2 sm:col-span-2">
+        {Array.from({ length: 8 }, (_, i) => (
+          <Skeleton key={i} className="h-5 w-full" />
+        ))}
+      </div>
+    </div>
+    <div className="mt-4 flex flex-col gap-2">
+      {Array.from({ length: 4 }, (_, i) => (
+        <Skeleton key={i} className="h-8 w-full" />
+      ))}
+    </div>
+    <Loader explanation="Fetching Public User Data" />
+  </ContentBox>
+);
 
 interface EditUserComponentProps {
   userId: string;

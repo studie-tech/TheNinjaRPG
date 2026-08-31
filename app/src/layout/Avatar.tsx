@@ -47,22 +47,33 @@ interface AvatarImageProps {
   className?: string;
 }
 
+/**
+ * Sizing shared by the placeholder and the loaded avatar. The two states must resolve to
+ * the same box: the placeholder used to omit `max-w-80`, so in any container wider than
+ * 384px it rendered wider (and, being square, taller) than the image that replaced it,
+ * shifting everything below it once the avatar arrived.
+ */
+const AVATAR_BOX =
+  "relative max-w-80 m-auto w-5/6 aspect-square rounded-2xl border-2 border-black";
+
 const AvatarImage: React.FC<AvatarImageProps> = (props) => {
   const renditionWidth = useAvatarRenditionWidth(props.size);
   // If no href, show loader, otherwise show avatar
   if (!props.href) {
     return (
       <div
-        className={`background-animate relative m-auto aspect-square w-5/6 rounded-2xl border-2 border-black bg-linear-to-r from-slate-500 to-slate-400 opacity-20`}
+        className={cn(
+          AVATAR_BOX,
+          "background-animate bg-linear-to-r from-slate-500 to-slate-400 opacity-20",
+          props.className,
+        )}
       ></div>
     );
   } else {
-    const base =
-      "relative max-w-80 m-auto w-5/6 aspect-square rounded-2xl border-2 border-black";
     const hover = props.hover_effect ? "hover:border-amber-500 hover:opacity-80" : "";
     return (
       <Image
-        className={cn(base, hover, props.className)}
+        className={cn(AVATAR_BOX, hover, props.className)}
         src={props.href}
         alt={`${props.alt || "unknown"} AvatarImage`}
         width={renditionWidth}
