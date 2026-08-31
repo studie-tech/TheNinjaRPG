@@ -5,8 +5,15 @@ import { getWorldCycleBrightness } from "@/libs/dayNight";
 export const updateDayNightOverlay = (
   overlay: Mesh,
   brightness = getWorldCycleBrightness(),
+  enabled = true,
 ) => {
   const material = overlay.material as MeshBasicMaterial;
+  if (!enabled) {
+    material.opacity = 0;
+    overlay.visible = false;
+    return;
+  }
+  overlay.visible = true;
   const darkness = Math.max(0, Math.min(1, 1 - brightness));
   material.opacity = darkness * (1 - WORLD_NIGHT_BRIGHTNESS + 0.15);
 };
@@ -28,7 +35,12 @@ export const createGroundDayNightOverlay = (group: Group, size = 40) => {
 export const applyCanvasDayNightBrightness = (
   element: HTMLElement | null | undefined,
   brightness = getWorldCycleBrightness(),
+  enabled = true,
 ) => {
   if (!element) return;
+  if (!enabled) {
+    element.style.filter = "brightness(1.000)";
+    return;
+  }
   element.style.filter = `brightness(${brightness.toFixed(3)})`;
 };

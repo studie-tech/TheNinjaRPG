@@ -17,6 +17,7 @@ import {
   type WebGLRenderer,
 } from "three";
 import { FARM_PLOT_COLUMNS } from "@/drizzle/constants";
+import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import WebGlError from "@/layout/WebGLError";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
@@ -74,6 +75,8 @@ const FarmCanvasInner = ({ initialState, onPlotClick, ref }: FarmCanvasProps) =>
   const onPlotClickRef = useRef(onPlotClick);
   const timeDiffRef = useRef(timeDiff);
   const dayNightOverlayRef = useRef<Mesh | null>(null);
+  const { showDayNightMapOverlays } = useDayNightMapOverlays();
+  const showDayNightMapOverlaysRef = useRef(showDayNightMapOverlays);
   const [webglError, setWebglError] = useState(false);
   const reducedMotionRef = useRef(false);
 
@@ -84,6 +87,10 @@ const FarmCanvasInner = ({ initialState, onPlotClick, ref }: FarmCanvasProps) =>
   useEffect(() => {
     timeDiffRef.current = timeDiff;
   }, [timeDiff]);
+
+  useEffect(() => {
+    showDayNightMapOverlaysRef.current = showDayNightMapOverlays;
+  }, [showDayNightMapOverlays]);
 
   const refreshPlotVisuals = (selectedSlot: number | null) => {
     const groups = groupsRef.current;
@@ -201,6 +208,7 @@ const FarmCanvasInner = ({ initialState, onPlotClick, ref }: FarmCanvasProps) =>
     updateDayNightOverlay(
       dayNightOverlayRef.current,
       getWorldCycleBrightness(new Date(Date.now() - timeDiffRef.current)),
+      showDayNightMapOverlaysRef.current,
     );
 
     mount.appendChild(renderer.domElement);
@@ -262,6 +270,7 @@ const FarmCanvasInner = ({ initialState, onPlotClick, ref }: FarmCanvasProps) =>
         updateDayNightOverlay(
           dayNightOverlayRef.current,
           getWorldCycleBrightness(new Date(Date.now() - timeDiffRef.current)),
+          showDayNightMapOverlaysRef.current,
         );
       }
 

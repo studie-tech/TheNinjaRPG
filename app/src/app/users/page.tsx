@@ -16,6 +16,7 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserFiltering, { getFilter, useFiltering } from "@/layout/UserFiltering";
+import { getFarmingLevel } from "@/libs/farming";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showUserRank } from "@/libs/profile";
 import { getRankedRank } from "@/libs/ranked_pvp";
@@ -95,6 +96,7 @@ export default function Users() {
       </div>
     ),
     pvpRank: getRankedRank(user.rankedLp, topPlayersLP ?? []),
+    farmingExperience: `${user.farmingExperience.toLocaleString()} (${getFarmingLevel(user.farmingExperience)})`,
   }));
   type User = ArrayElement<typeof allUsers>;
 
@@ -115,7 +117,11 @@ export default function Users() {
   } else if (activeTab === "Crafting") {
     columns.push({ key: "craftingExperience", header: "Crafting", type: "string" });
   } else if (activeTab === "Farming") {
-    columns.push({ key: "farmingExperience", header: "Farming", type: "string" });
+    columns.push({
+      key: "farmingExperience",
+      header: "Experience (level)",
+      type: "string",
+    });
   } else if (activeTab === "Medical") {
     columns.push({ key: "medicalExperience", header: "Medical", type: "string" });
   } else if (activeTab === "PvP") {

@@ -23,6 +23,7 @@ import {
   MUSIC_TSUKIMORI_THEME,
   MUSIC_WELCOME_TO_SEICHI,
 } from "@/drizzle/constants";
+import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import {
   safeLocalStorageGetItem,
   safeLocalStorageSetItem,
@@ -259,6 +260,10 @@ export const useGameSettings = (userData?: UserWithRelations | null) => {
   // Light layout preference state
   const [lightLayout, setLightLayout] = useLocalStorage<boolean>("lightLayout", false);
 
+  // Day/night map overlay preference (applies immediately, no refresh)
+  const { showDayNightMapOverlays, setShowDayNightMapOverlays } =
+    useDayNightMapOverlays();
+
   // Full layout preference state
   const activeLayout = useActiveLayout();
   const [anonymousLayout, setAnonymousLayout] = useLocalStorage<EffectiveLayout>(
@@ -300,6 +305,8 @@ export const useGameSettings = (userData?: UserWithRelations | null) => {
     setSfxVolume,
     lightLayout,
     setLightLayout,
+    showDayNightMapOverlays,
+    setShowDayNightMapOverlays,
     layoutPreference,
     setAnonymousLayout,
     isIframesMuted,
@@ -332,6 +339,8 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
     setSfxVolume,
     lightLayout,
     setLightLayout,
+    showDayNightMapOverlays,
+    setShowDayNightMapOverlays,
     layoutPreference,
     setAnonymousLayout,
     isIframesMuted,
@@ -584,6 +593,23 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
             />
           </div>
         )}
+        <div
+          className={`flex items-center justify-between ${!isPixelLayout ? "mt-3" : ""}`}
+        >
+          <div>
+            <p className={textClass}>Day/night map overlays</p>
+            {isPanel && (
+              <p className="text-muted-foreground text-xs">
+                {showDayNightMapOverlays ? "Enabled" : "Disabled"}
+              </p>
+            )}
+          </div>
+          <Switch
+            checked={!!showDayNightMapOverlays}
+            onCheckedChange={setShowDayNightMapOverlays}
+            aria-label="Toggle day/night map overlays"
+          />
+        </div>
         {lightLayoutChanged && (
           <div className={isPanel ? "mt-3" : "mt-2"}>
             <Button
