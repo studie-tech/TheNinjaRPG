@@ -119,7 +119,7 @@ describeWithDatabase("quest bootstrap guard", () => {
     const database = await getTestDatabase();
     const bootstrap = await fetchQuestBootstrap(database, "user-guard");
 
-    expect(bootstrap.candidates.some((c) => c.questType === "exam")).toBe(false);
+    expect(bootstrap.some((c) => c.questType === "exam")).toBe(false);
     expect(canBootstrapQuestType(bootstrap, "exam", 30)).toBe(false);
     expect(await fetchUncompletedQuests(database, asUser(30), "exam")).toHaveLength(0);
   });
@@ -133,6 +133,6 @@ describeWithDatabase("quest bootstrap guard", () => {
     const database = await getTestDatabase();
     const bootstrap = await fetchQuestBootstrap(database, "user-guard");
 
-    expect(bootstrap.candidates.map((c) => c.questType).sort()).toEqual(["tier"]);
+    expect(bootstrap.map((c) => c.questType).sort()).toEqual(["tier"]);
   });
 });
