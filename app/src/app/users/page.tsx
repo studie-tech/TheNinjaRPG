@@ -84,20 +84,23 @@ export default function Users() {
   const userCountDay = onlineStats?.onlineDay || 0;
   const maxOnline = onlineStats?.maxOnline || 0;
   const flatUsers = users?.pages.flatMap((page) => page.data);
-  const allUsers = flatUsers?.map((user) => ({
-    ...user,
-    info: (
-      <div>
-        <p className="font-bold">{user.username}</p>
-        <p>
-          Lvl. {user.level} {showUserRank(user)}
-        </p>
-        <p>{user.village?.name || "Syndicate"}</p>
-      </div>
-    ),
-    pvpRank: getRankedRank(user.rankedLp, topPlayersLP ?? []),
-    farmingExperience: `${user.farmingExperience.toLocaleString()} (${getFarmingLevel(user.farmingExperience)})`,
-  }));
+  const allUsers = flatUsers?.map((user) => {
+    const farmingExperience = Math.max(0, user.farmingExperience);
+    return {
+      ...user,
+      info: (
+        <div>
+          <p className="font-bold">{user.username}</p>
+          <p>
+            Lvl. {user.level} {showUserRank(user)}
+          </p>
+          <p>{user.village?.name || "Syndicate"}</p>
+        </div>
+      ),
+      pvpRank: getRankedRank(user.rankedLp, topPlayersLP ?? []),
+      farmingExperience: `${farmingExperience.toLocaleString()} (${getFarmingLevel(farmingExperience)})`,
+    };
+  });
   type User = ArrayElement<typeof allUsers>;
 
   useInfinitePagination({
