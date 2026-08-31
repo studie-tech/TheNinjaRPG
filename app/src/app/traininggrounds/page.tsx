@@ -751,7 +751,10 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
             handleNextStep();
           }
         }
-        await utils.jutsu.getUserJutsus.invalidate();
+        await Promise.all([
+          utils.jutsu.getUserJutsus.invalidate(),
+          utils.profile.getSidebarTimers.invalidate(),
+        ]);
       },
       onSettled: () => {
         document.body.style.cursor = "default";
@@ -764,7 +767,10 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     api.jutsu.stopTraining.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        await utils.jutsu.getUserJutsus.invalidate();
+        await Promise.all([
+          utils.jutsu.getUserJutsus.invalidate(),
+          utils.profile.getSidebarTimers.invalidate(),
+        ]);
       },
       onSettled: () => {
         document.body.style.cursor = "default";
