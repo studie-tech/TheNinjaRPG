@@ -1757,65 +1757,70 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
         // Update stats chart
         const chartTextColor = getEffectiveThemeTextColor(activeLayout);
         Chart.defaults.color = chartTextColor;
-        chart = new Chart(ctx, {
-          type: "bar",
-          options: {
-            maintainAspectRatio: false,
-            responsive: true,
-            aspectRatio: 1.1,
-            scales: {
-              y: {
-                beginAtZero: true,
-                grid: { color: "rgba(148, 163, 184, 0.16)" },
-                ticks: {
-                  color: chartTextColor,
-                  stepSize: 1,
+        try {
+          chart = new Chart(ctx, {
+            type: "bar",
+            options: {
+              maintainAspectRatio: false,
+              responsive: true,
+              aspectRatio: 1.1,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  grid: { color: "rgba(148, 163, 184, 0.16)" },
+                  ticks: {
+                    color: chartTextColor,
+                    stepSize: 1,
+                  },
+                  title: {
+                    display: false,
+                    text: "#Events",
+                  },
+                  stacked: true,
                 },
-                title: {
-                  display: false,
-                  text: "#Events",
+                x: {
+                  grid: { color: "rgba(148, 163, 184, 0.16)" },
+                  stacked: true,
+                  ticks: { color: chartTextColor },
+                  title: {
+                    display: true,
+                    color: chartTextColor,
+                    text: "Hour of Day",
+                  },
                 },
-                stacked: true,
               },
-              x: {
-                grid: { color: "rgba(148, 163, 184, 0.16)" },
-                stacked: true,
-                ticks: { color: chartTextColor },
-                title: {
+              plugins: {
+                legend: {
+                  position: "bottom",
                   display: true,
-                  color: chartTextColor,
-                  text: "Hour of Day",
                 },
-              },
-            },
-            plugins: {
-              legend: {
-                position: "bottom",
-                display: true,
-              },
-              tooltip: {
-                callbacks: {
-                  title: (tooltipItems) =>
-                    `Training at hour ${tooltipItems?.[0]?.label || "unknown"}`,
-                  label: (tooltipItems) => {
-                    const raw = tooltipItems?.raw as {
-                      entries: { trainingFinishedAt: string }[];
-                    };
-                    return (
-                      raw.entries?.map((e) =>
-                        new Date(e.trainingFinishedAt).toLocaleString(),
-                      ) || []
-                    );
+                tooltip: {
+                  callbacks: {
+                    title: (tooltipItems) =>
+                      `Training at hour ${tooltipItems?.[0]?.label || "unknown"}`,
+                    label: (tooltipItems) => {
+                      const raw = tooltipItems?.raw as {
+                        entries: { trainingFinishedAt: string }[];
+                      };
+                      return (
+                        raw.entries?.map((e) =>
+                          new Date(e.trainingFinishedAt).toLocaleString(),
+                        ) || []
+                      );
+                    },
                   },
                 },
               },
             },
-          },
-          data: {
-            labels: HOURS_OF_DAY,
-            datasets: datasets,
-          },
-        });
+            data: {
+              labels: HOURS_OF_DAY,
+              datasets: datasets,
+            },
+          });
+        } catch (error) {
+          console.error("Could not draw the training chart", error);
+          if (!cancelled) setChartFailed(true);
+        }
       })();
 
       // Remove on unmount
