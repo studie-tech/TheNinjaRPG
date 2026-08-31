@@ -46,16 +46,25 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
   /** Bumped per draw so an import that resolves late cannot overwrite a newer chart. */
   const chartRunRef = useRef(0);
 
-  // Format data for category chart - filter out totalEntries and only include categories with values > 0
-  const categoryChartData = data
-    ? Object.entries(data[0] || {})
-        .filter(([key, value]) => key !== "totalEntries" && Number(value) > 0)
-        .map(([category, count]) => ({
-          category: formatCategoryName(category),
-          count: Number(count),
-        }))
-        .sort((a, b) => b.count - a.count)
-    : [];
+  /**
+   * Format data for category chart - filter out totalEntries and only include categories with
+   * values > 0. Memoized because it is a dependency of the draw effect below: rebuilt on every
+   * render it would tear the chart down and start a fresh async draw each time, and the canvas
+   * ends up blank whenever a cleanup lands after the draw it was meant to precede.
+   */
+  const categoryChartData = React.useMemo(
+    () =>
+      data
+        ? Object.entries(data[0] || {})
+            .filter(([key, value]) => key !== "totalEntries" && Number(value) > 0)
+            .map(([category, count]) => ({
+              category: formatCategoryName(category),
+              count: Number(count),
+            }))
+            .sort((a, b) => b.count - a.count)
+        : [],
+    [data],
+  );
 
   /**
    * Loads the charting library once and remembers it. Hands back the constructor rather than a
