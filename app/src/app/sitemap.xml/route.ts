@@ -10,13 +10,9 @@ import {
 export const dynamic = "force-dynamic";
 
 export function GET() {
-  const now = new Date();
   return xmlResponse(
     renderSitemapIndex(
-      SITEMAP_SECTIONS.map((section) => ({
-        url: sitemapSectionUrl(section),
-        lastModified: now,
-      })),
+      SITEMAP_SECTIONS.map((section) => ({ url: sitemapSectionUrl(section) })),
     ),
   );
 }

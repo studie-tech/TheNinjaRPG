@@ -49,10 +49,7 @@ describe("renderUrlset", () => {
 describe("renderSitemapIndex", () => {
   it("lists child sitemaps in a sitemapindex", () => {
     const xml = renderSitemapIndex(
-      SITEMAP_SECTIONS.map((section) => ({
-        url: sitemapSectionUrl(section),
-        lastModified: new Date("2026-08-30T12:00:00.000Z"),
-      })),
+      SITEMAP_SECTIONS.map((section) => ({ url: sitemapSectionUrl(section) })),
     );
     expect(xml).toContain(
       '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
@@ -62,6 +59,8 @@ describe("renderSitemapIndex", () => {
     }
     // An index must not carry <url> entries; mixing the two silently invalidates it.
     expect(xml).not.toContain("<url>");
+    // A request-time lastmod would claim every child changed on every fetch.
+    expect(xml).not.toContain("<lastmod>");
   });
 });
 
