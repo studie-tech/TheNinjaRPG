@@ -40,6 +40,7 @@ import {
   XP_BRACKETS,
 } from "@/drizzle/constants";
 import type { UserData, VillageStructure } from "@/drizzle/schema";
+import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -215,6 +216,12 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   // Light layout preference state
   const [lightLayout] = useLocalStorage<boolean>("lightLayout", false);
+
+  // Day/night map shading preference — ref so the long-running render loop
+  // reacts without rebuilding the map
+  const { showDayNightMapOverlays } = useDayNightMapOverlays();
+  const showDayNightMapOverlaysRef = useRef(showDayNightMapOverlays);
+  showDayNightMapOverlaysRef.current = showDayNightMapOverlays;
 
   // Performance monitoring
   const performanceMonitor = usePerformanceMonitor(false);
@@ -2551,6 +2558,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         applyCanvasDayNightBrightness(
           renderer?.domElement,
           getWorldCycleBrightness(new Date(Date.now() - timeDiffRef.current)),
+          showDayNightMapOverlaysRef.current,
         );
         if (!contextHandlers.isContextLost() && renderer) {
           renderer.render(scene, camera);
