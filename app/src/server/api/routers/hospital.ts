@@ -29,6 +29,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import { findRelationship } from "@/utils/alliance";
+import { secondsFromNow } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
 
 const pusher = getServerPusher();
@@ -77,12 +78,11 @@ export const hospitalRouter = createTRPCRouter({
           user.villageId
             ? inArray(userData.villageId, uniqueVillageIds)
             : isNull(userData.villageId),
-          lte(userData.curHealth, userData.maxHealth),
           or(...MEDNIN_HEALABLE_STATES.map((s) => eq(userData.status, s))),
           sql`(${userData.maxHealth} - ${userData.curHealth}) > 0`,
+          gte(userData.updatedAt, secondsFromNow(-36000)),
         ),
         limit: 10,
-        orderBy: sql`RAND()`,
       });
     }),
   // Let users heal other users if they are GENIN or above

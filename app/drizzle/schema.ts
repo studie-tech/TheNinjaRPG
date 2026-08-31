@@ -2559,6 +2559,10 @@ export const userData = mysqlTable(
       battleIdIdx: index("UserData_battleId_idx").on(table.battleId),
       statusIdx: index("UserData_status_idx").on(table.status),
       sectorIdx: index("UserData_sector_idx").on(table.sector),
+      sectorUpdatedAtIdx: index("UserData_sector_updatedAt_idx").on(
+        table.sector,
+        table.updatedAt,
+      ),
       sectorStealthActiveIdx: index("UserData_sector_stealthActive_idx").on(
         table.sector,
         table.stealthActive,
