@@ -20,12 +20,23 @@ const lockfileVersion = (source: string) => {
   return match?.[1] === undefined ? undefined : Number(match[1]);
 };
 
-const packageManager = () => {
-  const manifest = JSON.parse(readFileSync(join(APP_ROOT, "package.json"), "utf8")) as {
+const manifest = () =>
+  JSON.parse(readFileSync(join(APP_ROOT, "package.json"), "utf8")) as {
     packageManager?: string;
+    overrides?: Record<string, unknown>;
   };
-  return manifest.packageManager;
-};
+
+/**
+ * The object-valued overrides, which are the ones an older bun cannot express and silently drops
+ * ("Bun currently does not support nested overrides"). Read from package.json rather than listed
+ * here, so an override added later is covered without anyone remembering to update this. The
+ * string-valued ones are deliberately not checked: they survive the downgrade, so they would
+ * report nothing about it.
+ */
+const nestedOverrideNames = () =>
+  Object.entries(manifest().overrides ?? {})
+    .filter(([, value]) => typeof value === "object" && value !== null)
+    .map(([name]) => name);
 
 describe("bun.lock", () => {
   it("has not been downgraded by an older bun", () => {
@@ -37,15 +48,16 @@ describe("bun.lock", () => {
   });
 
   it("still carries the nested overrides an older bun would have dropped", () => {
-    // Scoped to the overrides block on purpose: both names also appear in the packages list, so
+    // Scoped to the overrides block on purpose: the names also appear in the packages list, so
     // searching the whole file passes even on a lockfile that has lost them
-    const source = readLockfile();
-    const overrides = source.match(/"overrides":\s*\{([\s\S]*?)\n {2}\},/)?.[1] ?? "";
-    expect(overrides).toContain("@types/cytoscape-edgehandles");
-    expect(overrides).toContain("@types/react-cytoscapejs");
+    const overrides = readLockfile().match(/"overrides":\s*\{([\s\S]*?)\n {2}\},/)?.[1] ?? "";
+    const nested = nestedOverrideNames();
+    // Without one of these the assertion below is vacuous and the canary watches nothing
+    expect(nested.length).toBeGreaterThan(0);
+    for (const name of nested) expect(overrides).toContain(name);
   });
 
   it("pins a package manager for everyone to match", () => {
-    expect(packageManager()).toMatch(/^bun@\d+\.\d+\.\d+$/);
+    expect(manifest().packageManager).toMatch(/^bun@\d+\.\d+\.\d+$/);
   });
 });
