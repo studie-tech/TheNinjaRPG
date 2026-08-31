@@ -56,9 +56,11 @@ import {
   byItemName,
   calcItemRepairCost,
   calcItemSellingPrice,
+  calcMaxCookingItems,
   calcMaxEventItems,
   calcMaxItems,
   calcMaxMaterials,
+  getInventoryBucket,
   isEquippableUserItem,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
@@ -74,7 +76,7 @@ import { displayCostType } from "@/validators/item";
 
 export default function MyItems() {
   // State
-  const availableTabs = ["normal", "event", "materials"];
+  const availableTabs = ["normal", "event", "materials", "cooking"];
   const { data: userData } = useRequiredUserData();
   const [activeTab, setActiveTab] = useState<(typeof availableTabs)[number]>("normal");
 
@@ -164,19 +166,23 @@ export default function MyItems() {
       ),
     }));
   const normalItems = availableItems?.filter(
-    (ui) => !ui.item.isEventItem && ui.item.itemType !== "MATERIAL",
+    (ui) => getInventoryBucket(ui.item) === "normal",
   );
   const eventItems = availableItems?.filter(
-    (ui) => ui.item.isEventItem && ui.item.itemType !== "MATERIAL",
+    (ui) => getInventoryBucket(ui.item) === "event",
   );
   const materialsItems = availableItems?.filter(
-    (ui) => ui.item.itemType === "MATERIAL",
+    (ui) => getInventoryBucket(ui.item) === "materials",
+  );
+  const cookingItems = availableItems?.filter(
+    (ui) => getInventoryBucket(ui.item) === "cooking",
   );
 
   // Calculate inventory limits
   const maxNormalItems = userData ? calcMaxItems(userData) : 0;
   const maxEventItems = userData ? calcMaxEventItems(userData) : 0;
   const maxMaterials = userData ? calcMaxMaterials(userData) : 0;
+  const maxCookingItems = userData ? calcMaxCookingItems(userData) : 0;
 
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -216,7 +222,9 @@ export default function MyItems() {
             ? `Normal Inventory ${normalItems?.length}/${maxNormalItems}`
             : activeTab === "event"
               ? `Event Inventory ${eventItems?.length}/${maxEventItems}`
-              : `Materials Inventory ${materialsItems?.length}/${maxMaterials}`
+              : activeTab === "materials"
+                ? `Materials Inventory ${materialsItems?.length}/${maxMaterials}`
+                : `Cooking Inventory ${cookingItems?.length}/${maxCookingItems}`
         }
         padding={false}
         topRightContent={
@@ -274,7 +282,9 @@ export default function MyItems() {
                     ? normalItems?.filter((ui) => ui.equipped === "NONE")
                     : activeTab === "event"
                       ? eventItems?.filter((ui) => ui.equipped === "NONE")
-                      : materialsItems?.filter((ui) => ui.equipped === "NONE")
+                      : activeTab === "materials"
+                        ? materialsItems?.filter((ui) => ui.equipped === "NONE")
+                        : cookingItems?.filter((ui) => ui.equipped === "NONE")
                 }
                 allUserItems={userItems}
               />

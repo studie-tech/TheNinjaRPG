@@ -26,6 +26,9 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   FARM_GOLD_FED_TIME_REDUCTION_PERCENT,
+  FED_COOKING_GOLD_SLOTS,
+  FED_COOKING_NORMAL_SLOTS,
+  FED_COOKING_SILVER_SLOTS,
   FED_EVENT_ITEMS_DEFAULT,
   FED_EVENT_ITEMS_GOLD,
   FED_EVENT_ITEMS_NORMAL,
@@ -482,6 +485,7 @@ const PayPalSubscriptionButton = (props: {
         <li>
           +{FED_EVENT_ITEMS_NORMAL - FED_EVENT_ITEMS_DEFAULT} Event inventory space
         </li>
+        <li>+{FED_COOKING_NORMAL_SLOTS} Cooking inventory space</li>
         <li>+{FED_NORMAL_JUTSU_SLOTS} Jutsu slot</li>
         <li>+{FED_NORMAL_BANK_INTEREST}% bank interest</li>
         <li>{FED_JUTSU_LOADOUTS_BASE + FED_NORMAL_JUTSU_LOADOUTS} jutsu loadouts</li>
@@ -501,6 +505,7 @@ const PayPalSubscriptionButton = (props: {
         <li>
           +{FED_EVENT_ITEMS_SILVER - FED_EVENT_ITEMS_DEFAULT} Event inventory space
         </li>
+        <li>+{FED_COOKING_SILVER_SLOTS} Cooking inventory space</li>
         <li>+{FED_SILVER_JUTSU_SLOTS} Jutsu slots</li>
         <li>+{FED_SILVER_BANK_INTEREST}% bank interest</li>
         <li>{FED_JUTSU_LOADOUTS_BASE + FED_SILVER_JUTSU_LOADOUTS} jutsu loadouts</li>
@@ -518,6 +523,7 @@ const PayPalSubscriptionButton = (props: {
         <li>Gold username in tavern</li>
         <li>+{FED_GOLD_INVENTORY_SLOTS} Normal Inventory space</li>
         <li>+{FED_EVENT_ITEMS_GOLD - FED_EVENT_ITEMS_DEFAULT} Event inventory space</li>
+        <li>+{FED_COOKING_GOLD_SLOTS} Cooking inventory space</li>
         <li>+{FED_GOLD_JUTSU_SLOTS} Jutsu slots</li>
         <li>+{FED_GOLD_BANK_INTEREST}% bank interest</li>
         <li>{FARM_GOLD_FED_TIME_REDUCTION_PERCENT}% faster farming</li>

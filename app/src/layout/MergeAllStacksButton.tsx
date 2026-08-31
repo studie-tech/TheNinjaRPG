@@ -59,7 +59,7 @@ export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
     >
       <p>
         {storedAtHome
-          ? "Consolidate stackable items in your home storage (stored items and materials) into the fewest possible stacks. Carried inventory is not affected. This cannot be automatically undone."
+          ? "Consolidate stackable items in your home storage (stored items, materials, and cooking) into the fewest possible stacks. Carried inventory is not affected. This cannot be automatically undone."
           : "Consolidate stackable items in your carried inventory (backpack and equipped slots) into the fewest possible stacks. Home storage is not affected. This cannot be automatically undone."}
       </p>
     </Confirm2>

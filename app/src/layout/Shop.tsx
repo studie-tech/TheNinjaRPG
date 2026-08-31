@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Check,
+  ChefHat,
   CircleAlert,
   Diamond,
   FlaskConical,
@@ -97,6 +98,7 @@ const SHOP_ITEM_TYPE_TAB_ICON: Partial<Record<ItemType, LucideIcon>> = {
   ARMOR: Shield,
   ACCESSORY: Sparkles,
   MATERIAL: Package,
+  COOKING: ChefHat,
   KEYSTONE: Gem,
   CRYSTAL: Diamond,
 };
@@ -107,6 +109,7 @@ const SHOP_ITEM_TYPE_TAB_HINT: Record<ItemType, string> = {
   ARMOR: "Armor — defensive layers and resistances for your build.",
   ACCESSORY: "Accessories — rings, charms, and extras that tweak your kit.",
   MATERIAL: "Materials — crafting and upgrade components.",
+  COOKING: "Cooking — ingredients and prepared foods for storage.",
   KEYSTONE: "Keystones — slot upgrades and build-defining modifiers.",
   CRYSTAL: "Crystals — special slot items and enhancements.",
   OTHER: "Other — miscellaneous goods in stock.",
@@ -118,6 +121,7 @@ const SHOP_ITEM_TYPE_TAB_LABEL: Record<ItemType, string> = {
   ARMOR: "Armor",
   ACCESSORY: "Accessory",
   MATERIAL: "Material",
+  COOKING: "Cooking",
   KEYSTONE: "Keystone",
   CRYSTAL: "Crystal",
   OTHER: "Other",

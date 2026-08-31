@@ -1,17 +1,36 @@
 import { describe, it, expect } from "vitest";
 import {
+  COOKING_BASE_SLOTS,
+  FED_COOKING_GOLD_SLOTS,
+  FED_COOKING_NORMAL_SLOTS,
+  FED_COOKING_SILVER_SLOTS,
+  ItemTypes,
+  MATERIALS_BASE_SLOTS,
+  NonActionItemTypes,
+} from "@/drizzle/constants";
+import {
   buildItemLoadoutData,
+  calcMaxCookingItems,
+  calcMaxHouseCookingItems,
+  calcMaxHouseMaterials,
+  calcMaxMaterials,
   canEquipAdditional,
   checkEquipConstraints,
   computeLoadoutAssignments,
   type EquipConstraintInfo,
   type EquippedAssignment,
   type EquippedConstraintState,
+  getHomeStorageBucket,
+  getHomeStorageBucketFullMessage,
+  getInventoryBucket,
+  getInventoryBucketCapacity,
+  getInventoryBucketFullMessage,
   isEquippableUserItem,
+  showsItemLevelBadge,
   userItemActionBadges,
 } from "@/libs/item";
 import type { ItemSlot } from "@/drizzle/constants";
-import type { UserItemWithRelations } from "@/drizzle/schema";
+import type { UserData, UserItemWithRelations } from "@/drizzle/schema";
 
 const NOW = new Date("2026-06-17T00:00:00Z");
 const PAST = new Date("2026-06-16T00:00:00Z");
@@ -550,5 +569,108 @@ describe("computeLoadoutAssignments", () => {
     );
     expect(out.assignments).toEqual([{ userItemId: "r1", slot: "HEAD" }]);
     expect(out.invalidItems).toEqual([]);
+  });
+});
+
+describe("COOKING item type", () => {
+  it("is part of ItemTypes and NonActionItemTypes", () => {
+    expect(ItemTypes).toContain("COOKING");
+    expect(NonActionItemTypes).toContain("COOKING");
+  });
+
+  it("hides level badges like materials", () => {
+    expect(showsItemLevelBadge({ itemType: "COOKING", slot: "ITEM" })).toBe(false);
+    expect(showsItemLevelBadge({ itemType: "MATERIAL", slot: "ITEM" })).toBe(false);
+    expect(showsItemLevelBadge({ itemType: "WEAPON", slot: "HAND" })).toBe(true);
+  });
+});
+
+describe("inventory and home storage buckets", () => {
+  it("prioritizes dedicated types over event flag", () => {
+    expect(getInventoryBucket({ itemType: "COOKING", isEventItem: true })).toBe(
+      "cooking",
+    );
+    expect(getInventoryBucket({ itemType: "MATERIAL", isEventItem: true })).toBe(
+      "materials",
+    );
+    expect(getInventoryBucket({ itemType: "CONSUMABLE", isEventItem: true })).toBe(
+      "event",
+    );
+    expect(getInventoryBucket({ itemType: "WEAPON", isEventItem: false })).toBe(
+      "normal",
+    );
+  });
+
+  it("maps home storage with event items using ordinary capacity", () => {
+    expect(getHomeStorageBucket({ itemType: "COOKING" })).toBe("cooking");
+    expect(getHomeStorageBucket({ itemType: "MATERIAL" })).toBe("materials");
+    expect(getHomeStorageBucket({ itemType: "CONSUMABLE" })).toBe("normal");
+  });
+
+  it("keeps cooking out of normal and materials buckets", () => {
+    const cooking = { itemType: "COOKING", isEventItem: false };
+    expect(getInventoryBucket(cooking)).not.toBe("normal");
+    expect(getInventoryBucket(cooking)).not.toBe("materials");
+    expect(getInventoryBucket(cooking)).not.toBe("event");
+  });
+});
+
+describe("cooking capacity", () => {
+  const user = (over: Partial<UserData> = {}) =>
+    ({
+      staffAccount: false,
+      federalStatus: "NONE",
+      extraItemSlots: 0,
+      ...over,
+    }) as UserData;
+
+  it("mirrors materials base, federal, and purchased extras", () => {
+    expect(calcMaxCookingItems(user())).toBe(COOKING_BASE_SLOTS);
+    expect(calcMaxCookingItems(user({ federalStatus: "NORMAL" }))).toBe(
+      COOKING_BASE_SLOTS + FED_COOKING_NORMAL_SLOTS,
+    );
+    expect(calcMaxCookingItems(user({ federalStatus: "SILVER" }))).toBe(
+      COOKING_BASE_SLOTS + FED_COOKING_SILVER_SLOTS,
+    );
+    expect(calcMaxCookingItems(user({ federalStatus: "GOLD" }))).toBe(
+      COOKING_BASE_SLOTS + FED_COOKING_GOLD_SLOTS,
+    );
+    expect(calcMaxCookingItems(user({ extraItemSlots: 3 }))).toBe(
+      COOKING_BASE_SLOTS + 3,
+    );
+    expect(calcMaxCookingItems(user())).toBe(calcMaxMaterials(user()));
+    expect(calcMaxCookingItems(user())).toBe(MATERIALS_BASE_SLOTS);
+  });
+
+  it("uses homeStorage - 10 for house cooking capacity", () => {
+    expect(calcMaxHouseCookingItems(user(), 25)).toBe(15);
+    expect(calcMaxHouseCookingItems(user(), 5)).toBe(0);
+    expect(calcMaxHouseCookingItems(user(), 25)).toBe(
+      calcMaxHouseMaterials(user(), 25),
+    );
+  });
+
+  it("reports cooking-specific full messages and capacity", () => {
+    expect(getInventoryBucketFullMessage("cooking")).toBe(
+      "Cooking inventory is full",
+    );
+    expect(getInventoryBucketCapacity("cooking", user({ federalStatus: "GOLD" }))).toBe(
+      COOKING_BASE_SLOTS + FED_COOKING_GOLD_SLOTS,
+    );
+    expect(getHomeStorageBucketFullMessage("cooking")).toBe(
+      "Your home cooking storage is full",
+    );
+  });
+
+  it("does not consume normal or materials capacity for cooking items", () => {
+    const cooking = { itemType: "COOKING" as const, isEventItem: false };
+    expect(getInventoryBucket(cooking)).toBe("cooking");
+    expect(getHomeStorageBucket(cooking)).toBe("cooking");
+    expect(getInventoryBucketFullMessage(getInventoryBucket(cooking))).not.toBe(
+      "Inventory is full",
+    );
+    expect(getInventoryBucketFullMessage(getInventoryBucket(cooking))).not.toBe(
+      "Materials inventory is full",
+    );
   });
 });

@@ -37,7 +37,12 @@ import {
   isPlotReady,
   mapPlotToState,
 } from "@/libs/farming";
-import { calcMaxEventItems, calcMaxItems, calcMaxMaterials } from "@/libs/item";
+import {
+  getInventoryBucket,
+  getInventoryBucketCapacity,
+  getInventoryBucketFullMessage,
+  type InventoryBucket,
+} from "@/libs/item";
 import {
   filterQuestTrackersForDbPersist,
   getNewTrackers,
@@ -2117,25 +2122,12 @@ const guardItemAwardInventoryCapacity = (
   );
 
   const inventoryItems = userItems.filter((ui) => !ui.storedAtHome);
-  if (itemInfo.isEventItem) {
-    const eventItemsCount = inventoryItems.filter((ui) => ui.item.isEventItem).length;
-    if (eventItemsCount + newStacksRequired > calcMaxEventItems(user)) {
-      return errorResponse("Event item inventory is full");
-    }
-  } else if (itemInfo.itemType === "MATERIAL") {
-    const materialsCount = inventoryItems.filter(
-      (ui) => !ui.item.isEventItem && ui.item.itemType === "MATERIAL",
-    ).length;
-    if (materialsCount + newStacksRequired > calcMaxMaterials(user)) {
-      return errorResponse("Materials inventory is full");
-    }
-  } else {
-    const regularItemsCount = inventoryItems.filter(
-      (ui) => !ui.item.isEventItem && ui.item.itemType !== "MATERIAL",
-    ).length;
-    if (regularItemsCount + newStacksRequired > calcMaxItems(user)) {
-      return errorResponse("Inventory is full");
-    }
+  const bucket = getInventoryBucket(itemInfo);
+  const bucketCount = inventoryItems.filter(
+    (ui) => getInventoryBucket(ui.item) === bucket,
+  ).length;
+  if (bucketCount + newStacksRequired > getInventoryBucketCapacity(bucket, user)) {
+    return errorResponse(getInventoryBucketFullMessage(bucket));
   }
 
   return null;
@@ -2147,7 +2139,12 @@ const guardBulkItemAwardInventoryCapacity = (
   awards: { item: Item; quantity: number }[],
 ) => {
   const inventoryItems = userItems.filter((userItem) => !userItem.storedAtHome);
-  const requiredStacks = { event: 0, material: 0, regular: 0 };
+  const requiredStacks: Record<InventoryBucket, number> = {
+    event: 0,
+    materials: 0,
+    cooking: 0,
+    normal: 0,
+  };
   const now = new Date();
 
   // Fold repeat awards of the same item together. Sized separately they would each claim
@@ -2178,28 +2175,18 @@ const guardBulkItemAwardInventoryCapacity = (
     const newStacks = Math.ceil(
       Math.max(0, award.quantity - reusableStackSpace) / stackSize,
     );
-    if (award.item.isEventItem) requiredStacks.event += newStacks;
-    else if (award.item.itemType === "MATERIAL") requiredStacks.material += newStacks;
-    else requiredStacks.regular += newStacks;
+    requiredStacks[getInventoryBucket(award.item)] += newStacks;
   }
 
-  const eventItemCount = inventoryItems.filter(
-    (userItem) => userItem.item.isEventItem,
-  ).length;
-  if (eventItemCount + requiredStacks.event > calcMaxEventItems(user)) {
-    return errorResponse("Event item inventory is full");
-  }
-  const materialCount = inventoryItems.filter(
-    (userItem) => !userItem.item.isEventItem && userItem.item.itemType === "MATERIAL",
-  ).length;
-  if (materialCount + requiredStacks.material > calcMaxMaterials(user)) {
-    return errorResponse("Materials inventory is full");
-  }
-  const regularItemCount = inventoryItems.filter(
-    (userItem) => !userItem.item.isEventItem && userItem.item.itemType !== "MATERIAL",
-  ).length;
-  if (regularItemCount + requiredStacks.regular > calcMaxItems(user)) {
-    return errorResponse("Inventory is full");
+  for (const bucket of Object.keys(requiredStacks) as InventoryBucket[]) {
+    const needed = requiredStacks[bucket];
+    if (needed <= 0) continue;
+    const bucketCount = inventoryItems.filter(
+      (userItem) => getInventoryBucket(userItem.item) === bucket,
+    ).length;
+    if (bucketCount + needed > getInventoryBucketCapacity(bucket, user)) {
+      return errorResponse(getInventoryBucketFullMessage(bucket));
+    }
   }
   return null;
 };

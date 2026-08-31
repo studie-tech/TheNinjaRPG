@@ -8,10 +8,12 @@ import {
 } from "@/drizzle/constants";
 import { userData, userItem } from "@/drizzle/schema";
 import {
-  calcMaxEventItems,
-  calcMaxHouseMaterials,
-  calcMaxItems,
-  calcMaxMaterials,
+  getHomeStorageBucket,
+  getHomeStorageBucketCapacity,
+  getHomeStorageBucketFullMessage,
+  getInventoryBucket,
+  getInventoryBucketCapacity,
+  getInventoryBucketFullMessage,
 } from "@/libs/item";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { calcIsInVillage } from "@/libs/travel";
@@ -215,17 +217,37 @@ export const homeRouter = createTRPCRouter({
         return { success: true, message: `Upgraded to ${targetHome.name}` };
       } else {
         const storedNormalItems =
-          storedItems.filter((ui) => ui.item.itemType !== "MATERIAL").length || 0;
+          storedItems.filter((ui) => getHomeStorageBucket(ui.item) === "normal")
+            .length || 0;
         const storedMaterialItems =
-          storedItems.filter((ui) => ui.item.itemType === "MATERIAL").length || 0;
+          storedItems.filter((ui) => getHomeStorageBucket(ui.item) === "materials")
+            .length || 0;
+        const storedCookingItems =
+          storedItems.filter((ui) => getHomeStorageBucket(ui.item) === "cooking")
+            .length || 0;
+        const maxMaterials = getHomeStorageBucketCapacity(
+          "materials",
+          user,
+          targetHome.storage,
+        );
+        const maxCooking = getHomeStorageBucketCapacity(
+          "cooking",
+          user,
+          targetHome.storage,
+        );
         if (storedNormalItems > targetHome.storage) {
           return errorResponse(
             `You need to remove some items from storage first (max ${targetHome.storage})`,
           );
         }
-        if (storedMaterialItems > calcMaxHouseMaterials(user, targetHome.storage)) {
+        if (storedMaterialItems > maxMaterials) {
           return errorResponse(
-            `You need to remove some materials from storage first (max ${calcMaxHouseMaterials(user, targetHome.storage)})`,
+            `You need to remove some materials from storage first (max ${maxMaterials})`,
+          );
+        }
+        if (storedCookingItems > maxCooking) {
+          return errorResponse(
+            `You need to remove some cooking items from storage first (max ${maxCooking})`,
           );
         }
         const downgradeRefund = Math.floor((currentHomeCost - targetHome.cost) * 0.75);
@@ -273,30 +295,12 @@ export const homeRouter = createTRPCRouter({
       }
       // Mutate
       if (userItemResult.storedAtHome) {
-        const nonStoredNonMaterials = nonStoredItems.filter(
-          (ui) => ui.item.itemType !== "MATERIAL",
-        );
-        const nRegularItems =
-          nonStoredNonMaterials.filter((ui) => !ui.item.isEventItem).length || 0;
-        const nEventItems =
-          nonStoredNonMaterials.filter((ui) => ui.item.isEventItem).length || 0;
-        const nMaterials =
-          nonStoredItems.filter((ui) => ui.item.itemType === "MATERIAL").length || 0;
-        if (
-          !userItemResult.item.isEventItem &&
-          userItemResult.item.itemType !== "MATERIAL" &&
-          nRegularItems >= calcMaxItems(user)
-        ) {
-          return errorResponse("Inventory is full");
-        }
-        if (userItemResult.item.isEventItem && nEventItems >= calcMaxEventItems(user)) {
-          return errorResponse("Event item inventory is full");
-        }
-        if (
-          userItemResult.item.itemType === "MATERIAL" &&
-          nMaterials >= calcMaxMaterials(user)
-        ) {
-          return errorResponse("Materials inventory is full");
+        const inventoryBucket = getInventoryBucket(userItemResult.item);
+        const bucketCount =
+          nonStoredItems.filter((ui) => getInventoryBucket(ui.item) === inventoryBucket)
+            .length || 0;
+        if (bucketCount >= getInventoryBucketCapacity(inventoryBucket, user)) {
+          return errorResponse(getInventoryBucketFullMessage(inventoryBucket));
         }
         const result = await ctx.drizzle
           .update(userItem)
@@ -314,24 +318,16 @@ export const homeRouter = createTRPCRouter({
         }
         return { success: true, message: "Item retrieved from your home." };
       } else {
-        // Check storage limits based on item type
-        if (userItemResult.item.itemType === "MATERIAL") {
-          // For materials, check materials storage limit
-          const storedMaterials =
-            storedItems.filter((ui) => ui.item.itemType === "MATERIAL").length || 0;
-          if (
-            storedMaterials >=
-            calcMaxHouseMaterials(user, HomeTypeDetails[user.homeType].storage)
-          ) {
-            return errorResponse("Your home materials storage is full");
-          }
-        } else {
-          // For normal items, check normal item storage limit
-          const storedNormalItems =
-            storedItems.filter((ui) => ui.item.itemType !== "MATERIAL").length || 0;
-          if (storedNormalItems >= HomeTypeDetails[user.homeType].storage) {
-            return errorResponse("Your home storage is full");
-          }
+        // Check storage limits based on home-storage bucket
+        const homeBucket = getHomeStorageBucket(userItemResult.item);
+        const homeStorage = HomeTypeDetails[user.homeType].storage;
+        const storedInBucket =
+          storedItems.filter((ui) => getHomeStorageBucket(ui.item) === homeBucket)
+            .length || 0;
+        if (
+          storedInBucket >= getHomeStorageBucketCapacity(homeBucket, user, homeStorage)
+        ) {
+          return errorResponse(getHomeStorageBucketFullMessage(homeBucket));
         }
         const result = await ctx.drizzle
           .update(userItem)
