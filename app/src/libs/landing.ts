@@ -42,15 +42,19 @@ export interface LandingContent {
   faqs: LandingFaq[];
 }
 
-const VILLAGES =
-  "Akasumi, Akikaze, Horizon, Hyorin, Shirohana and Tsukimori, plus the outlaw-held Freedom State";
+/**
+ * Only five villages are joinable. Horizon is the starting village (not joinable, PvP
+ * disabled, and levelling is capped there), and the outlaw faction is the Syndicate --
+ * Freedom State is a closed remnant with a dozen members, not a side you can pick.
+ */
+const VILLAGES = "Akasumi, Akikaze, Hyorin, Shirohana and Tsukimori";
 
 export const LANDING_PAGES = {
   "ninja-game": {
     path: "/ninja-game",
     title: "Ninja Game",
     description:
-      "A free ninja game you play in the browser. Train your stats, learn from 1,050 jutsu, join one of seven villages and fight other players in the world of Seichi.",
+      "A free ninja game you play in the browser. Train your stats, learn from 1,050 jutsu, join one of five villages and fight other players in the world of Seichi.",
     eyebrow: "Free to play",
     h1: "A ninja game that runs in your browser",
     intro:
@@ -71,10 +75,10 @@ export const LANDING_PAGES = {
         ],
       },
       {
-        heading: "Seven villages, and the option to leave them all",
+        heading: "Five villages, and the option to leave them all",
         body: [
-          `The world is divided between ${VILLAGES}. Your village decides who you can train with, which missions you are given, whose war you fight and which parts of the map are safe to walk through.`,
-          "You can also abandon that structure entirely and play as an outlaw, trading the protection of a village for freedom of movement and a different set of ways to make money.",
+          `Every character starts in Horizon and picks a side from there: ${VILLAGES}. Your village decides who you can train with, which missions you are given, whose war you fight and which parts of the map are safe to walk through.`,
+          "You can also abandon that structure entirely and go outlaw, joining the Syndicate and trading the protection of a village for freedom of movement and a different set of ways to make money.",
         ],
       },
       {
@@ -144,7 +148,7 @@ export const LANDING_PAGES = {
         heading: "Progress that does not stop when you close the tab",
         body: [
           "Training runs on a timer rather than a grind loop. You set what your character works on, close the browser and come back to the result. That makes the game playable in short sessions without falling behind people who play all day.",
-          "Because progress is continuous, the character you build over a year is genuinely yours. There is no seasonal reset that wipes the work.",
+          "Because progress is continuous, the character you build over a year is genuinely yours. Ranked ladder points reset between seasons, but your stats, jutsu and rank never do.",
         ],
       },
       {
@@ -197,11 +201,6 @@ export const LANDING_PAGES = {
           "A role-playing game that runs entirely in a web browser with no client to install. TheNinja-RPG is a persistent multiplayer example: the world keeps running whether or not you are logged in.",
       },
       {
-        question: "Does it work on mobile?",
-        answer:
-          "Yes. The interface is built mobile-first and the game is playable on a phone browser without a separate app.",
-      },
-      {
         question: "Is there a pay-to-win problem?",
         answer:
           "Paid perks exist and are mostly convenience and cosmetic. Stats, jutsu and rank come from playing, and the ranked ladders are built around that.",
@@ -217,7 +216,7 @@ export const LANDING_PAGES = {
     path: "/anime-ninja-online",
     title: "Anime Ninja Online",
     description:
-      "An anime-styled ninja MMORPG you play online in the browser. Seven villages, 51 bloodlines, 1,050 jutsu and a hand-drawn world. Free, no download.",
+      "An anime-styled ninja MMORPG you play online in the browser. Five villages, 51 bloodlines, 1,050 jutsu and twenty years of world-building. Free, no download.",
     eyebrow: "Original world",
     h1: "An anime-styled ninja world you play online",
     intro:
@@ -227,13 +226,13 @@ export const LANDING_PAGES = {
         heading: "An original setting, not a licensed one",
         body: [
           "TheNinja-RPG is not affiliated with any anime or manga franchise. The genre furniture will be familiar — hidden villages, chakra, ranked ninja, inherited techniques — but the world, the characters and the history are the game's own, built over twenty years by its own community.",
-          `Seichi is held by ${VILLAGES}, each with its own leadership, elders, territory and grudges.`,
+          `Seichi is held by ${VILLAGES}, each with its own leadership, elders, territory and grudges, with the outlaw Syndicate operating outside all of them.`,
         ],
       },
       {
-        heading: "Art the community keeps adding to",
+        heading: "A world with a look of its own",
         body: [
-          "Villages, bloodlines, jutsu, items and characters all carry their own artwork, and the concept-art gallery collects the pieces the world has been built from. It is a large part of why the setting reads as a place rather than a stat sheet.",
+          "Villages, bloodlines, jutsu, items and characters all carry their own artwork, and the concept-art gallery collects the AI-generated pieces the setting has been explored through. It is a large part of why Seichi reads as a place rather than a stat sheet.",
         ],
       },
       {
@@ -260,12 +259,12 @@ export const LANDING_PAGES = {
       {
         href: "/manual/world",
         label: "Villages and the map",
-        description: "The seven villages, their territory and how travel works.",
+        description: "The five villages, their territory and how travel works.",
       },
       {
         href: "/conceptart",
         label: "Concept art",
-        description: "Artwork the world of Seichi has been built from.",
+        description: "AI-generated artwork from the world of Seichi.",
       },
       {
         href: "/manual/ai",
@@ -282,17 +281,17 @@ export const LANDING_PAGES = {
       {
         question: "What can I do in the game?",
         answer:
-          "Train stats, learn and rank up jutsu, take missions, join a village and a clan, fight other players, run businesses and farms, craft, and take part in wars and tournaments.",
+          "Train stats, learn and rank up jutsu, take missions, join a village and a clan, fight other players, farm, craft, and take part in wars and tournaments.",
       },
       {
-        question: "Is it free?",
+        question: "Do I need to know the genre to start?",
         answer:
-          "Yes, and it needs no download. Optional paid perks exist but progression is earned by playing.",
+          "No. Horizon, the starting village, walks new players through training, missions and combat before you pick a side.",
       },
       {
-        question: "Can I play in a browser on my phone?",
+        question: "How do bloodlines work?",
         answer:
-          "Yes. The game runs in a mobile browser as well as on desktop, with no separate app required.",
+          "They are drawn rather than chosen, ranked from common to extremely rare, and each one changes how your techniques resolve. They can be removed and re-rolled if you want a different one.",
       },
     ],
   },
@@ -303,15 +302,19 @@ export type LandingSlug = keyof typeof LANDING_PAGES;
 export const LANDING_ROUTES = Object.values(LANDING_PAGES).map((page) => page.path);
 
 /**
- * FAQPage plus WebPage structured data for a landing page. The FAQ entries answer the
- * informational queries the site already receives impressions for, such as "where to
- * find flame village bloodlines", which drew 1,424 impressions and no clicks.
+ * Structured data for a landing page.
+ *
+ * FAQPage is a subclass of WebPage, so the questions are attached to the page node
+ * rather than emitted as a second, url-less page entity for the same address. Google
+ * retired FAQ rich results, so this earns no snippet; it is kept because it describes
+ * the page accurately for any consumer of the graph, and the questions themselves exist
+ * on the page for readers regardless.
  */
 export const landingStructuredData = (content: LandingContent) => ({
   "@context": "https://schema.org",
   "@graph": [
     {
-      "@type": "WebPage",
+      "@type": ["WebPage", "FAQPage"],
       "@id": `${absoluteUrl(content.path)}#webpage`,
       url: absoluteUrl(content.path),
       name: `${content.title} | ${SITE_NAME}`,
@@ -320,6 +323,11 @@ export const landingStructuredData = (content: LandingContent) => ({
       isPartOf: { "@id": `${SITE_URL}/#website` },
       about: { "@id": `${SITE_URL}/#game` },
       breadcrumb: { "@id": `${absoluteUrl(content.path)}#breadcrumb` },
+      mainEntity: content.faqs.map((faq) => ({
+        "@type": "Question",
+        name: faq.question,
+        acceptedAnswer: { "@type": "Answer", text: faq.answer },
+      })),
     },
     {
       "@type": "BreadcrumbList",
@@ -333,15 +341,6 @@ export const landingStructuredData = (content: LandingContent) => ({
           item: absoluteUrl(content.path),
         },
       ],
-    },
-    {
-      "@type": "FAQPage",
-      "@id": `${absoluteUrl(content.path)}#faq`,
-      mainEntity: content.faqs.map((faq) => ({
-        "@type": "Question",
-        name: faq.question,
-        acceptedAnswer: { "@type": "Answer", text: faq.answer },
-      })),
     },
   ],
 });

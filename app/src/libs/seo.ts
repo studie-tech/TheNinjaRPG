@@ -82,15 +82,7 @@ export const buildMetadata = ({
   return {
     title: { absolute: fullTitle },
     description,
-    alternates: {
-      canonical: url,
-      // The audience is overwhelmingly international -- the United States accounts for
-      // under a third of clicks, behind or alongside India, Indonesia, the Philippines
-      // and Brazil -- but every page is served in English to all of them. Declaring the
-      // English page as x-default states that explicitly instead of leaving Google to
-      // infer a country target, and gives translations somewhere to attach later.
-      languages: { en: url, "x-default": url },
-    },
+    alternates: { canonical: url },
     ...(noindex ? { robots: { index: false, follow: false } } : {}),
     openGraph: {
       title: fullTitle,
@@ -122,5 +114,8 @@ export const buildMetadata = ({
  */
 export const noindexMetadata = (title: string): Metadata => ({
   title: { absolute: `${title} | ${SITE_NAME}` },
-  robots: { index: false, follow: false },
+  // index only. These screens link onward to manual and profile URLs that the sitemap
+  // does advertise, and `follow: false` would tell Google to ignore those links -- a
+  // good way to strand the very pages this metadata exists to help get indexed.
+  robots: { index: false },
 });

@@ -1220,7 +1220,14 @@ const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
         defaultBackHref={defaultBackHref}
         initialBreak={initialBreak}
       >
-        <Skeleton className="h-10 w-full" />
+        {/* publicUserText is four paragraphs, not a line: a token-height placeholder
+            here would shift the stats panel by hundreds of pixels on arrival, which is
+            the shift this whole component exists to avoid. */}
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 14 }, (_, i) => (
+            <Skeleton key={i} className="h-4 w-full" />
+          ))}
+        </div>
       </ContentBox>
     )}
     <ContentBox

@@ -28,8 +28,11 @@ describe("landing page routes", () => {
     }
   });
 
-  it("exports the paths the sitemap advertises", () => {
-    expect([...LANDING_ROUTES].sort()).toEqual(pages.map((p) => p.path).sort());
+  it("advertises every landing page in the sitemap and nothing else", () => {
+    // LANDING_ROUTES is what libs/sitemap.ts submits, so it has to name real routes.
+    expect([...LANDING_ROUTES].sort()).toEqual(
+      ["/anime-ninja-online", "/browser-rpg", "/ninja-game"].sort(),
+    );
   });
 
   it("uses distinct paths, titles and descriptions", () => {
@@ -37,6 +40,12 @@ describe("landing page routes", () => {
       const values = pages.map((page) => page[field]);
       expect(new Set(values).size).toBe(values.length);
     }
+  });
+
+  it("asks a different set of questions on each page", () => {
+    // Near-identical FAQ sets across three pages about one game read as doorway pages.
+    const questions = pages.flatMap((page) => page.faqs.map((faq) => faq.question));
+    expect(new Set(questions).size).toBe(questions.length);
   });
 });
 
@@ -76,27 +85,33 @@ describe("landing page content", () => {
 });
 
 describe("landingStructuredData", () => {
-  it("emits WebPage, BreadcrumbList and FAQPage bound to the canonical URL", () => {
+  it("binds one page node, typed WebPage and FAQPage, to the canonical URL", () => {
     for (const page of pages) {
       const graph = landingStructuredData(page)["@graph"];
-      const types = graph.map((node) => node["@type"]);
-      expect(types).toEqual(["WebPage", "BreadcrumbList", "FAQPage"]);
+      // FAQPage is a subclass of WebPage, so a second page-typed node for the same URL
+      // would be two competing page entities rather than one described twice.
+      expect(graph.map((node) => node["@type"])).toEqual([
+        ["WebPage", "FAQPage"],
+        "BreadcrumbList",
+      ]);
 
       const url = `${SITE_URL}${page.path}`;
-      const webPage = graph[0] as { url: string; name: string };
+      const webPage = graph[0] as {
+        url: string;
+        name: string;
+        mainEntity: { name: string }[];
+      };
       expect(webPage.url).toBe(url);
       expect(webPage.name).toBe(`${page.title} | ${SITE_NAME}`);
-
-      const faq = graph[2] as { mainEntity: { name: string }[] };
-      expect(faq.mainEntity.map((q) => q.name)).toEqual(page.faqs.map((f) => f.question));
+      expect(webPage.mainEntity.map((q) => q.name)).toEqual(
+        page.faqs.map((f) => f.question),
+      );
     }
   });
 
-  it("serialises to JSON safely, since it is injected into a script tag", () => {
+  it("carries nothing that would close the script tag it is injected into", () => {
     for (const page of pages) {
-      const json = JSON.stringify(landingStructuredData(page));
-      expect(json).not.toContain("</script");
-      expect(() => JSON.parse(json)).not.toThrow();
+      expect(JSON.stringify(landingStructuredData(page))).not.toContain("</script");
     }
   });
 });
