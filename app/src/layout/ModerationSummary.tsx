@@ -105,44 +105,51 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
 
     const ctx = canvas.getContext("2d");
     if (ctx) {
-      chartInstanceRef.current = new Chart(ctx, {
-        type: "bar",
-        data: {
-          labels: categoryChartData.map((item) => item.category),
-          datasets: [
-            {
-              label: "Count",
-              data: categoryChartData.map((item) => item.count),
-              backgroundColor: "rgba(234, 88, 12, 0.7)",
-              borderColor: "rgba(234, 88, 12, 1)",
-              borderWidth: 1,
+      try {
+        chartInstanceRef.current = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: categoryChartData.map((item) => item.category),
+            datasets: [
+              {
+                label: "Count",
+                data: categoryChartData.map((item) => item.count),
+                backgroundColor: "rgba(234, 88, 12, 0.7)",
+                borderColor: "rgba(234, 88, 12, 1)",
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: false,
+              },
+              tooltip: {
+                callbacks: {
+                  label: (tooltipItem: TooltipItem<"bar">) =>
+                    `Count: ${tooltipItem.formattedValue}`,
+                },
+              },
             },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: false,
-            },
-            tooltip: {
-              callbacks: {
-                label: (tooltipItem: TooltipItem<"bar">) =>
-                  `Count: ${tooltipItem.formattedValue}`,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  precision: 0,
+                },
               },
             },
           },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: {
-                precision: 0,
-              },
-            },
-          },
-        },
-      });
+        });
+      } catch (error) {
+        console.error("Could not draw the moderation chart", error);
+        // Only if this draw is still the current one, so a superseded run cannot
+        // report a failure the live chart has already recovered from
+        if (run === chartRunRef.current) setChartFailed(true);
+      }
     }
   };
 
