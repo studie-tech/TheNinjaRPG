@@ -2861,18 +2861,7 @@ export const fetchUpdatedUser = async (props: {
   if (user) {
     for (const questType of BOOTSTRAP_QUEST_TYPES) {
       if (user.userQuests?.some((q) => q.quest.questType === questType)) continue;
-      // A strict subset of fetchUncompletedQuests' own filters. Clearing none of them means that
-      // query is guaranteed to come back empty, and the round-trip buys nothing; anything that
-      // does clear them still goes through insertNextQuest, which stays the authority on whether
-      // a quest is actually startable.
-      const possible = questBootstrap.candidates.some(
-        (candidate) =>
-          candidate.questType === questType &&
-          !questBootstrap.startedIds.has(candidate.id) &&
-          candidate.requiredLevel <= user.level &&
-          candidate.maxLevel >= user.level,
-      );
-      if (!possible) continue;
+      if (!canBootstrapQuestType(questBootstrap, questType, user.level)) continue;
       try {
         if (await insertNextQuest(client, user, questType)) {
           forceRegen = true;
@@ -3196,29 +3185,53 @@ const BOOTSTRAP_QUEST_TYPES = ["tier", "exam"] as const;
  * so a retyped quest could leave a history row out of `startedIds`; that can only make the guard
  * pass where it might have skipped, never the reverse.
  */
-export const fetchQuestBootstrap = async (client: DrizzleClient, userId: string) => {
-  const [candidates, started] = await Promise.all([
-    client
-      .select({
-        id: quest.id,
-        questType: quest.questType,
-        requiredLevel: quest.requiredLevel,
-        maxLevel: quest.maxLevel,
-      })
-      .from(quest)
-      .where(inArray(quest.questType, [...BOOTSTRAP_QUEST_TYPES])),
-    client
-      .select({ questId: questHistory.questId })
-      .from(questHistory)
-      .where(
-        and(
-          eq(questHistory.userId, userId),
-          inArray(questHistory.questType, [...BOOTSTRAP_QUEST_TYPES]),
+export const fetchQuestBootstrap = (client: DrizzleClient, userId: string) =>
+  scopedRead(`questBootstrap:${userId}`, async () => {
+    const [candidates, started] = await Promise.all([
+      client
+        .select({
+          id: quest.id,
+          questType: quest.questType,
+          requiredLevel: quest.requiredLevel,
+          maxLevel: quest.maxLevel,
+        })
+        .from(quest)
+        .where(inArray(quest.questType, [...BOOTSTRAP_QUEST_TYPES])),
+      client
+        .select({ questId: questHistory.questId })
+        .from(questHistory)
+        .where(
+          and(
+            eq(questHistory.userId, userId),
+            inArray(questHistory.questType, [...BOOTSTRAP_QUEST_TYPES]),
+          ),
         ),
-      ),
-  ]);
-  return { candidates, startedIds: new Set(started.map((row) => row.questId)) };
-};
+    ]);
+    return { candidates, startedIds: new Set(started.map((row) => row.questId)) };
+  });
+
+/**
+ * Whether starting a quest of this type is even possible, from what fetchQuestBootstrap read.
+ *
+ * A strict subset of fetchUncompletedQuests' filters — quest type, level band, and no existing
+ * history row — so a `false` means that query is guaranteed to return nothing and the round-trip
+ * buys nothing. Everything else it filters on (farming level, the date window, quest rank,
+ * village, bloodline, sage requirements, hidden) is deliberately not checked here: leaving a
+ * filter out can only let a call through that would have been skipped, never the reverse. A
+ * `true` still goes to insertNextQuest, which remains the authority.
+ */
+export const canBootstrapQuestType = (
+  bootstrap: Awaited<ReturnType<typeof fetchQuestBootstrap>>,
+  questType: (typeof BOOTSTRAP_QUEST_TYPES)[number],
+  level: number,
+) =>
+  bootstrap.candidates.some(
+    (candidate) =>
+      candidate.questType === questType &&
+      !bootstrap.startedIds.has(candidate.id) &&
+      candidate.requiredLevel <= level &&
+      candidate.maxLevel >= level,
+  );
 
 /**
  * Move a user's achievement rows out of `user.userQuests` and return them without their `quest`.
