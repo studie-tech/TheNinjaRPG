@@ -92,6 +92,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDeadlockError } from "@/server/utils/mysqlErrors";
+import { migrateStorePurchaseTransfers } from "@/server/utils/purchases/grant";
 import {
   canClearSectors,
   canCloneUser,
@@ -901,6 +902,10 @@ export const staffRouter = createTRPCRouter({
           .update(storeEntitlementState)
           .set({ userId: input.newUserId })
           .where(eq(storeEntitlementState.userId, input.userId)),
+        // TRANSFER aliases can mention an account in either column. The helper also
+        // merges a stale source alias already using the new id without violating the
+        // per-store source uniqueness constraint.
+        migrateStorePurchaseTransfers(ctx.drizzle, input.userId, input.newUserId),
         ctx.drizzle
           .update(userDevice)
           .set({ userId: input.newUserId })

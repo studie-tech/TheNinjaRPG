@@ -13,7 +13,15 @@ export interface StorePurchaseAttempt {
   transactionId?: string;
   /** Fallback correlation for platforms which expose no transaction id. */
   productId: string;
-  startedAt: Date;
+  /** Receipt ids fetched from the server immediately before opening checkout. */
+  baselineReceiptIds: readonly string[];
+}
+
+export interface StoreRestoreAttempt {
+  /** Receipt ownership visible to this account immediately before restore. */
+  baselineReceiptIds: readonly string[];
+  /** Subscription product ids the native SDK says the restored account owns. */
+  expectedProductIds: readonly string[];
 }
 
 /** An accepted receipt remains pending until it is granted or explicitly retired. */
@@ -32,7 +40,31 @@ export const hasSettledStorePurchase = (
     : recent.find(
         (purchase) =>
           purchase.productId === attempt.productId &&
-          purchase.createdAt.getTime() >= attempt.startedAt.getTime(),
+          !attempt.baselineReceiptIds.includes(purchase.id),
       );
   return Boolean(matching && !isPendingStorePurchase(matching));
+};
+
+/**
+ * A restore is reconciled once every expected subscription has a terminal server receipt.
+ * `changed` distinguishes a newly transferred receipt from an already-owned subscription;
+ * an empty pending set alone is deliberately not a completion signal.
+ */
+export const storeRestoreReconciliation = (
+  recent: StorePurchaseSettlement[],
+  attempt: StoreRestoreAttempt,
+): "changed" | "already-reconciled" | null => {
+  if (attempt.expectedProductIds.length === 0) return "already-reconciled";
+  const matching = attempt.expectedProductIds.map((productId) =>
+    recent.find(
+      (purchase) =>
+        purchase.productId === productId && !isPendingStorePurchase(purchase),
+    ),
+  );
+  if (matching.some((purchase) => !purchase)) return null;
+  return matching.some(
+    (purchase) => purchase && !attempt.baselineReceiptIds.includes(purchase.id),
+  )
+    ? "changed"
+    : "already-reconciled";
 };

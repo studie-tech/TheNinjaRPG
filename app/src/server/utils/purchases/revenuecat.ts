@@ -25,6 +25,8 @@ export const revenueCatEventSchema = z.object({
      * stop retrying an event it will never redeliver.
      */
     app_user_id: z.string().nullish(),
+    /** Public dashboard app id; identifies the originating platform when store is absent. */
+    app_id: z.string().nullish(),
     product_id: z.string().nullish(),
     /** Absent on some event types, in which case the event id stands in. */
     transaction_id: z.string().nullish(),
@@ -96,6 +98,18 @@ export const toStorePlatform = (
 ): StorePlatform | undefined => {
   if (store === "APP_STORE") return "APPLE";
   if (store === "PLAY_STORE") return "GOOGLE";
+  return undefined;
+};
+
+/** Resolve RevenueCat's dashboard app identifier against the configured native apps. */
+export const storePlatformFromAppId = (
+  appId: string | null | undefined,
+  iosAppId: string | null | undefined,
+  androidAppId: string | null | undefined,
+): StorePlatform | undefined => {
+  if (!appId) return undefined;
+  if (iosAppId && appId === iosAppId) return "APPLE";
+  if (androidAppId && appId === androidAppId) return "GOOGLE";
   return undefined;
 };
 

@@ -13,6 +13,8 @@ import {
   hasSettledStorePurchase,
   isPendingStorePurchase,
   type StorePurchaseAttempt,
+  type StoreRestoreAttempt,
+  storeRestoreReconciliation,
 } from "@/libs/native/purchaseSettlement";
 import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
@@ -54,14 +56,16 @@ export default function NativeStore() {
   } | null>(null);
   const [busyProduct, setBusyProduct] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [recentBaselineError, setRecentBaselineError] = useState<string | null>(null);
 
   const { data: catalogue } = api.purchases.catalogue.useQuery(undefined, {
     enabled: isNativeShell === true,
   });
-  const { data: recent, refetch: refetchRecent } = api.purchases.recent.useQuery(
-    { limit: 5 },
-    { enabled: isNativeShell === true },
-  );
+  const {
+    data: recent,
+    refetch: refetchRecent,
+    isFetching: isRecentFetching,
+  } = api.purchases.recent.useQuery({ limit: 5 }, { enabled: isNativeShell === true });
   const pendingProductIds = new Set(
     recent?.filter(isPendingStorePurchase).map((purchase) => purchase.productId),
   );
@@ -135,12 +139,19 @@ export default function NativeStore() {
     const generation = ++recentGeneration.current;
     const accountId = player?.userId;
     if (!isNativeShell || !accountId) return;
+    setRecentBaselineError(null);
     void refetchRecent()
-      .then(({ data }) => {
-        if (generation !== recentGeneration.current || !data) return;
+      .then(({ data, error }) => {
+        if (generation !== recentGeneration.current) return;
+        if (!data) throw error ?? new Error("Could not verify recent purchases");
         setRecentBaseline({ userId: accountId, newestId: data[0]?.id });
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        if (generation !== recentGeneration.current) return;
+        setRecentBaselineError(
+          error instanceof Error ? error.message : "Could not verify recent purchases",
+        );
+      });
     return () => {
       if (generation === recentGeneration.current) recentGeneration.current += 1;
     };
@@ -148,6 +159,20 @@ export default function NativeStore() {
   const purchaseBaseline =
     recentBaseline?.userId === player?.userId ? recentBaseline : null;
   const hasRecentBaseline = purchaseBaseline !== null;
+
+  const retryRecentBaseline = async () => {
+    const accountId = player?.userId;
+    if (!accountId) return;
+    setRecentBaselineError(null);
+    const { data, error } = await refetchRecent();
+    if (!data) {
+      setRecentBaselineError(
+        error instanceof Error ? error.message : "Could not verify recent purchases",
+      );
+      return;
+    }
+    setRecentBaseline({ userId: accountId, newestId: data[0]?.id });
+  };
 
   // A grant can be retried after the initial wait ends. Keep pending products disabled
   // and refresh both the receipt and profile when the retry finally settles.
@@ -182,18 +207,18 @@ export default function NativeStore() {
    *
    * A terminal purchase row is the signal that the webhook finished applying the grant.
    * The SDK transaction id identifies it when available. On platforms that omit that id,
-   * the product plus checkout-start time keeps an unrelated concurrent receipt from
-   * releasing this attempt's lock.
+   * a fresh server baseline means only a newly-visible same-product receipt can release
+   * this attempt's lock. No client clock is compared with a database timestamp.
    */
   const settleAfterPurchase = useCallback(
     async (attempt: StorePurchaseAttempt) => {
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
         const matching = await utils.purchases.recent.fetch({
-          limit: 5,
+          limit: 50,
           ...(attempt.transactionId
             ? { transactionId: attempt.transactionId }
-            : { productId: attempt.productId, createdAfter: attempt.startedAt }),
+            : { productId: attempt.productId }),
         });
         if (hasSettledStorePurchase(matching, attempt)) break;
       }
@@ -208,17 +233,24 @@ export default function NativeStore() {
     [refetchRecent, utils],
   );
 
-  const refreshAfterRestore = useCallback(async () => {
-    let newestId: string | undefined;
-    for (const delay of GRANT_POLL_DELAYS_MS) {
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      const { data } = await refetchRecent();
+  const refreshAfterRestore = useCallback(
+    async (attempt: StoreRestoreAttempt) => {
+      let newestId: string | undefined;
+      for (const delay of GRANT_POLL_DELAYS_MS) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        const matching = await utils.purchases.recent.fetch({ limit: 50 });
+        newestId = matching[0]?.id ?? newestId;
+        if (storeRestoreReconciliation(matching, attempt)) break;
+      }
+      const [{ data }] = await Promise.all([
+        refetchRecent(),
+        utils.profile.getUser.invalidate(),
+      ]);
       newestId = data?.[0]?.id ?? newestId;
-      if (data && !data.some(isPendingStorePurchase)) break;
-    }
-    await utils.profile.getUser.invalidate();
-    return newestId;
-  }, [refetchRecent, utils]);
+      return newestId;
+    },
+    [refetchRecent, utils],
+  );
 
   const buy = async (
     entry: purchases.StorePackage,
@@ -232,9 +264,12 @@ export default function NativeStore() {
     try {
       // Refresh again immediately before opening the store sheet. A webhook from an
       // earlier slow purchase may have landed since the screen's initial baseline.
-      const { data: baselineRows } = await refetchRecent();
-      if (!baselineRows) throw new Error("Could not verify recent purchases");
-      const previousNewestId = baselineRows[0]?.id;
+      const [baselineRows, { data: visibleRows }] = await Promise.all([
+        utils.purchases.recent.fetch({ limit: 50, productId }),
+        refetchRecent(),
+      ]);
+      if (!visibleRows) throw new Error("Could not verify recent purchases");
+      const previousNewestId = visibleRows[0]?.id;
       setRecentBaseline({ userId: accountId, newestId: previousNewestId });
 
       let storeProductChangeInfo: purchases.StoreProductChangeInfo | undefined;
@@ -274,7 +309,6 @@ export default function NativeStore() {
           }
         }
       }
-      const purchaseStartedAt = new Date();
       const result = await purchases.purchase(entry, storeProductChangeInfo);
       if (result.status === "cancelled") return;
       if (result.status === "error") {
@@ -300,7 +334,7 @@ export default function NativeStore() {
       const newestId = await settleAfterPurchase({
         transactionId: result.transactionId,
         productId,
-        startedAt: purchaseStartedAt,
+        baselineReceiptIds: baselineRows.map((purchase) => purchase.id),
       });
       setRecentBaseline((current) =>
         current?.userId === accountId ? { userId: accountId, newestId } : current,
@@ -322,6 +356,14 @@ export default function NativeStore() {
     const accountId = available.userId;
     setIsRestoring(true);
     try {
+      const [baselineRows, { data: visibleRows, error: baselineError }] =
+        await Promise.all([
+          utils.purchases.recent.fetch({ limit: 50 }),
+          refetchRecent(),
+        ]);
+      if (!visibleRows) {
+        throw baselineError ?? new Error("Could not verify recent purchases");
+      }
       const info = await purchases.restore();
       if (info) {
         setPackageState((current) =>
@@ -337,16 +379,16 @@ export default function NativeStore() {
           : "No previous purchases found for this store account.",
       });
       if (info?.activeEntitlements.length) {
-        // Restores replay transaction ids the server may already know, so a new recent-row
-        // id is not a completion signal. Reconcile in the background without keeping the
-        // restore control disabled for the full polling window.
-        void refreshAfterRestore()
-          .then((newestId) => {
-            setRecentBaseline((current) =>
-              current?.userId === accountId ? { userId: accountId, newestId } : current,
-            );
-          })
-          .catch(() => undefined);
+        // A TRANSFER can arrive after the first poll and may have no pending row before it
+        // moves the receipt. Wait for each restored subscription to have an explicit
+        // terminal server receipt; absence of pending rows is not completion.
+        const newestId = await refreshAfterRestore({
+          baselineReceiptIds: baselineRows.map((purchase) => purchase.id),
+          expectedProductIds: info.activeSubscriptions,
+        });
+        setRecentBaseline((current) =>
+          current?.userId === accountId ? { userId: accountId, newestId } : current,
+        );
       } else {
         // There is no webhook to wait for. Refresh once and finish immediately.
         const [{ data }] = await Promise.all([
@@ -394,6 +436,25 @@ export default function NativeStore() {
         <Loader explanation="Loading store" />
       ) : (
         <div className="flex flex-col gap-2">
+          {!hasRecentBaseline && (
+            <div className="rounded-lg border p-3 text-sm">
+              <p>{recentBaselineError ?? "Verifying your recent purchases..."}</p>
+              {recentBaselineError && (
+                <Button
+                  className="mt-2"
+                  size="sm"
+                  variant="outline"
+                  disabled={isRecentFetching}
+                  onClick={() => void retryRecentBaseline()}
+                >
+                  {isRecentFetching && (
+                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  )}
+                  Retry verification
+                </Button>
+              )}
+            </div>
+          )}
           <p className="mb-1 font-medium text-sm">Reputation</p>
           {catalogue?.reputation.map((product) => {
             // The store's own localised price, so the player sees their currency.

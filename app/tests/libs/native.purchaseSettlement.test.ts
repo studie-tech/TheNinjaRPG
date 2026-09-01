@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   hasSettledStorePurchase,
   isPendingStorePurchase,
+  storeRestoreReconciliation,
   type StorePurchaseSettlement,
 } from "@/libs/native/purchaseSettlement";
-
-const STARTED_AT = new Date("2026-09-01T12:00:00.000Z");
 
 const receipt = (
   overrides: Partial<StorePurchaseSettlement> = {},
@@ -16,7 +15,7 @@ const receipt = (
   acceptedAt: new Date(),
   grantedAt: null,
   revokedAt: null,
-  createdAt: new Date(STARTED_AT.getTime() + 1),
+  createdAt: new Date("2026-09-01T12:00:00.001Z"),
   ...overrides,
 });
 
@@ -28,7 +27,7 @@ describe("native purchase settlement", () => {
       hasSettledStorePurchase([pending], {
         transactionId: "wanted-transaction",
         productId: "tnr_reps_tier1",
-        startedAt: STARTED_AT,
+        baselineReceiptIds: [],
       }),
     ).toBe(false);
   });
@@ -38,21 +37,21 @@ describe("native purchase settlement", () => {
       hasSettledStorePurchase([receipt({ grantedAt: new Date() })], {
         transactionId: "wanted-transaction",
         productId: "tnr_reps_tier1",
-        startedAt: STARTED_AT,
+        baselineReceiptIds: [],
       }),
     ).toBe(true);
     expect(
       hasSettledStorePurchase([receipt({ revokedAt: new Date() })], {
         transactionId: "wanted-transaction",
         productId: "tnr_reps_tier1",
-        startedAt: STARTED_AT,
+        baselineReceiptIds: [],
       }),
     ).toBe(true);
     expect(
       hasSettledStorePurchase([receipt({ acceptedAt: null })], {
         transactionId: "wanted-transaction",
         productId: "tnr_reps_tier1",
-        startedAt: STARTED_AT,
+        baselineReceiptIds: [],
       }),
     ).toBe(true);
   });
@@ -72,14 +71,17 @@ describe("native purchase settlement", () => {
         {
           transactionId: "wanted-transaction",
           productId: "tnr_reps_tier1",
-          startedAt: STARTED_AT,
+          baselineReceiptIds: [],
         },
       ),
     ).toBe(false);
   });
 
-  it("falls back to the expected product and checkout-start time", () => {
-    const attempt = { productId: "tnr_reps_tier1", startedAt: STARTED_AT };
+  it("falls back to a same-product receipt absent from the fresh server baseline", () => {
+    const attempt = {
+      productId: "tnr_reps_tier1",
+      baselineReceiptIds: ["old-same-product"],
+    };
     expect(
       hasSettledStorePurchase(
         [
@@ -90,7 +92,8 @@ describe("native purchase settlement", () => {
           }),
           receipt({
             transactionId: "old-same-product",
-            createdAt: new Date(STARTED_AT.getTime() - 1),
+            id: "old-same-product",
+            createdAt: new Date("2099-01-01T00:00:00.000Z"),
             grantedAt: new Date(),
           }),
         ],
@@ -99,9 +102,46 @@ describe("native purchase settlement", () => {
     ).toBe(false);
     expect(
       hasSettledStorePurchase(
-        [receipt({ transactionId: "new-same-product", grantedAt: new Date() })],
+        [
+          receipt({
+            id: "new-same-product",
+            transactionId: "new-same-product",
+            // A skewed device clock is irrelevant: only server-issued ids are compared.
+            createdAt: new Date("2000-01-01T00:00:00.000Z"),
+            grantedAt: new Date(),
+          }),
+        ],
         attempt,
       ),
     ).toBe(true);
+  });
+
+  it("does not finish restore merely because no receipt is pending", () => {
+    expect(
+      storeRestoreReconciliation([], {
+        baselineReceiptIds: [],
+        expectedProductIds: ["tnr_federal_gold"],
+      }),
+    ).toBeNull();
+  });
+
+  it("recognizes transferred and already-owned restore receipts", () => {
+    const settled = receipt({
+      id: "restored",
+      productId: "tnr_federal_gold",
+      grantedAt: new Date(),
+    });
+    expect(
+      storeRestoreReconciliation([settled], {
+        baselineReceiptIds: [],
+        expectedProductIds: ["tnr_federal_gold"],
+      }),
+    ).toBe("changed");
+    expect(
+      storeRestoreReconciliation([settled], {
+        baselineReceiptIds: ["restored"],
+        expectedProductIds: ["tnr_federal_gold"],
+      }),
+    ).toBe("already-reconciled");
   });
 });

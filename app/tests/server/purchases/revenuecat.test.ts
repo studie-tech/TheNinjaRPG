@@ -18,6 +18,7 @@ import {
   occurredAt,
   paidThroughAt,
   purchasedAt,
+  storePlatformFromAppId,
   toStorePlatform,
 } from "@/server/utils/purchases/revenuecat";
 
@@ -112,6 +113,16 @@ describe("store catalogue", () => {
 });
 
 describe("revenuecat webhook classification", () => {
+  it("infers a storeless transfer platform from its dashboard app id", () => {
+    expect(storePlatformFromAppId("ios-app", "ios-app", "android-app")).toBe(
+      "APPLE",
+    );
+    expect(
+      storePlatformFromAppId("android-app", "ios-app", "android-app"),
+    ).toBe("GOOGLE");
+    expect(storePlatformFromAppId("unknown", "ios-app", "android-app")).toBeUndefined();
+  });
+
   it("grants on every event that means the player now owns something", () => {
     for (const type of [
       "INITIAL_PURCHASE",

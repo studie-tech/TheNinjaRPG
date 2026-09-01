@@ -110,11 +110,18 @@ const federalProduct = (productId: string) =>
       product.productId === productId || product.androidProductId === productId,
   );
 
-/** Follow durable RevenueCat ownership redirects, including a partially-flattened chain. */
+/**
+ * Follow durable RevenueCat ownership redirects, including a partially-flattened chain.
+ *
+ * A transfer only owns receipts which already existed when it happened. Passing the
+ * receipt/event time prevents a later purchase made by the old app user id from being
+ * permanently captured by an earlier restore.
+ */
 const transferredUserId = async (
   client: DrizzleClient,
   sourceUserId: string,
   store: StorePlatform,
+  asOf: Date,
 ): Promise<string> => {
   const visited = new Set<string>();
   let current = sourceUserId;
@@ -128,11 +135,35 @@ const transferredUserId = async (
       where: and(
         eq(storePurchaseTransfer.sourceUserId, current),
         eq(storePurchaseTransfer.store, store),
+        gte(storePurchaseTransfer.transferredAt, asOf),
       ),
     });
     if (!redirect || redirect.destinationUserId === current) return current;
     current = redirect.destinationUserId;
   }
+};
+
+/** Every account which may currently hold a receipt originally attached to sourceUserId. */
+const transferChainUserIds = async (
+  client: DrizzleClient,
+  sourceUserId: string,
+  store: StorePlatform,
+): Promise<string[]> => {
+  const visited = new Set<string>();
+  let current = sourceUserId;
+  while (!visited.has(current)) {
+    visited.add(current);
+    const redirect = await client.query.storePurchaseTransfer.findFirst({
+      columns: { destinationUserId: true },
+      where: and(
+        eq(storePurchaseTransfer.sourceUserId, current),
+        eq(storePurchaseTransfer.store, store),
+      ),
+    });
+    if (!redirect || redirect.destinationUserId === current) break;
+    current = redirect.destinationUserId;
+  }
+  return [...visited];
 };
 
 /**
@@ -155,7 +186,7 @@ export const grantStorePurchase = async (
   // TRANSFER may arrive first. Consumables stay with their purchaser, but subscriptions
   // follow the durable store-account ownership redirect before any receipt is inserted.
   let recipientUserId = federal
-    ? await transferredUserId(client, grant.userId, grant.store)
+    ? await transferredUserId(client, grant.userId, grant.store, grant.purchasedAt)
     : grant.userId;
   const accepted = !grant.isSandbox || isSandboxGrantee(recipientUserId);
 
@@ -239,6 +270,7 @@ export const grantStorePurchase = async (
         client,
         grant.userId,
         grant.store,
+        grant.purchasedAt,
       );
       if (latestRecipient !== recipientUserId) {
         const [latestUser] = await client
@@ -338,6 +370,7 @@ export const grantStorePurchase = async (
               SELECT 1 FROM ${storePurchaseTransfer}
               WHERE ${storePurchaseTransfer.sourceUserId} = ${storePurchase.userId}
                 AND ${storePurchaseTransfer.store} = ${storePurchase.store}
+                AND ${storePurchaseTransfer.transferredAt} >= ${storePurchase.purchasedAt}
             )
         `);
 
@@ -392,35 +425,59 @@ export const extendStoreSubscription = async (
   client: DrizzleClient,
   extension: StoreExtension,
 ): Promise<void> => {
-  const liveReceipt = and(
-    eq(storePurchase.userId, extension.userId),
-    eq(storePurchase.store, extension.store),
-    eq(storePurchase.productId, extension.productId),
-    isNotNull(storePurchase.acceptedAt),
-    isNotNull(storePurchase.federalStatus),
-    isNull(storePurchase.revokedAt),
-  );
   const exact = extension.transactionId
     ? await client.query.storePurchase.findFirst({
-        columns: { id: true },
+        columns: { id: true, userId: true, revokedAt: true },
         where: and(
           eq(storePurchase.transactionId, extension.transactionId),
-          liveReceipt,
+          eq(storePurchase.store, extension.store),
+          eq(storePurchase.productId, extension.productId),
+          isNotNull(storePurchase.acceptedAt),
+          isNotNull(storePurchase.federalStatus),
         ),
       })
     : undefined;
-  const receipt =
-    exact ??
-    (await client.query.storePurchase.findFirst({
-      columns: { id: true },
-      where: liveReceipt,
-      orderBy: desc(storePurchase.purchasedAt),
-    }));
+  // A retry of a known, already-retired period is complete. Falling back to another live
+  // receipt here would extend a resubscription with the old period's lifecycle event.
+  if (exact?.revokedAt) return;
+  const possibleOwners = await transferChainUserIds(
+    client,
+    extension.userId,
+    extension.store,
+  );
+  const candidates = exact
+    ? []
+    : await client.query.storePurchase.findMany({
+        columns: { id: true, userId: true, purchasedAt: true, revokedAt: true },
+        where: and(
+          inArray(storePurchase.userId, possibleOwners),
+          eq(storePurchase.store, extension.store),
+          eq(storePurchase.productId, extension.productId),
+          isNotNull(storePurchase.acceptedAt),
+          isNotNull(storePurchase.federalStatus),
+          isNull(storePurchase.revokedAt),
+        ),
+        orderBy: desc(storePurchase.purchasedAt),
+      });
+  let receipt = exact;
+  for (const candidate of candidates) {
+    const owner = await transferredUserId(
+      client,
+      extension.userId,
+      extension.store,
+      candidate.purchasedAt,
+    );
+    if (owner === candidate.userId) {
+      receipt = candidate;
+      break;
+    }
+  }
   if (!receipt) {
     throw new Error(
       `No live receipt to extend for ${extension.userId}/${extension.productId}`,
     );
   }
+  const ownerUserId = receipt.userId;
 
   await client
     .update(storePurchase)
@@ -431,8 +488,8 @@ export const extendStoreSubscription = async (
 
   // The cleaner may have run before a delayed extension arrived. Re-derive immediately
   // so the newly durable entitlement also restores any tier it still pays for.
-  const paypal = await paypalFederalFloor(client, extension.userId);
-  await setFederalStatusWithStoreFloor(client, extension.userId, paypal);
+  const paypal = await paypalFederalFloor(client, ownerUserId);
+  await setFederalStatusWithStoreFloor(client, ownerUserId, paypal);
 };
 
 /**
@@ -453,6 +510,8 @@ export interface RevocationScope {
   productId?: string | null;
   /** The store it expired on, so an Apple lapse cannot retire a Google receipt. */
   store?: StorePlatform | null;
+  /** The expiring store transaction, when RevenueCat supplies it. */
+  transactionId?: string | null;
 }
 
 export const revokeFederalStatus = async (
@@ -460,7 +519,22 @@ export const revokeFederalStatus = async (
   userId: string,
   scope: RevocationScope,
 ): Promise<void> => {
-  const { occurredAt, productId, store } = scope;
+  const { occurredAt, productId, store, transactionId } = scope;
+  const exact =
+    transactionId && store
+      ? await client.query.storePurchase.findFirst({
+          columns: { userId: true, purchasedAt: true, revokedAt: true },
+          where: and(
+            eq(storePurchase.transactionId, transactionId),
+            eq(storePurchase.store, store),
+            ...(productId ? [eq(storePurchase.productId, productId)] : []),
+            isNotNull(storePurchase.federalStatus),
+          ),
+        })
+      : undefined;
+  // This exact transaction is already retired. Treat its retry as acknowledged instead
+  // of falling through to a newer subscription owned by either account.
+  if (exact?.revokedAt) return;
   // A renewal period commonly begins at the exact millisecond the previous period ends.
   // Product-scoped expiry events therefore cover timestamps strictly before occurredAt;
   // using the boundary itself would make a late expiry consume the live renewal.
@@ -483,22 +557,40 @@ export const revokeFederalStatus = async (
   // Anything bought after it is a resubscribe, and survives.
   //
   // The event's own timestamp is the fallback for a payload that names no product.
-  const spent = productId
-    ? await client.query.storePurchase.findFirst({
-        columns: { purchasedAt: true },
-        where: and(
-          eq(storePurchase.userId, userId),
-          eq(storePurchase.productId, productId),
-          isNotNull(storePurchase.federalStatus),
-          // A renewal can start exactly when the expired period ended, so the boundary is
-          // exclusive. Taking an equal timestamp as the cutoff would let a late expiry
-          // retire the subscription the player is currently paying for.
-          lt(storePurchase.purchasedAt, occurredAt),
-          ...(store ? [eq(storePurchase.store, store)] : []),
-        ),
-        orderBy: desc(storePurchase.purchasedAt),
-      })
-    : undefined;
+  const possibleOwners = store
+    ? await transferChainUserIds(client, userId, store)
+    : [userId];
+  const candidates =
+    !exact && productId
+      ? await client.query.storePurchase.findMany({
+          columns: { userId: true, purchasedAt: true, revokedAt: true },
+          where: and(
+            inArray(storePurchase.userId, possibleOwners),
+            eq(storePurchase.productId, productId),
+            isNotNull(storePurchase.federalStatus),
+            // A renewal can start exactly when the expired period ended, so the boundary is
+            // exclusive. Taking an equal timestamp as the cutoff would let a late expiry
+            // retire the subscription the player is currently paying for.
+            lt(storePurchase.purchasedAt, occurredAt),
+            ...(store ? [eq(storePurchase.store, store)] : []),
+          ),
+          orderBy: desc(storePurchase.purchasedAt),
+        })
+      : [];
+  let spent = exact;
+  for (const candidate of candidates) {
+    const owner = store
+      ? await transferredUserId(client, userId, store, candidate.purchasedAt)
+      : userId;
+    if (owner === candidate.userId) {
+      spent = candidate;
+      break;
+    }
+  }
+  const ownerUserId =
+    exact?.userId ??
+    spent?.userId ??
+    (store ? await transferredUserId(client, userId, store, occurredAt) : userId);
   const cutoff = spent?.purchasedAt ?? (productId ? beforeExpiry : occurredAt);
 
   // Persist the cutoff before touching receipts. If the purchase webhook has not inserted
@@ -509,7 +601,7 @@ export const revokeFederalStatus = async (
       .insert(storeEntitlementState)
       .values({
         id: nanoid(),
-        userId,
+        userId: ownerUserId,
         store,
         revokedThrough: cutoff,
         updatedAt: new Date(),
@@ -527,7 +619,7 @@ export const revokeFederalStatus = async (
     .set({ revokedAt: new Date() })
     .where(
       and(
-        eq(storePurchase.userId, userId),
+        eq(storePurchase.userId, ownerUserId),
         isNotNull(storePurchase.federalStatus),
         isNull(storePurchase.revokedAt),
         lte(storePurchase.purchasedAt, cutoff),
@@ -541,18 +633,84 @@ export const revokeFederalStatus = async (
   // The bound above deliberately spares a receipt bought after the expiry, and reading
   // only PayPal here would drop the tier anyway and leave a paying subscriber with a live
   // receipt and nothing to show for it, until their next renewal.
-  const paypal = await paypalFederalFloor(client, userId);
-  await setFederalStatusWithStoreFloor(client, userId, paypal);
+  const paypal = await paypalFederalFloor(client, ownerUserId);
+  await setFederalStatusWithStoreFloor(client, ownerUserId, paypal);
 };
 
 export interface StoreTransfer {
   fromUserIds: string[];
   toUserIds: string[];
-  /** Missing on valid RevenueCat TRANSFER payloads; those apply to both supported stores. */
+  /** Missing when neither RevenueCat's store nor configured app id identifies a platform. */
   store?: StorePlatform | null;
   /** RevenueCat event time, used to reject a delayed older ownership redirect. */
   occurredAt: Date;
 }
+
+/**
+ * Rename an application user id inside durable transfer aliases.
+ *
+ * Destination ids are non-unique and can be changed directly. Source ids are unique per
+ * store, so a stale alias already using the new id is merged with the renamed account's
+ * alias by keeping the newest ownership watermark.
+ */
+export const migrateStorePurchaseTransfers = async (
+  client: DrizzleClient,
+  oldUserId: string,
+  newUserId: string,
+): Promise<void> => {
+  await client
+    .update(storePurchaseTransfer)
+    .set({ destinationUserId: newUserId, updatedAt: new Date() })
+    .where(eq(storePurchaseTransfer.destinationUserId, oldUserId));
+
+  const aliases = await client.query.storePurchaseTransfer.findMany({
+    where: inArray(storePurchaseTransfer.sourceUserId, [oldUserId, newUserId]),
+  });
+  for (const store of STORE_PLATFORMS) {
+    const candidates = aliases.filter((alias) => alias.store === store);
+    if (candidates.length === 0) continue;
+    const newest = candidates.reduce((current, candidate) =>
+      candidate.transferredAt > current.transferredAt ? candidate : current,
+    );
+    const oldAlias = candidates.find((alias) => alias.sourceUserId === oldUserId);
+    const newAlias = candidates.find((alias) => alias.sourceUserId === newUserId);
+
+    // Renaming A to B turns A -> B into a no-op. It must disappear or future lifecycle
+    // lookups would detect a cycle.
+    if (newest.destinationUserId === newUserId) {
+      await client
+        .delete(storePurchaseTransfer)
+        .where(
+          and(
+            inArray(storePurchaseTransfer.sourceUserId, [oldUserId, newUserId]),
+            eq(storePurchaseTransfer.store, store),
+          ),
+        );
+      continue;
+    }
+
+    if (newAlias) {
+      await client
+        .update(storePurchaseTransfer)
+        .set({
+          destinationUserId: newest.destinationUserId,
+          transferredAt: newest.transferredAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(storePurchaseTransfer.id, newAlias.id));
+      if (oldAlias) {
+        await client
+          .delete(storePurchaseTransfer)
+          .where(eq(storePurchaseTransfer.id, oldAlias.id));
+      }
+    } else if (oldAlias) {
+      await client
+        .update(storePurchaseTransfer)
+        .set({ sourceUserId: newUserId, updatedAt: new Date() })
+        .where(eq(storePurchaseTransfer.id, oldAlias.id));
+    }
+  }
+};
 
 /**
  * Follow a RevenueCat receipt transfer between identified application users.
@@ -593,7 +751,6 @@ export const transferStorePurchases = async (
         .update(storePurchaseTransfer)
         .set({
           destinationUserId,
-          transferredAt: transfer.occurredAt,
           updatedAt: new Date(),
         })
         .where(
@@ -605,7 +762,12 @@ export const transferStorePurchases = async (
         );
     }
 
-    const mappedDestination = await transferredUserId(client, destinationUserId, store);
+    const mappedDestination = await transferredUserId(
+      client,
+      destinationUserId,
+      store,
+      transfer.occurredAt,
+    );
     effectiveDestinations.add(mappedDestination);
     for (const sourceUserId of sourceIds) {
       // Persist before moving rows. A concurrent grant then either sees the redirect up
@@ -628,7 +790,12 @@ export const transferStorePurchases = async (
           },
         });
 
-      const effectiveDestination = await transferredUserId(client, sourceUserId, store);
+      const effectiveDestination = await transferredUserId(
+        client,
+        sourceUserId,
+        store,
+        transfer.occurredAt,
+      );
       effectiveDestinations.add(effectiveDestination);
       const sourceEntitlementState = await client.query.storeEntitlementState.findFirst(
         {
@@ -636,6 +803,7 @@ export const transferStorePurchases = async (
           where: and(
             eq(storeEntitlementState.userId, sourceUserId),
             eq(storeEntitlementState.store, store),
+            lte(storeEntitlementState.revokedThrough, transfer.occurredAt),
           ),
         },
       );
@@ -666,6 +834,7 @@ export const transferStorePurchases = async (
           and(
             eq(storePurchase.userId, sourceUserId),
             eq(storePurchase.store, store),
+            lte(storePurchase.purchasedAt, transfer.occurredAt),
             isNotNull(storePurchase.acceptedAt),
             isNotNull(storePurchase.federalStatus),
             isNull(storePurchase.revokedAt),

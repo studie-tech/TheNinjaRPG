@@ -50,6 +50,9 @@ export const serverSchema = z.object({
   ANDROID_CERT_FINGERPRINTS: z.string().optional(),
   // Shared secret sent by RevenueCat in the Authorization header of every webhook.
   REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
+  // RevenueCat dashboard app ids. TRANSFER can omit store but still includes app_id.
+  REVENUECAT_IOS_APP_ID: z.string().optional(),
+  REVENUECAT_ANDROID_APP_ID: z.string().optional(),
   /**
    * Accounts whose sandbox purchases still grant, comma separated.
    *
@@ -111,6 +114,8 @@ export const serverEnv = {
   ANDROID_CERT_FINGERPRINTS: process.env.ANDROID_CERT_FINGERPRINTS,
   // RevenueCat
   REVENUECAT_WEBHOOK_SECRET: process.env.REVENUECAT_WEBHOOK_SECRET,
+  REVENUECAT_IOS_APP_ID: process.env.REVENUECAT_IOS_APP_ID,
+  REVENUECAT_ANDROID_APP_ID: process.env.REVENUECAT_ANDROID_APP_ID,
   STORE_SANDBOX_USER_IDS: process.env.STORE_SANDBOX_USER_IDS,
 };
 

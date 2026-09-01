@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { beforeEach, expect, it } from "vitest";
 import { nanoid } from "nanoid";
 import {
@@ -14,6 +14,7 @@ import type { FederalStatus, StorePlatform } from "@/drizzle/constants";
 import {
   extendStoreSubscription,
   grantStorePurchase,
+  migrateStorePurchaseTransfers,
   reconcileFederalStatuses,
   revokeFederalStatus,
   setFederalStatusWithStoreFloor,
@@ -361,15 +362,17 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(receipt?.userId).toBe(DESTINATION);
   });
 
-  it("persists a storeless transfer before purchase and routes retries to its destination", async () => {
+  it("routes only purchases made before an Apple transfer and leaves later purchases", async () => {
     await insertUsers([
       { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
     ]);
     const database = await db();
+    const transferredAt = new Date();
     await transferStorePurchases(database, {
       fromUserIds: [USER],
       toUserIds: [DESTINATION],
-      occurredAt: new Date(),
+      store: "APPLE",
+      occurredAt: transferredAt,
     });
 
     const transactionId = nanoid();
@@ -379,7 +382,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       productId: "tnr_federal_gold",
       store: "APPLE" as const,
       isSandbox: false,
-      purchasedAt: new Date(),
+      purchasedAt: new Date(transferredAt.getTime() - MINUTE),
       raw: {},
     };
     await expect(grantStorePurchase(database, grant)).resolves.toMatchObject({
@@ -390,13 +393,20 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       status: "duplicate",
     });
 
-    // Missing store created redirects for both supported stores, not whichever receipt
-    // happened to exist when the transfer arrived.
+    // A purchase made after the transfer belongs to the source account again. Likewise,
+    // an Apple app_id-inferred transfer must not capture a later Google purchase.
     await grantStorePurchase(database, {
       ...grant,
       transactionId: nanoid(),
       productId: "tnr_federal_silver",
       store: "GOOGLE",
+      purchasedAt: new Date(transferredAt.getTime() + MINUTE),
+    });
+    await grantStorePurchase(database, {
+      ...grant,
+      transactionId: nanoid(),
+      productId: "tnr_federal_normal",
+      purchasedAt: new Date(transferredAt.getTime() + MINUTE),
     });
     const [source, destination, receipts, redirects] = await Promise.all([
       database.query.userData.findFirst({
@@ -414,13 +424,207 @@ describeWithDatabase("federal status across real webhook sequences", () => {
         columns: { store: true, destinationUserId: true },
       }),
     ]);
-    expect(source?.federalStatus).toBe("NONE");
+    expect(source?.federalStatus).toBe("SILVER");
     expect(destination?.federalStatus).toBe("GOLD");
-    expect(receipts.every((receipt) => receipt.userId === DESTINATION)).toBe(true);
-    expect(redirects).toEqual(
+    expect(receipts.map((receipt) => receipt.userId).sort()).toEqual(
+      [DESTINATION, USER, USER].sort(),
+    );
+    expect(redirects).toEqual([
+      { store: "APPLE", destinationUserId: DESTINATION },
+    ]);
+  });
+
+  it("applies delayed extension and expiry events to a transferred receipt owner", async () => {
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const transactionId = await buyFederal("GOLD", MINUTE);
+    const transferredAt = new Date();
+    await transferStorePurchases(database, {
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      occurredAt: transferredAt,
+    });
+    const extendedUntil = new Date(Date.now() + DAY);
+    await extendStoreSubscription(database, {
+      userId: USER,
+      store: "APPLE",
+      productId: "tnr_federal_gold",
+      expirationAt: extendedUntil,
+      transactionId,
+    });
+    const fallbackExtension = new Date(Date.now() + 2 * DAY);
+    await extendStoreSubscription(database, {
+      userId: USER,
+      store: "APPLE",
+      productId: "tnr_federal_gold",
+      expirationAt: fallbackExtension,
+    });
+    const extended = await database.query.storePurchase.findFirst({
+      columns: { userId: true, expiresAt: true },
+      where: eq(storePurchase.transactionId, transactionId),
+    });
+    expect(extended?.userId).toBe(DESTINATION);
+    expect(extended?.expiresAt?.getTime()).toBe(fallbackExtension.getTime());
+
+    await revokeFederalStatus(database, USER, {
+      occurredAt: new Date(),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      transactionId,
+    });
+    // A retry naming the now-revoked transaction is an acknowledged no-op.
+    await revokeFederalStatus(database, USER, {
+      occurredAt: new Date(Date.now() + MINUTE),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      transactionId,
+    });
+    const [receipt, source, destination] = await Promise.all([
+      database.query.storePurchase.findFirst({
+        columns: { userId: true, revokedAt: true },
+        where: eq(storePurchase.transactionId, transactionId),
+      }),
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, USER),
+      }),
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, DESTINATION),
+      }),
+    ]);
+    expect(receipt?.userId).toBe(DESTINATION);
+    expect(receipt?.revokedAt).toBeInstanceOf(Date);
+    expect(source?.federalStatus).toBe("NONE");
+    expect(destination?.federalStatus).toBe("NONE");
+  });
+
+  it("preserves each transfer time while flattening an ownership chain", async () => {
+    const finalDestination = "federal-transfer-final-destination";
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+      {
+        userId: finalDestination,
+        username: "final-destination",
+        federalStatus: "NONE",
+      },
+    ]);
+    const database = await db();
+    const firstTransferAt = new Date(Date.now() - 2 * MINUTE);
+    const secondTransferAt = new Date();
+    await transferStorePurchases(database, {
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      occurredAt: firstTransferAt,
+    });
+    await transferStorePurchases(database, {
+      fromUserIds: [DESTINATION],
+      toUserIds: [finalDestination],
+      store: "APPLE",
+      occurredAt: secondTransferAt,
+    });
+
+    const beforeFirst = nanoid();
+    const betweenTransfers = nanoid();
+    await grantStorePurchase(database, {
+      userId: USER,
+      transactionId: beforeFirst,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: false,
+      purchasedAt: new Date(firstTransferAt.getTime() - MINUTE),
+      raw: {},
+    });
+    await grantStorePurchase(database, {
+      userId: USER,
+      transactionId: betweenTransfers,
+      productId: "tnr_federal_silver",
+      store: "APPLE",
+      isSandbox: false,
+      purchasedAt: new Date(firstTransferAt.getTime() + MINUTE),
+      raw: {},
+    });
+    const [oldReceipt, laterReceipt, flattened] = await Promise.all([
+      database.query.storePurchase.findFirst({
+        columns: { userId: true },
+        where: eq(storePurchase.transactionId, beforeFirst),
+      }),
+      database.query.storePurchase.findFirst({
+        columns: { userId: true },
+        where: eq(storePurchase.transactionId, betweenTransfers),
+      }),
+      database.query.storePurchaseTransfer.findFirst({
+        columns: { destinationUserId: true, transferredAt: true },
+        where: and(
+          eq(storePurchaseTransfer.sourceUserId, USER),
+          eq(storePurchaseTransfer.store, "APPLE"),
+        ),
+      }),
+    ]);
+    expect(oldReceipt?.userId).toBe(finalDestination);
+    expect(laterReceipt?.userId).toBe(USER);
+    expect(flattened?.destinationUserId).toBe(finalDestination);
+    expect(flattened?.transferredAt.getTime()).toBe(firstTransferAt.getTime());
+  });
+
+  it("renames transfer source and destination ids and merges source uniqueness", async () => {
+    const database = await db();
+    const newUserId = "renamed-federal-user";
+    const otherSource = "other-transfer-source";
+    const older = new Date(Date.now() - MINUTE);
+    const newer = new Date();
+    await database.insert(storePurchaseTransfer).values([
+      {
+        id: nanoid(),
+        sourceUserId: USER,
+        destinationUserId: "older-owner",
+        store: "APPLE",
+        transferredAt: older,
+      },
+      {
+        id: nanoid(),
+        sourceUserId: newUserId,
+        destinationUserId: "newer-owner",
+        store: "APPLE",
+        transferredAt: newer,
+      },
+      {
+        id: nanoid(),
+        sourceUserId: otherSource,
+        destinationUserId: USER,
+        store: "GOOGLE",
+        transferredAt: older,
+      },
+    ]);
+
+    await migrateStorePurchaseTransfers(database, USER, newUserId);
+    const aliases = await database.query.storePurchaseTransfer.findMany({
+      columns: {
+        sourceUserId: true,
+        destinationUserId: true,
+        store: true,
+        transferredAt: true,
+      },
+    });
+    expect(aliases).toHaveLength(2);
+    expect(aliases).toEqual(
       expect.arrayContaining([
-        { store: "APPLE", destinationUserId: DESTINATION },
-        { store: "GOOGLE", destinationUserId: DESTINATION },
+        {
+          sourceUserId: newUserId,
+          destinationUserId: "newer-owner",
+          store: "APPLE",
+          transferredAt: newer,
+        },
+        {
+          sourceUserId: otherSource,
+          destinationUserId: newUserId,
+          store: "GOOGLE",
+          transferredAt: older,
+        },
       ]),
     );
   });
@@ -456,7 +660,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       productId: "tnr_federal_gold",
       store: "APPLE",
       isSandbox: false,
-      purchasedAt: new Date(),
+      purchasedAt: new Date(newerAt.getTime() - 2 * MINUTE),
       raw: {},
     });
     const [redirect, receipt] = await Promise.all([

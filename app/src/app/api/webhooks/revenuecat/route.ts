@@ -19,6 +19,7 @@ import {
   paidThroughAt,
   purchasedAt,
   revenueCatEventSchema,
+  storePlatformFromAppId,
   toStorePlatform,
 } from "@/server/utils/purchases/revenuecat";
 
@@ -62,9 +63,18 @@ export async function POST(request: Request) {
 
   try {
     if (event.type === "TRANSFER") {
-      const store = toStorePlatform(event.store);
-      // RevenueCat legitimately omits store on TRANSFER. In that case persist a redirect
-      // for both stores this app supports; an explicit unknown store remains unsupported.
+      const store =
+        toStorePlatform(event.store) ??
+        (!event.store
+          ? storePlatformFromAppId(
+              event.app_id,
+              env.REVENUECAT_IOS_APP_ID,
+              env.REVENUECAT_ANDROID_APP_ID,
+            )
+          : undefined);
+      // RevenueCat legitimately omits store on TRANSFER. Prefer its dashboard app id;
+      // deployments without those ids configured retain the conservative both-store
+      // fallback. An explicit unknown store remains unsupported.
       if (event.store && !store) return unsupportedStore(event.type, event.store);
       const outcome = await transferStorePurchases(drizzleDB, {
         fromUserIds: event.transferred_from ?? [],
@@ -94,6 +104,7 @@ export async function POST(request: Request) {
         occurredAt: occurredAt(event),
         productId: event.product_id,
         store,
+        transactionId: event.transaction_id,
       });
       return Response.json({ handled: "revoked" });
     }
