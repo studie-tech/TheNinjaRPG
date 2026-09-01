@@ -16,6 +16,7 @@ import {
   isRefund,
   isSandbox,
   occurredAt,
+  paidThroughAt,
   purchasedAt,
   toStorePlatform,
 } from "@/server/utils/purchases/revenuecat";
@@ -147,6 +148,28 @@ describe("revenuecat webhook classification", () => {
     } as Parameters<typeof expirationAt>[0];
     expect(expirationAt(event)?.getTime()).toBe(event.expiration_at_ms);
     expect(expirationAt({ ...event, expiration_at_ms: null })).toBeNull();
+  });
+
+  it("uses the grace-period end as the paid-through boundary", () => {
+    const event = {
+      type: "BILLING_ISSUE",
+      id: "e",
+      expiration_at_ms: 1_701_000_000_000,
+      grace_period_expiration_at_ms: 1_702_000_000_000,
+    } as Parameters<typeof paidThroughAt>[0];
+    expect(paidThroughAt(event)?.getTime()).toBe(
+      event.grace_period_expiration_at_ms,
+    );
+    expect(
+      paidThroughAt({ ...event, grace_period_expiration_at_ms: null })?.getTime(),
+    ).toBe(event.expiration_at_ms);
+    expect(
+      paidThroughAt({
+        ...event,
+        expiration_at_ms: null,
+        grace_period_expiration_at_ms: null,
+      }),
+    ).toBeNull();
   });
 
   it("dates an event by when the store says it happened, not when we hear it", () => {

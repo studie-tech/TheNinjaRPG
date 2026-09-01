@@ -42,9 +42,15 @@ export default function NativeStore() {
   const [packageState, setPackageState] = useState<{
     userId: string;
     packages: purchases.StorePackage[];
+    activeSubscriptions: string[] | null;
     bound: boolean;
   } | null>(null);
   const bindingGeneration = useRef(0);
+  const recentGeneration = useRef(0);
+  const [recentBaseline, setRecentBaseline] = useState<{
+    userId: string;
+    newestId: string | undefined;
+  } | null>(null);
   const [busyProduct, setBusyProduct] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -75,20 +81,39 @@ export default function NativeStore() {
     if (!apiKey) {
       // isConfigured only reflects the server's webhook secret, so a build with that set
       // and the public SDK key missing would otherwise spin forever with no explanation.
-      setPackageState({ userId: accountId, packages: [], bound: false });
+      setPackageState({
+        userId: accountId,
+        packages: [],
+        activeSubscriptions: null,
+        bound: false,
+      });
       return;
     }
     // The native module owns the queue, so sign-out's logOut and another mounted store
     // participate in the same ordering rather than racing a component-local promise.
     const binding = purchases.bind(apiKey, accountId);
     void binding
-      .then((packages) => {
+      .then(async (packages) => ({
+        packages,
+        customerInfo: await purchases.getCustomerInfo(),
+      }))
+      .then(({ packages, customerInfo }) => {
         if (generation !== bindingGeneration.current) return;
-        setPackageState({ userId: accountId, packages, bound: true });
+        setPackageState({
+          userId: accountId,
+          packages,
+          activeSubscriptions: customerInfo?.activeSubscriptions ?? null,
+          bound: true,
+        });
       })
       .catch(() => {
         if (generation !== bindingGeneration.current) return;
-        setPackageState({ userId: accountId, packages: [], bound: false });
+        setPackageState({
+          userId: accountId,
+          packages: [],
+          activeSubscriptions: null,
+          bound: false,
+        });
       });
     return () => {
       if (generation === bindingGeneration.current) bindingGeneration.current += 1;
@@ -100,20 +125,50 @@ export default function NativeStore() {
   const available =
     player && packageState?.userId === player.userId ? packageState : null;
   const packages = available?.packages ?? null;
+  const activeSubscriptions = available?.activeSubscriptions ?? null;
+
+  // `recent` is the before-checkout watermark used to tell this attempt's receipt from a
+  // terminal receipt already in the list. Refetch it for each signed-in account and keep
+  // checkout closed until that account's baseline has actually completed.
+  useEffect(() => {
+    const generation = ++recentGeneration.current;
+    const accountId = player?.userId;
+    if (!isNativeShell || !accountId) return;
+    void refetchRecent()
+      .then(({ data }) => {
+        if (generation !== recentGeneration.current || !data) return;
+        setRecentBaseline({ userId: accountId, newestId: data[0]?.id });
+      })
+      .catch(() => undefined);
+    return () => {
+      if (generation === recentGeneration.current) recentGeneration.current += 1;
+    };
+  }, [isNativeShell, player?.userId, refetchRecent]);
+  const purchaseBaseline =
+    recentBaseline?.userId === player?.userId ? recentBaseline : null;
+  const hasRecentBaseline = purchaseBaseline !== null;
 
   // A grant can be retried after the initial wait ends. Keep pending products disabled
   // and refresh both the receipt and profile when the retry finally settles.
   useEffect(() => {
-    if (!hasPendingPurchase) return;
+    const accountId = player?.userId;
+    if (!hasPendingPurchase || !accountId) return;
     const timer = window.setInterval(() => {
       void refetchRecent().then(({ data }) => {
+        if (data) {
+          setRecentBaseline((current) =>
+            current?.userId === accountId
+              ? { userId: accountId, newestId: data[0]?.id }
+              : current,
+          );
+        }
         if (data && !data.some(isPendingStorePurchase)) {
           void utils.profile.getUser.invalidate();
         }
       });
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [hasPendingPurchase, refetchRecent, utils]);
+  }, [hasPendingPurchase, player?.userId, refetchRecent, utils]);
 
   /**
    * Wait for the webhook, then refetch the balance.
@@ -130,14 +185,17 @@ export default function NativeStore() {
    */
   const settleAfterPurchase = useCallback(
     async (previousNewestId: string | undefined) => {
+      let newestId = previousNewestId;
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
         const { data } = await refetchRecent();
+        if (data?.[0]) newestId = data[0].id;
         if (hasSettledNewPurchase(data ?? [], previousNewestId)) break;
       }
       // Refetch regardless: if the webhook is slow or has failed, the player should still
       // see whatever the truth currently is rather than a frozen screen.
       await utils.profile.getUser.invalidate();
+      return newestId;
     },
     [refetchRecent, utils],
   );
@@ -147,27 +205,53 @@ export default function NativeStore() {
     productId: string,
     isFederal = false,
   ) => {
-    if (!available?.bound || available.userId !== player?.userId) return;
-    const previousNewestId = recent?.[0]?.id;
+    if (!available?.bound || available.userId !== player?.userId || !purchaseBaseline)
+      return;
+    const accountId = available.userId;
     setBusyProduct(productId);
     try {
+      // Refresh again immediately before opening the store sheet. A webhook from an
+      // earlier slow purchase may have landed since the screen's initial baseline.
+      const { data: baselineRows } = await refetchRecent();
+      if (!baselineRows) throw new Error("Could not verify recent purchases");
+      const previousNewestId = baselineRows[0]?.id;
+      setRecentBaseline({ userId: accountId, newestId: previousNewestId });
+
       let storeProductChangeInfo: purchases.StoreProductChangeInfo | undefined;
-      if (storePlatform === "android" && isFederal && catalogue?.federal) {
+      if (isFederal && catalogue?.federal) {
         const customerInfo = await purchases.getCustomerInfo();
-        const change = purchases.androidSubscriptionChange(
-          customerInfo?.activeSubscriptions ?? [],
-          productId,
-          catalogue.federal,
-        );
-        if (change.status === "active") {
-          showMutationToast({
-            success: false,
-            message: "This subscription is already active in your Play account.",
-          });
-          return;
+        if (!customerInfo) {
+          throw new Error("Could not verify your current store subscription");
         }
-        if (change.status === "change") {
-          storeProductChangeInfo = change.storeProductChangeInfo;
+        setPackageState((current) =>
+          current?.userId === accountId
+            ? { ...current, activeSubscriptions: customerInfo.activeSubscriptions }
+            : current,
+        );
+        if (storePlatform !== "android") {
+          if (customerInfo.activeSubscriptions.includes(productId)) {
+            showMutationToast({
+              success: false,
+              message: "This subscription is already active in your App Store account.",
+            });
+            return;
+          }
+        } else {
+          const change = purchases.androidSubscriptionChange(
+            customerInfo.activeSubscriptions,
+            productId,
+            catalogue.federal,
+          );
+          if (change.status === "active") {
+            showMutationToast({
+              success: false,
+              message: "This subscription is already active in your Play account.",
+            });
+            return;
+          }
+          if (change.status === "change") {
+            storeProductChangeInfo = change.storeProductChangeInfo;
+          }
         }
       }
       const result = await purchases.purchase(entry, storeProductChangeInfo);
@@ -180,9 +264,22 @@ export default function NativeStore() {
         success: true,
         message: "Purchase complete. Crediting your account...",
       });
+      if (isFederal) {
+        const customerInfo = await purchases.getCustomerInfo();
+        if (customerInfo) {
+          setPackageState((current) =>
+            current?.userId === accountId
+              ? { ...current, activeSubscriptions: customerInfo.activeSubscriptions }
+              : current,
+          );
+        }
+      }
       // Held busy across the wait so the player cannot buy the same tier twice while the
       // first grant is still in flight.
-      await settleAfterPurchase(previousNewestId);
+      const newestId = await settleAfterPurchase(previousNewestId);
+      setRecentBaseline((current) =>
+        current?.userId === accountId ? { userId: accountId, newestId } : current,
+      );
     } catch (error) {
       showMutationToast({
         success: false,
@@ -197,10 +294,19 @@ export default function NativeStore() {
 
   const restore = async () => {
     if (!available?.bound || available.userId !== player?.userId) return;
-    const previousNewestId = recent?.[0]?.id;
+    const accountId = available.userId;
+    const previousNewestId =
+      recentBaseline?.userId === accountId ? recentBaseline.newestId : recent?.[0]?.id;
     setIsRestoring(true);
     try {
       const info = await purchases.restore();
+      if (info) {
+        setPackageState((current) =>
+          current?.userId === accountId
+            ? { ...current, activeSubscriptions: info.activeSubscriptions }
+            : current,
+        );
+      }
       showMutationToast({
         success: true,
         message: info?.activeEntitlements.length
@@ -211,10 +317,26 @@ export default function NativeStore() {
         // Restores replay transaction ids the server may already know, so a new recent-row
         // id is not a completion signal. Reconcile in the background without keeping the
         // restore control disabled for the full polling window.
-        void settleAfterPurchase(previousNewestId).catch(() => undefined);
+        void settleAfterPurchase(previousNewestId)
+          .then((newestId) => {
+            setRecentBaseline((current) =>
+              current?.userId === accountId ? { userId: accountId, newestId } : current,
+            );
+          })
+          .catch(() => undefined);
       } else {
         // There is no webhook to wait for. Refresh once and finish immediately.
-        await Promise.all([refetchRecent(), utils.profile.getUser.invalidate()]);
+        const [{ data }] = await Promise.all([
+          refetchRecent(),
+          utils.profile.getUser.invalidate(),
+        ]);
+        if (data) {
+          setRecentBaseline((current) =>
+            current?.userId === accountId
+              ? { userId: accountId, newestId: data[0]?.id }
+              : current,
+          );
+        }
       }
     } catch (error) {
       showMutationToast({
@@ -273,7 +395,9 @@ export default function NativeStore() {
                 </div>
                 <Button
                   size="sm"
-                  disabled={busyProduct !== null || isPending || !listed}
+                  disabled={
+                    busyProduct !== null || isPending || !listed || !hasRecentBaseline
+                  }
                   onClick={() => listed && void buy(listed, product.productId)}
                 >
                   {busyProduct === product.productId || isPending ? (
@@ -298,7 +422,8 @@ export default function NativeStore() {
                     purchases.productIdForPackage(entry, storePlatform) ===
                     expectedProductId,
                 );
-                const isCurrent = player.federalStatus === plan.federalStatus;
+                const isCurrent =
+                  activeSubscriptions?.includes(expectedProductId) ?? false;
                 const isPending = pendingProductIds.has(expectedProductId);
                 return (
                   <div
@@ -318,7 +443,12 @@ export default function NativeStore() {
                       size="sm"
                       variant={isCurrent ? "outline" : "default"}
                       disabled={
-                        busyProduct !== null || isPending || !listed || isCurrent
+                        busyProduct !== null ||
+                        isPending ||
+                        !listed ||
+                        isCurrent ||
+                        activeSubscriptions === null ||
+                        !hasRecentBaseline
                       }
                       onClick={() =>
                         listed && void buy(listed, expectedProductId, true)

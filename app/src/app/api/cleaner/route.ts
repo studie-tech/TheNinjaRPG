@@ -450,7 +450,7 @@ export async function GET() {
       sql`UPDATE ${userData} u SET u.federalStatus = 'NONE' WHERE u.federalStatus != 'NONE' AND NOT EXISTS (
         SELECT 1 FROM ${paypalSubscription} p WHERE p.affectedUserId = u.userId AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
       ) AND NOT EXISTS (
-        SELECT 1 FROM ${storePurchase} s WHERE s.userId = u.userId AND s.federalStatus IS NOT NULL AND s.acceptedAt IS NOT NULL AND s.revokedAt IS NULL AND (s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY OR s.expiresAt >= CURRENT_TIMESTAMP(3))
+        SELECT 1 FROM ${storePurchase} s WHERE s.userId = u.userId AND s.federalStatus IS NOT NULL AND s.acceptedAt IS NOT NULL AND s.revokedAt IS NULL AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
       )`,
     );
 

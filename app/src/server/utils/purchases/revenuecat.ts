@@ -34,6 +34,7 @@ export const revenueCatEventSchema = z.object({
     event_timestamp_ms: z.number().nullish(),
     purchased_at_ms: z.number().nullish(),
     expiration_at_ms: z.number().nullish(),
+    grace_period_expiration_at_ms: z.number().nullish(),
     environment: z.string().nullish(),
     entitlement_ids: z.array(z.string()).nullish(),
     transferred_from: z.array(z.string()).nullish(),
@@ -133,6 +134,21 @@ export const purchasedAt = (event: RevenueCatEvent): Date =>
 /** The current paid-through date when RevenueCat provides one. */
 export const expirationAt = (event: RevenueCatEvent): Date | null =>
   event.expiration_at_ms ? new Date(event.expiration_at_ms) : null;
+
+/**
+ * The last instant RevenueCat says an entitlement remains active.
+ *
+ * BILLING_ISSUE is the only normal event carrying a grace-period end, but taking the
+ * maximum here also makes delayed or hand-built payloads fail closed around the same
+ * paid-through definition.
+ */
+export const paidThroughAt = (event: RevenueCatEvent): Date | null => {
+  const timestamps = [
+    event.expiration_at_ms,
+    event.grace_period_expiration_at_ms,
+  ].filter((timestamp): timestamp is number => typeof timestamp === "number");
+  return timestamps.length > 0 ? new Date(Math.max(...timestamps)) : null;
+};
 
 export const isAuthorized = (
   header: string | null,

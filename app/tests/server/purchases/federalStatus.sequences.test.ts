@@ -213,6 +213,19 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(next).toBe("NONE");
   });
 
+  it("does not use receipt age after an explicit paid-through date has ended", async () => {
+    const transactionId = await buyFederal("GOLD");
+    const database = await db();
+    await database
+      .update(storePurchase)
+      .set({ expiresAt: new Date(Date.now() - MINUTE) })
+      .where(eq(storePurchase.transactionId, transactionId));
+
+    expect(await storeFederalFloor(database, USER)).toBe("NONE");
+    await setFederalStatusWithStoreFloor(database, USER, "NONE");
+    expect(await statusOf()).toBe("NONE");
+  });
+
   it("keeps and restores an old receipt when the store extends its paid-through date", async () => {
     const transactionId = await buyFederal("GOLD", 70 * DAY);
     const database = await db();
@@ -523,6 +536,42 @@ describeWithDatabase("federal status across real webhook sequences", () => {
         where: eq(userData.userId, userId),
       }),
     ]);
+    expect(receipt?.grantedAt).toBeNull();
+    expect(receipt?.revokedAt).toBeInstanceOf(Date);
+    expect(user?.federalStatus).toBe("NONE");
+  });
+
+  it("retires a delayed grant whose explicit paid-through date already ended", async () => {
+    const userId = "store-grant-past-paid-through";
+    const database = await db();
+    const endedAt = new Date(Date.now() - MINUTE);
+    await insertUsers([{ userId, username: "late-explicit", federalStatus: "NONE" }]);
+
+    const transactionId = nanoid();
+    await expect(
+      grantStorePurchase(database, {
+        userId,
+        transactionId,
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt: new Date(endedAt.getTime() - DAY),
+        expiresAt: endedAt,
+        raw: {},
+      }),
+    ).resolves.toEqual({ status: "ignored", reason: "Expired purchase" });
+
+    const [receipt, user] = await Promise.all([
+      database.query.storePurchase.findFirst({
+        columns: { grantedAt: true, revokedAt: true, expiresAt: true },
+        where: eq(storePurchase.transactionId, transactionId),
+      }),
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, userId),
+      }),
+    ]);
+    expect(receipt?.expiresAt?.getTime()).toBe(endedAt.getTime());
     expect(receipt?.grantedAt).toBeNull();
     expect(receipt?.revokedAt).toBeInstanceOf(Date);
     expect(user?.federalStatus).toBe("NONE");

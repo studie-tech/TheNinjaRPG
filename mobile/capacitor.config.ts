@@ -13,7 +13,6 @@ const APP_VERSION = "1.0.0";
  */
 const ORIGIN = process.env.TNR_ORIGIN ?? "https://www.theninja-rpg.com";
 const ORIGIN_HOST = new URL(ORIGIN).host;
-const APEX_HOST = ORIGIN_HOST.replace(/^www\./, "");
 
 const config: CapacitorConfig = {
   appId: process.env.TNR_APP_ID ?? "com.theninjarpg.app",
@@ -32,15 +31,10 @@ const config: CapacitorConfig = {
     // Keeps that navigation inside the WebView — and the Capacitor bridge with it —
     // rather than handing the URL to the system browser.
     //
-    // The apex is listed in its own right because both matchers compare host labels one
-    // for one, so `*.theninja-rpg.com` does not cover `theninja-rpg.com`. It redirects to
-    // www in production and is deliberately not claimed as an App/Universal Link host:
-    // association-file verification does not follow that redirect.
-    allowNavigation: [
-      ORIGIN_HOST,
-      APEX_HOST,
-      `*.${APEX_HOST}`,
-    ],
+    // Keep the native bridge confined to the one origin this binary was built to trust.
+    // Other first-party hosts still open in the system browser: a compromised or
+    // abandoned subdomain must never inherit access to native plugins.
+    allowNavigation: [ORIGIN_HOST],
   },
 
   ios: {

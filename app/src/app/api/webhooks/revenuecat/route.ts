@@ -11,12 +11,12 @@ import {
 } from "@/server/utils/purchases/grant";
 import {
   classifyEvent,
-  expirationAt,
   idempotencyKey,
   isAuthorized,
   isRefund,
   isSandbox,
   occurredAt,
+  paidThroughAt,
   purchasedAt,
   revenueCatEventSchema,
   toStorePlatform,
@@ -94,6 +94,31 @@ export async function POST(request: Request) {
       });
       return Response.json({ handled: "revoked" });
     }
+    if (event.type === "BILLING_ISSUE") {
+      // RevenueCat keeps the entitlement active through an explicit store grace period.
+      // Persist that boundary so reconciliation neither drops it early nor lets the
+      // receipt live on the generic age fallback after the boundary has passed.
+      const gracePeriodEndsAt = event.grace_period_expiration_at_ms
+        ? new Date(event.grace_period_expiration_at_ms)
+        : null;
+      if (!gracePeriodEndsAt) return Response.json({ handled: "ignored" });
+      if (isSandbox(event.environment) && !isSandboxGrantee(appUserId)) {
+        return Response.json({ handled: "ignored" });
+      }
+      const store = toStorePlatform(event.store);
+      if (!store) return unsupportedStore(event.type, event.store);
+      if (!event.product_id) {
+        throw new Error("RevenueCat billing issue is missing its product");
+      }
+      await extendStoreSubscription(drizzleDB, {
+        userId: appUserId,
+        store,
+        productId: event.product_id,
+        expirationAt: gracePeriodEndsAt,
+        transactionId: event.transaction_id,
+      });
+      return Response.json({ handled: "extended" });
+    }
     if (action === "extend") {
       if (isSandbox(event.environment) && !isSandboxGrantee(appUserId)) {
         return Response.json({ handled: "ignored" });
@@ -103,7 +128,7 @@ export async function POST(request: Request) {
       if (!event.product_id) {
         throw new Error("RevenueCat extension is missing its store or product");
       }
-      const expiresAt = expirationAt(event);
+      const expiresAt = paidThroughAt(event);
       if (!expiresAt) throw new Error("RevenueCat extension has no expiration");
       await extendStoreSubscription(drizzleDB, {
         userId: appUserId,
@@ -124,7 +149,7 @@ export async function POST(request: Request) {
         store,
         isSandbox: isSandbox(event.environment),
         purchasedAt: purchasedAt(event),
-        expiresAt: expirationAt(event),
+        expiresAt: paidThroughAt(event),
         raw: body,
       });
       return Response.json({ handled: outcome.status });

@@ -127,21 +127,36 @@ export const grantStorePurchase = async (
 
   const accepted = !grant.isSandbox || isSandboxGrantee(grant.userId);
 
-  const retireIfExpired = async (): Promise<boolean> => {
+  const retireIfExpired = async (
+    explicitExpiration: Date | null | undefined,
+  ): Promise<boolean> => {
     if (!federal) return false;
-    const expired = await client.query.storeEntitlementState.findFirst({
-      columns: { revokedThrough: true },
-      where: and(
-        eq(storeEntitlementState.userId, grant.userId),
-        eq(storeEntitlementState.store, grant.store),
-        gte(storeEntitlementState.revokedThrough, grant.purchasedAt),
-      ),
-    });
-    if (!expired) return false;
+    const pastPaidThrough =
+      explicitExpiration !== null &&
+      explicitExpiration !== undefined &&
+      explicitExpiration.getTime() <= Date.now();
+    const expiredByEvent = pastPaidThrough
+      ? true
+      : Boolean(
+          await client.query.storeEntitlementState.findFirst({
+            columns: { revokedThrough: true },
+            where: and(
+              eq(storeEntitlementState.userId, grant.userId),
+              eq(storeEntitlementState.store, grant.store),
+              gte(storeEntitlementState.revokedThrough, grant.purchasedAt),
+            ),
+          }),
+        );
+    if (!expiredByEvent) return false;
     await client
       .update(storePurchase)
       .set({ revokedAt: new Date() })
-      .where(eq(storePurchase.transactionId, grant.transactionId));
+      .where(
+        and(
+          eq(storePurchase.transactionId, grant.transactionId),
+          isNull(storePurchase.grantedAt),
+        ),
+      );
     return true;
   };
 
@@ -190,6 +205,7 @@ export const grantStorePurchase = async (
         acceptedAt: true,
         grantedAt: true,
         revokedAt: true,
+        expiresAt: true,
       },
       where: eq(storePurchase.transactionId, grant.transactionId),
     });
@@ -210,7 +226,7 @@ export const grantStorePurchase = async (
     }
     if (receipt.grantedAt) return { status: "duplicate" };
     if (receipt.revokedAt) return { status: "ignored", reason: "Revoked purchase" };
-    if (await retireIfExpired()) {
+    if (await retireIfExpired(receipt.expiresAt)) {
       return { status: "ignored", reason: "Expired purchase" };
     }
 
@@ -244,6 +260,7 @@ export const grantStorePurchase = async (
             AND ${storePurchase.grantedAt} IS NULL
             AND ${storePurchase.acceptedAt} IS NOT NULL
             AND ${storePurchase.revokedAt} IS NULL
+            AND (${storePurchase.expiresAt} IS NULL OR ${storePurchase.expiresAt} > CURRENT_TIMESTAMP(3))
             AND NOT EXISTS (
               SELECT 1 FROM ${storeEntitlementState}
               WHERE ${storeEntitlementState.userId} = ${storePurchase.userId}
@@ -254,14 +271,14 @@ export const grantStorePurchase = async (
 
     if (result.rowsAffected === 0) {
       const settled = await client.query.storePurchase.findFirst({
-        columns: { grantedAt: true, revokedAt: true },
+        columns: { grantedAt: true, revokedAt: true, expiresAt: true },
         where: eq(storePurchase.transactionId, grant.transactionId),
       });
       if (settled?.grantedAt) return { status: "duplicate" };
       if (settled?.revokedAt) {
         return { status: "ignored", reason: "Revoked purchase" };
       }
-      if (await retireIfExpired()) {
+      if (await retireIfExpired(settled?.expiresAt)) {
         return { status: "ignored", reason: "Expired purchase" };
       }
       throw new Error(`Could not apply store receipt ${grant.transactionId}`);
@@ -594,8 +611,11 @@ export const storeFederalFloor = async (
       isNotNull(storePurchase.federalStatus),
       isNull(storePurchase.revokedAt),
       or(
-        gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
         gte(storePurchase.expiresAt, new Date()),
+        and(
+          isNull(storePurchase.expiresAt),
+          gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
+        ),
       ),
     ),
   });
@@ -618,8 +638,11 @@ export const setFederalStatusWithStoreFloor = async (
     isNotNull(storePurchase.acceptedAt),
     isNull(storePurchase.revokedAt),
     or(
-      gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
       gte(storePurchase.expiresAt, new Date()),
+      and(
+        isNull(storePurchase.expiresAt),
+        gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
+      ),
     ),
   );
   const hasTier = (tier: FederalStatus) => sql`EXISTS (
