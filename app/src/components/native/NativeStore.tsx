@@ -13,13 +13,14 @@ import {
   fetchFreshStoreObservation,
   finalStorePurchaseResult,
   finalStoreRestoreResult,
-  hasSettledStorePurchase,
   isPendingStorePurchase,
+  reconcileInterruptedStoreAttempt,
   releaseStorePurchaseLock,
   retainStorePurchaseLock,
   type StorePurchaseAttempt,
   type StorePurchaseLock,
   type StoreRestoreAttempt,
+  storePurchaseReconciliation,
   storeRestoreReconciliation,
 } from "@/libs/native/purchaseSettlement";
 import { showMutationToast } from "@/libs/toast";
@@ -70,6 +71,7 @@ export default function NativeStore() {
   const [retryingProduct, setRetryingProduct] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [recentBaselineError, setRecentBaselineError] = useState<string | null>(null);
+  const recoveredAccounts = useRef(new Set<string>());
 
   const { data: catalogue } = api.purchases.catalogue.useQuery(undefined, {
     enabled: isNativeShell === true,
@@ -83,6 +85,10 @@ export default function NativeStore() {
     recent?.filter(isPendingStorePurchase).map((purchase) => purchase.productId),
   );
   const hasPendingPurchase = pendingProductIds.size > 0;
+  const rejectedRecent =
+    recent?.filter(
+      (purchase) => purchase.grantedAt === null && !isPendingStorePurchase(purchase),
+    ) ?? [];
   const accountUnsettledAttempts = unsettledAttempts.filter(
     (entry) => entry.accountId === player?.userId,
   );
@@ -118,17 +124,20 @@ export default function NativeStore() {
       const raw = window.localStorage.getItem(PURCHASE_ATTEMPT_STORAGE_KEY);
       const parsed: unknown = raw ? JSON.parse(raw) : [];
       if (Array.isArray(parsed)) {
-        const stored = parsed.filter((entry): entry is StorePurchaseLock => {
-          if (!entry || typeof entry !== "object") return false;
+        const stored = parsed.flatMap((entry): StorePurchaseLock[] => {
+          if (!entry || typeof entry !== "object") return [];
           const value = entry as {
             accountId?: unknown;
             attempt?: {
               transactionId?: unknown;
               productId?: unknown;
               baselineReceiptIds?: unknown;
+              baselineNativeTransactionIds?: unknown;
+              phase?: unknown;
+              startedAt?: unknown;
             };
           };
-          return (
+          const valid =
             typeof value.accountId === "string" &&
             typeof value.attempt?.productId === "string" &&
             (value.attempt.transactionId === undefined ||
@@ -136,9 +145,41 @@ export default function NativeStore() {
             Array.isArray(value.attempt.baselineReceiptIds) &&
             value.attempt.baselineReceiptIds.every(
               (receiptId) => typeof receiptId === "string",
-            )
-          );
+            );
+          if (!valid || !value.attempt) return [];
+          // Phase-less entries were written after a native callback was already lost in
+          // older builds. Keep them conservatively locked rather than abandoning them.
+          return [
+            {
+              accountId: value.accountId as string,
+              attempt: {
+                transactionId:
+                  typeof value.attempt.transactionId === "string"
+                    ? value.attempt.transactionId
+                    : undefined,
+                productId: value.attempt.productId as string,
+                baselineReceiptIds: value.attempt.baselineReceiptIds as string[],
+                baselineNativeTransactionIds: Array.isArray(
+                  value.attempt.baselineNativeTransactionIds,
+                )
+                  ? value.attempt.baselineNativeTransactionIds.filter(
+                      (id): id is string => typeof id === "string",
+                    )
+                  : [],
+                phase:
+                  value.attempt.phase === "sheet-open" ||
+                  value.attempt.phase === "charged-or-pending"
+                    ? value.attempt.phase
+                    : "charged-or-pending",
+                startedAt:
+                  typeof value.attempt.startedAt === "string"
+                    ? value.attempt.startedAt
+                    : new Date(0).toISOString(),
+              },
+            },
+          ];
         });
+        recoveredAccounts.current = new Set(stored.map((entry) => entry.accountId));
         unsettledAttemptsRef.current = stored;
         setUnsettledAttempts(stored);
       }
@@ -301,7 +342,7 @@ export default function NativeStore() {
    */
   const settleAfterPurchase = useCallback(
     async (attempt: StorePurchaseAttempt) => {
-      let settled = false;
+      let observation: "pending" | "credited" | "rejected" = "pending";
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
         const matching = await fetchRecentFresh({
@@ -310,10 +351,8 @@ export default function NativeStore() {
             ? { transactionId: attempt.transactionId }
             : { productId: attempt.productId }),
         });
-        if (hasSettledStorePurchase(matching, attempt)) {
-          settled = true;
-          break;
-        }
+        observation = storePurchaseReconciliation(matching, attempt);
+        if (observation !== "pending") break;
       }
       // Refetch regardless: if the webhook is slow or has failed, the player should still
       // see whatever the truth currently is rather than a frozen screen.
@@ -321,10 +360,12 @@ export default function NativeStore() {
         refetchRecent(),
         utils.profile.getUser.invalidate(),
       ]);
-      settled ||= Boolean(data && hasSettledStorePurchase(data, attempt));
+      if (data && observation === "pending") {
+        observation = storePurchaseReconciliation(data, attempt);
+      }
       return {
         newestId: data?.[0]?.id,
-        status: finalStorePurchaseResult(settled),
+        status: finalStorePurchaseResult(observation),
       };
     },
     [fetchRecentFresh, refetchRecent, utils],
@@ -338,12 +379,13 @@ export default function NativeStore() {
           ? { transactionId: attempt.transactionId }
           : { productId: attempt.productId }),
       });
-      if (!hasSettledStorePurchase(matching, attempt)) return false;
+      const observation = storePurchaseReconciliation(matching, attempt);
+      if (observation === "pending") return observation;
       updateUnsettledAttempts((current) =>
         releaseStorePurchaseLock(current, accountId, attempt.productId),
       );
       await Promise.all([refetchRecent(), utils.profile.getUser.invalidate()]);
-      return true;
+      return observation;
     },
     [fetchRecentFresh, refetchRecent, updateUnsettledAttempts, utils],
   );
@@ -362,6 +404,52 @@ export default function NativeStore() {
     }, 5000);
     return () => window.clearInterval(timer);
   }, [accountUnsettledAttempts, verifyPurchaseAttempt]);
+
+  // On restart, synchronize RevenueCat with the device queue before deciding whether an
+  // interrupted native sheet charged. A new native transaction upgrades correlation; an
+  // unchanged history is the only condition which safely abandons a sheet-open attempt.
+  useEffect(() => {
+    const accountId = player?.userId;
+    if (
+      !attemptsHydrated ||
+      !accountId ||
+      !available?.bound ||
+      accountUnsettledAttempts.length === 0 ||
+      !recoveredAccounts.current.has(accountId)
+    )
+      return;
+    recoveredAccounts.current.delete(accountId);
+    void purchases
+      .syncCustomerInfo()
+      .then(async (info) => {
+        if (!info) throw new Error("Could not reconcile purchase history");
+        const recovered = accountUnsettledAttempts.flatMap((entry) => {
+          const attempt = reconcileInterruptedStoreAttempt(
+            entry.attempt,
+            info.transactions,
+          );
+          return attempt ? [{ ...entry, attempt }] : [];
+        });
+        updateUnsettledAttempts((current) => [
+          ...current.filter((entry) => entry.accountId !== accountId),
+          ...recovered,
+        ]);
+        for (const entry of recovered) {
+          await verifyPurchaseAttempt(entry.accountId, entry.attempt);
+        }
+      })
+      .catch(() => {
+        // An ambiguous native reconciliation failure preserves every lock. A later manual
+        // or background server check can still finish it safely.
+      });
+  }, [
+    accountUnsettledAttempts,
+    attemptsHydrated,
+    available?.bound,
+    player?.userId,
+    updateUnsettledAttempts,
+    verifyPurchaseAttempt,
+  ]);
 
   const refreshAfterRestore = useCallback(
     async (attempt: StoreRestoreAttempt) => {
@@ -407,11 +495,16 @@ export default function NativeStore() {
     try {
       // Refresh again immediately before opening the store sheet. A webhook from an
       // earlier slow purchase may have landed since the screen's initial baseline.
-      const [baselineRows, { data: visibleRows }] = await Promise.all([
-        fetchRecentFresh({ limit: 50, productId }),
-        refetchRecent(),
-      ]);
+      const [baselineRows, { data: visibleRows }, checkoutCustomerInfo] =
+        await Promise.all([
+          fetchRecentFresh({ limit: 50, productId }),
+          refetchRecent(),
+          purchases.getCustomerInfo(),
+        ]);
       if (!visibleRows) throw new Error("Could not verify recent purchases");
+      if (!checkoutCustomerInfo) {
+        throw new Error("Could not verify store purchase history");
+      }
       const previousNewestId = visibleRows[0]?.id;
       setRecentBaseline({ userId: accountId, newestId: previousNewestId });
 
@@ -455,6 +548,11 @@ export default function NativeStore() {
       const attempt: StorePurchaseAttempt = {
         productId,
         baselineReceiptIds: baselineRows.map((purchase) => purchase.id),
+        baselineNativeTransactionIds: checkoutCustomerInfo.transactions.map(
+          (transaction) => transaction.transactionId,
+        ),
+        phase: "sheet-open",
+        startedAt: new Date().toISOString(),
       };
       // Persist before opening the native sheet. The app can be suspended or killed after
       // the store charges the account but before the bridge promise reaches JavaScript;
@@ -470,16 +568,33 @@ export default function NativeStore() {
         return;
       }
       if (result.status === "error") {
-        updateUnsettledAttempts((current) =>
-          releaseStorePurchaseLock(current, accountId, productId),
-        );
-        showMutationToast({ success: false, message: result.message });
+        if (result.mayHaveCharged) {
+          updateUnsettledAttempts((current) =>
+            retainStorePurchaseLock(current, {
+              accountId,
+              attempt: { ...attempt, phase: "charged-or-pending" },
+            }),
+          );
+        } else {
+          updateUnsettledAttempts((current) =>
+            releaseStorePurchaseLock(current, accountId, productId),
+          );
+        }
+        showMutationToast({
+          success: false,
+          message: result.mayHaveCharged
+            ? `${result.message} The store outcome is being reconciled before another charge is allowed.`
+            : result.message,
+        });
         return;
       }
       const chargedAttempt: StorePurchaseAttempt = {
         transactionId: result.transactionId,
         productId,
         baselineReceiptIds: attempt.baselineReceiptIds,
+        baselineNativeTransactionIds: attempt.baselineNativeTransactionIds,
+        phase: "charged-or-pending",
+        startedAt: attempt.startedAt,
       };
       // Enrich the already-durable attempt with the SDK's authoritative correlation.
       updateUnsettledAttempts((current) =>
@@ -502,11 +617,18 @@ export default function NativeStore() {
       // Held busy across the wait so the player cannot buy the same tier twice while the
       // first grant is still in flight.
       const settlement = await settleAfterPurchase(chargedAttempt);
-      if (settlement.status === "settled") {
+      if (settlement.status !== "timed-out") {
         updateUnsettledAttempts((current) =>
           releaseStorePurchaseLock(current, accountId, chargedAttempt.productId),
         );
-      } else {
+      }
+      if (settlement.status === "rejected") {
+        showMutationToast({
+          success: false,
+          message:
+            "The store completed checkout, but the server rejected the receipt. You were not credited; please contact support.",
+        });
+      } else if (settlement.status === "timed-out") {
         showMutationToast({
           success: false,
           message:
@@ -661,8 +783,9 @@ export default function NativeStore() {
               className="rounded-lg border border-amber-500/50 p-3 text-sm"
             >
               <p>
-                {attempt.productId} was charged and is still being verified. Checkout is
-                locked for this item.
+                {attempt.phase === "sheet-open"
+                  ? `${attempt.productId} checkout was interrupted and is being reconciled. Checkout is locked for this item.`
+                  : `${attempt.productId} may have been charged and is still being verified. Checkout is locked for this item.`}
               </p>
               <Button
                 className="mt-2"
@@ -672,12 +795,15 @@ export default function NativeStore() {
                 onClick={() => {
                   setRetryingProduct(attempt.productId);
                   void verifyPurchaseAttempt(accountId, attempt)
-                    .then((settled) => {
+                    .then((observation) => {
                       showMutationToast({
-                        success: settled,
-                        message: settled
-                          ? "Purchase verification finished."
-                          : "The server is still processing this purchase.",
+                        success: observation === "credited",
+                        message:
+                          observation === "credited"
+                            ? "Purchase verification finished."
+                            : observation === "rejected"
+                              ? "The receipt was rejected and was not credited. Please contact support."
+                              : "The server is still processing this purchase.",
                       });
                     })
                     .catch((error: unknown) => {
@@ -699,6 +825,17 @@ export default function NativeStore() {
               </Button>
             </div>
           ))}
+          {rejectedRecent.length > 0 && (
+            <div className="rounded-lg border border-red-500/50 p-3 text-sm">
+              <p className="font-medium">Recent purchase not credited</p>
+              {rejectedRecent.map((purchase) => (
+                <p key={purchase.id} className="text-muted-foreground text-xs">
+                  {purchase.productId}: rejected or retired. Contact support if the
+                  store charged you.
+                </p>
+              ))}
+            </div>
+          )}
           <p className="mb-1 font-medium text-sm">Reputation</p>
           {catalogue?.reputation.map((product) => {
             // The store's own localised price, so the player sees their currency.

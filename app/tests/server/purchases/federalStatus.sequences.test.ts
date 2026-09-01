@@ -5,6 +5,7 @@ import { beforeEach, expect, it } from "vitest";
 import { nanoid } from "nanoid";
 import {
   paypalSubscription,
+  storeEntitlementRevocation,
   storeEntitlementState,
   storePurchase,
   storePurchaseTransfer,
@@ -120,6 +121,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
   beforeEach(async () => {
     await resetTables(
       storeEntitlementState,
+      storeEntitlementRevocation,
       storePurchaseTransfer,
       storeUserIdAlias,
       storePurchase,
@@ -1210,6 +1212,100 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(destination?.federalStatus).toBe("NONE");
     expect(receipt?.userId).toBe(DESTINATION);
     expect(receipt?.revokedAt).toBeInstanceOf(Date);
+  });
+
+  it("applies expiry delivered before an older transfer to the original ownership epoch", async () => {
+    await insertUsers([
+      { userId: DESTINATION, username: "epoch-destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const purchasedAt = new Date(Date.now() - 3 * MINUTE);
+    const transferredAt = new Date(Date.now() - 2 * MINUTE);
+    const endedAt = new Date(Date.now() - MINUTE);
+
+    // Delivery order is expiry(t2), transfer(t1), purchase(p), while event order is
+    // p < t1 < t2. The expiry initially lands on the original id because the delayed
+    // ownership event has not been observed yet.
+    await revokeFederalStatus(database, USER, {
+      eventId: "expiry-before-delayed-transfer",
+      occurredAt: endedAt,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+    });
+    await transferStorePurchases(database, {
+      eventId: "delayed-transfer",
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      occurredAt: transferredAt,
+    });
+    await expect(
+      grantStorePurchase(database, {
+        userId: USER,
+        transactionId: "delayed-ended-period",
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt,
+        raw: {},
+      }),
+    ).resolves.toEqual({ status: "ignored", reason: "Expired purchase" });
+    const receipt = await database.query.storePurchase.findFirst({
+      where: eq(storePurchase.transactionId, "delayed-ended-period"),
+    });
+    expect(receipt?.userId).toBe(DESTINATION);
+    expect(receipt?.grantedAt).toBeNull();
+    expect(receipt?.revokedAt).toBeInstanceOf(Date);
+  });
+
+  it("does not spill a post-transfer new-purchase expiry onto the old owner epoch", async () => {
+    await insertUsers([
+      { userId: DESTINATION, username: "isolated-destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const transferredAt = new Date(Date.now() - 3 * MINUTE);
+    await transferStorePurchases(database, {
+      eventId: "epoch-boundary-transfer",
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      occurredAt: transferredAt,
+    });
+    const newerTransactionId = "post-transfer-period";
+    await grantStorePurchase(database, {
+      userId: USER,
+      transactionId: newerTransactionId,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: false,
+      purchasedAt: new Date(transferredAt.getTime() + MINUTE),
+      raw: {},
+    });
+    await revokeFederalStatus(database, USER, {
+      eventId: "post-transfer-expiry",
+      occurredAt: new Date(),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      transactionId: newerTransactionId,
+    });
+
+    await expect(
+      grantStorePurchase(database, {
+        userId: USER,
+        transactionId: "old-transferred-live-period",
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt: new Date(transferredAt.getTime() - MINUTE),
+        expiresAt: new Date(Date.now() + DAY),
+        raw: {},
+      }),
+    ).resolves.toMatchObject({ status: "granted" });
+    const oldReceipt = await database.query.storePurchase.findFirst({
+      where: eq(storePurchase.transactionId, "old-transferred-live-period"),
+    });
+    expect(oldReceipt?.userId).toBe(DESTINATION);
+    expect(oldReceipt?.grantedAt).toBeInstanceOf(Date);
   });
 
   it("bulk reconciliation downgrades expired GOLD to a live store SILVER", async () => {

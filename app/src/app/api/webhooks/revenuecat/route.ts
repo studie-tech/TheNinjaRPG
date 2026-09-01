@@ -114,6 +114,7 @@ export async function POST(request: Request) {
       const store = toStorePlatform(event.store);
       if (!store) return unsupportedStore(event.type, event.store);
       await revokeFederalStatus(drizzleDB, appUserId, {
+        eventId: event.id,
         occurredAt: occurredAt(event),
         productId: event.product_id,
         store,

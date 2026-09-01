@@ -49,6 +49,8 @@ export interface CustomerInfo {
   /** Store product ids for subscriptions currently active on this account. */
   activeSubscriptions: string[];
   originalAppUserId: string;
+  /** Store transactions used to reconcile a sheet whose JS callback was lost. */
+  transactions: { transactionId: string; productId: string }[];
 }
 
 export type StoreReplacementMode =
@@ -181,7 +183,37 @@ export const productIdForPackage = (
 export type PurchaseOutcome =
   | { status: "purchased"; transactionId?: string }
   | { status: "cancelled" }
-  | { status: "error"; message: string };
+  | {
+      status: "error";
+      message: string;
+      code?: string;
+      /** False only when the SDK proves checkout could not have charged. */
+      mayHaveCharged: boolean;
+    };
+
+const DEFINITE_PRECHARGE_ERROR_CODES = new Set(["3", "4", "5", "14", "23", "24"]);
+
+export const purchaseErrorOutcome = (error: unknown): PurchaseOutcome => {
+  const candidate =
+    error && typeof error === "object"
+      ? (error as { code?: unknown; message?: unknown; userCancelled?: unknown })
+      : undefined;
+  const code =
+    typeof candidate?.code === "string" || typeof candidate?.code === "number"
+      ? String(candidate.code)
+      : undefined;
+  const message =
+    typeof candidate?.message === "string" ? candidate.message : "Purchase failed";
+  if (code === "1" || candidate?.userCancelled === true) {
+    return { status: "cancelled" };
+  }
+  return {
+    status: "error",
+    message,
+    code,
+    mayHaveCharged: !code || !DEFINITE_PRECHARGE_ERROR_CODES.has(code),
+  };
+};
 
 /**
  * Present the store's purchase sheet. Cancellation is reported separately because it is
@@ -205,10 +237,7 @@ export const purchase = async (
       transactionId: result.transaction?.transactionIdentifier,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Purchase failed";
-    // Both SDKs surface a cancellation as an error rather than a flag on some paths.
-    if (/cancel/i.test(message)) return { status: "cancelled" };
-    return { status: "error", message };
+    return purchaseErrorOutcome(error);
   }
 };
 
@@ -229,15 +258,52 @@ export const getCustomerInfo = async (): Promise<CustomerInfo | undefined> => {
   return toCustomerInfo(result?.customerInfo);
 };
 
+/** Force RevenueCat to reconcile the device store queue before restart recovery. */
+export const syncCustomerInfo = async (): Promise<CustomerInfo | undefined> => {
+  await invoke(PLUGIN, "syncPurchases");
+  return await getCustomerInfo();
+};
+
 const toCustomerInfo = (raw: unknown): CustomerInfo | undefined => {
   const info = raw as
     | {
         entitlements?: { active?: Record<string, unknown> };
         activeSubscriptions?: unknown;
         originalAppUserId?: string;
+        nonSubscriptionTransactions?: unknown;
+        subscriptionsByProductIdentifier?: unknown;
       }
     | undefined;
   if (!info) return undefined;
+  const nonSubscriptions = Array.isArray(info.nonSubscriptionTransactions)
+    ? info.nonSubscriptionTransactions.flatMap((entry) => {
+        const transaction = entry as {
+          transactionIdentifier?: unknown;
+          productIdentifier?: unknown;
+        };
+        return typeof transaction.transactionIdentifier === "string" &&
+          typeof transaction.productIdentifier === "string"
+          ? [
+              {
+                transactionId: transaction.transactionIdentifier,
+                productId: transaction.productIdentifier,
+              },
+            ]
+          : [];
+      })
+    : [];
+  const subscriptions =
+    info.subscriptionsByProductIdentifier &&
+    typeof info.subscriptionsByProductIdentifier === "object"
+      ? Object.entries(info.subscriptionsByProductIdentifier).flatMap(
+          ([productId, value]) => {
+            const subscription = value as { storeTransactionId?: unknown };
+            return typeof subscription.storeTransactionId === "string"
+              ? [{ transactionId: subscription.storeTransactionId, productId }]
+              : [];
+          },
+        )
+      : [];
   return {
     activeEntitlements: Object.keys(info.entitlements?.active ?? {}),
     activeSubscriptions: Array.isArray(info.activeSubscriptions)
@@ -246,5 +312,6 @@ const toCustomerInfo = (raw: unknown): CustomerInfo | undefined => {
         )
       : [],
     originalAppUserId: info.originalAppUserId ?? "",
+    transactions: [...nonSubscriptions, ...subscriptions],
   };
 };

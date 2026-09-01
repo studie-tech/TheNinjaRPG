@@ -32,6 +32,7 @@ import {
 } from "@/drizzle/constants";
 import {
   paypalSubscription,
+  storeEntitlementRevocation,
   storeEntitlementState,
   storePurchase,
   storePurchaseTransfer,
@@ -163,7 +164,15 @@ const canonicalStoreUserIdForUpdate = async (
  * and staff renames observe one stable graph without requiring a race-prone graph walk
  * before the locks are known. The INSERT itself owns the row until transaction commit.
  */
-const STORE_USER_MUTATION_LOCK_ID = "__tnr_internal_store_user_mutation_lock__";
+export const STORE_USER_MUTATION_LOCK_ID = "__tnr_internal_store_user_mutation_lock__";
+export const DELETED_STORE_USER_PREFIX = "__tnr_deleted_store_user__:";
+
+export const isReservedStoreUserId = (userId: string): boolean =>
+  userId === STORE_USER_MUTATION_LOCK_ID ||
+  userId.startsWith(DELETED_STORE_USER_PREFIX);
+
+export const isDeletedStoreUserId = (userId: string): boolean =>
+  userId.startsWith(DELETED_STORE_USER_PREFIX);
 
 export const acquireStoreUserMutationLock = async (
   client: DrizzleClient,
@@ -452,6 +461,12 @@ const grantStorePurchaseUnlocked = async (
   // TRANSFER may arrive first. Consumables stay with their purchaser, but subscriptions
   // follow the durable store-account ownership redirect before any receipt is inserted.
   const originalUserId = await canonicalStoreUserId(client, grant.userId);
+  if (isDeletedStoreUserId(originalUserId)) {
+    // Store receipts are an audit/idempotency ledger and deliberately survive account
+    // deletion. A retry for a tombstoned owner is acknowledged without recreating value
+    // or asking RevenueCat to retry forever for a UserData row that will never return.
+    return { status: "ignored", reason: "Deleted user" };
+  }
   let recipientUserId = federal
     ? await transferredUserId(client, originalUserId, grant.store, grant.purchasedAt)
     : originalUserId;
@@ -468,14 +483,33 @@ const grantStorePurchaseUnlocked = async (
     const expiredByEvent = pastPaidThrough
       ? true
       : Boolean(
-          await client.query.storeEntitlementState.findFirst({
+          (await client.query.storeEntitlementState.findFirst({
             columns: { revokedThrough: true },
             where: and(
               eq(storeEntitlementState.userId, recipientUserId),
               eq(storeEntitlementState.store, grant.store),
               gte(storeEntitlementState.revokedThrough, grant.purchasedAt),
             ),
-          }),
+          })) ??
+            (await client.query.storeEntitlementRevocation.findFirst({
+              columns: { id: true },
+              where: and(
+                inArray(storeEntitlementRevocation.userId, [
+                  recipientUserId,
+                  originalUserId,
+                ]),
+                eq(storeEntitlementRevocation.store, grant.store),
+                gte(storeEntitlementRevocation.revokedThrough, grant.purchasedAt),
+                or(
+                  isNull(storeEntitlementRevocation.productId),
+                  eq(storeEntitlementRevocation.productId, grant.productId),
+                ),
+                or(
+                  isNull(storeEntitlementRevocation.transactionId),
+                  eq(storeEntitlementRevocation.transactionId, grant.transactionId),
+                ),
+              ),
+            })),
         );
     if (!expiredByEvent) return false;
     await client
@@ -621,6 +655,17 @@ const grantStorePurchaseUnlocked = async (
               WHERE ${storeEntitlementState.userId} = ${storePurchase.userId}
                 AND ${storeEntitlementState.store} = ${storePurchase.store}
                 AND ${storeEntitlementState.revokedThrough} >= ${storePurchase.purchasedAt}
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM ${storeEntitlementRevocation}
+              WHERE (${storeEntitlementRevocation.userId} = ${storePurchase.userId}
+                  OR ${storeEntitlementRevocation.userId} = ${storePurchase.originalUserId})
+                AND ${storeEntitlementRevocation.store} = ${storePurchase.store}
+                AND ${storeEntitlementRevocation.revokedThrough} >= ${storePurchase.purchasedAt}
+                AND (${storeEntitlementRevocation.productId} IS NULL
+                  OR ${storeEntitlementRevocation.productId} = ${storePurchase.productId})
+                AND (${storeEntitlementRevocation.transactionId} IS NULL
+                  OR ${storeEntitlementRevocation.transactionId} = ${storePurchase.transactionId})
             )
         `);
 
@@ -783,6 +828,8 @@ export const extendStoreSubscription = async (
  * Idempotent: running it twice retires nothing new and computes the same tier.
  */
 export interface RevocationScope {
+  /** Stable webhook event id, used to deduplicate the durable expiry fact. */
+  eventId?: string;
   /** The moment the store says the subscription ended. */
   occurredAt: Date;
   /** The product that expired. Absent only on payloads that do not name one. */
@@ -803,7 +850,12 @@ const revokeFederalStatusUnlocked = async (
   const exact =
     transactionId && store
       ? await client.query.storePurchase.findFirst({
-          columns: { userId: true, purchasedAt: true, revokedAt: true },
+          columns: {
+            userId: true,
+            purchasedAt: true,
+            revokedAt: true,
+            transactionId: true,
+          },
           where: and(
             eq(storePurchase.transactionId, transactionId),
             eq(storePurchase.store, store),
@@ -848,7 +900,12 @@ const revokeFederalStatusUnlocked = async (
   const candidates =
     !exact && productId
       ? await client.query.storePurchase.findMany({
-          columns: { userId: true, purchasedAt: true, revokedAt: true },
+          columns: {
+            userId: true,
+            purchasedAt: true,
+            revokedAt: true,
+            transactionId: true,
+          },
           where: and(
             inArray(storePurchase.userId, possibleOwners),
             eq(storePurchase.productId, productId),
@@ -877,6 +934,30 @@ const revokeFederalStatusUnlocked = async (
     spent?.userId ??
     (store ? await transferredUserId(client, userId, store, occurredAt) : userId);
   const cutoff = spent?.purchasedAt ?? (productId ? beforeExpiry : occurredAt);
+
+  if (store) {
+    const applicableTransactionId = transactionId ?? spent?.transactionId ?? null;
+    const eventId =
+      scope.eventId ??
+      `scope:${applicableTransactionId ?? productId ?? "all"}:${occurredAt.toISOString()}`;
+    await client
+      .insert(storeEntitlementRevocation)
+      .values({
+        id: nanoid(),
+        eventId,
+        userId: ownerUserId,
+        store,
+        productId: productId ?? null,
+        transactionId: applicableTransactionId,
+        revokedThrough: cutoff,
+        occurredAt,
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          revokedThrough: sql`GREATEST(${storeEntitlementRevocation.revokedThrough}, ${cutoff})`,
+        },
+      });
+  }
 
   // Persist the cutoff before touching receipts. If the purchase webhook has not inserted
   // its row yet, or races this handler, the grant's atomic claim checks this watermark and
@@ -1050,6 +1131,46 @@ export const migrateStoreEntitlementStates = async (
   }
 };
 
+/** Move durable per-event expiry facts across a staff user-id rename. */
+export const migrateStoreEntitlementRevocations = async (
+  client: DrizzleClient,
+  oldUserId: string,
+  newUserId: string,
+): Promise<void> => {
+  const revocations = await client.query.storeEntitlementRevocation.findMany({
+    where: eq(storeEntitlementRevocation.userId, oldUserId),
+  });
+  for (const revocation of revocations) {
+    const collision = await client.query.storeEntitlementRevocation.findFirst({
+      columns: { id: true, revokedThrough: true },
+      where: and(
+        eq(storeEntitlementRevocation.eventId, revocation.eventId),
+        eq(storeEntitlementRevocation.userId, newUserId),
+        eq(storeEntitlementRevocation.store, revocation.store),
+      ),
+    });
+    if (collision) {
+      await client
+        .update(storeEntitlementRevocation)
+        .set({
+          revokedThrough:
+            collision.revokedThrough > revocation.revokedThrough
+              ? collision.revokedThrough
+              : revocation.revokedThrough,
+        })
+        .where(eq(storeEntitlementRevocation.id, collision.id));
+      await client
+        .delete(storeEntitlementRevocation)
+        .where(eq(storeEntitlementRevocation.id, revocation.id));
+    } else {
+      await client
+        .update(storeEntitlementRevocation)
+        .set({ userId: newUserId })
+        .where(eq(storeEntitlementRevocation.id, revocation.id));
+    }
+  }
+};
+
 /**
  * Follow a RevenueCat receipt transfer between identified application users.
  *
@@ -1216,6 +1337,32 @@ export const transferStorePurchases = async (
         toUserIds: canonicalUserIds.slice(sourceCount),
       }),
   );
+};
+
+/** Tombstone a deleted store identity while retaining receipt idempotency history. */
+export const retireStoreUserId = async (
+  client: DrizzleClient,
+  userId: string,
+): Promise<void> => {
+  if (isReservedStoreUserId(userId)) return;
+  await client.transaction(async (tx) => {
+    const lockedClient = tx as unknown as DrizzleClient;
+    await acquireStoreUserMutationLock(lockedClient);
+    await lockedClient
+      .select({ userId: userData.userId })
+      .from(userData)
+      .where(eq(userData.userId, userId))
+      .for("update");
+    const tombstone = `${DELETED_STORE_USER_PREFIX}${nanoid()}`;
+    await lockedClient
+      .update(storeUserIdAlias)
+      .set({ newUserId: tombstone, updatedAt: new Date() })
+      .where(eq(storeUserIdAlias.newUserId, userId));
+    await lockedClient
+      .insert(storeUserIdAlias)
+      .values({ oldUserId: userId, newUserId: tombstone, updatedAt: new Date() })
+      .onDuplicateKeyUpdate({ set: { newUserId: tombstone, updatedAt: new Date() } });
+  });
 };
 
 /** Where a status sits on the ladder, so two sources can be compared. */

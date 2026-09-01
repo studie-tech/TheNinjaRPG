@@ -5747,6 +5747,40 @@ export const storeEntitlementState = mysqlTable(
 );
 export type StoreEntitlementState = InferSelectModel<typeof storeEntitlementState>;
 
+/**
+ * Individual expiry facts retained separately from the aggregate watermark.
+ * Transaction-scoped expiries must not spill across a transfer onto a different billing
+ * period, while a transaction-less expiry delivered before its receipt must still block
+ * that delayed receipt once ownership history arrives.
+ */
+export const storeEntitlementRevocation = mysqlTable(
+  "StoreEntitlementRevocation",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    eventId: varchar("eventId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
+    productId: varchar("productId", { length: 191 }),
+    transactionId: varchar("transactionId", { length: 191 }),
+    revokedThrough: datetime("revokedThrough", { mode: "date", fsp: 3 }).notNull(),
+    occurredAt: datetime("occurredAt", { mode: "date", fsp: 3 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    eventUserStoreKey: uniqueIndex(
+      "StoreEntitlementRevocation_eventId_userId_store_key",
+    ).on(table.eventId, table.userId, table.store),
+    ownerStoreCutoffIdx: index(
+      "StoreEntitlementRevocation_userId_store_revokedThrough_idx",
+    ).on(table.userId, table.store, table.revokedThrough),
+  }),
+);
+export type StoreEntitlementRevocation = InferSelectModel<
+  typeof storeEntitlementRevocation
+>;
+
 /** Durable canonicalization for staff-driven application user-id renames. */
 export const storeUserIdAlias = mysqlTable("StoreUserIdAlias", {
   oldUserId: varchar("oldUserId", { length: 191 }).primaryKey().notNull(),

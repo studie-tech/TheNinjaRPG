@@ -5,13 +5,17 @@ import { nanoid } from "nanoid";
 import { beforeEach, expect, it } from "vitest";
 import {
   notification,
+  storeEntitlementRevocation,
   storeEntitlementState,
   storePurchase,
   storePurchaseTransfer,
   storeUserIdAlias,
   userData,
+  userDevice,
+  userLiveActivity,
+  userPushPreference,
 } from "@/drizzle/schema";
-import { staffRouter } from "@/server/api/routers/staff";
+import { deleteUser, staffRouter } from "@/server/api/routers/staff";
 import {
   grantStorePurchase,
   transferStorePurchases,
@@ -35,6 +39,10 @@ describeWithDatabase("staff user-id rename", () => {
   beforeEach(async () => {
     await resetTables(
       notification,
+      userLiveActivity,
+      userPushPreference,
+      userDevice,
+      storeEntitlementRevocation,
       storeEntitlementState,
       storePurchaseTransfer,
       storeUserIdAlias,
@@ -45,6 +53,106 @@ describeWithDatabase("staff user-id rename", () => {
       { userId: STAFF, username: "Terriator", role: "CODING-ADMIN" },
       { userId: OLD_USER_ID, username: "rename-target", role: "USER" },
     ]);
+  });
+
+  it("reserves every retired alias against later reuse", async () => {
+    const database = await getTestDatabase();
+    await insertUsers([{ userId: "rename-other-user", username: "rename-other" }]);
+    const caller = await callerFor(staffRouter, STAFF);
+    await expect(
+      caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
+    ).resolves.toMatchObject({ success: true });
+    await expect(
+      caller.updateUserId({
+        userId: "rename-other-user",
+        newUserId: OLD_USER_ID,
+      }),
+    ).resolves.toEqual({
+      success: false,
+      message: "UserId was previously used and is reserved",
+    });
+    expect(
+      await database.query.userData.findFirst({
+        where: eq(userData.userId, "rename-other-user"),
+      }),
+    ).toBeDefined();
+  });
+
+  it("deletes push bearer state and tombstones the retained store ledger", async () => {
+    const database = await getTestDatabase();
+    await Promise.all([
+      database.insert(userDevice).values({
+        id: nanoid(),
+        userId: OLD_USER_ID,
+        platform: "ios",
+        token: `push-${nanoid()}`,
+        widgetToken: `widget-${nanoid()}`,
+      }),
+      database.insert(userPushPreference).values({
+        id: nanoid(),
+        userId: OLD_USER_ID,
+        category: "system",
+        enabled: true,
+      }),
+      database.insert(userLiveActivity).values({
+        id: nanoid(),
+        userId: OLD_USER_ID,
+        activityId: nanoid(),
+        kind: "training",
+        pushToken: nanoid(),
+        endsAt: new Date(Date.now() + 60_000),
+      }),
+      database.insert(storePurchase).values({
+        id: nanoid(),
+        userId: OLD_USER_ID,
+        originalUserId: OLD_USER_ID,
+        transactionId: "deleted-user-ledger",
+        productId: "tnr_reps_tier1",
+        store: "APPLE",
+        reputationPoints: 8,
+        federalStatus: null,
+        isSandbox: false,
+        acceptedAt: new Date(),
+        grantedAt: new Date(),
+        purchasedAt: new Date(),
+        rawData: {},
+      }),
+    ]);
+
+    await deleteUser(database, OLD_USER_ID);
+    const [devices, preferences, activities, ledger, alias] = await Promise.all([
+      database.query.userDevice.findMany({
+        where: eq(userDevice.userId, OLD_USER_ID),
+      }),
+      database.query.userPushPreference.findMany({
+        where: eq(userPushPreference.userId, OLD_USER_ID),
+      }),
+      database.query.userLiveActivity.findMany({
+        where: eq(userLiveActivity.userId, OLD_USER_ID),
+      }),
+      database.query.storePurchase.findFirst({
+        where: eq(storePurchase.transactionId, "deleted-user-ledger"),
+      }),
+      database.query.storeUserIdAlias.findFirst({
+        where: eq(storeUserIdAlias.oldUserId, OLD_USER_ID),
+      }),
+    ]);
+    expect(devices).toEqual([]);
+    expect(preferences).toEqual([]);
+    expect(activities).toEqual([]);
+    expect(ledger).toBeDefined();
+    expect(alias?.newUserId).toMatch(/^__tnr_deleted_store_user__:/);
+    await expect(
+      grantStorePurchase(database, {
+        userId: OLD_USER_ID,
+        transactionId: "deleted-user-retry",
+        productId: "tnr_reps_tier1",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt: new Date(),
+        raw: {},
+      }),
+    ).resolves.toEqual({ status: "ignored", reason: "Deleted user" });
   });
 
   it("rolls back helper and broad writes together when a late rename write fails", async () => {

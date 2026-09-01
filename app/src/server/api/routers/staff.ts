@@ -91,11 +91,17 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { isMysqlDeadlockError } from "@/server/utils/mysqlErrors";
+import {
+  isMysqlDeadlockError,
+  isMysqlTransactionRetryableError,
+} from "@/server/utils/mysqlErrors";
 import {
   acquireStoreUserMutationLock,
+  isReservedStoreUserId,
+  migrateStoreEntitlementRevocations,
   migrateStoreEntitlementStates,
   migrateStorePurchaseTransfers,
+  retireStoreUserId,
 } from "@/server/utils/purchases/grant";
 import {
   canClearSectors,
@@ -803,324 +809,362 @@ export const staffRouter = createTRPCRouter({
       if (fromUser.role !== "USER") {
         return { success: false, message: "Cannot change staff member's userId " };
       }
-      await ctx.drizzle.transaction(async (tx) => {
-        // RevenueCat mutations can reach accounts not named in their payload through a
-        // transfer chain. Share their durable graph lock before changing any user id.
-        await acquireStoreUserMutationLock(tx as unknown as DrizzleClient);
-        // Serialize renames of either id and make the uniqueness guards authoritative
-        // inside the same commit as every dependent write.
-        for (const userId of [input.userId, input.newUserId].sort()) {
-          await tx
-            .select({ userId: userData.userId })
-            .from(userData)
-            .where(eq(userData.userId, userId))
-            .for("update");
-        }
-        const lockedFrom = await tx.query.userData.findFirst({
-          columns: { userId: true },
-          where: eq(userData.userId, input.userId),
-        });
-        const lockedTo = await tx.query.userData.findFirst({
-          columns: { userId: true },
-          where: eq(userData.userId, input.newUserId),
-        });
-        if (!lockedFrom || lockedTo) {
-          throw new Error("UserId rename changed while acquiring its lock");
-        }
+      if (
+        isReservedStoreUserId(input.userId) ||
+        isReservedStoreUserId(input.newUserId)
+      ) {
+        return { success: false, message: "UserId is reserved" };
+      }
+      const performRename = async (): Promise<boolean> =>
+        await ctx.drizzle.transaction(async (tx) => {
+          const ctx = { drizzle: tx as unknown as DrizzleClient };
+          // Migrate unrelated references first. They remain in this transaction for atomic
+          // rollback, but do not hold the global store graph mutex while ~70 remote
+          // statements cross the PlanetScale connection.
+          for (const mutation of [
+            ctx.drizzle
+              .update(aiProfile)
+              .set({ userId: input.newUserId })
+              .where(eq(aiProfile.userId, input.userId)),
+            ctx.drizzle
+              .update(userBlackList)
+              .set({ creatorUserId: input.newUserId })
+              .where(eq(userBlackList.creatorUserId, input.userId)),
+            ctx.drizzle
+              .update(userBlackList)
+              .set({ targetUserId: input.newUserId })
+              .where(eq(userBlackList.targetUserId, input.userId)),
+            ctx.drizzle
+              .update(bloodlineRolls)
+              .set({ userId: input.newUserId })
+              .where(eq(bloodlineRolls.userId, input.userId)),
+            ctx.drizzle
+              .update(captcha)
+              .set({ userId: input.newUserId })
+              .where(eq(captcha.userId, input.userId)),
+            ctx.drizzle
+              .update(mpvpBattleUser)
+              .set({ userId: input.newUserId })
+              .where(eq(mpvpBattleUser.userId, input.userId)),
+            ctx.drizzle
+              .update(conversation)
+              .set({ createdById: input.newUserId })
+              .where(eq(conversation.createdById, input.userId)),
+            ctx.drizzle
+              .update(user2conversation)
+              .set({ userId: input.newUserId })
+              .where(eq(user2conversation.userId, input.userId)),
+            ctx.drizzle
+              .update(conversationComment)
+              .set({ userId: input.newUserId })
+              .where(eq(conversationComment.userId, input.userId)),
+            ctx.drizzle
+              .update(damageSimulation)
+              .set({ userId: input.newUserId })
+              .where(eq(damageSimulation.userId, input.userId)),
+            ctx.drizzle
+              .update(forumPost)
+              .set({ userId: input.newUserId })
+              .where(eq(forumPost.userId, input.userId)),
+            ctx.drizzle
+              .update(forumThread)
+              .set({ userId: input.newUserId })
+              .where(eq(forumThread.userId, input.userId)),
+            ctx.drizzle
+              .update(historicalAvatar)
+              .set({ userId: input.newUserId })
+              .where(eq(historicalAvatar.userId, input.userId)),
+            ctx.drizzle
+              .update(historicalIp)
+              .set({ userId: input.newUserId })
+              .where(eq(historicalIp.userId, input.userId)),
+            ctx.drizzle
+              .update(userActivityEvent)
+              .set({ userId: input.newUserId })
+              .where(eq(userActivityEvent.userId, input.userId)),
+            ctx.drizzle
+              .update(jutsuLoadout)
+              .set({ userId: input.newUserId })
+              .where(eq(jutsuLoadout.userId, input.userId)),
+            ctx.drizzle
+              .update(notification)
+              .set({ userId: input.newUserId })
+              .where(eq(notification.userId, input.userId)),
+            ctx.drizzle
+              .update(paypalSubscription)
+              .set({ createdById: input.newUserId })
+              .where(eq(paypalSubscription.createdById, input.userId)),
+            ctx.drizzle
+              .update(paypalSubscription)
+              .set({ affectedUserId: input.newUserId })
+              .where(eq(paypalSubscription.affectedUserId, input.userId)),
+            ctx.drizzle
+              .update(paypalTransaction)
+              .set({ affectedUserId: input.newUserId })
+              .where(eq(paypalTransaction.affectedUserId, input.userId)),
+            ctx.drizzle
+              .update(paypalTransaction)
+              .set({ createdById: input.newUserId })
+              .where(eq(paypalTransaction.createdById, input.userId)),
+            ctx.drizzle
+              .update(userDevice)
+              .set({ userId: input.newUserId })
+              .where(eq(userDevice.userId, input.userId)),
+            ctx.drizzle
+              .update(userPushPreference)
+              .set({ userId: input.newUserId })
+              .where(eq(userPushPreference.userId, input.userId)),
+            ctx.drizzle
+              .update(userLiveActivity)
+              .set({ userId: input.newUserId })
+              .where(eq(userLiveActivity.userId, input.userId)),
+            ctx.drizzle
+              .update(ryoTrade)
+              .set({ creatorUserId: input.newUserId })
+              .where(eq(ryoTrade.creatorUserId, input.userId)),
+            ctx.drizzle
+              .update(ryoTrade)
+              .set({ purchaserUserId: input.newUserId })
+              .where(eq(ryoTrade.purchaserUserId, input.userId)),
+            ctx.drizzle
+              .update(ryoTrade)
+              .set({ allowedPurchaserId: input.newUserId })
+              .where(eq(ryoTrade.allowedPurchaserId, input.userId)),
+            ctx.drizzle
+              .update(reportLog)
+              .set({ targetUserId: input.newUserId })
+              .where(eq(reportLog.targetUserId, input.userId)),
+            ctx.drizzle
+              .update(reportLog)
+              .set({ staffUserId: input.newUserId })
+              .where(eq(reportLog.staffUserId, input.userId)),
+            ctx.drizzle
+              .update(actionLog)
+              .set({ userId: input.newUserId })
+              .where(eq(actionLog.userId, input.userId)),
+            ctx.drizzle
+              .update(trainingLog)
+              .set({ userId: input.newUserId })
+              .where(eq(trainingLog.userId, input.userId)),
+            ctx.drizzle
+              .update(userAttribute)
+              .set({ userId: input.newUserId })
+              .where(eq(userAttribute.userId, input.userId)),
+            ctx.drizzle
+              .update(userReview)
+              .set({ authorUserId: input.newUserId })
+              .where(eq(userReview.authorUserId, input.userId)),
+            ctx.drizzle
+              .update(userRewards)
+              .set({ awardedById: input.newUserId })
+              .where(eq(userRewards.awardedById, input.userId)),
+            ctx.drizzle
+              .update(userRewards)
+              .set({ receiverId: input.newUserId })
+              .where(eq(userRewards.receiverId, input.userId)),
+            ctx.drizzle
+              .update(userReview)
+              .set({ targetUserId: input.newUserId })
+              .where(eq(userReview.targetUserId, input.userId)),
+            ctx.drizzle
+              .update(userNindo)
+              .set({ userId: input.newUserId })
+              .where(eq(userNindo.userId, input.userId)),
+            ctx.drizzle
+              .update(userItem)
+              .set({ userId: input.newUserId })
+              .where(eq(userItem.userId, input.userId)),
+            ctx.drizzle
+              .update(userJutsu)
+              .set({ userId: input.newUserId })
+              .where(eq(userJutsu.userId, input.userId)),
+            ctx.drizzle
+              .update(userReport)
+              .set({ reporterUserId: input.newUserId })
+              .where(eq(userReport.reporterUserId, input.userId)),
+            ctx.drizzle
+              .update(userReport)
+              .set({ reportedUserId: input.newUserId })
+              .where(eq(userReport.reportedUserId, input.userId)),
+            ctx.drizzle
+              .update(userReportComment)
+              .set({ userId: input.newUserId })
+              .where(eq(userReportComment.userId, input.userId)),
+            ctx.drizzle
+              .update(bankTransfers)
+              .set({ senderId: input.newUserId })
+              .where(eq(bankTransfers.senderId, input.userId)),
+            ctx.drizzle
+              .update(bankTransfers)
+              .set({ receiverId: input.newUserId })
+              .where(eq(bankTransfers.receiverId, input.userId)),
+            ctx.drizzle
+              .update(automatedModeration)
+              .set({ userId: input.newUserId })
+              .where(eq(automatedModeration.userId, input.userId)),
+            ctx.drizzle
+              .update(supportReview)
+              .set({ userId: input.newUserId })
+              .where(eq(supportReview.userId, input.userId)),
+            ctx.drizzle
+              .update(kageDefendedChallenges)
+              .set({ userId: input.newUserId })
+              .where(eq(kageDefendedChallenges.userId, input.userId)),
+            ctx.drizzle
+              .update(kageDefendedChallenges)
+              .set({ kageId: input.newUserId })
+              .where(eq(kageDefendedChallenges.kageId, input.userId)),
+            ctx.drizzle
+              .update(questHistory)
+              .set({ userId: input.newUserId })
+              .where(eq(questHistory.userId, input.userId)),
+            ctx.drizzle
+              .update(userLikes)
+              .set({ userId: input.newUserId })
+              .where(eq(userLikes.userId, input.userId)),
+            ctx.drizzle
+              .update(conceptImage)
+              .set({ userId: input.newUserId })
+              .where(eq(conceptImage.userId, input.userId)),
+            ctx.drizzle
+              .update(userBadge)
+              .set({ userId: input.newUserId })
+              .where(eq(userBadge.userId, input.userId)),
+            ctx.drizzle
+              .update(userRequest)
+              .set({ senderId: input.newUserId })
+              .where(eq(userRequest.senderId, input.userId)),
+            ctx.drizzle
+              .update(userRequest)
+              .set({ receiverId: input.newUserId })
+              .where(eq(userRequest.receiverId, input.userId)),
+            ctx.drizzle
+              .update(linkPromotion)
+              .set({ userId: input.newUserId })
+              .where(eq(linkPromotion.userId, input.userId)),
+            ctx.drizzle
+              .update(linkPromotion)
+              .set({ reviewedBy: input.newUserId })
+              .where(eq(linkPromotion.reviewedBy, input.userId)),
+            ctx.drizzle
+              .update(userVote)
+              .set({ userId: input.newUserId })
+              .where(eq(userVote.userId, input.userId)),
+            ctx.drizzle
+              .update(poll)
+              .set({ createdByUserId: input.newUserId })
+              .where(eq(poll.createdByUserId, input.userId)),
+            ctx.drizzle
+              .update(pollOption)
+              .set({ targetUserId: input.newUserId })
+              .where(eq(pollOption.targetUserId, input.userId)),
+            ctx.drizzle
+              .update(pollOption)
+              .set({ createdByUserId: input.newUserId })
+              .where(eq(pollOption.createdByUserId, input.userId)),
+            ctx.drizzle
+              .update(village)
+              .set({ kageId: input.newUserId })
+              .where(eq(village.kageId, input.userId)),
+            ctx.drizzle
+              .update(userPollVote)
+              .set({ userId: input.newUserId })
+              .where(eq(userPollVote.userId, input.userId)),
+            ctx.drizzle
+              .update(userUpload)
+              .set({ userId: input.newUserId })
+              .where(eq(userUpload.userId, input.userId)),
+          ]) {
+            await mutation;
+          }
 
-        // Keep the established mutation list readable while ensuring every statement and
-        // both collision-merging helpers use this transaction's connection.
-        const ctx = { drizzle: tx as unknown as DrizzleClient };
-        await ctx.drizzle
-          .update(storeUserIdAlias)
-          .set({ newUserId: input.newUserId, updatedAt: new Date() })
-          .where(eq(storeUserIdAlias.newUserId, input.userId));
-        await ctx.drizzle
-          .insert(storeUserIdAlias)
-          .values({
-            oldUserId: input.userId,
-            newUserId: input.newUserId,
-            updatedAt: new Date(),
-          })
-          .onDuplicateKeyUpdate({
-            set: { newUserId: input.newUserId, updatedAt: new Date() },
+          // Acquire the store graph mutex only for the alias/ledger cutover. The lock order
+          // remains the same as webhook mutations: global graph first, then UserData rows.
+          await acquireStoreUserMutationLock(ctx.drizzle);
+          for (const userId of [input.userId, input.newUserId].sort()) {
+            await tx
+              .select({ userId: userData.userId })
+              .from(userData)
+              .where(eq(userData.userId, userId))
+              .for("update");
+          }
+          const lockedFrom = await tx.query.userData.findFirst({
+            columns: { userId: true },
+            where: eq(userData.userId, input.userId),
           });
-        await migrateStoreEntitlementStates(ctx.drizzle, input.userId, input.newUserId);
-        await migrateStorePurchaseTransfers(ctx.drizzle, input.userId, input.newUserId);
-        // PlanetScale's transaction session is sequential; issuing concurrent requests
-        // against it can reuse a stale session token and escape the intended ordering.
-        for (const mutation of [
-          ctx.drizzle
-            .update(userData)
-            .set({ userId: input.newUserId })
-            .where(eq(userData.userId, input.userId)),
-          ctx.drizzle
-            .update(aiProfile)
-            .set({ userId: input.newUserId })
-            .where(eq(aiProfile.userId, input.userId)),
-          ctx.drizzle
-            .update(userBlackList)
-            .set({ creatorUserId: input.newUserId })
-            .where(eq(userBlackList.creatorUserId, input.userId)),
-          ctx.drizzle
-            .update(userBlackList)
-            .set({ targetUserId: input.newUserId })
-            .where(eq(userBlackList.targetUserId, input.userId)),
-          ctx.drizzle
-            .update(bloodlineRolls)
-            .set({ userId: input.newUserId })
-            .where(eq(bloodlineRolls.userId, input.userId)),
-          ctx.drizzle
-            .update(captcha)
-            .set({ userId: input.newUserId })
-            .where(eq(captcha.userId, input.userId)),
-          ctx.drizzle
-            .update(mpvpBattleUser)
-            .set({ userId: input.newUserId })
-            .where(eq(mpvpBattleUser.userId, input.userId)),
-          ctx.drizzle
-            .update(conversation)
-            .set({ createdById: input.newUserId })
-            .where(eq(conversation.createdById, input.userId)),
-          ctx.drizzle
-            .update(user2conversation)
-            .set({ userId: input.newUserId })
-            .where(eq(user2conversation.userId, input.userId)),
-          ctx.drizzle
-            .update(conversationComment)
-            .set({ userId: input.newUserId })
-            .where(eq(conversationComment.userId, input.userId)),
-          ctx.drizzle
-            .update(damageSimulation)
-            .set({ userId: input.newUserId })
-            .where(eq(damageSimulation.userId, input.userId)),
-          ctx.drizzle
-            .update(forumPost)
-            .set({ userId: input.newUserId })
-            .where(eq(forumPost.userId, input.userId)),
-          ctx.drizzle
-            .update(forumThread)
-            .set({ userId: input.newUserId })
-            .where(eq(forumThread.userId, input.userId)),
-          ctx.drizzle
-            .update(historicalAvatar)
-            .set({ userId: input.newUserId })
-            .where(eq(historicalAvatar.userId, input.userId)),
-          ctx.drizzle
-            .update(historicalIp)
-            .set({ userId: input.newUserId })
-            .where(eq(historicalIp.userId, input.userId)),
-          ctx.drizzle
-            .update(userActivityEvent)
-            .set({ userId: input.newUserId })
-            .where(eq(userActivityEvent.userId, input.userId)),
-          ctx.drizzle
-            .update(jutsuLoadout)
-            .set({ userId: input.newUserId })
-            .where(eq(jutsuLoadout.userId, input.userId)),
-          ctx.drizzle
-            .update(notification)
-            .set({ userId: input.newUserId })
-            .where(eq(notification.userId, input.userId)),
-          ctx.drizzle
-            .update(paypalSubscription)
-            .set({ createdById: input.newUserId })
-            .where(eq(paypalSubscription.createdById, input.userId)),
-          ctx.drizzle
-            .update(paypalSubscription)
-            .set({ affectedUserId: input.newUserId })
-            .where(eq(paypalSubscription.affectedUserId, input.userId)),
-          ctx.drizzle
-            .update(paypalTransaction)
-            .set({ affectedUserId: input.newUserId })
-            .where(eq(paypalTransaction.affectedUserId, input.userId)),
-          ctx.drizzle
-            .update(paypalTransaction)
-            .set({ createdById: input.newUserId })
-            .where(eq(paypalTransaction.createdById, input.userId)),
-          // The federal-status reconciliation in /api/cleaner reads StorePurchase to decide
-          // whether a store subscription still vouches for a tier, so a receipt left behind
-          // on the old id costs the player the status they are still paying for.
-          ctx.drizzle
+          const lockedTo = await tx.query.userData.findFirst({
+            columns: { userId: true },
+            where: eq(userData.userId, input.newUserId),
+          });
+          if (!lockedFrom || lockedTo) {
+            throw new Error("UserId rename changed while acquiring its lock");
+          }
+          const [retiredDestination] = await tx
+            .select({ oldUserId: storeUserIdAlias.oldUserId })
+            .from(storeUserIdAlias)
+            .where(eq(storeUserIdAlias.oldUserId, input.newUserId))
+            .for("update");
+          if (retiredDestination) return false;
+          await ctx.drizzle
+            .update(storeUserIdAlias)
+            .set({ newUserId: input.newUserId, updatedAt: new Date() })
+            .where(eq(storeUserIdAlias.newUserId, input.userId));
+          await ctx.drizzle
+            .insert(storeUserIdAlias)
+            .values({
+              oldUserId: input.userId,
+              newUserId: input.newUserId,
+              updatedAt: new Date(),
+            })
+            .onDuplicateKeyUpdate({
+              set: { newUserId: input.newUserId, updatedAt: new Date() },
+            });
+          await migrateStoreEntitlementStates(
+            ctx.drizzle,
+            input.userId,
+            input.newUserId,
+          );
+          await migrateStoreEntitlementRevocations(
+            ctx.drizzle,
+            input.userId,
+            input.newUserId,
+          );
+          await migrateStorePurchaseTransfers(
+            ctx.drizzle,
+            input.userId,
+            input.newUserId,
+          );
+          await ctx.drizzle
             .update(storePurchase)
             .set({ userId: input.newUserId })
-            .where(eq(storePurchase.userId, input.userId)),
-          ctx.drizzle
+            .where(eq(storePurchase.userId, input.userId));
+          await ctx.drizzle
             .update(storePurchase)
             .set({ originalUserId: input.newUserId })
-            .where(eq(storePurchase.originalUserId, input.userId)),
-          ctx.drizzle
-            .update(userDevice)
+            .where(eq(storePurchase.originalUserId, input.userId));
+          await ctx.drizzle
+            .update(userData)
             .set({ userId: input.newUserId })
-            .where(eq(userDevice.userId, input.userId)),
-          ctx.drizzle
-            .update(userPushPreference)
-            .set({ userId: input.newUserId })
-            .where(eq(userPushPreference.userId, input.userId)),
-          ctx.drizzle
-            .update(userLiveActivity)
-            .set({ userId: input.newUserId })
-            .where(eq(userLiveActivity.userId, input.userId)),
-          ctx.drizzle
-            .update(ryoTrade)
-            .set({ creatorUserId: input.newUserId })
-            .where(eq(ryoTrade.creatorUserId, input.userId)),
-          ctx.drizzle
-            .update(ryoTrade)
-            .set({ purchaserUserId: input.newUserId })
-            .where(eq(ryoTrade.purchaserUserId, input.userId)),
-          ctx.drizzle
-            .update(ryoTrade)
-            .set({ allowedPurchaserId: input.newUserId })
-            .where(eq(ryoTrade.allowedPurchaserId, input.userId)),
-          ctx.drizzle
-            .update(reportLog)
-            .set({ targetUserId: input.newUserId })
-            .where(eq(reportLog.targetUserId, input.userId)),
-          ctx.drizzle
-            .update(reportLog)
-            .set({ staffUserId: input.newUserId })
-            .where(eq(reportLog.staffUserId, input.userId)),
-          ctx.drizzle
-            .update(actionLog)
-            .set({ userId: input.newUserId })
-            .where(eq(actionLog.userId, input.userId)),
-          ctx.drizzle
-            .update(trainingLog)
-            .set({ userId: input.newUserId })
-            .where(eq(trainingLog.userId, input.userId)),
-          ctx.drizzle
-            .update(userAttribute)
-            .set({ userId: input.newUserId })
-            .where(eq(userAttribute.userId, input.userId)),
-          ctx.drizzle
-            .update(userReview)
-            .set({ authorUserId: input.newUserId })
-            .where(eq(userReview.authorUserId, input.userId)),
-          ctx.drizzle
-            .update(userRewards)
-            .set({ awardedById: input.newUserId })
-            .where(eq(userRewards.awardedById, input.userId)),
-          ctx.drizzle
-            .update(userRewards)
-            .set({ receiverId: input.newUserId })
-            .where(eq(userRewards.receiverId, input.userId)),
-          ctx.drizzle
-            .update(userReview)
-            .set({ targetUserId: input.newUserId })
-            .where(eq(userReview.targetUserId, input.userId)),
-          ctx.drizzle
-            .update(userNindo)
-            .set({ userId: input.newUserId })
-            .where(eq(userNindo.userId, input.userId)),
-          ctx.drizzle
-            .update(userItem)
-            .set({ userId: input.newUserId })
-            .where(eq(userItem.userId, input.userId)),
-          ctx.drizzle
-            .update(userJutsu)
-            .set({ userId: input.newUserId })
-            .where(eq(userJutsu.userId, input.userId)),
-          ctx.drizzle
-            .update(userReport)
-            .set({ reporterUserId: input.newUserId })
-            .where(eq(userReport.reporterUserId, input.userId)),
-          ctx.drizzle
-            .update(userReport)
-            .set({ reportedUserId: input.newUserId })
-            .where(eq(userReport.reportedUserId, input.userId)),
-          ctx.drizzle
-            .update(userReportComment)
-            .set({ userId: input.newUserId })
-            .where(eq(userReportComment.userId, input.userId)),
-          ctx.drizzle
-            .update(bankTransfers)
-            .set({ senderId: input.newUserId })
-            .where(eq(bankTransfers.senderId, input.userId)),
-          ctx.drizzle
-            .update(bankTransfers)
-            .set({ receiverId: input.newUserId })
-            .where(eq(bankTransfers.receiverId, input.userId)),
-          ctx.drizzle
-            .update(automatedModeration)
-            .set({ userId: input.newUserId })
-            .where(eq(automatedModeration.userId, input.userId)),
-          ctx.drizzle
-            .update(supportReview)
-            .set({ userId: input.newUserId })
-            .where(eq(supportReview.userId, input.userId)),
-          ctx.drizzle
-            .update(kageDefendedChallenges)
-            .set({ userId: input.newUserId })
-            .where(eq(kageDefendedChallenges.userId, input.userId)),
-          ctx.drizzle
-            .update(kageDefendedChallenges)
-            .set({ kageId: input.newUserId })
-            .where(eq(kageDefendedChallenges.kageId, input.userId)),
-          ctx.drizzle
-            .update(questHistory)
-            .set({ userId: input.newUserId })
-            .where(eq(questHistory.userId, input.userId)),
-          ctx.drizzle
-            .update(userLikes)
-            .set({ userId: input.newUserId })
-            .where(eq(userLikes.userId, input.userId)),
-          ctx.drizzle
-            .update(conceptImage)
-            .set({ userId: input.newUserId })
-            .where(eq(conceptImage.userId, input.userId)),
-          ctx.drizzle
-            .update(userBadge)
-            .set({ userId: input.newUserId })
-            .where(eq(userBadge.userId, input.userId)),
-          ctx.drizzle
-            .update(userRequest)
-            .set({ senderId: input.newUserId })
-            .where(eq(userRequest.senderId, input.userId)),
-          ctx.drizzle
-            .update(userRequest)
-            .set({ receiverId: input.newUserId })
-            .where(eq(userRequest.receiverId, input.userId)),
-          ctx.drizzle
-            .update(linkPromotion)
-            .set({ userId: input.newUserId })
-            .where(eq(linkPromotion.userId, input.userId)),
-          ctx.drizzle
-            .update(linkPromotion)
-            .set({ reviewedBy: input.newUserId })
-            .where(eq(linkPromotion.reviewedBy, input.userId)),
-          ctx.drizzle
-            .update(userVote)
-            .set({ userId: input.newUserId })
-            .where(eq(userVote.userId, input.userId)),
-          ctx.drizzle
-            .update(poll)
-            .set({ createdByUserId: input.newUserId })
-            .where(eq(poll.createdByUserId, input.userId)),
-          ctx.drizzle
-            .update(pollOption)
-            .set({ targetUserId: input.newUserId })
-            .where(eq(pollOption.targetUserId, input.userId)),
-          ctx.drizzle
-            .update(pollOption)
-            .set({ createdByUserId: input.newUserId })
-            .where(eq(pollOption.createdByUserId, input.userId)),
-          ctx.drizzle
-            .update(village)
-            .set({ kageId: input.newUserId })
-            .where(eq(village.kageId, input.userId)),
-          ctx.drizzle
-            .update(userPollVote)
-            .set({ userId: input.newUserId })
-            .where(eq(userPollVote.userId, input.userId)),
-          ctx.drizzle
-            .update(userUpload)
-            .set({ userId: input.newUserId })
-            .where(eq(userUpload.userId, input.userId)),
-        ]) {
-          await mutation;
+            .where(eq(userData.userId, input.userId));
+          return true;
+        });
+      let renamed: boolean | undefined;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          renamed = await performRename();
+          break;
+        } catch (error) {
+          if (!isMysqlTransactionRetryableError(error) || attempt === 3) throw error;
+          await delay(100 * 2 ** (attempt - 1));
         }
-      });
+      }
+
+      if (!renamed) {
+        return {
+          success: false,
+          message: "UserId was previously used and is reserved",
+        };
+      }
 
       return { success: true, message: "UserId updated" };
     }),
@@ -1359,7 +1403,17 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     client.delete(linkPromotion).where(eq(linkPromotion.userId, userId)),
     client.delete(linkPromotion).where(eq(linkPromotion.reviewedBy, userId)),
     client.delete(userUpload).where(eq(userUpload.userId, userId)),
+    // Push rows are intentionally transient. In particular widgetToken is a bearer
+    // credential and must not outlive the account that owned it.
+    client.delete(userLiveActivity).where(eq(userLiveActivity.userId, userId)),
+    client.delete(userPushPreference).where(eq(userPushPreference.userId, userId)),
+    client.delete(userDevice).where(eq(userDevice.userId, userId)),
   ]);
+
+  // Keep the store ledger as an idempotency tombstone immediately before deleting the
+  // identity it references. Delayed RevenueCat retries then terminate instead of retrying
+  // forever, while an earlier failed cleanup cannot disable purchases for a live account.
+  await retireStoreUserId(client, userId);
 
   // Final batch: Delete main userData record (must be last)
   await client.delete(userData).where(eq(userData.userId, userId));

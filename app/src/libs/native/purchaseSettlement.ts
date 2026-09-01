@@ -16,6 +16,12 @@ export interface StorePurchaseAttempt {
   productId: string;
   /** Receipt ids fetched from the server immediately before opening checkout. */
   baselineReceiptIds: readonly string[];
+  /** Native transaction ids observed before the sheet opened. */
+  baselineNativeTransactionIds: readonly string[];
+  /** Distinguishes an interrupted sheet from a callback which may have charged. */
+  phase: "sheet-open" | "charged-or-pending";
+  /** Device time is only used to explain/recover local state, never to order receipts. */
+  startedAt: string;
 }
 
 export interface StoreRestoreAttempt {
@@ -30,10 +36,12 @@ export interface StorePurchaseLock {
 
 export type StoreRestoreObservation = "reconciled" | "rejected" | "pending";
 export type StoreRestoreResult = "reconciled" | "rejected" | "timed-out";
-export type StorePurchaseResult = "settled" | "timed-out";
+export type StorePurchaseObservation = "credited" | "rejected" | "pending";
+export type StorePurchaseResult = "credited" | "rejected" | "timed-out";
 
-export const finalStorePurchaseResult = (settled: boolean): StorePurchaseResult =>
-  settled ? "settled" : "timed-out";
+export const finalStorePurchaseResult = (
+  observation: StorePurchaseObservation,
+): StorePurchaseResult => (observation === "pending" ? "timed-out" : observation);
 
 export const retainStorePurchaseLock = (
   locks: readonly StorePurchaseLock[],
@@ -76,11 +84,11 @@ export const isPendingStorePurchase = (purchase: StorePurchaseSettlement): boole
   purchase.grantedAt === null &&
   purchase.revokedAt === null;
 
-/** Whether the receipt belonging to this exact checkout attempt reached a terminal state. */
-export const hasSettledStorePurchase = (
+/** Classify only the receipt belonging to this exact checkout attempt. */
+export const storePurchaseReconciliation = (
   recent: StorePurchaseSettlement[],
   attempt: StorePurchaseAttempt,
-): boolean => {
+): StorePurchaseObservation => {
   const matching = attempt.transactionId
     ? recent.find((purchase) => purchase.transactionId === attempt.transactionId)
     : recent.find(
@@ -88,7 +96,44 @@ export const hasSettledStorePurchase = (
           purchase.productId === attempt.productId &&
           !attempt.baselineReceiptIds.includes(purchase.id),
       );
-  return Boolean(matching && !isPendingStorePurchase(matching));
+  if (!matching || isPendingStorePurchase(matching)) return "pending";
+  return matching.grantedAt !== null ? "credited" : "rejected";
+};
+
+/** Backwards-compatible predicate for callers which only need a terminal check. */
+export const hasSettledStorePurchase = (
+  recent: StorePurchaseSettlement[],
+  attempt: StorePurchaseAttempt,
+): boolean => storePurchaseReconciliation(recent, attempt) !== "pending";
+
+export interface NativePurchaseHistory {
+  transactionId: string;
+  productId: string;
+}
+
+/**
+ * Reconcile a callback-lost sheet with RevenueCat's synced purchase history.
+ * A transaction absent from the pre-sheet snapshot proves that the sheet progressed past
+ * the point where checkout can be safely abandoned; its id also restores exact server
+ * correlation. No age-based timeout can make that decision safely.
+ */
+export const reconcileInterruptedStoreAttempt = (
+  attempt: StorePurchaseAttempt,
+  history: readonly NativePurchaseHistory[],
+): StorePurchaseAttempt | null => {
+  const transaction = history.find(
+    (entry) =>
+      entry.productId === attempt.productId &&
+      !attempt.baselineNativeTransactionIds.includes(entry.transactionId),
+  );
+  if (transaction) {
+    return {
+      ...attempt,
+      transactionId: transaction.transactionId,
+      phase: "charged-or-pending",
+    };
+  }
+  return attempt.phase === "sheet-open" ? null : attempt;
 };
 
 /**
