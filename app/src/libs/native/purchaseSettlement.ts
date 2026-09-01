@@ -23,8 +23,39 @@ export interface StoreRestoreAttempt {
   expectedProductIds: readonly string[];
 }
 
+export interface StorePurchaseLock {
+  accountId: string;
+  attempt: StorePurchaseAttempt;
+}
+
 export type StoreRestoreObservation = "reconciled" | "rejected" | "pending";
 export type StoreRestoreResult = "reconciled" | "rejected" | "timed-out";
+export type StorePurchaseResult = "settled" | "timed-out";
+
+export const finalStorePurchaseResult = (settled: boolean): StorePurchaseResult =>
+  settled ? "settled" : "timed-out";
+
+export const retainStorePurchaseLock = (
+  locks: readonly StorePurchaseLock[],
+  lock: StorePurchaseLock,
+): StorePurchaseLock[] => [
+  ...locks.filter(
+    (current) =>
+      current.accountId !== lock.accountId ||
+      current.attempt.productId !== lock.attempt.productId,
+  ),
+  lock,
+];
+
+export const releaseStorePurchaseLock = (
+  locks: readonly StorePurchaseLock[],
+  accountId: string,
+  productId: string,
+): StorePurchaseLock[] =>
+  locks.filter(
+    (current) =>
+      current.accountId !== accountId || current.attempt.productId !== productId,
+  );
 
 export const finalStoreRestoreResult = (
   observation: StoreRestoreObservation,
@@ -78,8 +109,9 @@ export const storeRestoreReconciliation = (
     purchase.acceptedAt !== null &&
     purchase.grantedAt !== null &&
     purchase.revokedAt === null &&
-    purchase.expiresAt !== null &&
-    purchase.expiresAt.getTime() > now.getTime();
+    (purchase.expiresAt !== null
+      ? purchase.expiresAt.getTime() > now.getTime()
+      : purchase.createdAt.getTime() >= now.getTime() - 63 * 24 * 60 * 60 * 1000);
   if (receiptsByProduct.every((receipts) => receipts.some(hasLiveEntitlement))) {
     return "reconciled";
   }

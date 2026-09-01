@@ -5649,6 +5649,8 @@ export const storePurchase = mysqlTable(
   {
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
+    /** Application user id RevenueCat attached to the original purchase event. */
+    originalUserId: varchar("originalUserId", { length: 191 }).notNull(),
     transactionId: varchar("transactionId", { length: 191 }).notNull(),
     productId: varchar("productId", { length: 191 }).notNull(),
     store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
@@ -5702,6 +5704,10 @@ export const storePurchase = mysqlTable(
         table.userId,
         table.purchasedAt,
       ),
+      originalUserIdStoreIdx: index("StorePurchase_originalUserId_store_idx").on(
+        table.originalUserId,
+        table.store,
+      ),
     };
   },
 );
@@ -5741,6 +5747,16 @@ export const storeEntitlementState = mysqlTable(
 );
 export type StoreEntitlementState = InferSelectModel<typeof storeEntitlementState>;
 
+/** Durable canonicalization for staff-driven application user-id renames. */
+export const storeUserIdAlias = mysqlTable("StoreUserIdAlias", {
+  oldUserId: varchar("oldUserId", { length: 191 }).primaryKey().notNull(),
+  newUserId: varchar("newUserId", { length: 191 }).notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+});
+export type StoreUserIdAlias = InferSelectModel<typeof storeUserIdAlias>;
+
 /**
  * Durable ownership redirects emitted by RevenueCat TRANSFER events.
  *
@@ -5753,6 +5769,8 @@ export const storePurchaseTransfer = mysqlTable(
   "StorePurchaseTransfer",
   {
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    /** Stable RevenueCat delivery id; retries retain the first stored cutoff. */
+    eventId: varchar("eventId", { length: 191 }).notNull(),
     sourceUserId: varchar("sourceUserId", { length: 191 }).notNull(),
     destinationUserId: varchar("destinationUserId", { length: 191 }).notNull(),
     store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
@@ -5762,8 +5780,15 @@ export const storePurchaseTransfer = mysqlTable(
       .notNull(),
   },
   (table) => ({
-    sourceStoreTimeKey: uniqueIndex(
-      "StorePurchaseTransfer_sourceUserId_store_transferredAt_key",
+    eventSourceStoreKey: uniqueIndex(
+      "StorePurchaseTransfer_eventId_sourceUserId_store_key",
+    ).on(
+      table.eventId,
+      table.sourceUserId,
+      table.store,
+    ),
+    sourceStoreTimeIdx: index(
+      "StorePurchaseTransfer_sourceUserId_store_transferredAt_idx",
     ).on(
       table.sourceUserId,
       table.store,

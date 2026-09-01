@@ -2,9 +2,12 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import {
   fetchFreshStoreObservation,
+  finalStorePurchaseResult,
   finalStoreRestoreResult,
   hasSettledStorePurchase,
   isPendingStorePurchase,
+  releaseStorePurchaseLock,
+  retainStorePurchaseLock,
   storeRestoreReconciliation,
   type StorePurchaseSettlement,
 } from "@/libs/native/purchaseSettlement";
@@ -34,6 +37,22 @@ describe("native purchase settlement", () => {
         baselineReceiptIds: [],
       }),
     ).toBe(false);
+    expect(finalStorePurchaseResult(false)).toBe("timed-out");
+  });
+
+  it("retains an attempt-specific lock after timeout until verification settles", () => {
+    const attempt = {
+      transactionId: "charged-transaction",
+      productId: "tnr_reps_tier1",
+      baselineReceiptIds: ["before-charge"],
+    };
+    const locked = retainStorePurchaseLock([], { accountId: "player", attempt });
+    expect(finalStorePurchaseResult(false)).toBe("timed-out");
+    expect(locked).toEqual([{ accountId: "player", attempt }]);
+    expect(releaseStorePurchaseLock(locked, "other-player", attempt.productId)).toEqual(
+      locked,
+    );
+    expect(releaseStorePurchaseLock(locked, "player", attempt.productId)).toEqual([]);
   });
 
   it("settles only after the new receipt is granted or retired", () => {
@@ -176,6 +195,39 @@ describe("native purchase settlement", () => {
           }),
         ],
         { expectedProductIds: ["tnr_federal_gold", "tnr_reps_tier1"] },
+      ),
+    ).toBe("rejected");
+  });
+
+  it("uses the same 63-day fallback as the server for null expiry receipts", () => {
+    const now = new Date("2026-09-01T12:00:00.000Z");
+    const attempt = { expectedProductIds: ["tnr_federal_gold"] };
+    expect(
+      storeRestoreReconciliation(
+        [
+          receipt({
+            productId: "tnr_federal_gold",
+            grantedAt: new Date(),
+            expiresAt: null,
+            createdAt: new Date(now.getTime() - 62 * 24 * 60 * 60 * 1000),
+          }),
+        ],
+        attempt,
+        now,
+      ),
+    ).toBe("reconciled");
+    expect(
+      storeRestoreReconciliation(
+        [
+          receipt({
+            productId: "tnr_federal_gold",
+            grantedAt: new Date(),
+            expiresAt: null,
+            createdAt: new Date(now.getTime() - 64 * 24 * 60 * 60 * 1000),
+          }),
+        ],
+        attempt,
+        now,
       ),
     ).toBe("rejected");
   });

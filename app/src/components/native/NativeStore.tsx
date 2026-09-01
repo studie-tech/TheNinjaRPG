@@ -11,10 +11,14 @@ import Loader from "@/layout/Loader";
 import { platform, purchases } from "@/libs/native";
 import {
   fetchFreshStoreObservation,
+  finalStorePurchaseResult,
   finalStoreRestoreResult,
   hasSettledStorePurchase,
   isPendingStorePurchase,
+  releaseStorePurchaseLock,
+  retainStorePurchaseLock,
   type StorePurchaseAttempt,
+  type StorePurchaseLock,
   type StoreRestoreAttempt,
   storeRestoreReconciliation,
 } from "@/libs/native/purchaseSettlement";
@@ -26,6 +30,7 @@ import { useUserData } from "@/utils/UserContext";
  * generous for a webhook that normally lands in one or two.
  */
 const GRANT_POLL_DELAYS_MS = [1000, 2000, 3000, 5000, 5000, 5000];
+const PURCHASE_ATTEMPT_STORAGE_KEY = "tnr:unsettled-store-purchases";
 
 /**
  * The in-app store.
@@ -59,6 +64,9 @@ export default function NativeStore() {
     newestId: string | undefined;
   } | null>(null);
   const [busyProduct, setBusyProduct] = useState<string | null>(null);
+  const [unsettledAttempts, setUnsettledAttempts] = useState<StorePurchaseLock[]>([]);
+  const [attemptsHydrated, setAttemptsHydrated] = useState(false);
+  const [retryingProduct, setRetryingProduct] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [recentBaselineError, setRecentBaselineError] = useState<string | null>(null);
 
@@ -74,12 +82,69 @@ export default function NativeStore() {
     recent?.filter(isPendingStorePurchase).map((purchase) => purchase.productId),
   );
   const hasPendingPurchase = pendingProductIds.size > 0;
+  const accountUnsettledAttempts = unsettledAttempts.filter(
+    (entry) => entry.accountId === player?.userId,
+  );
+  const reconciliationLockedProductIds = new Set(
+    accountUnsettledAttempts.map((entry) => entry.attempt.productId),
+  );
 
   const storePlatform = platform();
   const apiKey =
     storePlatform === "ios"
       ? env.NEXT_PUBLIC_REVENUECAT_IOS_KEY
       : env.NEXT_PUBLIC_REVENUECAT_ANDROID_KEY;
+
+  // A charged attempt must survive navigation and application restarts. Its exact
+  // transaction/baseline correlation is persisted; only a terminal server receipt may
+  // remove it and reopen checkout for that product.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(PURCHASE_ATTEMPT_STORAGE_KEY);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) {
+        setUnsettledAttempts(
+          parsed.filter((entry): entry is StorePurchaseLock => {
+            if (!entry || typeof entry !== "object") return false;
+            const value = entry as {
+              accountId?: unknown;
+              attempt?: {
+                transactionId?: unknown;
+                productId?: unknown;
+                baselineReceiptIds?: unknown;
+              };
+            };
+            return (
+              typeof value.accountId === "string" &&
+              typeof value.attempt?.productId === "string" &&
+              (value.attempt.transactionId === undefined ||
+                typeof value.attempt.transactionId === "string") &&
+              Array.isArray(value.attempt.baselineReceiptIds) &&
+              value.attempt.baselineReceiptIds.every(
+                (receiptId) => typeof receiptId === "string",
+              )
+            );
+          }),
+        );
+      }
+    } catch {
+      // Corrupt local state cannot identify a real checkout attempt, so ignore it.
+    } finally {
+      setAttemptsHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!attemptsHydrated) return;
+    try {
+      window.localStorage.setItem(
+        PURCHASE_ATTEMPT_STORAGE_KEY,
+        JSON.stringify(unsettledAttempts),
+      );
+    } catch {
+      // The in-memory lock still protects this mounted checkout if storage is unavailable.
+    }
+  }, [attemptsHydrated, unsettledAttempts]);
 
   // Binding the SDK to the player's own id is what lets the webhook know who to credit;
   // without it a purchase is validated and then dropped.
@@ -233,6 +298,7 @@ export default function NativeStore() {
    */
   const settleAfterPurchase = useCallback(
     async (attempt: StorePurchaseAttempt) => {
+      let settled = false;
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
         const matching = await fetchRecentFresh({
@@ -241,7 +307,10 @@ export default function NativeStore() {
             ? { transactionId: attempt.transactionId }
             : { productId: attempt.productId }),
         });
-        if (hasSettledStorePurchase(matching, attempt)) break;
+        if (hasSettledStorePurchase(matching, attempt)) {
+          settled = true;
+          break;
+        }
       }
       // Refetch regardless: if the webhook is slow or has failed, the player should still
       // see whatever the truth currently is rather than a frozen screen.
@@ -249,10 +318,44 @@ export default function NativeStore() {
         refetchRecent(),
         utils.profile.getUser.invalidate(),
       ]);
-      return data?.[0]?.id;
+      settled ||= Boolean(data && hasSettledStorePurchase(data, attempt));
+      return {
+        newestId: data?.[0]?.id,
+        status: finalStorePurchaseResult(settled),
+      };
     },
     [fetchRecentFresh, refetchRecent, utils],
   );
+
+  const verifyPurchaseAttempt = useCallback(
+    async (accountId: string, attempt: StorePurchaseAttempt) => {
+      const matching = await fetchRecentFresh({
+        limit: 50,
+        ...(attempt.transactionId
+          ? { transactionId: attempt.transactionId }
+          : { productId: attempt.productId }),
+      });
+      if (!hasSettledStorePurchase(matching, attempt)) return false;
+      setUnsettledAttempts((current) =>
+        releaseStorePurchaseLock(current, accountId, attempt.productId),
+      );
+      await Promise.all([refetchRecent(), utils.profile.getUser.invalidate()]);
+      return true;
+    },
+    [fetchRecentFresh, refetchRecent, utils],
+  );
+
+  // A receipt may not exist yet when the initial wait expires. Keep checking the exact
+  // checkout attempt while its product remains locked instead of reopening checkout.
+  useEffect(() => {
+    if (accountUnsettledAttempts.length === 0) return;
+    const timer = window.setInterval(() => {
+      for (const entry of accountUnsettledAttempts) {
+        void verifyPurchaseAttempt(entry.accountId, entry.attempt);
+      }
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [accountUnsettledAttempts, verifyPurchaseAttempt]);
 
   const refreshAfterRestore = useCallback(
     async (attempt: StoreRestoreAttempt) => {
@@ -360,13 +463,26 @@ export default function NativeStore() {
       }
       // Held busy across the wait so the player cannot buy the same tier twice while the
       // first grant is still in flight.
-      const newestId = await settleAfterPurchase({
+      const attempt = {
         transactionId: result.transactionId,
         productId,
         baselineReceiptIds: baselineRows.map((purchase) => purchase.id),
-      });
+      };
+      const settlement = await settleAfterPurchase(attempt);
+      if (settlement.status === "timed-out") {
+        setUnsettledAttempts((current) =>
+          retainStorePurchaseLock(current, { accountId, attempt }),
+        );
+        showMutationToast({
+          success: false,
+          message:
+            "The charge is still being verified. This item will stay locked until reconciliation finishes.",
+        });
+      }
       setRecentBaseline((current) =>
-        current?.userId === accountId ? { userId: accountId, newestId } : current,
+        current?.userId === accountId
+          ? { userId: accountId, newestId: settlement.newestId }
+          : current,
       );
     } catch (error) {
       showMutationToast({
@@ -505,6 +621,41 @@ export default function NativeStore() {
               </Button>
             </div>
           )}
+          {accountUnsettledAttempts.map(({ accountId, attempt }) => (
+            <div
+              key={attempt.productId}
+              className="rounded-lg border border-amber-500/50 p-3 text-sm"
+            >
+              <p>
+                {attempt.productId} was charged and is still being verified. Checkout is
+                locked for this item.
+              </p>
+              <Button
+                className="mt-2"
+                size="sm"
+                variant="outline"
+                disabled={retryingProduct === attempt.productId}
+                onClick={() => {
+                  setRetryingProduct(attempt.productId);
+                  void verifyPurchaseAttempt(accountId, attempt)
+                    .then((settled) => {
+                      showMutationToast({
+                        success: settled,
+                        message: settled
+                          ? "Purchase verification finished."
+                          : "The server is still processing this purchase.",
+                      });
+                    })
+                    .finally(() => setRetryingProduct(null));
+                }}
+              >
+                {retryingProduct === attempt.productId && (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                )}
+                Retry verification
+              </Button>
+            </div>
+          ))}
           <p className="mb-1 font-medium text-sm">Reputation</p>
           {catalogue?.reputation.map((product) => {
             // The store's own localised price, so the player sees their currency.
@@ -514,6 +665,9 @@ export default function NativeStore() {
                 product.productId,
             );
             const isPending = pendingProductIds.has(product.productId);
+            const isReconciliationLocked = reconciliationLockedProductIds.has(
+              product.productId,
+            );
             return (
               <div
                 key={product.productId}
@@ -530,16 +684,22 @@ export default function NativeStore() {
                 <Button
                   size="sm"
                   disabled={
-                    busyProduct !== null || isPending || !listed || !hasRecentBaseline
+                    busyProduct !== null ||
+                    isPending ||
+                    isReconciliationLocked ||
+                    !listed ||
+                    !hasRecentBaseline
                   }
                   onClick={() => listed && void buy(listed, product.productId)}
                 >
-                  {busyProduct === product.productId || isPending ? (
+                  {busyProduct === product.productId ||
+                  isPending ||
+                  isReconciliationLocked ? (
                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                   ) : (
                     <ShoppingCart className="mr-1 h-4 w-4" />
                   )}
-                  {isPending ? "Crediting" : "Buy"}
+                  {isPending || isReconciliationLocked ? "Verifying" : "Buy"}
                 </Button>
               </div>
             );
@@ -559,6 +719,8 @@ export default function NativeStore() {
                 const isCurrent =
                   activeSubscriptions?.includes(expectedProductId) ?? false;
                 const isPending = pendingProductIds.has(expectedProductId);
+                const isReconciliationLocked =
+                  reconciliationLockedProductIds.has(expectedProductId);
                 return (
                   <div
                     key={plan.productId}
@@ -579,6 +741,7 @@ export default function NativeStore() {
                       disabled={
                         busyProduct !== null ||
                         isPending ||
+                        isReconciliationLocked ||
                         !listed ||
                         isCurrent ||
                         activeSubscriptions === null ||
@@ -588,12 +751,18 @@ export default function NativeStore() {
                         listed && void buy(listed, expectedProductId, true)
                       }
                     >
-                      {busyProduct === expectedProductId || isPending ? (
+                      {busyProduct === expectedProductId ||
+                      isPending ||
+                      isReconciliationLocked ? (
                         <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                       ) : (
                         <ShoppingCart className="mr-1 h-4 w-4" />
                       )}
-                      {isCurrent ? "Active" : isPending ? "Crediting" : "Subscribe"}
+                      {isCurrent
+                        ? "Active"
+                        : isPending || isReconciliationLocked
+                          ? "Verifying"
+                          : "Subscribe"}
                     </Button>
                   </div>
                 );

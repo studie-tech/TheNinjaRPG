@@ -21,6 +21,7 @@ import {
   resolveTransferStore,
   revenueCatEventSchema,
   toStorePlatform,
+  transferOccurredAt,
 } from "@/server/utils/purchases/revenuecat";
 
 const unsupportedStore = (eventType: string, store: string | null | undefined) => {
@@ -63,6 +64,16 @@ export async function POST(request: Request) {
 
   try {
     if (event.type === "TRANSFER") {
+      const transferredAt = transferOccurredAt(event);
+      if (!transferredAt) {
+        // Using arrival time would create a new ownership epoch on every retry. This
+        // payload is permanently ambiguous, so acknowledge it as malformed rather than
+        // mutate ownership non-idempotently or ask RevenueCat to retry forever.
+        return Response.json(
+          { error: "TRANSFER event is missing event_timestamp_ms" },
+          { status: 400 },
+        );
+      }
       const resolution = resolveTransferStore(
         event.store,
         event.app_id,
@@ -78,10 +89,11 @@ export async function POST(request: Request) {
         throw new Error(`RevenueCat TRANSFER used unknown app_id ${resolution.value}`);
       }
       const outcome = await transferStorePurchases(drizzleDB, {
+        eventId: event.id,
         fromUserIds: event.transferred_from ?? [],
         toUserIds: event.transferred_to ?? [],
         store: resolution.status === "mapped" ? resolution.store : undefined,
-        occurredAt: occurredAt(event),
+        occurredAt: transferredAt,
       });
       return Response.json({ handled: "transferred", ...outcome });
     }

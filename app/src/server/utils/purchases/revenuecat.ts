@@ -18,7 +18,7 @@ import type { StorePlatform } from "@/drizzle/constants";
 export const revenueCatEventSchema = z.object({
   event: z.object({
     type: z.string(),
-    id: z.string(),
+    id: z.string().min(1),
     /**
      * Absent on TRANSFER, which names `transferred_from`/`transferred_to` instead. Required
      * here would make safeParse fail and the route answer 400, which tells RevenueCat to
@@ -168,6 +168,13 @@ export const occurredAt = (event: RevenueCatEvent): Date =>
     : event.event_timestamp_ms
       ? new Date(event.event_timestamp_ms)
       : new Date();
+
+/**
+ * A transfer cutoff must be stable across retries. RevenueCat's event id deduplicates a
+ * delivery, but it cannot recover chronology when the payload omitted its event time.
+ */
+export const transferOccurredAt = (event: RevenueCatEvent): Date | null =>
+  event.event_timestamp_ms ? new Date(event.event_timestamp_ms) : null;
 
 /** Start of the transaction's billing period, used to order receipts across retries. */
 export const purchasedAt = (event: RevenueCatEvent): Date =>

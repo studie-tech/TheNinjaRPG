@@ -18,6 +18,7 @@ import {
   occurredAt,
   paidThroughAt,
   purchasedAt,
+  transferOccurredAt,
   resolveTransferStore,
   storePlatformFromAppId,
   toStorePlatform,
@@ -203,6 +204,20 @@ describe("revenuecat webhook classification", () => {
     // Absent only in hand-made payloads; falling back to now keeps the caller simple.
     const fallback = occurredAt({ type: "EXPIRATION", id: "e", app_user_id: "u" } as Parameters<typeof occurredAt>[0]);
     expect(Math.abs(fallback.getTime() - Date.now())).toBeLessThan(5000);
+  });
+
+  it("rejects an unstable transfer cutoff instead of substituting retry arrival time", () => {
+    const event = {
+      type: "TRANSFER",
+      id: "transfer-event",
+      transferred_from: ["a"],
+      transferred_to: ["b"],
+    } as Parameters<typeof transferOccurredAt>[0];
+    expect(transferOccurredAt(event)).toBeNull();
+    expect(
+      transferOccurredAt({ ...event, event_timestamp_ms: 1_700_000_000_000 })
+        ?.getTime(),
+    ).toBe(1_700_000_000_000);
   });
 
   it("uses store action timestamps rather than webhook generation time", () => {

@@ -35,6 +35,7 @@ import {
   storeEntitlementState,
   storePurchase,
   storePurchaseTransfer,
+  storeUserIdAlias,
   userData,
 } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
@@ -111,6 +112,26 @@ const federalProduct = (productId: string) =>
       product.productId === productId || product.androidProductId === productId,
   );
 
+/** Follow staff-driven user-id renames so delayed webhooks cannot recreate the old id. */
+export const canonicalStoreUserId = async (
+  client: DrizzleClient,
+  userId: string,
+): Promise<string> => {
+  const visited = new Set<string>();
+  let current = userId;
+  while (true) {
+    if (visited.has(current))
+      throw new Error(`Store user-id alias cycle from ${userId}`);
+    visited.add(current);
+    const alias = await client.query.storeUserIdAlias.findFirst({
+      columns: { newUserId: true },
+      where: eq(storeUserIdAlias.oldUserId, current),
+    });
+    if (!alias || alias.newUserId === current) return current;
+    current = alias.newUserId;
+  }
+};
+
 /**
  * Follow durable RevenueCat ownership redirects, including a partially-flattened chain.
  *
@@ -124,27 +145,70 @@ const transferredUserId = async (
   store: StorePlatform,
   asOf: Date,
 ): Promise<string> => {
-  const visited = new Set<string>();
+  const visitedEdges = new Set<string>();
   let current = sourceUserId;
   let cursor = asOf;
+  let cursorKey: string | null = null;
   while (true) {
-    if (visited.has(current)) {
-      throw new Error(`RevenueCat transfer cycle from ${sourceUserId}/${store}`);
-    }
-    visited.add(current);
-    const redirect = await client.query.storePurchaseTransfer.findFirst({
-      columns: { destinationUserId: true, transferredAt: true },
+    const redirects = await client.query.storePurchaseTransfer.findMany({
+      columns: {
+        id: true,
+        eventId: true,
+        sourceUserId: true,
+        destinationUserId: true,
+        transferredAt: true,
+      },
       where: and(
         eq(storePurchaseTransfer.sourceUserId, current),
         eq(storePurchaseTransfer.store, store),
         gte(storePurchaseTransfer.transferredAt, cursor),
       ),
-      orderBy: asc(storePurchaseTransfer.transferredAt),
+      orderBy: [
+        asc(storePurchaseTransfer.transferredAt),
+        asc(storePurchaseTransfer.eventId),
+        asc(storePurchaseTransfer.sourceUserId),
+        asc(storePurchaseTransfer.destinationUserId),
+        asc(storePurchaseTransfer.id),
+      ],
+    });
+    const redirect = redirects.find((candidate) => {
+      if (candidate.transferredAt.getTime() > cursor.getTime()) return true;
+      const key = `${candidate.eventId}\0${candidate.sourceUserId}\0${candidate.destinationUserId}\0${candidate.id}`;
+      return cursorKey === null || key > cursorKey;
     });
     if (!redirect || redirect.destinationUserId === current) return current;
+    if (visitedEdges.has(redirect.id)) {
+      throw new Error(`RevenueCat transfer cycle from ${sourceUserId}/${store}`);
+    }
+    visitedEdges.add(redirect.id);
     cursor = redirect.transferredAt;
+    cursorKey = `${redirect.eventId}\0${redirect.sourceUserId}\0${redirect.destinationUserId}\0${redirect.id}`;
     current = redirect.destinationUserId;
   }
+};
+
+/** Every original owner whose chronological transfer path could reach sourceUserId. */
+const transferPredecessorUserIds = async (
+  client: DrizzleClient,
+  sourceUserId: string,
+  store: StorePlatform,
+): Promise<string[]> => {
+  const visited = new Set<string>();
+  const pending = [sourceUserId];
+  while (pending.length > 0) {
+    const current = pending.shift();
+    if (!current || visited.has(current)) continue;
+    visited.add(current);
+    const predecessors = await client.query.storePurchaseTransfer.findMany({
+      columns: { sourceUserId: true },
+      where: and(
+        eq(storePurchaseTransfer.destinationUserId, current),
+        eq(storePurchaseTransfer.store, store),
+      ),
+    });
+    pending.push(...predecessors.map((redirect) => redirect.sourceUserId));
+  }
+  return [...visited];
 };
 
 /** Every account which may currently hold a receipt originally attached to sourceUserId. */
@@ -191,9 +255,10 @@ export const grantStorePurchase = async (
 
   // TRANSFER may arrive first. Consumables stay with their purchaser, but subscriptions
   // follow the durable store-account ownership redirect before any receipt is inserted.
+  const originalUserId = await canonicalStoreUserId(client, grant.userId);
   let recipientUserId = federal
-    ? await transferredUserId(client, grant.userId, grant.store, grant.purchasedAt)
-    : grant.userId;
+    ? await transferredUserId(client, originalUserId, grant.store, grant.purchasedAt)
+    : originalUserId;
   const accepted = !grant.isSandbox || isSandboxGrantee(recipientUserId);
 
   const retireIfExpired = async (
@@ -244,6 +309,7 @@ export const grantStorePurchase = async (
     await client.insert(storePurchase).values({
       id: nanoid(),
       userId: recipientUserId,
+      originalUserId,
       transactionId: grant.transactionId,
       productId: grant.productId,
       store: grant.store,
@@ -270,11 +336,11 @@ export const grantStorePurchase = async (
   try {
     if (federal) {
       // Close the insert/transfer race: if the redirect appeared after the first lookup,
-      // move this still-unclaimed receipt before inspecting or granting it. The atomic
-      // claim below also refuses a source that becomes redirected after this recheck.
+      // move this still-unclaimed receipt before inspecting or granting it. A transfer
+      // arriving after this recheck scans the already-durable receipt and re-homes it.
       const latestRecipient = await transferredUserId(
         client,
-        grant.userId,
+        originalUserId,
         grant.store,
         grant.purchasedAt,
       );
@@ -372,12 +438,6 @@ export const grantStorePurchase = async (
                 AND ${storeEntitlementState.store} = ${storePurchase.store}
                 AND ${storeEntitlementState.revokedThrough} >= ${storePurchase.purchasedAt}
             )
-            AND NOT EXISTS (
-              SELECT 1 FROM ${storePurchaseTransfer}
-              WHERE ${storePurchaseTransfer.sourceUserId} = ${storePurchase.userId}
-                AND ${storePurchaseTransfer.store} = ${storePurchase.store}
-                AND ${storePurchaseTransfer.transferredAt} >= ${storePurchase.purchasedAt}
-            )
         `);
 
     if (result.rowsAffected === 0) {
@@ -431,6 +491,7 @@ export const extendStoreSubscription = async (
   client: DrizzleClient,
   extension: StoreExtension,
 ): Promise<void> => {
+  const canonicalUserId = await canonicalStoreUserId(client, extension.userId);
   const exact = extension.transactionId
     ? await client.query.storePurchase.findFirst({
         columns: { id: true, userId: true, revokedAt: true },
@@ -448,7 +509,7 @@ export const extendStoreSubscription = async (
   if (exact?.revokedAt) return;
   const possibleOwners = await transferChainUserIds(
     client,
-    extension.userId,
+    canonicalUserId,
     extension.store,
   );
   const candidates = exact
@@ -469,7 +530,7 @@ export const extendStoreSubscription = async (
   for (const candidate of candidates) {
     const owner = await transferredUserId(
       client,
-      extension.userId,
+      canonicalUserId,
       extension.store,
       candidate.purchasedAt,
     );
@@ -525,6 +586,7 @@ export const revokeFederalStatus = async (
   userId: string,
   scope: RevocationScope,
 ): Promise<void> => {
+  userId = await canonicalStoreUserId(client, userId);
   const { occurredAt, productId, store, transactionId } = scope;
   const exact =
     transactionId && store
@@ -649,6 +711,8 @@ export const revokeFederalStatus = async (
 };
 
 export interface StoreTransfer {
+  /** Stable RevenueCat event id used to deduplicate retries. */
+  eventId: string;
   fromUserIds: string[];
   toUserIds: string[];
   /** Missing when neither RevenueCat's store nor configured app id identifies a platform. */
@@ -688,7 +752,7 @@ export const migrateStorePurchaseTransfers = async (
       where: and(
         eq(storePurchaseTransfer.sourceUserId, newUserId),
         eq(storePurchaseTransfer.store, alias.store),
-        eq(storePurchaseTransfer.transferredAt, alias.transferredAt),
+        eq(storePurchaseTransfer.eventId, alias.eventId),
       ),
     });
     if (collision) {
@@ -726,20 +790,18 @@ export const migrateStoreEntitlementStates = async (
   newUserId: string,
 ): Promise<void> => {
   for (const store of STORE_PLATFORMS) {
-    const [oldState, newState] = await Promise.all([
-      client.query.storeEntitlementState.findFirst({
-        where: and(
-          eq(storeEntitlementState.userId, oldUserId),
-          eq(storeEntitlementState.store, store),
-        ),
-      }),
-      client.query.storeEntitlementState.findFirst({
-        where: and(
-          eq(storeEntitlementState.userId, newUserId),
-          eq(storeEntitlementState.store, store),
-        ),
-      }),
-    ]);
+    const oldState = await client.query.storeEntitlementState.findFirst({
+      where: and(
+        eq(storeEntitlementState.userId, oldUserId),
+        eq(storeEntitlementState.store, store),
+      ),
+    });
+    const newState = await client.query.storeEntitlementState.findFirst({
+      where: and(
+        eq(storeEntitlementState.userId, newUserId),
+        eq(storeEntitlementState.store, store),
+      ),
+    });
     if (!oldState) continue;
     if (newState) {
       await client
@@ -775,8 +837,24 @@ export const transferStorePurchases = async (
   client: DrizzleClient,
   transfer: StoreTransfer,
 ): Promise<{ destinationUserId: string; rowsAffected: number }> => {
-  const fromIds = [...new Set(transfer.fromUserIds.filter(Boolean))];
-  const toIds = [...new Set(transfer.toUserIds.filter(Boolean))];
+  const fromIds = [
+    ...new Set(
+      await Promise.all(
+        transfer.fromUserIds
+          .filter(Boolean)
+          .map((id) => canonicalStoreUserId(client, id)),
+      ),
+    ),
+  ];
+  const toIds = [
+    ...new Set(
+      await Promise.all(
+        transfer.toUserIds
+          .filter(Boolean)
+          .map((id) => canonicalStoreUserId(client, id)),
+      ),
+    ),
+  ];
   if (toIds.length === 0) throw new Error("RevenueCat transfer has no destination");
 
   const destinations = await client
@@ -796,29 +874,24 @@ export const transferStorePurchases = async (
   let rowsAffected = 0;
   const effectiveDestinations = new Set<string>([destinationUserId]);
   for (const store of stores) {
-    const mappedDestination = await transferredUserId(
-      client,
-      destinationUserId,
-      store,
-      transfer.occurredAt,
-    );
-    effectiveDestinations.add(mappedDestination);
     for (const sourceUserId of sourceIds) {
       // Persist before moving rows. A concurrent grant then either sees the redirect up
-      // front, or its atomic claim observes it and retries without crediting the source.
+      // front or leaves a durable receipt for the re-resolution below to re-home.
       await client
         .insert(storePurchaseTransfer)
         .values({
           id: nanoid(),
+          eventId: transfer.eventId,
           sourceUserId,
-          destinationUserId: mappedDestination,
+          destinationUserId,
           store,
           transferredAt: transfer.occurredAt,
           updatedAt: new Date(),
         })
         .onDuplicateKeyUpdate({
           set: {
-            destinationUserId: mappedDestination,
+            // Keep the first destination and cutoff for this stable event. A retry must
+            // not rewrite history from its arrival time or a changed payload.
             updatedAt: new Date(),
           },
         });
@@ -860,20 +933,45 @@ export const transferStorePurchases = async (
             },
           });
       }
-      const result = await client
-        .update(storePurchase)
-        .set({ userId: effectiveDestination })
-        .where(
-          and(
-            eq(storePurchase.userId, sourceUserId),
-            eq(storePurchase.store, store),
-            lte(storePurchase.purchasedAt, transfer.occurredAt),
-            isNotNull(storePurchase.acceptedAt),
-            isNotNull(storePurchase.federalStatus),
-            isNull(storePurchase.revokedAt),
-          ),
+      // A newer transfer may already have moved an older receipt away from sourceUserId.
+      // Re-resolve every receipt whose original ownership path can reach this source so a
+      // delayed epoch repairs the whole chronology, including later destinations.
+      const originalUserIds = await transferPredecessorUserIds(
+        client,
+        sourceUserId,
+        store,
+      );
+      const candidates = await client.query.storePurchase.findMany({
+        columns: {
+          id: true,
+          userId: true,
+          originalUserId: true,
+          purchasedAt: true,
+        },
+        where: and(
+          inArray(storePurchase.originalUserId, originalUserIds),
+          eq(storePurchase.store, store),
+          isNotNull(storePurchase.acceptedAt),
+          isNotNull(storePurchase.federalStatus),
+          isNull(storePurchase.revokedAt),
+        ),
+      });
+      for (const receipt of candidates) {
+        const resolvedOwner = await transferredUserId(
+          client,
+          receipt.originalUserId,
+          store,
+          receipt.purchasedAt,
         );
-      rowsAffected += result.rowsAffected;
+        effectiveDestinations.add(receipt.userId);
+        effectiveDestinations.add(resolvedOwner);
+        if (resolvedOwner === receipt.userId) continue;
+        const result = await client
+          .update(storePurchase)
+          .set({ userId: resolvedOwner })
+          .where(eq(storePurchase.id, receipt.id));
+        rowsAffected += result.rowsAffected;
+      }
     }
   }
 
