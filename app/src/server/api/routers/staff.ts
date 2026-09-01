@@ -1084,6 +1084,12 @@ export const staffRouter = createTRPCRouter({
             columns: { userId: true },
             where: eq(userData.userId, input.newUserId),
           });
+          const [retiredSource] = await tx
+            .select({ oldUserId: storeUserIdAlias.oldUserId })
+            .from(storeUserIdAlias)
+            .where(eq(storeUserIdAlias.oldUserId, input.userId))
+            .for("update");
+          if (retiredSource) throw new RetiredRenameSourceError();
           if (!lockedFrom || lockedTo) {
             throw new Error("UserId rename changed while acquiring its lock");
           }
@@ -1158,6 +1164,12 @@ export const staffRouter = createTRPCRouter({
           renamed = await performRename();
           break;
         } catch (error) {
+          if (error instanceof RetiredRenameSourceError) {
+            return {
+              success: false,
+              message: "UserId is being deleted and cannot be renamed",
+            };
+          }
           if (error instanceof RetiredRenameDestinationError) {
             renamed = false;
             break;
@@ -1237,6 +1249,14 @@ class RetiredRenameDestinationError extends Error {
   }
 }
 
+/** Deletion owns this identity once its durable tombstone has committed. */
+class RetiredRenameSourceError extends Error {
+  constructor() {
+    super("UserId is being deleted and cannot be renamed");
+    this.name = "RetiredRenameSourceError";
+  }
+}
+
 /**
  * Delete a user and all associated data with automatic retry on deadlock.
  * Implements exponential backoff with jitter to handle MySQL deadlocks (errno 1213).
@@ -1289,6 +1309,20 @@ export const deleteUser = async (client: DrizzleClient, userId: string) => {
  * @param userId - The ID of the user to delete.
  */
 const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
+  // Claim deletion before any cleanup. The durable alias remains through every later
+  // batch and the final UserData delete, so a concurrent staff rename cannot move the
+  // identity midway through cleanup and overwrite its tombstone.
+  await retireStoreUserId(client, userId, async (lockedClient) => {
+    // Push mutations share this lifecycle mutex and require the still-live UserData row.
+    await lockedClient.delete(userDevice).where(eq(userDevice.userId, userId));
+    await lockedClient
+      .delete(userLiveActivity)
+      .where(eq(userLiveActivity.userId, userId));
+    await lockedClient
+      .delete(userPushPreference)
+      .where(eq(userPushPreference.userId, userId));
+  });
+
   // Batch 1: AI templates may own placement rows. Their lookup is independent of the
   // prerequisite sensei-reference cleanup, so run both together before destructive deletes.
   const [aiPlacements] = await Promise.all([
@@ -1420,22 +1454,6 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     client.delete(linkPromotion).where(eq(linkPromotion.reviewedBy, userId)),
     client.delete(userUpload).where(eq(userUpload.userId, userId)),
   ]);
-
-  // Keep the store ledger as an idempotency tombstone immediately before deleting the
-  // identity it references. Delayed RevenueCat retries then terminate instead of retrying
-  // forever, while an earlier failed cleanup cannot disable purchases for a live account.
-  await retireStoreUserId(client, userId, async (lockedClient) => {
-    // Push mutations share this lifecycle mutex and require the still-live UserData row.
-    // Purging every push row here ensures a writer which began before retirement is either
-    // removed by this critical section or waits, observes the tombstone, and is rejected.
-    await lockedClient.delete(userDevice).where(eq(userDevice.userId, userId));
-    await lockedClient
-      .delete(userLiveActivity)
-      .where(eq(userLiveActivity.userId, userId));
-    await lockedClient
-      .delete(userPushPreference)
-      .where(eq(userPushPreference.userId, userId));
-  });
 
   // Final batch: Delete main userData record (must be last)
   await client.delete(userData).where(eq(userData.userId, userId));

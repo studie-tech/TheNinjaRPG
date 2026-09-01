@@ -306,9 +306,108 @@ describe("native push ownership", () => {
     });
 
     act(() => {
-      mocks.stateListeners[0]?.({ isActive: true });
+      for (const listener of mocks.stateListeners) listener({ isActive: true });
     });
     await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(2));
+  });
+
+  it("retries a failed sign-out detach on signed-out resume before clearing proof", async () => {
+    mocks.detachToken
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({ success: true });
+    const { result, rerender } = renderHook(
+      ({ enabled, accountId }) => useNativePush({ enabled, accountId }),
+      { initialProps: { enabled: true, accountId: "account-a" as string | null } },
+    );
+    await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
+    act(() => {
+      mocks.registrationListeners[0]?.({ value: TOKEN });
+    });
+    await waitFor(() =>
+      expect(localStorage.getItem("native-push-owner-token")).toBe("widget-token"),
+    );
+
+    await act(async () => {
+      await result.current.unregister();
+    });
+    expect(mocks.detachToken).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem("native-push-token")).toBe(TOKEN);
+    expect(localStorage.getItem("native-push-owner-token")).toBe("widget-token");
+    expect(JSON.parse(localStorage.getItem("native-push-pending-detach") ?? "{}"))
+      .toEqual({ token: TOKEN, widgetToken: "widget-token" });
+
+    rerender({ enabled: false, accountId: null });
+    act(() => {
+      for (const listener of [...mocks.stateListeners]) listener({ isActive: true });
+    });
+    await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(2));
+    expect(mocks.detachToken).toHaveBeenLastCalledWith({
+      token: TOKEN,
+      widgetToken: "widget-token",
+    });
+    await waitFor(() =>
+      expect(localStorage.getItem("native-push-pending-detach")).toBeNull(),
+    );
+    expect(localStorage.getItem("native-push-token")).toBeNull();
+    expect(localStorage.getItem("native-push-owner-token")).toBeNull();
+  });
+
+  it("retries a persisted signed-out detach when connectivity returns", async () => {
+    localStorage.setItem("native-push-token", TOKEN);
+    localStorage.setItem("native-push-owner-token", "widget-token");
+    localStorage.setItem(
+      "native-push-pending-detach",
+      JSON.stringify({ token: TOKEN, widgetToken: "widget-token" }),
+    );
+    mocks.detachToken
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({ success: true });
+
+    renderHook(() => useNativePush({ enabled: false, accountId: null }));
+    await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(1));
+    act(() => window.dispatchEvent(new window.Event("online")));
+    await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(localStorage.getItem("native-push-pending-detach")).toBeNull(),
+    );
+  });
+
+  it("does not clear a replacement bind when an older conditional detach recovers", async () => {
+    localStorage.setItem("native-push-token", TOKEN);
+    localStorage.setItem("native-push-owner-token", "widget-token-a");
+    localStorage.setItem(
+      "native-push-pending-detach",
+      JSON.stringify({ token: TOKEN, widgetToken: "widget-token-a" }),
+    );
+    mocks.detachToken
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({ success: true });
+    mocks.sendToken.mockResolvedValueOnce({
+      success: true,
+      widgetToken: "widget-token-b",
+    });
+
+    renderHook(() => useNativePush({ enabled: true, accountId: "account-b" }));
+    await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
+    act(() => {
+      mocks.registrationListeners[0]?.({ value: TOKEN });
+    });
+    await waitFor(() =>
+      expect(localStorage.getItem("native-push-owner-token")).toBe(
+        "widget-token-b",
+      ),
+    );
+
+    act(() => {
+      for (const listener of mocks.stateListeners) listener({ isActive: true });
+    });
+    await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(localStorage.getItem("native-push-pending-detach")).toBeNull(),
+    );
+    expect(localStorage.getItem("native-push-token")).toBe(TOKEN);
+    expect(localStorage.getItem("native-push-owner-token")).toBe("widget-token-b");
   });
 });
 

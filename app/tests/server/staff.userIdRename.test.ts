@@ -343,6 +343,83 @@ describeWithDatabase("staff user-id rename", () => {
     }
   }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
 
+  it("gives deletion durable ownership before cleanup and rejects a concurrent rename", async () => {
+    const database = await getTestDatabase();
+    const deleteConnection = await openTestDatabaseConnection();
+    const renameConnection = await openTestDatabaseConnection();
+    const barrierConnection = await openTestDatabaseConnection();
+    const barrier = `delete_rename_${nanoid()}`;
+    const trigger = `pause_delete_rename_${nanoid().replaceAll("-", "_")}`;
+    await database.insert(notification).values({
+      userId: OLD_USER_ID,
+      content: "deletion barrier",
+    });
+    await barrierConnection.query(`SELECT GET_LOCK('${barrier}', 10)`);
+    await runRawSql(`
+      CREATE TRIGGER ${trigger} BEFORE DELETE ON Notification FOR EACH ROW
+      BEGIN
+        IF OLD.userId = '${OLD_USER_ID}' THEN
+          SET @delete_rename_wait = GET_LOCK('${barrier}', 10);
+          SET @delete_rename_release = RELEASE_LOCK('${barrier}');
+        END IF;
+      END
+    `);
+    try {
+      const deletion = deleteUser(deleteConnection.database, OLD_USER_ID);
+      await barrierConnection.waitForNamedLockWaiter(barrier);
+
+      const markerDuringCleanup = await database.query.storeUserIdAlias.findFirst({
+        where: eq(storeUserIdAlias.oldUserId, OLD_USER_ID),
+      });
+      expect(markerDuringCleanup?.newUserId).toMatch(
+        /^__tnr_deleted_store_user__:/,
+      );
+
+      let renameFinished = false;
+      const rename = callerForDatabase(
+        staffRouter,
+        STAFF,
+        renameConnection.database,
+      )
+        .updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })
+        .finally(() => {
+          renameFinished = true;
+        });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(renameFinished).toBe(false);
+
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+      await expect(rename).resolves.toEqual({
+        success: false,
+        message: "UserId is being deleted and cannot be renamed",
+      });
+      await deletion;
+
+      const [oldUser, renamedUser, marker] = await Promise.all([
+        database.query.userData.findFirst({
+          where: eq(userData.userId, OLD_USER_ID),
+        }),
+        database.query.userData.findFirst({
+          where: eq(userData.userId, NEW_USER_ID),
+        }),
+        database.query.storeUserIdAlias.findFirst({
+          where: eq(storeUserIdAlias.oldUserId, OLD_USER_ID),
+        }),
+      ]);
+      expect(oldUser).toBeUndefined();
+      expect(renamedUser).toBeUndefined();
+      expect(marker?.newUserId).toMatch(/^__tnr_deleted_store_user__:/);
+    } finally {
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+      await runRawSql(`DROP TRIGGER IF EXISTS ${trigger}`);
+      await Promise.all([
+        deleteConnection.close(),
+        renameConnection.close(),
+        barrierConnection.close(),
+      ]);
+    }
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
+
   it.each([
     { kind: "preference", table: "UserPushPreference" },
     { kind: "activity", table: "UserLiveActivity" },
