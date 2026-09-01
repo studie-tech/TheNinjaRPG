@@ -78,6 +78,15 @@ public enum TNRSnapshotStore {
         defaults?.set(json, forKey: key)
     }
 
+    /// Persist a snapshot produced by native code rather than the web bridge.
+    public static func save(snapshot: TNRSnapshot) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(snapshot),
+              let json = String(data: data, encoding: .utf8) else { return }
+        save(json: json)
+    }
+
     public static func clear() {
         defaults?.removeObject(forKey: key)
     }

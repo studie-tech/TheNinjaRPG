@@ -9,6 +9,10 @@ import { useNativeShell } from "@/hooks/useNativeShell";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { platform, purchases } from "@/libs/native";
+import {
+  hasSettledNewPurchase,
+  isPendingStorePurchase,
+} from "@/libs/native/purchaseSettlement";
 import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
 
@@ -51,6 +55,10 @@ export default function NativeStore() {
     { limit: 5 },
     { enabled: isNativeShell === true },
   );
+  const pendingProductIds = new Set(
+    recent?.filter(isPendingStorePurchase).map((purchase) => purchase.productId),
+  );
+  const hasPendingPurchase = pendingProductIds.size > 0;
 
   const storePlatform = platform();
   const apiKey =
@@ -93,6 +101,20 @@ export default function NativeStore() {
     player && packageState?.userId === player.userId ? packageState : null;
   const packages = available?.packages ?? null;
 
+  // A grant can be retried after the initial wait ends. Keep pending products disabled
+  // and refresh both the receipt and profile when the retry finally settles.
+  useEffect(() => {
+    if (!hasPendingPurchase) return;
+    const timer = window.setInterval(() => {
+      void refetchRecent().then(({ data }) => {
+        if (data && !data.some(isPendingStorePurchase)) {
+          void utils.profile.getUser.invalidate();
+        }
+      });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [hasPendingPurchase, refetchRecent, utils]);
+
   /**
    * Wait for the webhook, then refetch the balance.
    *
@@ -102,16 +124,16 @@ export default function NativeStore() {
    * until the next background poll — which is exactly what the toast promises will not
    * happen.
    *
-   * The purchase row appearing is the signal that the webhook ran, so that is what is
-   * polled. Compared by id rather than by count, because `recent` is capped and a player
-   * at the cap would never see the count grow.
+   * A terminal purchase row is the signal that the webhook finished applying the grant.
+   * Compared by id rather than by count, because `recent` is capped and a player at the
+   * cap would never see the count grow.
    */
   const settleAfterPurchase = useCallback(
     async (previousNewestId: string | undefined) => {
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
         const { data } = await refetchRecent();
-        if (data?.[0]?.id && data[0].id !== previousNewestId) break;
+        if (hasSettledNewPurchase(data ?? [], previousNewestId)) break;
       }
       // Refetch regardless: if the webhook is slow or has failed, the player should still
       // see whatever the truth currently is rather than a frozen screen.
@@ -212,6 +234,7 @@ export default function NativeStore() {
                 purchases.productIdForPackage(entry, storePlatform) ===
                 product.productId,
             );
+            const isPending = pendingProductIds.has(product.productId);
             return (
               <div
                 key={product.productId}
@@ -227,15 +250,15 @@ export default function NativeStore() {
                 </div>
                 <Button
                   size="sm"
-                  disabled={busyProduct !== null || !listed}
+                  disabled={busyProduct !== null || isPending || !listed}
                   onClick={() => listed && void buy(listed, product.productId)}
                 >
-                  {busyProduct === product.productId ? (
+                  {busyProduct === product.productId || isPending ? (
                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                   ) : (
                     <ShoppingCart className="mr-1 h-4 w-4" />
                   )}
-                  Buy
+                  {isPending ? "Crediting" : "Buy"}
                 </Button>
               </div>
             );
@@ -253,6 +276,7 @@ export default function NativeStore() {
                     expectedProductId,
                 );
                 const isCurrent = player.federalStatus === plan.federalStatus;
+                const isPending = pendingProductIds.has(expectedProductId);
                 return (
                   <div
                     key={plan.productId}
@@ -270,15 +294,17 @@ export default function NativeStore() {
                     <Button
                       size="sm"
                       variant={isCurrent ? "outline" : "default"}
-                      disabled={busyProduct !== null || !listed || isCurrent}
+                      disabled={
+                        busyProduct !== null || isPending || !listed || isCurrent
+                      }
                       onClick={() => listed && void buy(listed, expectedProductId)}
                     >
-                      {busyProduct === expectedProductId ? (
+                      {busyProduct === expectedProductId || isPending ? (
                         <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                       ) : (
                         <ShoppingCart className="mr-1 h-4 w-4" />
                       )}
-                      {isCurrent ? "Active" : "Subscribe"}
+                      {isCurrent ? "Active" : isPending ? "Crediting" : "Subscribe"}
                     </Button>
                   </div>
                 );

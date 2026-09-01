@@ -56,11 +56,12 @@ export const summarise = (results: PushResult[]): PushSendSummary =>
 /**
  * APNs reasons that mean this specific device token is dead.
  *
- * Deliberately narrow. `DeviceTokenNotForTopic` is excluded because it fires when the
- * bundle identifier is misconfigured, which would be true of every token at once —
- * pruning on it would empty the table on a deploy with the wrong `APNS_BUNDLE_ID`.
+ * Deliberately narrow. `BadDeviceToken` can mean the token was sent to the wrong APNs
+ * environment, while `DeviceTokenNotForTopic` can mean the bundle id is misconfigured.
+ * Either can reject every token at once, so pruning on them could empty the table after
+ * one bad deploy.
  */
-const DEAD_APNS_REASONS = new Set(["BadDeviceToken", "Unregistered", "ExpiredToken"]);
+const DEAD_APNS_REASONS = new Set(["Unregistered", "ExpiredToken"]);
 
 export const isDeadApnsToken = (status: number, reason: string): boolean =>
   status === 410 || DEAD_APNS_REASONS.has(reason);

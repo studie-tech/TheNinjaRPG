@@ -78,10 +78,10 @@ describe("dead-token classification", () => {
   it("prunes only APNs reasons that are about this one device", async () => {
     const { isDeadApnsToken } = await import("@/server/utils/push/types");
     expect(isDeadApnsToken(410, "Unregistered")).toBe(true);
-    expect(isDeadApnsToken(400, "BadDeviceToken")).toBe(true);
     expect(isDeadApnsToken(400, "ExpiredToken")).toBe(true);
-    // A misconfigured bundle id rejects every token at once; pruning on it would empty
-    // the table on a bad deploy.
+    // A wrong APNs environment or bundle id rejects every token at once; pruning either
+    // response would empty the table on a bad deploy.
+    expect(isDeadApnsToken(400, "BadDeviceToken")).toBe(false);
     expect(isDeadApnsToken(400, "DeviceTokenNotForTopic")).toBe(false);
     expect(isDeadApnsToken(429, "TooManyRequests")).toBe(false);
     expect(isDeadApnsToken(503, "ServiceUnavailable")).toBe(false);

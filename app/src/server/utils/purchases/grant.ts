@@ -7,7 +7,18 @@
  */
 
 import * as Sentry from "@sentry/node";
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   type FederalStatus,
@@ -295,6 +306,10 @@ export const revokeFederalStatus = async (
   scope: RevocationScope,
 ): Promise<void> => {
   const { occurredAt, productId, store } = scope;
+  // A renewal period commonly begins at the exact millisecond the previous period ends.
+  // Product-scoped expiry events therefore cover timestamps strictly before occurredAt;
+  // using the boundary itself would make a late expiry consume the live renewal.
+  const beforeExpiry = new Date(occurredAt.getTime() - 1);
   // Retire the receipts first. They are what vouches for the tier to /api/cleaner and to
   // every PayPal writer, and a receipt outlives the subscription that produced it — left
   // unstamped they would go on claiming the player is a subscriber for the rest of the
@@ -320,16 +335,16 @@ export const revokeFederalStatus = async (
           eq(storePurchase.userId, userId),
           eq(storePurchase.productId, productId),
           isNotNull(storePurchase.federalStatus),
-          // Never past the expiry itself. A player who resubscribes to the same product
-          // has a newer receipt for it, and taking that as the cutoff would let a late
-          // expiry retire the subscription they are currently paying for.
-          lte(storePurchase.purchasedAt, occurredAt),
+          // A renewal can start exactly when the expired period ended, so the boundary is
+          // exclusive. Taking an equal timestamp as the cutoff would let a late expiry
+          // retire the subscription the player is currently paying for.
+          lt(storePurchase.purchasedAt, occurredAt),
           ...(store ? [eq(storePurchase.store, store)] : []),
         ),
         orderBy: desc(storePurchase.purchasedAt),
       })
     : undefined;
-  const cutoff = spent?.purchasedAt ?? occurredAt;
+  const cutoff = spent?.purchasedAt ?? (productId ? beforeExpiry : occurredAt);
 
   // Persist the cutoff before touching receipts. If the purchase webhook has not inserted
   // its row yet, or races this handler, the grant's atomic claim checks this watermark and

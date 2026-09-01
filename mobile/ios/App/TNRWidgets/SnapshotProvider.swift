@@ -60,6 +60,10 @@ struct SnapshotProvider: TimelineProvider {
             remote.hospitalUntil = remote.hospitalUntil ?? snapshot.hospitalUntil
             remote.activeQuest = remote.activeQuest ?? snapshot.activeQuest
             remote.questProgress = remote.questProgress ?? snapshot.questProgress
+            // WidgetKit may terminate this extension after completion. Persist first so
+            // the next timeline starts from the successful refresh instead of rolling
+            // back to the stale in-app snapshot when the network is unavailable.
+            TNRSnapshotStore.save(snapshot: remote)
             completion(remote)
         }.resume()
     }

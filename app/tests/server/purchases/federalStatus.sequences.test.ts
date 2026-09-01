@@ -133,6 +133,53 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(await statusOf()).toBe("GOLD");
   });
 
+  it("keeps a renewal that starts exactly when the expired period ends", async () => {
+    const database = await db();
+    const endedAt = new Date(Date.now() - MINUTE);
+    const oldTransactionId = nanoid();
+    const renewalTransactionId = nanoid();
+
+    await grantStorePurchase(database, {
+      userId: USER,
+      transactionId: oldTransactionId,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: false,
+      purchasedAt: new Date(endedAt.getTime() - DAY),
+      raw: {},
+    });
+    await grantStorePurchase(database, {
+      userId: USER,
+      transactionId: renewalTransactionId,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: false,
+      purchasedAt: endedAt,
+      raw: {},
+    });
+
+    await revokeFederalStatus(database, USER, {
+      occurredAt: endedAt,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+    });
+
+    const [oldReceipt, renewalReceipt] = await Promise.all([
+      database.query.storePurchase.findFirst({
+        columns: { revokedAt: true },
+        where: eq(storePurchase.transactionId, oldTransactionId),
+      }),
+      database.query.storePurchase.findFirst({
+        columns: { grantedAt: true, revokedAt: true },
+        where: eq(storePurchase.transactionId, renewalTransactionId),
+      }),
+    ]);
+    expect(oldReceipt?.revokedAt).toBeInstanceOf(Date);
+    expect(renewalReceipt?.grantedAt).toBeInstanceOf(Date);
+    expect(renewalReceipt?.revokedAt).toBeNull();
+    expect(await statusOf()).toBe("GOLD");
+  });
+
   it("lets a PayPal writer take the tier away once both sources have ended", async () => {
     await givePaypal("NORMAL");
     await buyFederal("GOLD", MINUTE);
@@ -459,7 +506,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(user?.federalStatus).toBe("NONE");
   });
 
-  it("allows a resubscription purchased after the recorded expiry", async () => {
+  it("allows a resubscription purchased at the recorded expiry boundary", async () => {
     const userId = "store-resubscribe-after-expiry";
     const database = await db();
     const endedAt = new Date(Date.now() - MINUTE);
@@ -477,7 +524,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
         productId: "tnr_federal_gold",
         store: "APPLE",
         isSandbox: false,
-        purchasedAt: new Date(endedAt.getTime() + 1),
+        purchasedAt: endedAt,
         raw: {},
       }),
     ).resolves.toMatchObject({ status: "granted", federalStatus: "GOLD" });

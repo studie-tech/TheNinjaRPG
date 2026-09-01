@@ -54,6 +54,9 @@ export const purchasesRouter = createTRPCRouter({
           store: z.enum(STORE_PLATFORMS),
           reputationPoints: z.number(),
           federalStatus: z.string().nullable(),
+          acceptedAt: z.date().nullable(),
+          grantedAt: z.date().nullable(),
+          revokedAt: z.date().nullable(),
           createdAt: z.date(),
         }),
       ),
@@ -66,6 +69,9 @@ export const purchasesRouter = createTRPCRouter({
           store: storePurchase.store,
           reputationPoints: storePurchase.reputationPoints,
           federalStatus: storePurchase.federalStatus,
+          acceptedAt: storePurchase.acceptedAt,
+          grantedAt: storePurchase.grantedAt,
+          revokedAt: storePurchase.revokedAt,
           createdAt: storePurchase.createdAt,
         })
         .from(storePurchase)
