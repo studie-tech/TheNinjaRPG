@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { hospitalRecoveryAt } from "@/libs/hospital";
-import { liveActivity } from "@/libs/native";
+import { appEvents, liveActivity } from "@/libs/native";
 import type { UserWithRelations } from "@/routers/profile";
 
 /**
@@ -21,7 +21,12 @@ export const useLiveActivity = (
   userData: UserWithRelations | undefined,
   timeDiff: number,
 ) => {
-  const { mutate: registerActivity } = api.push.registerActivity.useMutation();
+  const { mutateAsync: registerActivity } = api.push.registerActivity.useMutation({
+    // Mutations are not retried by the global tRPC client. Losing this particular write
+    // leaves the server unable to update an activity that is already on the Lock Screen.
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10_000),
+  });
   const { mutate: endActivity } = api.push.endActivity.useMutation();
 
   // ActivityKit ids, so an activity is only ended once and only started once per stay.
@@ -31,56 +36,110 @@ export const useLiveActivity = (
   // every profile refresh and the effect re-runs with it.
   const shouldBeRunning = useRef(false);
   const endsAtRef = useRef<Date | null>(null);
+  /** The last non-hospitalised account whose orphaned native card was reconciled. */
+  const stoppedAccount = useRef<string | null>(null);
 
   // The plugin subscribes to pushTokenUpdates before `start` resolves, so a token can
   // arrive while `activeId` is still null. Held here and claimed once the id is known,
   // rather than dropped — a discarded token means the server can never update that
   // activity, and Apple will not reissue one just because we missed it.
   const pendingToken = useRef<{ activityId: string; pushToken: string } | null>(null);
+  const registrationInFlight = useRef<Promise<void> | null>(null);
+
+  const flushPendingToken = useCallback(
+    function flushPendingToken() {
+      if (registrationInFlight.current) return;
+      const pending = pendingToken.current;
+      const endsAt = endsAtRef.current;
+      if (!pending || !endsAt || pending.activityId !== activeId.current) return;
+
+      const request = registerActivity({
+        activityId: pending.activityId,
+        kind: "hospital",
+        pushToken: pending.pushToken,
+        endsAt,
+      })
+        .then(() => {
+          const current = pendingToken.current;
+          if (
+            current?.activityId === pending.activityId &&
+            current.pushToken === pending.pushToken
+          ) {
+            pendingToken.current = null;
+          }
+        })
+        .catch(() => {
+          // Keep the token. A foreground transition calls this function again, which
+          // covers a device that stayed offline longer than the bounded immediate retries.
+        })
+        .finally(() => {
+          registrationInFlight.current = null;
+          const current = pendingToken.current;
+          // Apple may rotate the token while the previous one is on the wire. Flush a new
+          // value immediately, but do not loop on the same value after exhausted retries.
+          if (
+            current &&
+            (current.activityId !== pending.activityId ||
+              current.pushToken !== pending.pushToken)
+          ) {
+            flushPendingToken();
+          }
+        });
+      registrationInFlight.current = request;
+    },
+    [registerActivity],
+  );
 
   const submitToken = useCallback(
     (activityId: string, pushToken: string) => {
-      const endsAt = endsAtRef.current;
-      if (!endsAt) return;
-      registerActivity({ activityId, kind: "hospital", pushToken, endsAt });
+      pendingToken.current = { activityId, pushToken };
+      flushPendingToken();
     },
-    [registerActivity],
+    [flushPendingToken],
   );
 
   // Apple reissues the token, so this stays subscribed rather than reading it once.
   useEffect(() => {
     if (!liveActivity.isSupported()) return;
     return liveActivity.onToken(({ activityId, pushToken }) => {
-      if (activityId === activeId.current) {
-        submitToken(activityId, pushToken);
-        return;
-      }
-      pendingToken.current = { activityId, pushToken };
+      submitToken(activityId, pushToken);
     });
   }, [submitToken]);
 
+  useEffect(() => {
+    if (!liveActivity.isSupported()) return;
+    return appEvents.onStateChange((isActive) => {
+      if (isActive) flushPendingToken();
+    });
+  }, [flushPendingToken]);
+
   const isHospitalised = userData?.status === "HOSPITALIZED";
-  // Absent userData counts as "stop", not "no opinion": leaving the countdown up would show
-  // the previous player's recovery on the Lock Screen of a signed-out phone. NativeBridge
-  // withholds the profile once it stops matching the Clerk session, which is what makes a
-  // sign-out reach here at all -- the query itself keeps its last result when disabled.
+  // An absent profile is unresolved, not recovered. NativeBridge owns signed-out cleanup
+  // with endAll(); treating the loading gap as recovery would discard a valid activity on
+  // every cold launch before the current player's profile arrives.
   const shouldRun = isHospitalised && !!userData;
   shouldBeRunning.current = shouldRun;
 
   useEffect(() => {
     if (!liveActivity.isSupported()) return;
 
+    if (!userData) return;
+
     if (!shouldRun) {
-      const current = activeId.current;
-      if (current) {
-        activeId.current = null;
-        endsAtRef.current = null;
-        void liveActivity.end(current);
-        // Only worth telling the server while there is still a session to tell it with.
-        if (userData) endActivity({ kind: "hospital" });
+      activeId.current = null;
+      endsAtRef.current = null;
+      pendingToken.current = null;
+      // An activity outlives the process, so there may be no JavaScript id after a cold
+      // relaunch. Reconcile once per recovered account by kind in the native store.
+      if (stoppedAccount.current !== userData.userId) {
+        stoppedAccount.current = userData.userId;
+        void liveActivity.endKind("hospital");
+        endActivity({ kind: "hospital" });
       }
       return;
     }
+
+    stoppedAccount.current = null;
 
     // Already showing one; the server pushes the updates from here.
     if (activeId.current || isStarting.current || !userData) return;
@@ -116,12 +175,11 @@ export const useLiveActivity = (
         // Claim a token that arrived before the id was known.
         const held = pendingToken.current;
         if (held?.activityId === started.activityId) {
-          pendingToken.current = null;
-          submitToken(held.activityId, held.pushToken);
+          flushPendingToken();
         }
       })
       .finally(() => {
         isStarting.current = false;
       });
-  }, [endActivity, shouldRun, timeDiff, userData]);
+  }, [endActivity, flushPendingToken, shouldRun, timeDiff, userData]);
 };

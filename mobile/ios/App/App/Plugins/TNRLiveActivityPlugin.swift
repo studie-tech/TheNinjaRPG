@@ -20,6 +20,7 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "update", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "end", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "endKind", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "endAll", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPushToStartToken", returnType: CAPPluginReturnPromise),
     ]
@@ -172,6 +173,29 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         Task {
             for activity in Activity<TNRActivityAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+            call.resolve()
+        }
+        #else
+        call.resolve()
+        #endif
+    }
+
+    @objc func endKind(_ call: CAPPluginCall) {
+        #if canImport(ActivityKit)
+        guard #available(iOS 16.2, *) else {
+            call.resolve()
+            return
+        }
+        guard let kindRaw = call.getString("kind"),
+              let kind = TNRActivityAttributes.Kind(rawValue: kindRaw) else {
+            call.reject("Unknown activity kind")
+            return
+        }
+        Task {
+            for activity in Activity<TNRActivityAttributes>.activities
+                where activity.attributes.kind == kind {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
             call.resolve()

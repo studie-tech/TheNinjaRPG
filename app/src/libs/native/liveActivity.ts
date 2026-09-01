@@ -58,6 +58,11 @@ export const end = async (activityId: string): Promise<void> => {
   await invokeSafe(PLUGIN, "end", { activityId });
 };
 
+/** End every surviving activity of one kind, including ones from an earlier process. */
+export const endKind = async (kind: LiveActivityKind): Promise<void> => {
+  await invokeSafe(PLUGIN, "endKind", { kind });
+};
+
 /** End every activity this app started — used on sign-out. */
 export const endAll = async (): Promise<void> => {
   await invokeSafe(PLUGIN, "endAll");

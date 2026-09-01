@@ -104,6 +104,28 @@ public class TNRLiveUpdatesPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void endKind(PluginCall call) {
+        String kind = call.getString("kind");
+        if (kind == null) {
+            call.reject("kind is required");
+            return;
+        }
+        String prefix = kind + "-";
+        SharedPreferences.Editor editor = prefs().edit();
+        for (Map.Entry<String, ?> entry : prefs().getAll().entrySet()) {
+            if (!entry.getKey().startsWith(prefix) || !(entry.getValue() instanceof Integer)) {
+                continue;
+            }
+            int notificationId = (Integer) entry.getValue();
+            cancelExpiry(entry.getKey(), notificationId);
+            manager().cancel(notificationId);
+            editor.remove(entry.getKey());
+        }
+        editor.apply();
+        call.resolve();
+    }
+
+    @PluginMethod
     public void endAll(PluginCall call) {
         SharedPreferences prefs = prefs();
         for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {

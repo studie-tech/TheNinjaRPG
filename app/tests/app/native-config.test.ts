@@ -19,6 +19,30 @@ describe("native release configuration", () => {
     expect(manifest).toContain('android:allowBackup="false"');
   });
 
+  it("claims only the canonical host for verified web links", () => {
+    const manifest = readRepoFile("mobile/android/app/src/main/AndroidManifest.xml");
+    const entitlements = readRepoFile("mobile/ios/App/App/App.entitlements");
+
+    expect(manifest).toContain('android:host="www.theninja-rpg.com"');
+    expect(manifest).not.toContain('android:host="theninja-rpg.com"');
+    expect(entitlements).toContain("applinks:www.theninja-rpg.com");
+    expect(entitlements).not.toContain("applinks:theninja-rpg.com");
+  });
+
+  it("can clean up process-persistent activities by kind", () => {
+    const bridge = readRepoFile("app/src/libs/native/liveActivity.ts");
+    const android = readRepoFile(
+      "mobile/android/app/src/main/java/com/theninjarpg/app/TNRLiveUpdatesPlugin.java",
+    );
+    const ios = readRepoFile(
+      "mobile/ios/App/App/Plugins/TNRLiveActivityPlugin.swift",
+    );
+
+    expect(bridge).toContain('invokeSafe(PLUGIN, "endKind", { kind })');
+    expect(android).toContain("public void endKind(PluginCall call)");
+    expect(ios).toContain('@objc func endKind(_ call: CAPPluginCall)');
+  });
+
   it("stops the audio service after a rebuilt Activity is finally destroyed", () => {
     const plugin = readRepoFile(
       "mobile/android/app/src/main/java/com/theninjarpg/app/TNRAudioSessionPlugin.java",

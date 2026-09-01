@@ -32,10 +32,10 @@ const config: CapacitorConfig = {
     // Keeps that navigation inside the WebView — and the Capacitor bridge with it —
     // rather than handing the URL to the system browser.
     //
-    // The apex is listed in its own right: both matchers compare host labels one for one,
-    // so `*.theninja-rpg.com` does not cover `theninja-rpg.com`. The Android manifest
-    // registers the apex as an App Link host, so leaving it out would mean a link the app
-    // claims it can open is one it then refuses to navigate to.
+    // The apex is listed in its own right because both matchers compare host labels one
+    // for one, so `*.theninja-rpg.com` does not cover `theninja-rpg.com`. It redirects to
+    // www in production and is deliberately not claimed as an App/Universal Link host:
+    // association-file verification does not follow that redirect.
     allowNavigation: [
       ORIGIN_HOST,
       APEX_HOST,

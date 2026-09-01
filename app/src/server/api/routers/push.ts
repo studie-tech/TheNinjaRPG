@@ -91,16 +91,23 @@ export const pushRouter = createTRPCRouter({
    * Public on purpose: by the time the app knows it is signed out, Clerk has already
    * cleared the session, so a protected procedure would be rejected by both the client
    * guard and the server at exactly the moment it is needed, leaving the device bound to
-   * the previous account. Authority comes from holding the device token, which only that
-   * device has, and the worst an attacker with a stolen token achieves is stopping
-   * notifications to a phone that recovers them by reopening the app. Listed in
-   * PUBLIC_MUTATIONS.
+   * the previous account. Authority comes from the device token plus the rotating widget
+   * credential minted by the last successful bind. Requiring both also makes an old
+   * account's late cleanup harmless after a new account has rebound the same OS token.
+   * Listed in PUBLIC_MUTATIONS.
    */
   unregisterDevice: publicProcedure
     .input(unregisterDeviceSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      await ctx.drizzle.delete(userDevice).where(eq(userDevice.token, input.token));
+      await ctx.drizzle
+        .delete(userDevice)
+        .where(
+          and(
+            eq(userDevice.token, input.token),
+            eq(userDevice.widgetToken, input.widgetToken),
+          ),
+        );
       return { success: true, message: "Device unregistered" };
     }),
 

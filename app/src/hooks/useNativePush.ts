@@ -8,12 +8,20 @@ import {
   safeLocalStorageRemoveItem,
   safeLocalStorageSetItem,
 } from "@/hooks/localstorage";
-import { isNative, parseNativeUserAgent, push, toSafePath } from "@/libs/native";
+import {
+  appEvents,
+  isNative,
+  parseNativeUserAgent,
+  push,
+  toSafePath,
+} from "@/libs/native";
 
 /** Token last handed to the server, so a resume does not re-register the same value. */
 const LAST_TOKEN_KEY = "native-push-token";
 /** Widget credential the server minted for this device, kept for the snapshot writes. */
 const WIDGET_TOKEN_KEY = "native-widget-token";
+/** Rotating proof used only to conditionally detach the row created by the last bind. */
+const OWNER_TOKEN_KEY = "native-push-owner-token";
 
 /**
  * Bumped on every unregister, so a registration still in flight can tell that the account
@@ -53,8 +61,6 @@ interface UseNativePushOptions {
 export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
   const router = useRouter();
   const registeredToken = useRef<string | null>(null);
-  /** The registration currently on the wire, so a sign-out can let it land first. */
-  const inFlight = useRef<Promise<unknown> | null>(null);
 
   const registerDevice = api.push.registerDevice.useMutation();
   const unregisterDevice = api.push.unregisterDevice.useMutation();
@@ -111,12 +117,13 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
           });
         })
         .then((result) => {
-          // Signed out while this was in flight. The detach in `unregister` waits for this
-          // promise before deleting, so the row is already gone by now and there is nothing
-          // to undo — only the local write to decline.
+          // Signed out while this was in flight. The detach queued by `unregister` runs
+          // after this promise and removes the row; only the local credential write must
+          // be declined here.
           if (epoch !== registrationEpoch || !result) return;
           safeLocalStorageSetItem(LAST_TOKEN_KEY, token);
           if (result.widgetToken) {
+            safeLocalStorageSetItem(OWNER_TOKEN_KEY, result.widgetToken);
             safeLocalStorageSetItem(WIDGET_TOKEN_KEY, result.widgetToken);
             setWidgetToken(result.widgetToken);
           }
@@ -129,7 +136,6 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
         () => undefined,
         () => undefined,
       );
-      inFlight.current = pending;
       void pending;
     });
 
@@ -142,14 +148,24 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
       if (path) router.push(path);
     });
 
-    void push.checkPermissions().then(async (state) => {
+    const requestRegistration = async () => {
+      const state = await push.checkPermissions();
       if (state === "granted") await push.register();
+    };
+
+    void requestRegistration();
+    const unsubscribeState = appEvents.onStateChange((isActive) => {
+      // A successful handoff keeps this ref populated. Its failure path clears it, so the
+      // next foreground transition asks the OS to emit the token again and retries the
+      // server bind instead of leaving notifications disabled until a process restart.
+      if (isActive && registeredToken.current === null) void requestRegistration();
     });
 
     return () => {
       unsubscribeRegistration();
       unsubscribeError();
       unsubscribeTap();
+      unsubscribeState();
     };
   }, [accountId, enabled, router, sendToken]);
 
@@ -158,32 +174,45 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
     // Invalidate first, so a registration racing this cannot write its result back after
     // the row has been deleted.
     registrationEpoch += 1;
-    const epoch = registrationEpoch;
+    const ownershipToken =
+      safeLocalStorageGetItem(OWNER_TOKEN_KEY) ??
+      safeLocalStorageGetItem(WIDGET_TOKEN_KEY) ??
+      undefined;
     setWidgetToken(undefined);
-    // The widget credential belongs to the account being left, and nothing below needs it.
+    // The widget credential belongs to the account being left. The separate owner proof
+    // remains until conditional detach succeeds, so a signed-out relaunch can retry.
     safeLocalStorageRemoveItem(WIDGET_TOKEN_KEY);
-    // Let a registration already on the wire land before deleting. Deleting first would
-    // leave the phone bound when the upsert arrived afterwards; undoing that upsert once it
-    // had is worse still, because the token identifies the phone rather than the account,
-    // so by then the row can belong to whoever signed in next.
-    await inFlight.current?.catch(() => undefined);
-    inFlight.current = null;
     const token = registeredToken.current ?? safeLocalStorageGetItem(LAST_TOKEN_KEY);
-    if (!token) return;
+    if (!token || !ownershipToken) return;
     registeredToken.current = null;
-    // Somebody signed in while the wait above was running. Their registration has already
-    // bound this token to them, and the delete is by token rather than by account, so going
-    // ahead would unbind the session that is actually here.
-    if (epoch !== registrationEpoch) return;
-    try {
-      await detachToken({ token });
-      // Only once the row is actually gone. Discarding the token first and swallowing the
-      // failure would leave the device bound to the account with the one credential that
-      // could detach it already thrown away.
-      safeLocalStorageRemoveItem(LAST_TOKEN_KEY);
-    } catch {
-      // Kept, so the next sign-out or launch can try the detach again.
-    }
+    // Detachment is an ownership change just like registration, so it belongs in the same
+    // queue, so the next account's upsert ordinarily waits behind the delete. The server
+    // also matches the rotating ownership credential: if a newer bind somehow lands
+    // first, this older cleanup no longer matches it and becomes a no-op.
+    const pending = registrationQueue
+      .catch(() => undefined)
+      .then(async () => {
+        await detachToken({ token, widgetToken: ownershipToken });
+        return true;
+      })
+      .then((detached) => {
+        // Only once the row is actually gone. Discarding the token first and swallowing a
+        // failure would leave the device bound with its only cleanup credential lost.
+        if (detached) {
+          safeLocalStorageRemoveItem(LAST_TOKEN_KEY);
+          if (safeLocalStorageGetItem(OWNER_TOKEN_KEY) === ownershipToken) {
+            safeLocalStorageRemoveItem(OWNER_TOKEN_KEY);
+          }
+        }
+      })
+      .catch(() => {
+        // Kept, so the next sign-out or launch can try the detach again.
+      });
+    registrationQueue = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+    await pending;
   }, [detachToken]);
 
   return { unregister, widgetToken };

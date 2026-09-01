@@ -27,7 +27,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="www.theninja-rpg.com" />
-                <data android:scheme="https" android:host="theninja-rpg.com" />
             </intent-filter>
 
             <!-- Return leg for social sign-in, which has to run in the system browser:

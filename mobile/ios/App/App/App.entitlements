@@ -12,7 +12,6 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:www.theninja-rpg.com</string>
-		<string>applinks:theninja-rpg.com</string>
 		<string>webcredentials:www.theninja-rpg.com</string>
 	</array>
 
