@@ -3,7 +3,10 @@ import {
   calculateLpEloChange,
   getRankedRadius,
   getRankedRank,
+  validateItemLoadout,
+  validateJutsuLoadout,
 } from "@/libs/ranked_pvp";
+import type { Item, Jutsu } from "@/drizzle/schema";
 import {
   RANKED_LEGEND_LP_REQUIREMENT,
   RANKED_MIN_LP_GAIN,
@@ -99,5 +102,52 @@ describe("getRankedRadius", () => {
     expect(getRankedRadius(RANKED_QUEUE_MAX_WAIT_SECS)).toBe(Infinity);
     expect(getRankedRadius(600)).toBe(Infinity);
     expect(getRankedRadius(5000)).toBe(Infinity);
+  });
+});
+
+describe("ranked skill-tree restrictions", () => {
+  it("rejects any jutsu with a required skill, even when that skill is active", () => {
+    const result = validateJutsuLoadout([
+      { name: "Skill Jutsu", requiredSkillId: "skill-1" } as Jutsu,
+    ]);
+
+    expect(result.check).toBe(false);
+    expect(result.message).toMatch(/requires a skill tree entry/);
+  });
+
+  it("rejects any item with a required skill", () => {
+    const result = validateItemLoadout([
+      { name: "Skill Item", requiredSkillId: "skill-1" } as Item,
+    ]);
+
+    expect(result.check).toBe(false);
+    expect(result.message).toMatch(/requires a skill tree entry/);
+  });
+
+  it("rejects any item with a bloodline requirement", () => {
+    const result = validateItemLoadout([
+      { name: "Bloodline Item", bloodlineId: "bl-1" } as Item,
+    ]);
+
+    expect(result.check).toBe(false);
+    expect(result.message).toMatch(/requires a bloodline/);
+  });
+
+  it("rejects any PVE-only jutsu", () => {
+    const result = validateJutsuLoadout([
+      { name: "PVE Jutsu", battleUsageType: "PVE" } as Jutsu,
+    ]);
+
+    expect(result.check).toBe(false);
+    expect(result.message).toMatch(/PVE-only/);
+  });
+
+  it("rejects any village-gated jutsu", () => {
+    const result = validateJutsuLoadout([
+      { name: "Village Jutsu", villageId: "village-1" } as Jutsu,
+    ]);
+
+    expect(result.check).toBe(false);
+    expect(result.message).toMatch(/requires a village/);
   });
 });
