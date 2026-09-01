@@ -73,6 +73,10 @@ export default function NativeStore() {
   const [recentBaselineError, setRecentBaselineError] = useState<string | null>(null);
   const recoveredAccounts = useRef(new Set<string>());
   const recoveringAccounts = useRef(new Set<string>());
+  const lastRecoveryAttempt = useRef<string | null>(null);
+  const [recoveringAccountIds, setRecoveringAccountIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [recoveryRetry, setRecoveryRetry] = useState(0);
 
   const { data: catalogue } = api.purchases.catalogue.useQuery(undefined, {
@@ -375,13 +379,21 @@ export default function NativeStore() {
   );
 
   const verifyPurchaseAttempt = useCallback(
-    async (accountId: string, attempt: StorePurchaseAttempt) => {
+    async (
+      accountId: string,
+      attempt: StorePurchaseAttempt,
+      assertCurrent?: () => void,
+    ) => {
+      assertCurrent?.();
       const matching = await fetchRecentFresh({
         limit: 50,
         ...(attempt.transactionId
           ? { transactionId: attempt.transactionId }
           : { productId: attempt.productId }),
       });
+      // A server response from an old session is not allowed to unlock that account after
+      // RevenueCat has been rebound to somebody else or the character has disappeared.
+      assertCurrent?.();
       const observation = storePurchaseReconciliation(matching, attempt);
       if (observation === "pending") return observation;
       updateUnsettledAttempts((current) =>
@@ -413,19 +425,32 @@ export default function NativeStore() {
   // unchanged history is the only condition which safely abandons a sheet-open attempt.
   useEffect(() => {
     const accountId = player?.userId;
+    const recoveryAttempt = accountId
+      ? `${accountId}:${bindingGeneration.current}:${recoveryRetry}`
+      : null;
     if (
       !attemptsHydrated ||
       !accountId ||
       !available?.bound ||
       accountUnsettledAttemptCount === 0 ||
       !recoveredAccounts.current.has(accountId) ||
-      recoveringAccounts.current.has(accountId)
+      recoveringAccounts.current.has(accountId) ||
+      lastRecoveryAttempt.current === recoveryAttempt
     )
       return;
+    lastRecoveryAttempt.current = recoveryAttempt;
     recoveringAccounts.current.add(accountId);
+    setRecoveringAccountIds((current) => new Set(current).add(accountId));
+    const recoveryBindingGeneration = bindingGeneration.current;
+    const assertCurrentRecovery = () => {
+      if (recoveryBindingGeneration !== bindingGeneration.current) {
+        throw new Error("Store account changed during purchase recovery");
+      }
+    };
     void purchases
       .syncCustomerInfo()
       .then(async (info) => {
+        assertCurrentRecovery();
         if (!info) throw new Error("Could not reconcile purchase history");
         const recovered = unsettledAttemptsRef.current
           .filter((entry) => entry.accountId === accountId)
@@ -436,15 +461,22 @@ export default function NativeStore() {
             );
             return attempt ? [{ ...entry, attempt }] : [];
           });
+        assertCurrentRecovery();
         updateUnsettledAttempts((current) => [
           ...current.filter((entry) => entry.accountId !== accountId),
           ...recovered,
         ]);
         for (const entry of recovered) {
-          await verifyPurchaseAttempt(entry.accountId, entry.attempt);
+          assertCurrentRecovery();
+          await verifyPurchaseAttempt(
+            entry.accountId,
+            entry.attempt,
+            assertCurrentRecovery,
+          );
         }
         // Only a complete native sync and server verification retires the recovery
         // marker. A transient failure must leave the account eligible for a later retry.
+        assertCurrentRecovery();
         recoveredAccounts.current.delete(accountId);
       })
       .catch(() => {
@@ -453,6 +485,11 @@ export default function NativeStore() {
       })
       .finally(() => {
         recoveringAccounts.current.delete(accountId);
+        setRecoveringAccountIds((current) => {
+          const next = new Set(current);
+          next.delete(accountId);
+          return next;
+        });
       });
   }, [
     accountUnsettledAttemptCount,
@@ -804,7 +841,10 @@ export default function NativeStore() {
                 className="mt-2"
                 size="sm"
                 variant="outline"
-                disabled={retryingProduct === attempt.productId}
+                disabled={
+                  retryingProduct === attempt.productId ||
+                  recoveringAccountIds.has(accountId)
+                }
                 onClick={() => {
                   setRetryingProduct(attempt.productId);
                   // If startup's native history sync failed, a manual verification must

@@ -47,30 +47,13 @@ export const pushRouter = createTRPCRouter({
       // Rotated on every registration, so a device that changes hands cannot keep reading
       // the previous account's status.
       const widgetToken = nanoid(32);
-      // The eviction snapshot rides alongside the upsert rather than waiting for it. It
-      // deliberately excludes this device by token, so it does not matter whether the
-      // upsert has landed yet -- the row for the phone registering right now is the one
-      // device guaranteed to survive, being the most recently seen.
-      const result = await ctx.drizzle.transaction(async (tx) => {
-        const lockedClient = tx as unknown as DrizzleClient;
-        // Account deletion uses the same lock for its tombstone and final device purge.
-        // Requiring both the live UserData row and an unretired id means a still-valid
-        // Clerk session cannot recreate bearer state after its game account is gone.
-        await acquireStoreUserMutationLock(lockedClient);
-        const [liveUser] = await lockedClient
-          .select({ userId: userData.userId })
-          .from(userData)
-          .where(eq(userData.userId, ctx.userId))
-          .for("update");
-        const [retiredIdentity] = await lockedClient
-          .select({ oldUserId: storeUserIdAlias.oldUserId })
-          .from(storeUserIdAlias)
-          .where(eq(storeUserIdAlias.oldUserId, ctx.userId))
-          .for("update");
-        if (!liveUser || retiredIdentity) return undefined;
-
-        const [, others] = await Promise.all([
-          lockedClient
+      const registered = await mutateLivePushUser(
+        ctx.drizzle,
+        ctx.userId,
+        async (lockedClient) => {
+          // PlanetScale advances its transaction session token with each response, so no
+          // two statements inside the transaction may share the same prior session.
+          await lockedClient
             .insert(userDevice)
             .values({
               id: nanoid(),
@@ -92,20 +75,19 @@ export const pushRouter = createTRPCRouter({
                 widgetToken,
                 lastSeenAt: now,
               },
-            }),
-          lockedClient
+            });
+          const others = await lockedClient
             .select({ id: userDevice.id })
             .from(userDevice)
             .where(
               and(eq(userDevice.userId, ctx.userId), ne(userDevice.token, input.token)),
             )
-            .orderBy(desc(userDevice.lastSeenAt)),
-        ]);
-        // One slot is spoken for by the device above, hence the cap less one.
-        await evictExcessDevices(lockedClient, others);
-        return widgetToken;
-      });
-      if (!result) {
+            .orderBy(desc(userDevice.lastSeenAt));
+          // One slot is spoken for by the device above, hence the cap less one.
+          await evictExcessDevices(lockedClient, others);
+        },
+      );
+      if (!registered) {
         return {
           success: false,
           message: "Character no longer exists",
@@ -115,7 +97,7 @@ export const pushRouter = createTRPCRouter({
       return {
         success: true,
         message: "Device registered for notifications",
-        widgetToken: result,
+        widgetToken,
       };
     }),
 
@@ -200,18 +182,26 @@ export const pushRouter = createTRPCRouter({
     .input(setPushPreferenceSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      await ctx.drizzle
-        .insert(userPushPreference)
-        .values({
-          id: nanoid(),
-          userId: ctx.userId,
-          category: input.category,
-          enabled: input.enabled,
-          updatedAt: new Date(),
-        })
-        .onDuplicateKeyUpdate({
-          set: { enabled: input.enabled, updatedAt: new Date() },
-        });
+      const updatedAt = new Date();
+      const updated = await mutateLivePushUser(
+        ctx.drizzle,
+        ctx.userId,
+        async (lockedClient) => {
+          await lockedClient
+            .insert(userPushPreference)
+            .values({
+              id: nanoid(),
+              userId: ctx.userId,
+              category: input.category,
+              enabled: input.enabled,
+              updatedAt,
+            })
+            .onDuplicateKeyUpdate({
+              set: { enabled: input.enabled, updatedAt },
+            });
+        },
+      );
+      if (!updated) return errorResponse("Character no longer exists");
       return {
         success: true,
         message: `${input.category} notifications ${input.enabled ? "enabled" : "disabled"}`,
@@ -227,25 +217,33 @@ export const pushRouter = createTRPCRouter({
     .input(registerActivitySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      await ctx.drizzle
-        .insert(userLiveActivity)
-        .values({
-          id: nanoid(),
-          userId: ctx.userId,
-          activityId: input.activityId,
-          kind: input.kind,
-          pushToken: input.pushToken,
-          endsAt: input.endsAt,
-          createdAt: new Date(),
-        })
-        .onDuplicateKeyUpdate({
-          set: {
-            activityId: input.activityId,
-            pushToken: input.pushToken,
-            endsAt: input.endsAt,
-            createdAt: new Date(),
-          },
-        });
+      const createdAt = new Date();
+      const registered = await mutateLivePushUser(
+        ctx.drizzle,
+        ctx.userId,
+        async (lockedClient) => {
+          await lockedClient
+            .insert(userLiveActivity)
+            .values({
+              id: nanoid(),
+              userId: ctx.userId,
+              activityId: input.activityId,
+              kind: input.kind,
+              pushToken: input.pushToken,
+              endsAt: input.endsAt,
+              createdAt,
+            })
+            .onDuplicateKeyUpdate({
+              set: {
+                activityId: input.activityId,
+                pushToken: input.pushToken,
+                endsAt: input.endsAt,
+                createdAt,
+              },
+            });
+        },
+      );
+      if (!registered) return errorResponse("Character no longer exists");
       return { success: true, message: "Activity registered" };
     }),
 
@@ -280,6 +278,34 @@ export const pushRouter = createTRPCRouter({
     };
   }),
 });
+
+/**
+ * Serialize identity-scoped push writes with account retirement and reject a stale Clerk
+ * session after its character is gone. Statements stay sequential because PlanetScale's
+ * transaction driver obtains the next session token from the preceding response.
+ */
+const mutateLivePushUser = async (
+  client: DrizzleClient,
+  userId: string,
+  mutation: (lockedClient: DrizzleClient) => Promise<void>,
+): Promise<boolean> =>
+  await client.transaction(async (tx) => {
+    const lockedClient = tx as unknown as DrizzleClient;
+    await acquireStoreUserMutationLock(lockedClient);
+    const [liveUser] = await lockedClient
+      .select({ userId: userData.userId })
+      .from(userData)
+      .where(eq(userData.userId, userId))
+      .for("update");
+    const [retiredIdentity] = await lockedClient
+      .select({ oldUserId: storeUserIdAlias.oldUserId })
+      .from(storeUserIdAlias)
+      .where(eq(storeUserIdAlias.oldUserId, userId))
+      .for("update");
+    if (!liveUser || retiredIdentity) return false;
+    await mutation(lockedClient);
+    return true;
+  });
 
 /**
  * Keep the newest devices and drop the rest. Without this a player who reinstalls

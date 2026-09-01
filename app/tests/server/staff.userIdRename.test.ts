@@ -199,6 +199,34 @@ describeWithDatabase("staff user-id rename", () => {
     ).resolves.toEqual([]);
   });
 
+  it("refuses preference and Live Activity writes after account deletion", async () => {
+    const database = await getTestDatabase();
+    await deleteUser(database, OLD_USER_ID);
+    const caller = await callerFor(pushRouter, OLD_USER_ID);
+
+    await expect(
+      caller.setPreference({ category: "system", enabled: false }),
+    ).resolves.toEqual({ success: false, message: "Character no longer exists" });
+    await expect(
+      caller.registerActivity({
+        activityId: "deleted-activity",
+        kind: "training",
+        pushToken: "c".repeat(64),
+        endsAt: new Date(Date.now() + 60_000),
+      }),
+    ).resolves.toEqual({ success: false, message: "Character no longer exists" });
+    const [preferences, activities] = await Promise.all([
+      database.query.userPushPreference.findMany({
+        where: eq(userPushPreference.userId, OLD_USER_ID),
+      }),
+      database.query.userLiveActivity.findMany({
+        where: eq(userLiveActivity.userId, OLD_USER_ID),
+      }),
+    ]);
+    expect(preferences).toEqual([]);
+    expect(activities).toEqual([]);
+  });
+
   it("does not let a deleted Clerk identity create another character", async () => {
     const database = await getTestDatabase();
     await deleteUser(database, OLD_USER_ID);
@@ -307,6 +335,72 @@ describeWithDatabase("staff user-id rename", () => {
       ]);
     }
   });
+
+  it.each([
+    { kind: "preference", table: "UserPushPreference" },
+    { kind: "activity", table: "UserLiveActivity" },
+  ] as const)(
+    "purges a $kind write that overlaps account retirement",
+    async ({ kind, table }) => {
+      const database = await getTestDatabase();
+      const writeConnection = await openTestDatabaseConnection();
+      const deleteConnection = await openTestDatabaseConnection();
+      const barrierConnection = await openTestDatabaseConnection();
+      const barrier = `delete_push_${kind}_${nanoid()}`;
+      const trigger = `pause_delete_push_${kind}_${nanoid().replaceAll("-", "_")}`;
+      await barrierConnection.query(`SELECT GET_LOCK('${barrier}', 10)`);
+      await runRawSql(`
+        CREATE TRIGGER ${trigger} BEFORE INSERT ON ${table} FOR EACH ROW
+        BEGIN
+          IF NEW.userId = '${OLD_USER_ID}' THEN
+            SET @delete_push_wait = GET_LOCK('${barrier}', 10);
+            SET @delete_push_release = RELEASE_LOCK('${barrier}');
+          END IF;
+        END
+      `);
+      try {
+        const caller = callerForDatabase(pushRouter, OLD_USER_ID, writeConnection.database);
+        const write =
+          kind === "preference"
+            ? caller.setPreference({ category: "system", enabled: false })
+            : caller.registerActivity({
+                activityId: "overlapping-activity",
+                kind: "training",
+                pushToken: "d".repeat(64),
+                endsAt: new Date(Date.now() + 60_000),
+              });
+        await barrierConnection.waitForNamedLockWaiter(barrier);
+
+        let deletionFinished = false;
+        const deletion = deleteUser(deleteConnection.database, OLD_USER_ID).finally(() => {
+          deletionFinished = true;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(deletionFinished).toBe(false);
+        await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+
+        await expect(write).resolves.toMatchObject({ success: true });
+        await deletion;
+        const remaining =
+          kind === "preference"
+            ? await database.query.userPushPreference.findMany({
+                where: eq(userPushPreference.userId, OLD_USER_ID),
+              })
+            : await database.query.userLiveActivity.findMany({
+                where: eq(userLiveActivity.userId, OLD_USER_ID),
+              });
+        expect(remaining).toEqual([]);
+      } finally {
+        await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+        await runRawSql(`DROP TRIGGER IF EXISTS ${trigger}`);
+        await Promise.all([
+          writeConnection.close(),
+          deleteConnection.close(),
+          barrierConnection.close(),
+        ]);
+      }
+    },
+  );
 
   it("rolls back helper and broad writes together when a late rename write fails", async () => {
     const database = await getTestDatabase();

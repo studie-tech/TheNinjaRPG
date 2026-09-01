@@ -1415,17 +1415,22 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     client.delete(linkPromotion).where(eq(linkPromotion.userId, userId)),
     client.delete(linkPromotion).where(eq(linkPromotion.reviewedBy, userId)),
     client.delete(userUpload).where(eq(userUpload.userId, userId)),
-    // Push rows are intentionally transient. The device row carries a bearer credential,
-    // so it is purged atomically with the store tombstone below.
-    client.delete(userLiveActivity).where(eq(userLiveActivity.userId, userId)),
-    client.delete(userPushPreference).where(eq(userPushPreference.userId, userId)),
   ]);
 
   // Keep the store ledger as an idempotency tombstone immediately before deleting the
   // identity it references. Delayed RevenueCat retries then terminate instead of retrying
   // forever, while an earlier failed cleanup cannot disable purchases for a live account.
   await retireStoreUserId(client, userId, async (lockedClient) => {
+    // Push mutations share this lifecycle mutex and require the still-live UserData row.
+    // Purging every push row here ensures a writer which began before retirement is either
+    // removed by this critical section or waits, observes the tombstone, and is rejected.
     await lockedClient.delete(userDevice).where(eq(userDevice.userId, userId));
+    await lockedClient
+      .delete(userLiveActivity)
+      .where(eq(userLiveActivity.userId, userId));
+    await lockedClient
+      .delete(userPushPreference)
+      .where(eq(userPushPreference.userId, userId));
   });
 
   // Final batch: Delete main userData record (must be last)

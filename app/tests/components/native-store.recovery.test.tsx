@@ -49,6 +49,22 @@ function testMocks(): NativeStoreMocks {
   return globals.__nativeStoreMocks;
 }
 
+type NativeStoreUser = {
+  userId: string | undefined;
+  data: { userId: string; reputationPoints: number } | undefined;
+};
+
+function testUser(): NativeStoreUser {
+  const globals = globalThis as typeof globalThis & {
+    __nativeStoreUser?: NativeStoreUser;
+  };
+  globals.__nativeStoreUser ??= {
+    userId: "player-1",
+    data: { userId: "player-1", reputationPoints: 10 },
+  };
+  return globals.__nativeStoreUser;
+}
+
 vi.mock("@/app/_trpc/client", () => ({
   api: {
     useUtils: () => ({
@@ -86,10 +102,7 @@ vi.mock("@/app/_trpc/client", () => ({
 vi.mock("@/hooks/useNativeShell", () => ({ useNativeShell: () => true }));
 
 vi.mock("@/utils/UserContext", () => ({
-  useUserData: () => ({
-    userId: "player-1",
-    data: { userId: "player-1", reputationPoints: 10 },
-  }),
+  useUserData: () => testUser(),
 }));
 
 vi.mock("@/env/client.mjs", () => ({
@@ -126,9 +139,25 @@ vi.mock("@/layout/Loader", () => ({
 ensureDom();
 
 const STORAGE_KEY = "tnr:unsettled-store-purchases";
+const recoveredSheetLock = () => [
+  {
+    accountId: "player-1",
+    attempt: {
+      productId: "tnr_reps_tier1",
+      baselineReceiptIds: [],
+      baselineNativeTransactionIds: ["before"],
+      phase: "sheet-open",
+      startedAt: "2026-09-01T12:00:00.000Z",
+    },
+  },
+];
 
 beforeEach(() => {
   window.localStorage.clear();
+  Object.assign(testUser(), {
+    userId: "player-1",
+    data: { userId: "player-1", reputationPoints: 10 },
+  });
   const mocks = testMocks();
   for (const mock of Object.values(mocks)) mock.mockReset();
   mocks.bind.mockResolvedValue([storePackage]);
@@ -285,6 +314,90 @@ describe("NativeStore purchase recovery", () => {
     await waitFor(() =>
       expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toEqual([]),
     );
+  });
+
+  it("disables manual recovery while native history synchronization is running", async () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(recoveredSheetLock()));
+    let rejectSync: ((reason: Error) => void) | undefined;
+    testMocks().syncCustomerInfo.mockImplementationOnce(
+      async () =>
+        await new Promise((_resolve, reject) => {
+          rejectSync = reject;
+        }),
+    );
+    const view = render(<NativeStore />);
+
+    const retry = await view.findByRole("button", { name: "Retry verification" });
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(retry);
+    expect(testMocks().syncCustomerInfo).toHaveBeenCalledTimes(1);
+
+    await act(async () => rejectSync?.(new Error("native sync offline")));
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(retry);
+    await waitFor(() => expect(testMocks().syncCustomerInfo).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not apply an old account's recovery after switching accounts", async () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(recoveredSheetLock()));
+    let finishSync: ((value: unknown) => void) | undefined;
+    testMocks().syncCustomerInfo.mockImplementationOnce(
+      async () =>
+        await new Promise((resolve) => {
+          finishSync = resolve;
+        }),
+    );
+    const view = render(<NativeStore />);
+    await waitFor(() => expect(testMocks().syncCustomerInfo).toHaveBeenCalledTimes(1));
+
+    Object.assign(testUser(), {
+      userId: "player-2",
+      data: { userId: "player-2", reputationPoints: 20 },
+    });
+    view.rerender(<NativeStore />);
+    await act(async () =>
+      finishSync?.({
+        activeEntitlements: [],
+        activeSubscriptions: [],
+        originalAppUserId: "player-2",
+        transactions: [{ transactionId: "before", productId: "tnr_reps_tier1" }],
+      }),
+    );
+
+    await waitFor(() => expect(testMocks().bind).toHaveBeenCalledWith("ios-key", "player-2"));
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toEqual(
+      recoveredSheetLock(),
+    );
+    expect(testMocks().fetchRecent).not.toHaveBeenCalled();
+  });
+
+  it("does not apply recovery after the current character is deleted", async () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(recoveredSheetLock()));
+    let finishSync: ((value: unknown) => void) | undefined;
+    testMocks().syncCustomerInfo.mockImplementationOnce(
+      async () =>
+        await new Promise((resolve) => {
+          finishSync = resolve;
+        }),
+    );
+    const view = render(<NativeStore />);
+    await waitFor(() => expect(testMocks().syncCustomerInfo).toHaveBeenCalledTimes(1));
+
+    Object.assign(testUser(), { userId: undefined, data: undefined });
+    view.rerender(<NativeStore />);
+    await act(async () =>
+      finishSync?.({
+        activeEntitlements: [],
+        activeSubscriptions: [],
+        originalAppUserId: "player-1",
+        transactions: [{ transactionId: "before", productId: "tnr_reps_tier1" }],
+      }),
+    );
+
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toEqual(
+      recoveredSheetLock(),
+    );
+    expect(testMocks().fetchRecent).not.toHaveBeenCalled();
   });
 
   it("retains a failed recovery lock and shows manual verification errors", async () => {

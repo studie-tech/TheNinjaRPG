@@ -13,7 +13,9 @@ import { hasPlugin, invoke, invokeSafe, isNative } from "./bridge";
 const PLUGIN = "Purchases";
 let identityQueue: Promise<void> = Promise.resolve();
 
-const withIdentityLock = <T>(operation: () => Promise<T>): Promise<T> => {
+export const runPurchaseIdentityOperation = <T>(
+  operation: () => Promise<T>,
+): Promise<T> => {
   const pending = identityQueue.catch(() => undefined).then(operation);
   identityQueue = pending.then(
     () => undefined,
@@ -130,7 +132,7 @@ export const logIn = async (appUserId: string): Promise<void> => {
 
 /** Unbind on sign-out so the next player's purchases are not credited to the last one. */
 export const logOut = async (): Promise<void> => {
-  await withIdentityLock(async () => {
+  await runPurchaseIdentityOperation(async () => {
     await invokeSafe(PLUGIN, "logOut");
   });
 };
@@ -162,7 +164,7 @@ export const bind = async (
   apiKey: string,
   appUserId: string,
 ): Promise<StorePackage[]> =>
-  await withIdentityLock(async () => {
+  await runPurchaseIdentityOperation(async () => {
     await configure(apiKey, appUserId);
     await logIn(appUserId);
     return await getPackages();
@@ -262,11 +264,22 @@ export const getCustomerInfo = async (): Promise<CustomerInfo | undefined> => {
   return toCustomerInfo(result?.customerInfo);
 };
 
+/** Keep a singleton-SDK synchronization and its confirming snapshot in one queue slot. */
+export const syncPurchaseIdentitySnapshot = async <T>(
+  sync: () => Promise<void>,
+  readSnapshot: () => Promise<T>,
+): Promise<T> =>
+  await runPurchaseIdentityOperation(async () => {
+    await sync();
+    return await readSnapshot();
+  });
+
 /** Force RevenueCat to reconcile the device store queue before restart recovery. */
-export const syncCustomerInfo = async (): Promise<CustomerInfo | undefined> => {
-  await invoke(PLUGIN, "syncPurchases");
-  return await getCustomerInfo();
-};
+export const syncCustomerInfo = async (): Promise<CustomerInfo | undefined> =>
+  await syncPurchaseIdentitySnapshot(
+    async () => await invoke(PLUGIN, "syncPurchases"),
+    getCustomerInfo,
+  );
 
 const toCustomerInfo = (raw: unknown): CustomerInfo | undefined => {
   const info = raw as
