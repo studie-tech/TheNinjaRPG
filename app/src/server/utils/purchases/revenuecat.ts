@@ -149,6 +149,18 @@ export const isSandbox = (environment: string | null | undefined): boolean =>
   environment?.toUpperCase() === "SANDBOX";
 
 /**
+ * TRANSFER historically omits `environment`, and that omission means the ownership move
+ * is not scoped rather than that it came from production. Apply such a transfer to both
+ * isolated ledgers; an explicit environment continues to affect only its own ledger.
+ */
+export const transferSandboxScopes = (
+  environment: string | null | undefined,
+): readonly boolean[] =>
+  environment === null || environment === undefined
+    ? [false, true]
+    : [isSandbox(environment)];
+
+/**
  * The transaction id is the idempotency key, and some event types omit it. The event id is
  * unique per event, so it is a safe stand-in: a retry of the same delivery repeats it.
  */

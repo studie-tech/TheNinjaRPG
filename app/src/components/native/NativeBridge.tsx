@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
 import {
   safeLocalStorageGetItem,
@@ -26,6 +26,7 @@ import {
   nativeWidgetAccountAction,
   shouldClearNativeAccountState,
 } from "@/libs/native/accountCleanup";
+import { NativeWidgetOperations } from "@/libs/native/widgetOperations";
 import { useUserData } from "@/utils/UserContext";
 
 /**
@@ -62,7 +63,18 @@ export default function NativeBridge() {
   // Keep bridge writes ordered. A slow A snapshot must finish before the handoff clear,
   // and that clear must finish before B's first snapshot, or native completion order could
   // put stale A data back after React has already moved on.
-  const widgetOperations = useRef<Promise<void>>(Promise.resolve());
+  const widgetOperations = useRef(new NativeWidgetOperations());
+
+  const clearWidgets = useCallback(async () => {
+    // Invalidate queued snapshots synchronously, before this clear waits behind a native
+    // mutation already in flight. A rejected clear deliberately retains the prior owner,
+    // which prevents a replacement account from syncing until a later clear succeeds.
+    lastSnapshot.current = null;
+    await widgetOperations.current.clear(widgets.clear, () => {
+      safeLocalStorageRemoveItem(NATIVE_WIDGET_SNAPSHOT_OWNER_KEY);
+      setSnapshotOwnerUserId(null);
+    });
+  }, []);
 
   // The profile query keeps its last result when it is disabled, so cached userData
   // outlives the session it belongs to. Both hooks below have to know whose data this is:
@@ -140,33 +152,24 @@ export default function NativeBridge() {
   // transient query failure) while Clerk remains signed in after character deletion.
   useEffect(() => {
     if (!isNative() || !shouldClearAccountState) return;
-    void clearNativeAccountState(unregister);
+    void clearNativeAccountState(unregister, clearWidgets);
     // Forget the deduplication signature too. Without this, signing back in with the same
     // vitals produces a matching signature, the write is skipped as redundant, and the
     // widget stays on the signed-out placeholder until a rounded stat happens to change.
     lastSnapshot.current = null;
-  }, [shouldClearAccountState, unregister]);
+  }, [clearWidgets, shouldClearAccountState, unregister]);
 
   // Home screen widgets read a snapshot from the shared container rather than the API, so
-  // they stay correct while the app is closed. `sync` is a no-op when the shell has no
-  // widget plugin.
+  // they stay correct while the app is closed. Ownership markers change only after the
+  // shell confirms the matching native mutation.
   useEffect(() => {
     if (!isNative()) return;
-    const enqueueWidgetOperation = (operation: () => Promise<void>) => {
-      const next = widgetOperations.current.then(operation, operation);
-      widgetOperations.current = next.catch(() => undefined);
-    };
     // Clerk can replace A with B without passing through a signed-out render, while the
     // shared profile query still exposes A's cached result. Keep the native container
     // empty throughout that handoff and do not write again until the profile identity
     // agrees with Clerk's active account.
     if (widgetAccountAction === "clear") {
-      lastSnapshot.current = null;
-      enqueueWidgetOperation(async () => {
-        await widgets.clear();
-        safeLocalStorageRemoveItem(NATIVE_WIDGET_SNAPSHOT_OWNER_KEY);
-        setSnapshotOwnerUserId(null);
-      });
+      void clearWidgets().catch(() => undefined);
       return;
     }
     if (widgetAccountAction !== "sync" || !userData || isSignedOut) return;
@@ -199,12 +202,28 @@ export default function NativeBridge() {
     const signature = JSON.stringify(snapshot);
     if (signature === lastSnapshot.current) return;
     lastSnapshot.current = signature;
-    enqueueWidgetOperation(async () => {
-      await widgets.sync({ ...snapshot, updatedAt: new Date().toISOString() });
-      safeLocalStorageSetItem(NATIVE_WIDGET_SNAPSHOT_OWNER_KEY, userData.userId);
-      setSnapshotOwnerUserId(userData.userId);
-    });
-  }, [isSignedOut, userData, timeDiff, widgetToken, widgetAccountAction]);
+    void widgetOperations.current
+      .sync(
+        async () => {
+          await widgets.sync({ ...snapshot, updatedAt: new Date().toISOString() });
+        },
+        () => {
+          safeLocalStorageSetItem(NATIVE_WIDGET_SNAPSHOT_OWNER_KEY, userData.userId);
+          setSnapshotOwnerUserId(userData.userId);
+        },
+      )
+      .then((outcome) => {
+        // A stale write was skipped because a clear took ownership. The clear already reset
+        // this signature, but keep the invariant local in case these operations are reused.
+        if (outcome === "stale" && lastSnapshot.current === signature) {
+          lastSnapshot.current = null;
+        }
+      })
+      .catch(() => {
+        // Keep the prior persisted owner and allow an unchanged regeneration tick to retry.
+        if (lastSnapshot.current === signature) lastSnapshot.current = null;
+      });
+  }, [clearWidgets, isSignedOut, userData, timeDiff, widgetToken, widgetAccountAction]);
 
   if (!isOutdated) return null;
   return <UpdateWall />;

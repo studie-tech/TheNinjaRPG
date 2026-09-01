@@ -206,6 +206,32 @@ describe("native push ownership", () => {
     expect(result.current.widgetToken).toBeUndefined();
   });
 
+  it("detaches account A while account B's profile is still disabled", async () => {
+    const { rerender } = renderHook(
+      ({ accountId, enabled }) => useNativePush({ enabled, accountId }),
+      { initialProps: { accountId: "account-a", enabled: true } },
+    );
+    await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
+    act(() => {
+      mocks.registrationListeners[0]?.({ value: TOKEN });
+    });
+    await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(localStorage.getItem("native-push-owner-token")).toBe("widget-token"),
+    );
+
+    rerender({ accountId: "account-b", enabled: false });
+
+    await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(1));
+    expect(mocks.detachToken).toHaveBeenCalledWith({
+      token: TOKEN,
+      widgetToken: "widget-token",
+    });
+    expect(mocks.pushRegister).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem("native-widget-token")).toBeNull();
+    expect(localStorage.getItem("native-widget-token-owner")).toBeNull();
+  });
+
   it("serialises a slow detach ahead of the next account's bind", async () => {
     const events: string[] = [];
     let finishDetach: (() => void) | undefined;

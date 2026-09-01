@@ -7,7 +7,7 @@
  * `/api/widget/status` serves the same figures over HTTP when this snapshot gets stale.
  */
 
-import { invokeSafe } from "./bridge";
+import { invoke } from "./bridge";
 
 const PLUGIN = "TNRWidgetSync";
 
@@ -43,10 +43,10 @@ export interface WidgetSnapshot {
 
 /** Write the snapshot and ask the OS to redraw the widgets. */
 export const sync = async (snapshot: WidgetSnapshot): Promise<void> => {
-  await invokeSafe(PLUGIN, "sync", { snapshot: JSON.stringify(snapshot) });
+  await invoke(PLUGIN, "sync", { snapshot: JSON.stringify(snapshot) });
 };
 
 /** Drop the snapshot on sign-out so a signed-out phone stops showing someone's stats. */
 export const clear = async (): Promise<void> => {
-  await invokeSafe(PLUGIN, "clear");
+  await invoke(PLUGIN, "clear");
 };

@@ -115,7 +115,7 @@ describe("NativeBridge deleted-profile cleanup", () => {
 
   it("clears push, widget, purchase, and Live Activity state", async () => {
     const unregister = vi.fn().mockResolvedValue(undefined);
-    await clearNativeAccountState(unregister);
+    await clearNativeAccountState(unregister, clearWidget);
 
     expect(unregister).toHaveBeenCalledTimes(1);
     expect(clearWidget).toHaveBeenCalledTimes(1);

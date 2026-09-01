@@ -1,6 +1,5 @@
 import * as liveActivity from "./liveActivity";
 import * as purchases from "./purchases";
-import * as widgets from "./widgetBridge";
 
 /** Last profile whose snapshot was successfully written to the shared widget container. */
 export const NATIVE_WIDGET_SNAPSHOT_OWNER_KEY = "native-widget-snapshot-owner";
@@ -37,10 +36,11 @@ export const nativeWidgetAccountAction = (state: {
 /** Clear every device-local surface which can retain the previous game account. */
 export const clearNativeAccountState = async (
   unregister: () => Promise<void>,
+  clearWidgets: () => Promise<void>,
 ): Promise<void> => {
   await Promise.allSettled([
     unregister(),
-    widgets.clear(),
+    clearWidgets(),
     purchases.logOut(),
     liveActivity.endAll(),
   ]);

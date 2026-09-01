@@ -21,6 +21,7 @@ import {
   revenueCatEventSchema,
   toStorePlatform,
   transferOccurredAt,
+  transferSandboxScopes,
 } from "@/server/utils/purchases/revenuecat";
 
 const unsupportedStore = (eventType: string, store: string | null | undefined) => {
@@ -87,15 +88,33 @@ export async function POST(request: Request) {
         // event retryable instead of silently applying it to both stores.
         throw new Error(`RevenueCat TRANSFER used unknown app_id ${resolution.value}`);
       }
-      const outcome = await transferStorePurchases(drizzleDB, {
-        eventId: event.id,
-        fromUserIds: event.transferred_from ?? [],
-        toUserIds: event.transferred_to ?? [],
-        store: resolution.status === "mapped" ? resolution.store : undefined,
-        isSandbox: isSandbox(event.environment),
-        occurredAt: transferredAt,
+      const outcomes = [];
+      for (const sandboxScope of transferSandboxScopes(event.environment)) {
+        outcomes.push(
+          await transferStorePurchases(drizzleDB, {
+            eventId: event.id,
+            fromUserIds: event.transferred_from ?? [],
+            toUserIds: event.transferred_to ?? [],
+            store: resolution.status === "mapped" ? resolution.store : undefined,
+            isSandbox: sandboxScope,
+            occurredAt: transferredAt,
+          }),
+        );
+      }
+      const destinationUserIds = new Set(
+        outcomes.map((outcome) => outcome.destinationUserId),
+      );
+      if (destinationUserIds.size !== 1) {
+        throw new Error("RevenueCat TRANSFER resolved different environment owners");
+      }
+      return Response.json({
+        handled: "transferred",
+        destinationUserId: outcomes[0]?.destinationUserId,
+        rowsAffected: outcomes.reduce(
+          (total, outcome) => total + outcome.rowsAffected,
+          0,
+        ),
       });
-      return Response.json({ handled: "transferred", ...outcome });
     }
     if (!event.app_user_id) {
       Sentry.captureException(

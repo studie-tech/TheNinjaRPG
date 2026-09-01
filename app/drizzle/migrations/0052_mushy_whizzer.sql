@@ -1,3 +1,6 @@
+-- These ownership tables are introduced earlier in this same unreleased migration series.
+-- A staged migration-first deploy leaves them unwritten by the previous application, so
+-- there is no historical environment data to infer or backfill here.
 ALTER TABLE `StoreEntitlementRevocation` DROP INDEX `StoreEntitlementRevocation_eventId_userId_store_key`;
 ALTER TABLE `StoreEntitlementState` DROP INDEX `StoreEntitlementState_userId_store_key`;
 ALTER TABLE `StorePurchaseTransfer` DROP INDEX `StorePurchaseTransfer_eventId_sourceUserId_store_key`;

@@ -19,6 +19,7 @@ import {
   paidThroughAt,
   purchasedAt,
   transferOccurredAt,
+  transferSandboxScopes,
   resolveTransferStore,
   storePlatformFromAppId,
   toStorePlatform,
@@ -255,6 +256,10 @@ describe("revenuecat webhook classification", () => {
     expect(isSandbox("sandbox")).toBe(true);
     expect(isSandbox("PRODUCTION")).toBe(false);
     expect(isSandbox(undefined)).toBe(false);
+    expect(transferSandboxScopes("PRODUCTION")).toEqual([false]);
+    expect(transferSandboxScopes("SANDBOX")).toEqual([true]);
+    expect(transferSandboxScopes(undefined)).toEqual([false, true]);
+    expect(transferSandboxScopes(null)).toEqual([false, true]);
   });
 
   it("falls back to the event id when an event carries no transaction", () => {

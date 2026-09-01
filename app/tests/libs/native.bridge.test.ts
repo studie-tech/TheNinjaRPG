@@ -138,6 +138,43 @@ describe("invokeSafe", () => {
   });
 });
 
+describe("widget ownership mutations", () => {
+  it("rejects failed syncs and clears so callers cannot advance ownership", async () => {
+    setWindow({
+      Capacitor: {
+        isNativePlatform: () => true,
+        Plugins: {
+          TNRWidgetSync: {
+            clear: async () => {
+              throw new Error("clear failed");
+            },
+            sync: async () => {
+              throw new Error("sync failed");
+            },
+          },
+        },
+      },
+    });
+    const widgets = await import("@/libs/native/widgetBridge");
+
+    await expect(widgets.clear()).rejects.toThrow("clear failed");
+    await expect(
+      widgets.sync({
+        updatedAt: new Date().toISOString(),
+        username: "A",
+        level: 1,
+        curHealth: 1,
+        maxHealth: 1,
+        curChakra: 1,
+        maxChakra: 1,
+        curStamina: 1,
+        maxStamina: 1,
+        unreadNotifications: 0,
+      }),
+    ).rejects.toThrow("sync failed");
+  });
+});
+
 describe("addNativeListener", () => {
   it("returns a callable unsubscribe even when nothing was attached", async () => {
     const { addNativeListener } = await load();
