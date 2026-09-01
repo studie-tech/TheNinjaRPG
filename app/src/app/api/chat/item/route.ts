@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   // Call LLM
   const { messages: uiMessages } = (await req.json()) as { messages: UIMessage[] };
   const schema = convertToOpenaiCompatibleSchema(
-    ItemValidatorRawSchema.omit({ effects: true }),
+    ItemValidatorRawSchema.omit({ effects: true, requiredSkillId: true }),
   );
   const { system, messages } = await prepareChatPrompt(
     uiMessages,

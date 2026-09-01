@@ -487,6 +487,7 @@ export const computeLoadoutAssignments = (
   useritems: UserItemWithRelations[],
   user: { level: number; bloodlineId: string | null },
   now: Date = new Date(),
+  activatedSkillIds: ReadonlySet<string> = new Set(),
 ): ComputedLoadout => {
   const assignments: LoadoutAssignment[] = [];
   const invalidItems: string[] = [];
@@ -533,6 +534,10 @@ export const computeLoadoutAssignments = (
     }
     if (item.bloodlineId && item.bloodlineId !== user.bloodlineId) {
       invalidItems.push(`${item.name} requires a specific bloodline to equip`);
+      continue;
+    }
+    if (item.requiredSkillId && !activatedSkillIds.has(item.requiredSkillId)) {
+      invalidItems.push(`${item.name} requires an active skill to equip`);
       continue;
     }
     if (isImbuing(useritem, now)) {
@@ -607,6 +612,7 @@ export interface AutoEquipUserItem {
     itemType: string;
     bloodlineId: string | null;
     requiredLevel: number;
+    requiredSkillId: string | null;
     maxEquips: number;
   };
 }
@@ -628,6 +634,7 @@ export const computeAutoEquipAssignments = (
   useritems: AutoEquipUserItem[],
   user: { level: number; bloodlineId: string | null },
   now: Date = new Date(),
+  activatedSkillIds: ReadonlySet<string> = new Set(),
 ): ComputedAutoEquip => {
   const candidates = useritems.filter(
     (ui) =>
@@ -665,6 +672,12 @@ export const computeAutoEquipAssignments = (
     if (useritem.item.bloodlineId && useritem.item.bloodlineId !== user.bloodlineId) {
       continue;
     }
+    if (
+      useritem.item.requiredSkillId &&
+      !activatedSkillIds.has(useritem.item.requiredSkillId)
+    ) {
+      continue;
+    }
     if (isImbuing(useritem, now)) continue;
 
     const info: EquipConstraintInfo = {
@@ -699,6 +712,10 @@ export const showsItemLevelBadge = (item: {
   item.itemType !== "COOKING" &&
   item.itemType !== "CRYSTAL" &&
   item.slot !== "THROWN";
+
+/** Stackable items can merge regardless of their stored ownership level. */
+export const itemStacksIgnoreLevel = (item: { canStack: boolean }): boolean =>
+  item.canStack;
 
 /**
  * ActionSelector badge lists for user items: amber stack quantity (bottom-right)
