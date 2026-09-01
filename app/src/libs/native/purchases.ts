@@ -12,6 +12,7 @@ import { hasPlugin, invoke, invokeSafe, isNative } from "./bridge";
 
 const PLUGIN = "Purchases";
 let identityQueue: Promise<void> = Promise.resolve();
+let configuredApiKey: string | undefined;
 
 export const runPurchaseIdentityOperation = <T>(
   operation: () => Promise<T>,
@@ -114,8 +115,31 @@ export const isSupported = (): boolean => isNative() && hasPlugin(PLUGIN);
  * Configure the SDK with the public key for this platform and bind purchases to the
  * player's account, so the webhook knows who to credit.
  */
-export const configure = async (apiKey: string, appUserId: string): Promise<void> => {
+const configure = async (apiKey: string, appUserId: string): Promise<void> => {
   await invoke(PLUGIN, "configure", { apiKey, appUserID: appUserId });
+};
+
+/** RevenueCat is a process singleton and rejects being configured more than once. */
+const configureOnce = async (apiKey: string, appUserId: string): Promise<void> => {
+  if (configuredApiKey) {
+    if (configuredApiKey !== apiKey) {
+      throw new Error("The purchase SDK was already configured with another API key");
+    }
+    return;
+  }
+  // The native SDK outlives this JavaScript module during WebView reloads and hot updates.
+  // Query it before relying on module state so a fresh bundle never configures the same
+  // process singleton twice. Older shells without isConfigured safely fall through.
+  const existing = await invokeSafe<{ isConfigured?: unknown }>(PLUGIN, "isConfigured");
+  if (existing?.isConfigured === true) {
+    configuredApiKey = apiKey;
+    return;
+  }
+  await configure(apiKey, appUserId);
+  // Record success only after the bridge resolves so a transient first failure remains
+  // retryable. This function is called inside identityQueue, so no second configure can
+  // observe or race the in-flight attempt.
+  configuredApiKey = apiKey;
 };
 
 /**
@@ -126,7 +150,7 @@ export const configure = async (apiKey: string, appUserId: string): Promise<void
  * while the store went on offering products, so the player could buy something the webhook
  * then had nobody to credit. The caller shows no products instead.
  */
-export const logIn = async (appUserId: string): Promise<void> => {
+const logIn = async (appUserId: string): Promise<void> => {
   await invoke(PLUGIN, "logIn", { appUserID: appUserId });
 };
 
@@ -159,15 +183,19 @@ export const getPackages = async (): Promise<StorePackage[]> => {
   );
 };
 
-/** Bind the singleton SDK and fetch offerings without allowing another session to interleave. */
-export const bind = async (
-  apiKey: string,
-  appUserId: string,
-): Promise<StorePackage[]> =>
+export interface StoreBinding {
+  packages: StorePackage[];
+  customerInfo: CustomerInfo | undefined;
+}
+
+/** Bind the singleton SDK and fetch its complete snapshot in one identity queue slot. */
+export const bind = async (apiKey: string, appUserId: string): Promise<StoreBinding> =>
   await runPurchaseIdentityOperation(async () => {
-    await configure(apiKey, appUserId);
+    await configureOnce(apiKey, appUserId);
     await logIn(appUserId);
-    return await getPackages();
+    const packages = await getPackages();
+    const customerInfo = await getCustomerInfo();
+    return { packages, customerInfo };
   });
 
 /** RevenueCat's canonical product id, including the Play base-plan suffix. */
@@ -225,7 +253,7 @@ export const purchaseErrorOutcome = (error: unknown): PurchaseOutcome => {
  * Present the store's purchase sheet. Cancellation is reported separately because it is
  * the player changing their mind, not something to show an error for.
  */
-export const purchase = async (
+const purchase = async (
   aPackage: StorePackage,
   storeProductChangeInfo?: StoreProductChangeInfo,
 ): Promise<PurchaseOutcome> => {
@@ -247,16 +275,51 @@ export const purchase = async (
   }
 };
 
+export interface BoundPurchasePreparation<T> {
+  prepared: T;
+  storeProductChangeInfo?: StoreProductChangeInfo;
+}
+
+export interface BoundPurchaseResult<T> {
+  customerInfo: CustomerInfo;
+  postPurchaseCustomerInfo: CustomerInfo | undefined;
+  outcome: PurchaseOutcome;
+  prepared: T;
+}
+
+/**
+ * Snapshot the bound account, durably prepare the attempt, open its sheet, and take the
+ * confirming snapshot without allowing bind/logout to change RevenueCat identity between
+ * those operations.
+ */
+export const purchaseForBoundIdentity = async <T>(
+  aPackage: StorePackage,
+  prepare: (customerInfo: CustomerInfo) => BoundPurchasePreparation<T>,
+): Promise<BoundPurchaseResult<T>> =>
+  await runPurchaseIdentityOperation(async () => {
+    const customerInfo = await getCustomerInfo();
+    if (!customerInfo) throw new Error("Could not verify store purchase history");
+    const { prepared, storeProductChangeInfo } = prepare(customerInfo);
+    const outcome = await purchase(aPackage, storeProductChangeInfo);
+    const postPurchaseCustomerInfo =
+      outcome.status === "purchased" ? await getCustomerInfo() : customerInfo;
+    return { customerInfo, postPurchaseCustomerInfo, outcome, prepared };
+  });
+
 /**
  * Restore Purchases. Apple requires this control in any app selling non-consumables or
  * subscriptions, and rejects apps that omit it.
  */
-export const restore = async (): Promise<CustomerInfo | undefined> => {
+const restore = async (): Promise<CustomerInfo | undefined> => {
   const result = await invoke<{ customerInfo?: unknown }>(PLUGIN, "restorePurchases");
   return toCustomerInfo(result?.customerInfo);
 };
 
-export const getCustomerInfo = async (): Promise<CustomerInfo | undefined> => {
+/** Restore against one bound identity without allowing bind/logout to interleave. */
+export const restoreForBoundIdentity = async (): Promise<CustomerInfo | undefined> =>
+  await runPurchaseIdentityOperation(restore);
+
+const getCustomerInfo = async (): Promise<CustomerInfo | undefined> => {
   const result = await invokeSafe<{ customerInfo?: unknown }>(
     PLUGIN,
     "getCustomerInfo",

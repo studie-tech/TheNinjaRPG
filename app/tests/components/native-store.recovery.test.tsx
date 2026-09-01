@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import NativeStore from "@/components/native/NativeStore";
+import { purchases as nativePurchases } from "@/libs/native";
 import type { StorePackage } from "@/libs/native/purchases";
 import { ensureDom } from "../setup-dom.mjs";
 
@@ -10,9 +11,12 @@ type AsyncMock = ReturnType<
 >;
 type SyncMock = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
 type NativeStoreMocks = {
-  bind: AsyncMock;
+  configure: AsyncMock;
+  logIn: AsyncMock;
+  logOut: AsyncMock;
   getCustomerInfo: AsyncMock;
   purchase: AsyncMock;
+  restore: AsyncMock;
   syncCustomerInfo: AsyncMock;
   refetchRecent: AsyncMock;
   fetchRecent: AsyncMock;
@@ -36,9 +40,12 @@ function testMocks(): NativeStoreMocks {
     __nativeStoreMocks?: NativeStoreMocks;
   };
   globals.__nativeStoreMocks ??= {
-    bind: vi.fn(),
+    configure: vi.fn(),
+    logIn: vi.fn(),
+    logOut: vi.fn(),
     getCustomerInfo: vi.fn(),
     purchase: vi.fn(),
+    restore: vi.fn(),
     syncCustomerInfo: vi.fn(),
     refetchRecent: vi.fn(),
     fetchRecent: vi.fn(),
@@ -99,8 +106,6 @@ vi.mock("@/app/_trpc/client", () => ({
   },
 }));
 
-vi.mock("@/hooks/useNativeShell", () => ({ useNativeShell: () => true }));
-
 vi.mock("@/utils/UserContext", () => ({
   useUserData: () => testUser(),
 }));
@@ -109,18 +114,6 @@ vi.mock("@/env/client.mjs", () => ({
   env: {
     NEXT_PUBLIC_REVENUECAT_IOS_KEY: "ios-key",
     NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: "android-key",
-  },
-}));
-
-vi.mock("@/libs/native", () => ({
-  platform: () => "ios",
-  purchases: {
-    bind: (...args: unknown[]) => testMocks().bind(...args),
-    getCustomerInfo: (...args: unknown[]) => testMocks().getCustomerInfo(...args),
-    purchase: (...args: unknown[]) => testMocks().purchase(...args),
-    syncCustomerInfo: (...args: unknown[]) => testMocks().syncCustomerInfo(...args),
-    productIdForPackage: (entry: StorePackage) => entry.product.identifier,
-    restore: vi.fn(),
   },
 }));
 
@@ -139,6 +132,30 @@ vi.mock("@/layout/Loader", () => ({
 ensureDom();
 
 const STORAGE_KEY = "tnr:unsettled-store-purchases";
+type TestCustomerInfo = {
+  activeEntitlements: string[];
+  activeSubscriptions: string[];
+  originalAppUserId: string;
+  transactions: { transactionId: string; productId: string }[];
+};
+const rawCustomerInfo = (info: TestCustomerInfo) => ({
+  entitlements: {
+    active: Object.fromEntries(info.activeEntitlements.map((id) => [id, {}])),
+  },
+  activeSubscriptions: info.activeSubscriptions,
+  originalAppUserId: info.originalAppUserId,
+  nonSubscriptionTransactions: info.transactions.map((transaction) => ({
+    transactionIdentifier: transaction.transactionId,
+    productIdentifier: transaction.productId,
+  })),
+});
+const capacitorWindow = window as typeof window & {
+  Capacitor?: {
+    getPlatform: () => string;
+    isNativePlatform: () => boolean;
+    Plugins: Record<string, Record<string, unknown>>;
+  };
+};
 const recoveredSheetLock = () => [
   {
     accountId: "player-1",
@@ -160,7 +177,9 @@ beforeEach(() => {
   });
   const mocks = testMocks();
   for (const mock of Object.values(mocks)) mock.mockReset();
-  mocks.bind.mockResolvedValue([storePackage]);
+  mocks.configure.mockResolvedValue(undefined);
+  mocks.logIn.mockResolvedValue(undefined);
+  mocks.logOut.mockResolvedValue(undefined);
   mocks.getCustomerInfo.mockResolvedValue({
     activeEntitlements: [],
     activeSubscriptions: [],
@@ -177,10 +196,65 @@ beforeEach(() => {
   mocks.fetchRecent.mockResolvedValue([]);
   mocks.invalidateRecent.mockResolvedValue(undefined);
   mocks.invalidateProfile.mockResolvedValue(undefined);
+  mocks.purchase.mockResolvedValue({ status: "cancelled" });
+  mocks.restore.mockResolvedValue({
+    activeEntitlements: [],
+    activeSubscriptions: [],
+    originalAppUserId: "player-1",
+    transactions: [],
+  });
+
+  let syncedCustomerInfo: TestCustomerInfo | undefined;
+  capacitorWindow.Capacitor = {
+    getPlatform: () => "ios",
+    isNativePlatform: () => true,
+    Plugins: {
+      Purchases: {
+        isConfigured: async () => ({ isConfigured: false }),
+        configure: (...args: unknown[]) => mocks.configure(...args),
+        logIn: (...args: unknown[]) => mocks.logIn(...args),
+        logOut: (...args: unknown[]) => mocks.logOut(...args),
+        getOfferings: async () => ({
+          current: { availablePackages: [storePackage] },
+        }),
+        getCustomerInfo: async () => {
+          const info =
+            syncedCustomerInfo ??
+            ((await mocks.getCustomerInfo()) as TestCustomerInfo | undefined);
+          syncedCustomerInfo = undefined;
+          return { customerInfo: info ? rawCustomerInfo(info) : undefined };
+        },
+        syncPurchases: async () => {
+          syncedCustomerInfo = (await mocks.syncCustomerInfo()) as
+            | TestCustomerInfo
+            | undefined;
+          return {};
+        },
+        purchasePackage: async (...args: unknown[]) => {
+          const outcome = (await mocks.purchase(...args)) as
+            | { status: "purchased"; transactionId?: string }
+            | { status: "cancelled" }
+            | { status: "error"; code?: string; message: string };
+          if (outcome.status === "cancelled") return { userCancelled: true };
+          if (outcome.status === "error") {
+            throw { code: outcome.code, message: outcome.message };
+          }
+          return {
+            transaction: { transactionIdentifier: outcome.transactionId },
+          };
+        },
+        restorePurchases: async (...args: unknown[]) => {
+          const info = (await mocks.restore(...args)) as TestCustomerInfo | undefined;
+          return { customerInfo: info ? rawCustomerInfo(info) : undefined };
+        },
+      },
+    },
+  };
 });
 
 afterEach(() => {
   cleanup();
+  delete capacitorWindow.Capacitor;
   vi.restoreAllMocks();
 });
 
@@ -364,7 +438,9 @@ describe("NativeStore purchase recovery", () => {
       }),
     );
 
-    await waitFor(() => expect(testMocks().bind).toHaveBeenCalledWith("ios-key", "player-2"));
+    await waitFor(() =>
+      expect(testMocks().logIn).toHaveBeenCalledWith({ appUserID: "player-2" }),
+    );
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toEqual(
       recoveredSheetLock(),
     );
@@ -398,6 +474,77 @@ describe("NativeStore purchase recovery", () => {
       recoveredSheetLock(),
     );
     expect(testMocks().fetchRecent).not.toHaveBeenCalled();
+  });
+
+  it("leaves an old account checkout locked when an account switch is requested", async () => {
+    let finishPurchase:
+      | ((value: { status: "purchased"; transactionId: string }) => void)
+      | undefined;
+    testMocks().purchase.mockImplementationOnce(
+      async () =>
+        await new Promise<{ status: "purchased"; transactionId: string }>(
+          (resolve) => {
+            finishPurchase = resolve;
+          },
+        ),
+    );
+    const view = render(<NativeStore />);
+    const buy = await view.findByRole("button", { name: "Buy" });
+    await waitFor(() => expect((buy as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(buy);
+    await waitFor(() => expect(testMocks().purchase).toHaveBeenCalledTimes(1));
+
+    Object.assign(testUser(), {
+      userId: "player-2",
+      data: { userId: "player-2", reputationPoints: 20 },
+    });
+    view.rerender(<NativeStore />);
+    await act(async () =>
+      finishPurchase?.({ status: "purchased", transactionId: "old-charge" }),
+    );
+
+    await waitFor(() =>
+      expect(testMocks().logIn).toHaveBeenCalledWith({ appUserID: "player-2" }),
+    );
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toEqual([
+      expect.objectContaining({
+        accountId: "player-1",
+        attempt: expect.objectContaining({ phase: "sheet-open" }),
+      }),
+    ]);
+    expect(testMocks().toast).not.toHaveBeenCalled();
+  });
+
+  it("does not continue a restore after sign-out queues RevenueCat logout", async () => {
+    let finishRestore: ((value: TestCustomerInfo) => void) | undefined;
+    testMocks().restore.mockImplementationOnce(
+      async () =>
+        await new Promise<TestCustomerInfo>((resolve) => {
+          finishRestore = resolve;
+        }),
+    );
+    const view = render(<NativeStore />);
+    const restore = await view.findByRole("button", { name: "Restore purchases" });
+    await waitFor(() => expect((restore as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(restore);
+    await waitFor(() => expect(testMocks().restore).toHaveBeenCalledTimes(1));
+
+    Object.assign(testUser(), { userId: undefined, data: undefined });
+    view.rerender(<NativeStore />);
+    const logout = nativePurchases.logOut();
+    await act(async () =>
+      finishRestore?.({
+        activeEntitlements: ["federal"],
+        activeSubscriptions: ["tnr_federal_gold"],
+        originalAppUserId: "player-1",
+        transactions: [],
+      }),
+    );
+    await logout;
+
+    expect(testMocks().logOut).toHaveBeenCalledTimes(1);
+    expect(testMocks().fetchRecent).not.toHaveBeenCalled();
+    expect(testMocks().toast).not.toHaveBeenCalled();
   });
 
   it("retains a failed recovery lock and shows manual verification errors", async () => {

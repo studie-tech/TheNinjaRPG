@@ -402,6 +402,105 @@ describeWithDatabase("staff user-id rename", () => {
     },
   );
 
+  it.each([
+    { kind: "device", table: "UserDevice" },
+    { kind: "preference", table: "UserPushPreference" },
+    { kind: "activity", table: "UserLiveActivity" },
+  ] as const)(
+    "migrates a $kind write that overlaps user-id rename",
+    async ({ kind, table }) => {
+      const database = await getTestDatabase();
+      const writeConnection = await openTestDatabaseConnection();
+      const renameConnection = await openTestDatabaseConnection();
+      const barrierConnection = await openTestDatabaseConnection();
+      const barrier = `rename_push_${kind}_${nanoid()}`;
+      const trigger = `pause_rename_push_${kind}_${nanoid().replaceAll("-", "_")}`;
+      await barrierConnection.query(`SELECT GET_LOCK('${barrier}', 10)`);
+      await runRawSql(`
+        CREATE TRIGGER ${trigger} BEFORE INSERT ON ${table} FOR EACH ROW
+        BEGIN
+          IF NEW.userId = '${OLD_USER_ID}' THEN
+            SET @rename_push_wait = GET_LOCK('${barrier}', 10);
+            SET @rename_push_release = RELEASE_LOCK('${barrier}');
+          END IF;
+        END
+      `);
+      try {
+        const pushCaller = callerForDatabase(
+          pushRouter,
+          OLD_USER_ID,
+          writeConnection.database,
+        );
+        const write =
+          kind === "device"
+            ? pushCaller.registerDevice({ token: "e".repeat(64), platform: "ios" })
+            : kind === "preference"
+              ? pushCaller.setPreference({ category: "system", enabled: false })
+              : pushCaller.registerActivity({
+                  activityId: "rename-overlapping-activity",
+                  kind: "training",
+                  pushToken: "f".repeat(64),
+                  endsAt: new Date(Date.now() + 60_000),
+                });
+        await barrierConnection.waitForNamedLockWaiter(barrier);
+
+        let renameFinished = false;
+        const rename = callerForDatabase(
+          staffRouter,
+          STAFF,
+          renameConnection.database,
+        )
+          .updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })
+          .finally(() => {
+            renameFinished = true;
+          });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(renameFinished).toBe(false);
+        await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+
+        await expect(write).resolves.toMatchObject({ success: true });
+        await expect(rename).resolves.toMatchObject({ success: true });
+        const [oldRows, newRows] =
+          kind === "device"
+            ? await Promise.all([
+                database.query.userDevice.findMany({
+                  where: eq(userDevice.userId, OLD_USER_ID),
+                }),
+                database.query.userDevice.findMany({
+                  where: eq(userDevice.userId, NEW_USER_ID),
+                }),
+              ])
+            : kind === "preference"
+              ? await Promise.all([
+                  database.query.userPushPreference.findMany({
+                    where: eq(userPushPreference.userId, OLD_USER_ID),
+                  }),
+                  database.query.userPushPreference.findMany({
+                    where: eq(userPushPreference.userId, NEW_USER_ID),
+                  }),
+                ])
+              : await Promise.all([
+                  database.query.userLiveActivity.findMany({
+                    where: eq(userLiveActivity.userId, OLD_USER_ID),
+                  }),
+                  database.query.userLiveActivity.findMany({
+                    where: eq(userLiveActivity.userId, NEW_USER_ID),
+                  }),
+                ]);
+        expect(oldRows).toEqual([]);
+        expect(newRows).toHaveLength(1);
+      } finally {
+        await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+        await runRawSql(`DROP TRIGGER IF EXISTS ${trigger}`);
+        await Promise.all([
+          writeConnection.close(),
+          renameConnection.close(),
+          barrierConnection.close(),
+        ]);
+      }
+    },
+  );
+
   it("rolls back helper and broad writes together when a late rename write fails", async () => {
     const database = await getTestDatabase();
     await Promise.all([

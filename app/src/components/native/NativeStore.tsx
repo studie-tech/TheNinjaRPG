@@ -219,10 +219,6 @@ export default function NativeStore() {
     // participate in the same ordering rather than racing a component-local promise.
     const binding = purchases.bind(apiKey, accountId);
     void binding
-      .then(async (packages) => ({
-        packages,
-        customerInfo: await purchases.getCustomerInfo(),
-      }))
       .then(({ packages, customerInfo }) => {
         if (generation !== bindingGeneration.current) return;
         if (!customerInfo) {
@@ -348,16 +344,18 @@ export default function NativeStore() {
    * this attempt's lock. No client clock is compared with a database timestamp.
    */
   const settleAfterPurchase = useCallback(
-    async (attempt: StorePurchaseAttempt) => {
+    async (attempt: StorePurchaseAttempt, assertCurrent?: () => void) => {
       let observation: "pending" | "credited" | "rejected" = "pending";
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
+        assertCurrent?.();
         const matching = await fetchRecentFresh({
           limit: 50,
           ...(attempt.transactionId
             ? { transactionId: attempt.transactionId }
             : { productId: attempt.productId }),
         });
+        assertCurrent?.();
         observation = storePurchaseReconciliation(matching, attempt);
         if (observation !== "pending") break;
       }
@@ -367,6 +365,7 @@ export default function NativeStore() {
         refetchRecent(),
         utils.profile.getUser.invalidate(),
       ]);
+      assertCurrent?.();
       if (data && observation === "pending") {
         observation = storePurchaseReconciliation(data, attempt);
       }
@@ -502,11 +501,12 @@ export default function NativeStore() {
   ]);
 
   const refreshAfterRestore = useCallback(
-    async (attempt: StoreRestoreAttempt) => {
+    async (attempt: StoreRestoreAttempt, assertCurrent?: () => void) => {
       let newestId: string | undefined;
       let observation = storeRestoreReconciliation([], attempt);
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
+        assertCurrent?.();
         const matching = (
           await Promise.all(
             [...new Set(attempt.expectedProductIds)].map((productId) =>
@@ -514,6 +514,7 @@ export default function NativeStore() {
             ),
           )
         ).flat();
+        assertCurrent?.();
         newestId = matching[0]?.id ?? newestId;
         observation = storeRestoreReconciliation(matching, attempt);
         if (observation === "reconciled") break;
@@ -522,6 +523,7 @@ export default function NativeStore() {
         refetchRecent(),
         utils.profile.getUser.invalidate(),
       ]);
+      assertCurrent?.();
       newestId = data?.[0]?.id ?? newestId;
       return { newestId, status: finalStoreRestoreResult(observation) };
     },
@@ -541,76 +543,86 @@ export default function NativeStore() {
     )
       return;
     const accountId = available.userId;
+    const checkoutGeneration = bindingGeneration.current;
+    const assertCurrentCheckout = () => {
+      if (checkoutGeneration !== bindingGeneration.current) {
+        throw new Error("Store account changed during checkout");
+      }
+    };
     setBusyProduct(productId);
     try {
       // Refresh again immediately before opening the store sheet. A webhook from an
       // earlier slow purchase may have landed since the screen's initial baseline.
-      const [baselineRows, { data: visibleRows }, checkoutCustomerInfo] =
-        await Promise.all([
-          fetchRecentFresh({ limit: 50, productId }),
-          refetchRecent(),
-          purchases.getCustomerInfo(),
-        ]);
+      const [baselineRows, { data: visibleRows }] = await Promise.all([
+        fetchRecentFresh({ limit: 50, productId }),
+        refetchRecent(),
+      ]);
+      assertCurrentCheckout();
       if (!visibleRows) throw new Error("Could not verify recent purchases");
-      if (!checkoutCustomerInfo) {
-        throw new Error("Could not verify store purchase history");
-      }
       const previousNewestId = visibleRows[0]?.id;
       setRecentBaseline({ userId: accountId, newestId: previousNewestId });
-
-      let storeProductChangeInfo: purchases.StoreProductChangeInfo | undefined;
-      if (isFederal && catalogue?.federal) {
-        const customerInfo = await purchases.getCustomerInfo();
-        if (!customerInfo) {
-          throw new Error("Could not verify your current store subscription");
-        }
-        setPackageState((current) =>
-          current?.userId === accountId
-            ? { ...current, activeSubscriptions: customerInfo.activeSubscriptions }
-            : current,
-        );
-        if (storePlatform !== "android") {
-          if (customerInfo.activeSubscriptions.includes(productId)) {
-            showMutationToast({
-              success: false,
-              message: "This subscription is already active in your App Store account.",
-            });
-            return;
-          }
-        } else {
-          const change = purchases.androidSubscriptionChange(
-            customerInfo.activeSubscriptions,
-            productId,
-            catalogue.federal,
+      const {
+        outcome: result,
+        postPurchaseCustomerInfo,
+        prepared: attempt,
+      } = await purchases.purchaseForBoundIdentity(entry, (checkoutCustomerInfo) => {
+        // The queue guarantees RevenueCat is still bound to this identity; the React
+        // generation additionally rejects an account switch requested while earlier
+        // server baselines were in flight, before the native sheet can open.
+        assertCurrentCheckout();
+        let storeProductChangeInfo: purchases.StoreProductChangeInfo | undefined;
+        if (isFederal && catalogue?.federal) {
+          setPackageState((current) =>
+            current?.userId === accountId
+              ? {
+                  ...current,
+                  activeSubscriptions: checkoutCustomerInfo.activeSubscriptions,
+                }
+              : current,
           );
-          if (change.status === "active") {
-            showMutationToast({
-              success: false,
-              message: "This subscription is already active in your Play account.",
-            });
-            return;
-          }
-          if (change.status === "change") {
-            storeProductChangeInfo = change.storeProductChangeInfo;
+          if (storePlatform !== "android") {
+            if (checkoutCustomerInfo.activeSubscriptions.includes(productId)) {
+              throw new Error(
+                "This subscription is already active in your App Store account.",
+              );
+            }
+          } else {
+            const change = purchases.androidSubscriptionChange(
+              checkoutCustomerInfo.activeSubscriptions,
+              productId,
+              catalogue.federal,
+            );
+            if (change.status === "active") {
+              throw new Error(
+                "This subscription is already active in your Play account.",
+              );
+            }
+            if (change.status === "change") {
+              storeProductChangeInfo = change.storeProductChangeInfo;
+            }
           }
         }
-      }
-      const attempt: StorePurchaseAttempt = {
-        productId,
-        baselineReceiptIds: baselineRows.map((purchase) => purchase.id),
-        baselineNativeTransactionIds: checkoutCustomerInfo.transactions.map(
-          (transaction) => transaction.transactionId,
-        ),
-        phase: "sheet-open",
-        startedAt: new Date().toISOString(),
-      };
-      // Persist before opening the native sheet. The app can be suspended or killed after
-      // the store charges the account but before the bridge promise reaches JavaScript;
-      // this baseline-only attempt can still reconcile the callback-lost receipt.
-      updateUnsettledAttempts((current) =>
-        retainStorePurchaseLock(current, { accountId, attempt }),
-      );
-      const result = await purchases.purchase(entry, storeProductChangeInfo);
+        const preparedAttempt: StorePurchaseAttempt = {
+          productId,
+          baselineReceiptIds: baselineRows.map((purchase) => purchase.id),
+          baselineNativeTransactionIds: checkoutCustomerInfo.transactions.map(
+            (transaction) => transaction.transactionId,
+          ),
+          phase: "sheet-open",
+          startedAt: new Date().toISOString(),
+        };
+        // Persist immediately before the helper opens the native sheet. The app can be
+        // suspended after the store charges but before its bridge callback reaches JS.
+        updateUnsettledAttempts((current) =>
+          retainStorePurchaseLock(current, {
+            accountId,
+            attempt: preparedAttempt,
+          }),
+        );
+        assertCurrentCheckout();
+        return { prepared: preparedAttempt, storeProductChangeInfo };
+      });
+      assertCurrentCheckout();
       if (result.status === "cancelled") {
         updateUnsettledAttempts((current) =>
           releaseStorePurchaseLock(current, accountId, productId),
@@ -655,18 +667,24 @@ export default function NativeStore() {
         message: "Purchase complete. Crediting your account...",
       });
       if (isFederal) {
-        const customerInfo = await purchases.getCustomerInfo();
-        if (customerInfo) {
+        if (postPurchaseCustomerInfo) {
           setPackageState((current) =>
             current?.userId === accountId
-              ? { ...current, activeSubscriptions: customerInfo.activeSubscriptions }
+              ? {
+                  ...current,
+                  activeSubscriptions: postPurchaseCustomerInfo.activeSubscriptions,
+                }
               : current,
           );
         }
       }
       // Held busy across the wait so the player cannot buy the same tier twice while the
       // first grant is still in flight.
-      const settlement = await settleAfterPurchase(chargedAttempt);
+      const settlement = await settleAfterPurchase(
+        chargedAttempt,
+        assertCurrentCheckout,
+      );
+      assertCurrentCheckout();
       if (settlement.status !== "timed-out") {
         updateUnsettledAttempts((current) =>
           releaseStorePurchaseLock(current, accountId, chargedAttempt.productId),
@@ -691,10 +709,12 @@ export default function NativeStore() {
           : current,
       );
     } catch (error) {
-      showMutationToast({
-        success: false,
-        message: error instanceof Error ? error.message : "The purchase failed",
-      });
+      if (checkoutGeneration === bindingGeneration.current) {
+        showMutationToast({
+          success: false,
+          message: error instanceof Error ? error.message : "The purchase failed",
+        });
+      }
     } finally {
       // In `finally` because anything that escapes above would otherwise leave the button
       // disabled until the component remounts.
@@ -705,13 +725,21 @@ export default function NativeStore() {
   const restore = async () => {
     if (!available?.bound || available.userId !== player?.userId) return;
     const accountId = available.userId;
+    const restoreGeneration = bindingGeneration.current;
+    const assertCurrentRestore = () => {
+      if (restoreGeneration !== bindingGeneration.current) {
+        throw new Error("Store account changed during restore");
+      }
+    };
     setIsRestoring(true);
     try {
       const { data: visibleRows, error: baselineError } = await refetchRecent();
+      assertCurrentRestore();
       if (!visibleRows) {
         throw baselineError ?? new Error("Could not verify recent purchases");
       }
-      const info = await purchases.restore();
+      const info = await purchases.restoreForBoundIdentity();
+      assertCurrentRestore();
       if (!info) {
         throw new Error("Could not verify restored purchases with the store");
       }
@@ -724,9 +752,11 @@ export default function NativeStore() {
         // A TRANSFER can arrive after the first poll and may have no pending row before it
         // moves the receipt. Wait for each restored subscription to have a live server
         // entitlement; absence of pending rows is not completion.
-        const result = await refreshAfterRestore({
-          expectedProductIds: info.activeSubscriptions,
-        });
+        const result = await refreshAfterRestore(
+          { expectedProductIds: info.activeSubscriptions },
+          assertCurrentRestore,
+        );
+        assertCurrentRestore();
         setRecentBaseline((current) =>
           current?.userId === accountId
             ? { userId: accountId, newestId: result.newestId }
@@ -747,6 +777,7 @@ export default function NativeStore() {
           refetchRecent(),
           utils.profile.getUser.invalidate(),
         ]);
+        assertCurrentRestore();
         if (data) {
           setRecentBaseline((current) =>
             current?.userId === accountId
@@ -760,10 +791,12 @@ export default function NativeStore() {
         });
       }
     } catch (error) {
-      showMutationToast({
-        success: false,
-        message: error instanceof Error ? error.message : "The restore failed",
-      });
+      if (restoreGeneration === bindingGeneration.current) {
+        showMutationToast({
+          success: false,
+          message: error instanceof Error ? error.message : "The restore failed",
+        });
+      }
     } finally {
       setIsRestoring(false);
     }

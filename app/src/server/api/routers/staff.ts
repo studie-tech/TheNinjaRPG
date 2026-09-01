@@ -907,18 +907,6 @@ export const staffRouter = createTRPCRouter({
               .set({ createdById: input.newUserId })
               .where(eq(paypalTransaction.createdById, input.userId)),
             ctx.drizzle
-              .update(userDevice)
-              .set({ userId: input.newUserId })
-              .where(eq(userDevice.userId, input.userId)),
-            ctx.drizzle
-              .update(userPushPreference)
-              .set({ userId: input.newUserId })
-              .where(eq(userPushPreference.userId, input.userId)),
-            ctx.drizzle
-              .update(userLiveActivity)
-              .set({ userId: input.newUserId })
-              .where(eq(userLiveActivity.userId, input.userId)),
-            ctx.drizzle
               .update(ryoTrade)
               .set({ creatorUserId: input.newUserId })
               .where(eq(ryoTrade.creatorUserId, input.userId)),
@@ -1105,6 +1093,22 @@ export const staffRouter = createTRPCRouter({
             .where(eq(storeUserIdAlias.oldUserId, input.newUserId))
             .for("update");
           if (retiredDestination) throw new RetiredRenameDestinationError();
+          // Push writers take the same lifecycle mutex before locking UserData. Migrating
+          // their rows only after both identities are locked means a writer which started
+          // first is included here, while a stale writer which starts later waits and is
+          // rejected once the alias/UserData cutover completes.
+          await ctx.drizzle
+            .update(userDevice)
+            .set({ userId: input.newUserId })
+            .where(eq(userDevice.userId, input.userId));
+          await ctx.drizzle
+            .update(userPushPreference)
+            .set({ userId: input.newUserId })
+            .where(eq(userPushPreference.userId, input.userId));
+          await ctx.drizzle
+            .update(userLiveActivity)
+            .set({ userId: input.newUserId })
+            .where(eq(userLiveActivity.userId, input.userId));
           await ctx.drizzle
             .update(storeUserIdAlias)
             .set({ newUserId: input.newUserId, updatedAt: new Date() })
