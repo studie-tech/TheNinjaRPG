@@ -93,6 +93,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDeadlockError } from "@/server/utils/mysqlErrors";
 import {
+  acquireStoreUserMutationLock,
   migrateStoreEntitlementStates,
   migrateStorePurchaseTransfers,
 } from "@/server/utils/purchases/grant";
@@ -803,6 +804,9 @@ export const staffRouter = createTRPCRouter({
         return { success: false, message: "Cannot change staff member's userId " };
       }
       await ctx.drizzle.transaction(async (tx) => {
+        // RevenueCat mutations can reach accounts not named in their payload through a
+        // transfer chain. Share their durable graph lock before changing any user id.
+        await acquireStoreUserMutationLock(tx as unknown as DrizzleClient);
         // Serialize renames of either id and make the uniqueness guards authoritative
         // inside the same commit as every dependent write.
         for (const userId of [input.userId, input.newUserId].sort()) {

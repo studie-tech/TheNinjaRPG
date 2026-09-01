@@ -17,6 +17,7 @@ import {
   grantStorePurchase,
   migrateStoreEntitlementStates,
   migrateStorePurchaseTransfers,
+  reconcileStorePurchaseOwner,
   reconcileFederalStatuses,
   revokeFederalStatus,
   setFederalStatusWithStoreFloor,
@@ -877,6 +878,153 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       expect(source?.federalStatus).toBe("NONE");
       expect(middle?.federalStatus).toBe("NONE");
       expect(destination?.federalStatus).toBe("GOLD");
+    } finally {
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+      await runRawSql(`DROP TRIGGER IF EXISTS ${trigger}`);
+      await Promise.all([
+        firstConnection.close(),
+        secondConnection.close(),
+        barrierConnection.close(),
+      ]);
+    }
+  });
+
+  it("serializes a grant through A to B with a concurrent B to C transfer", async () => {
+    const middleUserId = "overlap-grant-middle";
+    const finalUserId = "overlap-grant-final";
+    await insertUsers([
+      { userId: middleUserId, username: "grant-middle", federalStatus: "NONE" },
+      { userId: finalUserId, username: "grant-final", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const firstTransferAt = new Date(Date.now() - MINUTE);
+    await transferStorePurchases(database, {
+      fromUserIds: [USER],
+      toUserIds: [middleUserId],
+      store: "APPLE",
+      occurredAt: firstTransferAt,
+    });
+
+    const grantConnection = await openTestDatabaseConnection();
+    const transferConnection = await openTestDatabaseConnection();
+    const barrierConnection = await openTestDatabaseConnection();
+    const transactionId = nanoid();
+    const barrier = `grant_transfer_${nanoid()}`;
+    const trigger = `pause_grant_transfer_${nanoid().replaceAll("-", "_")}`;
+    await barrierConnection.query(`SELECT GET_LOCK('${barrier}', 10)`);
+    await runRawSql(`
+      CREATE TRIGGER ${trigger} BEFORE INSERT ON StorePurchase FOR EACH ROW
+      BEGIN
+        IF NEW.transactionId = '${transactionId}' THEN
+          SET @grant_transfer_wait = GET_LOCK('${barrier}', 10);
+          SET @grant_transfer_release = RELEASE_LOCK('${barrier}');
+        END IF;
+      END
+    `);
+    try {
+      const grant = grantStorePurchase(grantConnection.database, {
+        userId: USER,
+        transactionId,
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt: new Date(firstTransferAt.getTime() - MINUTE),
+        raw: {},
+      });
+      await barrierConnection.waitForNamedLockWaiter(barrier);
+
+      let transferFinished = false;
+      const transfer = transferStorePurchases(transferConnection.database, {
+        fromUserIds: [middleUserId],
+        toUserIds: [finalUserId],
+        store: "APPLE",
+        occurredAt: new Date(),
+      }).finally(() => {
+        transferFinished = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(transferFinished).toBe(false);
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+
+      await expect(grant).resolves.toMatchObject({ status: "granted" });
+      await expect(transfer).resolves.toMatchObject({ destinationUserId: finalUserId });
+      const [receipt, middle, final] = await Promise.all([
+        database.query.storePurchase.findFirst({
+          columns: { userId: true },
+          where: eq(storePurchase.transactionId, transactionId),
+        }),
+        database.query.userData.findFirst({
+          columns: { federalStatus: true },
+          where: eq(userData.userId, middleUserId),
+        }),
+        database.query.userData.findFirst({
+          columns: { federalStatus: true },
+          where: eq(userData.userId, finalUserId),
+        }),
+      ]);
+      expect(receipt?.userId).toBe(finalUserId);
+      expect(middle?.federalStatus).toBe("NONE");
+      expect(final?.federalStatus).toBe("GOLD");
+    } finally {
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+      await runRawSql(`DROP TRIGGER IF EXISTS ${trigger}`);
+      await Promise.all([
+        grantConnection.close(),
+        transferConnection.close(),
+        barrierConnection.close(),
+      ]);
+    }
+  });
+
+  it("lets a two-connection CAS loser observe the winning receipt owner", async () => {
+    const destinationUserId = "cas-owner-destination";
+    await insertUsers([
+      { userId: destinationUserId, username: "cas-owner", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const transactionId = await buyFederal("GOLD", 2 * MINUTE);
+    await transferStorePurchases(database, {
+      fromUserIds: [USER],
+      toUserIds: [destinationUserId],
+      store: "APPLE",
+      occurredAt: new Date(Date.now() - MINUTE),
+    });
+    const receipt = await database.query.storePurchase.findFirst({
+      columns: { id: true },
+      where: eq(storePurchase.transactionId, transactionId),
+    });
+    if (!receipt) throw new Error("Missing CAS test receipt");
+    await database
+      .update(storePurchase)
+      .set({ userId: USER })
+      .where(eq(storePurchase.id, receipt.id));
+
+    const firstConnection = await openTestDatabaseConnection();
+    const secondConnection = await openTestDatabaseConnection();
+    const barrierConnection = await openTestDatabaseConnection();
+    const barrier = `receipt_cas_${nanoid()}`;
+    const trigger = `pause_receipt_cas_${nanoid().replaceAll("-", "_")}`;
+    await barrierConnection.query(`SELECT GET_LOCK('${barrier}', 10)`);
+    await runRawSql(`
+      CREATE TRIGGER ${trigger} BEFORE UPDATE ON StorePurchase FOR EACH ROW
+      BEGIN
+        IF OLD.id = '${receipt.id}' AND OLD.userId = '${USER}' AND NEW.userId = '${destinationUserId}' THEN
+          SET @receipt_cas_wait = GET_LOCK('${barrier}', 10);
+          SET @receipt_cas_release = RELEASE_LOCK('${barrier}');
+        END IF;
+      END
+    `);
+    try {
+      const winner = reconcileStorePurchaseOwner(firstConnection.database, receipt.id);
+      await barrierConnection.waitForNamedLockWaiter(barrier);
+      const loser = reconcileStorePurchaseOwner(secondConnection.database, receipt.id);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+
+      await expect(Promise.all([winner, loser])).resolves.toEqual([
+        expect.objectContaining({ userId: destinationUserId }),
+        expect.objectContaining({ userId: destinationUserId }),
+      ]);
     } finally {
       await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
       await runRawSql(`DROP TRIGGER IF EXISTS ${trigger}`);

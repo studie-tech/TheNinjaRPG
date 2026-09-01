@@ -155,6 +155,35 @@ const canonicalStoreUserIdForUpdate = async (
 };
 
 /**
+ * One durable mutex for mutations of the store ownership graph.
+ *
+ * A mutation named for A can ultimately write B (or C) through RevenueCat's transfer
+ * history, so locking only the ids in the webhook payload is not closed under ownership.
+ * Keeping a self-alias row as a mutex makes grants, extensions, revocations, transfers,
+ * and staff renames observe one stable graph without requiring a race-prone graph walk
+ * before the locks are known. The INSERT itself owns the row until transaction commit.
+ */
+const STORE_USER_MUTATION_LOCK_ID = "__tnr_internal_store_user_mutation_lock__";
+
+export const acquireStoreUserMutationLock = async (
+  client: DrizzleClient,
+): Promise<void> => {
+  await client
+    .insert(storeUserIdAlias)
+    .values({
+      oldUserId: STORE_USER_MUTATION_LOCK_ID,
+      newUserId: STORE_USER_MUTATION_LOCK_ID,
+      updatedAt: new Date(),
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        newUserId: STORE_USER_MUTATION_LOCK_ID,
+        updatedAt: new Date(),
+      },
+    });
+};
+
+/**
  * Share the UserData row lock used by staff renames, then resolve aliases again using
  * current reads. If a rename committed while the first lock waited, the retired id no
  * longer yields a row and the newly canonical row is locked before mutation continues.
@@ -166,6 +195,7 @@ const serializeStoreUserMutation = async <T>(
 ): Promise<T> => {
   const outcome = await client.transaction(async (tx) => {
     const lockedClient = tx as unknown as DrizzleClient;
+    await acquireStoreUserMutationLock(lockedClient);
     const originalUserIds = userIds.filter(Boolean);
     const lockedUserIds = new Set<string>();
     let pendingUserIds = [...new Set(originalUserIds)].sort();
@@ -180,11 +210,12 @@ const serializeStoreUserMutation = async <T>(
         lockedUserIds.add(userId);
       }
 
-      const canonicalUserIds = await Promise.all(
-        originalUserIds.map((userId) =>
-          canonicalStoreUserIdForUpdate(lockedClient, userId),
-        ),
-      );
+      const canonicalUserIds: string[] = [];
+      for (const userId of originalUserIds) {
+        canonicalUserIds.push(
+          await canonicalStoreUserIdForUpdate(lockedClient, userId),
+        );
+      }
       pendingUserIds = [...new Set(canonicalUserIds)]
         .filter((userId) => !lockedUserIds.has(userId))
         .sort();
@@ -331,22 +362,26 @@ type StorePurchaseOwnerSnapshot = {
  * overwrite a newer decision with its stale snapshot. Losing the comparison simply
  * re-reads and resolves again.
  */
-const reconcileStorePurchaseOwner = async (
+export const reconcileStorePurchaseOwner = async (
   client: DrizzleClient,
   receiptId: string,
 ): Promise<StorePurchaseOwnerSnapshot> => {
   for (let attempt = 0; attempt < 20; attempt++) {
-    const receipt = await client.query.storePurchase.findFirst({
-      columns: {
-        id: true,
-        userId: true,
-        originalUserId: true,
-        purchasedAt: true,
-        store: true,
-        federalStatus: true,
-      },
-      where: eq(storePurchase.id, receiptId),
-    });
+    const receiptQuery = client
+      .select({
+        id: storePurchase.id,
+        userId: storePurchase.userId,
+        originalUserId: storePurchase.originalUserId,
+        purchasedAt: storePurchase.purchasedAt,
+        store: storePurchase.store,
+        federalStatus: storePurchase.federalStatus,
+      })
+      .from(storePurchase)
+      .where(eq(storePurchase.id, receiptId));
+    // A CAS loser must escape its repeatable-read snapshot before resolving again.
+    // MySQL locking reads are current reads, so the retry observes the winner's owner.
+    const [receipt] =
+      attempt === 0 ? await receiptQuery : await receiptQuery.for("update");
     if (!receipt) throw new Error(`Missing store receipt ${receiptId}`);
 
     const canonicalOriginalUserId = await canonicalStoreUserIdForUpdate(
@@ -1026,24 +1061,16 @@ const transferStorePurchasesUnlocked = async (
   client: DrizzleClient,
   transfer: StoreTransfer,
 ): Promise<{ destinationUserId: string; rowsAffected: number }> => {
-  const fromIds = [
-    ...new Set(
-      await Promise.all(
-        transfer.fromUserIds
-          .filter(Boolean)
-          .map((id) => canonicalStoreUserId(client, id)),
-      ),
-    ),
-  ];
-  const toIds = [
-    ...new Set(
-      await Promise.all(
-        transfer.toUserIds
-          .filter(Boolean)
-          .map((id) => canonicalStoreUserId(client, id)),
-      ),
-    ),
-  ];
+  const canonicalFromIds: string[] = [];
+  for (const id of transfer.fromUserIds.filter(Boolean)) {
+    canonicalFromIds.push(await canonicalStoreUserId(client, id));
+  }
+  const fromIds = [...new Set(canonicalFromIds)];
+  const canonicalToIds: string[] = [];
+  for (const id of transfer.toUserIds.filter(Boolean)) {
+    canonicalToIds.push(await canonicalStoreUserId(client, id));
+  }
+  const toIds = [...new Set(canonicalToIds)];
   if (toIds.length === 0) throw new Error("RevenueCat transfer has no destination");
 
   const destinations = await client

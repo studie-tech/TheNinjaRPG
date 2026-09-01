@@ -354,7 +354,10 @@ export default function NativeStore() {
     if (accountUnsettledAttempts.length === 0) return;
     const timer = window.setInterval(() => {
       for (const entry of accountUnsettledAttempts) {
-        void verifyPurchaseAttempt(entry.accountId, entry.attempt);
+        void verifyPurchaseAttempt(entry.accountId, entry.attempt).catch(() => {
+          // A transient background verification failure is not evidence that checkout
+          // failed. Keep the durable lock and let the next interval retry it.
+        });
       }
     }, 5000);
     return () => window.clearInterval(timer);
@@ -449,21 +452,38 @@ export default function NativeStore() {
           }
         }
       }
-      const result = await purchases.purchase(entry, storeProductChangeInfo);
-      if (result.status === "cancelled") return;
-      if (result.status === "error") {
-        showMutationToast({ success: false, message: result.message });
-        return;
-      }
-      const attempt = {
-        transactionId: result.transactionId,
+      const attempt: StorePurchaseAttempt = {
         productId,
         baselineReceiptIds: baselineRows.map((purchase) => purchase.id),
       };
-      // The SDK has confirmed a charge. Persist its exact correlation before any store,
-      // network, timer, or React scheduling await can be interrupted by a process exit.
+      // Persist before opening the native sheet. The app can be suspended or killed after
+      // the store charges the account but before the bridge promise reaches JavaScript;
+      // this baseline-only attempt can still reconcile the callback-lost receipt.
       updateUnsettledAttempts((current) =>
         retainStorePurchaseLock(current, { accountId, attempt }),
+      );
+      const result = await purchases.purchase(entry, storeProductChangeInfo);
+      if (result.status === "cancelled") {
+        updateUnsettledAttempts((current) =>
+          releaseStorePurchaseLock(current, accountId, productId),
+        );
+        return;
+      }
+      if (result.status === "error") {
+        updateUnsettledAttempts((current) =>
+          releaseStorePurchaseLock(current, accountId, productId),
+        );
+        showMutationToast({ success: false, message: result.message });
+        return;
+      }
+      const chargedAttempt: StorePurchaseAttempt = {
+        transactionId: result.transactionId,
+        productId,
+        baselineReceiptIds: attempt.baselineReceiptIds,
+      };
+      // Enrich the already-durable attempt with the SDK's authoritative correlation.
+      updateUnsettledAttempts((current) =>
+        retainStorePurchaseLock(current, { accountId, attempt: chargedAttempt }),
       );
       showMutationToast({
         success: true,
@@ -481,10 +501,10 @@ export default function NativeStore() {
       }
       // Held busy across the wait so the player cannot buy the same tier twice while the
       // first grant is still in flight.
-      const settlement = await settleAfterPurchase(attempt);
+      const settlement = await settleAfterPurchase(chargedAttempt);
       if (settlement.status === "settled") {
         updateUnsettledAttempts((current) =>
-          releaseStorePurchaseLock(current, accountId, attempt.productId),
+          releaseStorePurchaseLock(current, accountId, chargedAttempt.productId),
         );
       } else {
         showMutationToast({
@@ -658,6 +678,15 @@ export default function NativeStore() {
                         message: settled
                           ? "Purchase verification finished."
                           : "The server is still processing this purchase.",
+                      });
+                    })
+                    .catch((error: unknown) => {
+                      showMutationToast({
+                        success: false,
+                        message:
+                          error instanceof Error
+                            ? error.message
+                            : "Purchase verification failed. Please try again.",
                       });
                     })
                     .finally(() => setRetryingProduct(null));
