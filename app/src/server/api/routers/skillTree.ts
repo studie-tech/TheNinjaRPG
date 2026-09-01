@@ -19,6 +19,8 @@ import {
 import type { UserData } from "@/drizzle/schema";
 import {
   actionLog,
+  item,
+  jutsu,
   skillTree,
   skillTreeFolder,
   userData,
@@ -287,10 +289,25 @@ export const skillTreeRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      const [{ user }, skill, usersWithSkill, requiredByItems, requiredByJutsus] =
+        await Promise.all([
+          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+          ctx.drizzle.query.skillTree.findFirst({
+            where: eq(skillTree.id, input.id),
+          }),
+          ctx.drizzle.query.userSkill.findMany({
+            where: eq(userSkill.skillId, input.id),
+            columns: { id: true },
+          }),
+          ctx.drizzle.query.item.findMany({
+            where: eq(item.requiredSkillId, input.id),
+            columns: { id: true },
+          }),
+          ctx.drizzle.query.jutsu.findMany({
+            where: eq(jutsu.requiredSkillId, input.id),
+            columns: { id: true },
+          }),
+        ]);
       if (!user || !canChangeContent(user.role)) {
         throw serverError(
           "UNAUTHORIZED",
@@ -298,18 +315,17 @@ export const skillTreeRouter = createTRPCRouter({
         );
       }
 
-      const skill = await ctx.drizzle.query.skillTree.findFirst({
-        where: eq(skillTree.id, input.id),
-      });
-
       if (!skill) return errorResponse("Skill not found");
 
-      // Check if any users have this skill
-      const usersWithSkill = await ctx.drizzle.query.userSkill.findMany({
-        where: eq(userSkill.skillId, input.id),
-      });
-      if (usersWithSkill.length > 0) {
-        return errorResponse("Cannot delete skill that users have purchased");
+      const references = [
+        requiredByItems.length > 0 ? "items" : null,
+        requiredByJutsus.length > 0 ? "jutsus" : null,
+        usersWithSkill.length > 0 ? "users" : null,
+      ].filter((value): value is string => value !== null);
+      if (references.length > 0) {
+        return errorResponse(
+          `Cannot delete skill while referenced by ${references.join(", ")}`,
+        );
       }
 
       await ctx.drizzle.delete(skillTree).where(eq(skillTree.id, input.id));

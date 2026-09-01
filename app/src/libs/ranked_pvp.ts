@@ -139,6 +139,14 @@ export const getRankedRadius = (secondsInQueue: number): number => {
  * @returns An object with a check flag and a message if the loadout is invalid
  */
 export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
+  const skillGatedJutsu = jutsus.find((jutsu) => jutsu.requiredSkillId);
+  if (skillGatedJutsu) {
+    return {
+      check: false,
+      message: `${skillGatedJutsu.name} cannot be equipped in ranked PvP because it requires a skill tree entry`,
+    };
+  }
+
   let check = true;
   let message = "";
 
@@ -166,6 +174,14 @@ export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
  * @returns An object with a check flag and a message if the loadout is invalid
  */
 export const validateItemLoadout = (items: Item[]) => {
+  const skillGatedItem = items.find((item) => item.requiredSkillId);
+  if (skillGatedItem) {
+    return {
+      check: false,
+      message: `${skillGatedItem.name} cannot be equipped in ranked PvP because it requires a skill tree entry`,
+    };
+  }
+
   let check = true;
   let message = "";
 

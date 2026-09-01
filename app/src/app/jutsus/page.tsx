@@ -45,6 +45,7 @@ import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
 import { getFreeTransfers } from "@/libs/jutsu";
 import { showUserRank } from "@/libs/profile";
+import { getActivatedSkillIds, meetsRequiredSkill } from "@/libs/skillTree";
 import { showMutationToast } from "@/libs/toast";
 import {
   calcJutsuEquipLimit,
@@ -135,6 +136,18 @@ export default function MyJutsu() {
   const { data: userItems, isFetching: l2 } = api.item.getUserItems.useQuery(
     undefined,
     { enabled: !!userData },
+  );
+  const { data: userSkills, isFetching: l3 } = api.skillTree.getUserSkills.useQuery(
+    undefined,
+    { enabled: !!userData },
+  );
+  const { data: skillNames, isFetching: l4 } = api.skillTree.getAllNames.useQuery(
+    undefined,
+    { enabled: !!userData, staleTime: 5 * 60 * 1000 },
+  );
+  const activatedSkillIds = useMemo(
+    () => getActivatedSkillIds(userSkills ?? []),
+    [userSkills],
   );
   const { data: userReskins } = api.jutsu.getUserReskins.useQuery(undefined, {
     enabled: !!userData,
@@ -325,7 +338,7 @@ export default function MyJutsu() {
     isReskinning ||
     isRemovingReskin ||
     isEvolving;
-  const isFetching = l1 || l2;
+  const isFetching = l1 || l2 || l3 || l4;
 
   // Collapse UserItem and Item
   const userElements = useMemo(() => new Set(getUserElements(userData)), [userData]);
@@ -333,8 +346,14 @@ export default function MyJutsu() {
   // Categorize jutsu for organized display
   const categorizedJutsus = useMemo(() => {
     if (!userData) return null;
-    return categorizeJutsus(userJutsus, userData, userItems, userElements);
-  }, [userJutsus, userData, userItems, userElements]);
+    return categorizeJutsus(
+      userJutsus,
+      userData,
+      userItems,
+      userElements,
+      activatedSkillIds,
+    );
+  }, [userJutsus, userData, userItems, userElements, activatedSkillIds]);
 
   // Transform jutsu to action items with warnings
   const transformToActionItems = useCallback(
@@ -366,6 +385,12 @@ export default function MyJutsu() {
           if (!checkJutsuBloodlineItem(uj.jutsu, userItems)) {
             warning = "You do not have the required bloodline item equipped.";
           }
+          if (!meetsRequiredSkill(uj.jutsu.requiredSkillId, activatedSkillIds)) {
+            const requiredSkill = skillNames?.find(
+              (skill) => skill.id === uj.jutsu.requiredSkillId,
+            )?.name;
+            warning = `Requires active skill: ${requiredSkill ?? uj.jutsu.requiredSkillId}`;
+          }
         }
         return {
           ...uj.jutsu,
@@ -377,13 +402,20 @@ export default function MyJutsu() {
         };
       });
     },
-    [userData, userItems, userElements],
+    [userData, userItems, userElements, skillNames, activatedSkillIds],
   );
 
   // Derived calculations
   const curEquip = userJutsus?.filter((j) => j.equipped).length;
   const maxEquip = userData && calcJutsuEquipLimit(userData);
   const canEquip = curEquip !== undefined && maxEquip && curEquip < maxEquip;
+  const selectedMeetsSkill = userjutsu
+    ? meetsRequiredSkill(userjutsu.jutsu.requiredSkillId, activatedSkillIds)
+    : true;
+  const selectedRequiredSkillName = userjutsu?.jutsu.requiredSkillId
+    ? (skillNames?.find((skill) => skill.id === userjutsu.jutsu.requiredSkillId)
+        ?.name ?? userjutsu.jutsu.requiredSkillId)
+    : null;
   const subtitle =
     curEquip && maxEquip
       ? `Equipped ${curEquip}/${maxEquip}`
@@ -568,21 +600,23 @@ export default function MyJutsu() {
               !isToggling
                 ? userjutsu.equipped
                   ? "Unequip"
-                  : canEquip
-                    ? "Equip"
-                    : "Unequip other first"
+                  : !selectedMeetsSkill
+                    ? `Activate ${selectedRequiredSkillName ?? "required skill"} first`
+                    : canEquip
+                      ? "Equip"
+                      : "Unequip other first"
                 : undefined
             }
             isValid={false}
             onAccept={() => {
-              if (canEquip || userjutsu.equipped) {
+              if ((canEquip && selectedMeetsSkill) || userjutsu.equipped) {
                 equip({ userJutsuId: userjutsu.id });
               } else {
                 setIsOpen(false);
               }
             }}
             confirmClassName={
-              canEquip
+              canEquip && selectedMeetsSkill
                 ? "bg-blue-600 text-white hover:bg-blue-700"
                 : "bg-red-600 text-white hover:bg-red-700"
             }
@@ -602,6 +636,11 @@ export default function MyJutsu() {
                   showStatistic="jutsu"
                   showEvolutions
                 />
+                {!selectedMeetsSkill && selectedRequiredSkillName && (
+                  <p className="mb-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-destructive text-sm">
+                    Requires active skill: {selectedRequiredSkillName}
+                  </p>
+                )}
                 {userReskins?.find((r) => r.jutsuId === userjutsu.jutsuId) &&
                   !userjutsu.activeReskin &&
                   !userjutsu.activeReskin && (
@@ -1250,6 +1289,7 @@ const categorizeJutsus = (
   },
   userItems: UserItemWithItem[] | undefined,
   userElements: Set<ElementName>,
+  activatedSkillIds: ReadonlySet<string>,
 ): CategorizedJutsus => {
   const result: CategorizedJutsus = {
     equipped: [],
@@ -1263,6 +1303,10 @@ const categorizeJutsus = (
   if (!userJutsus) return result;
 
   for (const uj of userJutsus) {
+    if (!meetsRequiredSkill(uj.jutsu.requiredSkillId, activatedSkillIds)) {
+      result.unavailable.push(uj);
+      continue;
+    }
     // Equipped jutsu go to their own section
     if (uj.equipped) {
       result.equipped.push(uj);

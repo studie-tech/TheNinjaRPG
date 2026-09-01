@@ -1,9 +1,10 @@
-import { gte } from "drizzle-orm";
+import { eq, gte, inArray } from "drizzle-orm";
 import {
   RANKED_LEGEND_LP_REQUIREMENT,
   RANKED_SANNIN_TOP_PLAYERS,
 } from "@/drizzle/constants";
-import { userData } from "@/drizzle/schema";
+import type { RankedLoadout } from "@/drizzle/schema";
+import { item, jutsu, rankedLoadout, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 /**
@@ -21,4 +22,68 @@ export const fetchSanninRankedPlayers = async (client: DrizzleClient) => {
     limit: RANKED_SANNIN_TOP_PLAYERS,
   });
   return users.map((u) => u.rankedLp);
+};
+
+/** Remove skill-gated jutsu and items from a stored ranked loadout. */
+export const cleanRankedSkillRequirements = async (
+  client: DrizzleClient,
+  storedLoadout: RankedLoadout,
+): Promise<{
+  loadout: RankedLoadout;
+  removedJutsuIds: string[];
+  removedItemIds: string[];
+}> => {
+  const selectedItemIds = [
+    ...storedLoadout.loadout.weaponIds,
+    ...storedLoadout.loadout.consumableIds,
+  ];
+  const [selectedJutsus, selectedItems] = await Promise.all([
+    storedLoadout.loadout.jutsuIds.length > 0
+      ? client.query.jutsu.findMany({
+          where: inArray(jutsu.id, storedLoadout.loadout.jutsuIds),
+        })
+      : Promise.resolve([]),
+    selectedItemIds.length > 0
+      ? client.query.item.findMany({ where: inArray(item.id, selectedItemIds) })
+      : Promise.resolve([]),
+  ]);
+  const removedJutsuIds = selectedJutsus
+    .filter((entry) => entry.requiredSkillId)
+    .map((entry) => entry.id);
+  const removedItemIds = selectedItems
+    .filter((entry) => entry.requiredSkillId)
+    .map((entry) => entry.id);
+  if (removedJutsuIds.length === 0 && removedItemIds.length === 0) {
+    return { loadout: storedLoadout, removedJutsuIds, removedItemIds };
+  }
+  const loadout: RankedLoadout = {
+    ...storedLoadout,
+    updatedAt: new Date(),
+    loadout: {
+      ...storedLoadout.loadout,
+      jutsuIds: storedLoadout.loadout.jutsuIds.filter(
+        (id) => !removedJutsuIds.includes(id),
+      ),
+      favoriteJutsuIds: (storedLoadout.loadout.favoriteJutsuIds ?? []).filter(
+        (id) => !removedJutsuIds.includes(id),
+      ),
+      weaponIds: storedLoadout.loadout.weaponIds.filter(
+        (id) => !removedItemIds.includes(id),
+      ),
+      consumableIds: storedLoadout.loadout.consumableIds.filter(
+        (id) => !removedItemIds.includes(id),
+      ),
+      favoriteWeaponIds: (storedLoadout.loadout.favoriteWeaponIds ?? []).filter(
+        (id) => !removedItemIds.includes(id),
+      ),
+      favoriteConsumableIds: (storedLoadout.loadout.favoriteConsumableIds ?? []).filter(
+        (id) => !removedItemIds.includes(id),
+      ),
+    },
+  };
+  await client
+    .update(rankedLoadout)
+    .set({ loadout: loadout.loadout, updatedAt: loadout.updatedAt })
+    .where(eq(rankedLoadout.id, storedLoadout.id));
+  return { loadout, removedJutsuIds, removedItemIds };
 };

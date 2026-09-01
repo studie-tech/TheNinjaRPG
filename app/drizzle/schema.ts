@@ -634,6 +634,8 @@ export type SkillTree = InferSelectModel<typeof skillTree>;
 
 export const skillTreeRelations = relations(skillTree, ({ one, many }) => ({
   userSkills: many(userSkill),
+  requiredByItems: many(item),
+  requiredByJutsus: many(jutsu),
   folder: one(skillTreeFolder, {
     fields: [skillTree.folderId],
     references: [skillTreeFolder.id],
@@ -1463,6 +1465,7 @@ export const item = mysqlTable(
     craftingExperience: int("craftingExperience").default(0).notNull(),
     crystalTargetTypes: mysqlEnum("crystalTargetTypes", consts.ItemTypes),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
+    requiredSkillId: varchar("requiredSkillId", { length: 191 }),
     battleUsageType: mysqlEnum("battleUsageType", consts.BattleUsageTypes)
       .default("BOTH")
       .notNull(),
@@ -1481,6 +1484,9 @@ export const item = mysqlTable(
       repsCostIdx: index("Item_repsCost_idx").on(table.repsCost),
       requiredLevelIdx: index("Item_requiredLevel_idx").on(table.requiredLevel),
       bloodlineIdIdx: index("Item_bloodlineId_idx").on(table.bloodlineId),
+      requiredSkillIdIdx: index("Item_requiredSkillId_idx").on(
+        table.requiredSkillId,
+      ),
       parentItemIdIdx: index("Item_parentItemId_idx").on(table.parentItemId),
       parentItemIdHiddenIdx: index("Item_parentItemId_hidden_idx").on(
         table.parentItemId,
@@ -1501,6 +1507,10 @@ export const itemRelations = relations(item, ({ one, many }) => ({
   requiredBloodline: one(bloodline, {
     fields: [item.bloodlineId],
     references: [bloodline.id],
+  }),
+  requiredSkill: one(skillTree, {
+    fields: [item.requiredSkillId],
+    references: [skillTree.id],
   }),
   parentItem: one(item, {
     fields: [item.parentItemId],
@@ -1682,6 +1692,7 @@ export const jutsu = mysqlTable(
     requiredIntelligence: int("requiredIntelligence"),
     requiredWillpower: int("requiredWillpower"),
     requiredBloodlineItemId: varchar("requiredBloodlineItemId", { length: 191 }),
+    requiredSkillId: varchar("requiredSkillId", { length: 191 }),
   },
   (table) => {
     return {
@@ -1698,6 +1709,9 @@ export const jutsu = mysqlTable(
       requiredBloodlineItemIdIdx: index("Jutsu_requiredBloodlineItemId_idx").on(
         table.requiredBloodlineItemId,
       ),
+      requiredSkillIdIdx: index("Jutsu_requiredSkillId_idx").on(
+        table.requiredSkillId,
+      ),
     };
   },
 );
@@ -1710,6 +1724,10 @@ export const jutsuRelations = relations(jutsu, ({ one, many }) => ({
   requiredBloodlineItem: one(item, {
     fields: [jutsu.requiredBloodlineItemId],
     references: [item.id],
+  }),
+  requiredSkill: one(skillTree, {
+    fields: [jutsu.requiredSkillId],
+    references: [skillTree.id],
   }),
   reskins: many(jutsuReskin, { relationName: "jutsuReskins" }),
   parentJutsu: one(jutsu, {
