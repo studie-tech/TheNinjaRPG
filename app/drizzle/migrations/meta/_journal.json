@@ -330,6 +330,13 @@
       "when": 1788253691539,
       "tag": "0046_charming_old_lace",
       "breakpoints": false
+    },
+    {
+      "idx": 47,
+      "version": "5",
+      "when": 1788257876335,
+      "tag": "0047_even_shatterstar",
+      "breakpoints": false
     }
   ]
 }

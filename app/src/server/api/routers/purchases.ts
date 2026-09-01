@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "@/api/trpc";
 import {
@@ -45,11 +45,19 @@ export const purchasesRouter = createTRPCRouter({
 
   /** Recent store purchases, so the player can see a grant land. */
   recent: protectedProcedure
-    .input(z.object({ limit: z.number().min(1).max(50).default(10) }))
+    .input(
+      z.object({
+        limit: z.number().min(1).max(50).default(10),
+        transactionId: z.string().optional(),
+        productId: z.string().optional(),
+        createdAfter: z.date().optional(),
+      }),
+    )
     .output(
       z.array(
         z.object({
           id: z.string(),
+          transactionId: z.string(),
           productId: z.string(),
           store: z.enum(STORE_PLATFORMS),
           reputationPoints: z.number(),
@@ -65,6 +73,7 @@ export const purchasesRouter = createTRPCRouter({
       const rows = await ctx.drizzle
         .select({
           id: storePurchase.id,
+          transactionId: storePurchase.transactionId,
           productId: storePurchase.productId,
           store: storePurchase.store,
           reputationPoints: storePurchase.reputationPoints,
@@ -75,7 +84,18 @@ export const purchasesRouter = createTRPCRouter({
           createdAt: storePurchase.createdAt,
         })
         .from(storePurchase)
-        .where(eq(storePurchase.userId, ctx.userId))
+        .where(
+          and(
+            eq(storePurchase.userId, ctx.userId),
+            ...(input.transactionId
+              ? [eq(storePurchase.transactionId, input.transactionId)]
+              : []),
+            ...(input.productId ? [eq(storePurchase.productId, input.productId)] : []),
+            ...(input.createdAfter
+              ? [gte(storePurchase.createdAt, input.createdAfter)]
+              : []),
+          ),
+        )
         .orderBy(desc(storePurchase.createdAt))
         .limit(input.limit);
       return rows;

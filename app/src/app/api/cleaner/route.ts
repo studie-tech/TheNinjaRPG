@@ -23,10 +23,8 @@ import {
   jutsu,
   mpvpBattleQueue,
   mpvpBattleUser,
-  paypalSubscription,
   questHistory,
   rankedPvpQueue,
-  storePurchase,
   trainingLog,
   user2conversation,
   userActivityEvent,
@@ -46,6 +44,7 @@ import {
 } from "@/libs/gamesettings";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { drizzleDB } from "@/server/db";
+import { reconcileFederalStatuses } from "@/server/utils/purchases/grant";
 import { secondsFromNow } from "@/utils/time";
 
 const HOURLY_TIMER_NAME = "cleaner-hourly";
@@ -433,37 +432,9 @@ export async function GET() {
           LIMIT ${rangeCleanupBatchSize}`,
     );
 
-    // Step 32: Clear subscriptions that no longer have a paying source behind them.
-    // Federal status is derived state: it survives only while some subscription vouches
-    // for it. The App Store and Play bill outside PayPal entirely, so a store subscriber
-    // has no PaypalSubscription row and would be reset here within the hour. Their proof
-    // is the StorePurchase row, refreshed every billing period because RevenueCat sends
-    // RENEWAL as a granting event. The window is wider than PayPal's because a failed
-    // renewal opens a billing-retry grace period of up to 30 days during which the player
-    // is still entitled and no RENEWAL arrives; a monthly cycle plus that grace outlasts
-    // 31 days. An explicit paid-through date takes precedence, including one moved far
-    // into the future by SUBSCRIPTION_EXTENDED. The age window remains as the fallback
-    // when a store omits expiration data. Revocation is event-driven through EXPIRATION.
-    // Reputation bundles carry a NULL federalStatus and sandbox receipts never grant, so
-    // neither may hold a status open.
-    await drizzleDB.execute(
-      sql`UPDATE ${userData} u SET u.federalStatus = 'NONE' WHERE u.federalStatus != 'NONE' AND NOT EXISTS (
-        SELECT 1 FROM ${paypalSubscription} p WHERE p.affectedUserId = u.userId AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
-      ) AND NOT EXISTS (
-        SELECT 1 FROM ${storePurchase} s WHERE s.userId = u.userId AND s.federalStatus IS NOT NULL AND s.acceptedAt IS NOT NULL AND s.revokedAt IS NULL AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
-      )`,
-    );
-
-    // Step 33: Activate users with active subscriptions
-    await drizzleDB.execute(
-      sql`UPDATE ${userData} u
-          INNER JOIN ${paypalSubscription} ps ON u.userId = ps.affectedUserId
-          SET u.federalStatus = ps.federalStatus
-          WHERE 
-            u.federalStatus = 'NONE'
-            AND ps.status = 'ACTIVE'
-            AND ps.updatedAt > DATE_SUB(NOW(), INTERVAL 31 DAY)`,
-    );
+    // Step 32: Federal status is derived state. Reconcile its exact maximum active tier
+    // across PayPal and both stores, including downgrades when a higher receipt expires.
+    await reconcileFederalStatuses(drizzleDB);
 
     // Step 34: Clear daily bank interest older than 7 days
     await drizzleDB.execute(

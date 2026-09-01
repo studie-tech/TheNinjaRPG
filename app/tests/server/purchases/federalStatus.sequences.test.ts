@@ -7,12 +7,14 @@ import {
   paypalSubscription,
   storeEntitlementState,
   storePurchase,
+  storePurchaseTransfer,
   userData,
 } from "@/drizzle/schema";
 import type { FederalStatus, StorePlatform } from "@/drizzle/constants";
 import {
   extendStoreSubscription,
   grantStorePurchase,
+  reconcileFederalStatuses,
   revokeFederalStatus,
   setFederalStatusWithStoreFloor,
   storeFederalFloor,
@@ -95,6 +97,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
   beforeEach(async () => {
     await resetTables(
       storeEntitlementState,
+      storePurchaseTransfer,
       storePurchase,
       paypalSubscription,
       userData,
@@ -320,10 +323,12 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     ]);
     await buyFederal("GOLD");
 
+    const transferredAt = new Date();
     const first = await transferStorePurchases(await db(), {
       fromUserIds: [USER],
       toUserIds: [DESTINATION],
       store: "APPLE",
+      occurredAt: transferredAt,
     });
     expect(first.rowsAffected).toBe(1);
     // RevenueCat retries the same TRANSFER; the second pass must be harmless while still
@@ -332,6 +337,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       fromUserIds: [USER],
       toUserIds: [DESTINATION],
       store: "APPLE",
+      occurredAt: transferredAt,
     });
     expect(retry.rowsAffected).toBe(0);
 
@@ -353,6 +359,187 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(source?.federalStatus).toBe("NONE");
     expect(destination?.federalStatus).toBe("GOLD");
     expect(receipt?.userId).toBe(DESTINATION);
+  });
+
+  it("persists a storeless transfer before purchase and routes retries to its destination", async () => {
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    await transferStorePurchases(database, {
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      occurredAt: new Date(),
+    });
+
+    const transactionId = nanoid();
+    const grant = {
+      userId: USER,
+      transactionId,
+      productId: "tnr_federal_gold",
+      store: "APPLE" as const,
+      isSandbox: false,
+      purchasedAt: new Date(),
+      raw: {},
+    };
+    await expect(grantStorePurchase(database, grant)).resolves.toMatchObject({
+      status: "granted",
+      federalStatus: "GOLD",
+    });
+    await expect(grantStorePurchase(database, grant)).resolves.toEqual({
+      status: "duplicate",
+    });
+
+    // Missing store created redirects for both supported stores, not whichever receipt
+    // happened to exist when the transfer arrived.
+    await grantStorePurchase(database, {
+      ...grant,
+      transactionId: nanoid(),
+      productId: "tnr_federal_silver",
+      store: "GOOGLE",
+    });
+    const [source, destination, receipts, redirects] = await Promise.all([
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, USER),
+      }),
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, DESTINATION),
+      }),
+      database.query.storePurchase.findMany({
+        columns: { userId: true },
+      }),
+      database.query.storePurchaseTransfer.findMany({
+        columns: { store: true, destinationUserId: true },
+      }),
+    ]);
+    expect(source?.federalStatus).toBe("NONE");
+    expect(destination?.federalStatus).toBe("GOLD");
+    expect(receipts.every((receipt) => receipt.userId === DESTINATION)).toBe(true);
+    expect(redirects).toEqual(
+      expect.arrayContaining([
+        { store: "APPLE", destinationUserId: DESTINATION },
+        { store: "GOOGLE", destinationUserId: DESTINATION },
+      ]),
+    );
+  });
+
+  it("does not let a delayed older transfer overwrite the ownership watermark", async () => {
+    const olderDestination = "federal-transfer-older-destination";
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+      {
+        userId: olderDestination,
+        username: "older-destination",
+        federalStatus: "NONE",
+      },
+    ]);
+    const database = await db();
+    const newerAt = new Date();
+    await transferStorePurchases(database, {
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      occurredAt: newerAt,
+    });
+    await transferStorePurchases(database, {
+      fromUserIds: [USER],
+      toUserIds: [olderDestination],
+      store: "APPLE",
+      occurredAt: new Date(newerAt.getTime() - MINUTE),
+    });
+
+    await grantStorePurchase(database, {
+      userId: USER,
+      transactionId: nanoid(),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: false,
+      purchasedAt: new Date(),
+      raw: {},
+    });
+    const [redirect, receipt] = await Promise.all([
+      database.query.storePurchaseTransfer.findFirst({
+        columns: { destinationUserId: true, transferredAt: true },
+        where: eq(storePurchaseTransfer.sourceUserId, USER),
+      }),
+      database.query.storePurchase.findFirst({ columns: { userId: true } }),
+    ]);
+    expect(redirect?.destinationUserId).toBe(DESTINATION);
+    expect(redirect?.transferredAt.getTime()).toBe(newerAt.getTime());
+    expect(receipt?.userId).toBe(DESTINATION);
+  });
+
+  it("carries an expiry watermark across a transfer before delayed purchase delivery", async () => {
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const endedAt = new Date(Date.now() - MINUTE);
+    await revokeFederalStatus(database, USER, {
+      occurredAt: endedAt,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+    });
+    await transferStorePurchases(database, {
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      occurredAt: new Date(),
+    });
+
+    await expect(
+      grantStorePurchase(database, {
+        userId: USER,
+        transactionId: nanoid(),
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt: new Date(endedAt.getTime() - MINUTE),
+        raw: {},
+      }),
+    ).resolves.toEqual({ status: "ignored", reason: "Expired purchase" });
+    const [destination, receipt] = await Promise.all([
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, DESTINATION),
+      }),
+      database.query.storePurchase.findFirst({
+        columns: { userId: true, revokedAt: true },
+      }),
+    ]);
+    expect(destination?.federalStatus).toBe("NONE");
+    expect(receipt?.userId).toBe(DESTINATION);
+    expect(receipt?.revokedAt).toBeInstanceOf(Date);
+  });
+
+  it("bulk reconciliation downgrades expired GOLD to a live store SILVER", async () => {
+    const goldTransactionId = await buyFederal("GOLD");
+    const database = await db();
+    await database
+      .update(storePurchase)
+      .set({ expiresAt: new Date(Date.now() - MINUTE) })
+      .where(eq(storePurchase.transactionId, goldTransactionId));
+    await buyFederal("SILVER");
+    expect(await statusOf()).toBe("GOLD");
+
+    await reconcileFederalStatuses(database);
+    expect(await statusOf()).toBe("SILVER");
+  });
+
+  it("bulk reconciliation downgrades expired GOLD to live PayPal NORMAL", async () => {
+    const goldTransactionId = await buyFederal("GOLD");
+    const database = await db();
+    await database
+      .update(storePurchase)
+      .set({ expiresAt: new Date(Date.now() - MINUTE) })
+      .where(eq(storePurchase.transactionId, goldTransactionId));
+    await givePaypal("NORMAL");
+    expect(await statusOf()).toBe("GOLD");
+
+    await reconcileFederalStatuses(database);
+    expect(await statusOf()).toBe("NORMAL");
   });
 
   it("leaves a failed grant pending, then applies it exactly once on retry", async () => {

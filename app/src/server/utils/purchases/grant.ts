@@ -25,6 +25,7 @@ import {
   type FederalStatus,
   FederalStatuses,
   STORE_FEDERAL_PRODUCTS,
+  STORE_PLATFORMS,
   STORE_REP_PRODUCTS,
   type StorePlatform,
 } from "@/drizzle/constants";
@@ -32,6 +33,7 @@ import {
   paypalSubscription,
   storeEntitlementState,
   storePurchase,
+  storePurchaseTransfer,
   userData,
 } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
@@ -108,6 +110,31 @@ const federalProduct = (productId: string) =>
       product.productId === productId || product.androidProductId === productId,
   );
 
+/** Follow durable RevenueCat ownership redirects, including a partially-flattened chain. */
+const transferredUserId = async (
+  client: DrizzleClient,
+  sourceUserId: string,
+  store: StorePlatform,
+): Promise<string> => {
+  const visited = new Set<string>();
+  let current = sourceUserId;
+  while (true) {
+    if (visited.has(current)) {
+      throw new Error(`RevenueCat transfer cycle from ${sourceUserId}/${store}`);
+    }
+    visited.add(current);
+    const redirect = await client.query.storePurchaseTransfer.findFirst({
+      columns: { destinationUserId: true },
+      where: and(
+        eq(storePurchaseTransfer.sourceUserId, current),
+        eq(storePurchaseTransfer.store, store),
+      ),
+    });
+    if (!redirect || redirect.destinationUserId === current) return current;
+    current = redirect.destinationUserId;
+  }
+};
+
 /**
  * Apply a purchase exactly once.
  *
@@ -125,7 +152,12 @@ export const grantStorePurchase = async (
     return { status: "ignored", reason: `Unknown product ${grant.productId}` };
   }
 
-  const accepted = !grant.isSandbox || isSandboxGrantee(grant.userId);
+  // TRANSFER may arrive first. Consumables stay with their purchaser, but subscriptions
+  // follow the durable store-account ownership redirect before any receipt is inserted.
+  let recipientUserId = federal
+    ? await transferredUserId(client, grant.userId, grant.store)
+    : grant.userId;
+  const accepted = !grant.isSandbox || isSandboxGrantee(recipientUserId);
 
   const retireIfExpired = async (
     explicitExpiration: Date | null | undefined,
@@ -141,7 +173,7 @@ export const grantStorePurchase = async (
           await client.query.storeEntitlementState.findFirst({
             columns: { revokedThrough: true },
             where: and(
-              eq(storeEntitlementState.userId, grant.userId),
+              eq(storeEntitlementState.userId, recipientUserId),
               eq(storeEntitlementState.store, grant.store),
               gte(storeEntitlementState.revokedThrough, grant.purchasedAt),
             ),
@@ -163,16 +195,18 @@ export const grantStorePurchase = async (
   const [recipient] = await client
     .select({ userId: userData.userId })
     .from(userData)
-    .where(eq(userData.userId, grant.userId));
+    .where(eq(userData.userId, recipientUserId));
   if (!recipient) {
-    throw new Error(`No user ${grant.userId} for transaction ${grant.transactionId}`);
+    throw new Error(
+      `No user ${recipientUserId} for transaction ${grant.transactionId}`,
+    );
   }
 
   let inserted = true;
   try {
     await client.insert(storePurchase).values({
       id: nanoid(),
-      userId: grant.userId,
+      userId: recipientUserId,
       transactionId: grant.transactionId,
       productId: grant.productId,
       store: grant.store,
@@ -197,6 +231,39 @@ export const grantStorePurchase = async (
   }
 
   try {
+    if (federal) {
+      // Close the insert/transfer race: if the redirect appeared after the first lookup,
+      // move this still-unclaimed receipt before inspecting or granting it. The atomic
+      // claim below also refuses a source that becomes redirected after this recheck.
+      const latestRecipient = await transferredUserId(
+        client,
+        grant.userId,
+        grant.store,
+      );
+      if (latestRecipient !== recipientUserId) {
+        const [latestUser] = await client
+          .select({ userId: userData.userId })
+          .from(userData)
+          .where(eq(userData.userId, latestRecipient));
+        if (!latestUser) {
+          throw new Error(
+            `No transfer destination ${latestRecipient} for transaction ${grant.transactionId}`,
+          );
+        }
+        await client
+          .update(storePurchase)
+          .set({ userId: latestRecipient })
+          .where(
+            and(
+              eq(storePurchase.transactionId, grant.transactionId),
+              eq(storePurchase.userId, recipientUserId),
+              isNotNull(storePurchase.federalStatus),
+              isNull(storePurchase.grantedAt),
+            ),
+          );
+        recipientUserId = latestRecipient;
+      }
+    }
     const receipt = await client.query.storePurchase.findFirst({
       columns: {
         userId: true,
@@ -218,7 +285,7 @@ export const grantStorePurchase = async (
     }
     // A TRANSFER may have moved a subscription receipt before an older delivery retries.
     // The destination reconciliation already applied its tier; never move or grant it back.
-    if (receipt.userId !== grant.userId) return { status: "duplicate" };
+    if (receipt.userId !== recipientUserId) return { status: "duplicate" };
     if (!receipt.acceptedAt) {
       return inserted
         ? { status: "ignored", reason: "Sandbox purchase" }
@@ -267,6 +334,11 @@ export const grantStorePurchase = async (
                 AND ${storeEntitlementState.store} = ${storePurchase.store}
                 AND ${storeEntitlementState.revokedThrough} >= ${storePurchase.purchasedAt}
             )
+            AND NOT EXISTS (
+              SELECT 1 FROM ${storePurchaseTransfer}
+              WHERE ${storePurchaseTransfer.sourceUserId} = ${storePurchase.userId}
+                AND ${storePurchaseTransfer.store} = ${storePurchase.store}
+            )
         `);
 
     if (result.rowsAffected === 0) {
@@ -289,7 +361,7 @@ export const grantStorePurchase = async (
     const [updated] = await client
       .select({ federalStatus: userData.federalStatus })
       .from(userData)
-      .where(eq(userData.userId, grant.userId));
+      .where(eq(userData.userId, recipientUserId));
     return { status: "granted", federalStatus: updated?.federalStatus ?? target };
   } catch (error) {
     Sentry.captureException(error, {
@@ -476,7 +548,10 @@ export const revokeFederalStatus = async (
 export interface StoreTransfer {
   fromUserIds: string[];
   toUserIds: string[];
-  store: StorePlatform;
+  /** Missing on valid RevenueCat TRANSFER payloads; those apply to both supported stores. */
+  store?: StorePlatform | null;
+  /** RevenueCat event time, used to reject a delayed older ownership redirect. */
+  occurredAt: Date;
 }
 
 /**
@@ -506,22 +581,98 @@ export const transferStorePurchases = async (
   }
   const destinationUserId = destination.userId;
   const sourceIds = fromIds.filter((id) => id !== destinationUserId);
+  const stores = transfer.store ? [transfer.store] : [...STORE_PLATFORMS];
 
   let rowsAffected = 0;
-  if (sourceIds.length > 0) {
-    const result = await client
-      .update(storePurchase)
-      .set({ userId: destinationUserId })
-      .where(
-        and(
-          inArray(storePurchase.userId, sourceIds),
-          eq(storePurchase.store, transfer.store),
-          isNotNull(storePurchase.acceptedAt),
-          isNotNull(storePurchase.federalStatus),
-          isNull(storePurchase.revokedAt),
-        ),
+  const effectiveDestinations = new Set<string>([destinationUserId]);
+  for (const store of stores) {
+    // Flatten aliases which already pointed at a transferred source. This keeps retries
+    // of an old A -> B receipt following a later B -> C transfer too.
+    if (sourceIds.length > 0) {
+      await client
+        .update(storePurchaseTransfer)
+        .set({
+          destinationUserId,
+          transferredAt: transfer.occurredAt,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(storePurchaseTransfer.store, store),
+            inArray(storePurchaseTransfer.destinationUserId, sourceIds),
+            lte(storePurchaseTransfer.transferredAt, transfer.occurredAt),
+          ),
+        );
+    }
+
+    const mappedDestination = await transferredUserId(client, destinationUserId, store);
+    effectiveDestinations.add(mappedDestination);
+    for (const sourceUserId of sourceIds) {
+      // Persist before moving rows. A concurrent grant then either sees the redirect up
+      // front, or its atomic claim observes it and retries without crediting the source.
+      await client
+        .insert(storePurchaseTransfer)
+        .values({
+          id: nanoid(),
+          sourceUserId,
+          destinationUserId: mappedDestination,
+          store,
+          transferredAt: transfer.occurredAt,
+          updatedAt: new Date(),
+        })
+        .onDuplicateKeyUpdate({
+          set: {
+            destinationUserId: sql`IF(${storePurchaseTransfer.transferredAt} <= ${transfer.occurredAt}, ${mappedDestination}, ${storePurchaseTransfer.destinationUserId})`,
+            transferredAt: sql`GREATEST(${storePurchaseTransfer.transferredAt}, ${transfer.occurredAt})`,
+            updatedAt: new Date(),
+          },
+        });
+
+      const effectiveDestination = await transferredUserId(client, sourceUserId, store);
+      effectiveDestinations.add(effectiveDestination);
+      const sourceEntitlementState = await client.query.storeEntitlementState.findFirst(
+        {
+          columns: { revokedThrough: true },
+          where: and(
+            eq(storeEntitlementState.userId, sourceUserId),
+            eq(storeEntitlementState.store, store),
+          ),
+        },
       );
-    rowsAffected = result.rowsAffected;
+      if (sourceEntitlementState && effectiveDestination !== sourceUserId) {
+        // Ownership redirects apply to delayed expiries as well as delayed grants. Carry
+        // the revocation watermark forward so an already-ended old period cannot become
+        // live merely because its purchase webhook lands under the destination later.
+        await client
+          .insert(storeEntitlementState)
+          .values({
+            id: nanoid(),
+            userId: effectiveDestination,
+            store,
+            revokedThrough: sourceEntitlementState.revokedThrough,
+            updatedAt: new Date(),
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              revokedThrough: sql`GREATEST(${storeEntitlementState.revokedThrough}, ${sourceEntitlementState.revokedThrough})`,
+              updatedAt: new Date(),
+            },
+          });
+      }
+      const result = await client
+        .update(storePurchase)
+        .set({ userId: effectiveDestination })
+        .where(
+          and(
+            eq(storePurchase.userId, sourceUserId),
+            eq(storePurchase.store, store),
+            isNotNull(storePurchase.acceptedAt),
+            isNotNull(storePurchase.federalStatus),
+            isNull(storePurchase.revokedAt),
+          ),
+        );
+      rowsAffected += result.rowsAffected;
+    }
   }
 
   const knownSources =
@@ -531,7 +682,10 @@ export const transferStorePurchases = async (
           .from(userData)
           .where(inArray(userData.userId, sourceIds))
       : [];
-  for (const userId of [...knownSources.map((row) => row.userId), destinationUserId]) {
+  for (const userId of new Set([
+    ...knownSources.map((row) => row.userId),
+    ...effectiveDestinations,
+  ])) {
     const paypal = await paypalFederalFloor(client, userId);
     await setFederalStatusWithStoreFloor(client, userId, paypal);
   }
@@ -663,3 +817,77 @@ export const setFederalStatusWithStoreFloor = async (
     WHERE ${userData.userId} = ${userId}
   `);
 };
+
+/**
+ * Re-derive every non-NONE or currently subscribed player's tier in one correlated write.
+ *
+ * This is the bulk cleaner counterpart of `setFederalStatusWithStoreFloor`: GOLD wins over
+ * SILVER, which wins over NORMAL, across both active PayPal rows and live store receipts.
+ * It therefore performs downgrades as well as clearing or restoring a status.
+ */
+export const reconcileFederalStatuses = async (
+  client: Pick<DrizzleClient, "execute">,
+) =>
+  await client.execute(sql`
+    UPDATE ${userData} u
+    SET u.federalStatus = CASE
+      WHEN EXISTS (
+        SELECT 1 FROM ${paypalSubscription} p
+        WHERE p.affectedUserId = u.userId
+          AND p.status = 'ACTIVE'
+          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
+          AND p.federalStatus = 'GOLD'
+      ) OR EXISTS (
+        SELECT 1 FROM ${storePurchase} s
+        WHERE s.userId = u.userId
+          AND s.federalStatus = 'GOLD'
+          AND s.acceptedAt IS NOT NULL
+          AND s.revokedAt IS NULL
+          AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
+      ) THEN 'GOLD'
+      WHEN EXISTS (
+        SELECT 1 FROM ${paypalSubscription} p
+        WHERE p.affectedUserId = u.userId
+          AND p.status = 'ACTIVE'
+          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
+          AND p.federalStatus = 'SILVER'
+      ) OR EXISTS (
+        SELECT 1 FROM ${storePurchase} s
+        WHERE s.userId = u.userId
+          AND s.federalStatus = 'SILVER'
+          AND s.acceptedAt IS NOT NULL
+          AND s.revokedAt IS NULL
+          AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
+      ) THEN 'SILVER'
+      WHEN EXISTS (
+        SELECT 1 FROM ${paypalSubscription} p
+        WHERE p.affectedUserId = u.userId
+          AND p.status = 'ACTIVE'
+          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
+          AND p.federalStatus = 'NORMAL'
+      ) OR EXISTS (
+        SELECT 1 FROM ${storePurchase} s
+        WHERE s.userId = u.userId
+          AND s.federalStatus = 'NORMAL'
+          AND s.acceptedAt IS NOT NULL
+          AND s.revokedAt IS NULL
+          AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
+      ) THEN 'NORMAL'
+      ELSE 'NONE'
+    END
+    WHERE u.federalStatus != 'NONE'
+      OR EXISTS (
+        SELECT 1 FROM ${paypalSubscription} p
+        WHERE p.affectedUserId = u.userId
+          AND p.status = 'ACTIVE'
+          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
+      )
+      OR EXISTS (
+        SELECT 1 FROM ${storePurchase} s
+        WHERE s.userId = u.userId
+          AND s.federalStatus IS NOT NULL
+          AND s.acceptedAt IS NOT NULL
+          AND s.revokedAt IS NULL
+          AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
+      )
+  `);

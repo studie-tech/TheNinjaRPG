@@ -10,8 +10,9 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { platform, purchases } from "@/libs/native";
 import {
-  hasSettledNewPurchase,
+  hasSettledStorePurchase,
   isPendingStorePurchase,
+  type StorePurchaseAttempt,
 } from "@/libs/native/purchaseSettlement";
 import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
@@ -180,25 +181,44 @@ export default function NativeStore() {
    * happen.
    *
    * A terminal purchase row is the signal that the webhook finished applying the grant.
-   * Compared by id rather than by count, because `recent` is capped and a player at the
-   * cap would never see the count grow.
+   * The SDK transaction id identifies it when available. On platforms that omit that id,
+   * the product plus checkout-start time keeps an unrelated concurrent receipt from
+   * releasing this attempt's lock.
    */
   const settleAfterPurchase = useCallback(
-    async (previousNewestId: string | undefined) => {
-      let newestId = previousNewestId;
+    async (attempt: StorePurchaseAttempt) => {
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
-        const { data } = await refetchRecent();
-        if (data?.[0]) newestId = data[0].id;
-        if (hasSettledNewPurchase(data ?? [], previousNewestId)) break;
+        const matching = await utils.purchases.recent.fetch({
+          limit: 5,
+          ...(attempt.transactionId
+            ? { transactionId: attempt.transactionId }
+            : { productId: attempt.productId, createdAfter: attempt.startedAt }),
+        });
+        if (hasSettledStorePurchase(matching, attempt)) break;
       }
       // Refetch regardless: if the webhook is slow or has failed, the player should still
       // see whatever the truth currently is rather than a frozen screen.
-      await utils.profile.getUser.invalidate();
-      return newestId;
+      const [{ data }] = await Promise.all([
+        refetchRecent(),
+        utils.profile.getUser.invalidate(),
+      ]);
+      return data?.[0]?.id;
     },
     [refetchRecent, utils],
   );
+
+  const refreshAfterRestore = useCallback(async () => {
+    let newestId: string | undefined;
+    for (const delay of GRANT_POLL_DELAYS_MS) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      const { data } = await refetchRecent();
+      newestId = data?.[0]?.id ?? newestId;
+      if (data && !data.some(isPendingStorePurchase)) break;
+    }
+    await utils.profile.getUser.invalidate();
+    return newestId;
+  }, [refetchRecent, utils]);
 
   const buy = async (
     entry: purchases.StorePackage,
@@ -254,6 +274,7 @@ export default function NativeStore() {
           }
         }
       }
+      const purchaseStartedAt = new Date();
       const result = await purchases.purchase(entry, storeProductChangeInfo);
       if (result.status === "cancelled") return;
       if (result.status === "error") {
@@ -276,7 +297,11 @@ export default function NativeStore() {
       }
       // Held busy across the wait so the player cannot buy the same tier twice while the
       // first grant is still in flight.
-      const newestId = await settleAfterPurchase(previousNewestId);
+      const newestId = await settleAfterPurchase({
+        transactionId: result.transactionId,
+        productId,
+        startedAt: purchaseStartedAt,
+      });
       setRecentBaseline((current) =>
         current?.userId === accountId ? { userId: accountId, newestId } : current,
       );
@@ -295,8 +320,6 @@ export default function NativeStore() {
   const restore = async () => {
     if (!available?.bound || available.userId !== player?.userId) return;
     const accountId = available.userId;
-    const previousNewestId =
-      recentBaseline?.userId === accountId ? recentBaseline.newestId : recent?.[0]?.id;
     setIsRestoring(true);
     try {
       const info = await purchases.restore();
@@ -317,7 +340,7 @@ export default function NativeStore() {
         // Restores replay transaction ids the server may already know, so a new recent-row
         // id is not a completion signal. Reconcile in the background without keeping the
         // restore control disabled for the full polling window.
-        void settleAfterPurchase(previousNewestId)
+        void refreshAfterRestore()
           .then((newestId) => {
             setRecentBaseline((current) =>
               current?.userId === accountId ? { userId: accountId, newestId } : current,

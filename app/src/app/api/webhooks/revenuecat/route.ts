@@ -63,11 +63,14 @@ export async function POST(request: Request) {
   try {
     if (event.type === "TRANSFER") {
       const store = toStorePlatform(event.store);
-      if (!store) return unsupportedStore(event.type, event.store);
+      // RevenueCat legitimately omits store on TRANSFER. In that case persist a redirect
+      // for both stores this app supports; an explicit unknown store remains unsupported.
+      if (event.store && !store) return unsupportedStore(event.type, event.store);
       const outcome = await transferStorePurchases(drizzleDB, {
         fromUserIds: event.transferred_from ?? [],
         toUserIds: event.transferred_to ?? [],
         store,
+        occurredAt: occurredAt(event),
       });
       return Response.json({ handled: "transferred", ...outcome });
     }
