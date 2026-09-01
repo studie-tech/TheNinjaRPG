@@ -10,13 +10,15 @@ import {
   appEvents,
   isNative,
   isOutdatedNativeClient,
-  liveActivity,
   parseNativeUserAgent,
   platform,
-  purchases,
   toInternalPath,
   widgets,
 } from "@/libs/native";
+import {
+  clearNativeAccountState,
+  shouldClearNativeAccountState,
+} from "@/libs/native/accountCleanup";
 import { useUserData } from "@/utils/UserContext";
 
 /**
@@ -26,11 +28,24 @@ import { useUserData } from "@/utils/UserContext";
  * for every visitor.
  */
 export default function NativeBridge() {
-  const { data: userData, userId, isClerkLoaded, pusher, timeDiff } = useUserData();
+  const {
+    data: userData,
+    userId,
+    isClerkLoaded,
+    pusher,
+    status,
+    timeDiff,
+  } = useUserData();
   const router = useRouter();
   const pathname = usePathname();
   const [isOutdated, setIsOutdated] = useState(false);
   const isSignedOut = isClerkLoaded && !userId;
+  const shouldClearAccountState = shouldClearNativeAccountState({
+    isClerkLoaded,
+    status,
+    userData,
+    userId,
+  });
   // Signature of the last snapshot written, so a regeneration tick that changes nothing
   // the widget renders does not spend a WidgetKit reload.
   const lastSnapshot = useRef<string | null>(null);
@@ -99,25 +114,18 @@ export default function NativeBridge() {
     });
   }, [pusher]);
 
-  // Leaving a token bound to a signed-out account would send the next person to pick up
-  // the phone somebody else's alerts, and leave their stats on the home screen. Gated on
-  // Clerk having resolved, because userData is undefined during load for a signed-in
-  // player too.
+  // Leaving a token bound to a signed-out or deleted account would send the next person
+  // to pick up the phone somebody else's alerts, and leave their stats on the home screen.
+  // `success` distinguishes a genuinely missing profile from the normal loading gap (or a
+  // transient query failure) while Clerk remains signed in after character deletion.
   useEffect(() => {
-    if (!isNative() || !isSignedOut) return;
-    void unregister();
-    void widgets.clear();
-    // RevenueCat stays bound to the previous appUserId until told otherwise, so a
-    // purchase or restore by the next person on this phone would credit the last account.
-    void purchases.logOut();
-    // Belt and braces alongside useLiveActivity's own cleanup: if the app was killed
-    // mid-stay, nothing holds the activity id any more, and endAll reaches it anyway.
-    void liveActivity.endAll();
+    if (!isNative() || !shouldClearAccountState) return;
+    void clearNativeAccountState(unregister);
     // Forget the deduplication signature too. Without this, signing back in with the same
     // vitals produces a matching signature, the write is skipped as redundant, and the
     // widget stays on the signed-out placeholder until a rounded stat happens to change.
     lastSnapshot.current = null;
-  }, [isSignedOut, unregister]);
+  }, [shouldClearAccountState, unregister]);
 
   // Home screen widgets read a snapshot from the shared container rather than the API, so
   // they stay correct while the app is closed. `sync` is a no-op when the shell has no
@@ -126,7 +134,7 @@ export default function NativeBridge() {
     // `isSignedOut` and not just `userData`: the profile query stays cached after Clerk
     // drops the session, so without this the sign-out clearing of `widgetToken` would
     // re-trigger this effect and write the previous player's stats straight back over
-    // the `widgets.clear()` above.
+    // the account-state clearing above.
     if (!isNative() || !userData || isSignedOut) return;
     const quest = activeQuest(userData);
     const snapshot = {

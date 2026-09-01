@@ -14,8 +14,15 @@ import {
   PUSH_TOKEN_STALE_DAYS,
   type PushCategory,
 } from "@/drizzle/constants";
-import { userDevice, userLiveActivity, userPushPreference } from "@/drizzle/schema";
+import {
+  storeUserIdAlias,
+  userData,
+  userDevice,
+  userLiveActivity,
+  userPushPreference,
+} from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { acquireStoreUserMutationLock } from "@/server/utils/purchases/grant";
 import { deliveryTest, isPushEnabled, sendPushToUsers } from "@/server/utils/push";
 import { secondsFromNow } from "@/utils/time";
 import {
@@ -44,44 +51,71 @@ export const pushRouter = createTRPCRouter({
       // deliberately excludes this device by token, so it does not matter whether the
       // upsert has landed yet -- the row for the phone registering right now is the one
       // device guaranteed to survive, being the most recently seen.
-      const [, others] = await Promise.all([
-        ctx.drizzle
-          .insert(userDevice)
-          .values({
-            id: nanoid(),
-            userId: ctx.userId,
-            token: input.token,
-            platform: input.platform,
-            appVersion: input.appVersion,
-            locale: input.locale,
-            widgetToken,
-            createdAt: now,
-            lastSeenAt: now,
-          })
-          .onDuplicateKeyUpdate({
-            set: {
+      const result = await ctx.drizzle.transaction(async (tx) => {
+        const lockedClient = tx as unknown as DrizzleClient;
+        // Account deletion uses the same lock for its tombstone and final device purge.
+        // Requiring both the live UserData row and an unretired id means a still-valid
+        // Clerk session cannot recreate bearer state after its game account is gone.
+        await acquireStoreUserMutationLock(lockedClient);
+        const [liveUser] = await lockedClient
+          .select({ userId: userData.userId })
+          .from(userData)
+          .where(eq(userData.userId, ctx.userId))
+          .for("update");
+        const [retiredIdentity] = await lockedClient
+          .select({ oldUserId: storeUserIdAlias.oldUserId })
+          .from(storeUserIdAlias)
+          .where(eq(storeUserIdAlias.oldUserId, ctx.userId))
+          .for("update");
+        if (!liveUser || retiredIdentity) return undefined;
+
+        const [, others] = await Promise.all([
+          lockedClient
+            .insert(userDevice)
+            .values({
+              id: nanoid(),
               userId: ctx.userId,
+              token: input.token,
               platform: input.platform,
               appVersion: input.appVersion,
               locale: input.locale,
               widgetToken,
+              createdAt: now,
               lastSeenAt: now,
-            },
-          }),
-        ctx.drizzle
-          .select({ id: userDevice.id })
-          .from(userDevice)
-          .where(
-            and(eq(userDevice.userId, ctx.userId), ne(userDevice.token, input.token)),
-          )
-          .orderBy(desc(userDevice.lastSeenAt)),
-      ]);
-      // One slot is spoken for by the device above, hence the cap less one.
-      await evictExcessDevices(ctx.drizzle, others);
+            })
+            .onDuplicateKeyUpdate({
+              set: {
+                userId: ctx.userId,
+                platform: input.platform,
+                appVersion: input.appVersion,
+                locale: input.locale,
+                widgetToken,
+                lastSeenAt: now,
+              },
+            }),
+          lockedClient
+            .select({ id: userDevice.id })
+            .from(userDevice)
+            .where(
+              and(eq(userDevice.userId, ctx.userId), ne(userDevice.token, input.token)),
+            )
+            .orderBy(desc(userDevice.lastSeenAt)),
+        ]);
+        // One slot is spoken for by the device above, hence the cap less one.
+        await evictExcessDevices(lockedClient, others);
+        return widgetToken;
+      });
+      if (!result) {
+        return {
+          success: false,
+          message: "Character no longer exists",
+          widgetToken: null,
+        };
+      }
       return {
         success: true,
         message: "Device registered for notifications",
-        widgetToken,
+        widgetToken: result,
       };
     }),
 

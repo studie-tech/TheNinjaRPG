@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { beforeEach, expect, it } from "vitest";
 import {
+  bloodline,
   notification,
   storeEntitlementRevocation,
   storeEntitlementState,
@@ -14,9 +15,13 @@ import {
   userDevice,
   userLiveActivity,
   userPushPreference,
+  village,
 } from "@/drizzle/schema";
+import { registerRouter } from "@/server/api/routers/register";
 import { deleteUser, staffRouter } from "@/server/api/routers/staff";
+import { pushRouter } from "@/server/api/routers/push";
 import {
+  extendStoreSubscription,
   grantStorePurchase,
   transferStorePurchases,
 } from "@/server/utils/purchases/grant";
@@ -38,6 +43,7 @@ const NEW_USER_ID = "rename-new-user";
 describeWithDatabase("staff user-id rename", () => {
   beforeEach(async () => {
     await resetTables(
+      bloodline,
       notification,
       userLiveActivity,
       userPushPreference,
@@ -48,6 +54,7 @@ describeWithDatabase("staff user-id rename", () => {
       storeUserIdAlias,
       storePurchase,
       userData,
+      village,
     );
     await insertUsers([
       { userId: STAFF, username: "Terriator", role: "CODING-ADMIN" },
@@ -62,6 +69,10 @@ describeWithDatabase("staff user-id rename", () => {
     await expect(
       caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
     ).resolves.toMatchObject({ success: true });
+    await database.insert(notification).values({
+      userId: "rename-other-user",
+      content: "must roll back",
+    });
     await expect(
       caller.updateUserId({
         userId: "rename-other-user",
@@ -71,11 +82,16 @@ describeWithDatabase("staff user-id rename", () => {
       success: false,
       message: "UserId was previously used and is reserved",
     });
-    expect(
-      await database.query.userData.findFirst({
+    const [unchangedUser, unchangedNotification] = await Promise.all([
+      database.query.userData.findFirst({
         where: eq(userData.userId, "rename-other-user"),
       }),
-    ).toBeDefined();
+      database.query.notification.findFirst({
+        where: eq(notification.userId, "rename-other-user"),
+      }),
+    ]);
+    expect(unchangedUser).toBeDefined();
+    expect(unchangedNotification?.userId).toBe("rename-other-user");
   });
 
   it("deletes push bearer state and tombstones the retained store ledger", async () => {
@@ -153,6 +169,143 @@ describeWithDatabase("staff user-id rename", () => {
         raw: {},
       }),
     ).resolves.toEqual({ status: "ignored", reason: "Deleted user" });
+    await expect(
+      extendStoreSubscription(database, {
+        userId: OLD_USER_ID,
+        store: "APPLE",
+        productId: "tnr_federal_gold",
+        expirationAt: new Date(Date.now() + 86_400_000),
+        transactionId: "delayed-deleted-extension",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("refuses device registration after the game account is deleted", async () => {
+    const database = await getTestDatabase();
+    await deleteUser(database, OLD_USER_ID);
+    const caller = await callerFor(pushRouter, OLD_USER_ID);
+
+    await expect(
+      caller.registerDevice({ token: "a".repeat(64), platform: "ios" }),
+    ).resolves.toEqual({
+      success: false,
+      message: "Character no longer exists",
+      widgetToken: null,
+    });
+    await expect(
+      database.query.userDevice.findMany({
+        where: eq(userDevice.userId, OLD_USER_ID),
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it("does not let a deleted Clerk identity create another character", async () => {
+    const database = await getTestDatabase();
+    await deleteUser(database, OLD_USER_ID);
+    await Promise.all([
+      database.insert(village).values({
+        id: "registration-horizon",
+        name: "Horizon",
+        sector: 1,
+        kageId: STAFF,
+      }),
+      database.insert(bloodline).values({
+        id: "registration-bloodline",
+        name: "Registration Bloodline",
+        image: "/bloodline.png",
+        description: "test",
+        effects: [],
+        rank: "D",
+      }),
+    ]);
+    const caller = await callerFor(registerRouter, OLD_USER_ID);
+
+    await expect(
+      caller.createCharacter({
+        username: "Reborn",
+        gender: "Male",
+        hair_color: "Black",
+        eye_color: "Blue",
+        skin_color: "Light",
+        attribute_1: "Soft features",
+        attribute_2: "Glasses",
+        attribute_3: "Short Hair",
+        read_tos: true,
+        read_privacy: true,
+        read_earlyaccess: true,
+        recruiter_userid: null,
+        utm_source: null,
+        bloodlineId: "registration-bloodline",
+      }),
+    ).resolves.toEqual({
+      success: false,
+      message: "This account was deleted and cannot create another character",
+    });
+    await expect(
+      database.query.userData.findFirst({
+        where: eq(userData.userId, OLD_USER_ID),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("purges a device registration that overlaps account retirement", async () => {
+    const database = await getTestDatabase();
+    const registerConnection = await openTestDatabaseConnection();
+    const deleteConnection = await openTestDatabaseConnection();
+    const barrierConnection = await openTestDatabaseConnection();
+    const barrier = `delete_register_${nanoid()}`;
+    const trigger = `pause_delete_register_${nanoid().replaceAll("-", "_")}`;
+    await barrierConnection.query(`SELECT GET_LOCK('${barrier}', 10)`);
+    await runRawSql(`
+      CREATE TRIGGER ${trigger} BEFORE INSERT ON UserDevice FOR EACH ROW
+      BEGIN
+        IF NEW.userId = '${OLD_USER_ID}' THEN
+          SET @delete_register_wait = GET_LOCK('${barrier}', 10);
+          SET @delete_register_release = RELEASE_LOCK('${barrier}');
+        END IF;
+      END
+    `);
+    try {
+      const caller = callerForDatabase(
+        pushRouter,
+        OLD_USER_ID,
+        registerConnection.database,
+      );
+      const registration = caller.registerDevice({
+        token: "b".repeat(64),
+        platform: "ios",
+      });
+      await barrierConnection.waitForNamedLockWaiter(barrier);
+
+      let deletionFinished = false;
+      const deletion = deleteUser(deleteConnection.database, OLD_USER_ID).finally(() => {
+        deletionFinished = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(deletionFinished).toBe(false);
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+
+      await expect(registration).resolves.toMatchObject({ success: true });
+      await deletion;
+      const [devices, alias] = await Promise.all([
+        database.query.userDevice.findMany({
+          where: eq(userDevice.userId, OLD_USER_ID),
+        }),
+        database.query.storeUserIdAlias.findFirst({
+          where: eq(storeUserIdAlias.oldUserId, OLD_USER_ID),
+        }),
+      ]);
+      expect(devices).toEqual([]);
+      expect(alias?.newUserId).toMatch(/^__tnr_deleted_store_user__:/);
+    } finally {
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+      await runRawSql(`DROP TRIGGER IF EXISTS ${trigger}`);
+      await Promise.all([
+        registerConnection.close(),
+        deleteConnection.close(),
+        barrierConnection.close(),
+      ]);
+    }
   });
 
   it("rolls back helper and broad writes together when a late rename write fails", async () => {

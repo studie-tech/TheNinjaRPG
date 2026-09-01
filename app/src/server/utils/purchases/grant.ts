@@ -735,6 +735,11 @@ const extendStoreSubscriptionUnlocked = async (
   extension: StoreExtension,
 ): Promise<void> => {
   const canonicalUserId = await canonicalStoreUserId(client, extension.userId);
+  // Account deletion is terminal for the canonical store identity. RevenueCat can send
+  // SUBSCRIPTION_EXTENDED or BILLING_ISSUE after deletion, and when no receipt exists
+  // there is nothing a later retry can repair. Acknowledge the event instead of asking
+  // RevenueCat to retry forever for an owner that is deliberately gone.
+  if (isDeletedStoreUserId(canonicalUserId)) return;
   const exact = extension.transactionId
     ? await client.query.storePurchase.findFirst({
         columns: { id: true, userId: true, revokedAt: true },
@@ -1343,6 +1348,7 @@ export const transferStorePurchases = async (
 export const retireStoreUserId = async (
   client: DrizzleClient,
   userId: string,
+  beforeRetire?: (lockedClient: DrizzleClient) => Promise<void>,
 ): Promise<void> => {
   if (isReservedStoreUserId(userId)) return;
   await client.transaction(async (tx) => {
@@ -1353,6 +1359,10 @@ export const retireStoreUserId = async (
       .from(userData)
       .where(eq(userData.userId, userId))
       .for("update");
+    // Identity-scoped cleanup which must not race a writer using the same lifecycle
+    // mutex belongs here. In particular, device registration can otherwise land after
+    // deletion's ordinary cleanup batch and survive the account itself.
+    await beforeRetire?.(lockedClient);
     const tombstone = `${DELETED_STORE_USER_PREFIX}${nanoid()}`;
     await lockedClient
       .update(storeUserIdAlias)

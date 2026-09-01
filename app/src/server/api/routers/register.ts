@@ -12,6 +12,7 @@ import {
   historicalIp,
   questHistory,
   referralSource,
+  storeUserIdAlias,
   userAttribute,
   userData,
   village,
@@ -23,6 +24,8 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
+import { acquireStoreUserMutationLock } from "@/server/utils/purchases/grant";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromNow } from "@/utils/time";
 import { registrationSchema, utmSourceSchema } from "@/validators/register";
@@ -145,27 +148,46 @@ export const registerRouter = createTRPCRouter({
       ].sort();
       // The account row is written on its own before anything that references it, so
       // registration never leaves rows behind that look like orphans to the cleaner.
-      const createdUser = await ctx.drizzle
-        .insert(userData)
-        .values({
-          userId: ctx.userId,
-          lastIp: ctx.userIp,
-          recruiterId: input.recruiter_userid,
-          username: input.username,
-          gender: input.gender,
-          avatar: IMG_DEFAULT_PROFILE_PICTURE,
-          villageId: villageData.id,
-          bloodlineId: selectedBloodline.id,
-          approvedTos: true,
-          sector: villageData.sector,
-          extraJutsuSlots: 0,
-          immunityUntil: secondsFromNow(24 * 3600),
-          musicOn: input.musicOn ?? true,
-          sfxOn: input.sfxOn ?? true,
-          buttonSfxOn: input.buttonSfxOn ?? true,
-          ...(reminder ? { earnedExperience: 10000 } : {}),
-        })
-        .onDuplicateKeyUpdate({ set: { userId: sql`userId` } });
+      const createdUser = await ctx.drizzle.transaction(async (tx) => {
+        const lockedClient = tx as unknown as DrizzleClient;
+        // A deleted Clerk identity is permanently retired from the store ownership graph.
+        // Serialize registration with deletion so the same id cannot create a new player
+        // whose future store receipts are routed to the old account's tombstone.
+        await acquireStoreUserMutationLock(lockedClient);
+        const [retiredIdentity] = await lockedClient
+          .select({ oldUserId: storeUserIdAlias.oldUserId })
+          .from(storeUserIdAlias)
+          .where(eq(storeUserIdAlias.oldUserId, ctx.userId))
+          .for("update");
+        if (retiredIdentity) return { rowsAffected: 0, retired: true };
+        const inserted = await lockedClient
+          .insert(userData)
+          .values({
+            userId: ctx.userId,
+            lastIp: ctx.userIp,
+            recruiterId: input.recruiter_userid,
+            username: input.username,
+            gender: input.gender,
+            avatar: IMG_DEFAULT_PROFILE_PICTURE,
+            villageId: villageData.id,
+            bloodlineId: selectedBloodline.id,
+            approvedTos: true,
+            sector: villageData.sector,
+            extraJutsuSlots: 0,
+            immunityUntil: secondsFromNow(24 * 3600),
+            musicOn: input.musicOn ?? true,
+            sfxOn: input.sfxOn ?? true,
+            buttonSfxOn: input.buttonSfxOn ?? true,
+            ...(reminder ? { earnedExperience: 10000 } : {}),
+          })
+          .onDuplicateKeyUpdate({ set: { userId: sql`userId` } });
+        return { rowsAffected: inserted.rowsAffected, retired: false };
+      });
+      if (createdUser.retired) {
+        return errorResponse(
+          "This account was deleted and cannot create another character",
+        );
+      }
       if (createdUser.rowsAffected === 0) {
         return errorResponse("Character already created for this account");
       }

@@ -247,6 +247,46 @@ describe("NativeStore purchase recovery", () => {
     expect((buy as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("keeps failed native recovery eligible for a manual sync retry", async () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([
+        {
+          accountId: "player-1",
+          attempt: {
+            productId: "tnr_reps_tier1",
+            baselineReceiptIds: [],
+            baselineNativeTransactionIds: ["before"],
+            phase: "sheet-open",
+            startedAt: "2026-09-01T12:00:00.000Z",
+          },
+        },
+      ]),
+    );
+    testMocks()
+      .syncCustomerInfo.mockRejectedValueOnce(new Error("native sync offline"))
+      .mockResolvedValueOnce({
+        activeEntitlements: [],
+        activeSubscriptions: [],
+        originalAppUserId: "player-1",
+        transactions: [{ transactionId: "before", productId: "tnr_reps_tier1" }],
+      });
+    const view = render(<NativeStore />);
+
+    await waitFor(() => expect(testMocks().syncCustomerInfo).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toHaveLength(
+      1,
+    );
+    fireEvent.click(
+      await view.findByRole("button", { name: "Retry verification" }),
+    );
+
+    await waitFor(() => expect(testMocks().syncCustomerInfo).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toEqual([]),
+    );
+  });
+
   it("retains a failed recovery lock and shows manual verification errors", async () => {
     window.localStorage.setItem(
       STORAGE_KEY,
@@ -267,15 +307,13 @@ describe("NativeStore purchase recovery", () => {
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toHaveLength(1);
     expect(testMocks().toast).not.toHaveBeenCalled();
 
-    await act(async () => {
-      fireEvent.click(retry);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(testMocks().toast).toHaveBeenCalledWith({
-      success: false,
-      message: "verification offline",
-    });
+    fireEvent.click(retry);
+    await waitFor(() =>
+      expect(testMocks().toast).toHaveBeenCalledWith({
+        success: false,
+        message: "verification offline",
+      }),
+    );
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toHaveLength(1);
     expect((retry as HTMLButtonElement).disabled).toBe(false);
   });

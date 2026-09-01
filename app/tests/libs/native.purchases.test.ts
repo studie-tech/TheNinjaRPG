@@ -24,6 +24,9 @@ describe("native purchase errors", () => {
       purchaseErrorOutcome({ code: "5", message: "Product unavailable" }),
     ).toMatchObject({ status: "error", code: "5", mayHaveCharged: false });
     expect(
+      purchaseErrorOutcome({ code: 6, message: "Product already purchased" }),
+    ).toMatchObject({ status: "error", code: "6", mayHaveCharged: false });
+    expect(
       purchaseErrorOutcome({ code: "20", message: "Payment pending" }),
     ).toMatchObject({ status: "error", code: "20", mayHaveCharged: true });
     expect(purchaseErrorOutcome(new Error("Bridge disconnected"))).toMatchObject({

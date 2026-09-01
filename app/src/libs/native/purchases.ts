@@ -191,7 +191,11 @@ export type PurchaseOutcome =
       mayHaveCharged: boolean;
     };
 
-const DEFINITE_PRECHARGE_ERROR_CODES = new Set(["3", "4", "5", "14", "23", "24"]);
+// PRODUCT_ALREADY_PURCHASED (6) means the store rejected a duplicate checkout against
+// an entitlement it already owns; this invocation cannot have created a new charge. The
+// existing transaction will arrive through restore/sync, so permanently locking a fresh
+// attempt here would leave the product impossible to settle.
+const DEFINITE_PRECHARGE_ERROR_CODES = new Set(["3", "4", "5", "6", "14", "23", "24"]);
 
 export const purchaseErrorOutcome = (error: unknown): PurchaseOutcome => {
   const candidate =

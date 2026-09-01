@@ -72,6 +72,8 @@ export default function NativeStore() {
   const [isRestoring, setIsRestoring] = useState(false);
   const [recentBaselineError, setRecentBaselineError] = useState<string | null>(null);
   const recoveredAccounts = useRef(new Set<string>());
+  const recoveringAccounts = useRef(new Set<string>());
+  const [recoveryRetry, setRecoveryRetry] = useState(0);
 
   const { data: catalogue } = api.purchases.catalogue.useQuery(undefined, {
     enabled: isNativeShell === true,
@@ -92,6 +94,7 @@ export default function NativeStore() {
   const accountUnsettledAttempts = unsettledAttempts.filter(
     (entry) => entry.accountId === player?.userId,
   );
+  const accountUnsettledAttemptCount = accountUnsettledAttempts.length;
   const reconciliationLockedProductIds = new Set(
     accountUnsettledAttempts.map((entry) => entry.attempt.productId),
   );
@@ -414,22 +417,25 @@ export default function NativeStore() {
       !attemptsHydrated ||
       !accountId ||
       !available?.bound ||
-      accountUnsettledAttempts.length === 0 ||
-      !recoveredAccounts.current.has(accountId)
+      accountUnsettledAttemptCount === 0 ||
+      !recoveredAccounts.current.has(accountId) ||
+      recoveringAccounts.current.has(accountId)
     )
       return;
-    recoveredAccounts.current.delete(accountId);
+    recoveringAccounts.current.add(accountId);
     void purchases
       .syncCustomerInfo()
       .then(async (info) => {
         if (!info) throw new Error("Could not reconcile purchase history");
-        const recovered = accountUnsettledAttempts.flatMap((entry) => {
-          const attempt = reconcileInterruptedStoreAttempt(
-            entry.attempt,
-            info.transactions,
-          );
-          return attempt ? [{ ...entry, attempt }] : [];
-        });
+        const recovered = unsettledAttemptsRef.current
+          .filter((entry) => entry.accountId === accountId)
+          .flatMap((entry) => {
+            const attempt = reconcileInterruptedStoreAttempt(
+              entry.attempt,
+              info.transactions,
+            );
+            return attempt ? [{ ...entry, attempt }] : [];
+          });
         updateUnsettledAttempts((current) => [
           ...current.filter((entry) => entry.accountId !== accountId),
           ...recovered,
@@ -437,16 +443,23 @@ export default function NativeStore() {
         for (const entry of recovered) {
           await verifyPurchaseAttempt(entry.accountId, entry.attempt);
         }
+        // Only a complete native sync and server verification retires the recovery
+        // marker. A transient failure must leave the account eligible for a later retry.
+        recoveredAccounts.current.delete(accountId);
       })
       .catch(() => {
         // An ambiguous native reconciliation failure preserves every lock. A later manual
         // or background server check can still finish it safely.
+      })
+      .finally(() => {
+        recoveringAccounts.current.delete(accountId);
       });
   }, [
-    accountUnsettledAttempts,
+    accountUnsettledAttemptCount,
     attemptsHydrated,
     available?.bound,
     player?.userId,
+    recoveryRetry,
     updateUnsettledAttempts,
     verifyPurchaseAttempt,
   ]);
@@ -794,6 +807,9 @@ export default function NativeStore() {
                 disabled={retryingProduct === attempt.productId}
                 onClick={() => {
                   setRetryingProduct(attempt.productId);
+                  // If startup's native history sync failed, a manual verification must
+                  // retry that sync too rather than consulting only the server receipt.
+                  setRecoveryRetry((retry) => retry + 1);
                   void verifyPurchaseAttempt(accountId, attempt)
                     .then((observation) => {
                       showMutationToast({
