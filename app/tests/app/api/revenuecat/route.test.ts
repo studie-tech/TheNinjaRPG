@@ -29,7 +29,6 @@ vi.mock("@/env/server.mjs", () => ({
     REVENUECAT_WEBHOOK_SECRET: "webhook-secret",
   },
 }));
-vi.mock("@/server/db", () => ({ drizzleDB: { kind: "test-db" } }));
 vi.mock("@/server/utils/purchases/grant", () => ({
   extendStoreSubscription: vi.fn(),
   grantStorePurchase: vi.fn(),
