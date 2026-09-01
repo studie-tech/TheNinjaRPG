@@ -6,7 +6,7 @@ import { ensureDom } from "../setup-dom.mjs";
 ensureDom();
 
 interface NativeLifecycleMocks {
-  actionListeners: Array<(payload: { url?: string }) => void>;
+  actionListeners: Array<(payload: unknown) => void>;
   detachToken: ReturnType<typeof vi.fn>;
   endActivity: ReturnType<typeof vi.fn>;
   endKind: ReturnType<typeof vi.fn>;
@@ -17,14 +17,12 @@ interface NativeLifecycleMocks {
   >;
   pushCheckPermissions: ReturnType<typeof vi.fn>;
   pushRegister: ReturnType<typeof vi.fn>;
-  registrationErrorListeners: Array<(error: string) => void>;
-  registrationListeners: Array<
-    (payload: { token: string; platform: "ios" | "android" }) => void
-  >;
+  registrationErrorListeners: Array<(payload: { error: string }) => void>;
+  registrationListeners: Array<(payload: { value: string }) => void>;
   registerActivity: ReturnType<typeof vi.fn>;
   registerActivityOptions?: Record<string, unknown>;
   sendToken: ReturnType<typeof vi.fn>;
-  stateListeners: Array<(isActive: boolean) => void>;
+  stateListeners: Array<(payload: { isActive: boolean }) => void>;
 }
 
 function getMocks(): NativeLifecycleMocks {
@@ -88,41 +86,18 @@ vi.mock("@/app/_trpc/client", () => ({
   },
 }));
 
-vi.mock("@/libs/native", () => ({
-  appEvents: {
-    onStateChange: (callback: (isActive: boolean) => void) =>
-      subscribe(getMocks().stateListeners, callback),
-  },
-  isNative: () => true,
-  liveActivity: {
-    end: getMocks().endLiveActivity,
-    endKind: getMocks().endKind,
-    isSupported: () => true,
-    onToken: (
-      callback: (payload: { activityId: string; pushToken: string }) => void,
-    ) => subscribe(getMocks().liveTokenListeners, callback),
-    start: getMocks().liveStart,
-  },
-  parseNativeUserAgent: () => ({ platform: "ios", version: "1.0.0" }),
-  push: {
-    checkPermissions: getMocks().pushCheckPermissions,
-    onActionPerformed: (callback: (payload: { url?: string }) => void) =>
-      subscribe(getMocks().actionListeners, callback),
-    onRegistration: (
-      callback: (payload: { token: string; platform: "ios" | "android" }) => void,
-    ) => subscribe(getMocks().registrationListeners, callback),
-    onRegistrationError: (callback: (error: string) => void) =>
-      subscribe(getMocks().registrationErrorListeners, callback),
-    register: getMocks().pushRegister,
-  },
-  toSafePath: () => null,
-}));
-
 import { useLiveActivity } from "@/hooks/useLiveActivity";
 import { useNativePush } from "@/hooks/useNativePush";
 
 const TOKEN = "a".repeat(64);
 const mocks = getMocks();
+const capacitorWindow = window as typeof window & {
+  Capacitor?: {
+    getPlatform: () => string;
+    isNativePlatform: () => boolean;
+    Plugins: Record<string, Record<string, unknown>>;
+  };
+};
 
 const profile = (status: "AWAKE" | "HOSPITALIZED") =>
   ({
@@ -151,10 +126,52 @@ beforeEach(() => {
   mocks.sendToken
     .mockReset()
     .mockResolvedValue({ success: true, widgetToken: "widget-token" });
+
+  const listener = <T,>(
+    listeners: Array<(payload: T) => void>,
+    callback: unknown,
+  ) => {
+    const remove = subscribe(listeners, callback as (payload: T) => void);
+    return { remove: async () => remove() };
+  };
+  capacitorWindow.Capacitor = {
+    getPlatform: () => "ios",
+    isNativePlatform: () => true,
+    Plugins: {
+      App: {
+        addListener: (_event: string, callback: unknown) =>
+          listener(mocks.stateListeners, callback),
+      },
+      PushNotifications: {
+        addListener: (event: string, callback: unknown) => {
+          if (event === "registration") {
+            return listener(mocks.registrationListeners, callback);
+          }
+          if (event === "registrationError") {
+            return listener(mocks.registrationErrorListeners, callback);
+          }
+          return listener(mocks.actionListeners, callback);
+        },
+        checkPermissions: async () => ({
+          receive: await (mocks.pushCheckPermissions as () => Promise<string>)(),
+        }),
+        register: mocks.pushRegister,
+      },
+      TNRLiveActivity: {
+        addListener: (_event: string, callback: unknown) =>
+          listener(mocks.liveTokenListeners, callback),
+        end: mocks.endLiveActivity,
+        endKind: async (options?: { kind?: string }) =>
+          (mocks.endKind as (kind?: string) => Promise<void>)(options?.kind),
+        start: mocks.liveStart,
+      },
+    },
+  };
 });
 
 afterEach(() => {
   cleanup();
+  delete capacitorWindow.Capacitor;
 });
 
 describe("native push ownership", () => {
@@ -181,9 +198,10 @@ describe("native push ownership", () => {
       { initialProps: { accountId: "account-a" } },
     );
     await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
 
     act(() => {
-      mocks.registrationListeners[0]?.({ token: TOKEN, platform: "ios" });
+      mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(1));
     await waitFor(() =>
@@ -201,8 +219,9 @@ describe("native push ownership", () => {
     });
 
     rerender({ accountId: "account-b" });
+    await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
     act(() => {
-      mocks.registrationListeners[0]?.({ token: TOKEN, platform: "ios" });
+      mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     expect(mocks.sendToken).toHaveBeenCalledTimes(1);
 
@@ -218,9 +237,10 @@ describe("native push ownership", () => {
     mocks.sendToken.mockRejectedValueOnce(new Error("offline"));
     renderHook(() => useNativePush({ enabled: true, accountId: "account-a" }));
     await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
 
     act(() => {
-      mocks.registrationListeners[0]?.({ token: TOKEN, platform: "ios" });
+      mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(1));
     await act(async () => {
@@ -229,7 +249,7 @@ describe("native push ownership", () => {
     });
 
     act(() => {
-      mocks.stateListeners[0]?.(true);
+      mocks.stateListeners[0]?.({ isActive: true });
     });
     await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(2));
   });
@@ -242,6 +262,7 @@ describe("native Live Activity lifecycle", () => {
       .mockResolvedValueOnce({ success: true });
     renderHook(() => useLiveActivity(profile("HOSPITALIZED"), 0));
     await waitFor(() => expect(mocks.liveStart).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.liveTokenListeners).toHaveLength(1));
 
     act(() => {
       mocks.liveTokenListeners[0]?.({
@@ -256,7 +277,7 @@ describe("native Live Activity lifecycle", () => {
     });
 
     act(() => {
-      mocks.stateListeners[0]?.(true);
+      mocks.stateListeners[0]?.({ isActive: true });
     });
     await waitFor(() => expect(mocks.registerActivity).toHaveBeenCalledTimes(2));
     expect(mocks.registerActivityOptions?.retry).toBe(3);
