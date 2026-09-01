@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { and, eq, sql } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { nanoid } from "nanoid";
 import {
   paypalSubscription,
@@ -13,6 +13,7 @@ import {
   userData,
 } from "@/drizzle/schema";
 import type { FederalStatus, StorePlatform } from "@/drizzle/constants";
+import { env } from "@/env/server.mjs";
 import {
   extendStoreSubscription,
   grantStorePurchase,
@@ -44,6 +45,7 @@ const USER = "federal-seq-user";
 const DESTINATION = "federal-transfer-destination";
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * 60 * 1000;
+const ORIGINAL_SANDBOX_USER_IDS = env.STORE_SANDBOX_USER_IDS;
 
 const db = () => getTestDatabase();
 
@@ -119,6 +121,7 @@ const givePaypal = async (tier: FederalStatus, status = "ACTIVE") => {
 
 describeWithDatabase("federal status across real webhook sequences", () => {
   beforeEach(async () => {
+    env.STORE_SANDBOX_USER_IDS = ORIGINAL_SANDBOX_USER_IDS;
     await resetTables(
       storeEntitlementState,
       storeEntitlementRevocation,
@@ -129,6 +132,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       userData,
     );
     await insertUsers([{ userId: USER, username: "seq", federalStatus: "NONE" }]);
+  });
+
+  afterEach(() => {
+    env.STORE_SANDBOX_USER_IDS = ORIGINAL_SANDBOX_USER_IDS;
   });
 
   it("grants, then gives the tier back on expiry", async () => {
@@ -332,6 +339,212 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     });
     // Recorded for the audit trail, but never accepted, so nothing vouches for a tier.
     expect(await storeFederalFloor(await db(), USER)).toBe("NONE");
+  });
+
+  it("withdraws an allowlisted sandbox tier when its receipt transfers to an ordinary account", async () => {
+    env.STORE_SANDBOX_USER_IDS = USER;
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const purchasedAt = new Date(Date.now() - 3 * MINUTE);
+    const transactionId = nanoid();
+    await grantStorePurchase(database, {
+      userId: USER,
+      transactionId,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: true,
+      purchasedAt,
+      raw: {},
+    });
+
+    await transferStorePurchases(database, {
+      eventId: "sandbox-transfer-away",
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      occurredAt: new Date(purchasedAt.getTime() + MINUTE),
+    });
+
+    const receipt = await database.query.storePurchase.findFirst({
+      columns: { userId: true, acceptedAt: true, grantedAt: true },
+      where: eq(storePurchase.transactionId, transactionId),
+    });
+    expect(receipt?.userId).toBe(DESTINATION);
+    expect(receipt?.acceptedAt).toBeNull();
+    expect(receipt?.grantedAt).toBeInstanceOf(Date);
+    expect(await storeFederalFloor(database, DESTINATION)).toBe("NONE");
+    const destination = await database.query.userData.findFirst({
+      columns: { federalStatus: true },
+      where: eq(userData.userId, DESTINATION),
+    });
+    expect(destination?.federalStatus).toBe("NONE");
+
+    // Even a stale acceptance marker from an older deployment cannot make a sandbox
+    // receipt count for an account which is not currently allowlisted.
+    await database
+      .update(storePurchase)
+      .set({ acceptedAt: new Date() })
+      .where(eq(storePurchase.transactionId, transactionId));
+    expect(await storeFederalFloor(database, DESTINATION)).toBe("NONE");
+    await database
+      .update(userData)
+      .set({ federalStatus: "GOLD" })
+      .where(eq(userData.userId, DESTINATION));
+    await reconcileFederalStatuses(database);
+    const reconciledDestination = await database.query.userData.findFirst({
+      columns: { federalStatus: true },
+      where: eq(userData.userId, DESTINATION),
+    });
+    expect(reconciledDestination?.federalStatus).toBe("NONE");
+  });
+
+  it("restores sandbox acceptance when the receipt transfers back to its allowlisted owner", async () => {
+    env.STORE_SANDBOX_USER_IDS = USER;
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const purchasedAt = new Date(Date.now() - 4 * MINUTE);
+    const transactionId = nanoid();
+    await grantStorePurchase(database, {
+      userId: USER,
+      transactionId,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: true,
+      purchasedAt,
+      raw: {},
+    });
+    await transferStorePurchases(database, {
+      eventId: "sandbox-transfer-away-before-return",
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      occurredAt: new Date(purchasedAt.getTime() + MINUTE),
+    });
+    await transferStorePurchases(database, {
+      eventId: "sandbox-transfer-return",
+      fromUserIds: [DESTINATION],
+      toUserIds: [USER],
+      store: "APPLE",
+      occurredAt: new Date(purchasedAt.getTime() + 2 * MINUTE),
+    });
+
+    const receipt = await database.query.storePurchase.findFirst({
+      columns: { userId: true, acceptedAt: true },
+      where: eq(storePurchase.transactionId, transactionId),
+    });
+    expect(receipt?.userId).toBe(USER);
+    expect(receipt?.acceptedAt).toBeInstanceOf(Date);
+    expect(await statusOf()).toBe("GOLD");
+  });
+
+  it("expires a returned sandbox receipt by its actual owner, not the payload user", async () => {
+    env.STORE_SANDBOX_USER_IDS = USER;
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const purchasedAt = new Date(Date.now() - 4 * MINUTE);
+    const transactionId = nanoid();
+    await grantStorePurchase(database, {
+      userId: USER,
+      transactionId,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: true,
+      purchasedAt,
+      raw: {},
+    });
+    await transferStorePurchases(database, {
+      eventId: "sandbox-expiry-transfer-away",
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      occurredAt: new Date(purchasedAt.getTime() + MINUTE),
+    });
+    await transferStorePurchases(database, {
+      eventId: "sandbox-expiry-transfer-return",
+      fromUserIds: [DESTINATION],
+      toUserIds: [USER],
+      store: "APPLE",
+      occurredAt: new Date(purchasedAt.getTime() + 2 * MINUTE),
+    });
+
+    // RevenueCat may still name the transfer source. The exact receipt says who owns the
+    // entitlement now, and that account is the one whose tier must be recomputed.
+    await revokeFederalStatus(database, DESTINATION, {
+      eventId: "sandbox-expiry-after-return",
+      occurredAt: new Date(),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      transactionId,
+      isSandbox: true,
+    });
+
+    const receipt = await database.query.storePurchase.findFirst({
+      columns: { userId: true, revokedAt: true },
+      where: eq(storePurchase.transactionId, transactionId),
+    });
+    expect(receipt?.userId).toBe(USER);
+    expect(receipt?.revokedAt).toBeInstanceOf(Date);
+    expect(await statusOf()).toBe("NONE");
+  });
+
+  it("retires a sandbox receipt at its ordinary owner so a later return cannot revive it", async () => {
+    env.STORE_SANDBOX_USER_IDS = USER;
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const purchasedAt = new Date(Date.now() - 4 * MINUTE);
+    const transactionId = nanoid();
+    await grantStorePurchase(database, {
+      userId: USER,
+      transactionId,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: true,
+      purchasedAt,
+      raw: {},
+    });
+    await transferStorePurchases(database, {
+      eventId: "sandbox-expiry-at-ordinary-owner",
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      occurredAt: new Date(purchasedAt.getTime() + MINUTE),
+    });
+
+    // The event still names the original allowlisted account, while the receipt itself
+    // has moved. Expiry must use that receipt owner and retire it even though B was never
+    // eligible to receive the sandbox tier.
+    await revokeFederalStatus(database, USER, {
+      eventId: "sandbox-expiry-before-return",
+      occurredAt: new Date(purchasedAt.getTime() + 2 * MINUTE),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      transactionId,
+      isSandbox: true,
+    });
+    await transferStorePurchases(database, {
+      eventId: "sandbox-return-after-expiry",
+      fromUserIds: [DESTINATION],
+      toUserIds: [USER],
+      store: "APPLE",
+      occurredAt: new Date(purchasedAt.getTime() + 3 * MINUTE),
+    });
+
+    const receipt = await database.query.storePurchase.findFirst({
+      columns: { userId: true, acceptedAt: true, revokedAt: true },
+      where: eq(storePurchase.transactionId, transactionId),
+    });
+    expect(receipt?.userId).toBe(DESTINATION);
+    expect(receipt?.acceptedAt).toBeNull();
+    expect(receipt?.revokedAt).toBeInstanceOf(Date);
+    expect(await statusOf()).toBe("NONE");
   });
 
   it("is idempotent when the same expiry is delivered twice", async () => {

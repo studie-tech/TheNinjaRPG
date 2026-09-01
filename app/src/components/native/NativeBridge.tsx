@@ -17,6 +17,7 @@ import {
 } from "@/libs/native";
 import {
   clearNativeAccountState,
+  nativeWidgetAccountAction,
   shouldClearNativeAccountState,
 } from "@/libs/native/accountCleanup";
 import { useUserData } from "@/utils/UserContext";
@@ -49,12 +50,21 @@ export default function NativeBridge() {
   // Signature of the last snapshot written, so a regeneration tick that changes nothing
   // the widget renders does not spend a WidgetKit reload.
   const lastSnapshot = useRef<string | null>(null);
+  // Keep bridge writes ordered. A slow A snapshot must finish before the handoff clear,
+  // and that clear must finish before B's first snapshot, or native completion order could
+  // put stale A data back after React has already moved on.
+  const widgetOperations = useRef<Promise<void>>(Promise.resolve());
 
   // The profile query keeps its last result when it is disabled, so cached userData
   // outlives the session it belongs to. Both hooks below have to know whose data this is:
   // gated on userData alone, a sign-out leaves the previous player's profile driving them,
   // and the next account never triggers a fresh registration.
   const isCurrentUser = !!userId && userData?.userId === userId;
+  const widgetAccountAction = nativeWidgetAccountAction({
+    isClerkLoaded,
+    userData,
+    userId,
+  });
 
   const { unregister, widgetToken } = useNativePush({
     enabled: isCurrentUser,
@@ -131,11 +141,21 @@ export default function NativeBridge() {
   // they stay correct while the app is closed. `sync` is a no-op when the shell has no
   // widget plugin.
   useEffect(() => {
-    // `isSignedOut` and not just `userData`: the profile query stays cached after Clerk
-    // drops the session, so without this the sign-out clearing of `widgetToken` would
-    // re-trigger this effect and write the previous player's stats straight back over
-    // the account-state clearing above.
-    if (!isNative() || !userData || isSignedOut) return;
+    if (!isNative()) return;
+    const enqueueWidgetOperation = (operation: () => Promise<void>) => {
+      const next = widgetOperations.current.then(operation, operation);
+      widgetOperations.current = next.catch(() => undefined);
+    };
+    // Clerk can replace A with B without passing through a signed-out render, while the
+    // shared profile query still exposes A's cached result. Keep the native container
+    // empty throughout that handoff and do not write again until the profile identity
+    // agrees with Clerk's active account.
+    if (widgetAccountAction === "clear") {
+      lastSnapshot.current = null;
+      enqueueWidgetOperation(widgets.clear);
+      return;
+    }
+    if (widgetAccountAction !== "sync" || !userData || isSignedOut) return;
     const quest = activeQuest(userData);
     const snapshot = {
       widgetToken,
@@ -165,8 +185,10 @@ export default function NativeBridge() {
     const signature = JSON.stringify(snapshot);
     if (signature === lastSnapshot.current) return;
     lastSnapshot.current = signature;
-    void widgets.sync({ ...snapshot, updatedAt: new Date().toISOString() });
-  }, [isSignedOut, userData, timeDiff, widgetToken]);
+    enqueueWidgetOperation(() =>
+      widgets.sync({ ...snapshot, updatedAt: new Date().toISOString() }),
+    );
+  }, [isSignedOut, userData, timeDiff, widgetToken, widgetAccountAction]);
 
   if (!isOutdated) return null;
   return <UpdateWall />;

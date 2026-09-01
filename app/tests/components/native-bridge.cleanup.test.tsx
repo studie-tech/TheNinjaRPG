@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearNativeAccountState,
+  nativeWidgetAccountAction,
   shouldClearNativeAccountState,
 } from "@/libs/native/accountCleanup";
 import { ensureDom } from "../setup-dom.mjs";
@@ -56,6 +57,37 @@ describe("NativeBridge deleted-profile cleanup", () => {
         userId: "deleted-player",
       }),
     ).toBe(true);
+  });
+
+  it("clears cached A widget data throughout a direct Clerk A-to-B replacement", () => {
+    expect(
+      nativeWidgetAccountAction({
+        isClerkLoaded: true,
+        userData: { userId: "account-a" },
+        userId: "account-a",
+      }),
+    ).toBe("sync");
+    expect(
+      nativeWidgetAccountAction({
+        isClerkLoaded: true,
+        userData: { userId: "account-a" },
+        userId: "account-b",
+      }),
+    ).toBe("clear");
+    expect(
+      nativeWidgetAccountAction({
+        isClerkLoaded: true,
+        userData: undefined,
+        userId: "account-b",
+      }),
+    ).toBe("clear");
+    expect(
+      nativeWidgetAccountAction({
+        isClerkLoaded: true,
+        userData: { userId: "account-b" },
+        userId: "account-b",
+      }),
+    ).toBe("sync");
   });
 
   it("clears push, widget, purchase, and Live Activity state", async () => {

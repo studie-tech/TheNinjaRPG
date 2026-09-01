@@ -5,7 +5,6 @@ import { drizzleDB } from "@/server/db";
 import {
   extendStoreSubscription,
   grantStorePurchase,
-  isSandboxGrantee,
   revokeFederalStatus,
   transferStorePurchases,
 } from "@/server/utils/purchases/grant";
@@ -105,12 +104,6 @@ export async function POST(request: Request) {
       return Response.json({ handled: "ignored" });
     }
     if (action === "revoke") {
-      // A sandbox subscription normally granted nothing, so letting its expiry through
-      // would strip a real status a tester also holds on the same account. An allowlisted
-      // account is the exception: its sandbox purchase did grant, so its expiry must land.
-      if (isSandbox(event.environment) && !isSandboxGrantee(appUserId)) {
-        return Response.json({ handled: "ignored" });
-      }
       const store = toStorePlatform(event.store);
       if (!store) return unsupportedStore(event.type, event.store);
       await revokeFederalStatus(drizzleDB, appUserId, {
@@ -119,6 +112,7 @@ export async function POST(request: Request) {
         productId: event.product_id,
         store,
         transactionId: event.transaction_id,
+        isSandbox: isSandbox(event.environment),
       });
       return Response.json({ handled: "revoked" });
     }
@@ -130,9 +124,6 @@ export async function POST(request: Request) {
         ? new Date(event.grace_period_expiration_at_ms)
         : null;
       if (!gracePeriodEndsAt) return Response.json({ handled: "ignored" });
-      if (isSandbox(event.environment) && !isSandboxGrantee(appUserId)) {
-        return Response.json({ handled: "ignored" });
-      }
       const store = toStorePlatform(event.store);
       if (!store) return unsupportedStore(event.type, event.store);
       if (!event.product_id) {
@@ -144,13 +135,11 @@ export async function POST(request: Request) {
         productId: event.product_id,
         expirationAt: gracePeriodEndsAt,
         transactionId: event.transaction_id,
+        isSandbox: isSandbox(event.environment),
       });
       return Response.json({ handled: "extended" });
     }
     if (action === "extend") {
-      if (isSandbox(event.environment) && !isSandboxGrantee(appUserId)) {
-        return Response.json({ handled: "ignored" });
-      }
       const store = toStorePlatform(event.store);
       if (!store) return unsupportedStore(event.type, event.store);
       if (!event.product_id) {
@@ -164,6 +153,7 @@ export async function POST(request: Request) {
         productId: event.product_id,
         expirationAt: expiresAt,
         transactionId: event.transaction_id,
+        isSandbox: isSandbox(event.environment),
       });
       return Response.json({ handled: "extended" });
     }

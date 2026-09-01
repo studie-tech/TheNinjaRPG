@@ -97,12 +97,14 @@ const isDuplicateKeyError = (error: unknown): boolean => {
  * Set it as a release step. Unset, sandbox purchases grant
  * nothing at all, which is the safe default for an ordinary deployment.
  */
-export const isSandboxGrantee = (userId: string): boolean =>
+const sandboxGranteeUserIds = (): string[] =>
   (env.STORE_SANDBOX_USER_IDS ?? "")
     .split(",")
     .map((id) => id.trim())
-    .filter(Boolean)
-    .includes(userId);
+    .filter(Boolean);
+
+export const isSandboxGrantee = (userId: string): boolean =>
+  sandboxGranteeUserIds().includes(userId);
 
 const repProduct = (productId: string) =>
   STORE_REP_PRODUCTS.find((product) => product.productId === productId);
@@ -363,6 +365,8 @@ type StorePurchaseOwnerSnapshot = {
   purchasedAt: Date;
   store: StorePlatform;
   federalStatus: FederalStatus | null;
+  isSandbox: boolean;
+  acceptedAt: Date | null;
 };
 
 /**
@@ -384,6 +388,8 @@ export const reconcileStorePurchaseOwner = async (
         purchasedAt: storePurchase.purchasedAt,
         store: storePurchase.store,
         federalStatus: storePurchase.federalStatus,
+        isSandbox: storePurchase.isSandbox,
+        acceptedAt: storePurchase.acceptedAt,
       })
       .from(storePurchase)
       .where(eq(storePurchase.id, receiptId));
@@ -405,10 +411,12 @@ export const reconcileStorePurchaseOwner = async (
           receipt.purchasedAt,
         )
       : canonicalOriginalUserId;
+    const shouldAccept = !receipt.isSandbox || isSandboxGrantee(resolvedUserId);
 
     if (
       receipt.userId === resolvedUserId &&
-      receipt.originalUserId === canonicalOriginalUserId
+      receipt.originalUserId === canonicalOriginalUserId &&
+      Boolean(receipt.acceptedAt) === shouldAccept
     ) {
       return receipt;
     }
@@ -426,12 +434,20 @@ export const reconcileStorePurchaseOwner = async (
       .set({
         userId: resolvedUserId,
         originalUserId: canonicalOriginalUserId,
+        // Acceptance follows the current owner, not the account which happened to own
+        // the receipt when it was inserted. This lets a sandbox entitlement stop at an
+        // ordinary account and become eligible again if RevenueCat restores it to the
+        // allowlisted review account later.
+        acceptedAt: shouldAccept ? (receipt.acceptedAt ?? new Date()) : null,
       })
       .where(
         and(
           eq(storePurchase.id, receipt.id),
           eq(storePurchase.userId, receipt.userId),
           eq(storePurchase.originalUserId, receipt.originalUserId),
+          receipt.acceptedAt
+            ? eq(storePurchase.acceptedAt, receipt.acceptedAt)
+            : isNull(storePurchase.acceptedAt),
         ),
       );
     if (result.rowsAffected === 0) continue;
@@ -721,6 +737,8 @@ export interface StoreExtension {
   productId: string;
   expirationAt: Date;
   transactionId?: string | null;
+  /** Match the receipt environment when the lifecycle event supplies it. */
+  isSandbox?: boolean;
 }
 
 /**
@@ -747,7 +765,9 @@ const extendStoreSubscriptionUnlocked = async (
           eq(storePurchase.transactionId, extension.transactionId),
           eq(storePurchase.store, extension.store),
           eq(storePurchase.productId, extension.productId),
-          isNotNull(storePurchase.acceptedAt),
+          ...(extension.isSandbox === undefined
+            ? []
+            : [eq(storePurchase.isSandbox, extension.isSandbox)]),
           isNotNull(storePurchase.federalStatus),
         ),
       })
@@ -768,7 +788,9 @@ const extendStoreSubscriptionUnlocked = async (
           inArray(storePurchase.userId, possibleOwners),
           eq(storePurchase.store, extension.store),
           eq(storePurchase.productId, extension.productId),
-          isNotNull(storePurchase.acceptedAt),
+          ...(extension.isSandbox === undefined
+            ? []
+            : [eq(storePurchase.isSandbox, extension.isSandbox)]),
           isNotNull(storePurchase.federalStatus),
           isNull(storePurchase.revokedAt),
         ),
@@ -843,6 +865,8 @@ export interface RevocationScope {
   store?: StorePlatform | null;
   /** The expiring store transaction, when RevenueCat supplies it. */
   transactionId?: string | null;
+  /** Match the receipt environment rather than trusting the payload account's allowlist. */
+  isSandbox?: boolean;
 }
 
 const revokeFederalStatusUnlocked = async (
@@ -865,6 +889,9 @@ const revokeFederalStatusUnlocked = async (
             eq(storePurchase.transactionId, transactionId),
             eq(storePurchase.store, store),
             ...(productId ? [eq(storePurchase.productId, productId)] : []),
+            ...(scope.isSandbox === undefined
+              ? []
+              : [eq(storePurchase.isSandbox, scope.isSandbox)]),
             isNotNull(storePurchase.federalStatus),
           ),
         })
@@ -920,6 +947,9 @@ const revokeFederalStatusUnlocked = async (
             // retire the subscription the player is currently paying for.
             lt(storePurchase.purchasedAt, occurredAt),
             ...(store ? [eq(storePurchase.store, store)] : []),
+            ...(scope.isSandbox === undefined
+              ? []
+              : [eq(storePurchase.isSandbox, scope.isSandbox)]),
           ),
           orderBy: desc(storePurchase.purchasedAt),
         })
@@ -939,8 +969,14 @@ const revokeFederalStatusUnlocked = async (
     spent?.userId ??
     (store ? await transferredUserId(client, userId, store, occurredAt) : userId);
   const cutoff = spent?.purchasedAt ?? (productId ? beforeExpiry : occurredAt);
+  // A sandbox expiry for an ordinary account still retires a receipt which already
+  // exists, so restoring it later cannot resurrect an ended period. Without a matching
+  // receipt, though, its environment cannot be represented by the shared watermark
+  // tables; persisting it there could suppress a later production purchase.
+  const persistRevocationWatermark =
+    scope.isSandbox !== true || isSandboxGrantee(ownerUserId);
 
-  if (store) {
+  if (store && persistRevocationWatermark) {
     const applicableTransactionId = transactionId ?? spent?.transactionId ?? null;
     const eventId =
       scope.eventId ??
@@ -967,7 +1003,7 @@ const revokeFederalStatusUnlocked = async (
   // Persist the cutoff before touching receipts. If the purchase webhook has not inserted
   // its row yet, or races this handler, the grant's atomic claim checks this watermark and
   // cannot resurrect a subscription period the store has already ended.
-  if (store) {
+  if (store && persistRevocationWatermark) {
     await client
       .insert(storeEntitlementState)
       .values({
@@ -998,6 +1034,9 @@ const revokeFederalStatusUnlocked = async (
         // the product ids are the same strings on both, so a lapse on one must not retire
         // the other's receipts.
         ...(store ? [eq(storePurchase.store, store)] : []),
+        ...(scope.isSandbox === undefined
+          ? []
+          : [eq(storePurchase.isSandbox, scope.isSandbox)]),
       ),
     );
   // Then fall back to whatever still vouches — which is both sources, not just PayPal.
@@ -1293,7 +1332,6 @@ const transferStorePurchasesUnlocked = async (
         where: and(
           inArray(storePurchase.originalUserId, originalUserIds),
           eq(storePurchase.store, store),
-          isNotNull(storePurchase.acceptedAt),
           isNotNull(storePurchase.federalStatus),
           isNull(storePurchase.revokedAt),
         ),
@@ -1444,6 +1482,7 @@ export const storeFederalFloor = async (
     where: and(
       eq(storePurchase.userId, userId),
       isNotNull(storePurchase.acceptedAt),
+      ...(isSandboxGrantee(userId) ? [] : [eq(storePurchase.isSandbox, false)]),
       isNotNull(storePurchase.federalStatus),
       isNull(storePurchase.revokedAt),
       or(
@@ -1472,6 +1511,7 @@ export const setFederalStatusWithStoreFloor = async (
   const liveStoreReceipt = and(
     eq(storePurchase.userId, userId),
     isNotNull(storePurchase.acceptedAt),
+    ...(isSandboxGrantee(userId) ? [] : [eq(storePurchase.isSandbox, false)]),
     isNull(storePurchase.revokedAt),
     or(
       gte(storePurchase.expiresAt, new Date()),
@@ -1509,8 +1549,15 @@ export const setFederalStatusWithStoreFloor = async (
  */
 export const reconcileFederalStatuses = async (
   client: Pick<DrizzleClient, "execute">,
-) =>
-  await client.execute(sql`
+) => {
+  const sandboxUserIds = sandboxGranteeUserIds();
+  const sandboxEligibility = sandboxUserIds.length
+    ? sql`AND (s.isSandbox = FALSE OR s.userId IN (${sql.join(
+        sandboxUserIds.map((userId) => sql`${userId}`),
+        sql`, `,
+      )}))`
+    : sql`AND s.isSandbox = FALSE`;
+  return await client.execute(sql`
     UPDATE ${userData} u
     SET u.federalStatus = CASE
       WHEN EXISTS (
@@ -1524,6 +1571,7 @@ export const reconcileFederalStatuses = async (
         WHERE s.userId = u.userId
           AND s.federalStatus = 'GOLD'
           AND s.acceptedAt IS NOT NULL
+          ${sandboxEligibility}
           AND s.revokedAt IS NULL
           AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
       ) THEN 'GOLD'
@@ -1538,6 +1586,7 @@ export const reconcileFederalStatuses = async (
         WHERE s.userId = u.userId
           AND s.federalStatus = 'SILVER'
           AND s.acceptedAt IS NOT NULL
+          ${sandboxEligibility}
           AND s.revokedAt IS NULL
           AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
       ) THEN 'SILVER'
@@ -1552,6 +1601,7 @@ export const reconcileFederalStatuses = async (
         WHERE s.userId = u.userId
           AND s.federalStatus = 'NORMAL'
           AND s.acceptedAt IS NOT NULL
+          ${sandboxEligibility}
           AND s.revokedAt IS NULL
           AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
       ) THEN 'NORMAL'
@@ -1569,7 +1619,9 @@ export const reconcileFederalStatuses = async (
         WHERE s.userId = u.userId
           AND s.federalStatus IS NOT NULL
           AND s.acceptedAt IS NOT NULL
+          ${sandboxEligibility}
           AND s.revokedAt IS NULL
           AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
       )
   `);
+};

@@ -5659,14 +5659,14 @@ export const storePurchase = mysqlTable(
     /** Sandbox receipts are recorded for debugging but never move a balance. */
     isSandbox: boolean("isSandbox").default(false).notNull(),
     /**
-     * When this receipt was accepted as real value, or null if it was recorded but never
-     * counted.
+     * When this receipt was accepted as real value for its current owner, or null while it
+     * must not be counted.
      *
      * Not the same question as `isSandbox`, which records the environment truthfully. A
      * sandbox receipt normally counts for nothing, but App Review and TestFlight can only
      * transact in the sandbox, so an allowlisted account's sandbox purchase does count.
-     * Everything asking "may this receipt vouch for a tier" reads this rather than trying
-     * to re-derive it from the environment.
+     * Ownership reconciliation refreshes this marker after every transfer. Federal-floor
+     * readers also check the current allowlist so a stale marker can never grant value.
      */
     acceptedAt: datetime("acceptedAt", { mode: "date", fsp: 3 }),
     /** Set atomically with the balance/status write; null receipts are safe to retry. */
