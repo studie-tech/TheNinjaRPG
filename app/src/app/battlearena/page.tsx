@@ -652,7 +652,10 @@ const ActiveChallenges: React.FC = () => {
             battleId: data.battleId,
             updatedAt: new Date(),
           });
-          await utils.sparring.getUserChallenges.invalidate();
+          await Promise.all([
+            utils.sparring.getUserChallenges.invalidate(),
+            utils.pvpRank.getRankedLoadout.invalidate(),
+          ]);
           pushToCombat(router, data.battleId);
         }
       },

@@ -53,6 +53,7 @@ import {
   NonActionItemTypes,
   PvpBattleTypes,
   QuestBattleTypes,
+  RANKED_BLOODLINE_EFFECT_MULT,
   RANKS_RESTRICTED_FROM_PVP,
   REGEN_SECONDS,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
@@ -138,6 +139,7 @@ import type {
   GroundEffect,
   ProcessedItem,
   ProcessingBattleUser,
+  ReturnedBattle,
   UserEffect,
 } from "@/libs/combat/types";
 import {
@@ -155,6 +157,7 @@ import {
 } from "@/libs/combat/util";
 import { fetchDmgConfig } from "@/libs/gamesettings";
 import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
+import { resolveSelectableLoadout } from "@/libs/loadout";
 import {
   calcActiveUserRegen,
   calcCP,
@@ -174,6 +177,7 @@ import {
   mockAchievementHistoryEntries,
 } from "@/libs/quest";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
+import { getActivatedSkillIds, meetsRequiredSkill } from "@/libs/skillTree";
 import { toDefenceStat, toOffenceStat } from "@/libs/stats";
 import { rollStealthKeep } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
@@ -209,6 +213,7 @@ import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { findRelationship } from "@/utils/alliance";
 import { getRandomElement } from "@/utils/array";
 import { randomInt } from "@/utils/math";
+import { fedItemLoadouts, fedJutsuLoadouts } from "@/utils/paypal";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
 import type { StatSchemaType } from "@/validators/combat";
@@ -1003,6 +1008,9 @@ export const combatRouter = createTRPCRouter({
         itemLoadoutId: z.string().optional(),
       }),
     )
+    .output(
+      baseServerResponse.extend({ battle: z.custom<ReturnedBattle>().optional() }),
+    )
     .mutation(async ({ input, ctx }) => {
       // Queries
       const jId = input.jutsuLoadoutId;
@@ -1032,8 +1040,8 @@ export const combatRouter = createTRPCRouter({
       if (!userBattle) return errorResponse("You are not in a battle");
       if (!user) return errorResponse("You are not in this battle");
       if (user.iAmHere) return errorResponse("You are already marked as ready");
-      if (userBattle.battleType !== "COMBAT") {
-        return errorResponse("You can only update loadouts in combat");
+      if (userBattle.battleType !== "COMBAT" && userBattle.battleType !== "SPARRING") {
+        return errorResponse("You can only update loadouts in the combat lobby");
       }
       if (new Date() > userBattle.roundStartAt) {
         return errorResponse("You can only update loadouts in the combat lobby");
@@ -1044,6 +1052,7 @@ export const combatRouter = createTRPCRouter({
       if (jId === user.jutsuLoadout && iId === user.itemLoadout) {
         return errorResponse("You already have this loadout selected");
       }
+      const activatedSkillIds = getActivatedSkillIds(userSkills);
 
       // Apply the item loadout first, then the jutsu loadout. selectItemLoadout mutates
       // `useritems` in place to the post-switch equipped state, and selectJutsuLoadout
@@ -1051,45 +1060,110 @@ export const combatRouter = createTRPCRouter({
       // Running them in parallel would validate jutsus against the pre-switch items,
       // re-equipping a gated jutsu after its required item is dropped, or wrongly
       // rejecting one the new item loadout has just equipped.
+      //
+      // Pre-validate explicitly requested loadouts before any write so an invalid
+      // jutsu ID cannot leave a successful item switch persisted while this
+      // endpoint returns an error (PlanetScale has no multi-statement transactions).
+      const itemChanged = !!iId && user.itemLoadout !== iId;
+      const jutsuChanged = !!jId && user.jutsuLoadout !== jId;
+      if (itemChanged && iId) {
+        const selectableItem = resolveSelectableLoadout(
+          itemLoadouts,
+          iId,
+          fedItemLoadouts(user),
+        );
+        if (!selectableItem.ok) return errorResponse(selectableItem.message);
+      }
+      if (jutsuChanged && jId) {
+        const selectableJutsu = resolveSelectableLoadout(
+          jutsuLoadouts,
+          jId,
+          fedJutsuLoadouts(user),
+        );
+        if (!selectableJutsu.ok) return errorResponse(selectableJutsu.message);
+      }
       const itemLoadoutResult =
         user.itemLoadout === iId || !iId
           ? { success: true, message: "Item loadout already selected" }
-          : await selectItemLoadout(ctx.drizzle, iId, itemLoadouts, useritems, user);
-      const jutsuLoadoutResult =
-        user.jutsuLoadout === jId || !jId
-          ? { success: true, message: "Jutsu loadout already selected" }
-          : await selectJutsuLoadout(
+          : await selectItemLoadout(
               ctx.drizzle,
-              jId,
-              jutsuLoadouts,
-              userjutsus,
+              iId,
+              itemLoadouts,
+              useritems,
               user,
-              (jutsuIds) =>
-                computeJutsuLoadoutCapAssignments({
-                  jutsuIds,
-                  userjutsus,
-                  maxEquip: calcJutsuEquipLimit(user),
-                  validateJutsu: ({ jutsu }) =>
-                    checkJutsuBloodlineItem(jutsu, useritems)
-                      ? undefined
-                      : `${jutsu.name}: required bloodline item is not equipped`,
-                }),
+              activatedSkillIds,
             );
+      if (!itemLoadoutResult.success) {
+        return errorResponse(itemLoadoutResult.message);
+      }
+      // processUsersForBattle drops skill-ineligible items, so bloodline-item jutsu
+      // validation and item hydration must use the same filtered inventory. When only
+      // the jutsu loadout changes, selectItemLoadout does not run and would otherwise
+      // leave skill-gated equipped items visible to checkJutsuBloodlineItem.
+      const skillEligibleUserItems = useritems.filter((ui) =>
+        meetsRequiredSkill(ui.item.requiredSkillId, activatedSkillIds),
+      );
+      const validateCombatJutsuLoadout = (jutsuIds: string[]) =>
+        computeJutsuLoadoutCapAssignments({
+          jutsuIds,
+          userjutsus,
+          maxEquip: calcJutsuEquipLimit(user),
+          validateJutsu: ({ jutsu }) => {
+            if (!meetsRequiredSkill(jutsu.requiredSkillId, activatedSkillIds)) {
+              return `${jutsu.name}: required skill is not active`;
+            }
+            return checkJutsuBloodlineItem(jutsu, skillEligibleUserItems)
+              ? undefined
+              : `${jutsu.name}: required bloodline item is not equipped`;
+          },
+        });
+      // After an item-only switch, re-apply the active jutsu loadout so jutsus that
+      // require a newly equipped bloodline item become equippable (and ones that lost
+      // their item are unequipped). Without this, switching jutsu before items in the
+      // lobby permanently skips gated jutsus until the jutsu loadout is changed again.
+      const jutsuLoadoutIdToApply = jutsuChanged
+        ? jId
+        : itemChanged && user.jutsuLoadout
+          ? user.jutsuLoadout
+          : undefined;
+      const jutsuLoadoutResult = jutsuLoadoutIdToApply
+        ? await selectJutsuLoadout(
+            ctx.drizzle,
+            jutsuLoadoutIdToApply,
+            jutsuLoadouts,
+            userjutsus,
+            user,
+            validateCombatJutsuLoadout,
+          )
+        : { success: true, message: "Jutsu loadout already selected" };
+      // Explicit jutsu switches were pre-validated; this is a defensive fail-closed.
+      // Item-only re-applies fall back to surgical unequip below if the active loadout
+      // is no longer selectable.
+      if (!jutsuLoadoutResult.success && jutsuChanged) {
+        return errorResponse(jutsuLoadoutResult.message);
+      }
 
-      // When only the item loadout changed, selectJutsuLoadout (and its
-      // bloodline-item revalidation) never runs, so a jutsu gated on a bloodline
-      // item that the item switch just unequipped would otherwise stay equipped.
-      // Re-validate the currently-equipped jutsus against the post-switch items
-      // and unequip any that lost their required item — surgically, without
-      // touching the jutsu loadout pointer or the player's other equipped jutsus.
-      const itemChanged = !!iId && user.itemLoadout !== iId;
-      const jutsuChanged = !!jId && user.jutsuLoadout !== jId;
+      const jutsuLoadoutApplied =
+        jutsuLoadoutResult.success &&
+        "jutsus" in jutsuLoadoutResult &&
+        Array.isArray(jutsuLoadoutResult.jutsus);
+
+      // When we did not re-run selectJutsuLoadout (no active loadout, or re-apply
+      // failed), surgically unequip battle jutsus that are skill-gated or lost their
+      // required bloodline item — without touching the jutsu loadout pointer.
       let invalidatedJutsuIds: string[] = [];
-      if (itemChanged && !jutsuChanged && "items" in itemLoadoutResult) {
+      if (!jutsuLoadoutApplied) {
         invalidatedJutsuIds = user.jutsus
           .filter((ref) => {
             const owned = userjutsus.find((uj) => uj.jutsuId === ref.jutsuId);
-            return owned ? !checkJutsuBloodlineItem(owned.jutsu, useritems) : false;
+            if (!owned) return false;
+            if (!meetsRequiredSkill(owned.jutsu.requiredSkillId, activatedSkillIds)) {
+              return true;
+            }
+            return (
+              itemChanged &&
+              !checkJutsuBloodlineItem(owned.jutsu, skillEligibleUserItems)
+            );
           })
           .map((ref) => ref.jutsuId);
         if (invalidatedJutsuIds.length > 0) {
@@ -1112,7 +1186,7 @@ export const combatRouter = createTRPCRouter({
       // Build a user with updated loadout data for processing
       // We need to construct this from scratch with fresh data since user is BattleUserState
       const newJutsus =
-        jId && "jutsus" in jutsuLoadoutResult && jutsuLoadoutResult.jutsus
+        jutsuLoadoutApplied && "jutsus" in jutsuLoadoutResult
           ? jutsuLoadoutResult.jutsus.map((uj) => ({
               ...uj,
               lastUsedRound: -uj.jutsu.cooldown,
@@ -1122,14 +1196,14 @@ export const combatRouter = createTRPCRouter({
           : undefined;
 
       const newItems =
-        iId && "items" in itemLoadoutResult && itemLoadoutResult.items
-          ? itemLoadoutResult.items.map((ui) => {
-              return {
+        iId && "items" in itemLoadoutResult
+          ? skillEligibleUserItems
+              .filter((ui) => ui.equipped !== "NONE")
+              .map((ui) => ({
                 ...ui,
                 lastUsedRound: -ui.item.cooldown,
                 originalCooldown: ui.item.cooldown,
-              };
-            })
+              }))
           : undefined;
 
       // Split out user from current usersState & usersEffects
@@ -1145,10 +1219,14 @@ export const combatRouter = createTRPCRouter({
         (e) => e.creatorId !== ctx.userId,
       );
 
-      // Preserve original initiative and direction to avoid changing them when updating loadouts
-      // Direction is important for RAID battles where friendly fire is determined by direction
+      // Preserve original initiative, direction, and pools when updating loadouts.
+      // Direction matters for RAID friendly fire; pools must not be re-regened (or
+      // re-maxed for ranked) just because the loadout was swapped in the lobby.
       const originalInitiative = user.initiative;
       const originalDirection = user.direction;
+      const originalCurHealth = user.curHealth;
+      const originalCurChakra = user.curChakra;
+      const originalCurStamina = user.curStamina;
 
       // Hydrate jutsus and items from extraState if not using new loadouts
       // We reconstruct CombatQueryUser format from BattleUserState refs + extraState
@@ -1251,10 +1329,16 @@ export const combatRouter = createTRPCRouter({
         },
       );
 
-      // Restore original initiative and direction
+      // Restore original initiative, direction, and combat pools
       if (usersState[0]) {
         usersState[0].initiative = originalInitiative;
         usersState[0].direction = originalDirection;
+        usersState[0].curHealth = Math.min(originalCurHealth, usersState[0].maxHealth);
+        usersState[0].curChakra = Math.min(originalCurChakra, usersState[0].maxChakra);
+        usersState[0].curStamina = Math.min(
+          originalCurStamina,
+          usersState[0].maxStamina,
+        );
       }
 
       // Merge the user's state with the other user's state
@@ -2786,9 +2870,12 @@ export const processUsersForBattle = async (
 
   // Loop through users and transform to ProcessingBattleUser
   const usersState: ProcessingBattleUser[] = users.map((inputUser) => {
+    const activatedSkillIds = getActivatedSkillIds(inputUser.userSkills);
+    const activeUserSkills = inputUser.userSkills.filter((skill) => skill.activated);
     // Build the processing user object with all required fields
     const user: ProcessingBattleUser = {
       ...inputUser,
+      userSkills: activeUserSkills,
       // Set controllerID and mark this user as the original
       controllerId: inputUser.userId,
       userId: inputUser.isAi ? nanoid() : inputUser.userId,
@@ -2849,6 +2936,15 @@ export const processUsersForBattle = async (
             console.error(`Jutsu not found for UserJutsu ${uj.id}`);
             return false;
           }
+          if (
+            !meetsRequiredSkill(
+              uj.jutsu.requiredSkillId,
+              activatedSkillIds,
+              inputUser.isAi,
+            )
+          ) {
+            return false;
+          }
           return true;
         })
         .map((uj) => ({
@@ -2860,6 +2956,15 @@ export const processUsersForBattle = async (
         .filter((ui) => {
           if (!ui.item) {
             console.error(`Item not found for UserItem ${ui.id}`);
+            return false;
+          }
+          if (
+            !meetsRequiredSkill(
+              ui.item.requiredSkillId,
+              activatedSkillIds,
+              inputUser.isAi,
+            )
+          ) {
             return false;
           }
           return true;
@@ -3040,7 +3145,7 @@ export const processUsersForBattle = async (
     const ownSector = user.sector === user.village?.sector;
     const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
 
-    // Add bloodline efects
+    // Add bloodline effects (disabled in ranked — see simulated boost below)
     if (
       user.bloodline?.effects &&
       battleType !== "RANKED_PVP" &&
@@ -3060,6 +3165,44 @@ export const processUsersForBattle = async (
         realized.fromType = "bloodline";
         userEffects.push(realized);
       });
+    }
+
+    // Ranked: no unique bloodline tags. Inject a single bloodline-sourced damage
+    // boost instead, so absolute power is closer to live and bloodline seal can
+    // still suppress it.
+    if (
+      (battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING") &&
+      !user.isAi &&
+      user.bloodline
+    ) {
+      const realized = realizeTag({
+        tag: {
+          type: "increasedamagegiven",
+          power: (RANKED_BLOODLINE_EFFECT_MULT - 1) * 100,
+          powerPerLevel: 0,
+          calculation: "percentage",
+          direction: "offence",
+          target: "SELF",
+          description: "Ranked bloodline simulation",
+          statTypes: ["Highest"],
+          elements: ["Fire", "Water", "Wind", "Lightning", "Earth", "None"],
+          staticAssetPath: "",
+          staticAnimation: "",
+          appearAnimation: "",
+          disappearAnimation: "",
+          appearSfx: "",
+          disappearSfx: "",
+        } as UserEffect,
+        user: user,
+        actionId: user.bloodline.id,
+        target: user,
+        level: user.level,
+      });
+      realized.isNew = false;
+      realized.castThisRound = false;
+      realized.targetId = user.userId;
+      realized.fromType = "bloodline";
+      userEffects.push(realized);
     }
 
     // Add skill tree effects

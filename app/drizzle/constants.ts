@@ -1902,6 +1902,8 @@ export const RANKED_PVP_STATS = {
   bukijutsuOffence: MAX_STATS_CAP,
   bukijutsuDefence: MAX_STATS_CAP,
 };
+/** Flat damage-given multiplier used in ranked instead of real bloodline tags. */
+export const RANKED_BLOODLINE_EFFECT_MULT = 1.4;
 export const RANKED_LOADOUT_MAX_JUTSUS = 15;
 export const RANKED_LOADOUT_MAX_WEAPONS = 2;
 export const RANKED_LOADOUT_MAX_CONSUMABLES = 4;

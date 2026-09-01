@@ -60,6 +60,7 @@ import {
 } from "@/libs/loadout";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getActivatedSkillIds, meetsRequiredSkill } from "@/libs/skillTree";
 import { callDiscordContent } from "@/libs/socials";
 import {
   calcJutsuEquipLimit,
@@ -74,6 +75,7 @@ import {
   isJutsuTrainToLearnRestricted,
 } from "@/libs/train";
 import { fetchStudents } from "@/routers/sensei";
+import { fetchUserSkills } from "@/routers/skillTree";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -368,10 +370,11 @@ export const jutsuRouter = createTRPCRouter({
       // toggleEquip. Note this makes the mutation no longer read-only on the user
       // row: fetchUpdatedUser may persist the usual throttled regen/quest
       // maintenance (never money/XP/loadout state).
-      const [loadouts, data, userjutsus] = await Promise.all([
+      const [loadouts, data, userjutsus, userSkills] = await Promise.all([
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
@@ -384,7 +387,13 @@ export const jutsuRouter = createTRPCRouter({
         loadouts,
         userjutsus,
         user,
-        (jutsuIds) => computeJutsuLoadoutAssignments({ jutsuIds, userjutsus, user }),
+        (jutsuIds) =>
+          computeJutsuLoadoutAssignments({
+            jutsuIds,
+            userjutsus,
+            user,
+            activatedSkillIds: getActivatedSkillIds(userSkills),
+          }),
       );
     }),
 
@@ -407,6 +416,7 @@ export const jutsuRouter = createTRPCRouter({
         jutsuType: "AI",
         statClassification: "Highest",
         image: IMG_AVATAR_DEFAULT,
+        requiredSkillId: null,
       });
       return { success: true, message: id };
     } else {
@@ -520,20 +530,27 @@ export const jutsuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [{ user }, userJutsus, evolutionJutsu, allLoadouts, conflictingReskin] =
-        await Promise.all([
-          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-          fetchUserJutsus(ctx.drizzle, ctx.userId),
-          fetchJutsu(ctx.drizzle, input.evolutionJutsuId),
-          fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
-          ctx.drizzle.query.jutsuReskin.findFirst({
-            where: and(
-              eq(jutsuReskin.userId, ctx.userId),
-              eq(jutsuReskin.jutsuId, input.evolutionJutsuId),
-            ),
-            columns: { id: true },
-          }),
-        ]);
+      const [
+        { user },
+        userJutsus,
+        evolutionJutsu,
+        allLoadouts,
+        conflictingReskin,
+        userSkills,
+      ] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchUserJutsus(ctx.drizzle, ctx.userId),
+        fetchJutsu(ctx.drizzle, input.evolutionJutsuId),
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.jutsuReskin.findFirst({
+          where: and(
+            eq(jutsuReskin.userId, ctx.userId),
+            eq(jutsuReskin.jutsuId, input.evolutionJutsuId),
+          ),
+          columns: { id: true },
+        }),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
+      ]);
       // Guards
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE")
@@ -582,7 +599,12 @@ export const jutsuRouter = createTRPCRouter({
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       const evolutionCapFlags = getJutsuCapFlags(evolutionJutsu);
-      const isRestrictedEquipType = hasAnyJutsuEquipCap(evolutionCapFlags);
+      const meetsSkillRequirement = meetsRequiredSkill(
+        evolutionJutsu.requiredSkillId,
+        getActivatedSkillIds(userSkills),
+      );
+      const isRestrictedEquipType =
+        hasAnyJutsuEquipCap(evolutionCapFlags) || !meetsSkillRequirement;
       // Single compare-and-swap update that applies every userJutsu-row change at once:
       // - jutsuId/level/experience/finishTraining — the evolution itself
       // - equipped — force off for restricted types to avoid cap overflows
@@ -689,6 +711,7 @@ export const jutsuRouter = createTRPCRouter({
         siblings,
         evolutionGraph,
         requiredItem,
+        requiredSkill,
       ] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchJutsu(ctx.drizzle, input.id),
@@ -718,6 +741,12 @@ export const jutsuRouter = createTRPCRouter({
               where: eq(item.id, input.data.requiredBloodlineItemId),
             })
           : Promise.resolve(null),
+        input.data.requiredSkillId
+          ? ctx.drizzle.query.skillTree.findFirst({
+              columns: { id: true },
+              where: eq(skillTree.id, input.data.requiredSkillId),
+            })
+          : Promise.resolve(null),
       ]);
       // Guard
       if (user.isBanned)
@@ -728,6 +757,8 @@ export const jutsuRouter = createTRPCRouter({
       if (entry.id === TUTORIAL_JUTSU_ID && input?.data?.hidden)
         return errorResponse("Cannot hide tutorial jutsu");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      if (input.data.requiredSkillId && !requiredSkill)
+        return errorResponse("Required skill not found");
       // A required bloodline item must belong to the jutsu's own bloodline, otherwise the
       // in-combat gate could never be satisfied (or would gate on an unrelated item).
       if (input.data.requiredBloodlineItemId) {
@@ -973,7 +1004,7 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [data, info, userjutsus, students] = await Promise.all([
+      const [data, info, userjutsus, students, userSkills] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -981,6 +1012,7 @@ export const jutsuRouter = createTRPCRouter({
         fetchJutsu(ctx.drizzle, input.jutsuId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchStudents(ctx.drizzle, ctx.userId),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
@@ -1072,6 +1104,7 @@ export const jutsuRouter = createTRPCRouter({
         const canAutoEquip =
           curEquip < maxEquip &&
           checkJutsuBloodlineItem(info, user.items) &&
+          meetsRequiredSkill(info.requiredSkillId, getActivatedSkillIds(userSkills)) &&
           canEquipUnderCaps(capFlags, equippedCapCounts);
 
         const newUserJutsuId = nanoid();
@@ -1230,13 +1263,14 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [userjutsus, data, loadouts] = await Promise.all([
+      const [userjutsus, data, loadouts, userSkills] = await Promise.all([
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
@@ -1257,6 +1291,20 @@ export const jutsuRouter = createTRPCRouter({
       if (!userjutsuObj) return errorResponse("Jutsu not found");
       if (!isEquipped && userjutsuObj.jutsu.hidden && !canChangeContent(user.role))
         return errorResponse("Jutsu is hidden, cannot be equipped");
+      if (
+        !isEquipped &&
+        !meetsRequiredSkill(
+          userjutsuObj.jutsu.requiredSkillId,
+          getActivatedSkillIds(userSkills),
+        )
+      ) {
+        const requiredSkill = userSkills.find(
+          (skill) => skill.skillId === userjutsuObj.jutsu.requiredSkillId,
+        )?.skill.name;
+        return errorResponse(
+          `Requires active skill: ${requiredSkill ?? userjutsuObj.jutsu.requiredSkillId}`,
+        );
+      }
 
       // Check if jutsu can be equipped (bloodline item handled separately below for a
       // clearer error message, so skip it inside canUseJutsu here)

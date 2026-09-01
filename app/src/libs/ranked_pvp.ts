@@ -139,6 +139,30 @@ export const getRankedRadius = (secondsInQueue: number): number => {
  * @returns An object with a check flag and a message if the loadout is invalid
  */
 export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
+  const skillGatedJutsu = jutsus.find((jutsu) => jutsu.requiredSkillId);
+  if (skillGatedJutsu) {
+    return {
+      check: false,
+      message: `${skillGatedJutsu.name} cannot be equipped in ranked PvP because it requires a skill tree entry`,
+    };
+  }
+
+  const pveJutsu = jutsus.find((jutsu) => jutsu.battleUsageType === "PVE");
+  if (pveJutsu) {
+    return {
+      check: false,
+      message: `${pveJutsu.name} cannot be equipped in ranked PvP because it is PVE-only`,
+    };
+  }
+
+  const villageJutsu = jutsus.find((jutsu) => jutsu.villageId);
+  if (villageJutsu) {
+    return {
+      check: false,
+      message: `${villageJutsu.name} cannot be equipped in ranked PvP because it requires a village`,
+    };
+  }
+
   let check = true;
   let message = "";
 
@@ -166,6 +190,22 @@ export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
  * @returns An object with a check flag and a message if the loadout is invalid
  */
 export const validateItemLoadout = (items: Item[]) => {
+  const skillGatedItem = items.find((item) => item.requiredSkillId);
+  if (skillGatedItem) {
+    return {
+      check: false,
+      message: `${skillGatedItem.name} cannot be equipped in ranked PvP because it requires a skill tree entry`,
+    };
+  }
+
+  const bloodlineItem = items.find((item) => item.bloodlineId);
+  if (bloodlineItem) {
+    return {
+      check: false,
+      message: `${bloodlineItem.name} cannot be equipped in ranked PvP because it requires a bloodline`,
+    };
+  }
+
   let check = true;
   let message = "";
 
@@ -189,13 +229,6 @@ export const validateItemLoadout = (items: Item[]) => {
   if (increasecostItems.length > RANKED_LOADOUT_MAX_INCREASECOST_ITEMS) {
     check = false;
     message = `You can only equip up to ${RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} increasecost item in ranked PvP`;
-  }
-
-  // Check bloodline items limit
-  const bloodlineItems = items.filter((item) => item.bloodlineId);
-  if (bloodlineItems.length > 1) {
-    check = false;
-    message = `You can only equip one item with a bloodline requirement in ranked PvP`;
   }
 
   // Check weapon limit

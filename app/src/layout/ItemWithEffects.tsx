@@ -131,6 +131,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   // Get bloodline / sage-mode names for requirement labels
   const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
   const { data: sageModesData } = api.sageMode.getAllNames.useQuery();
+  const requiredSkillId = "requiredSkillId" in item ? item.requiredSkillId : null;
+  const { data: skillNames } = api.skillTree.getAllNames.useQuery(undefined, {
+    enabled: !!requiredSkillId,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Only fetch evolutions when the caller explicitly opts in, to avoid N+1 queries
   // in list views. Pass showEvolutions={true} for single-item detail views (e.g.
@@ -755,6 +760,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Required Bloodline</b>:{" "}
                   {bloodlinesData?.find((b) => b.id === item.bloodlineId)?.name ||
                     item.bloodlineId}
+                </p>
+              )}
+              {requiredSkillId && (
+                <p>
+                  <b>Required Active Skill</b>:{" "}
+                  {skillNames?.find((skill) => skill.id === requiredSkillId)?.name ??
+                    requiredSkillId}
                 </p>
               )}
               {"requiredSageModeId" in item && item.requiredSageModeId && (

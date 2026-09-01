@@ -1176,32 +1176,37 @@ const Combat: React.FC<CombatProps> = (props) => {
                   })}
               </div>
               <div className="mt-3 flex flex-row items-end gap-3">
-                <ItemLoadoutSelector
-                  variant="dropdown"
-                  label="Item Loadout"
-                  onSelectOverride={(loadoutId) => {
-                    if (battleRef?.current) {
-                      selectLoadout({
-                        battleId: battleRef.current.id,
-                        itemLoadoutId: loadoutId,
-                      });
-                    }
-                  }}
-                  selectedOverrideId={battleSessionUser?.itemLoadout}
-                />
-                <JutsuLoadoutSelector
-                  variant="dropdown"
-                  label="Jutsu Loadout"
-                  onSelectOverride={(loadoutId) => {
-                    if (battleRef?.current) {
-                      selectLoadout({
-                        battleId: battleRef.current.id,
-                        jutsuLoadoutId: loadoutId,
-                      });
-                    }
-                  }}
-                  selectedOverrideId={battleSessionUser?.jutsuLoadout}
-                />
+                {(battleRef.current.battleType === "COMBAT" ||
+                  battleRef.current.battleType === "SPARRING") && (
+                  <>
+                    <ItemLoadoutSelector
+                      variant="dropdown"
+                      label="Item Loadout"
+                      onSelectOverride={(loadoutId) => {
+                        if (battleRef?.current) {
+                          selectLoadout({
+                            battleId: battleRef.current.id,
+                            itemLoadoutId: loadoutId,
+                          });
+                        }
+                      }}
+                      selectedOverrideId={battleSessionUser?.itemLoadout}
+                    />
+                    <JutsuLoadoutSelector
+                      variant="dropdown"
+                      label="Jutsu Loadout"
+                      onSelectOverride={(loadoutId) => {
+                        if (battleRef?.current) {
+                          selectLoadout({
+                            battleId: battleRef.current.id,
+                            jutsuLoadoutId: loadoutId,
+                          });
+                        }
+                      }}
+                      selectedOverrideId={battleSessionUser?.jutsuLoadout}
+                    />
+                  </>
+                )}
                 <Button
                   variant="secondary"
                   className="shrink-0"
