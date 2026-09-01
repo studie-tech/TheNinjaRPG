@@ -343,8 +343,9 @@ export const computeJutsuLoadoutAssignments = (args: {
   jutsuIds: string[];
   userjutsus: UserJutsuWithRelations[];
   user: NonNullable<UserWithRelations>;
+  activatedSkillIds?: ReadonlySet<string>;
 }): ComputedJutsuLoadout => {
-  const { jutsuIds, userjutsus, user } = args;
+  const { jutsuIds, userjutsus, user, activatedSkillIds = new Set<string>() } = args;
   return computeJutsuLoadoutCapAssignments({
     jutsuIds,
     userjutsus,
@@ -355,6 +356,9 @@ export const computeJutsuLoadoutAssignments = (args: {
       }
       if (!canUseJutsu(jutsu, user)) {
         return `${jutsu.name}: missing requirements`;
+      }
+      if (jutsu.requiredSkillId && !activatedSkillIds.has(jutsu.requiredSkillId)) {
+        return `${jutsu.name}: required skill is not active`;
       }
       return undefined;
     },

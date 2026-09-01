@@ -1446,22 +1446,27 @@ const Combat: React.FC<CombatProps> = (props) => {
                 disabled={isMarkingReady || hasSettledReady || !!activePendingLoadout}
                 aria-busy={isMarkingReady || !!activePendingLoadout}
               >
-                <ItemLoadoutSelector
-                  variant="dropdown"
-                  label="Item Loadout"
-                  onSelectOverride={(loadoutId, displayName) =>
-                    handleSelectLoadout("item", loadoutId, displayName)
-                  }
-                  selectedOverrideId={battleSessionUser?.itemLoadout}
-                />
-                <JutsuLoadoutSelector
-                  variant="dropdown"
-                  label="Jutsu Loadout"
-                  onSelectOverride={(loadoutId, displayName) =>
-                    handleSelectLoadout("jutsu", loadoutId, displayName)
-                  }
-                  selectedOverrideId={battleSessionUser?.jutsuLoadout}
-                />
+                {(battleRef.current.battleType === "COMBAT" ||
+                  battleRef.current.battleType === "SPARRING") && (
+                  <>
+                    <ItemLoadoutSelector
+                      variant="dropdown"
+                      label="Item Loadout"
+                      onSelectOverride={(loadoutId, displayName) =>
+                        handleSelectLoadout("item", loadoutId, displayName)
+                      }
+                      selectedOverrideId={battleSessionUser?.itemLoadout}
+                    />
+                    <JutsuLoadoutSelector
+                      variant="dropdown"
+                      label="Jutsu Loadout"
+                      onSelectOverride={(loadoutId, displayName) =>
+                        handleSelectLoadout("jutsu", loadoutId, displayName)
+                      }
+                      selectedOverrideId={battleSessionUser?.jutsuLoadout}
+                    />
+                  </>
+                )}
                 <Button
                   variant="secondary"
                   className="shrink-0"

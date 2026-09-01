@@ -1,8 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
+import { api } from "@/app/_trpc/client";
 import {
   safeLocalStorageGetItem,
   safeLocalStorageSetItem,
@@ -58,6 +59,14 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const [lightLayout, setLightLayout] = useLocalStorage<boolean>("lightLayout", false);
   const [isMounted, setIsMounted] = useState(false);
 
+  const { data: rankedQueueCount = 0 } = api.pvpRank.getRankedQueueCount.useQuery(
+    undefined,
+    {
+      enabled: !!userId,
+      refetchInterval: 10_000,
+    },
+  );
+
   useEffect(() => {
     if (variant === "pixel") {
       document.documentElement.classList.add("dark");
@@ -110,12 +119,28 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   };
 
   const navbarMenuItems = getMainNavbarLinks(notifications);
-  const shownNotifications = notifications?.filter(
-    (n) =>
-      n.color !== "toast" &&
-      n.color !== "hidden" &&
-      (n.alwaysShow || n.href !== pathname),
-  );
+  const shownNotifications = useMemo(() => {
+    const base =
+      notifications?.filter(
+        (n) =>
+          n.color !== "toast" &&
+          n.color !== "hidden" &&
+          (n.alwaysShow || n.href !== pathname),
+      ) ?? [];
+    if (!userId || rankedQueueCount <= 0) return base;
+    return [
+      ...base,
+      {
+        href: "/battlearena#PVP%20Rank",
+        name:
+          rankedQueueCount === 1
+            ? "1 player in ranked queue"
+            : `${rankedQueueCount} players in ranked queue`,
+        color: "blue" as const,
+        alwaysShow: true,
+      },
+    ];
+  }, [notifications, pathname, rankedQueueCount, userId]);
   const navbarMenuItemsLeft = navbarMenuItems.slice(0, 3);
   const navbarMenuItemsRight = navbarMenuItems.slice(3);
   const isSignedInLayout =
