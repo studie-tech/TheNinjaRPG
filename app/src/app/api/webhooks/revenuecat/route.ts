@@ -92,6 +92,7 @@ export async function POST(request: Request) {
         fromUserIds: event.transferred_from ?? [],
         toUserIds: event.transferred_to ?? [],
         store: resolution.status === "mapped" ? resolution.store : undefined,
+        isSandbox: isSandbox(event.environment),
         occurredAt: transferredAt,
       });
       return Response.json({ handled: "transferred", ...outcome });

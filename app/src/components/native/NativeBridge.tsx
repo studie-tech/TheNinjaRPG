@@ -3,6 +3,11 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
+import {
+  safeLocalStorageGetItem,
+  safeLocalStorageRemoveItem,
+  safeLocalStorageSetItem,
+} from "@/hooks/localstorage";
 import { useLiveActivity } from "@/hooks/useLiveActivity";
 import { useNativePush } from "@/hooks/useNativePush";
 import { hospitalRecoveryAt } from "@/libs/hospital";
@@ -17,6 +22,7 @@ import {
 } from "@/libs/native";
 import {
   clearNativeAccountState,
+  NATIVE_WIDGET_SNAPSHOT_OWNER_KEY,
   nativeWidgetAccountAction,
   shouldClearNativeAccountState,
 } from "@/libs/native/accountCleanup";
@@ -40,6 +46,9 @@ export default function NativeBridge() {
   const router = useRouter();
   const pathname = usePathname();
   const [isOutdated, setIsOutdated] = useState(false);
+  const [snapshotOwnerUserId, setSnapshotOwnerUserId] = useState<string | null>(() =>
+    safeLocalStorageGetItem(NATIVE_WIDGET_SNAPSHOT_OWNER_KEY),
+  );
   const isSignedOut = isClerkLoaded && !userId;
   const shouldClearAccountState = shouldClearNativeAccountState({
     isClerkLoaded,
@@ -62,6 +71,7 @@ export default function NativeBridge() {
   const isCurrentUser = !!userId && userData?.userId === userId;
   const widgetAccountAction = nativeWidgetAccountAction({
     isClerkLoaded,
+    snapshotOwnerUserId,
     userData,
     userId,
   });
@@ -152,7 +162,11 @@ export default function NativeBridge() {
     // agrees with Clerk's active account.
     if (widgetAccountAction === "clear") {
       lastSnapshot.current = null;
-      enqueueWidgetOperation(widgets.clear);
+      enqueueWidgetOperation(async () => {
+        await widgets.clear();
+        safeLocalStorageRemoveItem(NATIVE_WIDGET_SNAPSHOT_OWNER_KEY);
+        setSnapshotOwnerUserId(null);
+      });
       return;
     }
     if (widgetAccountAction !== "sync" || !userData || isSignedOut) return;
@@ -185,9 +199,11 @@ export default function NativeBridge() {
     const signature = JSON.stringify(snapshot);
     if (signature === lastSnapshot.current) return;
     lastSnapshot.current = signature;
-    enqueueWidgetOperation(() =>
-      widgets.sync({ ...snapshot, updatedAt: new Date().toISOString() }),
-    );
+    enqueueWidgetOperation(async () => {
+      await widgets.sync({ ...snapshot, updatedAt: new Date().toISOString() });
+      safeLocalStorageSetItem(NATIVE_WIDGET_SNAPSHOT_OWNER_KEY, userData.userId);
+      setSnapshotOwnerUserId(userData.userId);
+    });
   }, [isSignedOut, userData, timeDiff, widgetToken, widgetAccountAction]);
 
   if (!isOutdated) return null;

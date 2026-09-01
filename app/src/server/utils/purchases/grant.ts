@@ -265,6 +265,7 @@ const transferredUserId = async (
   client: DrizzleClient,
   sourceUserId: string,
   store: StorePlatform,
+  isSandbox: boolean,
   asOf: Date,
 ): Promise<string> => {
   const visitedEdges = new Set<string>();
@@ -283,6 +284,7 @@ const transferredUserId = async (
       where: and(
         eq(storePurchaseTransfer.sourceUserId, current),
         eq(storePurchaseTransfer.store, store),
+        eq(storePurchaseTransfer.isSandbox, isSandbox),
         gte(storePurchaseTransfer.transferredAt, cursor),
       ),
       orderBy: [
@@ -300,7 +302,9 @@ const transferredUserId = async (
     });
     if (!redirect || redirect.destinationUserId === current) return current;
     if (visitedEdges.has(redirect.id)) {
-      throw new Error(`RevenueCat transfer cycle from ${sourceUserId}/${store}`);
+      throw new Error(
+        `RevenueCat transfer cycle from ${sourceUserId}/${store}/${isSandbox ? "sandbox" : "production"}`,
+      );
     }
     visitedEdges.add(redirect.id);
     cursor = redirect.transferredAt;
@@ -314,6 +318,7 @@ const transferPredecessorUserIds = async (
   client: DrizzleClient,
   sourceUserId: string,
   store: StorePlatform,
+  isSandbox: boolean,
 ): Promise<string[]> => {
   const visited = new Set<string>();
   const pending = [sourceUserId];
@@ -326,6 +331,7 @@ const transferPredecessorUserIds = async (
       where: and(
         eq(storePurchaseTransfer.destinationUserId, current),
         eq(storePurchaseTransfer.store, store),
+        eq(storePurchaseTransfer.isSandbox, isSandbox),
       ),
     });
     pending.push(...predecessors.map((redirect) => redirect.sourceUserId));
@@ -338,6 +344,7 @@ const transferChainUserIds = async (
   client: DrizzleClient,
   sourceUserId: string,
   store: StorePlatform,
+  isSandbox: boolean,
 ): Promise<string[]> => {
   const visited = new Set<string>();
   const pending = [sourceUserId];
@@ -350,6 +357,7 @@ const transferChainUserIds = async (
       where: and(
         eq(storePurchaseTransfer.sourceUserId, current),
         eq(storePurchaseTransfer.store, store),
+        eq(storePurchaseTransfer.isSandbox, isSandbox),
       ),
       orderBy: asc(storePurchaseTransfer.transferredAt),
     });
@@ -408,6 +416,7 @@ export const reconcileStorePurchaseOwner = async (
           client,
           canonicalOriginalUserId,
           receipt.store,
+          receipt.isSandbox,
           receipt.purchasedAt,
         )
       : canonicalOriginalUserId;
@@ -484,7 +493,13 @@ const grantStorePurchaseUnlocked = async (
     return { status: "ignored", reason: "Deleted user" };
   }
   let recipientUserId = federal
-    ? await transferredUserId(client, originalUserId, grant.store, grant.purchasedAt)
+    ? await transferredUserId(
+        client,
+        originalUserId,
+        grant.store,
+        grant.isSandbox,
+        grant.purchasedAt,
+      )
     : originalUserId;
   const accepted = !grant.isSandbox || isSandboxGrantee(recipientUserId);
 
@@ -504,6 +519,7 @@ const grantStorePurchaseUnlocked = async (
             where: and(
               eq(storeEntitlementState.userId, recipientUserId),
               eq(storeEntitlementState.store, grant.store),
+              eq(storeEntitlementState.isSandbox, grant.isSandbox),
               gte(storeEntitlementState.revokedThrough, grant.purchasedAt),
             ),
           })) ??
@@ -515,6 +531,7 @@ const grantStorePurchaseUnlocked = async (
                   originalUserId,
                 ]),
                 eq(storeEntitlementRevocation.store, grant.store),
+                eq(storeEntitlementRevocation.isSandbox, grant.isSandbox),
                 gte(storeEntitlementRevocation.revokedThrough, grant.purchasedAt),
                 or(
                   isNull(storeEntitlementRevocation.productId),
@@ -670,6 +687,7 @@ const grantStorePurchaseUnlocked = async (
               SELECT 1 FROM ${storeEntitlementState}
               WHERE ${storeEntitlementState.userId} = ${storePurchase.userId}
                 AND ${storeEntitlementState.store} = ${storePurchase.store}
+                AND ${storeEntitlementState.isSandbox} = ${storePurchase.isSandbox}
                 AND ${storeEntitlementState.revokedThrough} >= ${storePurchase.purchasedAt}
             )
             AND NOT EXISTS (
@@ -677,6 +695,7 @@ const grantStorePurchaseUnlocked = async (
               WHERE (${storeEntitlementRevocation.userId} = ${storePurchase.userId}
                   OR ${storeEntitlementRevocation.userId} = ${storePurchase.originalUserId})
                 AND ${storeEntitlementRevocation.store} = ${storePurchase.store}
+                AND ${storeEntitlementRevocation.isSandbox} = ${storePurchase.isSandbox}
                 AND ${storeEntitlementRevocation.revokedThrough} >= ${storePurchase.purchasedAt}
                 AND (${storeEntitlementRevocation.productId} IS NULL
                   OR ${storeEntitlementRevocation.productId} = ${storePurchase.productId})
@@ -753,6 +772,7 @@ const extendStoreSubscriptionUnlocked = async (
   extension: StoreExtension,
 ): Promise<void> => {
   const canonicalUserId = await canonicalStoreUserId(client, extension.userId);
+  const isSandbox = extension.isSandbox ?? false;
   // Account deletion is terminal for the canonical store identity. RevenueCat can send
   // SUBSCRIPTION_EXTENDED or BILLING_ISSUE after deletion, and when no receipt exists
   // there is nothing a later retry can repair. Acknowledge the event instead of asking
@@ -765,9 +785,7 @@ const extendStoreSubscriptionUnlocked = async (
           eq(storePurchase.transactionId, extension.transactionId),
           eq(storePurchase.store, extension.store),
           eq(storePurchase.productId, extension.productId),
-          ...(extension.isSandbox === undefined
-            ? []
-            : [eq(storePurchase.isSandbox, extension.isSandbox)]),
+          eq(storePurchase.isSandbox, isSandbox),
           isNotNull(storePurchase.federalStatus),
         ),
       })
@@ -779,6 +797,7 @@ const extendStoreSubscriptionUnlocked = async (
     client,
     canonicalUserId,
     extension.store,
+    isSandbox,
   );
   const candidates = exact
     ? []
@@ -788,9 +807,7 @@ const extendStoreSubscriptionUnlocked = async (
           inArray(storePurchase.userId, possibleOwners),
           eq(storePurchase.store, extension.store),
           eq(storePurchase.productId, extension.productId),
-          ...(extension.isSandbox === undefined
-            ? []
-            : [eq(storePurchase.isSandbox, extension.isSandbox)]),
+          eq(storePurchase.isSandbox, isSandbox),
           isNotNull(storePurchase.federalStatus),
           isNull(storePurchase.revokedAt),
         ),
@@ -802,6 +819,7 @@ const extendStoreSubscriptionUnlocked = async (
       client,
       canonicalUserId,
       extension.store,
+      isSandbox,
       candidate.purchasedAt,
     );
     if (owner === candidate.userId) {
@@ -876,6 +894,7 @@ const revokeFederalStatusUnlocked = async (
 ): Promise<void> => {
   userId = await canonicalStoreUserId(client, userId);
   const { occurredAt, productId, store, transactionId } = scope;
+  const isSandbox = scope.isSandbox ?? false;
   const exact =
     transactionId && store
       ? await client.query.storePurchase.findFirst({
@@ -889,9 +908,7 @@ const revokeFederalStatusUnlocked = async (
             eq(storePurchase.transactionId, transactionId),
             eq(storePurchase.store, store),
             ...(productId ? [eq(storePurchase.productId, productId)] : []),
-            ...(scope.isSandbox === undefined
-              ? []
-              : [eq(storePurchase.isSandbox, scope.isSandbox)]),
+            eq(storePurchase.isSandbox, isSandbox),
             isNotNull(storePurchase.federalStatus),
           ),
         })
@@ -927,7 +944,7 @@ const revokeFederalStatusUnlocked = async (
   //
   // The event's own timestamp is the fallback for a payload that names no product.
   const possibleOwners = store
-    ? await transferChainUserIds(client, userId, store)
+    ? await transferChainUserIds(client, userId, store, isSandbox)
     : [userId];
   const candidates =
     !exact && productId
@@ -947,9 +964,7 @@ const revokeFederalStatusUnlocked = async (
             // retire the subscription the player is currently paying for.
             lt(storePurchase.purchasedAt, occurredAt),
             ...(store ? [eq(storePurchase.store, store)] : []),
-            ...(scope.isSandbox === undefined
-              ? []
-              : [eq(storePurchase.isSandbox, scope.isSandbox)]),
+            eq(storePurchase.isSandbox, isSandbox),
           ),
           orderBy: desc(storePurchase.purchasedAt),
         })
@@ -957,7 +972,7 @@ const revokeFederalStatusUnlocked = async (
   let spent = exact;
   for (const candidate of candidates) {
     const owner = store
-      ? await transferredUserId(client, userId, store, candidate.purchasedAt)
+      ? await transferredUserId(client, userId, store, isSandbox, candidate.purchasedAt)
       : userId;
     if (owner === candidate.userId) {
       spent = candidate;
@@ -967,16 +982,11 @@ const revokeFederalStatusUnlocked = async (
   const ownerUserId =
     exact?.userId ??
     spent?.userId ??
-    (store ? await transferredUserId(client, userId, store, occurredAt) : userId);
+    (store
+      ? await transferredUserId(client, userId, store, isSandbox, occurredAt)
+      : userId);
   const cutoff = spent?.purchasedAt ?? (productId ? beforeExpiry : occurredAt);
-  // A sandbox expiry for an ordinary account still retires a receipt which already
-  // exists, so restoring it later cannot resurrect an ended period. Without a matching
-  // receipt, though, its environment cannot be represented by the shared watermark
-  // tables; persisting it there could suppress a later production purchase.
-  const persistRevocationWatermark =
-    scope.isSandbox !== true || isSandboxGrantee(ownerUserId);
-
-  if (store && persistRevocationWatermark) {
+  if (store) {
     const applicableTransactionId = transactionId ?? spent?.transactionId ?? null;
     const eventId =
       scope.eventId ??
@@ -988,6 +998,7 @@ const revokeFederalStatusUnlocked = async (
         eventId,
         userId: ownerUserId,
         store,
+        isSandbox,
         productId: productId ?? null,
         transactionId: applicableTransactionId,
         revokedThrough: cutoff,
@@ -1003,13 +1014,14 @@ const revokeFederalStatusUnlocked = async (
   // Persist the cutoff before touching receipts. If the purchase webhook has not inserted
   // its row yet, or races this handler, the grant's atomic claim checks this watermark and
   // cannot resurrect a subscription period the store has already ended.
-  if (store && persistRevocationWatermark) {
+  if (store) {
     await client
       .insert(storeEntitlementState)
       .values({
         id: nanoid(),
         userId: ownerUserId,
         store,
+        isSandbox,
         revokedThrough: cutoff,
         updatedAt: new Date(),
       })
@@ -1034,9 +1046,7 @@ const revokeFederalStatusUnlocked = async (
         // the product ids are the same strings on both, so a lapse on one must not retire
         // the other's receipts.
         ...(store ? [eq(storePurchase.store, store)] : []),
-        ...(scope.isSandbox === undefined
-          ? []
-          : [eq(storePurchase.isSandbox, scope.isSandbox)]),
+        eq(storePurchase.isSandbox, isSandbox),
       ),
     );
   // Then fall back to whatever still vouches — which is both sources, not just PayPal.
@@ -1066,6 +1076,8 @@ export interface StoreTransfer {
   toUserIds: string[];
   /** Missing when neither RevenueCat's store nor configured app id identifies a platform. */
   store?: StorePlatform | null;
+  /** RevenueCat environment. Omitted legacy callers are treated as production. */
+  isSandbox?: boolean;
   /** RevenueCat event time, used to reject a delayed older ownership redirect. */
   occurredAt: Date;
 }
@@ -1101,6 +1113,7 @@ export const migrateStorePurchaseTransfers = async (
       where: and(
         eq(storePurchaseTransfer.sourceUserId, newUserId),
         eq(storePurchaseTransfer.store, alias.store),
+        eq(storePurchaseTransfer.isSandbox, alias.isSandbox),
         eq(storePurchaseTransfer.eventId, alias.eventId),
       ),
     });
@@ -1139,38 +1152,42 @@ export const migrateStoreEntitlementStates = async (
   newUserId: string,
 ): Promise<void> => {
   for (const store of STORE_PLATFORMS) {
-    const oldState = await client.query.storeEntitlementState.findFirst({
-      where: and(
-        eq(storeEntitlementState.userId, oldUserId),
-        eq(storeEntitlementState.store, store),
-      ),
-    });
-    const newState = await client.query.storeEntitlementState.findFirst({
-      where: and(
-        eq(storeEntitlementState.userId, newUserId),
-        eq(storeEntitlementState.store, store),
-      ),
-    });
-    if (!oldState) continue;
-    if (newState) {
-      await client
-        .update(storeEntitlementState)
-        .set({
-          revokedThrough:
-            oldState.revokedThrough > newState.revokedThrough
-              ? oldState.revokedThrough
-              : newState.revokedThrough,
-          updatedAt: new Date(),
-        })
-        .where(eq(storeEntitlementState.id, newState.id));
-      await client
-        .delete(storeEntitlementState)
-        .where(eq(storeEntitlementState.id, oldState.id));
-    } else {
-      await client
-        .update(storeEntitlementState)
-        .set({ userId: newUserId, updatedAt: new Date() })
-        .where(eq(storeEntitlementState.id, oldState.id));
+    for (const isSandbox of [false, true]) {
+      const oldState = await client.query.storeEntitlementState.findFirst({
+        where: and(
+          eq(storeEntitlementState.userId, oldUserId),
+          eq(storeEntitlementState.store, store),
+          eq(storeEntitlementState.isSandbox, isSandbox),
+        ),
+      });
+      const newState = await client.query.storeEntitlementState.findFirst({
+        where: and(
+          eq(storeEntitlementState.userId, newUserId),
+          eq(storeEntitlementState.store, store),
+          eq(storeEntitlementState.isSandbox, isSandbox),
+        ),
+      });
+      if (!oldState) continue;
+      if (newState) {
+        await client
+          .update(storeEntitlementState)
+          .set({
+            revokedThrough:
+              oldState.revokedThrough > newState.revokedThrough
+                ? oldState.revokedThrough
+                : newState.revokedThrough,
+            updatedAt: new Date(),
+          })
+          .where(eq(storeEntitlementState.id, newState.id));
+        await client
+          .delete(storeEntitlementState)
+          .where(eq(storeEntitlementState.id, oldState.id));
+      } else {
+        await client
+          .update(storeEntitlementState)
+          .set({ userId: newUserId, updatedAt: new Date() })
+          .where(eq(storeEntitlementState.id, oldState.id));
+      }
     }
   }
 };
@@ -1191,6 +1208,7 @@ export const migrateStoreEntitlementRevocations = async (
         eq(storeEntitlementRevocation.eventId, revocation.eventId),
         eq(storeEntitlementRevocation.userId, newUserId),
         eq(storeEntitlementRevocation.store, revocation.store),
+        eq(storeEntitlementRevocation.isSandbox, revocation.isSandbox),
       ),
     });
     if (collision) {
@@ -1251,6 +1269,7 @@ const transferStorePurchasesUnlocked = async (
   const destinationUserId = destination.userId;
   const sourceIds = fromIds.filter((id) => id !== destinationUserId);
   const stores = transfer.store ? [transfer.store] : [...STORE_PLATFORMS];
+  const isSandbox = transfer.isSandbox ?? false;
 
   let rowsAffected = 0;
   const effectiveDestinations = new Set<string>([destinationUserId]);
@@ -1266,6 +1285,7 @@ const transferStorePurchasesUnlocked = async (
           sourceUserId,
           destinationUserId,
           store,
+          isSandbox,
           transferredAt: transfer.occurredAt,
           updatedAt: new Date(),
         })
@@ -1281,6 +1301,7 @@ const transferStorePurchasesUnlocked = async (
         client,
         sourceUserId,
         store,
+        isSandbox,
         transfer.occurredAt,
       );
       effectiveDestinations.add(effectiveDestination);
@@ -1290,6 +1311,7 @@ const transferStorePurchasesUnlocked = async (
           where: and(
             eq(storeEntitlementState.userId, sourceUserId),
             eq(storeEntitlementState.store, store),
+            eq(storeEntitlementState.isSandbox, isSandbox),
             lte(storeEntitlementState.revokedThrough, transfer.occurredAt),
           ),
         },
@@ -1304,6 +1326,7 @@ const transferStorePurchasesUnlocked = async (
             id: nanoid(),
             userId: effectiveDestination,
             store,
+            isSandbox,
             revokedThrough: sourceEntitlementState.revokedThrough,
             updatedAt: new Date(),
           })
@@ -1321,6 +1344,7 @@ const transferStorePurchasesUnlocked = async (
         client,
         sourceUserId,
         store,
+        isSandbox,
       );
       const candidates = await client.query.storePurchase.findMany({
         columns: {
@@ -1332,6 +1356,7 @@ const transferStorePurchasesUnlocked = async (
         where: and(
           inArray(storePurchase.originalUserId, originalUserIds),
           eq(storePurchase.store, store),
+          eq(storePurchase.isSandbox, isSandbox),
           isNotNull(storePurchase.federalStatus),
           isNull(storePurchase.revokedAt),
         ),

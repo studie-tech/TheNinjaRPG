@@ -5733,15 +5733,20 @@ export const storeEntitlementState = mysqlTable(
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
+    /** RevenueCat environment; production and sandbox billing histories are independent. */
+    isSandbox: boolean("isSandbox").default(false).notNull(),
     revokedThrough: datetime("revokedThrough", { mode: "date", fsp: 3 }).notNull(),
     updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
   },
   (table) => ({
-    userStoreKey: uniqueIndex("StoreEntitlementState_userId_store_key").on(
+    userStoreKey: uniqueIndex(
+      "StoreEntitlementState_userId_store_isSandbox_key",
+    ).on(
       table.userId,
       table.store,
+      table.isSandbox,
     ),
   }),
 );
@@ -5760,6 +5765,8 @@ export const storeEntitlementRevocation = mysqlTable(
     eventId: varchar("eventId", { length: 191 }).notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
+    /** RevenueCat environment; never apply this fact to the other environment. */
+    isSandbox: boolean("isSandbox").default(false).notNull(),
     productId: varchar("productId", { length: 191 }),
     transactionId: varchar("transactionId", { length: 191 }),
     revokedThrough: datetime("revokedThrough", { mode: "date", fsp: 3 }).notNull(),
@@ -5770,11 +5777,11 @@ export const storeEntitlementRevocation = mysqlTable(
   },
   (table) => ({
     eventUserStoreKey: uniqueIndex(
-      "StoreEntitlementRevocation_eventId_userId_store_key",
-    ).on(table.eventId, table.userId, table.store),
+      "StoreEntitlementRevocation_eventId_userId_store_isSandbox_key",
+    ).on(table.eventId, table.userId, table.store, table.isSandbox),
     ownerStoreCutoffIdx: index(
-      "StoreEntitlementRevocation_userId_store_revokedThrough_idx",
-    ).on(table.userId, table.store, table.revokedThrough),
+      "StoreEntitlementRevocation_owner_env_cutoff_idx",
+    ).on(table.userId, table.store, table.isSandbox, table.revokedThrough),
   }),
 );
 export type StoreEntitlementRevocation = InferSelectModel<
@@ -5808,6 +5815,8 @@ export const storePurchaseTransfer = mysqlTable(
     sourceUserId: varchar("sourceUserId", { length: 191 }).notNull(),
     destinationUserId: varchar("destinationUserId", { length: 191 }).notNull(),
     store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
+    /** RevenueCat environment; sandbox restores must never redirect production receipts. */
+    isSandbox: boolean("isSandbox").default(false).notNull(),
     transferredAt: datetime("transferredAt", { mode: "date", fsp: 3 }).notNull(),
     updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
@@ -5815,22 +5824,24 @@ export const storePurchaseTransfer = mysqlTable(
   },
   (table) => ({
     eventSourceStoreKey: uniqueIndex(
-      "StorePurchaseTransfer_eventId_sourceUserId_store_key",
+      "StorePurchaseTransfer_eventId_sourceUserId_store_isSandbox_key",
     ).on(
       table.eventId,
       table.sourceUserId,
       table.store,
+      table.isSandbox,
     ),
     sourceStoreTimeIdx: index(
-      "StorePurchaseTransfer_sourceUserId_store_transferredAt_idx",
+      "StorePurchaseTransfer_source_env_time_idx",
     ).on(
       table.sourceUserId,
       table.store,
+      table.isSandbox,
       table.transferredAt,
     ),
-    destinationIdx: index("StorePurchaseTransfer_destinationUserId_idx").on(
-      table.destinationUserId,
-    ),
+    destinationIdx: index(
+      "StorePurchaseTransfer_destinationUserId_store_isSandbox_idx",
+    ).on(table.destinationUserId, table.store, table.isSandbox),
   }),
 );
 export type StorePurchaseTransfer = InferSelectModel<typeof storePurchaseTransfer>;

@@ -175,6 +175,37 @@ afterEach(() => {
 });
 
 describe("native push ownership", () => {
+  it("exposes a persisted widget token only to its recorded account", async () => {
+    localStorage.setItem("native-widget-token", "account-a-widget-token");
+    localStorage.setItem("native-widget-token-owner", "account-a");
+
+    const current = renderHook(() =>
+      useNativePush({ enabled: true, accountId: "account-a" }),
+    );
+    expect(current.result.current.widgetToken).toBe("account-a-widget-token");
+    current.unmount();
+
+    const replacement = renderHook(() =>
+      useNativePush({ enabled: true, accountId: "account-b" }),
+    );
+    expect(replacement.result.current.widgetToken).toBeUndefined();
+  });
+
+  it("withdraws account A's widget token during a direct A-to-B handoff", async () => {
+    const { result, rerender } = renderHook(
+      ({ accountId }) => useNativePush({ enabled: true, accountId }),
+      { initialProps: { accountId: "account-a" } },
+    );
+    await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
+    act(() => {
+      mocks.registrationListeners[0]?.({ value: TOKEN });
+    });
+    await waitFor(() => expect(result.current.widgetToken).toBe("widget-token"));
+
+    rerender({ accountId: "account-b" });
+    expect(result.current.widgetToken).toBeUndefined();
+  });
+
   it("serialises a slow detach ahead of the next account's bind", async () => {
     const events: string[] = [];
     let finishDetach: (() => void) | undefined;

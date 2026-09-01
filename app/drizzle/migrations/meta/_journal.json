@@ -365,6 +365,13 @@
       "when": 1788267151309,
       "tag": "0051_fair_smasher",
       "breakpoints": false
+    },
+    {
+      "idx": 52,
+      "version": "5",
+      "when": 1788276370614,
+      "tag": "0052_mushy_whizzer",
+      "breakpoints": false
     }
   ]
 }

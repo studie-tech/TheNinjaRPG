@@ -63,6 +63,7 @@ describe("NativeBridge deleted-profile cleanup", () => {
     expect(
       nativeWidgetAccountAction({
         isClerkLoaded: true,
+        snapshotOwnerUserId: "account-a",
         userData: { userId: "account-a" },
         userId: "account-a",
       }),
@@ -70,6 +71,7 @@ describe("NativeBridge deleted-profile cleanup", () => {
     expect(
       nativeWidgetAccountAction({
         isClerkLoaded: true,
+        snapshotOwnerUserId: "account-a",
         userData: { userId: "account-a" },
         userId: "account-b",
       }),
@@ -77,6 +79,7 @@ describe("NativeBridge deleted-profile cleanup", () => {
     expect(
       nativeWidgetAccountAction({
         isClerkLoaded: true,
+        snapshotOwnerUserId: "account-a",
         userData: undefined,
         userId: "account-b",
       }),
@@ -84,10 +87,30 @@ describe("NativeBridge deleted-profile cleanup", () => {
     expect(
       nativeWidgetAccountAction({
         isClerkLoaded: true,
+        snapshotOwnerUserId: null,
         userData: { userId: "account-b" },
         userId: "account-b",
       }),
     ).toBe("sync");
+  });
+
+  it("keeps a known-current widget snapshot during cold profile loading and failures", () => {
+    expect(
+      nativeWidgetAccountAction({
+        isClerkLoaded: true,
+        snapshotOwnerUserId: "account-a",
+        userData: undefined,
+        userId: "account-a",
+      }),
+    ).toBe("idle");
+    expect(
+      nativeWidgetAccountAction({
+        isClerkLoaded: true,
+        snapshotOwnerUserId: null,
+        userData: undefined,
+        userId: "account-a",
+      }),
+    ).toBe("idle");
   });
 
   it("clears push, widget, purchase, and Live Activity state", async () => {

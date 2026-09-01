@@ -20,6 +20,8 @@ import {
 const LAST_TOKEN_KEY = "native-push-token";
 /** Widget credential the server minted for this device, kept for the snapshot writes. */
 const WIDGET_TOKEN_KEY = "native-widget-token";
+/** Account allowed to serialize the widget credential into its native snapshot. */
+const WIDGET_TOKEN_OWNER_KEY = "native-widget-token-owner";
 /** Rotating proof used only to conditionally detach the row created by the last bind. */
 const OWNER_TOKEN_KEY = "native-push-owner-token";
 
@@ -73,6 +75,9 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
   const [widgetToken, setWidgetToken] = useState<string | undefined>(
     () => safeLocalStorageGetItem(WIDGET_TOKEN_KEY) ?? undefined,
   );
+  const [widgetTokenOwner, setWidgetTokenOwner] = useState<string | undefined>(
+    () => safeLocalStorageGetItem(WIDGET_TOKEN_OWNER_KEY) ?? undefined,
+  );
 
   // Attach listeners before register() — the token arrives as an event, not a return
   // value, so a listener attached afterwards can miss it entirely.
@@ -95,7 +100,9 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
     if (lastAccount.current !== undefined && lastAccount.current !== accountId) {
       registeredToken.current = null;
       setWidgetToken(undefined);
+      setWidgetTokenOwner(undefined);
       safeLocalStorageRemoveItem(WIDGET_TOKEN_KEY);
+      safeLocalStorageRemoveItem(WIDGET_TOKEN_OWNER_KEY);
     }
     lastAccount.current = accountId;
 
@@ -124,8 +131,12 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
           safeLocalStorageSetItem(LAST_TOKEN_KEY, token);
           if (result.widgetToken) {
             safeLocalStorageSetItem(OWNER_TOKEN_KEY, result.widgetToken);
-            safeLocalStorageSetItem(WIDGET_TOKEN_KEY, result.widgetToken);
-            setWidgetToken(result.widgetToken);
+            if (accountId) {
+              safeLocalStorageSetItem(WIDGET_TOKEN_KEY, result.widgetToken);
+              safeLocalStorageSetItem(WIDGET_TOKEN_OWNER_KEY, accountId);
+              setWidgetToken(result.widgetToken);
+              setWidgetTokenOwner(accountId);
+            }
           }
         })
         .catch(() => {
@@ -179,9 +190,11 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
       safeLocalStorageGetItem(WIDGET_TOKEN_KEY) ??
       undefined;
     setWidgetToken(undefined);
+    setWidgetTokenOwner(undefined);
     // The widget credential belongs to the account being left. The separate owner proof
     // remains until conditional detach succeeds, so a signed-out relaunch can retry.
     safeLocalStorageRemoveItem(WIDGET_TOKEN_KEY);
+    safeLocalStorageRemoveItem(WIDGET_TOKEN_OWNER_KEY);
     const token = registeredToken.current ?? safeLocalStorageGetItem(LAST_TOKEN_KEY);
     if (!token || !ownershipToken) return;
     registeredToken.current = null;
@@ -215,7 +228,10 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
     await pending;
   }, [detachToken]);
 
-  return { unregister, widgetToken };
+  return {
+    unregister,
+    widgetToken: accountId && widgetTokenOwner === accountId ? widgetToken : undefined,
+  };
 };
 
 /**

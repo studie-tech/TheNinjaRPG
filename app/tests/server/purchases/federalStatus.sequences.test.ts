@@ -341,6 +341,133 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(await storeFederalFloor(await db(), USER)).toBe("NONE");
   });
 
+  it("isolates a delayed production purchase from sandbox expiry and transfer history", async () => {
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const purchasedAt = new Date(Date.now() - 3 * MINUTE);
+    const endedAt = new Date(Date.now() - 2 * MINUTE);
+    await revokeFederalStatus(database, USER, {
+      eventId: "sandbox-expiry-before-production",
+      occurredAt: endedAt,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: true,
+    });
+    await transferStorePurchases(database, {
+      eventId: "sandbox-transfer-before-production",
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      isSandbox: true,
+      occurredAt: new Date(Date.now() - MINUTE),
+    });
+
+    const transactionId = "production-after-sandbox-history";
+    await expect(
+      grantStorePurchase(database, {
+        userId: USER,
+        transactionId,
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt,
+        raw: {},
+      }),
+    ).resolves.toMatchObject({ status: "granted", federalStatus: "GOLD" });
+    const receipt = await database.query.storePurchase.findFirst({
+      columns: { userId: true, revokedAt: true },
+      where: eq(storePurchase.transactionId, transactionId),
+    });
+    expect(receipt).toEqual({ userId: USER, revokedAt: null });
+  });
+
+  it("isolates a delayed sandbox purchase from production expiry and transfer history", async () => {
+    env.STORE_SANDBOX_USER_IDS = USER;
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const purchasedAt = new Date(Date.now() - 3 * MINUTE);
+    await revokeFederalStatus(database, USER, {
+      eventId: "production-expiry-before-sandbox",
+      occurredAt: new Date(Date.now() - 2 * MINUTE),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: false,
+    });
+    await transferStorePurchases(database, {
+      eventId: "production-transfer-before-sandbox",
+      fromUserIds: [USER],
+      toUserIds: [DESTINATION],
+      store: "APPLE",
+      isSandbox: false,
+      occurredAt: new Date(Date.now() - MINUTE),
+    });
+
+    const transactionId = "sandbox-after-production-history";
+    await expect(
+      grantStorePurchase(database, {
+        userId: USER,
+        transactionId,
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        isSandbox: true,
+        purchasedAt,
+        raw: {},
+      }),
+    ).resolves.toMatchObject({ status: "granted", federalStatus: "GOLD" });
+    const receipt = await database.query.storePurchase.findFirst({
+      columns: { userId: true, revokedAt: true },
+      where: eq(storePurchase.transactionId, transactionId),
+    });
+    expect(receipt).toEqual({ userId: USER, revokedAt: null });
+  });
+
+  it("stores identical lifecycle event ids independently in both environments", async () => {
+    await insertUsers([
+      { userId: DESTINATION, username: "destination", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const occurredAt = new Date(Date.now() - MINUTE);
+    for (const isSandbox of [false, true]) {
+      await revokeFederalStatus(database, USER, {
+        eventId: "same-expiry-event",
+        occurredAt,
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        isSandbox,
+      });
+      await transferStorePurchases(database, {
+        eventId: "same-transfer-event",
+        fromUserIds: [USER],
+        toUserIds: [DESTINATION],
+        store: "APPLE",
+        isSandbox,
+        occurredAt: new Date(),
+      });
+    }
+
+    const [revocations, states, transfers] = await Promise.all([
+      database.query.storeEntitlementRevocation.findMany({
+        columns: { isSandbox: true },
+        where: eq(storeEntitlementRevocation.eventId, "same-expiry-event"),
+      }),
+      database.query.storeEntitlementState.findMany({
+        columns: { isSandbox: true },
+        where: eq(storeEntitlementState.userId, USER),
+      }),
+      database.query.storePurchaseTransfer.findMany({
+        columns: { isSandbox: true },
+        where: eq(storePurchaseTransfer.eventId, "same-transfer-event"),
+      }),
+    ]);
+    expect(revocations.map((row) => row.isSandbox).sort()).toEqual([false, true]);
+    expect(states.map((row) => row.isSandbox).sort()).toEqual([false, true]);
+    expect(transfers.map((row) => row.isSandbox).sort()).toEqual([false, true]);
+  });
+
   it("withdraws an allowlisted sandbox tier when its receipt transfers to an ordinary account", async () => {
     env.STORE_SANDBOX_USER_IDS = USER;
     await insertUsers([
@@ -364,6 +491,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       fromUserIds: [USER],
       toUserIds: [DESTINATION],
       store: "APPLE",
+      isSandbox: true,
       occurredAt: new Date(purchasedAt.getTime() + MINUTE),
     });
 
@@ -422,6 +550,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       fromUserIds: [USER],
       toUserIds: [DESTINATION],
       store: "APPLE",
+      isSandbox: true,
       occurredAt: new Date(purchasedAt.getTime() + MINUTE),
     });
     await transferStorePurchases(database, {
@@ -429,6 +558,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       fromUserIds: [DESTINATION],
       toUserIds: [USER],
       store: "APPLE",
+      isSandbox: true,
       occurredAt: new Date(purchasedAt.getTime() + 2 * MINUTE),
     });
 
@@ -463,6 +593,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       fromUserIds: [USER],
       toUserIds: [DESTINATION],
       store: "APPLE",
+      isSandbox: true,
       occurredAt: new Date(purchasedAt.getTime() + MINUTE),
     });
     await transferStorePurchases(database, {
@@ -470,6 +601,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       fromUserIds: [DESTINATION],
       toUserIds: [USER],
       store: "APPLE",
+      isSandbox: true,
       occurredAt: new Date(purchasedAt.getTime() + 2 * MINUTE),
     });
 
@@ -515,6 +647,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       fromUserIds: [USER],
       toUserIds: [DESTINATION],
       store: "APPLE",
+      isSandbox: true,
       occurredAt: new Date(purchasedAt.getTime() + MINUTE),
     });
 
@@ -534,6 +667,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       fromUserIds: [DESTINATION],
       toUserIds: [USER],
       store: "APPLE",
+      isSandbox: true,
       occurredAt: new Date(purchasedAt.getTime() + 3 * MINUTE),
     });
 

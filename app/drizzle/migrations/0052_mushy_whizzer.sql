@@ -1,0 +1,15 @@
+ALTER TABLE `StoreEntitlementRevocation` DROP INDEX `StoreEntitlementRevocation_eventId_userId_store_key`;
+ALTER TABLE `StoreEntitlementState` DROP INDEX `StoreEntitlementState_userId_store_key`;
+ALTER TABLE `StorePurchaseTransfer` DROP INDEX `StorePurchaseTransfer_eventId_sourceUserId_store_key`;
+DROP INDEX `StoreEntitlementRevocation_userId_store_revokedThrough_idx` ON `StoreEntitlementRevocation`;
+DROP INDEX `StorePurchaseTransfer_sourceUserId_store_transferredAt_idx` ON `StorePurchaseTransfer`;
+DROP INDEX `StorePurchaseTransfer_destinationUserId_idx` ON `StorePurchaseTransfer`;
+ALTER TABLE `StoreEntitlementRevocation` ADD `isSandbox` boolean DEFAULT false NOT NULL;
+ALTER TABLE `StoreEntitlementState` ADD `isSandbox` boolean DEFAULT false NOT NULL;
+ALTER TABLE `StorePurchaseTransfer` ADD `isSandbox` boolean DEFAULT false NOT NULL;
+ALTER TABLE `StoreEntitlementRevocation` ADD CONSTRAINT `StoreEntitlementRevocation_eventId_userId_store_isSandbox_key` UNIQUE(`eventId`,`userId`,`store`,`isSandbox`);
+ALTER TABLE `StoreEntitlementState` ADD CONSTRAINT `StoreEntitlementState_userId_store_isSandbox_key` UNIQUE(`userId`,`store`,`isSandbox`);
+ALTER TABLE `StorePurchaseTransfer` ADD CONSTRAINT `StorePurchaseTransfer_eventId_sourceUserId_store_isSandbox_key` UNIQUE(`eventId`,`sourceUserId`,`store`,`isSandbox`);
+CREATE INDEX `StoreEntitlementRevocation_owner_env_cutoff_idx` ON `StoreEntitlementRevocation` (`userId`,`store`,`isSandbox`,`revokedThrough`);
+CREATE INDEX `StorePurchaseTransfer_source_env_time_idx` ON `StorePurchaseTransfer` (`sourceUserId`,`store`,`isSandbox`,`transferredAt`);
+CREATE INDEX `StorePurchaseTransfer_destinationUserId_store_isSandbox_idx` ON `StorePurchaseTransfer` (`destinationUserId`,`store`,`isSandbox`);
