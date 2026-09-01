@@ -65,6 +65,7 @@ export default function NativeStore() {
   } | null>(null);
   const [busyProduct, setBusyProduct] = useState<string | null>(null);
   const [unsettledAttempts, setUnsettledAttempts] = useState<StorePurchaseLock[]>([]);
+  const unsettledAttemptsRef = useRef<StorePurchaseLock[]>([]);
   const [attemptsHydrated, setAttemptsHydrated] = useState(false);
   const [retryingProduct, setRetryingProduct] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -95,6 +96,20 @@ export default function NativeStore() {
       ? env.NEXT_PUBLIC_REVENUECAT_IOS_KEY
       : env.NEXT_PUBLIC_REVENUECAT_ANDROID_KEY;
 
+  const updateUnsettledAttempts = useCallback(
+    (update: (current: readonly StorePurchaseLock[]) => StorePurchaseLock[]) => {
+      const next = update(unsettledAttemptsRef.current);
+      unsettledAttemptsRef.current = next;
+      setUnsettledAttempts(next);
+      try {
+        window.localStorage.setItem(PURCHASE_ATTEMPT_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // The in-memory lock still protects this mounted checkout if storage is unavailable.
+      }
+    },
+    [],
+  );
+
   // A charged attempt must survive navigation and application restarts. Its exact
   // transaction/baseline correlation is persisted; only a terminal server receipt may
   // remove it and reopen checkout for that product.
@@ -103,29 +118,29 @@ export default function NativeStore() {
       const raw = window.localStorage.getItem(PURCHASE_ATTEMPT_STORAGE_KEY);
       const parsed: unknown = raw ? JSON.parse(raw) : [];
       if (Array.isArray(parsed)) {
-        setUnsettledAttempts(
-          parsed.filter((entry): entry is StorePurchaseLock => {
-            if (!entry || typeof entry !== "object") return false;
-            const value = entry as {
-              accountId?: unknown;
-              attempt?: {
-                transactionId?: unknown;
-                productId?: unknown;
-                baselineReceiptIds?: unknown;
-              };
+        const stored = parsed.filter((entry): entry is StorePurchaseLock => {
+          if (!entry || typeof entry !== "object") return false;
+          const value = entry as {
+            accountId?: unknown;
+            attempt?: {
+              transactionId?: unknown;
+              productId?: unknown;
+              baselineReceiptIds?: unknown;
             };
-            return (
-              typeof value.accountId === "string" &&
-              typeof value.attempt?.productId === "string" &&
-              (value.attempt.transactionId === undefined ||
-                typeof value.attempt.transactionId === "string") &&
-              Array.isArray(value.attempt.baselineReceiptIds) &&
-              value.attempt.baselineReceiptIds.every(
-                (receiptId) => typeof receiptId === "string",
-              )
-            );
-          }),
-        );
+          };
+          return (
+            typeof value.accountId === "string" &&
+            typeof value.attempt?.productId === "string" &&
+            (value.attempt.transactionId === undefined ||
+              typeof value.attempt.transactionId === "string") &&
+            Array.isArray(value.attempt.baselineReceiptIds) &&
+            value.attempt.baselineReceiptIds.every(
+              (receiptId) => typeof receiptId === "string",
+            )
+          );
+        });
+        unsettledAttemptsRef.current = stored;
+        setUnsettledAttempts(stored);
       }
     } catch {
       // Corrupt local state cannot identify a real checkout attempt, so ignore it.
@@ -133,18 +148,6 @@ export default function NativeStore() {
       setAttemptsHydrated(true);
     }
   }, []);
-
-  useEffect(() => {
-    if (!attemptsHydrated) return;
-    try {
-      window.localStorage.setItem(
-        PURCHASE_ATTEMPT_STORAGE_KEY,
-        JSON.stringify(unsettledAttempts),
-      );
-    } catch {
-      // The in-memory lock still protects this mounted checkout if storage is unavailable.
-    }
-  }, [attemptsHydrated, unsettledAttempts]);
 
   // Binding the SDK to the player's own id is what lets the webhook know who to credit;
   // without it a purchase is validated and then dropped.
@@ -336,13 +339,13 @@ export default function NativeStore() {
           : { productId: attempt.productId }),
       });
       if (!hasSettledStorePurchase(matching, attempt)) return false;
-      setUnsettledAttempts((current) =>
+      updateUnsettledAttempts((current) =>
         releaseStorePurchaseLock(current, accountId, attempt.productId),
       );
       await Promise.all([refetchRecent(), utils.profile.getUser.invalidate()]);
       return true;
     },
-    [fetchRecentFresh, refetchRecent, utils],
+    [fetchRecentFresh, refetchRecent, updateUnsettledAttempts, utils],
   );
 
   // A receipt may not exist yet when the initial wait expires. Keep checking the exact
@@ -389,7 +392,12 @@ export default function NativeStore() {
     productId: string,
     isFederal = false,
   ) => {
-    if (!available?.bound || available.userId !== player?.userId || !purchaseBaseline)
+    if (
+      !available?.bound ||
+      available.userId !== player?.userId ||
+      !purchaseBaseline ||
+      !attemptsHydrated
+    )
       return;
     const accountId = available.userId;
     setBusyProduct(productId);
@@ -447,6 +455,16 @@ export default function NativeStore() {
         showMutationToast({ success: false, message: result.message });
         return;
       }
+      const attempt = {
+        transactionId: result.transactionId,
+        productId,
+        baselineReceiptIds: baselineRows.map((purchase) => purchase.id),
+      };
+      // The SDK has confirmed a charge. Persist its exact correlation before any store,
+      // network, timer, or React scheduling await can be interrupted by a process exit.
+      updateUnsettledAttempts((current) =>
+        retainStorePurchaseLock(current, { accountId, attempt }),
+      );
       showMutationToast({
         success: true,
         message: "Purchase complete. Crediting your account...",
@@ -463,16 +481,12 @@ export default function NativeStore() {
       }
       // Held busy across the wait so the player cannot buy the same tier twice while the
       // first grant is still in flight.
-      const attempt = {
-        transactionId: result.transactionId,
-        productId,
-        baselineReceiptIds: baselineRows.map((purchase) => purchase.id),
-      };
       const settlement = await settleAfterPurchase(attempt);
-      if (settlement.status === "timed-out") {
-        setUnsettledAttempts((current) =>
-          retainStorePurchaseLock(current, { accountId, attempt }),
+      if (settlement.status === "settled") {
+        updateUnsettledAttempts((current) =>
+          releaseStorePurchaseLock(current, accountId, attempt.productId),
         );
+      } else {
         showMutationToast({
           success: false,
           message:
@@ -688,7 +702,8 @@ export default function NativeStore() {
                     isPending ||
                     isReconciliationLocked ||
                     !listed ||
-                    !hasRecentBaseline
+                    !hasRecentBaseline ||
+                    !attemptsHydrated
                   }
                   onClick={() => listed && void buy(listed, product.productId)}
                 >
@@ -745,7 +760,8 @@ export default function NativeStore() {
                         !listed ||
                         isCurrent ||
                         activeSubscriptions === null ||
-                        !hasRecentBaseline
+                        !hasRecentBaseline ||
+                        !attemptsHydrated
                       }
                       onClick={() =>
                         listed && void buy(listed, expectedProductId, true)

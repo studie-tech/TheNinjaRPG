@@ -132,6 +132,86 @@ export const canonicalStoreUserId = async (
   }
 };
 
+/** Resolve aliases with locking reads after the owning UserData row is serialized. */
+const canonicalStoreUserIdForUpdate = async (
+  client: DrizzleClient,
+  userId: string,
+): Promise<string> => {
+  const visited = new Set<string>();
+  let current = userId;
+  while (true) {
+    if (visited.has(current)) {
+      throw new Error(`Store user-id alias cycle from ${userId}`);
+    }
+    visited.add(current);
+    const [alias] = await client
+      .select({ newUserId: storeUserIdAlias.newUserId })
+      .from(storeUserIdAlias)
+      .where(eq(storeUserIdAlias.oldUserId, current))
+      .for("update");
+    if (!alias || alias.newUserId === current) return current;
+    current = alias.newUserId;
+  }
+};
+
+/**
+ * Share the UserData row lock used by staff renames, then resolve aliases again using
+ * current reads. If a rename committed while the first lock waited, the retired id no
+ * longer yields a row and the newly canonical row is locked before mutation continues.
+ */
+const serializeStoreUserMutation = async <T>(
+  client: DrizzleClient,
+  userIds: readonly string[],
+  mutation: (client: DrizzleClient, canonicalUserIds: string[]) => Promise<T>,
+): Promise<T> => {
+  const outcome = await client.transaction(async (tx) => {
+    const lockedClient = tx as unknown as DrizzleClient;
+    const originalUserIds = userIds.filter(Boolean);
+    const lockedUserIds = new Set<string>();
+    let pendingUserIds = [...new Set(originalUserIds)].sort();
+
+    while (pendingUserIds.length > 0) {
+      for (const userId of pendingUserIds) {
+        await lockedClient
+          .select({ userId: userData.userId })
+          .from(userData)
+          .where(eq(userData.userId, userId))
+          .for("update");
+        lockedUserIds.add(userId);
+      }
+
+      const canonicalUserIds = await Promise.all(
+        originalUserIds.map((userId) =>
+          canonicalStoreUserIdForUpdate(lockedClient, userId),
+        ),
+      );
+      pendingUserIds = [...new Set(canonicalUserIds)]
+        .filter((userId) => !lockedUserIds.has(userId))
+        .sort();
+      if (pendingUserIds.length === 0) {
+        try {
+          return {
+            status: "completed" as const,
+            value: await mutation(lockedClient, canonicalUserIds),
+          };
+        } catch (error) {
+          // Webhook mutations deliberately leave durable progress (especially a pending
+          // receipt or revocation watermark) for the retry which follows a 5xx.
+          return { status: "failed" as const, error };
+        }
+      }
+    }
+
+    try {
+      return { status: "completed" as const, value: await mutation(lockedClient, []) };
+    } catch (error) {
+      return { status: "failed" as const, error };
+    }
+  });
+  if (outcome.status === "failed") throw outcome.error;
+  return outcome.value;
+};
+
 /**
  * Follow durable RevenueCat ownership redirects, including a partially-flattened chain.
  *
@@ -236,6 +316,87 @@ const transferChainUserIds = async (
   return [...visited];
 };
 
+type StorePurchaseOwnerSnapshot = {
+  id: string;
+  userId: string;
+  originalUserId: string;
+  purchasedAt: Date;
+  store: StorePlatform;
+  federalStatus: FederalStatus | null;
+};
+
+/**
+ * Move a receipt to the owner implied by the latest alias/transfer graph. The observed
+ * owner and origin are part of the UPDATE predicate: a concurrent reconciler can never
+ * overwrite a newer decision with its stale snapshot. Losing the comparison simply
+ * re-reads and resolves again.
+ */
+const reconcileStorePurchaseOwner = async (
+  client: DrizzleClient,
+  receiptId: string,
+): Promise<StorePurchaseOwnerSnapshot> => {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const receipt = await client.query.storePurchase.findFirst({
+      columns: {
+        id: true,
+        userId: true,
+        originalUserId: true,
+        purchasedAt: true,
+        store: true,
+        federalStatus: true,
+      },
+      where: eq(storePurchase.id, receiptId),
+    });
+    if (!receipt) throw new Error(`Missing store receipt ${receiptId}`);
+
+    const canonicalOriginalUserId = await canonicalStoreUserIdForUpdate(
+      client,
+      receipt.originalUserId,
+    );
+    const resolvedUserId = receipt.federalStatus
+      ? await transferredUserId(
+          client,
+          canonicalOriginalUserId,
+          receipt.store,
+          receipt.purchasedAt,
+        )
+      : canonicalOriginalUserId;
+
+    if (
+      receipt.userId === resolvedUserId &&
+      receipt.originalUserId === canonicalOriginalUserId
+    ) {
+      return receipt;
+    }
+
+    const [owner] = await client
+      .select({ userId: userData.userId })
+      .from(userData)
+      .where(eq(userData.userId, resolvedUserId));
+    if (!owner) {
+      throw new Error(`No store receipt owner ${resolvedUserId} for ${receiptId}`);
+    }
+
+    const result = await client
+      .update(storePurchase)
+      .set({
+        userId: resolvedUserId,
+        originalUserId: canonicalOriginalUserId,
+      })
+      .where(
+        and(
+          eq(storePurchase.id, receipt.id),
+          eq(storePurchase.userId, receipt.userId),
+          eq(storePurchase.originalUserId, receipt.originalUserId),
+        ),
+      );
+    if (result.rowsAffected === 0) continue;
+    // Re-read even after winning: another transfer may have added a newer edge while this
+    // handler held an older snapshot, and its failed CAS must observe our write before retrying.
+  }
+  throw new Error(`Could not stabilize store receipt owner ${receiptId}`);
+};
+
 /**
  * Apply a purchase exactly once.
  *
@@ -243,7 +404,7 @@ const transferChainUserIds = async (
  * failed — which the webhook turns into a 5xx. Everything it can decide for itself comes
  * back as an outcome.
  */
-export const grantStorePurchase = async (
+const grantStorePurchaseUnlocked = async (
   client: DrizzleClient,
   grant: StoreGrant,
 ): Promise<GrantOutcome> => {
@@ -334,43 +495,11 @@ export const grantStorePurchase = async (
   }
 
   try {
-    if (federal) {
-      // Close the insert/transfer race: if the redirect appeared after the first lookup,
-      // move this still-unclaimed receipt before inspecting or granting it. A transfer
-      // arriving after this recheck scans the already-durable receipt and re-homes it.
-      const latestRecipient = await transferredUserId(
-        client,
-        originalUserId,
-        grant.store,
-        grant.purchasedAt,
-      );
-      if (latestRecipient !== recipientUserId) {
-        const [latestUser] = await client
-          .select({ userId: userData.userId })
-          .from(userData)
-          .where(eq(userData.userId, latestRecipient));
-        if (!latestUser) {
-          throw new Error(
-            `No transfer destination ${latestRecipient} for transaction ${grant.transactionId}`,
-          );
-        }
-        await client
-          .update(storePurchase)
-          .set({ userId: latestRecipient })
-          .where(
-            and(
-              eq(storePurchase.transactionId, grant.transactionId),
-              eq(storePurchase.userId, recipientUserId),
-              isNotNull(storePurchase.federalStatus),
-              isNull(storePurchase.grantedAt),
-            ),
-          );
-        recipientUserId = latestRecipient;
-      }
-    }
-    const receipt = await client.query.storePurchase.findFirst({
+    const storedReceipt = await client.query.storePurchase.findFirst({
       columns: {
+        id: true,
         userId: true,
+        originalUserId: true,
         productId: true,
         store: true,
         acceptedAt: true,
@@ -380,16 +509,36 @@ export const grantStorePurchase = async (
       },
       where: eq(storePurchase.transactionId, grant.transactionId),
     });
-    if (!receipt)
+    if (!storedReceipt)
       throw new Error(`Missing receipt ${grant.transactionId} after insert`);
-    if (receipt.productId !== grant.productId || receipt.store !== grant.store) {
+    if (
+      storedReceipt.productId !== grant.productId ||
+      storedReceipt.store !== grant.store
+    ) {
       throw new Error(
         `Transaction ${grant.transactionId} was replayed with new details`,
       );
     }
-    // A TRANSFER may have moved a subscription receipt before an older delivery retries.
-    // The destination reconciliation already applied its tier; never move or grant it back.
-    if (receipt.userId !== recipientUserId) return { status: "duplicate" };
+    const storedOriginalUserId = await canonicalStoreUserIdForUpdate(
+      client,
+      storedReceipt.originalUserId,
+    );
+    if (storedOriginalUserId !== originalUserId) return { status: "duplicate" };
+
+    // This also repairs receipts inserted under a retired id by an older deployment. A
+    // duplicate retry must not acknowledge that orphan while its grant remains pending.
+    const owner = await reconcileStorePurchaseOwner(client, storedReceipt.id);
+    recipientUserId = owner.userId;
+    const receipt = await client.query.storePurchase.findFirst({
+      columns: {
+        acceptedAt: true,
+        grantedAt: true,
+        revokedAt: true,
+        expiresAt: true,
+      },
+      where: eq(storePurchase.id, storedReceipt.id),
+    });
+    if (!receipt) throw new Error(`Missing store receipt ${storedReceipt.id}`);
     if (!receipt.acceptedAt) {
       return inserted
         ? { status: "ignored", reason: "Sandbox purchase" }
@@ -401,9 +550,9 @@ export const grantStorePurchase = async (
       return { status: "ignored", reason: "Expired purchase" };
     }
 
-    // PlanetScale cannot wrap the receipt and user in a transaction. Its supported
-    // multi-table UPDATE is still one atomic SQL statement: only the delivery that changes
-    // grantedAt from null can apply value, while a failed statement leaves both untouched.
+    // The receipt deliberately remains durable when a later grant fails, so correctness
+    // cannot depend on rolling both writes back. This multi-table UPDATE is one atomic SQL
+    // statement: only the delivery that changes grantedAt from null can apply value.
     const result = reps
       ? await client.execute(sql`
           UPDATE ${userData}
@@ -472,6 +621,20 @@ export const grantStorePurchase = async (
   }
 };
 
+export const grantStorePurchase = async (
+  client: DrizzleClient,
+  grant: StoreGrant,
+): Promise<GrantOutcome> =>
+  await serializeStoreUserMutation(
+    client,
+    [grant.userId],
+    async (lockedClient, [canonicalUserId]) =>
+      await grantStorePurchaseUnlocked(lockedClient, {
+        ...grant,
+        userId: canonicalUserId ?? grant.userId,
+      }),
+  );
+
 export interface StoreExtension {
   userId: string;
   store: StorePlatform;
@@ -487,7 +650,7 @@ export interface StoreExtension {
  * for reconciliation. A missing receipt is retryable: RevenueCat can deliver out of order,
  * so its purchase webhook should be allowed to land before this event is acknowledged.
  */
-export const extendStoreSubscription = async (
+const extendStoreSubscriptionUnlocked = async (
   client: DrizzleClient,
   extension: StoreExtension,
 ): Promise<void> => {
@@ -559,6 +722,20 @@ export const extendStoreSubscription = async (
   await setFederalStatusWithStoreFloor(client, ownerUserId, paypal);
 };
 
+export const extendStoreSubscription = async (
+  client: DrizzleClient,
+  extension: StoreExtension,
+): Promise<void> =>
+  await serializeStoreUserMutation(
+    client,
+    [extension.userId],
+    async (lockedClient, [canonicalUserId]) =>
+      await extendStoreSubscriptionUnlocked(lockedClient, {
+        ...extension,
+        userId: canonicalUserId ?? extension.userId,
+      }),
+  );
+
 /**
  * Retire a store subscription that has ended, and re-derive the status from what is left.
  *
@@ -581,7 +758,7 @@ export interface RevocationScope {
   transactionId?: string | null;
 }
 
-export const revokeFederalStatus = async (
+const revokeFederalStatusUnlocked = async (
   client: DrizzleClient,
   userId: string,
   scope: RevocationScope,
@@ -710,6 +887,18 @@ export const revokeFederalStatus = async (
   await setFederalStatusWithStoreFloor(client, ownerUserId, paypal);
 };
 
+export const revokeFederalStatus = async (
+  client: DrizzleClient,
+  userId: string,
+  scope: RevocationScope,
+): Promise<void> =>
+  await serializeStoreUserMutation(
+    client,
+    [userId],
+    async (lockedClient, [canonicalUserId]) =>
+      await revokeFederalStatusUnlocked(lockedClient, canonicalUserId ?? userId, scope),
+  );
+
 export interface StoreTransfer {
   /** Stable RevenueCat event id used to deduplicate retries. */
   eventId: string;
@@ -833,7 +1022,7 @@ export const migrateStoreEntitlementStates = async (
  * the purchaser and must never be granted a second time by a restore. Recomputing every
  * affected account makes this operation idempotent when RevenueCat retries the event.
  */
-export const transferStorePurchases = async (
+const transferStorePurchasesUnlocked = async (
   client: DrizzleClient,
   transfer: StoreTransfer,
 ): Promise<{ destinationUserId: string; rowsAffected: number }> => {
@@ -957,20 +1146,10 @@ export const transferStorePurchases = async (
         ),
       });
       for (const receipt of candidates) {
-        const resolvedOwner = await transferredUserId(
-          client,
-          receipt.originalUserId,
-          store,
-          receipt.purchasedAt,
-        );
         effectiveDestinations.add(receipt.userId);
-        effectiveDestinations.add(resolvedOwner);
-        if (resolvedOwner === receipt.userId) continue;
-        const result = await client
-          .update(storePurchase)
-          .set({ userId: resolvedOwner })
-          .where(eq(storePurchase.id, receipt.id));
-        rowsAffected += result.rowsAffected;
+        const reconciled = await reconcileStorePurchaseOwner(client, receipt.id);
+        effectiveDestinations.add(reconciled.userId);
+        if (reconciled.userId !== receipt.userId) rowsAffected += 1;
       }
     }
   }
@@ -991,6 +1170,25 @@ export const transferStorePurchases = async (
   }
 
   return { destinationUserId, rowsAffected };
+};
+
+export const transferStorePurchases = async (
+  client: DrizzleClient,
+  transfer: StoreTransfer,
+): Promise<{ destinationUserId: string; rowsAffected: number }> => {
+  const sourceUserIds = transfer.fromUserIds.filter(Boolean);
+  const destinationUserIds = transfer.toUserIds.filter(Boolean);
+  const sourceCount = sourceUserIds.length;
+  return await serializeStoreUserMutation(
+    client,
+    [...sourceUserIds, ...destinationUserIds],
+    async (lockedClient, canonicalUserIds) =>
+      await transferStorePurchasesUnlocked(lockedClient, {
+        ...transfer,
+        fromUserIds: canonicalUserIds.slice(0, sourceCount),
+        toUserIds: canonicalUserIds.slice(sourceCount),
+      }),
+  );
 };
 
 /** Where a status sits on the ladder, so two sources can be compared. */

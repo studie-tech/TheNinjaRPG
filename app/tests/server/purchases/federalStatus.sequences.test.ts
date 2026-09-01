@@ -8,6 +8,7 @@ import {
   storeEntitlementState,
   storePurchase,
   storePurchaseTransfer,
+  storeUserIdAlias,
   userData,
 } from "@/drizzle/schema";
 import type { FederalStatus, StorePlatform } from "@/drizzle/constants";
@@ -27,7 +28,9 @@ import { insertUsers } from "../../setup/factories";
 import {
   describeWithDatabase,
   getTestDatabase,
+  openTestDatabaseConnection,
   resetTables,
+  runRawSql,
 } from "../../setup/testDatabase";
 
 /**
@@ -117,6 +120,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     await resetTables(
       storeEntitlementState,
       storePurchaseTransfer,
+      storeUserIdAlias,
       storePurchase,
       paypalSubscription,
       userData,
@@ -798,6 +802,92 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(newerOwner?.federalStatus).toBe("NONE");
   });
 
+  it("serializes deliberately overlapped transfer reconciliation", async () => {
+    const finalDestination = "federal-transfer-final-destination";
+    await insertUsers([
+      { userId: DESTINATION, username: "middle-owner", federalStatus: "NONE" },
+      { userId: finalDestination, username: "final-owner", federalStatus: "NONE" },
+    ]);
+    const database = await db();
+    const transactionId = await buyFederal("GOLD", 2 * MINUTE);
+    const firstConnection = await openTestDatabaseConnection();
+    const secondConnection = await openTestDatabaseConnection();
+    const barrierConnection = await openTestDatabaseConnection();
+    const firstEventId = nanoid();
+    const barrier = `transfer_reconcile_${nanoid()}`;
+    const trigger = `pause_transfer_${nanoid().replaceAll("-", "_")}`;
+    await barrierConnection.query(`SELECT GET_LOCK('${barrier}', 10)`);
+    await runRawSql(`
+      CREATE TRIGGER ${trigger} BEFORE INSERT ON StorePurchaseTransfer FOR EACH ROW
+      BEGIN
+        IF NEW.eventId = '${firstEventId}' THEN
+          SET @transfer_wait = GET_LOCK('${barrier}', 10);
+          SET @transfer_release = RELEASE_LOCK('${barrier}');
+        END IF;
+      END
+    `);
+    try {
+      const olderAt = new Date(Date.now() - MINUTE);
+      const first = transferStorePurchases(firstConnection.database, {
+        eventId: firstEventId,
+        fromUserIds: [USER],
+        toUserIds: [DESTINATION],
+        store: "APPLE",
+        occurredAt: olderAt,
+      });
+      await barrierConnection.waitForNamedLockWaiter(barrier);
+
+      let secondFinished = false;
+      const second = transferStorePurchases(secondConnection.database, {
+        eventId: nanoid(),
+        fromUserIds: [DESTINATION],
+        toUserIds: [finalDestination],
+        store: "APPLE",
+        occurredAt: new Date(olderAt.getTime() + 1),
+      }).finally(() => {
+        secondFinished = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(secondFinished).toBe(false);
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+
+      await expect(first).resolves.toMatchObject({ destinationUserId: DESTINATION });
+      await expect(second).resolves.toMatchObject({
+        destinationUserId: finalDestination,
+      });
+      const [receipt, source, middle, destination] = await Promise.all([
+        database.query.storePurchase.findFirst({
+          columns: { userId: true },
+          where: eq(storePurchase.transactionId, transactionId),
+        }),
+        database.query.userData.findFirst({
+          columns: { federalStatus: true },
+          where: eq(userData.userId, USER),
+        }),
+        database.query.userData.findFirst({
+          columns: { federalStatus: true },
+          where: eq(userData.userId, DESTINATION),
+        }),
+        database.query.userData.findFirst({
+          columns: { federalStatus: true },
+          where: eq(userData.userId, finalDestination),
+        }),
+      ]);
+      expect(receipt?.userId).toBe(finalDestination);
+      expect(source?.federalStatus).toBe("NONE");
+      expect(middle?.federalStatus).toBe("NONE");
+      expect(destination?.federalStatus).toBe("GOLD");
+    } finally {
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+      await runRawSql(`DROP TRIGGER IF EXISTS ${trigger}`);
+      await Promise.all([
+        firstConnection.close(),
+        secondConnection.close(),
+        barrierConnection.close(),
+      ]);
+    }
+  });
+
   it("allows ownership to transfer back after time advances", async () => {
     await insertUsers([
       { userId: DESTINATION, username: "temporary-owner", federalStatus: "NONE" },
@@ -1081,10 +1171,14 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       raw: {},
     };
 
+    const firstConnection = await openTestDatabaseConnection();
+    const secondConnection = await openTestDatabaseConnection();
     const outcomes = await Promise.all([
-      grantStorePurchase(database, grant),
-      grantStorePurchase(database, grant),
-    ]);
+      grantStorePurchase(firstConnection.database, grant),
+      grantStorePurchase(secondConnection.database, grant),
+    ]).finally(async () => {
+      await Promise.all([firstConnection.close(), secondConnection.close()]);
+    });
     expect(outcomes.map((outcome) => outcome.status).sort()).toEqual([
       "duplicate",
       "granted",

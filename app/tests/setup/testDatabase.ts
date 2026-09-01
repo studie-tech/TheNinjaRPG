@@ -143,6 +143,57 @@ export const getTestDatabase = async (): Promise<DrizzleClient> => {
   return client;
 };
 
+/** A separate physical connection for tests which must exercise real lock contention. */
+export const openTestDatabaseConnection = async (): Promise<{
+  database: DrizzleClient;
+  query: (statement: string) => Promise<unknown>;
+  waitForNamedLockWaiter: (lockName: string) => Promise<void>;
+  close: () => Promise<void>;
+}> => {
+  if (!url || !allowDestructive) {
+    throw new Error("A destructive test database is required");
+  }
+  const independentConnection = await mysql.createConnection({
+    uri: url,
+    multipleStatements: true,
+  });
+  const database = drizzle(independentConnection, { schema, mode: "default" });
+  const wrapped = new Proxy(database, {
+    get(target, property, receiver) {
+      if (property === "execute") {
+        const method = Reflect.get(target, property, receiver) as (
+          ...args: unknown[]
+        ) => Promise<unknown>;
+        return async (...args: unknown[]) =>
+          normalize(await method.apply(target, args));
+      }
+      if (property === "insert" || property === "update" || property === "delete") {
+        const method = Reflect.get(target, property, receiver) as (
+          ...args: unknown[]
+        ) => object;
+        return (...args: unknown[]) => wrapWriteBuilder(method.apply(target, args));
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  }) as unknown as DrizzleClient;
+  return {
+    database: wrapped,
+    query: async (statement) => await independentConnection.query(statement),
+    waitForNamedLockWaiter: async (lockName) => {
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const [rows] = await independentConnection.query<mysql.RowDataPacket[]>(
+          "SELECT COUNT(*) AS pending FROM performance_schema.metadata_locks WHERE OBJECT_TYPE = 'USER LEVEL LOCK' AND OBJECT_NAME = ? AND LOCK_STATUS = 'PENDING'",
+          [lockName],
+        );
+        if (Number(rows[0]?.pending ?? 0) > 0) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      throw new Error(`No waiter reached named lock ${lockName}`);
+    },
+    close: async () => await independentConnection.end(),
+  };
+};
+
 /**
  * The connected client, or null before the first `getTestDatabase()`. For callers that must
  * stay synchronous -- the `@/server/db` stand-in in serverModules.ts, which cannot await.
@@ -190,3 +241,9 @@ export const callerFor = async <Context, Caller>(
   userId: string,
 ): Promise<Caller> =>
   router.createCaller({ drizzle: await getTestDatabase(), userId } as Context);
+
+export const callerForDatabase = <Context, Caller>(
+  router: { createCaller: (context: Context) => Caller },
+  userId: string,
+  database: DrizzleClient,
+): Caller => router.createCaller({ drizzle: database, userId } as Context);

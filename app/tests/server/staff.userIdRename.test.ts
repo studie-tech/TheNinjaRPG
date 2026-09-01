@@ -12,12 +12,17 @@ import {
   userData,
 } from "@/drizzle/schema";
 import { staffRouter } from "@/server/api/routers/staff";
-import { grantStorePurchase } from "@/server/utils/purchases/grant";
+import {
+  grantStorePurchase,
+  transferStorePurchases,
+} from "@/server/utils/purchases/grant";
 import { insertUsers } from "../setup/factories";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
+  openTestDatabaseConnection,
   resetTables,
   runRawSql,
 } from "../setup/testDatabase";
@@ -145,5 +150,234 @@ describeWithDatabase("staff user-id rename", () => {
       userId: NEW_USER_ID,
       originalUserId: NEW_USER_ID,
     });
+  });
+
+  it("repairs and grants a duplicate pending receipt left on the retired id", async () => {
+    const database = await getTestDatabase();
+    const caller = await callerFor(staffRouter, STAFF);
+    await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID });
+    const renamedBefore = await database.query.userData.findFirst({
+      columns: { reputationPoints: true },
+      where: eq(userData.userId, NEW_USER_ID),
+    });
+    const transactionId = nanoid();
+    const purchasedAt = new Date();
+    await database.insert(storePurchase).values({
+      id: nanoid(),
+      userId: OLD_USER_ID,
+      originalUserId: OLD_USER_ID,
+      transactionId,
+      productId: "tnr_reps_tier1",
+      store: "APPLE",
+      reputationPoints: 8,
+      federalStatus: null,
+      isSandbox: false,
+      acceptedAt: new Date(),
+      purchasedAt,
+      rawData: {},
+    });
+
+    await expect(
+      grantStorePurchase(database, {
+        userId: OLD_USER_ID,
+        transactionId,
+        productId: "tnr_reps_tier1",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt,
+        raw: {},
+      }),
+    ).resolves.toMatchObject({ status: "granted", reputationPoints: 8 });
+    const [renamedAfter, receipt] = await Promise.all([
+      database.query.userData.findFirst({
+        columns: { reputationPoints: true },
+        where: eq(userData.userId, NEW_USER_ID),
+      }),
+      database.query.storePurchase.findFirst({
+        columns: { userId: true, originalUserId: true, grantedAt: true },
+        where: eq(storePurchase.transactionId, transactionId),
+      }),
+    ]);
+    expect(renamedAfter?.reputationPoints).toBe(
+      (renamedBefore?.reputationPoints ?? 0) + 8,
+    );
+    expect(receipt).toMatchObject({
+      userId: NEW_USER_ID,
+      originalUserId: NEW_USER_ID,
+    });
+    expect(receipt?.grantedAt).toBeInstanceOf(Date);
+  });
+
+  it("serializes a grant already waiting behind the rename row lock", async () => {
+    const database = await getTestDatabase();
+    const before = await database.query.userData.findFirst({
+      columns: { reputationPoints: true },
+      where: eq(userData.userId, OLD_USER_ID),
+    });
+    const renameConnection = await openTestDatabaseConnection();
+    const grantConnection = await openTestDatabaseConnection();
+    const barrierConnection = await openTestDatabaseConnection();
+    const barrier = `rename_grant_${nanoid()}`;
+    const trigger = `pause_rename_grant_${nanoid().replaceAll("-", "_")}`;
+    await barrierConnection.query(`SELECT GET_LOCK('${barrier}', 10)`);
+    await runRawSql(`
+      CREATE TRIGGER ${trigger} BEFORE UPDATE ON UserData FOR EACH ROW
+      BEGIN
+        IF OLD.userId = '${OLD_USER_ID}' AND NEW.userId = '${NEW_USER_ID}' THEN
+          SET @rename_grant_wait = GET_LOCK('${barrier}', 10);
+          SET @rename_grant_release = RELEASE_LOCK('${barrier}');
+        END IF;
+      END
+    `);
+    try {
+      const caller = callerForDatabase(staffRouter, STAFF, renameConnection.database);
+      const rename = caller.updateUserId({
+        userId: OLD_USER_ID,
+        newUserId: NEW_USER_ID,
+      });
+      await barrierConnection.waitForNamedLockWaiter(barrier);
+
+      let grantFinished = false;
+      const transactionId = nanoid();
+      const grant = grantStorePurchase(grantConnection.database, {
+        userId: OLD_USER_ID,
+        transactionId,
+        productId: "tnr_reps_tier1",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt: new Date(),
+        raw: {},
+      }).finally(() => {
+        grantFinished = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(grantFinished).toBe(false);
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+
+      await expect(rename).resolves.toEqual({
+        success: true,
+        message: "UserId updated",
+      });
+      await expect(grant).resolves.toMatchObject({ status: "granted" });
+      const [renamed, receipt] = await Promise.all([
+        database.query.userData.findFirst({
+          columns: { reputationPoints: true },
+          where: eq(userData.userId, NEW_USER_ID),
+        }),
+        database.query.storePurchase.findFirst({
+          columns: { userId: true, originalUserId: true, grantedAt: true },
+          where: eq(storePurchase.transactionId, transactionId),
+        }),
+      ]);
+      expect(renamed?.reputationPoints).toBe((before?.reputationPoints ?? 0) + 8);
+      expect(receipt).toMatchObject({
+        userId: NEW_USER_ID,
+        originalUserId: NEW_USER_ID,
+      });
+      expect(receipt?.grantedAt).toBeInstanceOf(Date);
+    } finally {
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+      await runRawSql(`DROP TRIGGER IF EXISTS ${trigger}`);
+      await Promise.all([
+        renameConnection.close(),
+        grantConnection.close(),
+        barrierConnection.close(),
+      ]);
+    }
+  });
+
+  it("serializes a transfer already waiting behind the rename row lock", async () => {
+    const destinationUserId = "rename-transfer-destination";
+    await insertUsers([
+      { userId: destinationUserId, username: "rename-destination", role: "USER" },
+    ]);
+    const database = await getTestDatabase();
+    const transactionId = nanoid();
+    await grantStorePurchase(database, {
+      userId: OLD_USER_ID,
+      transactionId,
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      isSandbox: false,
+      purchasedAt: new Date(Date.now() - 60_000),
+      raw: {},
+    });
+
+    const renameConnection = await openTestDatabaseConnection();
+    const transferConnection = await openTestDatabaseConnection();
+    const barrierConnection = await openTestDatabaseConnection();
+    const barrier = `rename_transfer_${nanoid()}`;
+    const trigger = `pause_rename_transfer_${nanoid().replaceAll("-", "_")}`;
+    await barrierConnection.query(`SELECT GET_LOCK('${barrier}', 10)`);
+    await runRawSql(`
+      CREATE TRIGGER ${trigger} BEFORE UPDATE ON UserData FOR EACH ROW
+      BEGIN
+        IF OLD.userId = '${OLD_USER_ID}' AND NEW.userId = '${NEW_USER_ID}' THEN
+          SET @rename_transfer_wait = GET_LOCK('${barrier}', 10);
+          SET @rename_transfer_release = RELEASE_LOCK('${barrier}');
+        END IF;
+      END
+    `);
+    try {
+      const caller = callerForDatabase(staffRouter, STAFF, renameConnection.database);
+      const rename = caller.updateUserId({
+        userId: OLD_USER_ID,
+        newUserId: NEW_USER_ID,
+      });
+      await barrierConnection.waitForNamedLockWaiter(barrier);
+
+      let transferFinished = false;
+      const transfer = transferStorePurchases(transferConnection.database, {
+        eventId: nanoid(),
+        fromUserIds: [OLD_USER_ID],
+        toUserIds: [destinationUserId],
+        store: "APPLE",
+        occurredAt: new Date(),
+      }).finally(() => {
+        transferFinished = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(transferFinished).toBe(false);
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+
+      await expect(rename).resolves.toEqual({
+        success: true,
+        message: "UserId updated",
+      });
+      await expect(transfer).resolves.toMatchObject({
+        destinationUserId,
+        rowsAffected: 1,
+      });
+      const [receipt, ownership, destination] = await Promise.all([
+        database.query.storePurchase.findFirst({
+          columns: { userId: true, originalUserId: true },
+          where: eq(storePurchase.transactionId, transactionId),
+        }),
+        database.query.storePurchaseTransfer.findFirst({
+          columns: { sourceUserId: true, destinationUserId: true },
+        }),
+        database.query.userData.findFirst({
+          columns: { federalStatus: true },
+          where: eq(userData.userId, destinationUserId),
+        }),
+      ]);
+      expect(receipt).toEqual({
+        userId: destinationUserId,
+        originalUserId: NEW_USER_ID,
+      });
+      expect(ownership).toEqual({
+        sourceUserId: NEW_USER_ID,
+        destinationUserId,
+      });
+      expect(destination?.federalStatus).toBe("GOLD");
+    } finally {
+      await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+      await runRawSql(`DROP TRIGGER IF EXISTS ${trigger}`);
+      await Promise.all([
+        renameConnection.close(),
+        transferConnection.close(),
+        barrierConnection.close(),
+      ]);
+    }
   });
 });

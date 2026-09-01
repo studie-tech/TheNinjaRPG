@@ -805,12 +805,13 @@ export const staffRouter = createTRPCRouter({
       await ctx.drizzle.transaction(async (tx) => {
         // Serialize renames of either id and make the uniqueness guards authoritative
         // inside the same commit as every dependent write.
-        await tx.execute(sql`
-          SELECT ${userData.userId}
-          FROM ${userData}
-          WHERE ${userData.userId} IN (${input.userId}, ${input.newUserId})
-          FOR UPDATE
-        `);
+        for (const userId of [input.userId, input.newUserId].sort()) {
+          await tx
+            .select({ userId: userData.userId })
+            .from(userData)
+            .where(eq(userData.userId, userId))
+            .for("update");
+        }
         const lockedFrom = await tx.query.userData.findFirst({
           columns: { userId: true },
           where: eq(userData.userId, input.userId),
