@@ -45,7 +45,11 @@ export default function NativeBridge() {
     enabled: isCurrentUser,
     accountId: userId,
   });
-  useLiveActivity(isCurrentUser ? userData : undefined, timeDiff);
+  useLiveActivity(
+    isCurrentUser ? userData : undefined,
+    timeDiff,
+    isClerkLoaded ? userId : undefined,
+  );
 
   // The shell version is only knowable in the browser, so this runs after mount rather
   // than during render — checking it inline would break hydration.

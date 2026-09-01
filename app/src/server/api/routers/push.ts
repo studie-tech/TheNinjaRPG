@@ -186,8 +186,8 @@ export const pushRouter = createTRPCRouter({
 
   /**
    * Record a Live Activity the device just started, so the server can push updates to it.
-   * One per kind per player: a second hospital countdown would only replace the first on
-   * screen, so re-registering rebinds rather than accumulating dead tokens.
+   * Re-registering the same activity refreshes its token, while another device gets a row
+   * of its own.
    */
   registerActivity: protectedProcedure
     .input(registerActivitySchema)
@@ -215,7 +215,7 @@ export const pushRouter = createTRPCRouter({
       return { success: true, message: "Activity registered" };
     }),
 
-  /** Called when the device ends an activity locally, so we stop pushing to a dead token. */
+  /** Called when this device ends an activity locally, without touching another device. */
   endActivity: protectedProcedure
     .input(endActivitySchema)
     .output(baseServerResponse)
@@ -225,7 +225,7 @@ export const pushRouter = createTRPCRouter({
         .where(
           and(
             eq(userLiveActivity.userId, ctx.userId),
-            eq(userLiveActivity.kind, input.kind),
+            eq(userLiveActivity.activityId, input.activityId),
           ),
         );
       return { success: true, message: "Activity ended" };

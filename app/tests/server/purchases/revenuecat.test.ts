@@ -189,7 +189,9 @@ describe("revenuecat webhook classification", () => {
   it("maps the store and environment", () => {
     expect(toStorePlatform("PLAY_STORE")).toBe("GOOGLE");
     expect(toStorePlatform("APP_STORE")).toBe("APPLE");
-    expect(toStorePlatform(null)).toBe("APPLE");
+    expect(toStorePlatform("TEST_STORE")).toBeUndefined();
+    expect(toStorePlatform("STRIPE")).toBeUndefined();
+    expect(toStorePlatform(null)).toBeUndefined();
     expect(isSandbox("SANDBOX")).toBe(true);
     expect(isSandbox("sandbox")).toBe(true);
     expect(isSandbox("PRODUCTION")).toBe(false);

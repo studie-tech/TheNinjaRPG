@@ -5596,8 +5596,8 @@ export const userPushPreferenceRelations = relations(userPushPreference, ({ one 
 /**
  * Live Activities the device has started and the server can push updates to.
  *
- * One row per (user, kind): a second hospital countdown would just replace the first on
- * screen, so the unique index makes that explicit rather than accumulating dead tokens.
+ * One row per activity. A player can have the same kind active on multiple devices, and
+ * each ActivityKit instance has its own APNs token.
  */
 export const userLiveActivity = mysqlTable(
   "UserLiveActivity",
@@ -5616,11 +5616,14 @@ export const userLiveActivity = mysqlTable(
   },
   (table) => {
     return {
-      userKindKey: uniqueIndex("UserLiveActivity_userId_kind_key").on(
+      userActivityKey: uniqueIndex("UserLiveActivity_userId_activityId_key").on(
+        table.userId,
+        table.activityId,
+      ),
+      userKindIdx: index("UserLiveActivity_userId_kind_idx").on(
         table.userId,
         table.kind,
       ),
-      activityIdIdx: index("UserLiveActivity_activityId_idx").on(table.activityId),
       endsAtIdx: index("UserLiveActivity_endsAt_idx").on(table.endsAt),
     };
   },

@@ -13,7 +13,7 @@ import type { LiveActivityKind } from "@/drizzle/constants";
 import { userLiveActivity } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import * as apns from "./apns";
-import { summarise } from "./types";
+import type { PushResult } from "./types";
 
 export interface ActivityState {
   title: string;
@@ -54,6 +54,21 @@ export const buildActivityPayload = (
 });
 
 /**
+ * An end delivery retires a token only once APNs accepted it or confirmed it was dead.
+ * Keeping failed tokens is what leaves a transient provider failure retryable.
+ */
+export const activityTokensToPrune = (
+  results: PushResult[],
+  event: "update" | "end",
+): string[] =>
+  results
+    .filter(
+      (result) =>
+        result.status === "expired" || (event === "end" && result.status === "sent"),
+    )
+    .map((result) => result.token);
+
+/**
  * Push a new state to every one of `userIds`' activities of this kind. Never throws;
  * activities whose token APNs has retired are deleted.
  */
@@ -88,13 +103,7 @@ export const pushActivityUpdate = async (
       })),
     );
 
-    const summary = summarise(results);
-    // An ended activity's token stops working, so pruning also cleans up after the
-    // device ending one locally without telling us.
-    const gone =
-      event === "end"
-        ? activities.map((activity) => activity.token)
-        : summary.expiredTokens;
+    const gone = activityTokensToPrune(results, event);
     if (gone.length > 0) {
       await client
         .delete(userLiveActivity)

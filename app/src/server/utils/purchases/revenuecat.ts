@@ -89,8 +89,14 @@ export const classifyEvent = (type: string): EventAction => {
   return "ignore";
 };
 
-export const toStorePlatform = (store: string | null | undefined): StorePlatform =>
-  store === "PLAY_STORE" ? "GOOGLE" : "APPLE";
+/** Map only the two stores this app supports; never alias a new RevenueCat store to Apple. */
+export const toStorePlatform = (
+  store: string | null | undefined,
+): StorePlatform | undefined => {
+  if (store === "APP_STORE") return "APPLE";
+  if (store === "PLAY_STORE") return "GOOGLE";
+  return undefined;
+};
 
 export const isSandbox = (environment: string | null | undefined): boolean =>
   environment?.toUpperCase() === "SANDBOX";

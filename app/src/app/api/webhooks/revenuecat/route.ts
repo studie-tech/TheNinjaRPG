@@ -22,6 +22,15 @@ import {
   toStorePlatform,
 } from "@/server/utils/purchases/revenuecat";
 
+const unsupportedStore = (eventType: string, store: string | null | undefined) => {
+  Sentry.captureException(
+    new Error(`RevenueCat ${eventType} used unsupported store ${store ?? "missing"}`),
+    { level: "warning", tags: { source: "revenuecatWebhook" } },
+  );
+  // Retrying cannot turn an unsupported payload into a supported one.
+  return Response.json({ handled: "ignored" });
+};
+
 /**
  * Grants entitlements bought through the App Store or Play Billing.
  *
@@ -53,11 +62,12 @@ export async function POST(request: Request) {
 
   try {
     if (event.type === "TRANSFER") {
-      if (!event.store) throw new Error("RevenueCat transfer has no store");
+      const store = toStorePlatform(event.store);
+      if (!store) return unsupportedStore(event.type, event.store);
       const outcome = await transferStorePurchases(drizzleDB, {
         fromUserIds: event.transferred_from ?? [],
         toUserIds: event.transferred_to ?? [],
-        store: toStorePlatform(event.store),
+        store,
       });
       return Response.json({ handled: "transferred", ...outcome });
     }
@@ -75,11 +85,12 @@ export async function POST(request: Request) {
       if (isSandbox(event.environment) && !isSandboxGrantee(appUserId)) {
         return Response.json({ handled: "ignored" });
       }
-      if (!event.store) throw new Error("RevenueCat expiration has no store");
+      const store = toStorePlatform(event.store);
+      if (!store) return unsupportedStore(event.type, event.store);
       await revokeFederalStatus(drizzleDB, appUserId, {
         occurredAt: occurredAt(event),
         productId: event.product_id,
-        store: toStorePlatform(event.store),
+        store,
       });
       return Response.json({ handled: "revoked" });
     }
@@ -87,14 +98,16 @@ export async function POST(request: Request) {
       if (isSandbox(event.environment) && !isSandboxGrantee(appUserId)) {
         return Response.json({ handled: "ignored" });
       }
-      if (!event.store || !event.product_id) {
+      const store = toStorePlatform(event.store);
+      if (!store) return unsupportedStore(event.type, event.store);
+      if (!event.product_id) {
         throw new Error("RevenueCat extension is missing its store or product");
       }
       const expiresAt = expirationAt(event);
       if (!expiresAt) throw new Error("RevenueCat extension has no expiration");
       await extendStoreSubscription(drizzleDB, {
         userId: appUserId,
-        store: toStorePlatform(event.store),
+        store,
         productId: event.product_id,
         expirationAt: expiresAt,
         transactionId: event.transaction_id,
@@ -102,11 +115,13 @@ export async function POST(request: Request) {
       return Response.json({ handled: "extended" });
     }
     if (action === "grant" && event.product_id) {
+      const store = toStorePlatform(event.store);
+      if (!store) return unsupportedStore(event.type, event.store);
       const outcome = await grantStorePurchase(drizzleDB, {
         userId: appUserId,
         transactionId: idempotencyKey(event),
         productId: event.product_id,
-        store: toStorePlatform(event.store),
+        store,
         isSandbox: isSandbox(event.environment),
         purchasedAt: purchasedAt(event),
         expiresAt: expirationAt(event),

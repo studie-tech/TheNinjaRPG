@@ -38,5 +38,5 @@ export const registerActivitySchema = z.object({
 });
 
 export const endActivitySchema = z.object({
-  kind: z.enum(LIVE_ACTIVITY_KINDS),
+  activityId: z.string().min(1).max(191),
 });

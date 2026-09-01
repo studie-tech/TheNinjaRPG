@@ -121,6 +121,23 @@ describe("live activity content state", () => {
     expect(typeof aps["dismissal-date"]).toBe("number");
     expect(aps["dismissal-date"]).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
+
+  it("keeps failed end tokens available for retry", async () => {
+    const { activityTokensToPrune } = await load();
+    const results = [
+      { token: "sent", status: "sent" as const },
+      { token: "expired", status: "expired" as const, reason: "Unregistered" },
+      {
+        token: "retry",
+        status: "failed" as const,
+        reason: "503 Unavailable",
+        retryable: true,
+      },
+    ];
+
+    expect(activityTokensToPrune(results, "update")).toEqual(["expired"]);
+    expect(activityTokensToPrune(results, "end")).toEqual(["sent", "expired"]);
+  });
 });
 
 describe("mapWithConcurrency", () => {

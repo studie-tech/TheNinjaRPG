@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { hospitalRecoveryAt } from "@/libs/hospital";
 import { appEvents, liveActivity } from "@/libs/native";
@@ -20,6 +20,7 @@ import type { UserWithRelations } from "@/routers/profile";
 export const useLiveActivity = (
   userData: UserWithRelations | undefined,
   timeDiff: number,
+  accountId: string | null | undefined = userData?.userId,
 ) => {
   const { mutateAsync: registerActivity } = api.push.registerActivity.useMutation({
     // Mutations are not retried by the global tRPC client. Losing this particular write
@@ -28,10 +29,21 @@ export const useLiveActivity = (
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10_000),
   });
   const { mutate: endActivity } = api.push.endActivity.useMutation();
+  const endActivityRef = useRef(endActivity);
+  endActivityRef.current = endActivity;
 
   // ActivityKit ids, so an activity is only ended once and only started once per stay.
   const activeId = useRef<string | null>(null);
   const isStarting = useRef(false);
+  const startInFlight = useRef<Promise<void> | null>(null);
+  const cleanupInFlight = useRef<Promise<void> | null>(null);
+  const activityAccount = useRef<string | null | undefined>(accountId);
+  const lifecycleEpoch = useRef(0);
+  // A direct Clerk account replacement must finish native cleanup before the new account
+  // can adopt or create a card of the same kind.
+  const [readyAccountId, setReadyAccountId] = useState<string | null>(
+    () => accountId ?? null,
+  );
   // Read inside the start callback rather than captured, because `userData` changes on
   // every profile refresh and the effect re-runs with it.
   const shouldBeRunning = useRef(false);
@@ -98,6 +110,54 @@ export const useLiveActivity = (
     [flushPendingToken],
   );
 
+  useEffect(() => {
+    if (!liveActivity.isSupported() || accountId === undefined) return;
+    const nextAccountId = accountId;
+    if (activityAccount.current === nextAccountId) return;
+    if (activityAccount.current === undefined) {
+      activityAccount.current = nextAccountId;
+      if (nextAccountId) setReadyAccountId(nextAccountId);
+      return;
+    }
+
+    activityAccount.current = nextAccountId;
+    lifecycleEpoch.current += 1;
+    setReadyAccountId(null);
+    const previousActivityId = activeId.current;
+    activeId.current = null;
+    endsAtRef.current = null;
+    pendingToken.current = null;
+    stoppedAccount.current = null;
+
+    let cancelled = false;
+    // Let an old start/registration settle first. Otherwise endKind can race a late native
+    // start, or a retried registration can attach the previous card to the new session.
+    const pending = [
+      cleanupInFlight.current,
+      startInFlight.current,
+      registrationInFlight.current,
+    ].filter((request): request is Promise<void> => request !== null);
+    const cleanup = Promise.allSettled(pending)
+      .then(async () => {
+        // If a retried old registration landed under the replacement session, remove that
+        // exact row. Correctly-owned rows remain protected by the server's userId predicate.
+        if (nextAccountId && previousActivityId) {
+          endActivityRef.current({ activityId: previousActivityId });
+        }
+        await liveActivity.endKind("hospital");
+      })
+      .finally(() => {
+        if (cleanupInFlight.current === cleanup) cleanupInFlight.current = null;
+        if (!cancelled && nextAccountId && activityAccount.current === nextAccountId) {
+          setReadyAccountId(nextAccountId);
+        }
+      });
+    cleanupInFlight.current = cleanup;
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId]);
+
   // Apple reissues the token, so this stays subscribed rather than reading it once.
   useEffect(() => {
     if (!liveActivity.isSupported()) return;
@@ -124,8 +184,10 @@ export const useLiveActivity = (
     if (!liveActivity.isSupported()) return;
 
     if (!userData) return;
+    if (readyAccountId !== userData.userId) return;
 
     if (!shouldRun) {
+      const activityId = activeId.current;
       activeId.current = null;
       endsAtRef.current = null;
       pendingToken.current = null;
@@ -134,7 +196,7 @@ export const useLiveActivity = (
       if (stoppedAccount.current !== userData.userId) {
         stoppedAccount.current = userData.userId;
         void liveActivity.endKind("hospital");
-        endActivity({ kind: "hospital" });
+        if (activityId) endActivity({ activityId });
       }
       return;
     }
@@ -150,7 +212,9 @@ export const useLiveActivity = (
 
     isStarting.current = true;
     endsAtRef.current = endsAt;
-    void liveActivity
+    const epoch = lifecycleEpoch.current;
+    const accountId = userData.userId;
+    const request = liveActivity
       .start("hospital", {
         title: "Recovering",
         subtitle: userData.village?.name
@@ -162,8 +226,15 @@ export const useLiveActivity = (
         // Checked through the ref rather than a cleanup flag: this effect re-runs on
         // every profile refresh, so treating each cleanup as a cancellation would end
         // the activity that had just started in the middle of a normal hospital stay.
-        if (!shouldBeRunning.current) {
-          if (started) void liveActivity.end(started.activityId);
+        if (
+          !shouldBeRunning.current ||
+          lifecycleEpoch.current !== epoch ||
+          activityAccount.current !== accountId
+        ) {
+          if (started) {
+            void liveActivity.end(started.activityId);
+            endActivity({ activityId: started.activityId });
+          }
           endsAtRef.current = null;
           return;
         }
@@ -180,6 +251,8 @@ export const useLiveActivity = (
       })
       .finally(() => {
         isStarting.current = false;
+        if (startInFlight.current === request) startInFlight.current = null;
       });
-  }, [endActivity, flushPendingToken, shouldRun, timeDiff, userData]);
+    startInFlight.current = request;
+  }, [endActivity, flushPendingToken, readyAccountId, shouldRun, timeDiff, userData]);
 };

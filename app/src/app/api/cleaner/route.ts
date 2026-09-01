@@ -34,6 +34,7 @@ import {
   userData,
   userItem,
   userJutsu,
+  userLiveActivity,
   userRequest,
   village,
   warKill,
@@ -86,6 +87,12 @@ export async function GET() {
     // Time constants
     const oneHour = 1000 * 60 * 60;
     const oneDay = oneHour * 24;
+
+    // A device can end an orphaned activity after a cold launch without JavaScript knowing
+    // its id. Keep a retry window for failed APNs endings, then drain those dead addresses.
+    await drizzleDB
+      .delete(userLiveActivity)
+      .where(lt(userLiveActivity.endsAt, new Date(Date.now() - oneDay)));
 
     // Battle retention periods:
     // - PVP (72 hours): Explicit PVP types that we want longer retention for

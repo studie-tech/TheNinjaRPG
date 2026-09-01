@@ -99,11 +99,11 @@ const capacitorWindow = window as typeof window & {
   };
 };
 
-const profile = (status: "AWAKE" | "HOSPITALIZED") =>
+const profile = (status: "AWAKE" | "HOSPITALIZED", userId = "user-a") =>
   ({
     regenAt: new Date(),
     status,
-    userId: "user-a",
+    userId,
     village: { name: "Leaf" },
   }) as unknown as UserWithRelations;
 
@@ -292,9 +292,59 @@ describe("native Live Activity lifecycle", () => {
 
     rerender({ user: profile("AWAKE") });
     await waitFor(() => expect(mocks.endKind).toHaveBeenCalledWith("hospital"));
-    expect(mocks.endActivity).toHaveBeenCalledWith({ kind: "hospital" });
+    expect(mocks.endActivity).not.toHaveBeenCalled();
 
     rerender({ user: profile("AWAKE") });
     expect(mocks.endKind).toHaveBeenCalledTimes(1);
+  });
+
+  it("ends only the current device's registered activity after recovery", async () => {
+    const { rerender } = renderHook(
+      ({ user }) => useLiveActivity(user, 0),
+      { initialProps: { user: profile("HOSPITALIZED") } },
+    );
+    await waitFor(() => expect(mocks.liveStart).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    rerender({ user: profile("AWAKE") });
+    await waitFor(() =>
+      expect(mocks.endActivity).toHaveBeenCalledWith({ activityId: "activity-1" }),
+    );
+  });
+
+  it("ends the previous account's card before starting for a replacement account", async () => {
+    mocks.liveStart
+      .mockResolvedValueOnce({ activityId: "activity-a" })
+      .mockResolvedValueOnce({ activityId: "activity-b" });
+    const { rerender } = renderHook(
+      ({ user }) => useLiveActivity(user, 0),
+      { initialProps: { user: profile("HOSPITALIZED", "user-a") } },
+    );
+    await waitFor(() => expect(mocks.liveStart).toHaveBeenCalledTimes(1));
+
+    rerender({ user: profile("HOSPITALIZED", "user-b") });
+    await waitFor(() => expect(mocks.endKind).toHaveBeenCalledWith("hospital"));
+    await waitFor(() => expect(mocks.liveStart).toHaveBeenCalledTimes(2));
+  });
+
+  it("starts again when the same account returns after an explicit sign-out", async () => {
+    const { rerender } = renderHook(
+      ({ user, accountId }) => useLiveActivity(user, 0, accountId),
+      {
+        initialProps: {
+          user: profile("HOSPITALIZED") as UserWithRelations | undefined,
+          accountId: "user-a" as string | null,
+        },
+      },
+    );
+    await waitFor(() => expect(mocks.liveStart).toHaveBeenCalledTimes(1));
+
+    rerender({ user: undefined, accountId: null });
+    await waitFor(() => expect(mocks.endKind).toHaveBeenCalledWith("hospital"));
+
+    rerender({ user: profile("HOSPITALIZED"), accountId: "user-a" });
+    await waitFor(() => expect(mocks.liveStart).toHaveBeenCalledTimes(2));
   });
 });
