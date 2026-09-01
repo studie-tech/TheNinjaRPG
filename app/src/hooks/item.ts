@@ -133,6 +133,7 @@ export const useItemEditForm = (
 
   // Query for bloodlines for bloodline requirement dropdown
   const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
+  const { data: skillsData } = api.skillTree.getAllNames.useQuery();
 
   // Object for form values
   const formData: FormEntry<keyof ZodItemType>[] = [
@@ -168,6 +169,13 @@ export const useItemEditForm = (
       type: "db_values",
       values: bloodlinesData,
       label: "Required Bloodline",
+      resetButton: true,
+    },
+    {
+      id: "requiredSkillId",
+      type: "db_values",
+      values: skillsData,
+      label: "Required Active Skill",
       resetButton: true,
     },
     {
