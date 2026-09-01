@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createPurchaseIdentityScope,
   runPurchaseIdentityOperation,
   syncPurchaseIdentitySnapshot,
 } from "@/libs/native/purchases";
@@ -60,10 +61,7 @@ describe("RevenueCat identity queue", () => {
   });
 
   it("configures once after a retryable failure and logs in for every later bind", async () => {
-    // Use a fresh module singleton so this assertion is valid even when Vitest runs files
-    // in one non-isolated worker after a NativeStore suite already configured RevenueCat.
-    vi.resetModules();
-    const { bind } = await import("@/libs/native/purchases");
+    const identity = createPurchaseIdentityScope();
     const configure = vi
       .fn()
       .mockRejectedValueOnce(new Error("SDK unavailable"))
@@ -91,11 +89,13 @@ describe("RevenueCat identity queue", () => {
       },
     };
 
-    await expect(bind("ios-key", "player-a")).rejects.toThrow("SDK unavailable");
-    await expect(bind("ios-key", "player-a")).resolves.toMatchObject({
+    await expect(identity.bind("ios-key", "player-a")).rejects.toThrow(
+      "SDK unavailable",
+    );
+    await expect(identity.bind("ios-key", "player-a")).resolves.toMatchObject({
       packages: [],
     });
-    await expect(bind("ios-key", "player-b")).resolves.toMatchObject({
+    await expect(identity.bind("ios-key", "player-b")).resolves.toMatchObject({
       packages: [],
     });
 

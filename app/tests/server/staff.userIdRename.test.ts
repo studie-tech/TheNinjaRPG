@@ -39,6 +39,10 @@ import {
 const STAFF = "rename-staff";
 const OLD_USER_ID = "rename-old-user";
 const NEW_USER_ID = "rename-new-user";
+// These deliberately-overlapped real-MySQL tests may wait behind the store graph's
+// production global mutex when Bun runs database files together. Keep the application's
+// lock timeout authoritative instead of failing at Bun's much shorter unit-test default.
+const REAL_DB_CONCURRENCY_TIMEOUT_MS = 30_000;
 
 describeWithDatabase("staff user-id rename", () => {
   beforeEach(async () => {
@@ -60,7 +64,7 @@ describeWithDatabase("staff user-id rename", () => {
       { userId: STAFF, username: "Terriator", role: "CODING-ADMIN" },
       { userId: OLD_USER_ID, username: "rename-target", role: "USER" },
     ]);
-  });
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
 
   it("reserves every retired alias against later reuse", async () => {
     const database = await getTestDatabase();
@@ -192,11 +196,11 @@ describeWithDatabase("staff user-id rename", () => {
       message: "Character no longer exists",
       widgetToken: null,
     });
-    await expect(
-      database.query.userDevice.findMany({
+    expect(
+      await database.query.userDevice.findMany({
         where: eq(userDevice.userId, OLD_USER_ID),
       }),
-    ).resolves.toEqual([]);
+    ).toEqual([]);
   });
 
   it("refuses preference and Live Activity writes after account deletion", async () => {
@@ -214,6 +218,9 @@ describeWithDatabase("staff user-id rename", () => {
         pushToken: "c".repeat(64),
         endsAt: new Date(Date.now() + 60_000),
       }),
+    ).resolves.toEqual({ success: false, message: "Character no longer exists" });
+    await expect(
+      caller.endActivity({ activityId: "deleted-activity" }),
     ).resolves.toEqual({ success: false, message: "Character no longer exists" });
     const [preferences, activities] = await Promise.all([
       database.query.userPushPreference.findMany({
@@ -269,12 +276,12 @@ describeWithDatabase("staff user-id rename", () => {
       success: false,
       message: "This account was deleted and cannot create another character",
     });
-    await expect(
-      database.query.userData.findFirst({
+    expect(
+      await database.query.userData.findFirst({
         where: eq(userData.userId, OLD_USER_ID),
       }),
-    ).resolves.toBeUndefined();
-  });
+    ).toBeUndefined();
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
 
   it("purges a device registration that overlaps account retirement", async () => {
     const database = await getTestDatabase();
@@ -334,7 +341,7 @@ describeWithDatabase("staff user-id rename", () => {
         barrierConnection.close(),
       ]);
     }
-  });
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
 
   it.each([
     { kind: "preference", table: "UserPushPreference" },
@@ -400,6 +407,7 @@ describeWithDatabase("staff user-id rename", () => {
         ]);
       }
     },
+    REAL_DB_CONCURRENCY_TIMEOUT_MS,
   );
 
   it.each([
@@ -499,6 +507,79 @@ describeWithDatabase("staff user-id rename", () => {
         ]);
       }
     },
+    REAL_DB_CONCURRENCY_TIMEOUT_MS,
+  );
+
+  it(
+    "serializes an activity end that overlaps user-id rename",
+    async () => {
+      const activityId = "rename-ending-activity";
+      const database = await getTestDatabase();
+      await database.insert(userLiveActivity).values({
+        id: nanoid(),
+        userId: OLD_USER_ID,
+        activityId,
+        kind: "training",
+        pushToken: "g".repeat(64),
+        endsAt: new Date(Date.now() + 60_000),
+      });
+      const renameConnection = await openTestDatabaseConnection();
+      const endConnection = await openTestDatabaseConnection();
+      const barrierConnection = await openTestDatabaseConnection();
+      const barrier = `rename_end_activity_${nanoid()}`;
+      const trigger = `pause_rename_end_${nanoid().replaceAll("-", "_")}`;
+      await barrierConnection.query(`SELECT GET_LOCK('${barrier}', 10)`);
+      await runRawSql(`
+        CREATE TRIGGER ${trigger} BEFORE UPDATE ON UserData FOR EACH ROW
+        BEGIN
+          IF OLD.userId = '${OLD_USER_ID}' AND NEW.userId = '${NEW_USER_ID}' THEN
+            SET @rename_end_wait = GET_LOCK('${barrier}', 10);
+            SET @rename_end_release = RELEASE_LOCK('${barrier}');
+          END IF;
+        END
+      `);
+      try {
+        const rename = callerForDatabase(
+          staffRouter,
+          STAFF,
+          renameConnection.database,
+        ).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID });
+        await barrierConnection.waitForNamedLockWaiter(barrier);
+
+        let endFinished = false;
+        const end = callerForDatabase(pushRouter, OLD_USER_ID, endConnection.database)
+          .endActivity({ activityId })
+          .finally(() => {
+            endFinished = true;
+          });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(endFinished).toBe(false);
+        await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+
+        await expect(rename).resolves.toEqual({
+          success: true,
+          message: "UserId updated",
+        });
+        await expect(end).resolves.toEqual({
+          success: false,
+          message: "Character no longer exists",
+        });
+        const activities = await database.query.userLiveActivity.findMany({
+          where: eq(userLiveActivity.userId, NEW_USER_ID),
+        });
+        expect(activities).toHaveLength(1);
+        expect(activities[0]?.activityId).toBe(activityId);
+      } finally {
+        await barrierConnection.query(`SELECT RELEASE_LOCK('${barrier}')`);
+        await runRawSql(`DROP TRIGGER IF EXISTS ${trigger}`);
+        await Promise.all([
+          renameConnection.close(),
+          endConnection.close(),
+          barrierConnection.close(),
+        ]);
+      }
+    },
+    REAL_DB_CONCURRENCY_TIMEOUT_MS,
   );
 
   it("rolls back helper and broad writes together when a late rename write fails", async () => {
@@ -738,7 +819,7 @@ describeWithDatabase("staff user-id rename", () => {
         barrierConnection.close(),
       ]);
     }
-  });
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
 
   it("serializes a transfer already waiting behind the rename row lock", async () => {
     const destinationUserId = "rename-transfer-destination";
@@ -833,5 +914,5 @@ describeWithDatabase("staff user-id rename", () => {
         barrierConnection.close(),
       ]);
     }
-  });
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
 });

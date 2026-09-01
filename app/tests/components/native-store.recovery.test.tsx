@@ -476,7 +476,7 @@ describe("NativeStore purchase recovery", () => {
     expect(testMocks().fetchRecent).not.toHaveBeenCalled();
   });
 
-  it("leaves an old account checkout locked when an account switch is requested", async () => {
+  it("keeps an old account charge correlated when an account switch is requested", async () => {
     let finishPurchase:
       | ((value: { status: "purchased"; transactionId: string }) => void)
       | undefined;
@@ -509,9 +509,49 @@ describe("NativeStore purchase recovery", () => {
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toEqual([
       expect.objectContaining({
         accountId: "player-1",
-        attempt: expect.objectContaining({ phase: "sheet-open" }),
+        attempt: expect.objectContaining({
+          transactionId: "old-charge",
+          phase: "charged-or-pending",
+        }),
       }),
     ]);
+    expect(testMocks().toast).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { name: "cancellation", outcome: { status: "cancelled" } as const },
+    {
+      name: "definite pre-charge failure",
+      outcome: { status: "error", code: "3", message: "Not available" } as const,
+    },
+  ])("releases an old account sheet lock after $name during a switch", async ({ outcome }) => {
+    let finishPurchase: ((value: typeof outcome) => void) | undefined;
+    testMocks().purchase.mockImplementationOnce(
+      async () =>
+        await new Promise<typeof outcome>((resolve) => {
+          finishPurchase = resolve;
+        }),
+    );
+    const view = render(<NativeStore />);
+    const buy = await view.findByRole("button", { name: "Buy" });
+    await waitFor(() => expect((buy as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(buy);
+    await waitFor(() => expect(testMocks().purchase).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toHaveLength(
+      1,
+    );
+
+    Object.assign(testUser(), {
+      userId: "player-2",
+      data: { userId: "player-2", reputationPoints: 20 },
+    });
+    view.rerender(<NativeStore />);
+    await act(async () => finishPurchase?.(outcome));
+
+    await waitFor(() =>
+      expect(testMocks().logIn).toHaveBeenCalledWith({ appUserID: "player-2" }),
+    );
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toEqual([]);
     expect(testMocks().toast).not.toHaveBeenCalled();
   });
 

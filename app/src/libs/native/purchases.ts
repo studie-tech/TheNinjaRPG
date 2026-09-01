@@ -11,19 +11,47 @@
 import { hasPlugin, invoke, invokeSafe, isNative } from "./bridge";
 
 const PLUGIN = "Purchases";
-let identityQueue: Promise<void> = Promise.resolve();
-let configuredApiKey: string | undefined;
 
-export const runPurchaseIdentityOperation = <T>(
+interface PurchaseIdentityScopeState {
+  identityQueue: Promise<void>;
+  configuredApiKey: string | undefined;
+}
+
+const runPurchaseIdentityOperationInScope = <T>(
+  scope: PurchaseIdentityScopeState,
   operation: () => Promise<T>,
 ): Promise<T> => {
-  const pending = identityQueue.catch(() => undefined).then(operation);
-  identityQueue = pending.then(
+  const pending = scope.identityQueue.catch(() => undefined).then(operation);
+  scope.identityQueue = pending.then(
     () => undefined,
     () => undefined,
   );
   return pending;
 };
+
+/**
+ * A separately-scoped identity coordinator for consumers which own a distinct SDK process.
+ * Production uses one module singleton; tests can create a disposable scope without evicting
+ * modules or leaking configured state into another suite while still invoking the real bridge.
+ */
+export const createPurchaseIdentityScope = () => {
+  const state: PurchaseIdentityScopeState = {
+    identityQueue: Promise.resolve(),
+    configuredApiKey: undefined,
+  };
+  return {
+    run: async <T>(operation: () => Promise<T>): Promise<T> =>
+      await runPurchaseIdentityOperationInScope(state, operation),
+    bind: async (apiKey: string, appUserId: string): Promise<StoreBinding> =>
+      await bindInPurchaseIdentityScope(state, apiKey, appUserId),
+  };
+};
+
+const purchaseIdentityScope = createPurchaseIdentityScope();
+
+export const runPurchaseIdentityOperation = <T>(
+  operation: () => Promise<T>,
+): Promise<T> => purchaseIdentityScope.run(operation);
 
 /**
  * A product as RevenueCat returned it. It remains nested in its package so Android keeps
@@ -120,9 +148,13 @@ const configure = async (apiKey: string, appUserId: string): Promise<void> => {
 };
 
 /** RevenueCat is a process singleton and rejects being configured more than once. */
-const configureOnce = async (apiKey: string, appUserId: string): Promise<void> => {
-  if (configuredApiKey) {
-    if (configuredApiKey !== apiKey) {
+const configureOnce = async (
+  scope: PurchaseIdentityScopeState,
+  apiKey: string,
+  appUserId: string,
+): Promise<void> => {
+  if (scope.configuredApiKey) {
+    if (scope.configuredApiKey !== apiKey) {
       throw new Error("The purchase SDK was already configured with another API key");
     }
     return;
@@ -132,14 +164,14 @@ const configureOnce = async (apiKey: string, appUserId: string): Promise<void> =
   // process singleton twice. Older shells without isConfigured safely fall through.
   const existing = await invokeSafe<{ isConfigured?: unknown }>(PLUGIN, "isConfigured");
   if (existing?.isConfigured === true) {
-    configuredApiKey = apiKey;
+    scope.configuredApiKey = apiKey;
     return;
   }
   await configure(apiKey, appUserId);
   // Record success only after the bridge resolves so a transient first failure remains
   // retryable. This function is called inside identityQueue, so no second configure can
   // observe or race the in-flight attempt.
-  configuredApiKey = apiKey;
+  scope.configuredApiKey = apiKey;
 };
 
 /**
@@ -189,14 +221,21 @@ export interface StoreBinding {
 }
 
 /** Bind the singleton SDK and fetch its complete snapshot in one identity queue slot. */
-export const bind = async (apiKey: string, appUserId: string): Promise<StoreBinding> =>
-  await runPurchaseIdentityOperation(async () => {
-    await configureOnce(apiKey, appUserId);
+const bindInPurchaseIdentityScope = async (
+  scope: PurchaseIdentityScopeState,
+  apiKey: string,
+  appUserId: string,
+): Promise<StoreBinding> =>
+  await runPurchaseIdentityOperationInScope(scope, async () => {
+    await configureOnce(scope, apiKey, appUserId);
     await logIn(appUserId);
     const packages = await getPackages();
     const customerInfo = await getCustomerInfo();
     return { packages, customerInfo };
   });
+
+export const bind = async (apiKey: string, appUserId: string): Promise<StoreBinding> =>
+  await purchaseIdentityScope.bind(apiKey, appUserId);
 
 /** RevenueCat's canonical product id, including the Play base-plan suffix. */
 export const productIdForPackage = (

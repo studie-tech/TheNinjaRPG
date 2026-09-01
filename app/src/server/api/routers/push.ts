@@ -252,14 +252,21 @@ export const pushRouter = createTRPCRouter({
     .input(endActivitySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      await ctx.drizzle
-        .delete(userLiveActivity)
-        .where(
-          and(
-            eq(userLiveActivity.userId, ctx.userId),
-            eq(userLiveActivity.activityId, input.activityId),
-          ),
-        );
+      const ended = await mutateLivePushUser(
+        ctx.drizzle,
+        ctx.userId,
+        async (lockedClient) => {
+          await lockedClient
+            .delete(userLiveActivity)
+            .where(
+              and(
+                eq(userLiveActivity.userId, ctx.userId),
+                eq(userLiveActivity.activityId, input.activityId),
+              ),
+            );
+        },
+      );
+      if (!ended) return errorResponse("Character no longer exists");
       return { success: true, message: "Activity ended" };
     }),
 

@@ -622,7 +622,9 @@ export default function NativeStore() {
         assertCurrentCheckout();
         return { prepared: preparedAttempt, storeProductChangeInfo };
       });
-      assertCurrentCheckout();
+      // Classify the result for the account which opened the sheet before suppressing stale
+      // React work. A requested account switch cannot strand that account's sheet-open lock
+      // after the native queue returns a definite cancellation/pre-charge failure.
       if (result.status === "cancelled") {
         updateUnsettledAttempts((current) =>
           releaseStorePurchaseLock(current, accountId, productId),
@@ -642,6 +644,7 @@ export default function NativeStore() {
             releaseStorePurchaseLock(current, accountId, productId),
           );
         }
+        assertCurrentCheckout();
         showMutationToast({
           success: false,
           message: result.mayHaveCharged
@@ -662,6 +665,7 @@ export default function NativeStore() {
       updateUnsettledAttempts((current) =>
         retainStorePurchaseLock(current, { accountId, attempt: chargedAttempt }),
       );
+      assertCurrentCheckout();
       showMutationToast({
         success: true,
         message: "Purchase complete. Crediting your account...",
