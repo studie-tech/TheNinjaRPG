@@ -113,6 +113,38 @@ export const storePlatformFromAppId = (
   return undefined;
 };
 
+export type TransferStoreResolution =
+  | { status: "mapped"; store: StorePlatform }
+  | { status: "legacy" }
+  | { status: "unsupported-store"; value: string }
+  | { status: "unknown-app"; value: string };
+
+/**
+ * Resolve a storeless TRANSFER without letting a present but unknown discriminator leak
+ * across both stores. The both-store fallback is reserved for old payloads that contain
+ * neither field at all.
+ */
+export const resolveTransferStore = (
+  store: string | null | undefined,
+  appId: string | null | undefined,
+  iosAppId: string | null | undefined,
+  androidAppId: string | null | undefined,
+): TransferStoreResolution => {
+  if (store !== null && store !== undefined) {
+    const mapped = toStorePlatform(store);
+    return mapped
+      ? { status: "mapped", store: mapped }
+      : { status: "unsupported-store", value: store };
+  }
+  if (appId !== null && appId !== undefined) {
+    const mapped = storePlatformFromAppId(appId, iosAppId, androidAppId);
+    return mapped
+      ? { status: "mapped", store: mapped }
+      : { status: "unknown-app", value: appId };
+  }
+  return { status: "legacy" };
+};
+
 export const isSandbox = (environment: string | null | undefined): boolean =>
   environment?.toUpperCase() === "SANDBOX";
 

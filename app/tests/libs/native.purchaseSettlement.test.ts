@@ -1,5 +1,8 @@
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import {
+  fetchFreshStoreObservation,
+  finalStoreRestoreResult,
   hasSettledStorePurchase,
   isPendingStorePurchase,
   storeRestoreReconciliation,
@@ -15,6 +18,7 @@ const receipt = (
   acceptedAt: new Date(),
   grantedAt: null,
   revokedAt: null,
+  expiresAt: new Date("2099-01-01T00:00:00.000Z"),
   createdAt: new Date("2026-09-01T12:00:00.001Z"),
   ...overrides,
 });
@@ -117,15 +121,14 @@ describe("native purchase settlement", () => {
   });
 
   it("does not finish restore merely because no receipt is pending", () => {
-    expect(
-      storeRestoreReconciliation([], {
-        baselineReceiptIds: [],
-        expectedProductIds: ["tnr_federal_gold"],
-      }),
-    ).toBeNull();
+    const observation = storeRestoreReconciliation([], {
+      expectedProductIds: ["tnr_federal_gold"],
+    });
+    expect(observation).toBe("pending");
+    expect(finalStoreRestoreResult(observation)).toBe("timed-out");
   });
 
-  it("recognizes transferred and already-owned restore receipts", () => {
+  it("accepts only a live paid-through restored entitlement", () => {
     const settled = receipt({
       id: "restored",
       productId: "tnr_federal_gold",
@@ -133,15 +136,66 @@ describe("native purchase settlement", () => {
     });
     expect(
       storeRestoreReconciliation([settled], {
-        baselineReceiptIds: [],
         expectedProductIds: ["tnr_federal_gold"],
       }),
-    ).toBe("changed");
+    ).toBe("reconciled");
     expect(
-      storeRestoreReconciliation([settled], {
-        baselineReceiptIds: ["restored"],
-        expectedProductIds: ["tnr_federal_gold"],
-      }),
-    ).toBe("already-reconciled");
+      storeRestoreReconciliation(
+        [
+          settled,
+          receipt({
+            id: "obsolete",
+            productId: "tnr_federal_gold",
+            grantedAt: new Date(),
+            revokedAt: new Date(),
+          }),
+        ],
+        { expectedProductIds: ["tnr_federal_gold"] },
+      ),
+    ).toBe("reconciled");
+    expect(
+      storeRestoreReconciliation(
+        [
+          receipt({
+            productId: "tnr_federal_gold",
+            grantedAt: new Date(),
+            revokedAt: new Date(),
+          }),
+        ],
+        { expectedProductIds: ["tnr_federal_gold"] },
+      ),
+    ).toBe("rejected");
+    expect(
+      storeRestoreReconciliation(
+        [
+          settled,
+          receipt({
+            id: "expired",
+            grantedAt: new Date(),
+            expiresAt: new Date("2000-01-01"),
+          }),
+        ],
+        { expectedProductIds: ["tnr_federal_gold", "tnr_reps_tier1"] },
+      ),
+    ).toBe("rejected");
+  });
+
+  it("invalidates before observing with an infinite-stale QueryClient", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY } },
+    });
+    const queryKey = ["purchases", "recent"];
+    let serverValue = "old";
+    const fetch = () =>
+      client.fetchQuery({ queryKey, queryFn: () => Promise.resolve(serverValue) });
+    expect(await fetch()).toBe("old");
+    serverValue = "new";
+    expect(await fetch()).toBe("old");
+    await expect(
+      fetchFreshStoreObservation(
+        () => client.invalidateQueries({ queryKey }),
+        fetch,
+      ),
+    ).resolves.toBe("new");
   });
 });

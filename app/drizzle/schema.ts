@@ -5745,9 +5745,9 @@ export type StoreEntitlementState = InferSelectModel<typeof storeEntitlementStat
  * Durable ownership redirects emitted by RevenueCat TRANSFER events.
  *
  * RevenueCat may deliver a transfer before the purchase it moves, and TRANSFER payloads
- * do not always identify a store. Keeping one redirect per supported store lets a later
- * subscription receipt follow the current owner instead of being granted to the source
- * account. `transferredAt` is the ordering watermark for delayed older transfers.
+ * do not always identify a store. Keeping every chronological ownership epoch lets a
+ * delayed receipt follow the owner at that receipt's point in history instead of whichever
+ * transfer happened to arrive last.
  */
 export const storePurchaseTransfer = mysqlTable(
   "StorePurchaseTransfer",
@@ -5762,9 +5762,12 @@ export const storePurchaseTransfer = mysqlTable(
       .notNull(),
   },
   (table) => ({
-    sourceStoreKey: uniqueIndex("StorePurchaseTransfer_sourceUserId_store_key").on(
+    sourceStoreTimeKey: uniqueIndex(
+      "StorePurchaseTransfer_sourceUserId_store_transferredAt_key",
+    ).on(
       table.sourceUserId,
       table.store,
+      table.transferredAt,
     ),
     destinationIdx: index("StorePurchaseTransfer_destinationUserId_idx").on(
       table.destinationUserId,

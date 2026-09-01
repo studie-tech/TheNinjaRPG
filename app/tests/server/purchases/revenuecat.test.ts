@@ -18,6 +18,7 @@ import {
   occurredAt,
   paidThroughAt,
   purchasedAt,
+  resolveTransferStore,
   storePlatformFromAppId,
   toStorePlatform,
 } from "@/server/utils/purchases/revenuecat";
@@ -121,6 +122,15 @@ describe("revenuecat webhook classification", () => {
       storePlatformFromAppId("android-app", "ios-app", "android-app"),
     ).toBe("GOOGLE");
     expect(storePlatformFromAppId("unknown", "ios-app", "android-app")).toBeUndefined();
+    expect(
+      resolveTransferStore(undefined, "ios-app", "ios-app", "android-app"),
+    ).toEqual({ status: "mapped", store: "APPLE" });
+    expect(
+      resolveTransferStore(undefined, "unknown", "ios-app", "android-app"),
+    ).toEqual({ status: "unknown-app", value: "unknown" });
+    expect(
+      resolveTransferStore(undefined, undefined, "ios-app", "android-app"),
+    ).toEqual({ status: "legacy" });
   });
 
   it("grants on every event that means the player now owns something", () => {

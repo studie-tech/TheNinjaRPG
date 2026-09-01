@@ -18,8 +18,8 @@ import {
   occurredAt,
   paidThroughAt,
   purchasedAt,
+  resolveTransferStore,
   revenueCatEventSchema,
-  storePlatformFromAppId,
   toStorePlatform,
 } from "@/server/utils/purchases/revenuecat";
 
@@ -63,23 +63,24 @@ export async function POST(request: Request) {
 
   try {
     if (event.type === "TRANSFER") {
-      const store =
-        toStorePlatform(event.store) ??
-        (!event.store
-          ? storePlatformFromAppId(
-              event.app_id,
-              env.REVENUECAT_IOS_APP_ID,
-              env.REVENUECAT_ANDROID_APP_ID,
-            )
-          : undefined);
-      // RevenueCat legitimately omits store on TRANSFER. Prefer its dashboard app id;
-      // deployments without those ids configured retain the conservative both-store
-      // fallback. An explicit unknown store remains unsupported.
-      if (event.store && !store) return unsupportedStore(event.type, event.store);
+      const resolution = resolveTransferStore(
+        event.store,
+        event.app_id,
+        env.REVENUECAT_IOS_APP_ID,
+        env.REVENUECAT_ANDROID_APP_ID,
+      );
+      if (resolution.status === "unsupported-store") {
+        return unsupportedStore(event.type, resolution.value);
+      }
+      if (resolution.status === "unknown-app") {
+        // Configuration may be lagging a new RevenueCat app. A 5xx keeps this isolated
+        // event retryable instead of silently applying it to both stores.
+        throw new Error(`RevenueCat TRANSFER used unknown app_id ${resolution.value}`);
+      }
       const outcome = await transferStorePurchases(drizzleDB, {
         fromUserIds: event.transferred_from ?? [],
         toUserIds: event.transferred_to ?? [],
-        store,
+        store: resolution.status === "mapped" ? resolution.store : undefined,
         occurredAt: occurredAt(event),
       });
       return Response.json({ handled: "transferred", ...outcome });

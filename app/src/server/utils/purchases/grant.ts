@@ -9,6 +9,7 @@
 import * as Sentry from "@sentry/node";
 import {
   and,
+  asc,
   desc,
   eq,
   gte,
@@ -125,20 +126,23 @@ const transferredUserId = async (
 ): Promise<string> => {
   const visited = new Set<string>();
   let current = sourceUserId;
+  let cursor = asOf;
   while (true) {
     if (visited.has(current)) {
       throw new Error(`RevenueCat transfer cycle from ${sourceUserId}/${store}`);
     }
     visited.add(current);
     const redirect = await client.query.storePurchaseTransfer.findFirst({
-      columns: { destinationUserId: true },
+      columns: { destinationUserId: true, transferredAt: true },
       where: and(
         eq(storePurchaseTransfer.sourceUserId, current),
         eq(storePurchaseTransfer.store, store),
-        gte(storePurchaseTransfer.transferredAt, asOf),
+        gte(storePurchaseTransfer.transferredAt, cursor),
       ),
+      orderBy: asc(storePurchaseTransfer.transferredAt),
     });
     if (!redirect || redirect.destinationUserId === current) return current;
+    cursor = redirect.transferredAt;
     current = redirect.destinationUserId;
   }
 };
@@ -150,18 +154,20 @@ const transferChainUserIds = async (
   store: StorePlatform,
 ): Promise<string[]> => {
   const visited = new Set<string>();
-  let current = sourceUserId;
-  while (!visited.has(current)) {
+  const pending = [sourceUserId];
+  while (pending.length > 0) {
+    const current = pending.shift();
+    if (!current || visited.has(current)) continue;
     visited.add(current);
-    const redirect = await client.query.storePurchaseTransfer.findFirst({
+    const redirects = await client.query.storePurchaseTransfer.findMany({
       columns: { destinationUserId: true },
       where: and(
         eq(storePurchaseTransfer.sourceUserId, current),
         eq(storePurchaseTransfer.store, store),
       ),
+      orderBy: asc(storePurchaseTransfer.transferredAt),
     });
-    if (!redirect || redirect.destinationUserId === current) break;
-    current = redirect.destinationUserId;
+    pending.push(...redirects.map((redirect) => redirect.destinationUserId));
   }
   return [...visited];
 };
@@ -532,9 +538,14 @@ export const revokeFederalStatus = async (
           ),
         })
       : undefined;
-  // This exact transaction is already retired. Treat its retry as acknowledged instead
-  // of falling through to a newer subscription owned by either account.
-  if (exact?.revokedAt) return;
+  // Revoking the receipt and recomputing the shared status are separate writes on
+  // PlanetScale. A retry must repair the second write if the first delivery failed after
+  // stamping revokedAt.
+  if (exact?.revokedAt) {
+    const paypal = await paypalFederalFloor(client, exact.userId);
+    await setFederalStatusWithStoreFloor(client, exact.userId, paypal);
+    return;
+  }
   // A renewal period commonly begins at the exact millisecond the previous period ends.
   // Product-scoped expiry events therefore cover timestamps strictly before occurredAt;
   // using the boundary itself would make a late expiry consume the live renewal.
@@ -649,9 +660,8 @@ export interface StoreTransfer {
 /**
  * Rename an application user id inside durable transfer aliases.
  *
- * Destination ids are non-unique and can be changed directly. Source ids are unique per
- * store, so a stale alias already using the new id is merged with the renamed account's
- * alias by keeping the newest ownership watermark.
+ * Destination ids are non-unique and can be changed directly. A source can have many
+ * ownership epochs, so each historical redirect follows the rename independently.
  */
 export const migrateStorePurchaseTransfers = async (
   client: DrizzleClient,
@@ -664,50 +674,92 @@ export const migrateStorePurchaseTransfers = async (
     .where(eq(storePurchaseTransfer.destinationUserId, oldUserId));
 
   const aliases = await client.query.storePurchaseTransfer.findMany({
-    where: inArray(storePurchaseTransfer.sourceUserId, [oldUserId, newUserId]),
+    where: eq(storePurchaseTransfer.sourceUserId, oldUserId),
   });
-  for (const store of STORE_PLATFORMS) {
-    const candidates = aliases.filter((alias) => alias.store === store);
-    if (candidates.length === 0) continue;
-    const newest = candidates.reduce((current, candidate) =>
-      candidate.transferredAt > current.transferredAt ? candidate : current,
-    );
-    const oldAlias = candidates.find((alias) => alias.sourceUserId === oldUserId);
-    const newAlias = candidates.find((alias) => alias.sourceUserId === newUserId);
-
-    // Renaming A to B turns A -> B into a no-op. It must disappear or future lifecycle
-    // lookups would detect a cycle.
-    if (newest.destinationUserId === newUserId) {
+  for (const alias of aliases) {
+    if (alias.destinationUserId === newUserId) {
       await client
         .delete(storePurchaseTransfer)
-        .where(
-          and(
-            inArray(storePurchaseTransfer.sourceUserId, [oldUserId, newUserId]),
-            eq(storePurchaseTransfer.store, store),
-          ),
-        );
+        .where(eq(storePurchaseTransfer.id, alias.id));
       continue;
     }
-
-    if (newAlias) {
+    const collision = await client.query.storePurchaseTransfer.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(storePurchaseTransfer.sourceUserId, newUserId),
+        eq(storePurchaseTransfer.store, alias.store),
+        eq(storePurchaseTransfer.transferredAt, alias.transferredAt),
+      ),
+    });
+    if (collision) {
       await client
         .update(storePurchaseTransfer)
         .set({
-          destinationUserId: newest.destinationUserId,
-          transferredAt: newest.transferredAt,
+          destinationUserId: alias.destinationUserId,
           updatedAt: new Date(),
         })
-        .where(eq(storePurchaseTransfer.id, newAlias.id));
-      if (oldAlias) {
-        await client
-          .delete(storePurchaseTransfer)
-          .where(eq(storePurchaseTransfer.id, oldAlias.id));
-      }
-    } else if (oldAlias) {
+        .where(eq(storePurchaseTransfer.id, collision.id));
+      await client
+        .delete(storePurchaseTransfer)
+        .where(eq(storePurchaseTransfer.id, alias.id));
+    } else {
       await client
         .update(storePurchaseTransfer)
         .set({ sourceUserId: newUserId, updatedAt: new Date() })
-        .where(eq(storePurchaseTransfer.id, oldAlias.id));
+        .where(eq(storePurchaseTransfer.id, alias.id));
+    }
+  }
+  await client
+    .delete(storePurchaseTransfer)
+    .where(
+      and(
+        eq(storePurchaseTransfer.sourceUserId, newUserId),
+        eq(storePurchaseTransfer.destinationUserId, newUserId),
+      ),
+    );
+};
+
+/** Merge per-store revocation watermarks before an account id is renamed. */
+export const migrateStoreEntitlementStates = async (
+  client: DrizzleClient,
+  oldUserId: string,
+  newUserId: string,
+): Promise<void> => {
+  for (const store of STORE_PLATFORMS) {
+    const [oldState, newState] = await Promise.all([
+      client.query.storeEntitlementState.findFirst({
+        where: and(
+          eq(storeEntitlementState.userId, oldUserId),
+          eq(storeEntitlementState.store, store),
+        ),
+      }),
+      client.query.storeEntitlementState.findFirst({
+        where: and(
+          eq(storeEntitlementState.userId, newUserId),
+          eq(storeEntitlementState.store, store),
+        ),
+      }),
+    ]);
+    if (!oldState) continue;
+    if (newState) {
+      await client
+        .update(storeEntitlementState)
+        .set({
+          revokedThrough:
+            oldState.revokedThrough > newState.revokedThrough
+              ? oldState.revokedThrough
+              : newState.revokedThrough,
+          updatedAt: new Date(),
+        })
+        .where(eq(storeEntitlementState.id, newState.id));
+      await client
+        .delete(storeEntitlementState)
+        .where(eq(storeEntitlementState.id, oldState.id));
+    } else {
+      await client
+        .update(storeEntitlementState)
+        .set({ userId: newUserId, updatedAt: new Date() })
+        .where(eq(storeEntitlementState.id, oldState.id));
     }
   }
 };
@@ -744,24 +796,6 @@ export const transferStorePurchases = async (
   let rowsAffected = 0;
   const effectiveDestinations = new Set<string>([destinationUserId]);
   for (const store of stores) {
-    // Flatten aliases which already pointed at a transferred source. This keeps retries
-    // of an old A -> B receipt following a later B -> C transfer too.
-    if (sourceIds.length > 0) {
-      await client
-        .update(storePurchaseTransfer)
-        .set({
-          destinationUserId,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(storePurchaseTransfer.store, store),
-            inArray(storePurchaseTransfer.destinationUserId, sourceIds),
-            lte(storePurchaseTransfer.transferredAt, transfer.occurredAt),
-          ),
-        );
-    }
-
     const mappedDestination = await transferredUserId(
       client,
       destinationUserId,
@@ -784,8 +818,7 @@ export const transferStorePurchases = async (
         })
         .onDuplicateKeyUpdate({
           set: {
-            destinationUserId: sql`IF(${storePurchaseTransfer.transferredAt} <= ${transfer.occurredAt}, ${mappedDestination}, ${storePurchaseTransfer.destinationUserId})`,
-            transferredAt: sql`GREATEST(${storePurchaseTransfer.transferredAt}, ${transfer.occurredAt})`,
+            destinationUserId: mappedDestination,
             updatedAt: new Date(),
           },
         });

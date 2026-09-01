@@ -5,6 +5,7 @@ export interface StorePurchaseSettlement {
   acceptedAt: Date | null;
   grantedAt: Date | null;
   revokedAt: Date | null;
+  expiresAt: Date | null;
   createdAt: Date;
 }
 
@@ -18,11 +19,25 @@ export interface StorePurchaseAttempt {
 }
 
 export interface StoreRestoreAttempt {
-  /** Receipt ownership visible to this account immediately before restore. */
-  baselineReceiptIds: readonly string[];
   /** Subscription product ids the native SDK says the restored account owns. */
   expectedProductIds: readonly string[];
 }
+
+export type StoreRestoreObservation = "reconciled" | "rejected" | "pending";
+export type StoreRestoreResult = "reconciled" | "rejected" | "timed-out";
+
+export const finalStoreRestoreResult = (
+  observation: StoreRestoreObservation,
+): StoreRestoreResult => (observation === "pending" ? "timed-out" : observation);
+
+/** Force a server observation even when the application's QueryClient uses staleTime Infinity. */
+export const fetchFreshStoreObservation = async <T>(
+  invalidate: () => Promise<unknown>,
+  fetch: () => Promise<T>,
+): Promise<T> => {
+  await invalidate();
+  return await fetch();
+};
 
 /** An accepted receipt remains pending until it is granted or explicitly retired. */
 export const isPendingStorePurchase = (purchase: StorePurchaseSettlement): boolean =>
@@ -46,25 +61,34 @@ export const hasSettledStorePurchase = (
 };
 
 /**
- * A restore is reconciled once every expected subscription has a terminal server receipt.
- * `changed` distinguishes a newly transferred receipt from an already-owned subscription;
- * an empty pending set alone is deliberately not a completion signal.
+ * A restore is reconciled only when every subscription the native SDK calls active has a
+ * live server entitlement: accepted, granted, unrevoked, and still paid through. Obsolete
+ * terminal receipts are evidence of rejection, never success.
  */
 export const storeRestoreReconciliation = (
   recent: StorePurchaseSettlement[],
   attempt: StoreRestoreAttempt,
-): "changed" | "already-reconciled" | null => {
-  if (attempt.expectedProductIds.length === 0) return "already-reconciled";
-  const matching = attempt.expectedProductIds.map((productId) =>
-    recent.find(
-      (purchase) =>
-        purchase.productId === productId && !isPendingStorePurchase(purchase),
-    ),
+  now = new Date(),
+): StoreRestoreObservation => {
+  if (attempt.expectedProductIds.length === 0) return "reconciled";
+  const receiptsByProduct = attempt.expectedProductIds.map((productId) =>
+    recent.filter((purchase) => purchase.productId === productId),
   );
-  if (matching.some((purchase) => !purchase)) return null;
-  return matching.some(
-    (purchase) => purchase && !attempt.baselineReceiptIds.includes(purchase.id),
-  )
-    ? "changed"
-    : "already-reconciled";
+  const hasLiveEntitlement = (purchase: StorePurchaseSettlement) =>
+    purchase.acceptedAt !== null &&
+    purchase.grantedAt !== null &&
+    purchase.revokedAt === null &&
+    purchase.expiresAt !== null &&
+    purchase.expiresAt.getTime() > now.getTime();
+  if (receiptsByProduct.every((receipts) => receipts.some(hasLiveEntitlement))) {
+    return "reconciled";
+  }
+  if (
+    receiptsByProduct.every(
+      (receipts) => receipts.length > 0 && !receipts.some(isPendingStorePurchase),
+    )
+  ) {
+    return "rejected";
+  }
+  return "pending";
 };

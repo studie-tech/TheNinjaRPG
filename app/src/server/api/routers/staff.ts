@@ -49,7 +49,6 @@ import {
   ryoTrade,
   sector,
   staffApplication,
-  storeEntitlementState,
   storePurchase,
   supportReview,
   trainingLog,
@@ -92,7 +91,10 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDeadlockError } from "@/server/utils/mysqlErrors";
-import { migrateStorePurchaseTransfers } from "@/server/utils/purchases/grant";
+import {
+  migrateStoreEntitlementStates,
+  migrateStorePurchaseTransfers,
+} from "@/server/utils/purchases/grant";
 import {
   canClearSectors,
   canCloneUser,
@@ -799,6 +801,10 @@ export const staffRouter = createTRPCRouter({
       if (fromUser.role !== "USER") {
         return { success: false, message: "Cannot change staff member's userId " };
       }
+      // These tables have per-user uniqueness. Merge them before the broad parallel rename
+      // so an existing destination watermark cannot fail after unrelated rows were moved.
+      await migrateStoreEntitlementStates(ctx.drizzle, input.userId, input.newUserId);
+      await migrateStorePurchaseTransfers(ctx.drizzle, input.userId, input.newUserId);
       // Mutate
       await Promise.all([
         ctx.drizzle
@@ -896,16 +902,6 @@ export const staffRouter = createTRPCRouter({
           .update(storePurchase)
           .set({ userId: input.newUserId })
           .where(eq(storePurchase.userId, input.userId)),
-        // Expiration watermarks must follow the receipts they protect. Otherwise a delayed
-        // pre-expiration webhook can re-grant federal status after the account id changes.
-        ctx.drizzle
-          .update(storeEntitlementState)
-          .set({ userId: input.newUserId })
-          .where(eq(storeEntitlementState.userId, input.userId)),
-        // TRANSFER aliases can mention an account in either column. The helper also
-        // merges a stale source alias already using the new id without violating the
-        // per-store source uniqueness constraint.
-        migrateStorePurchaseTransfers(ctx.drizzle, input.userId, input.newUserId),
         ctx.drizzle
           .update(userDevice)
           .set({ userId: input.newUserId })

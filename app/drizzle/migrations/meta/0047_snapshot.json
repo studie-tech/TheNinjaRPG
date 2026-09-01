@@ -10550,11 +10550,12 @@
         }
       },
       "indexes": {
-        "StorePurchaseTransfer_sourceUserId_store_key": {
-          "name": "StorePurchaseTransfer_sourceUserId_store_key",
+        "StorePurchaseTransfer_sourceUserId_store_transferredAt_key": {
+          "name": "StorePurchaseTransfer_sourceUserId_store_transferredAt_key",
           "columns": [
             "sourceUserId",
-            "store"
+            "store",
+            "transferredAt"
           ],
           "isUnique": true
         },

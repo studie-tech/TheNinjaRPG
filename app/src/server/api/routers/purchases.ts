@@ -65,6 +65,7 @@ export const purchasesRouter = createTRPCRouter({
           acceptedAt: z.date().nullable(),
           grantedAt: z.date().nullable(),
           revokedAt: z.date().nullable(),
+          expiresAt: z.date().nullable(),
           createdAt: z.date(),
         }),
       ),
@@ -81,6 +82,7 @@ export const purchasesRouter = createTRPCRouter({
           acceptedAt: storePurchase.acceptedAt,
           grantedAt: storePurchase.grantedAt,
           revokedAt: storePurchase.revokedAt,
+          expiresAt: storePurchase.expiresAt,
           createdAt: storePurchase.createdAt,
         })
         .from(storePurchase)

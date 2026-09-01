@@ -10,6 +10,8 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { platform, purchases } from "@/libs/native";
 import {
+  fetchFreshStoreObservation,
+  finalStoreRestoreResult,
   hasSettledStorePurchase,
   isPendingStorePurchase,
   type StorePurchaseAttempt,
@@ -48,6 +50,8 @@ export default function NativeStore() {
     activeSubscriptions: string[] | null;
     bound: boolean;
   } | null>(null);
+  const [bindingError, setBindingError] = useState<string | null>(null);
+  const [bindingRetry, setBindingRetry] = useState(0);
   const bindingGeneration = useRef(0);
   const recentGeneration = useRef(0);
   const [recentBaseline, setRecentBaseline] = useState<{
@@ -83,6 +87,7 @@ export default function NativeStore() {
     const generation = ++bindingGeneration.current;
     const accountId = player?.userId;
     if (!isNativeShell || !accountId) return;
+    setBindingError(null);
     if (!apiKey) {
       // isConfigured only reflects the server's webhook secret, so a build with that set
       // and the public SDK key missing would otherwise spin forever with no explanation.
@@ -104,15 +109,21 @@ export default function NativeStore() {
       }))
       .then(({ packages, customerInfo }) => {
         if (generation !== bindingGeneration.current) return;
+        if (!customerInfo) {
+          throw new Error("Could not verify your current store subscriptions");
+        }
         setPackageState({
           userId: accountId,
           packages,
-          activeSubscriptions: customerInfo?.activeSubscriptions ?? null,
+          activeSubscriptions: customerInfo.activeSubscriptions,
           bound: true,
         });
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (generation !== bindingGeneration.current) return;
+        setBindingError(
+          error instanceof Error ? error.message : "Could not connect to the store",
+        );
         setPackageState({
           userId: accountId,
           packages: [],
@@ -123,7 +134,7 @@ export default function NativeStore() {
     return () => {
       if (generation === bindingGeneration.current) bindingGeneration.current += 1;
     };
-  }, [apiKey, isNativeShell, player?.userId]);
+  }, [apiKey, bindingRetry, isNativeShell, player?.userId]);
 
   // Never expose packages fetched for the previous account, even for the render before
   // the new binding effect gets a chance to clear its state.
@@ -159,6 +170,16 @@ export default function NativeStore() {
   const purchaseBaseline =
     recentBaseline?.userId === player?.userId ? recentBaseline : null;
   const hasRecentBaseline = purchaseBaseline !== null;
+
+  /** QueryClient defaults may keep purchase data fresh forever; invalidate first. */
+  const fetchRecentFresh = useCallback(
+    async (input: { limit: number; transactionId?: string; productId?: string }) =>
+      await fetchFreshStoreObservation(
+        () => utils.purchases.recent.invalidate(input),
+        () => utils.purchases.recent.fetch(input, { staleTime: 0 }),
+      ),
+    [utils],
+  );
 
   const retryRecentBaseline = async () => {
     const accountId = player?.userId;
@@ -214,7 +235,7 @@ export default function NativeStore() {
     async (attempt: StorePurchaseAttempt) => {
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
-        const matching = await utils.purchases.recent.fetch({
+        const matching = await fetchRecentFresh({
           limit: 50,
           ...(attempt.transactionId
             ? { transactionId: attempt.transactionId }
@@ -230,26 +251,34 @@ export default function NativeStore() {
       ]);
       return data?.[0]?.id;
     },
-    [refetchRecent, utils],
+    [fetchRecentFresh, refetchRecent, utils],
   );
 
   const refreshAfterRestore = useCallback(
     async (attempt: StoreRestoreAttempt) => {
       let newestId: string | undefined;
+      let observation = storeRestoreReconciliation([], attempt);
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
-        const matching = await utils.purchases.recent.fetch({ limit: 50 });
+        const matching = (
+          await Promise.all(
+            [...new Set(attempt.expectedProductIds)].map((productId) =>
+              fetchRecentFresh({ limit: 10, productId }),
+            ),
+          )
+        ).flat();
         newestId = matching[0]?.id ?? newestId;
-        if (storeRestoreReconciliation(matching, attempt)) break;
+        observation = storeRestoreReconciliation(matching, attempt);
+        if (observation === "reconciled") break;
       }
       const [{ data }] = await Promise.all([
         refetchRecent(),
         utils.profile.getUser.invalidate(),
       ]);
       newestId = data?.[0]?.id ?? newestId;
-      return newestId;
+      return { newestId, status: finalStoreRestoreResult(observation) };
     },
-    [refetchRecent, utils],
+    [fetchRecentFresh, refetchRecent, utils],
   );
 
   const buy = async (
@@ -265,7 +294,7 @@ export default function NativeStore() {
       // Refresh again immediately before opening the store sheet. A webhook from an
       // earlier slow purchase may have landed since the screen's initial baseline.
       const [baselineRows, { data: visibleRows }] = await Promise.all([
-        utils.purchases.recent.fetch({ limit: 50, productId }),
+        fetchRecentFresh({ limit: 50, productId }),
         refetchRecent(),
       ]);
       if (!visibleRows) throw new Error("Could not verify recent purchases");
@@ -356,39 +385,40 @@ export default function NativeStore() {
     const accountId = available.userId;
     setIsRestoring(true);
     try {
-      const [baselineRows, { data: visibleRows, error: baselineError }] =
-        await Promise.all([
-          utils.purchases.recent.fetch({ limit: 50 }),
-          refetchRecent(),
-        ]);
+      const { data: visibleRows, error: baselineError } = await refetchRecent();
       if (!visibleRows) {
         throw baselineError ?? new Error("Could not verify recent purchases");
       }
       const info = await purchases.restore();
-      if (info) {
-        setPackageState((current) =>
-          current?.userId === accountId
-            ? { ...current, activeSubscriptions: info.activeSubscriptions }
-            : current,
-        );
+      if (!info) {
+        throw new Error("Could not verify restored purchases with the store");
       }
-      showMutationToast({
-        success: true,
-        message: info?.activeEntitlements.length
-          ? "Purchases restored."
-          : "No previous purchases found for this store account.",
-      });
-      if (info?.activeEntitlements.length) {
+      setPackageState((current) =>
+        current?.userId === accountId
+          ? { ...current, activeSubscriptions: info.activeSubscriptions }
+          : current,
+      );
+      if (info.activeSubscriptions.length) {
         // A TRANSFER can arrive after the first poll and may have no pending row before it
-        // moves the receipt. Wait for each restored subscription to have an explicit
-        // terminal server receipt; absence of pending rows is not completion.
-        const newestId = await refreshAfterRestore({
-          baselineReceiptIds: baselineRows.map((purchase) => purchase.id),
+        // moves the receipt. Wait for each restored subscription to have a live server
+        // entitlement; absence of pending rows is not completion.
+        const result = await refreshAfterRestore({
           expectedProductIds: info.activeSubscriptions,
         });
         setRecentBaseline((current) =>
-          current?.userId === accountId ? { userId: accountId, newestId } : current,
+          current?.userId === accountId
+            ? { userId: accountId, newestId: result.newestId }
+            : current,
         );
+        showMutationToast({
+          success: result.status === "reconciled",
+          message:
+            result.status === "reconciled"
+              ? "Purchases restored."
+              : result.status === "rejected"
+                ? "The store restored a subscription, but the server rejected its receipt. Please contact support."
+                : "The store restored a subscription, but the server is still processing it. Please try again shortly.",
+        });
       } else {
         // There is no webhook to wait for. Refresh once and finish immediately.
         const [{ data }] = await Promise.all([
@@ -402,6 +432,10 @@ export default function NativeStore() {
               : current,
           );
         }
+        showMutationToast({
+          success: true,
+          message: "No previous purchases found for this store account.",
+        });
       }
     } catch (error) {
       showMutationToast({
@@ -453,6 +487,22 @@ export default function NativeStore() {
                   Retry verification
                 </Button>
               )}
+            </div>
+          )}
+          {bindingError && (
+            <div className="rounded-lg border p-3 text-sm">
+              <p>{bindingError}</p>
+              <Button
+                className="mt-2"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setPackageState(null);
+                  setBindingRetry((attempt) => attempt + 1);
+                }}
+              >
+                Retry store connection
+              </Button>
             </div>
           )}
           <p className="mb-1 font-medium text-sm">Reputation</p>
@@ -555,7 +605,7 @@ export default function NativeStore() {
             </>
           )}
 
-          {packages.length === 0 && (
+          {packages.length === 0 && !bindingError && (
             <p className="text-muted-foreground text-sm">
               The store is not responding right now. Please try again shortly.
             </p>
