@@ -11,6 +11,7 @@ import {
 } from "@/drizzle/schema";
 import type { FederalStatus, StorePlatform } from "@/drizzle/constants";
 import {
+  extendStoreSubscription,
   grantStorePurchase,
   revokeFederalStatus,
   setFederalStatusWithStoreFloor,
@@ -50,7 +51,7 @@ const buyFederal = async (
   tier: FederalStatus,
   agoMs = 0,
   store: StorePlatform = "APPLE",
-) => {
+): Promise<string> => {
   const database = await db();
   const transactionId = nanoid();
   await grantStorePurchase(database, {
@@ -73,6 +74,7 @@ const buyFederal = async (
       .set({ createdAt: new Date(Date.now() - agoMs) })
       .where(eq(storePurchase.transactionId, transactionId));
   }
+  return transactionId;
 };
 
 const givePaypal = async (tier: FederalStatus, status = "ACTIVE") => {
@@ -209,6 +211,26 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     await buyFederal("GOLD", 70 * DAY);
     const next = await storeFederalFloor(await db(), USER);
     expect(next).toBe("NONE");
+  });
+
+  it("keeps and restores an old receipt when the store extends its paid-through date", async () => {
+    const transactionId = await buyFederal("GOLD", 70 * DAY);
+    const database = await db();
+    await database
+      .update(userData)
+      .set({ federalStatus: "NONE" })
+      .where(eq(userData.userId, USER));
+
+    await extendStoreSubscription(database, {
+      userId: USER,
+      store: "APPLE",
+      productId: "tnr_federal_gold",
+      expirationAt: new Date(Date.now() + 30 * DAY),
+      transactionId,
+    });
+
+    expect(await storeFederalFloor(database, USER)).toBe("GOLD");
+    expect(await statusOf()).toBe("GOLD");
   });
 
   it("still vouches inside the billing-retry grace window", async () => {

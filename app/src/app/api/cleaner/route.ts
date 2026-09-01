@@ -434,15 +434,16 @@ export async function GET() {
     // RENEWAL as a granting event. The window is wider than PayPal's because a failed
     // renewal opens a billing-retry grace period of up to 30 days during which the player
     // is still entitled and no RENEWAL arrives; a monthly cycle plus that grace outlasts
-    // 31 days. Revocation is event-driven through EXPIRATION, so this only has to be
-    // long enough not to strip a subscriber the store still recognises.
+    // 31 days. An explicit paid-through date takes precedence, including one moved far
+    // into the future by SUBSCRIPTION_EXTENDED. The age window remains as the fallback
+    // when a store omits expiration data. Revocation is event-driven through EXPIRATION.
     // Reputation bundles carry a NULL federalStatus and sandbox receipts never grant, so
     // neither may hold a status open.
     await drizzleDB.execute(
       sql`UPDATE ${userData} u SET u.federalStatus = 'NONE' WHERE u.federalStatus != 'NONE' AND NOT EXISTS (
         SELECT 1 FROM ${paypalSubscription} p WHERE p.affectedUserId = u.userId AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
       ) AND NOT EXISTS (
-        SELECT 1 FROM ${storePurchase} s WHERE s.userId = u.userId AND s.federalStatus IS NOT NULL AND s.acceptedAt IS NOT NULL AND s.revokedAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY
+        SELECT 1 FROM ${storePurchase} s WHERE s.userId = u.userId AND s.federalStatus IS NOT NULL AND s.acceptedAt IS NOT NULL AND s.revokedAt IS NULL AND (s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY OR s.expiresAt >= CURRENT_TIMESTAMP(3))
       )`,
     );
 

@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { env } from "@/env/server.mjs";
 import { drizzleDB } from "@/server/db";
 import {
+  extendStoreSubscription,
   grantStorePurchase,
   isSandboxGrantee,
   revokeFederalStatus,
@@ -10,6 +11,7 @@ import {
 } from "@/server/utils/purchases/grant";
 import {
   classifyEvent,
+  expirationAt,
   idempotencyKey,
   isAuthorized,
   isRefund,
@@ -81,6 +83,24 @@ export async function POST(request: Request) {
       });
       return Response.json({ handled: "revoked" });
     }
+    if (action === "extend") {
+      if (isSandbox(event.environment) && !isSandboxGrantee(appUserId)) {
+        return Response.json({ handled: "ignored" });
+      }
+      if (!event.store || !event.product_id) {
+        throw new Error("RevenueCat extension is missing its store or product");
+      }
+      const expiresAt = expirationAt(event);
+      if (!expiresAt) throw new Error("RevenueCat extension has no expiration");
+      await extendStoreSubscription(drizzleDB, {
+        userId: appUserId,
+        store: toStorePlatform(event.store),
+        productId: event.product_id,
+        expirationAt: expiresAt,
+        transactionId: event.transaction_id,
+      });
+      return Response.json({ handled: "extended" });
+    }
     if (action === "grant" && event.product_id) {
       const outcome = await grantStorePurchase(drizzleDB, {
         userId: appUserId,
@@ -89,6 +109,7 @@ export async function POST(request: Request) {
         store: toStorePlatform(event.store),
         isSandbox: isSandbox(event.environment),
         purchasedAt: purchasedAt(event),
+        expiresAt: expirationAt(event),
         raw: body,
       });
       return Response.json({ handled: outcome.status });

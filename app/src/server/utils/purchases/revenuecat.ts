@@ -67,6 +67,7 @@ const GRANTING_EVENTS = new Set([
  * A refund is the exception, and it arrives as a CANCELLATION too. See `isRefund`.
  */
 const REVOKING_EVENTS = new Set(["EXPIRATION"]);
+const EXTENDING_EVENTS = new Set(["SUBSCRIPTION_EXTENDED"]);
 
 /**
  * Whether a CANCELLATION is a refund rather than a lapse.
@@ -79,11 +80,12 @@ const REVOKING_EVENTS = new Set(["EXPIRATION"]);
 export const isRefund = (event: RevenueCatEvent): boolean =>
   event.type === "CANCELLATION" && event.cancel_reason === "CUSTOMER_SUPPORT";
 
-export type EventAction = "grant" | "revoke" | "ignore";
+export type EventAction = "grant" | "revoke" | "extend" | "ignore";
 
 export const classifyEvent = (type: string): EventAction => {
   if (GRANTING_EVENTS.has(type)) return "grant";
   if (REVOKING_EVENTS.has(type)) return "revoke";
+  if (EXTENDING_EVENTS.has(type)) return "extend";
   return "ignore";
 };
 
@@ -121,6 +123,10 @@ export const purchasedAt = (event: RevenueCatEvent): Date =>
     : event.event_timestamp_ms
       ? new Date(event.event_timestamp_ms)
       : new Date();
+
+/** The current paid-through date when RevenueCat provides one. */
+export const expirationAt = (event: RevenueCatEvent): Date | null =>
+  event.expiration_at_ms ? new Date(event.expiration_at_ms) : null;
 
 export const isAuthorized = (
   header: string | null,

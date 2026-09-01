@@ -5668,6 +5668,8 @@ export const storePurchase = mysqlTable(
     grantedAt: datetime("grantedAt", { mode: "date", fsp: 3 }),
     /** Store transaction/billing-period time, independent of webhook delivery order. */
     purchasedAt: datetime("purchasedAt", { mode: "date", fsp: 3 }).notNull(),
+    /** End of the paid entitlement period, including extensions granted by the store. */
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }),
     /**
      * When the store told us the subscription this receipt paid for had ended.
      *

@@ -86,8 +86,7 @@ public class TNRStatusWidget extends AppWidgetProvider {
             copyIfMissing(local, remote, "hospitalUntil");
             copyIfMissing(local, remote, "activeQuest");
             copyIfMissing(local, remote, "questProgress");
-            TNRSnapshotStore.save(context, remote.toString());
-            return true;
+            return TNRSnapshotStore.saveIfUnchanged(context, raw, remote.toString());
         } catch (Exception ignored) {
             return false;
         } finally {

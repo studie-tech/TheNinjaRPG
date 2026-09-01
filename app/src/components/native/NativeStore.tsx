@@ -142,12 +142,35 @@ export default function NativeStore() {
     [refetchRecent, utils],
   );
 
-  const buy = async (entry: purchases.StorePackage, productId: string) => {
+  const buy = async (
+    entry: purchases.StorePackage,
+    productId: string,
+    isFederal = false,
+  ) => {
     if (!available?.bound || available.userId !== player?.userId) return;
     const previousNewestId = recent?.[0]?.id;
     setBusyProduct(productId);
     try {
-      const result = await purchases.purchase(entry);
+      let storeProductChangeInfo: purchases.StoreProductChangeInfo | undefined;
+      if (storePlatform === "android" && isFederal && catalogue?.federal) {
+        const customerInfo = await purchases.getCustomerInfo();
+        const change = purchases.androidSubscriptionChange(
+          customerInfo?.activeSubscriptions ?? [],
+          productId,
+          catalogue.federal,
+        );
+        if (change.status === "active") {
+          showMutationToast({
+            success: false,
+            message: "This subscription is already active in your Play account.",
+          });
+          return;
+        }
+        if (change.status === "change") {
+          storeProductChangeInfo = change.storeProductChangeInfo;
+        }
+      }
+      const result = await purchases.purchase(entry, storeProductChangeInfo);
       if (result.status === "cancelled") return;
       if (result.status === "error") {
         showMutationToast({ success: false, message: result.message });
@@ -297,7 +320,9 @@ export default function NativeStore() {
                       disabled={
                         busyProduct !== null || isPending || !listed || isCurrent
                       }
-                      onClick={() => listed && void buy(listed, expectedProductId)}
+                      onClick={() =>
+                        listed && void buy(listed, expectedProductId, true)
+                      }
                     >
                       {busyProduct === expectedProductId || isPending ? (
                         <Loader2 className="mr-1 h-4 w-4 animate-spin" />

@@ -17,6 +17,7 @@ import {
   isNull,
   lt,
   lte,
+  or,
   sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -46,6 +47,8 @@ export interface StoreGrant {
   isSandbox: boolean;
   /** Start of the billing period/store transaction, not webhook delivery time. */
   purchasedAt: Date;
+  /** Current paid-through time, when the store supplies one. */
+  expiresAt?: Date | null;
   raw: unknown;
 }
 
@@ -163,6 +166,7 @@ export const grantStorePurchase = async (
       isSandbox: grant.isSandbox,
       acceptedAt: accepted ? new Date() : null,
       purchasedAt: grant.purchasedAt,
+      expiresAt: grant.expiresAt ?? null,
       rawData: grant.raw as never,
     });
   } catch (error) {
@@ -278,6 +282,68 @@ export const grantStorePurchase = async (
     });
     throw error;
   }
+};
+
+export interface StoreExtension {
+  userId: string;
+  store: StorePlatform;
+  productId: string;
+  expirationAt: Date;
+  transactionId?: string | null;
+}
+
+/**
+ * Apply a store-granted billing extension to the live subscription receipt.
+ *
+ * Extensions carry no new purchase value, but their paid-through time is durable evidence
+ * for reconciliation. A missing receipt is retryable: RevenueCat can deliver out of order,
+ * so its purchase webhook should be allowed to land before this event is acknowledged.
+ */
+export const extendStoreSubscription = async (
+  client: DrizzleClient,
+  extension: StoreExtension,
+): Promise<void> => {
+  const liveReceipt = and(
+    eq(storePurchase.userId, extension.userId),
+    eq(storePurchase.store, extension.store),
+    eq(storePurchase.productId, extension.productId),
+    isNotNull(storePurchase.acceptedAt),
+    isNotNull(storePurchase.federalStatus),
+    isNull(storePurchase.revokedAt),
+  );
+  const exact = extension.transactionId
+    ? await client.query.storePurchase.findFirst({
+        columns: { id: true },
+        where: and(
+          eq(storePurchase.transactionId, extension.transactionId),
+          liveReceipt,
+        ),
+      })
+    : undefined;
+  const receipt =
+    exact ??
+    (await client.query.storePurchase.findFirst({
+      columns: { id: true },
+      where: liveReceipt,
+      orderBy: desc(storePurchase.purchasedAt),
+    }));
+  if (!receipt) {
+    throw new Error(
+      `No live receipt to extend for ${extension.userId}/${extension.productId}`,
+    );
+  }
+
+  await client
+    .update(storePurchase)
+    .set({
+      expiresAt: sql`GREATEST(COALESCE(${storePurchase.expiresAt}, ${storePurchase.purchasedAt}), ${extension.expirationAt})`,
+    })
+    .where(eq(storePurchase.id, receipt.id));
+
+  // The cleaner may have run before a delayed extension arrived. Re-derive immediately
+  // so the newly durable entitlement also restores any tier it still pays for.
+  const paypal = await paypalFederalFloor(client, extension.userId);
+  await setFederalStatusWithStoreFloor(client, extension.userId, paypal);
 };
 
 /**
@@ -527,7 +593,10 @@ export const storeFederalFloor = async (
       isNotNull(storePurchase.acceptedAt),
       isNotNull(storePurchase.federalStatus),
       isNull(storePurchase.revokedAt),
-      gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
+      or(
+        gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
+        gte(storePurchase.expiresAt, new Date()),
+      ),
     ),
   });
   return highest(rows.map((row) => row.federalStatus ?? "NONE"));
@@ -548,7 +617,10 @@ export const setFederalStatusWithStoreFloor = async (
     eq(storePurchase.userId, userId),
     isNotNull(storePurchase.acceptedAt),
     isNull(storePurchase.revokedAt),
-    gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
+    or(
+      gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
+      gte(storePurchase.expiresAt, new Date()),
+    ),
   );
   const hasTier = (tier: FederalStatus) => sql`EXISTS (
     SELECT 1 FROM ${storePurchase}

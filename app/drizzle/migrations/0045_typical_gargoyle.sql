@@ -1,0 +1,1 @@
+ALTER TABLE `StorePurchase` ADD `expiresAt` datetime(3);

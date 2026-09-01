@@ -102,6 +102,24 @@ sync_sources(project, app, "TNRShared", "TNRShared", [widget])
 sync_sources(project, app, "Plugins", "App/Plugins")
 sync_sources(project, widget, WIDGET_TARGET, WIDGET_TARGET)
 
+# Privacy manifests belong in each executable bundle that accesses the App Group defaults.
+# Merely compiling the shared source into both targets is not enough for App Store privacy
+# validation: each target must copy its own manifest into its resources.
+def sync_resource(project, target, group_name, relative_dir, filename)
+  group = project.main_group.find_subpath(group_name, true)
+  group.set_path(relative_dir) unless group.path
+  absolute = File.join(File.dirname(project.path), relative_dir, filename)
+  return unless File.exist?(absolute)
+
+  ref = group.files.find { |file| file.path == filename } || group.new_file(filename)
+  return if target.resources_build_phase.files_references.include?(ref)
+
+  target.resources_build_phase.add_file_reference(ref)
+end
+
+sync_resource(project, app, APP_TARGET, "App", "PrivacyInfo.xcprivacy")
+sync_resource(project, widget, WIDGET_TARGET, WIDGET_TARGET, "PrivacyInfo.xcprivacy")
+
 # Widget assets
 widget_assets = File.join(File.dirname(PROJECT_PATH), WIDGET_TARGET, "Assets.xcassets")
 if Dir.exist?(widget_assets)

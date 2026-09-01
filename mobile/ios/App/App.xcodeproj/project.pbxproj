@@ -10,6 +10,7 @@
 		1C8083588A083F1FC03B7951 /* TNRSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899CEDBA5E6D382BF26DE003 /* TNRSnapshot.swift */; };
 		1FC4635F0B216E212AFDA10C /* TNRWidgetSyncPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D066DBD0D1840E451A3EA2B5 /* TNRWidgetSyncPlugin.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
+		31C4BF5C69F9F1E6AB9571C5 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C478BA8F5F68928B1D2560AB /* PrivacyInfo.xcprivacy */; };
 		34025539633132EC98166752 /* TNRActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F0CFD83A9684DF1A5393480 /* TNRActivityAttributes.swift */; };
 		42443A6A030C1899CDB19E7A /* TNRLiveActivityPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24440524767CF85BB54BBD31 /* TNRLiveActivityPlugin.swift */; };
 		45FE3861B8E77A3A71E1CBA3 /* TNRWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C530E1E942B17F088B58612 /* TNRWidgetBundle.swift */; };
@@ -24,6 +25,7 @@
 		65AA16B3BB8587CBD75444B9 /* SnapshotProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEEE63858F156FE5FDA69B40 /* SnapshotProvider.swift */; };
 		8D9FF00A30175EF55B969974 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 5F66428BBB0DDFBFF0AF014D /* Sentry */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		9E45A2A9F8CA67E8BE105562 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F5EB9BEA4D03E70B809AFC51 /* PrivacyInfo.xcprivacy */; };
 		AE1298BE506C5AC46DC224A1 /* TNRAudioSessionPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F7172005B14E3D726CE3128 /* TNRAudioSessionPlugin.swift */; };
 		BC0DAD1846EE103C1CC53A55 /* QuestWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 456523F6A3B3CB4CB4BB6E32 /* QuestWidget.swift */; };
 		C69F75B0060FF3321B44BE89 /* WidgetStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8634C162AD2BE24A0FBC514 /* WidgetStyle.swift */; };
@@ -81,10 +83,12 @@
 		99E7DEDDF35E641214B5D944 /* TNRWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TNRWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9CEEF1E86AD365AD0F0E8397 /* TNRAppleAuthPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TNRAppleAuthPlugin.swift; sourceTree = "<group>"; };
 		B98FA7FE72BF8191FED2697D /* StatusWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StatusWidget.swift; sourceTree = "<group>"; };
+		C478BA8F5F68928B1D2560AB /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D066DBD0D1840E451A3EA2B5 /* TNRWidgetSyncPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TNRWidgetSyncPlugin.swift; sourceTree = "<group>"; };
 		D3282FB2C7BEBBBB0654433C /* VillageWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VillageWidget.swift; sourceTree = "<group>"; };
 		DEEE63858F156FE5FDA69B40 /* SnapshotProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnapshotProvider.swift; sourceTree = "<group>"; };
 		E8634C162AD2BE24A0FBC514 /* WidgetStyle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetStyle.swift; sourceTree = "<group>"; };
+		F5EB9BEA4D03E70B809AFC51 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -156,6 +160,7 @@
 				504EC3131FED79650016851F /* Info.plist */,
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
+				C478BA8F5F68928B1D2560AB /* PrivacyInfo.xcprivacy */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -170,6 +175,7 @@
 				1C530E1E942B17F088B58612 /* TNRWidgetBundle.swift */,
 				D3282FB2C7BEBBBB0654433C /* VillageWidget.swift */,
 				E8634C162AD2BE24A0FBC514 /* WidgetStyle.swift */,
+				F5EB9BEA4D03E70B809AFC51 /* PrivacyInfo.xcprivacy */,
 			);
 			name = TNRWidgets;
 			path = TNRWidgets;
@@ -314,6 +320,7 @@
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
+				31C4BF5C69F9F1E6AB9571C5 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -321,6 +328,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9E45A2A9F8CA67E8BE105562 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

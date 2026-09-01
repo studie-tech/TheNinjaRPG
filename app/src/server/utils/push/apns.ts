@@ -13,6 +13,7 @@
 
 import { type ClientHttp2Session, connect, constants } from "node:http2";
 import { env } from "@/env/server.mjs";
+import { retryRejectedOnce } from "./authRetry";
 import { mapWithConcurrency } from "./batch";
 import { signJwt } from "./jwt";
 import { apnsAlertPayload } from "./payloads";
@@ -75,11 +76,16 @@ interface ApnsRequest {
   priority?: 5 | 10;
 }
 
+type ApnsAttemptResult = PushResult & {
+  /** Internal marker: this request may be replayed once after refreshing batch auth. */
+  authExpired?: boolean;
+};
+
 const sendOne = (
   session: ClientHttp2Session,
   providerToken: string,
   request: ApnsRequest,
-): Promise<PushResult> =>
+): Promise<ApnsAttemptResult> =>
   new Promise((resolve) => {
     // A synchronous failure here — most likely `session.request` on a session that has
     // already closed — resolves this one token as retryable rather than rejecting the
@@ -100,7 +106,7 @@ const sendOverSession = (
   session: ClientHttp2Session,
   providerToken: string,
   request: ApnsRequest,
-  resolve: (result: PushResult) => void,
+  resolve: (result: ApnsAttemptResult) => void,
 ): void => {
   const body = Buffer.from(JSON.stringify(request.payload));
   // Live Activity updates address a different topic than the app itself.
@@ -127,7 +133,7 @@ const sendOverSession = (
   let status = 0;
   const chunks: Buffer[] = [];
   let settled = false;
-  const settle = (result: PushResult) => {
+  const settle = (result: ApnsAttemptResult) => {
     if (settled) return;
     settled = true;
     resolve(result);
@@ -164,17 +170,40 @@ const sendOverSession = (
       settle({ token: request.token, status: "expired", reason });
       return;
     }
-    // A rejected provider token is worth retrying once with a fresh one.
-    if (status === 403) resetProviderToken();
+    // Only ExpiredProviderToken says the shared JWT should be refreshed. Other 403s are
+    // configuration failures and replaying every device would produce the same result.
+    const authExpired = status === 403 && reason === "ExpiredProviderToken";
     settle({
       token: request.token,
       status: "failed",
       reason: `${status} ${reason}`,
-      retryable: status === 429 || status >= 500,
+      retryable: authExpired || status === 429 || status >= 500,
+      ...(authExpired ? { authExpired: true } : {}),
     });
   });
 
   stream.end(body);
+};
+
+/** Refresh once, but reuse a token another concurrent batch already replaced. */
+const providerTokenAfterRejection = (rejectedToken: string): string => {
+  if (cachedToken?.jwt && cachedToken.jwt !== rejectedToken)
+    return buildProviderToken();
+  resetProviderToken();
+  return buildProviderToken();
+};
+
+const publicResult = (result: ApnsAttemptResult): PushResult => {
+  if (result.status === "sent") return { token: result.token, status: "sent" };
+  if (result.status === "expired") {
+    return { token: result.token, status: "expired", reason: result.reason };
+  }
+  return {
+    token: result.token,
+    status: "failed",
+    reason: result.reason,
+    retryable: result.retryable,
+  };
 };
 
 const parseReason = (raw: string): string => {
@@ -223,9 +252,20 @@ export const sendBatch = async (requests: ApnsRequest[]): Promise<PushResult[]> 
   session.setTimeout(SESSION_TIMEOUT_MS, () => session.close());
 
   try {
-    return await mapWithConcurrency(requests, (request) =>
+    const results = await mapWithConcurrency(requests, (request) =>
       sendOne(session, providerToken, request),
     );
+    await retryRejectedOnce(
+      results,
+      (result) => result.authExpired === true,
+      async (rejected) => {
+        const refreshedToken = providerTokenAfterRejection(providerToken);
+        return await mapWithConcurrency(rejected, (index) =>
+          sendOne(session, refreshedToken, requests[index] as ApnsRequest),
+        );
+      },
+    );
+    return results.map(publicResult);
   } finally {
     session.close();
   }

@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import java.util.Objects;
 
 /**
  * The player snapshot the web app writes for the home screen widgets.
@@ -19,18 +20,37 @@ final class TNRSnapshotStore {
 
     private TNRSnapshotStore() {}
 
-    static void save(Context context, String json) {
+    static synchronized void save(Context context, String json) {
         prefs(context).edit().putString(KEY, json).apply();
         notifyWidgets(context);
     }
 
-    static void clear(Context context) {
+    static synchronized void clear(Context context) {
         prefs(context).edit().remove(KEY).apply();
         notifyWidgets(context);
     }
 
-    static String load(Context context) {
+    static synchronized String load(Context context) {
         return prefs(context).getString(KEY, null);
+    }
+
+    /**
+     * Persist a network refresh only if the app has not changed accounts since it began.
+     * SharedPreferences updates its in-memory value before apply() returns, and the shared
+     * monitor serializes this with save/clear, so an old response cannot restore a signed-
+     * out player's token or overwrite a newer player's snapshot.
+     */
+    static synchronized boolean saveIfUnchanged(
+        Context context,
+        String expectedJson,
+        String newJson
+    ) {
+        if (!Objects.equals(prefs(context).getString(KEY, null), expectedJson)) {
+            return false;
+        }
+        prefs(context).edit().putString(KEY, newJson).apply();
+        notifyWidgets(context);
+        return true;
     }
 
     private static SharedPreferences prefs(Context context) {

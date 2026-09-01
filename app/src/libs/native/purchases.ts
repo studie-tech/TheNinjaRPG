@@ -46,8 +46,63 @@ export interface StorePackage {
 export interface CustomerInfo {
   /** Entitlement ids currently active, e.g. `["federal"]`. */
   activeEntitlements: string[];
+  /** Store product ids for subscriptions currently active on this account. */
+  activeSubscriptions: string[];
   originalAppUserId: string;
 }
+
+export type StoreReplacementMode =
+  | "WITHOUT_PRORATION"
+  | "WITH_TIME_PRORATION"
+  | "CHARGE_FULL_PRICE"
+  | "CHARGE_PRORATED_PRICE"
+  | "DEFERRED";
+
+export interface StoreProductChangeInfo {
+  oldProductIdentifier: string;
+  replacementMode: StoreReplacementMode;
+}
+
+interface FederalPlan {
+  androidProductId: string;
+}
+
+export type AndroidSubscriptionChange =
+  | { status: "new" }
+  | { status: "active" }
+  | { status: "change"; storeProductChangeInfo: StoreProductChangeInfo };
+
+/**
+ * Describe a Play subscription replacement from the catalogue's tier order.
+ *
+ * Play requires the old product id when changing base plans. Upgrades take effect now
+ * with a prorated charge; downgrades are deferred so already-paid access is not shortened.
+ */
+export const androidSubscriptionChange = (
+  activeSubscriptions: string[],
+  targetProductId: string,
+  plans: readonly FederalPlan[],
+): AndroidSubscriptionChange => {
+  const targetIndex = plans.findIndex(
+    (plan) => plan.androidProductId === targetProductId,
+  );
+  const activeProductId = activeSubscriptions.find((productId) =>
+    plans.some((plan) => plan.androidProductId === productId),
+  );
+  if (!activeProductId || targetIndex < 0) return { status: "new" };
+  if (activeProductId === targetProductId) return { status: "active" };
+
+  const activeIndex = plans.findIndex(
+    (plan) => plan.androidProductId === activeProductId,
+  );
+  return {
+    status: "change",
+    storeProductChangeInfo: {
+      oldProductIdentifier: activeProductId,
+      replacementMode: targetIndex > activeIndex ? "CHARGE_PRORATED_PRICE" : "DEFERRED",
+    },
+  };
+};
 
 export const isSupported = (): boolean => isNative() && hasPlugin(PLUGIN);
 
@@ -132,12 +187,18 @@ export type PurchaseOutcome =
  * Present the store's purchase sheet. Cancellation is reported separately because it is
  * the player changing their mind, not something to show an error for.
  */
-export const purchase = async (aPackage: StorePackage): Promise<PurchaseOutcome> => {
+export const purchase = async (
+  aPackage: StorePackage,
+  storeProductChangeInfo?: StoreProductChangeInfo,
+): Promise<PurchaseOutcome> => {
   try {
     const result = await invoke<{
       transaction?: { transactionIdentifier?: string };
       userCancelled?: boolean;
-    }>(PLUGIN, "purchasePackage", { aPackage });
+    }>(PLUGIN, "purchasePackage", {
+      aPackage,
+      ...(storeProductChangeInfo ? { storeProductChangeInfo } : {}),
+    });
     if (result.userCancelled) return { status: "cancelled" };
     return {
       status: "purchased",
@@ -172,12 +233,18 @@ const toCustomerInfo = (raw: unknown): CustomerInfo | undefined => {
   const info = raw as
     | {
         entitlements?: { active?: Record<string, unknown> };
+        activeSubscriptions?: unknown;
         originalAppUserId?: string;
       }
     | undefined;
   if (!info) return undefined;
   return {
     activeEntitlements: Object.keys(info.entitlements?.active ?? {}),
+    activeSubscriptions: Array.isArray(info.activeSubscriptions)
+      ? info.activeSubscriptions.filter(
+          (subscription): subscription is string => typeof subscription === "string",
+        )
+      : [],
     originalAppUserId: info.originalAppUserId ?? "",
   };
 };

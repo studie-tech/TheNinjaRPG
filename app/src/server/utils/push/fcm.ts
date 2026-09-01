@@ -7,6 +7,7 @@
  */
 
 import { env } from "@/env/server.mjs";
+import { retryRejectedOnce } from "./authRetry";
 import { mapWithConcurrency } from "./batch";
 import { signJwt } from "./jwt";
 import { fcmMessage } from "./payloads";
@@ -24,6 +25,7 @@ interface CachedAccessToken {
 }
 
 let cachedAccessToken: CachedAccessToken | null = null;
+let accessTokenPromise: Promise<string> | null = null;
 
 export const isConfigured = (): boolean =>
   Boolean(env.FCM_PROJECT_ID && env.FCM_CLIENT_EMAIL && env.FCM_PRIVATE_KEY);
@@ -31,6 +33,7 @@ export const isConfigured = (): boolean =>
 /** Drop the cached access token. Used by tests and after a 401. */
 export const resetAccessToken = (): void => {
   cachedAccessToken = null;
+  accessTokenPromise = null;
 };
 
 const buildAssertion = (): string => {
@@ -53,37 +56,49 @@ const getAccessToken = async (): Promise<string> => {
   if (cachedAccessToken && cachedAccessToken.expiresAt - EXPIRY_SKEW_MS > now) {
     return cachedAccessToken.token;
   }
-  const response = await fetch(TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: buildAssertion(),
-    }),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    throw new Error(`FCM token exchange failed: ${response.status}`);
+  if (!accessTokenPromise) {
+    accessTokenPromise = (async () => {
+      const response = await fetch(TOKEN_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+          assertion: buildAssertion(),
+        }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        throw new Error(`FCM token exchange failed: ${response.status}`);
+      }
+      const payload = (await response.json()) as {
+        access_token?: string;
+        expires_in?: number;
+      };
+      if (!payload.access_token) {
+        throw new Error("FCM token exchange returned no access token");
+      }
+      cachedAccessToken = {
+        token: payload.access_token,
+        expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
+      };
+      return cachedAccessToken.token;
+    })().finally(() => {
+      accessTokenPromise = null;
+    });
   }
-  const payload = (await response.json()) as {
-    access_token?: string;
-    expires_in?: number;
-  };
-  if (!payload.access_token) {
-    throw new Error("FCM token exchange returned no access token");
-  }
-  cachedAccessToken = {
-    token: payload.access_token,
-    expiresAt: now + (payload.expires_in ?? 3600) * 1000,
-  };
-  return cachedAccessToken.token;
+  return accessTokenPromise;
+};
+
+type FcmAttemptResult = PushResult & {
+  /** Internal marker: retry this request once after refreshing the shared credential. */
+  authRejected?: boolean;
 };
 
 const sendOne = async (
   accessToken: string,
   token: string,
   message: PushMessage,
-): Promise<PushResult> => {
+): Promise<FcmAttemptResult> => {
   try {
     const response = await fetch(
       `https://fcm.googleapis.com/v1/projects/${env.FCM_PROJECT_ID}/messages:send`,
@@ -98,8 +113,6 @@ const sendOne = async (
       },
     );
     if (response.ok) return { token, status: "sent" };
-    if (response.status === 401) resetAccessToken();
-
     const body = (await response.json().catch(() => ({}))) as {
       error?: { status?: string; message?: string; details?: { errorCode?: string }[] };
     };
@@ -114,7 +127,9 @@ const sendOne = async (
       token,
       status: "failed",
       reason: `${response.status} ${code}`,
-      retryable: response.status === 429 || response.status >= 500,
+      retryable:
+        response.status === 401 || response.status === 429 || response.status >= 500,
+      ...(response.status === 401 ? { authRejected: true } : {}),
     };
   } catch (error) {
     return {
@@ -124,6 +139,28 @@ const sendOne = async (
       retryable: true,
     };
   }
+};
+
+/** Refresh once, but share an exchange already started by another concurrent batch. */
+const accessTokenAfterRejection = (rejectedToken: string): Promise<string> => {
+  if (cachedAccessToken?.token && cachedAccessToken.token !== rejectedToken) {
+    return getAccessToken();
+  }
+  cachedAccessToken = null;
+  return getAccessToken();
+};
+
+const publicResult = (result: FcmAttemptResult): PushResult => {
+  if (result.status === "sent") return { token: result.token, status: "sent" };
+  if (result.status === "expired") {
+    return { token: result.token, status: "expired", reason: result.reason };
+  }
+  return {
+    token: result.token,
+    status: "failed",
+    reason: result.reason,
+    retryable: result.retryable,
+  };
 };
 
 /** Deliver an alert to every token. Never throws. */
@@ -152,5 +189,18 @@ export const sendAlerts = async (
       retryable: true,
     }));
   }
-  return mapWithConcurrency(tokens, (token) => sendOne(accessToken, token, message));
+  const results = await mapWithConcurrency(tokens, (token) =>
+    sendOne(accessToken, token, message),
+  );
+  await retryRejectedOnce(
+    results,
+    (result) => result.authRejected === true,
+    async (rejected) => {
+      const refreshedToken = await accessTokenAfterRejection(accessToken);
+      return await mapWithConcurrency(rejected, (index) =>
+        sendOne(refreshedToken, tokens[index] as string, message),
+      );
+    },
+  );
+  return results.map(publicResult);
 };

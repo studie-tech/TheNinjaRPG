@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// The player state the app writes into the shared container for the widgets to render.
 ///
@@ -50,9 +51,42 @@ public enum TNRSnapshotStore {
         Bundle.main.object(forInfoDictionaryKey: "TNRAppGroup") as? String
         ?? "group.com.theninjarpg.app"
     private static let key = "tnr.widget.snapshot"
+    private static let processLock = NSLock()
 
     private static var defaults: UserDefaults? {
         UserDefaults(suiteName: appGroup)
+    }
+
+    /// Serialize all reads and writes across the app and widget extension. The process
+    /// lock covers same-process callers; flock covers the two executable processes sharing
+    /// the App Group. Every store operation participates, making compare-and-save atomic.
+    private static func withLock<T>(_ operation: () -> T) -> T {
+        processLock.lock()
+        defer { processLock.unlock() }
+
+        guard let container = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroup
+        ) else { return operation() }
+        let descriptor = open(
+            container.appendingPathComponent(".tnr-snapshot.lock").path,
+            O_CREAT | O_RDWR,
+            S_IRUSR | S_IWUSR
+        )
+        guard descriptor >= 0 else { return operation() }
+        defer {
+            flock(descriptor, LOCK_UN)
+            close(descriptor)
+        }
+        guard flock(descriptor, LOCK_EX) == 0 else { return operation() }
+        return operation()
+    }
+
+    private static func loadUnlocked() -> TNRSnapshot? {
+        guard let defaults else { return nil }
+        defaults.synchronize()
+        guard let json = defaults.string(forKey: key),
+              let data = json.data(using: .utf8) else { return nil }
+        return try? makeDecoder().decode(TNRSnapshot.self, from: data)
     }
 
     /// ISO-8601 with fractional seconds, which is what `Date.toISOString()` produces.
@@ -75,7 +109,11 @@ public enum TNRSnapshotStore {
     }
 
     public static func save(json: String) {
-        defaults?.set(json, forKey: key)
+        withLock {
+            guard let defaults else { return }
+            defaults.set(json, forKey: key)
+            defaults.synchronize()
+        }
     }
 
     /// Persist a snapshot produced by native code rather than the web bridge.
@@ -87,13 +125,35 @@ public enum TNRSnapshotStore {
         save(json: json)
     }
 
+    /// Save a network refresh only while the account snapshot it started from is current.
+    ///
+    /// The app can sign out or bind another player while the widget request is in flight.
+    /// In that case persisting the response would restore the previous player's token and
+    /// stats after the app deliberately replaced or cleared them.
+    @discardableResult
+    public static func save(snapshot: TNRSnapshot, ifUnchangedFrom expected: TNRSnapshot) -> Bool {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(snapshot),
+              let json = String(data: data, encoding: .utf8) else { return false }
+        return withLock {
+            guard let defaults else { return false }
+            guard loadUnlocked() == expected else { return false }
+            defaults.set(json, forKey: key)
+            defaults.synchronize()
+            return true
+        }
+    }
+
     public static func clear() {
-        defaults?.removeObject(forKey: key)
+        withLock {
+            guard let defaults else { return }
+            defaults.removeObject(forKey: key)
+            defaults.synchronize()
+        }
     }
 
     public static func load() -> TNRSnapshot? {
-        guard let json = defaults?.string(forKey: key),
-              let data = json.data(using: .utf8) else { return nil }
-        return try? makeDecoder().decode(TNRSnapshot.self, from: data)
+        withLock { loadUnlocked() }
     }
 }

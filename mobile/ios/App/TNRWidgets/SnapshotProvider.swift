@@ -63,8 +63,10 @@ struct SnapshotProvider: TimelineProvider {
             // WidgetKit may terminate this extension after completion. Persist first so
             // the next timeline starts from the successful refresh instead of rolling
             // back to the stale in-app snapshot when the network is unavailable.
-            TNRSnapshotStore.save(snapshot: remote)
-            completion(remote)
+            let saved = TNRSnapshotStore.save(snapshot: remote, ifUnchangedFrom: snapshot)
+            // If the app changed accounts during the request, render its newer state and
+            // never let this response put the previous player's credentials back.
+            completion(saved ? remote : TNRSnapshotStore.load())
         }.resume()
     }
 

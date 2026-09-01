@@ -4,9 +4,13 @@ import {
   STORE_REP_PRODUCTS,
 } from "@/drizzle/constants";
 import { dollars2reps } from "@/utils/paypal";
-import { productIdForPackage } from "@/libs/native/purchases";
+import {
+  androidSubscriptionChange,
+  productIdForPackage,
+} from "@/libs/native/purchases";
 import {
   classifyEvent,
+  expirationAt,
   idempotencyKey,
   isAuthorized,
   isRefund,
@@ -58,6 +62,52 @@ describe("store catalogue", () => {
     const prices = STORE_REP_PRODUCTS.map((p) => p.usd);
     expect([...prices].sort((a, b) => a - b)).toEqual(prices);
   });
+
+  it("uses Play's replacement flow for subscription tier changes", () => {
+    expect(
+      androidSubscriptionChange(
+        ["tnr_federal:normal"],
+        "tnr_federal:gold",
+        STORE_FEDERAL_PRODUCTS,
+      ),
+    ).toEqual({
+      status: "change",
+      storeProductChangeInfo: {
+        oldProductIdentifier: "tnr_federal:normal",
+        replacementMode: "CHARGE_PRORATED_PRICE",
+      },
+    });
+    expect(
+      androidSubscriptionChange(
+        ["tnr_federal:gold"],
+        "tnr_federal:silver",
+        STORE_FEDERAL_PRODUCTS,
+      ),
+    ).toEqual({
+      status: "change",
+      storeProductChangeInfo: {
+        oldProductIdentifier: "tnr_federal:gold",
+        replacementMode: "DEFERRED",
+      },
+    });
+  });
+
+  it("does not replace a new or already-active Play subscription", () => {
+    expect(
+      androidSubscriptionChange(
+        [],
+        "tnr_federal:gold",
+        STORE_FEDERAL_PRODUCTS,
+      ),
+    ).toEqual({ status: "new" });
+    expect(
+      androidSubscriptionChange(
+        ["tnr_federal:gold"],
+        "tnr_federal:gold",
+        STORE_FEDERAL_PRODUCTS,
+      ),
+    ).toEqual({ status: "active" });
+  });
 });
 
 describe("revenuecat webhook classification", () => {
@@ -86,6 +136,17 @@ describe("revenuecat webhook classification", () => {
     expect(classifyEvent("CANCELLATION")).toBe("ignore");
     expect(classifyEvent("BILLING_ISSUE")).toBe("ignore");
     expect(classifyEvent("TEST")).toBe("ignore");
+  });
+
+  it("extends an existing receipt without granting a second purchase", () => {
+    expect(classifyEvent("SUBSCRIPTION_EXTENDED")).toBe("extend");
+    const event = {
+      type: "SUBSCRIPTION_EXTENDED",
+      id: "e",
+      expiration_at_ms: 1_701_000_000_000,
+    } as Parameters<typeof expirationAt>[0];
+    expect(expirationAt(event)?.getTime()).toBe(event.expiration_at_ms);
+    expect(expirationAt({ ...event, expiration_at_ms: null })).toBeNull();
   });
 
   it("dates an event by when the store says it happened, not when we hear it", () => {
