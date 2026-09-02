@@ -1336,6 +1336,11 @@ const Character: React.FC<CharacterProps> = (props) => {
 
   // tRPC utility
   const utils = api.useUtils();
+  const { data: userSkills } = api.skillTree.getUserSkills.useQuery();
+  const { data: skillNames } = api.skillTree.getAllNames.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+  const activatedSkillIds = getActivatedSkillIds(userSkills ?? []);
 
   // Open modal for equipping
   const act = (slot: ItemSlot) => {
@@ -1364,6 +1369,25 @@ const Character: React.FC<CharacterProps> = (props) => {
       setUserItem(undefined);
     },
   });
+
+  const equipSelectedItem = (id: string) => {
+    const selectedItem = items?.find((item) => item.id === id);
+    setUserItem(selectedItem);
+    if (!selectedItem) return;
+
+    if (!meetsRequiredSkill(selectedItem.requiredSkillId, activatedSkillIds)) {
+      const requiredSkillName =
+        skillNames?.find((skill) => skill.id === selectedItem.requiredSkillId)?.name ??
+        selectedItem.requiredSkillId;
+      showMutationToast({
+        success: false,
+        message: `Activate ${requiredSkillName ?? "required skill"} first`,
+      });
+      return;
+    }
+
+    equip({ userItemId: id, slot });
+  };
 
   const { mutate: mutateRepairItem, isPending: isUsingRepairItem } =
     api.item.useRepairItem.useMutation({
@@ -1454,12 +1478,13 @@ const Character: React.FC<CharacterProps> = (props) => {
                 showBgColor={false}
                 showLabels={false}
                 greyedIds={items
-                  ?.filter((item) => item.equipped !== "NONE")
+                  ?.filter(
+                    (item) =>
+                      item.equipped !== "NONE" ||
+                      !meetsRequiredSkill(item.requiredSkillId, activatedSkillIds),
+                  )
                   .map((item) => item.id)}
-                onClick={(id) => {
-                  setUserItem(items?.find((item) => item.id === id));
-                  equip({ userItemId: id, slot: slot });
-                }}
+                onClick={equipSelectedItem}
               />
             ) : (
               <Loader explanation={`Swapping ${useritem?.item.name}`} />

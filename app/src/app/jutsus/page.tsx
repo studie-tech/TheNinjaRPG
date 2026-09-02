@@ -792,6 +792,7 @@ export default function MyJutsu() {
                       const canEvolve =
                         !!userData &&
                         effectiveLevel >= JUTSU_TRAIN_LEVEL_CAP &&
+                        meetsRequiredSkill(evo.requiredSkillId, activatedSkillIds) &&
                         canEvolveJutsu(evo, userData) &&
                         hasRequiredRank(userData.rank, evo.requiredRank) &&
                         hasRequiredLevel(userData.level, evo.requiredLevel) &&

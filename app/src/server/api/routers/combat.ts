@@ -138,6 +138,7 @@ import type {
   GroundEffect,
   ProcessedItem,
   ProcessingBattleUser,
+  ReturnedBattle,
   UserEffect,
 } from "@/libs/combat/types";
 import {
@@ -1003,6 +1004,9 @@ export const combatRouter = createTRPCRouter({
         jutsuLoadoutId: z.string().optional(),
         itemLoadoutId: z.string().optional(),
       }),
+    )
+    .output(
+      baseServerResponse.extend({ battle: z.custom<ReturnedBattle>().optional() }),
     )
     .mutation(async ({ input, ctx }) => {
       // Queries

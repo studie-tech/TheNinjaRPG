@@ -71,6 +71,9 @@ export const RankedArenaMain: React.FC = () => {
         showMutationToast(data);
         if (data.success) {
           void utils.pvpRank.getRankedPvpQueue.invalidate();
+          if (data.removedJutsuIds?.length || data.removedItemIds?.length) {
+            void utils.pvpRank.getRankedLoadout.invalidate();
+          }
         }
       },
     });

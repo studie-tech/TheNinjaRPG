@@ -137,7 +137,7 @@ export const sparringRouter = createTRPCRouter({
           !hasEffectiveLoadout(cleanedReceiver.loadout)
         ) {
           return errorResponse(
-            "A ranked loadout became empty because required skills are inactive",
+            "A ranked loadout became empty because ranked rules do not allow skill-tree requirements",
           );
         }
         forceLoadouts = [cleanedSender.loadout, cleanedReceiver.loadout];

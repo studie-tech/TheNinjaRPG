@@ -33,18 +33,28 @@ export const cleanRankedSkillRequirements = async (
   removedJutsuIds: string[];
   removedItemIds: string[];
 }> => {
-  const selectedItemIds = [
-    ...storedLoadout.loadout.weaponIds,
-    ...storedLoadout.loadout.consumableIds,
+  const referencedJutsuIds = [
+    ...new Set([
+      ...storedLoadout.loadout.jutsuIds,
+      ...(storedLoadout.loadout.favoriteJutsuIds ?? []),
+    ]),
+  ];
+  const referencedItemIds = [
+    ...new Set([
+      ...storedLoadout.loadout.weaponIds,
+      ...storedLoadout.loadout.consumableIds,
+      ...(storedLoadout.loadout.favoriteWeaponIds ?? []),
+      ...(storedLoadout.loadout.favoriteConsumableIds ?? []),
+    ]),
   ];
   const [selectedJutsus, selectedItems] = await Promise.all([
-    storedLoadout.loadout.jutsuIds.length > 0
+    referencedJutsuIds.length > 0
       ? client.query.jutsu.findMany({
-          where: inArray(jutsu.id, storedLoadout.loadout.jutsuIds),
+          where: inArray(jutsu.id, referencedJutsuIds),
         })
       : Promise.resolve([]),
-    selectedItemIds.length > 0
-      ? client.query.item.findMany({ where: inArray(item.id, selectedItemIds) })
+    referencedItemIds.length > 0
+      ? client.query.item.findMany({ where: inArray(item.id, referencedItemIds) })
       : Promise.resolve([]),
   ]);
   const removedJutsuIds = selectedJutsus
