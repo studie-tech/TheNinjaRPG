@@ -138,6 +138,7 @@ import type {
   GroundEffect,
   ProcessedItem,
   ProcessingBattleUser,
+  ReturnedBattle,
   UserEffect,
 } from "@/libs/combat/types";
 import {
@@ -174,6 +175,7 @@ import {
   mockAchievementHistoryEntries,
 } from "@/libs/quest";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
+import { getActivatedSkillIds, meetsRequiredSkill } from "@/libs/skillTree";
 import { toDefenceStat, toOffenceStat } from "@/libs/stats";
 import { rollStealthKeep } from "@/libs/stealth";
 import type { GlobalMapData } from "@/libs/threejs/types";
@@ -1003,6 +1005,9 @@ export const combatRouter = createTRPCRouter({
         itemLoadoutId: z.string().optional(),
       }),
     )
+    .output(
+      baseServerResponse.extend({ battle: z.custom<ReturnedBattle>().optional() }),
+    )
     .mutation(async ({ input, ctx }) => {
       // Queries
       const jId = input.jutsuLoadoutId;
@@ -1044,6 +1049,7 @@ export const combatRouter = createTRPCRouter({
       if (jId === user.jutsuLoadout && iId === user.itemLoadout) {
         return errorResponse("You already have this loadout selected");
       }
+      const activatedSkillIds = getActivatedSkillIds(userSkills);
 
       // Apply the item loadout first, then the jutsu loadout. selectItemLoadout mutates
       // `useritems` in place to the post-switch equipped state, and selectJutsuLoadout
@@ -1054,7 +1060,14 @@ export const combatRouter = createTRPCRouter({
       const itemLoadoutResult =
         user.itemLoadout === iId || !iId
           ? { success: true, message: "Item loadout already selected" }
-          : await selectItemLoadout(ctx.drizzle, iId, itemLoadouts, useritems, user);
+          : await selectItemLoadout(
+              ctx.drizzle,
+              iId,
+              itemLoadouts,
+              useritems,
+              user,
+              activatedSkillIds,
+            );
       const jutsuLoadoutResult =
         user.jutsuLoadout === jId || !jId
           ? { success: true, message: "Jutsu loadout already selected" }
@@ -1069,10 +1082,14 @@ export const combatRouter = createTRPCRouter({
                   jutsuIds,
                   userjutsus,
                   maxEquip: calcJutsuEquipLimit(user),
-                  validateJutsu: ({ jutsu }) =>
-                    checkJutsuBloodlineItem(jutsu, useritems)
+                  validateJutsu: ({ jutsu }) => {
+                    if (!meetsRequiredSkill(jutsu.requiredSkillId, activatedSkillIds)) {
+                      return `${jutsu.name}: required skill is not active`;
+                    }
+                    return checkJutsuBloodlineItem(jutsu, useritems)
                       ? undefined
-                      : `${jutsu.name}: required bloodline item is not equipped`,
+                      : `${jutsu.name}: required bloodline item is not equipped`;
+                  },
                 }),
             );
 
@@ -1084,25 +1101,35 @@ export const combatRouter = createTRPCRouter({
       // touching the jutsu loadout pointer or the player's other equipped jutsus.
       const itemChanged = !!iId && user.itemLoadout !== iId;
       const jutsuChanged = !!jId && user.jutsuLoadout !== jId;
-      let invalidatedJutsuIds: string[] = [];
+      let invalidatedJutsuIds = user.jutsus
+        .filter((ref) => {
+          const owned = userjutsus.find((uj) => uj.jutsuId === ref.jutsuId);
+          return owned
+            ? !meetsRequiredSkill(owned.jutsu.requiredSkillId, activatedSkillIds)
+            : false;
+        })
+        .map((ref) => ref.jutsuId);
       if (itemChanged && !jutsuChanged && "items" in itemLoadoutResult) {
         invalidatedJutsuIds = user.jutsus
           .filter((ref) => {
             const owned = userjutsus.find((uj) => uj.jutsuId === ref.jutsuId);
-            return owned ? !checkJutsuBloodlineItem(owned.jutsu, useritems) : false;
+            return owned
+              ? !meetsRequiredSkill(owned.jutsu.requiredSkillId, activatedSkillIds) ||
+                  !checkJutsuBloodlineItem(owned.jutsu, useritems)
+              : false;
           })
           .map((ref) => ref.jutsuId);
-        if (invalidatedJutsuIds.length > 0) {
-          await ctx.drizzle
-            .update(userJutsu)
-            .set({ equipped: false })
-            .where(
-              and(
-                eq(userJutsu.userId, ctx.userId),
-                inArray(userJutsu.jutsuId, invalidatedJutsuIds),
-              ),
-            );
-        }
+      }
+      if (invalidatedJutsuIds.length > 0) {
+        await ctx.drizzle
+          .update(userJutsu)
+          .set({ equipped: false })
+          .where(
+            and(
+              eq(userJutsu.userId, ctx.userId),
+              inArray(userJutsu.jutsuId, invalidatedJutsuIds),
+            ),
+          );
       }
 
       // Mutate
@@ -2786,9 +2813,12 @@ export const processUsersForBattle = async (
 
   // Loop through users and transform to ProcessingBattleUser
   const usersState: ProcessingBattleUser[] = users.map((inputUser) => {
+    const activatedSkillIds = getActivatedSkillIds(inputUser.userSkills);
+    const activeUserSkills = inputUser.userSkills.filter((skill) => skill.activated);
     // Build the processing user object with all required fields
     const user: ProcessingBattleUser = {
       ...inputUser,
+      userSkills: activeUserSkills,
       // Set controllerID and mark this user as the original
       controllerId: inputUser.userId,
       userId: inputUser.isAi ? nanoid() : inputUser.userId,
@@ -2849,6 +2879,15 @@ export const processUsersForBattle = async (
             console.error(`Jutsu not found for UserJutsu ${uj.id}`);
             return false;
           }
+          if (
+            !meetsRequiredSkill(
+              uj.jutsu.requiredSkillId,
+              activatedSkillIds,
+              inputUser.isAi,
+            )
+          ) {
+            return false;
+          }
           return true;
         })
         .map((uj) => ({
@@ -2860,6 +2899,15 @@ export const processUsersForBattle = async (
         .filter((ui) => {
           if (!ui.item) {
             console.error(`Item not found for UserItem ${ui.id}`);
+            return false;
+          }
+          if (
+            !meetsRequiredSkill(
+              ui.item.requiredSkillId,
+              activatedSkillIds,
+              inputUser.isAi,
+            )
+          ) {
             return false;
           }
           return true;

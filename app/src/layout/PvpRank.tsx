@@ -53,7 +53,6 @@ export const RankedArenaMain: React.FC = () => {
 
   // Get ranked loadout
   const { data: rankedLoadout } = api.pvpRank.getRankedLoadout.useQuery();
-
   // Enter ranked season
   const { mutate: enterSeason, isPending: isEntering } =
     api.pvpRank.enterRankedSeason.useMutation({
@@ -72,6 +71,9 @@ export const RankedArenaMain: React.FC = () => {
         showMutationToast(data);
         if (data.success) {
           void utils.pvpRank.getRankedPvpQueue.invalidate();
+          if (data.removedJutsuIds?.length || data.removedItemIds?.length) {
+            void utils.pvpRank.getRankedLoadout.invalidate();
+          }
         }
       },
     });
@@ -361,9 +363,14 @@ export const RankedLoadoutSelector: React.FC = () => {
   };
 
   // Process data with favorite sorting
-  const filteredWeapons = weapons?.data.filter((weapon) => weapon.repsCost === 0) || [];
+  const filteredWeapons =
+    weapons?.data.filter(
+      (weapon) => weapon.repsCost === 0 && !weapon.requiredSkillId,
+    ) || [];
   const filteredConsumables =
-    consumables?.data.filter((consumable) => consumable.repsCost === 0) || [];
+    consumables?.data.filter(
+      (consumable) => consumable.repsCost === 0 && !consumable.requiredSkillId,
+    ) || [];
   const flatJutsu = allJutsu?.pages.flatMap((page) => page.data) ?? [];
   const equippedItems = rankedLoadout
     ? [...rankedLoadout.loadout.weaponIds, ...rankedLoadout.loadout.consumableIds]
@@ -414,6 +421,7 @@ export const RankedLoadoutSelector: React.FC = () => {
     }))
     .filter((jutsu) => jutsu.jutsuType === "NORMAL")
     .filter((jutsu) => !jutsu.effects.some((e) => e.type === "summon")) // Exclude summon jutsu from ranked
+    .filter((jutsu) => !jutsu.requiredSkillId)
     .sort((a, b) => {
       const aIsEquipped = loadoutJutsus.includes(a.id);
       const bIsEquipped = loadoutJutsus.includes(b.id);

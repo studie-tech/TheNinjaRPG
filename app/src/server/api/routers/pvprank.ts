@@ -38,7 +38,10 @@ import { initiateBattle } from "@/routers/combat";
 import { fetchUser } from "@/routers/profile";
 import { updateRewards } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
-import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
+import {
+  cleanRankedSkillRequirements,
+  fetchSanninRankedPlayers,
+} from "@/server/utils/ranked";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { secondsPassed } from "@/utils/time";
@@ -314,8 +317,9 @@ export const pvpRankRouter = createTRPCRouter({
           },
         };
         await ctx.drizzle.insert(rankedLoadout).values(loadout);
+        return loadout;
       }
-      return loadout;
+      return (await cleanRankedSkillRequirements(ctx.drizzle, loadout)).loadout;
     }),
 
   // Get the ranked PvP queue
@@ -438,6 +442,7 @@ export const pvpRankRouter = createTRPCRouter({
       baseServerResponse.extend({
         battleId: z.string().optional(),
         removedJutsuIds: z.array(z.string()).optional(),
+        removedItemIds: z.array(z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx }) => {
@@ -470,7 +475,17 @@ export const pvpRankRouter = createTRPCRouter({
         return errorResponse("Ranked season is currently paused");
       }
 
-      // Validate loadout for residual jutsu limit
+      // Remove legacy skill-gated selections before validating the remaining loadout.
+      let removedJutsuIds: string[] = [];
+      let removedItemIds: string[] = [];
+      if (currentLoadout) {
+        const cleaned = await cleanRankedSkillRequirements(ctx.drizzle, currentLoadout);
+        currentLoadout.loadout = cleaned.loadout.loadout;
+        removedJutsuIds = cleaned.removedJutsuIds;
+        removedItemIds = cleaned.removedItemIds;
+      }
+
+      // Validate loadout for residual limits
       if (
         currentLoadout?.loadout.jutsuIds.length ||
         currentLoadout?.loadout.weaponIds.length ||
@@ -515,7 +530,15 @@ export const pvpRankRouter = createTRPCRouter({
         queueStartTime: new Date(),
         createdAt: new Date(),
       });
-      return { success: true, message: "Queued for ranked PvP" };
+      return {
+        success: true,
+        message:
+          removedJutsuIds.length > 0 || removedItemIds.length > 0
+            ? "Ranked loadout updated because skill-tree requirements are not allowed. Queued with the remaining loadout."
+            : "Queued for ranked PvP",
+        removedJutsuIds: removedJutsuIds.length > 0 ? removedJutsuIds : undefined,
+        removedItemIds: removedItemIds.length > 0 ? removedItemIds : undefined,
+      };
     }),
 
   // Leave the ranked PvP queue
@@ -611,6 +634,10 @@ export const pvpRankRouter = createTRPCRouter({
       if (!userEntry.user.rankedLoadout || !opponentEntry.user.rankedLoadout) {
         return { success: false, message: "No loadout found", battleId: undefined };
       }
+      const [userEffective, opponentEffective] = await Promise.all([
+        cleanRankedSkillRequirements(ctx.drizzle, userEntry.user.rankedLoadout),
+        cleanRankedSkillRequirements(ctx.drizzle, opponentEntry.user.rankedLoadout),
+      ]);
       // The atomic claim is inside initiateBattle: it transitions both
       // participants QUEUED -> BATTLE in one guarded UPDATE and rolls back
       // (resetting only the rows it touched to AWAKE) if it cannot claim both.
@@ -624,10 +651,7 @@ export const pvpRankRouter = createTRPCRouter({
           biome: "arena",
           targetStatDistribution: RANKED_PVP_STATS,
           userStatDistribution: RANKED_PVP_STATS,
-          forceLoadouts: [
-            userEntry.user.rankedLoadout,
-            opponentEntry.user.rankedLoadout,
-          ],
+          forceLoadouts: [userEffective.loadout, opponentEffective.loadout],
           topPlayersLP,
         },
         "RANKED_PVP",
@@ -635,44 +659,42 @@ export const pvpRankRouter = createTRPCRouter({
 
       if (result.success && result.battleId) {
         const rankedPickRows = [
-          ...userEntry.user.rankedLoadout.loadout.jutsuIds.map((jutsuId) => ({
+          ...userEffective.loadout.loadout.jutsuIds.map((jutsuId) => ({
             type: "jutsu" as const,
             contentId: jutsuId,
             battleType: "RANKED_PVP" as const,
             count: 1,
           })),
-          ...userEntry.user.rankedLoadout.loadout.weaponIds.map((weaponId) => ({
+          ...userEffective.loadout.loadout.weaponIds.map((weaponId) => ({
             type: "item" as const,
             contentId: weaponId,
             battleType: "RANKED_PVP" as const,
             count: 1,
           })),
-          ...userEntry.user.rankedLoadout.loadout.consumableIds.map((consumableId) => ({
+          ...userEffective.loadout.loadout.consumableIds.map((consumableId) => ({
             type: "consumable" as const,
             contentId: consumableId,
             battleType: "RANKED_PVP" as const,
             count: 1,
           })),
-          ...opponentEntry.user.rankedLoadout.loadout.jutsuIds.map((jutsuId) => ({
+          ...opponentEffective.loadout.loadout.jutsuIds.map((jutsuId) => ({
             type: "jutsu" as const,
             contentId: jutsuId,
             battleType: "RANKED_PVP" as const,
             count: 1,
           })),
-          ...opponentEntry.user.rankedLoadout.loadout.weaponIds.map((weaponId) => ({
+          ...opponentEffective.loadout.loadout.weaponIds.map((weaponId) => ({
             type: "item" as const,
             contentId: weaponId,
             battleType: "RANKED_PVP" as const,
             count: 1,
           })),
-          ...opponentEntry.user.rankedLoadout.loadout.consumableIds.map(
-            (consumableId) => ({
-              type: "consumable" as const,
-              contentId: consumableId,
-              battleType: "RANKED_PVP" as const,
-              count: 1,
-            }),
-          ),
+          ...opponentEffective.loadout.loadout.consumableIds.map((consumableId) => ({
+            type: "consumable" as const,
+            contentId: consumableId,
+            battleType: "RANKED_PVP" as const,
+            count: 1,
+          })),
         ];
         const postMatchTasks: PromiseLike<unknown>[] = [
           ctx.drizzle

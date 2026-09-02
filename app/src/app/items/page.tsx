@@ -68,6 +68,7 @@ import {
   userItemActionBadges,
 } from "@/libs/item";
 import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
+import { getActivatedSkillIds, meetsRequiredSkill } from "@/libs/skillTree";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
@@ -723,6 +724,11 @@ const Backpack: React.FC<BackpackProps> = (props) => {
 
   // tRPC utility
   const utils = api.useUtils();
+  const { data: userSkills } = api.skillTree.getUserSkills.useQuery();
+  const { data: skillNames } = api.skillTree.getAllNames.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+  const activatedSkillIds = getActivatedSkillIds(userSkills ?? []);
 
   // Handler for when mutations are settled
   const onSettled = () => {
@@ -887,6 +893,13 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       !userItem.isInAuction &&
       (!userItem.craftingFinishedAt || userItem.craftingFinishedAt < new Date()),
   );
+  const meetsSelectedSkill = useritem
+    ? meetsRequiredSkill(useritem.item.requiredSkillId, activatedSkillIds)
+    : true;
+  const selectedRequiredSkillName = useritem?.item.requiredSkillId
+    ? (skillNames?.find((skill) => skill.id === useritem.item.requiredSkillId)?.name ??
+      useritem.item.requiredSkillId)
+    : null;
 
   // Split stack handler
   const handleSplitStack = () => {
@@ -951,6 +964,11 @@ const Backpack: React.FC<BackpackProps> = (props) => {
             showStatistic="item"
             showEvolutions
           />
+          {!meetsSelectedSkill && selectedRequiredSkillName && (
+            <p className="mb-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-destructive text-sm">
+              Requires active skill: {selectedRequiredSkillName}
+            </p>
+          )}
           {!useritem.item.canBeImbued &&
             useritem.equipped === "NONE" &&
             useritem.imbuements.some(
@@ -1005,9 +1023,12 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                 <Button
                   variant="info"
                   onClick={() => equip({ userItemId: useritem.id })}
+                  disabled={!meetsSelectedSkill}
                 >
                   <Shirt className="mr-2 h-5 w-5" />
-                  Equip
+                  {meetsSelectedSkill
+                    ? "Equip"
+                    : `Activate ${selectedRequiredSkillName ?? "required skill"} first`}
                 </Button>
               )}
               {useritem.item.canStack && (
@@ -1037,9 +1058,12 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                 <Button
                   variant="info"
                   onClick={() => consume({ userItemId: useritem.id })}
+                  disabled={!meetsSelectedSkill}
                 >
                   <Cookie className="mr-2 h-5 w-5" />
-                  Consume
+                  {meetsSelectedSkill
+                    ? "Consume"
+                    : `Activate ${selectedRequiredSkillName ?? "required skill"} first`}
                 </Button>
               )}
               <ItemDurabilityRepairActions
@@ -1312,6 +1336,11 @@ const Character: React.FC<CharacterProps> = (props) => {
 
   // tRPC utility
   const utils = api.useUtils();
+  const { data: userSkills } = api.skillTree.getUserSkills.useQuery();
+  const { data: skillNames } = api.skillTree.getAllNames.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+  const activatedSkillIds = getActivatedSkillIds(userSkills ?? []);
 
   // Open modal for equipping
   const act = (slot: ItemSlot) => {
@@ -1340,6 +1369,25 @@ const Character: React.FC<CharacterProps> = (props) => {
       setUserItem(undefined);
     },
   });
+
+  const equipSelectedItem = (id: string) => {
+    const selectedItem = items?.find((item) => item.id === id);
+    setUserItem(selectedItem);
+    if (!selectedItem) return;
+
+    if (!meetsRequiredSkill(selectedItem.requiredSkillId, activatedSkillIds)) {
+      const requiredSkillName =
+        skillNames?.find((skill) => skill.id === selectedItem.requiredSkillId)?.name ??
+        selectedItem.requiredSkillId;
+      showMutationToast({
+        success: false,
+        message: `Activate ${requiredSkillName ?? "required skill"} first`,
+      });
+      return;
+    }
+
+    equip({ userItemId: id, slot });
+  };
 
   const { mutate: mutateRepairItem, isPending: isUsingRepairItem } =
     api.item.useRepairItem.useMutation({
@@ -1430,12 +1478,13 @@ const Character: React.FC<CharacterProps> = (props) => {
                 showBgColor={false}
                 showLabels={false}
                 greyedIds={items
-                  ?.filter((item) => item.equipped !== "NONE")
+                  ?.filter(
+                    (item) =>
+                      item.equipped !== "NONE" ||
+                      !meetsRequiredSkill(item.requiredSkillId, activatedSkillIds),
+                  )
                   .map((item) => item.id)}
-                onClick={(id) => {
-                  setUserItem(items?.find((item) => item.id === id));
-                  equip({ userItemId: id, slot: slot });
-                }}
+                onClick={equipSelectedItem}
               />
             ) : (
               <Loader explanation={`Swapping ${useritem?.item.name}`} />

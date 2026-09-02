@@ -17,6 +17,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { cleanRankedSkillRequirements } from "@/server/utils/ranked";
 import { secondsFromNow } from "@/utils/time";
 
 const pusher = getServerPusher();
@@ -123,7 +124,23 @@ export const sparringRouter = createTRPCRouter({
           );
         }
 
-        forceLoadouts = [senderLoadout, receiverLoadout];
+        const [cleanedSender, cleanedReceiver] = await Promise.all([
+          cleanRankedSkillRequirements(ctx.drizzle, senderLoadout),
+          cleanRankedSkillRequirements(ctx.drizzle, receiverLoadout),
+        ]);
+        const hasEffectiveLoadout = (entry: RankedLoadout) =>
+          entry.loadout.jutsuIds.length > 0 ||
+          entry.loadout.weaponIds.length > 0 ||
+          entry.loadout.consumableIds.length > 0;
+        if (
+          !hasEffectiveLoadout(cleanedSender.loadout) ||
+          !hasEffectiveLoadout(cleanedReceiver.loadout)
+        ) {
+          return errorResponse(
+            "A ranked loadout became empty because ranked rules do not allow skill-tree requirements",
+          );
+        }
+        forceLoadouts = [cleanedSender.loadout, cleanedReceiver.loadout];
       }
 
       // Mutate
