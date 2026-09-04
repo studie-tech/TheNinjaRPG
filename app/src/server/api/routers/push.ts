@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -46,46 +46,29 @@ export const pushRouter = createTRPCRouter({
       // Rotated on every registration, so a device that changes hands cannot keep reading
       // the previous account's status.
       const widgetToken = nanoid(32);
-      const registered = await mutateLivePushUser(
-        ctx.drizzle,
-        ctx.userId,
-        async (lockedClient) => {
-          // PlanetScale advances its transaction session token with each response, so no
-          // two statements inside the transaction may share the same prior session.
-          await lockedClient
-            .insert(userDevice)
-            .values({
-              id: nanoid(),
-              userId: ctx.userId,
-              token: input.token,
-              platform: input.platform,
-              appVersion: input.appVersion,
-              locale: input.locale,
-              widgetToken,
-              createdAt: now,
-              lastSeenAt: now,
-            })
-            .onDuplicateKeyUpdate({
-              set: {
-                userId: ctx.userId,
-                platform: input.platform,
-                appVersion: input.appVersion,
-                locale: input.locale,
-                widgetToken,
-                lastSeenAt: now,
-              },
-            });
-          const others = await lockedClient
-            .select({ id: userDevice.id })
-            .from(userDevice)
-            .where(
-              and(eq(userDevice.userId, ctx.userId), ne(userDevice.token, input.token)),
-            )
-            .orderBy(desc(userDevice.lastSeenAt));
-          // One slot is spoken for by the device above, hence the cap less one.
-          await evictExcessDevices(lockedClient, others);
-        },
+      const deviceId = nanoid();
+      const inserted = await ctx.drizzle.execute(
+        sql`INSERT INTO ${userDevice} (id, userId, token, platform, appVersion, locale, widgetToken, createdAt, lastSeenAt)
+            SELECT ${deviceId}, ${ctx.userId}, ${input.token}, ${input.platform}, ${input.appVersion ?? null}, ${input.locale ?? null}, ${widgetToken}, ${now}, ${now}
+            WHERE ${livePushUser(ctx.userId)}
+            ON DUPLICATE KEY UPDATE userId = ${ctx.userId}, platform = ${input.platform}, appVersion = ${input.appVersion ?? null}, locale = ${input.locale ?? null}, widgetToken = ${widgetToken}, lastSeenAt = ${now}`,
       );
+      const registered =
+        Number(inserted.rowsAffected ?? 0) > 0 ||
+        (await isLivePushUser(ctx.drizzle, ctx.userId));
+      if (registered) {
+        // Scoped to this player, so it needs no guard of its own: the row it would evict
+        // is one this account owns, and a retirement purges the lot regardless.
+        const others = await ctx.drizzle
+          .select({ id: userDevice.id })
+          .from(userDevice)
+          .where(
+            and(eq(userDevice.userId, ctx.userId), ne(userDevice.token, input.token)),
+          )
+          .orderBy(desc(userDevice.lastSeenAt));
+        // One slot is spoken for by the device above, hence the cap less one.
+        await evictExcessDevices(ctx.drizzle, others);
+      }
       if (!registered) {
         return {
           success: false,
@@ -182,24 +165,15 @@ export const pushRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const updatedAt = new Date();
-      const updated = await mutateLivePushUser(
-        ctx.drizzle,
-        ctx.userId,
-        async (lockedClient) => {
-          await lockedClient
-            .insert(userPushPreference)
-            .values({
-              id: nanoid(),
-              userId: ctx.userId,
-              category: input.category,
-              enabled: input.enabled,
-              updatedAt,
-            })
-            .onDuplicateKeyUpdate({
-              set: { enabled: input.enabled, updatedAt },
-            });
-        },
+      const written = await ctx.drizzle.execute(
+        sql`INSERT INTO ${userPushPreference} (id, userId, category, enabled, updatedAt)
+            SELECT ${nanoid()}, ${ctx.userId}, ${input.category}, ${input.enabled}, ${updatedAt}
+            WHERE ${livePushUser(ctx.userId)}
+            ON DUPLICATE KEY UPDATE enabled = ${input.enabled}, updatedAt = ${updatedAt}`,
       );
+      const updated =
+        Number(written.rowsAffected ?? 0) > 0 ||
+        (await isLivePushUser(ctx.drizzle, ctx.userId));
       if (!updated) return errorResponse("Character no longer exists");
       return {
         success: true,
@@ -217,31 +191,15 @@ export const pushRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const createdAt = new Date();
-      const registered = await mutateLivePushUser(
-        ctx.drizzle,
-        ctx.userId,
-        async (lockedClient) => {
-          await lockedClient
-            .insert(userLiveActivity)
-            .values({
-              id: nanoid(),
-              userId: ctx.userId,
-              activityId: input.activityId,
-              kind: input.kind,
-              pushToken: input.pushToken,
-              endsAt: input.endsAt,
-              createdAt,
-            })
-            .onDuplicateKeyUpdate({
-              set: {
-                activityId: input.activityId,
-                pushToken: input.pushToken,
-                endsAt: input.endsAt,
-                createdAt,
-              },
-            });
-        },
+      const written = await ctx.drizzle.execute(
+        sql`INSERT INTO ${userLiveActivity} (id, userId, activityId, kind, pushToken, endsAt, createdAt)
+            SELECT ${nanoid()}, ${ctx.userId}, ${input.activityId}, ${input.kind}, ${input.pushToken}, ${input.endsAt}, ${createdAt}
+            WHERE ${livePushUser(ctx.userId)}
+            ON DUPLICATE KEY UPDATE activityId = ${input.activityId}, pushToken = ${input.pushToken}, endsAt = ${input.endsAt}, createdAt = ${createdAt}`,
       );
+      const registered =
+        Number(written.rowsAffected ?? 0) > 0 ||
+        (await isLivePushUser(ctx.drizzle, ctx.userId));
       if (!registered) return errorResponse("Character no longer exists");
       return { success: true, message: "Activity registered" };
     }),
@@ -251,20 +209,18 @@ export const pushRouter = createTRPCRouter({
     .input(endActivitySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const ended = await mutateLivePushUser(
-        ctx.drizzle,
-        ctx.userId,
-        async (lockedClient) => {
-          await lockedClient
-            .delete(userLiveActivity)
-            .where(
-              and(
-                eq(userLiveActivity.userId, ctx.userId),
-                eq(userLiveActivity.activityId, input.activityId),
-              ),
-            );
-        },
+      // Guarded in the statement like the writes above, rather than read-then-delete. A
+      // rename migrates this row to the new id, and an end arriving for the identity being
+      // renamed away must be refused rather than delete a row that has already moved --
+      // otherwise the countdown the player still has on screen loses its server row.
+      const removed = await ctx.drizzle.execute(
+        sql`DELETE FROM ${userLiveActivity}
+            WHERE userId = ${ctx.userId} AND activityId = ${input.activityId}
+              AND ${livePushUser(ctx.userId)}`,
       );
+      const ended =
+        Number(removed.rowsAffected ?? 0) > 0 ||
+        (await isLivePushUser(ctx.drizzle, ctx.userId));
       if (!ended) return errorResponse("Character no longer exists");
       return { success: true, message: "Activity ended" };
     }),
@@ -286,38 +242,37 @@ export const pushRouter = createTRPCRouter({
 });
 
 /**
- * Serialize identity-scoped push writes with account retirement and reject a stale Clerk
- * session after its character is gone. Statements stay sequential because PlanetScale's
- * transaction driver obtains the next session token from the preceding response.
+ * The guard every identity-scoped push write carries, as part of its own statement.
  *
- * Locks only this player's rows. Retirement and staff renames both take the same
- * `UserData` row for update before they touch anything, so holding it here is what makes
- * those mutually exclusive with this write; the alias row closes the same race for an id
- * that has no player row yet. None of these writes touch the ownership graph, so the
- * global store mutex is not theirs to take -- doing so would queue every app launch,
- * preference toggle and hospital countdown behind every purchase in the game.
+ * A write must not outlive the account it names. `retireStoreUserId` lays the tombstone
+ * down before it purges, so a write either sees the tombstone and does nothing, or landed
+ * before it and is removed by the purge that follows. Testing this inside the statement is
+ * what makes that true without a lock: the check and the write commit together, so there
+ * is no window between them for a retirement to slip through.
  */
-const mutateLivePushUser = async (
+const livePushUser = (userId: string) =>
+  sql`EXISTS (SELECT 1 FROM ${userData} WHERE userId = ${userId}) AND NOT EXISTS (SELECT 1 FROM ${storeUserIdAlias} WHERE oldUserId = ${userId})`;
+
+/**
+ * Why a guarded write matched nothing. Only worth asking once one has, since an upsert
+ * that changed a timestamp always reports a row.
+ */
+const isLivePushUser = async (
   client: DrizzleClient,
   userId: string,
-  mutation: (lockedClient: DrizzleClient) => Promise<void>,
-): Promise<boolean> =>
-  await client.transaction(async (tx) => {
-    const lockedClient = tx as unknown as DrizzleClient;
-    const [liveUser] = await lockedClient
-      .select({ userId: userData.userId })
-      .from(userData)
-      .where(eq(userData.userId, userId))
-      .for("update");
-    const [retiredIdentity] = await lockedClient
-      .select({ oldUserId: storeUserIdAlias.oldUserId })
-      .from(storeUserIdAlias)
-      .where(eq(storeUserIdAlias.oldUserId, userId))
-      .for("update");
-    if (!liveUser || retiredIdentity) return false;
-    await mutation(lockedClient);
-    return true;
-  });
+): Promise<boolean> => {
+  const [liveUser, retiredIdentity] = await Promise.all([
+    client.query.userData.findFirst({
+      columns: { userId: true },
+      where: eq(userData.userId, userId),
+    }),
+    client.query.storeUserIdAlias.findFirst({
+      columns: { oldUserId: true },
+      where: eq(storeUserIdAlias.oldUserId, userId),
+    }),
+  ]);
+  return !!liveUser && !retiredIdentity;
+};
 
 /**
  * Keep the newest devices and drop the rest. Without this a player who reinstalls

@@ -1454,19 +1454,21 @@ export const retireStoreUserId = async (
       .from(userData)
       .where(eq(userData.userId, userId))
       .for("update");
-    // Identity-scoped cleanup which must not race a writer using the same lifecycle
-    // mutex belongs here. In particular, device registration can otherwise land after
-    // deletion's ordinary cleanup batch and survive the account itself.
-    await beforeRetire?.(lockedClient);
     const tombstone = `${DELETED_STORE_USER_PREFIX}${nanoid()}`;
     await lockedClient
       .update(storeUserIdAlias)
       .set({ newUserId: tombstone, updatedAt: new Date() })
       .where(eq(storeUserIdAlias.newUserId, userId));
+    // The tombstone goes down before the cleanup, not after. Identity-scoped writes test
+    // for it in their own statement, so once it exists none can land; the cleanup below
+    // then removes whatever arrived before it. Ordered the other way round, a registration
+    // slipping between the cleanup and the tombstone would outlive the account, which is
+    // what the lifecycle mutex used to be holding the line against.
     await lockedClient
       .insert(storeUserIdAlias)
       .values({ oldUserId: userId, newUserId: tombstone, updatedAt: new Date() })
       .onDuplicateKeyUpdate({ set: { newUserId: tombstone, updatedAt: new Date() } });
+    await beforeRetire?.(lockedClient);
   });
 };
 
