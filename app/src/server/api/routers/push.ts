@@ -22,7 +22,6 @@ import {
   userPushPreference,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { acquireStoreUserMutationLock } from "@/server/utils/purchases/grant";
 import { deliveryTest, isPushEnabled, sendPushToUsers } from "@/server/utils/push";
 import { secondsFromNow } from "@/utils/time";
 import {
@@ -290,6 +289,13 @@ export const pushRouter = createTRPCRouter({
  * Serialize identity-scoped push writes with account retirement and reject a stale Clerk
  * session after its character is gone. Statements stay sequential because PlanetScale's
  * transaction driver obtains the next session token from the preceding response.
+ *
+ * Locks only this player's rows. Retirement and staff renames both take the same
+ * `UserData` row for update before they touch anything, so holding it here is what makes
+ * those mutually exclusive with this write; the alias row closes the same race for an id
+ * that has no player row yet. None of these writes touch the ownership graph, so the
+ * global store mutex is not theirs to take -- doing so would queue every app launch,
+ * preference toggle and hospital countdown behind every purchase in the game.
  */
 const mutateLivePushUser = async (
   client: DrizzleClient,
@@ -298,7 +304,6 @@ const mutateLivePushUser = async (
 ): Promise<boolean> =>
   await client.transaction(async (tx) => {
     const lockedClient = tx as unknown as DrizzleClient;
-    await acquireStoreUserMutationLock(lockedClient);
     const [liveUser] = await lockedClient
       .select({ userId: userData.userId })
       .from(userData)

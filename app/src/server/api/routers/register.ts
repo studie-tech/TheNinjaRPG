@@ -25,7 +25,6 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { acquireStoreUserMutationLock } from "@/server/utils/purchases/grant";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromNow } from "@/utils/time";
 import { registrationSchema, utmSourceSchema } from "@/validators/register";
@@ -153,7 +152,12 @@ export const registerRouter = createTRPCRouter({
         // A deleted Clerk identity is permanently retired from the store ownership graph.
         // Serialize registration with deletion so the same id cannot create a new player
         // whose future store receipts are routed to the old account's tombstone.
-        await acquireStoreUserMutationLock(lockedClient);
+        //
+        // The tombstone's own row is the lock: oldUserId is the primary key, so taking it
+        // for update here blocks the retirement that would insert it, and vice versa.
+        // Scoped to this one id deliberately -- signing up is not an ownership-graph
+        // mutation, and taking the global store mutex would serialize every registration
+        // in the game behind every purchase webhook.
         const [retiredIdentity] = await lockedClient
           .select({ oldUserId: storeUserIdAlias.oldUserId })
           .from(storeUserIdAlias)

@@ -145,7 +145,7 @@ prerequisites and store setup.
 
 - Uses Drizzle ORM with MySQL hosted on **PlanetScale**
 - Prefer query syntax over raw SQL
-- **⚠️ NEVER use database transactions** - PlanetScale does not support traditional transactions. Instead, use guard clauses with WHERE conditions to ensure atomic updates (e.g., `WHERE balance >= amount` to prevent negative balances).
+- **Prefer guard clauses over transactions** - reach first for a WHERE condition that makes the update atomic on its own (e.g., `WHERE balance >= amount` to prevent negative balances) and check `rowsAffected`. This is cheaper and composes with parallel reads. Transactions *are* supported — the PlanetScale serverless driver runs interactive transactions by chaining a session token through each response, and `home.ts`, `item.ts`, `occupation.ts`, `paypal.ts` and `purchases/grant.ts` all use them — but that chaining forces every statement inside the transaction to be **sequential**, so `Promise.all` does not apply and each statement costs a full round-trip. Use one only when several rows must move together and no single guarded statement can express it, and keep the body as short as possible.
 - Schema is centralized in `@/drizzle/schema.ts`
 - We use the react compiler, and therefore must use useWatch hook, not watch, for react-hook-form.
 - **No Legacy Fields**: When refactoring database schema, fully remove legacy/deprecated fields rather than keeping them for backward compatibility. Do not leave legacy fields in the schema - migrate all code to use new field names immediately.
@@ -153,7 +153,7 @@ prerequisites and store setup.
 
 ### CAS / idempotency (rewards and economy)
 
-PlanetScale does not support multi-statement transactions. Use **compare-and-swap** predicates and verify `rowsAffected` before granting irreversible rewards:
+Grants are the case where a transaction is least likely to be worth its latency, because a single guarded statement usually expresses the whole invariant. Use **compare-and-swap** predicates and verify `rowsAffected` before granting irreversible rewards:
 
 - Examples: raid reward JSON guards (`raids.ts`), activity streak `lastClaimDate` (`activityStreak.ts`), helpers in `@/server/utils/concurrency.ts` (`claimUserSnapshot`, `consumeUserItemAtomically`).
 - Prefer **SQL increments** on counters (money, XP, prestige) via `` sql`${userData.money} + ${delta}` `` when parallel grants could otherwise apply the same stale base snapshot—mirror how village tokens and clan points already use atomic `+=` in `updateRewards`.
