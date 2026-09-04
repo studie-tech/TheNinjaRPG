@@ -1443,33 +1443,37 @@ export const transferStorePurchases = async (
 export const retireStoreUserId = async (
   client: DrizzleClient,
   userId: string,
-  beforeRetire?: (lockedClient: DrizzleClient) => Promise<void>,
+  beforeRetire?: (client: DrizzleClient) => Promise<void>,
 ): Promise<void> => {
   if (isReservedStoreUserId(userId)) return;
-  await client.transaction(async (tx) => {
-    const lockedClient = tx as unknown as DrizzleClient;
-    await acquireStoreUserMutationLock(lockedClient);
-    await lockedClient
-      .select({ userId: userData.userId })
-      .from(userData)
-      .where(eq(userData.userId, userId))
-      .for("update");
-    const tombstone = `${DELETED_STORE_USER_PREFIX}${nanoid()}`;
-    await lockedClient
-      .update(storeUserIdAlias)
-      .set({ newUserId: tombstone, updatedAt: new Date() })
-      .where(eq(storeUserIdAlias.newUserId, userId));
-    // The tombstone goes down before the cleanup, not after. Identity-scoped writes test
-    // for it in their own statement, so once it exists none can land; the cleanup below
-    // then removes whatever arrived before it. Ordered the other way round, a registration
-    // slipping between the cleanup and the tombstone would outlive the account, which is
-    // what the lifecycle mutex used to be holding the line against.
-    await lockedClient
-      .insert(storeUserIdAlias)
-      .values({ oldUserId: userId, newUserId: tombstone, updatedAt: new Date() })
-      .onDuplicateKeyUpdate({ set: { newUserId: tombstone, updatedAt: new Date() } });
-    await beforeRetire?.(lockedClient);
-  });
+  const tombstone = `${DELETED_STORE_USER_PREFIX}${nanoid()}`;
+  // Three idempotent statements rather than a transaction. Deletion is where this codebase
+  // has actually seen deadlocks -- deleteUser retries them with backoff -- and holding a
+  // lock across these while the cleanup runs is what made that likely. Re-running any of
+  // them converges on the same state, so a failure part-way is repaired by the retry
+  // deleteUser already performs.
+  await client
+    .update(storeUserIdAlias)
+    .set({ newUserId: tombstone, updatedAt: new Date() })
+    .where(eq(storeUserIdAlias.newUserId, userId));
+  // The tombstone goes down before the cleanup, not after. Identity-scoped writes test for
+  // it in their own statement, so once it exists none can land; the cleanup below then
+  // removes whatever arrived before it. Ordered the other way round, a registration
+  // slipping between the cleanup and the tombstone would outlive the account.
+  //
+  // A retry keeps the marker it first wrote. The prefix is compared by length rather than
+  // with LIKE, whose wildcards the prefix's own underscores would otherwise trip.
+  await client.execute(
+    sql`INSERT INTO ${storeUserIdAlias} (oldUserId, newUserId, updatedAt)
+        VALUES (${userId}, ${tombstone}, ${new Date()})
+        ON DUPLICATE KEY UPDATE
+          newUserId = IF(LEFT(newUserId, ${DELETED_STORE_USER_PREFIX.length}) = ${DELETED_STORE_USER_PREFIX}, newUserId, ${tombstone}),
+          updatedAt = ${new Date()}`,
+  );
+  // Whatever landed before the tombstone. Store receipts are deliberately left alone --
+  // they are an audit ledger and outlive the account by design -- so this reaches only the
+  // identity-scoped rows that must not.
+  await beforeRetire?.(client);
 };
 
 /** Where a status sits on the ladder, so two sources can be compared. */
