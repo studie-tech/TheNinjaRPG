@@ -234,6 +234,56 @@ describeWithDatabase("staff user-id rename", () => {
     expect(activities).toEqual([]);
   });
 
+  it("lets a deleted identity with no store history make another character", async () => {
+    // The ordinary "delete my character and start over" flow. It leaves the player signed
+    // into the same Clerk session, so a tombstone they can never clear would lock them out
+    // of the game permanently, with no way back short of a new email address.
+    const database = await getTestDatabase();
+    await database.delete(storePurchase).where(eq(storePurchase.userId, OLD_USER_ID));
+    await deleteUser(database, OLD_USER_ID);
+    await Promise.all([
+      database.insert(village).values({
+        id: "reclaim-horizon",
+        name: "Horizon",
+        sector: 1,
+        kageId: STAFF,
+      }),
+      database.insert(bloodline).values({
+        id: "reclaim-bloodline",
+        name: "Reclaim Bloodline",
+        image: "/bloodline.png",
+        description: "test",
+        effects: [],
+        rank: "D",
+      }),
+    ]);
+    const caller = await callerFor(registerRouter, OLD_USER_ID);
+    const created = await caller.createCharacter({
+      username: "Restarted",
+      gender: "Male",
+      hair_color: "Black",
+      eye_color: "Blue",
+      skin_color: "Light",
+      attribute_1: "Soft features",
+      attribute_2: "Glasses",
+      attribute_3: "Short Hair",
+      read_tos: true,
+      read_privacy: true,
+      read_earlyaccess: true,
+      recruiter_userid: null,
+      utm_source: null,
+      bloodlineId: "reclaim-bloodline",
+    });
+    expect(created.success).toBe(true);
+    const reborn = await database.query.userData.findFirst({
+      columns: { userId: true, earnedExperience: true },
+      where: eq(userData.userId, OLD_USER_ID),
+    });
+    expect(reborn?.userId).toBe(OLD_USER_ID);
+    // The column default, not the literal a raw insert would otherwise write.
+    expect(reborn?.earnedExperience).toBe(2000);
+  });
+
   it("does not let a deleted Clerk identity create another character", async () => {
     const database = await getTestDatabase();
     await deleteUser(database, OLD_USER_ID);

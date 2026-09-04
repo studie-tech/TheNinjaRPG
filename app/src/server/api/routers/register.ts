@@ -12,6 +12,7 @@ import {
   historicalIp,
   questHistory,
   referralSource,
+  storePurchase,
   storeUserIdAlias,
   userAttribute,
   userData,
@@ -24,6 +25,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromNow } from "@/utils/time";
 import { registrationSchema, utmSourceSchema } from "@/validators/register";
@@ -162,6 +164,25 @@ export const registerRouter = createTRPCRouter({
       // earnedExperience is named only for the reminder bonus, for the same reason: naming
       // it always would write a literal where the builder let the column default apply, and
       // a new character would start with none of the experience they are supposed to have.
+      // Deleting a character retires the Clerk identity in the store ownership graph, and
+      // the web flow deliberately leaves the player signed in afterwards. Without this they
+      // could never make another character: the guard below would see their own tombstone
+      // and refuse, permanently, with no way back short of a new email.
+      //
+      // Reclaiming is safe precisely when there is nothing to route: no receipt names this
+      // id, so no ownership graph hangs off it and a fresh character inherits nothing. A
+      // rename alias is untouched, since its target is a real id rather than a tombstone,
+      // and an identity that did buy something stays retired -- its entitlements are still
+      // tangled and that is a support question, not a signup one.
+      await ctx.drizzle.execute(
+        sql`DELETE FROM ${storeUserIdAlias}
+            WHERE oldUserId = ${ctx.userId}
+              AND LEFT(newUserId, ${DELETED_STORE_USER_PREFIX.length}) = ${DELETED_STORE_USER_PREFIX}
+              AND NOT EXISTS (
+                SELECT 1 FROM ${storePurchase}
+                WHERE userId = ${ctx.userId} OR originalUserId = ${ctx.userId}
+              )`,
+      );
       const inserted = await ctx.drizzle.execute(
         sql`INSERT INTO ${userData} (userId, lastIp, recruiterId, username, gender, avatar, villageId, bloodlineId, approvedTos, sector, extraJutsuSlots, immunityUntil, musicOn, sfxOn, buttonSfxOn${reminder ? sql`, earnedExperience` : sql``})
             SELECT ${ctx.userId}, ${ctx.userIp ?? null}, ${input.recruiter_userid ?? null}, ${input.username}, ${input.gender}, ${IMG_DEFAULT_PROFILE_PICTURE}, ${villageData.id ?? null}, ${selectedBloodline.id ?? null}, true, ${villageData.sector}, 0, ${secondsFromNow(24 * 3600)}, ${input.musicOn ?? true}, ${input.sfxOn ?? true}, ${input.buttonSfxOn ?? true}${reminder ? sql`, 10000` : sql``}
