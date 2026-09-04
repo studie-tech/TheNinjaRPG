@@ -828,6 +828,29 @@ const extendStoreSubscriptionUnlocked = async (
     }
   }
   if (!receipt) {
+    // Nothing live to extend. Whether that is worth a retry depends on why.
+    //
+    // If a retired receipt for this period exists, the subscription has already ended and
+    // no retry can change that -- the same reasoning as the deleted-owner case above.
+    // BILLING_ISSUE routinely lands after EXPIRATION, and the exact-match return only
+    // covers it when the payload's transaction id matches a stored receipt; without this
+    // an event carrying no transaction id, or one naming a period we never stored, is
+    // answered with a 500 and retried for days against a subscription that is over.
+    //
+    // If there is no receipt at all, the purchase webhook may simply not have arrived yet,
+    // and throwing is what lets a later retry find it.
+    const retired = await client.query.storePurchase.findFirst({
+      columns: { id: true },
+      where: and(
+        inArray(storePurchase.userId, possibleOwners),
+        eq(storePurchase.store, extension.store),
+        eq(storePurchase.productId, extension.productId),
+        eq(storePurchase.isSandbox, isSandbox),
+        isNotNull(storePurchase.federalStatus),
+        isNotNull(storePurchase.revokedAt),
+      ),
+    });
+    if (retired) return;
     throw new Error(
       `No live receipt to extend for ${extension.userId}/${extension.productId}`,
     );

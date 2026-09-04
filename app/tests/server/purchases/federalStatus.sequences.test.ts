@@ -289,6 +289,42 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(next).toBe("GOLD");
   });
 
+  it("acknowledges a billing issue that lands after the subscription ended", async () => {
+    // RevenueCat routinely delivers BILLING_ISSUE after EXPIRATION, and retries a 5xx for
+    // days. Once every receipt for the period is retired there is nothing a retry can
+    // repair, so the event has to be acknowledged rather than answered with an error --
+    // and the payload need not name a transaction we stored.
+    const database = await db();
+    await buyFederal("GOLD", MINUTE);
+    await revokeFederalStatus(database, USER, {
+      occurredAt: new Date(),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+    });
+    await expect(
+      extendStoreSubscription(database, {
+        userId: USER,
+        store: "APPLE",
+        productId: "tnr_federal_gold",
+        expirationAt: new Date(Date.now() + DAY),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("still asks for a retry when the purchase has not arrived yet", async () => {
+    // The other side of the same branch: no receipt at all may only mean the grant webhook
+    // is still in flight, and throwing is what lets a later retry find it.
+    const database = await db();
+    await expect(
+      extendStoreSubscription(database, {
+        userId: USER,
+        store: "APPLE",
+        productId: "tnr_federal_gold",
+        expirationAt: new Date(Date.now() + DAY),
+      }),
+    ).rejects.toThrow(/No live receipt to extend/);
+  });
+
   it("retires the receipt an upgrade left behind", async () => {
     // NORMAL upgraded to GOLD a day later; when GOLD expires, the leftover NORMAL receipt
     // is spent too -- it was superseded, not merely older.
