@@ -73,7 +73,16 @@ set_setting(widget, "SKIP_INSTALL", "YES")
 set_setting(widget, "CODE_SIGN_STYLE", "Automatic")
 set_setting(widget, "TARGETED_DEVICE_FAMILY", "1,2")
 set_setting(widget, "GENERATE_INFOPLIST_FILE", "NO")
-set_setting(widget, "MARKETING_VERSION", "1.0")
+# Mirror the app rather than pinning a literal. App Store Connect rejects an upload whose
+# extension carries a different CFBundleShortVersionString from the app embedding it, and
+# this script runs on every build -- so a pinned value would silently undo the first version
+# bump and fail every upload after it. The fallback matters: a widget with no version at all
+# ships an empty string, which is the worse failure.
+widget.build_configurations.each do |config|
+  app_config = app.build_configurations.find { |c| c.name == config.name }
+  config.build_settings["MARKETING_VERSION"] =
+    app_config&.build_settings&.dig("MARKETING_VERSION") || "1.0"
+end
 set_setting(widget, "CURRENT_PROJECT_VERSION", "1")
 
 # --- Source files ----------------------------------------------------------------------

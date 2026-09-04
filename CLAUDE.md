@@ -124,22 +124,34 @@ The native shells live in `mobile/` — a Capacitor project alongside `soketi/` 
 `spacetimedb-towerdefense/`, with its own `package.json`. See `mobile/README.md` for build
 prerequisites and store setup.
 
-- **`app/src/libs/native/` is the only bridge to the shell.** Every export there no-ops off
-  device, so call sites need no platform checks: `haptics.impact("HEAVY")` simply does
-  nothing in a browser. A biome `noRestrictedImports` rule blocks `@capacitor/*` and the
-  raw `bridge` module everywhere else under `src/`.
+- **`app/src/libs/native/` is the only bridge to the shell**, and it has two kinds of
+  export. *Fire-and-forget* ones — `haptics`, `widgets`, `audioSession`, `liveActivity` —
+  no-op off device, so `haptics.impact("HEAVY")` needs no platform check and does nothing
+  in a browser. *Result-bearing* ones — `appleAuth.authorize`, `oauthBrowser.open`,
+  `purchases.purchase`, `push.register` — reject off device instead, because a sign-in that
+  silently resolved without opening a browser would leave the caller waiting on a redirect
+  that never comes. Call those only from a path that has established it is in the shell.
+  A biome `noRestrictedImports` rule blocks `@capacitor/*` and the raw `bridge` module
+  everywhere else under `src/`.
 - **Capacitor packages are installed in `mobile/`, not `app/`.** `cap sync` needs them next
   to the native projects, and the web app reaches plugins through the `window.Capacitor`
   bridge the shell injects. Adding a plugin means installing it in `mobile/` *and* adding a
   wrapper in `libs/native/`.
-- **Push goes through `sendPushToUsers` in `@/server/utils/push`** — nothing else should
-  talk to APNs or FCM. It resolves devices, honours per-category opt-outs, fans out to both
-  transports and prunes dead tokens. It never throws.
+- **Ordinary notifications go through `sendPushToUsers` in `@/server/utils/push`** — no
+  router should reach a transport directly. It resolves devices, honours per-category
+  opt-outs, fans out to both transports and prunes dead tokens. It never throws. Live
+  Activities are the one exception, and go through `pushActivityUpdate` in the same
+  directory: they address an ActivityKit push token rather than a device, so they cannot
+  use the device fan-out. `hospital.ts` calls it, deferred with `after()` so a round-trip
+  to Apple stays off the player's response.
 - **The `Notification` table is a global announcement feed, not per-user delivery.** Its
   `userId` is the author; recipients are whoever the accompanying `unreadNotifications`
   increment targets. Push is genuinely per-user, so the two are separate systems.
-- **`isNativeUserAgent(ctx.userAgent)`** branches server-side, for surfaces that must
-  differ in the app (App Store guideline 3.1.1 forbids the web purchase flow there).
+- **The store gate is client-side.** `useNativeShell()` branches surfaces that must differ
+  in the app: `points/page.tsx` renders `<NativeStore />` in place of the PayPal flow,
+  because App Store guideline 3.1.1 forbids web checkout there. `isNativeUserAgent()` in
+  `libs/native/userAgent.ts` exists and is tested for a server-side branch, but no router
+  uses it yet.
 
 ## Database Patterns
 

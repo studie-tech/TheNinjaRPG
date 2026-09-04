@@ -289,6 +289,33 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(next).toBe("GOLD");
   });
 
+  it("keeps a cancelled web subscription until its paid period runs out", async () => {
+    // Cancelling on the web sets status without moving updatedAt, and the player has paid
+    // through the period. Dropping them at the next reconcile would take away time they
+    // already bought.
+    const database = await db();
+    await givePaypal("GOLD", "CANCELLED");
+    await database
+      .update(userData)
+      .set({ federalStatus: "GOLD" })
+      .where(eq(userData.userId, USER));
+    await reconcileFederalStatuses(database);
+    expect(await statusOf()).toBe("GOLD");
+  });
+
+  it("does not hand a tier back to someone already cleared", async () => {
+    // The other half: the same cancelled row must not restore a tier once it is gone, or
+    // a reconcile would undo every revocation for anyone holding a stale subscription.
+    const database = await db();
+    await givePaypal("GOLD", "CANCELLED");
+    await database
+      .update(userData)
+      .set({ federalStatus: "NONE" })
+      .where(eq(userData.userId, USER));
+    await reconcileFederalStatuses(database);
+    expect(await statusOf()).toBe("NONE");
+  });
+
   it("acknowledges an extension for a period it has already retired", async () => {
     // RevenueCat redelivers for days and retries a 5xx. Once the period an event describes
     // is retired there is nothing a retry can repair, so it has to be acknowledged rather

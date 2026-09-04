@@ -1637,6 +1637,17 @@ export const reconcileFederalStatuses = async (
           ${sandboxEligibility}
           AND s.revokedAt IS NULL
           AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
+      ) OR (
+        -- Cancelling on the web sets status without moving updatedAt, and the player has
+        -- already paid through the period. Gated on the tier they currently hold, so this
+        -- can only keep what they have -- never hand a tier back to someone the reconcile
+        -- has already cleared, which is what the ACTIVE predicate above is guarding.
+        u.federalStatus = 'GOLD' AND EXISTS (
+          SELECT 1 FROM ${paypalSubscription} p
+          WHERE p.affectedUserId = u.userId
+            AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
+            AND p.federalStatus = 'GOLD'
+        )
       ) THEN 'GOLD'
       WHEN EXISTS (
         SELECT 1 FROM ${paypalSubscription} p
@@ -1652,6 +1663,17 @@ export const reconcileFederalStatuses = async (
           ${sandboxEligibility}
           AND s.revokedAt IS NULL
           AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
+      ) OR (
+        -- Cancelling on the web sets status without moving updatedAt, and the player has
+        -- already paid through the period. Gated on the tier they currently hold, so this
+        -- can only keep what they have -- never hand a tier back to someone the reconcile
+        -- has already cleared, which is what the ACTIVE predicate above is guarding.
+        u.federalStatus = 'SILVER' AND EXISTS (
+          SELECT 1 FROM ${paypalSubscription} p
+          WHERE p.affectedUserId = u.userId
+            AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
+            AND p.federalStatus = 'SILVER'
+        )
       ) THEN 'SILVER'
       WHEN EXISTS (
         SELECT 1 FROM ${paypalSubscription} p
@@ -1667,6 +1689,17 @@ export const reconcileFederalStatuses = async (
           ${sandboxEligibility}
           AND s.revokedAt IS NULL
           AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
+      ) OR (
+        -- Cancelling on the web sets status without moving updatedAt, and the player has
+        -- already paid through the period. Gated on the tier they currently hold, so this
+        -- can only keep what they have -- never hand a tier back to someone the reconcile
+        -- has already cleared, which is what the ACTIVE predicate above is guarding.
+        u.federalStatus = 'NORMAL' AND EXISTS (
+          SELECT 1 FROM ${paypalSubscription} p
+          WHERE p.affectedUserId = u.userId
+            AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
+            AND p.federalStatus = 'NORMAL'
+        )
       ) THEN 'NORMAL'
       ELSE 'NONE'
     END
