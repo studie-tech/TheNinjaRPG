@@ -121,6 +121,12 @@ export default function PaypalShop() {
     return <Loader explanation="Loading store" />;
   }
 
+  // Ahead of the branch below, because the native store is reached without passing through
+  // the sub-components that carry this gate on the web. Without it a banned player can
+  // still complete an in-app purchase, and the webhook credits an account the rest of the
+  // game locks out.
+  if (userData.isBanned) return <BanInfo />;
+
   // App Store guideline 3.1.1 requires digital goods to be sold through in-app purchase,
   // and both stores treat a web checkout inside the app as a violation. The native shell
   // therefore never sees the PayPal flow.

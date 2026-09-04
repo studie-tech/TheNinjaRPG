@@ -107,10 +107,12 @@ export const useNativeAuth = () => {
           return { status: "error", message: "The provider returned no sign-in URL" };
         }
 
-        // Subscribe before opening: on a fast provider the deep link can arrive before
-        // the browser sheet has finished animating in. Dismissal is raced against the
-        // redirect because only one of the two will ever happen — waiting on the redirect
-        // alone leaves a cancelled sign-in pending forever, with the buttons disabled.
+        // Subscribe before opening: on a fast provider the deep link can arrive before the
+        // browser sheet has finished animating in. Dismissal is raced against the redirect
+        // so a genuine cancellation cannot leave the sign-in pending forever with the
+        // buttons disabled — but the two are not mutually exclusive. A successful return
+        // closes the sheet as well, and nothing orders the two events, so the dismissal
+        // alone says nothing about which happened; that is settled below.
         const outcome = await new Promise<"redirected" | "dismissed">((resolve) => {
           const stopUrl = appEvents.onUrlOpen((url) => {
             if (url.startsWith(OAUTH_REDIRECT)) resolve("redirected");
@@ -123,7 +125,21 @@ export const useNativeAuth = () => {
           void oauthBrowser.open(target.toString()).catch(() => resolve("dismissed"));
         });
 
-        if (outcome === "dismissed") return { status: "cancelled" };
+        if (outcome === "dismissed") {
+          // The sheet closing is not proof the player backed out: the redirect closes it
+          // too, and if that event lands first this branch runs on a sign-in Clerk has
+          // already advanced. Ask Clerk what happened rather than inferring it from the
+          // dismissal, or a completed sign-in is reported as a cancellation and the player
+          // is left signed out with a session they cannot see.
+          const settled = await signIn.reload().catch(() => null);
+          if (
+            settled?.createdSessionId ||
+            settled?.firstFactorVerification.status === "transferable"
+          ) {
+            return await completeOrTransfer(settled);
+          }
+          return { status: "cancelled" };
+        }
         await oauthBrowser.close();
 
         // The sign-in was advanced by the browser, not by this page, so the local copy is
