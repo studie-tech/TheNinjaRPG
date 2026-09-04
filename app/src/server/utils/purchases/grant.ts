@@ -1590,13 +1590,29 @@ export const setFederalStatusWithStoreFloor = async (
       AND ${storePurchase.federalStatus} = ${tier}
   )`;
   const paypalRank = rankOf(paypalStatus);
+  // The same grace reconcileFederalStatuses applies, and for the same reason: cancelling on
+  // the web leaves the row CANCELLED without moving updatedAt, so paypalFederalFloor --
+  // which counts only ACTIVE rows -- reports NONE for a period the player has already paid
+  // for. Without this, a store grant, revocation or transfer arriving inside that window
+  // writes NONE, and the reconcile deliberately never restores a cleared tier, so the rest
+  // of the paid period would be gone.
+  //
+  // Gated on the tier the column already holds, so it can only preserve, never restore.
+  const paypalGrace = (
+    tier: FederalStatus,
+  ) => sql`(${userData.federalStatus} = ${tier} AND EXISTS (
+      SELECT 1 FROM ${paypalSubscription}
+      WHERE ${paypalSubscription.affectedUserId} = ${userId}
+        AND ${paypalSubscription.updatedAt} >= ${new Date(Date.now() - PAYPAL_WINDOW_MS)}
+        AND ${paypalSubscription.federalStatus} = ${tier}
+    ))`;
 
   return await client.execute(sql`
     UPDATE ${userData}
     SET ${userData.federalStatus} = CASE
-      WHEN ${paypalRank >= rankOf("GOLD")} OR ${hasTier("GOLD")} THEN 'GOLD'
-      WHEN ${paypalRank >= rankOf("SILVER")} OR ${hasTier("SILVER")} THEN 'SILVER'
-      WHEN ${paypalRank >= rankOf("NORMAL")} OR ${hasTier("NORMAL")} THEN 'NORMAL'
+      WHEN ${paypalRank >= rankOf("GOLD")} OR ${hasTier("GOLD")} OR ${paypalGrace("GOLD")} THEN 'GOLD'
+      WHEN ${paypalRank >= rankOf("SILVER")} OR ${hasTier("SILVER")} OR ${paypalGrace("SILVER")} THEN 'SILVER'
+      WHEN ${paypalRank >= rankOf("NORMAL")} OR ${hasTier("NORMAL")} OR ${paypalGrace("NORMAL")} THEN 'NORMAL'
       ELSE 'NONE'
     END
     WHERE ${userData.userId} = ${userId}

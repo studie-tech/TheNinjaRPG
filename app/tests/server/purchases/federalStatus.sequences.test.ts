@@ -303,6 +303,21 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(await statusOf()).toBe("GOLD");
   });
 
+  it("keeps the paid period when a store event lands inside it", async () => {
+    // The grace has to hold in both writers. A store revocation or transfer during the
+    // cancelled-but-paid window recomputes the column through setFederalStatusWithStoreFloor,
+    // and that path counts only ACTIVE PayPal rows -- so without the same gate it would
+    // write NONE, which the reconcile then refuses to undo.
+    const database = await db();
+    await givePaypal("GOLD", "CANCELLED");
+    await database
+      .update(userData)
+      .set({ federalStatus: "GOLD" })
+      .where(eq(userData.userId, USER));
+    await setFederalStatusWithStoreFloor(database, USER, "NONE");
+    expect(await statusOf()).toBe("GOLD");
+  });
+
   it("does not hand a tier back to someone already cleared", async () => {
     // The other half: the same cancelled row must not restore a tier once it is gone, or
     // a reconcile would undo every revocation for anyone holding a stale subscription.
