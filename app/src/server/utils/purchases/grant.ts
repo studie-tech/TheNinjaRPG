@@ -1461,14 +1461,14 @@ export const retireStoreUserId = async (
   // removes whatever arrived before it. Ordered the other way round, a registration
   // slipping between the cleanup and the tombstone would outlive the account.
   //
-  // A retry keeps the marker it first wrote. The prefix is compared by length rather than
-  // with LIKE, whose wildcards the prefix's own underscores would otherwise trip.
+  // Whoever wrote this row first keeps it. A retry therefore keeps its own marker, and --
+  // the reason this matters without the lock -- a rename or transfer that has already
+  // pointed this id somewhere real is not overwritten with a tombstone, which would strand
+  // every store lookup for the old id on a deleted identity.
   await client.execute(
     sql`INSERT INTO ${storeUserIdAlias} (oldUserId, newUserId, updatedAt)
         VALUES (${userId}, ${tombstone}, ${new Date()})
-        ON DUPLICATE KEY UPDATE
-          newUserId = IF(LEFT(newUserId, ${DELETED_STORE_USER_PREFIX.length}) = ${DELETED_STORE_USER_PREFIX}, newUserId, ${tombstone}),
-          updatedAt = ${new Date()}`,
+        ON DUPLICATE KEY UPDATE newUserId = newUserId, updatedAt = ${new Date()}`,
   );
   // Whatever landed before the tombstone. Store receipts are deliberately left alone --
   // they are an audit ledger and outlive the account by design -- so this reaches only the

@@ -158,9 +158,13 @@ export const registerRouter = createTRPCRouter({
       // Every nullable binding is written `?? null` on purpose: a raw template renders an
       // undefined value as nothing at all, which produces a syntax error rather than a
       // NULL, and the builder API is what normally hides that.
+      //
+      // earnedExperience is named only for the reminder bonus, for the same reason: naming
+      // it always would write a literal where the builder let the column default apply, and
+      // a new character would start with none of the experience they are supposed to have.
       const inserted = await ctx.drizzle.execute(
-        sql`INSERT INTO ${userData} (userId, lastIp, recruiterId, username, gender, avatar, villageId, bloodlineId, approvedTos, sector, extraJutsuSlots, immunityUntil, musicOn, sfxOn, buttonSfxOn, earnedExperience)
-            SELECT ${ctx.userId}, ${ctx.userIp ?? null}, ${input.recruiter_userid ?? null}, ${input.username}, ${input.gender}, ${IMG_DEFAULT_PROFILE_PICTURE}, ${villageData.id ?? null}, ${selectedBloodline.id ?? null}, true, ${villageData.sector}, 0, ${secondsFromNow(24 * 3600)}, ${input.musicOn ?? true}, ${input.sfxOn ?? true}, ${input.buttonSfxOn ?? true}, ${reminder ? 10000 : 0}
+        sql`INSERT INTO ${userData} (userId, lastIp, recruiterId, username, gender, avatar, villageId, bloodlineId, approvedTos, sector, extraJutsuSlots, immunityUntil, musicOn, sfxOn, buttonSfxOn${reminder ? sql`, earnedExperience` : sql``})
+            SELECT ${ctx.userId}, ${ctx.userIp ?? null}, ${input.recruiter_userid ?? null}, ${input.username}, ${input.gender}, ${IMG_DEFAULT_PROFILE_PICTURE}, ${villageData.id ?? null}, ${selectedBloodline.id ?? null}, true, ${villageData.sector}, 0, ${secondsFromNow(24 * 3600)}, ${input.musicOn ?? true}, ${input.sfxOn ?? true}, ${input.buttonSfxOn ?? true}${reminder ? sql`, 10000` : sql``}
             WHERE NOT EXISTS (SELECT 1 FROM ${storeUserIdAlias} WHERE oldUserId = ${ctx.userId})
             ON DUPLICATE KEY UPDATE userId = userId`,
       );
