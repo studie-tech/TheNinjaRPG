@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "a3c0adeb-f4b9-435b-9212-b48b03bb7ab4",
+  "id": "10a255f4-de58-46f7-8a0e-90b82b52c236",
   "prevId": "564c721e-6432-408f-bcba-179d39f16ac6",
   "tables": {
     "AbEvent": {
@@ -10291,6 +10291,116 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
+    "StoreEntitlementRevocation": {
+      "name": "StoreEntitlementRevocation",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "eventId": {
+          "name": "eventId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "store": {
+          "name": "store",
+          "type": "enum('APPLE','GOOGLE')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "isSandbox": {
+          "name": "isSandbox",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "productId": {
+          "name": "productId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "transactionId": {
+          "name": "transactionId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revokedThrough": {
+          "name": "revokedThrough",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "occurredAt": {
+          "name": "occurredAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        }
+      },
+      "indexes": {
+        "StoreEntitlementRevocation_eventId_userId_store_isSandbox_key": {
+          "name": "StoreEntitlementRevocation_eventId_userId_store_isSandbox_key",
+          "columns": [
+            "eventId",
+            "userId",
+            "store",
+            "isSandbox"
+          ],
+          "isUnique": true
+        },
+        "StoreEntitlementRevocation_owner_env_cutoff_idx": {
+          "name": "StoreEntitlementRevocation_owner_env_cutoff_idx",
+          "columns": [
+            "userId",
+            "store",
+            "isSandbox",
+            "revokedThrough"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "StoreEntitlementRevocation_id": {
+          "name": "StoreEntitlementRevocation_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
     "StoreEntitlementState": {
       "name": "StoreEntitlementState",
       "columns": {
@@ -10315,6 +10425,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "isSandbox": {
+          "name": "isSandbox",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "revokedThrough": {
           "name": "revokedThrough",
           "type": "datetime(3)",
@@ -10332,11 +10450,12 @@
         }
       },
       "indexes": {
-        "StoreEntitlementState_userId_store_key": {
-          "name": "StoreEntitlementState_userId_store_key",
+        "StoreEntitlementState_userId_store_isSandbox_key": {
+          "name": "StoreEntitlementState_userId_store_isSandbox_key",
           "columns": [
             "userId",
-            "store"
+            "store",
+            "isSandbox"
           ],
           "isUnique": true
         }
@@ -10365,6 +10484,13 @@
         },
         "userId": {
           "name": "userId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "originalUserId": {
+          "name": "originalUserId",
           "type": "varchar(191)",
           "primaryKey": false,
           "notNull": true,
@@ -10435,6 +10561,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "revokedAt": {
           "name": "revokedAt",
           "type": "datetime(3)",
@@ -10481,6 +10614,14 @@
             "purchasedAt"
           ],
           "isUnique": false
+        },
+        "StorePurchase_originalUserId_store_idx": {
+          "name": "StorePurchase_originalUserId_store_idx",
+          "columns": [
+            "originalUserId",
+            "store"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {},
@@ -10489,6 +10630,150 @@
           "name": "StorePurchase_id",
           "columns": [
             "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "StorePurchaseTransfer": {
+      "name": "StorePurchaseTransfer",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "eventId": {
+          "name": "eventId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sourceUserId": {
+          "name": "sourceUserId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "destinationUserId": {
+          "name": "destinationUserId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "store": {
+          "name": "store",
+          "type": "enum('APPLE','GOOGLE')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "isSandbox": {
+          "name": "isSandbox",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "transferredAt": {
+          "name": "transferredAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        }
+      },
+      "indexes": {
+        "StorePurchaseTransfer_eventId_sourceUserId_store_isSandbox_key": {
+          "name": "StorePurchaseTransfer_eventId_sourceUserId_store_isSandbox_key",
+          "columns": [
+            "eventId",
+            "sourceUserId",
+            "store",
+            "isSandbox"
+          ],
+          "isUnique": true
+        },
+        "StorePurchaseTransfer_source_env_time_idx": {
+          "name": "StorePurchaseTransfer_source_env_time_idx",
+          "columns": [
+            "sourceUserId",
+            "store",
+            "isSandbox",
+            "transferredAt"
+          ],
+          "isUnique": false
+        },
+        "StorePurchaseTransfer_destinationUserId_store_isSandbox_idx": {
+          "name": "StorePurchaseTransfer_destinationUserId_store_isSandbox_idx",
+          "columns": [
+            "destinationUserId",
+            "store",
+            "isSandbox"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "StorePurchaseTransfer_id": {
+          "name": "StorePurchaseTransfer_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "StoreUserIdAlias": {
+      "name": "StoreUserIdAlias",
+      "columns": {
+        "oldUserId": {
+          "name": "oldUserId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "newUserId": {
+          "name": "newUserId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "StoreUserIdAlias_oldUserId": {
+          "name": "StoreUserIdAlias_oldUserId",
+          "columns": [
+            "oldUserId"
           ]
         }
       },
@@ -14210,18 +14495,19 @@
         }
       },
       "indexes": {
-        "UserLiveActivity_userId_kind_key": {
-          "name": "UserLiveActivity_userId_kind_key",
+        "UserLiveActivity_userId_activityId_key": {
+          "name": "UserLiveActivity_userId_activityId_key",
           "columns": [
             "userId",
-            "kind"
+            "activityId"
           ],
           "isUnique": true
         },
-        "UserLiveActivity_activityId_idx": {
-          "name": "UserLiveActivity_activityId_idx",
+        "UserLiveActivity_userId_kind_idx": {
+          "name": "UserLiveActivity_userId_kind_idx",
           "columns": [
-            "activityId"
+            "userId",
+            "kind"
           ],
           "isUnique": false
         },

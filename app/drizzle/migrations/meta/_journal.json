@@ -313,64 +313,8 @@
     {
       "idx": 44,
       "version": "5",
-      "when": 1788202700140,
-      "tag": "0044_light_daredevil",
-      "breakpoints": false
-    },
-    {
-      "idx": 45,
-      "version": "5",
-      "when": 1788247354074,
-      "tag": "0045_typical_gargoyle",
-      "breakpoints": false
-    },
-    {
-      "idx": 46,
-      "version": "5",
-      "when": 1788253691539,
-      "tag": "0046_charming_old_lace",
-      "breakpoints": false
-    },
-    {
-      "idx": 47,
-      "version": "5",
-      "when": 1788257876335,
-      "tag": "0047_even_shatterstar",
-      "breakpoints": false
-    },
-    {
-      "idx": 48,
-      "version": "5",
-      "when": 1788261810081,
-      "tag": "0048_store_purchase_origin",
-      "breakpoints": false
-    },
-    {
-      "idx": 49,
-      "version": "5",
-      "when": 1788262093416,
-      "tag": "0049_store_user_id_alias",
-      "breakpoints": false
-    },
-    {
-      "idx": 50,
-      "version": "5",
-      "when": 1788262411091,
-      "tag": "0050_stable_store_transfer_events",
-      "breakpoints": false
-    },
-    {
-      "idx": 51,
-      "version": "5",
-      "when": 1788267151309,
-      "tag": "0051_fair_smasher",
-      "breakpoints": false
-    },
-    {
-      "idx": 52,
-      "version": "5",
-      "when": 1788276370614,
-      "tag": "0052_mushy_whizzer",
+      "when": 1788532162123,
+      "tag": "0044_native_app_foundations",
       "breakpoints": false
     }
   ]
