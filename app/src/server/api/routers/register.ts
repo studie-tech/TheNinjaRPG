@@ -24,7 +24,6 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
-import type { DrizzleClient } from "@/server/db";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromNow } from "@/utils/time";
 import { registrationSchema, utmSourceSchema } from "@/validators/register";
@@ -147,53 +146,36 @@ export const registerRouter = createTRPCRouter({
       ].sort();
       // The account row is written on its own before anything that references it, so
       // registration never leaves rows behind that look like orphans to the cleaner.
-      const createdUser = await ctx.drizzle.transaction(async (tx) => {
-        const lockedClient = tx as unknown as DrizzleClient;
-        // A deleted Clerk identity is permanently retired from the store ownership graph.
-        // Serialize registration with deletion so the same id cannot create a new player
-        // whose future store receipts are routed to the old account's tombstone.
-        //
-        // The tombstone's own row is the lock: oldUserId is the primary key, so taking it
-        // for update here blocks the retirement that would insert it, and vice versa.
-        // Scoped to this one id deliberately -- signing up is not an ownership-graph
-        // mutation, and taking the global store mutex would serialize every registration
-        // in the game behind every purchase webhook.
-        const [retiredIdentity] = await lockedClient
-          .select({ oldUserId: storeUserIdAlias.oldUserId })
-          .from(storeUserIdAlias)
-          .where(eq(storeUserIdAlias.oldUserId, ctx.userId))
-          .for("update");
-        if (retiredIdentity) return { rowsAffected: 0, retired: true };
-        const inserted = await lockedClient
-          .insert(userData)
-          .values({
-            userId: ctx.userId,
-            lastIp: ctx.userIp,
-            recruiterId: input.recruiter_userid,
-            username: input.username,
-            gender: input.gender,
-            avatar: IMG_DEFAULT_PROFILE_PICTURE,
-            villageId: villageData.id,
-            bloodlineId: selectedBloodline.id,
-            approvedTos: true,
-            sector: villageData.sector,
-            extraJutsuSlots: 0,
-            immunityUntil: secondsFromNow(24 * 3600),
-            musicOn: input.musicOn ?? true,
-            sfxOn: input.sfxOn ?? true,
-            buttonSfxOn: input.buttonSfxOn ?? true,
-            ...(reminder ? { earnedExperience: 10000 } : {}),
-          })
-          .onDuplicateKeyUpdate({ set: { userId: sql`userId` } });
-        return { rowsAffected: inserted.rowsAffected, retired: false };
-      });
-      if (createdUser.retired) {
+      // One guarded insert rather than a lock. The tombstone test rides in the statement
+      // as a NOT EXISTS, so a retirement committing alongside this either lands first --
+      // and the insert matches nothing -- or lands after, against a row that already
+      // exists and which the retirement then purges. Nothing is held open between the
+      // check and the write, so there is no transaction here to wait on.
+      //
+      // The primary key carries the other guard: a second character for the same account
+      // updates nothing and reports no rows.
+      //
+      // Every nullable binding is written `?? null` on purpose: a raw template renders an
+      // undefined value as nothing at all, which produces a syntax error rather than a
+      // NULL, and the builder API is what normally hides that.
+      const inserted = await ctx.drizzle.execute(
+        sql`INSERT INTO ${userData} (userId, lastIp, recruiterId, username, gender, avatar, villageId, bloodlineId, approvedTos, sector, extraJutsuSlots, immunityUntil, musicOn, sfxOn, buttonSfxOn, earnedExperience)
+            SELECT ${ctx.userId}, ${ctx.userIp ?? null}, ${input.recruiter_userid ?? null}, ${input.username}, ${input.gender}, ${IMG_DEFAULT_PROFILE_PICTURE}, ${villageData.id ?? null}, ${selectedBloodline.id ?? null}, true, ${villageData.sector}, 0, ${secondsFromNow(24 * 3600)}, ${input.musicOn ?? true}, ${input.sfxOn ?? true}, ${input.buttonSfxOn ?? true}, ${reminder ? 10000 : 0}
+            WHERE NOT EXISTS (SELECT 1 FROM ${storeUserIdAlias} WHERE oldUserId = ${ctx.userId})
+            ON DUPLICATE KEY UPDATE userId = userId`,
+      );
+      if (Number(inserted.rowsAffected ?? 0) === 0) {
+        // Nothing was written, which is one of the two guards. Only now is it worth a read
+        // to say which, so the successful path stays a single statement.
+        const retired = await ctx.drizzle.query.storeUserIdAlias.findFirst({
+          columns: { oldUserId: true },
+          where: eq(storeUserIdAlias.oldUserId, ctx.userId),
+        });
         return errorResponse(
-          "This account was deleted and cannot create another character",
+          retired
+            ? "This account was deleted and cannot create another character"
+            : "Character already created for this account",
         );
-      }
-      if (createdUser.rowsAffected === 0) {
-        return errorResponse("Character already created for this account");
       }
       await ctx.drizzle
         .delete(userAttribute)
