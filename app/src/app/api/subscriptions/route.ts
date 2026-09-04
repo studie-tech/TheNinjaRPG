@@ -42,7 +42,12 @@ export async function GET() {
           .set({
             status: paypalStatus,
             federalStatus: newFedStatus,
-            updatedAt: new Date(),
+            // Only while the subscription is live. updatedAt is the last-payment marker
+            // that every federal window keys on, so refreshing it on the row being marked
+            // done would read as a fresh payment and hand the player another 31 days of a
+            // tier they have stopped paying for. A finished row is never selected again --
+            // this query takes only ACTIVE ones -- so leaving it is safe.
+            ...(isDone ? {} : { updatedAt: new Date() }),
           })
           .where(eq(paypalSubscription.id, subscription.id));
         // PayPal decides its own tier, but not the column: a player may also be paying
@@ -75,7 +80,9 @@ export async function GET() {
         .update(paypalSubscription)
         .set({
           status: isDone ? "CANCELLED" : "ACTIVE",
-          updatedAt: new Date(),
+          // As above: the reputation-funded row's last-payment marker has to survive being
+          // cancelled, or the tier outlives what was paid for.
+          ...(isDone ? {} : { updatedAt: new Date() }),
         })
         .where(eq(paypalSubscription.id, subscription.id));
       await setFederalStatusWithStoreFloor(

@@ -318,6 +318,30 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(await statusOf()).toBe("GOLD");
   });
 
+  it("drops the tier when the paid period is genuinely over", async () => {
+    // The grace keys on updatedAt as the last payment. A subscription the cron has marked
+    // finished carries a marker at least 31 days old -- that is the only kind of row it
+    // selects -- so the window has closed and the tier must go, whichever writer runs.
+    const database = await db();
+    await givePaypal("GOLD", "CANCELLED");
+    await database
+      .update(paypalSubscription)
+      .set({ updatedAt: new Date(Date.now() - 40 * DAY) })
+      .where(eq(paypalSubscription.affectedUserId, USER));
+    await database
+      .update(userData)
+      .set({ federalStatus: "GOLD" })
+      .where(eq(userData.userId, USER));
+    await setFederalStatusWithStoreFloor(database, USER, "NONE");
+    expect(await statusOf()).toBe("NONE");
+    await database
+      .update(userData)
+      .set({ federalStatus: "GOLD" })
+      .where(eq(userData.userId, USER));
+    await reconcileFederalStatuses(database);
+    expect(await statusOf()).toBe("NONE");
+  });
+
   it("does not hand a tier back to someone already cleared", async () => {
     // The other half: the same cancelled row must not restore a tier once it is gone, or
     // a reconcile would undo every revocation for anyone holding a stale subscription.
