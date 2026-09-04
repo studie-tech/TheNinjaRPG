@@ -284,8 +284,26 @@ describeWithDatabase("staff user-id rename", () => {
     expect(reborn?.earnedExperience).toBe(2000);
   });
 
-  it("does not let a deleted Clerk identity create another character", async () => {
+  it("does not let a deleted identity with store history create another character", async () => {
+    // A receipt naming this id means an ownership graph still hangs off it, so the
+    // retirement stands and a fresh character must not inherit it. The player who bought
+    // nothing is the other case, covered above.
     const database = await getTestDatabase();
+    await database.insert(storePurchase).values({
+      id: nanoid(),
+      userId: OLD_USER_ID,
+      originalUserId: OLD_USER_ID,
+      transactionId: "retired-with-history",
+      productId: "tnr_reps_tier1",
+      store: "APPLE",
+      reputationPoints: 8,
+      federalStatus: null,
+      isSandbox: false,
+      acceptedAt: new Date(),
+      grantedAt: new Date(),
+      purchasedAt: new Date(),
+      rawData: {},
+    });
     await deleteUser(database, OLD_USER_ID);
     await Promise.all([
       database.insert(village).values({
