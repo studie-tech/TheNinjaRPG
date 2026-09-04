@@ -289,11 +289,32 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(next).toBe("GOLD");
   });
 
-  it("acknowledges a billing issue that lands after the subscription ended", async () => {
-    // RevenueCat routinely delivers BILLING_ISSUE after EXPIRATION, and retries a 5xx for
-    // days. Once every receipt for the period is retired there is nothing a retry can
-    // repair, so the event has to be acknowledged rather than answered with an error --
-    // and the payload need not name a transaction we stored.
+  it("acknowledges an extension for a period it has already retired", async () => {
+    // RevenueCat redelivers for days and retries a 5xx. Once the period an event describes
+    // is retired there is nothing a retry can repair, so it has to be acknowledged rather
+    // than answered with an error -- and the payload need not name a transaction we stored.
+    const database = await db();
+    await buyFederal("GOLD", MINUTE);
+    await revokeFederalStatus(database, USER, {
+      occurredAt: new Date(),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+    });
+    await expect(
+      extendStoreSubscription(database, {
+        userId: USER,
+        store: "APPLE",
+        productId: "tnr_federal_gold",
+        expirationAt: new Date(Date.now() - 2 * MINUTE),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("retries an extension asking for coverage beyond anything retired", async () => {
+    // Every resubscriber has an old retired receipt, so acknowledging on its mere presence
+    // would drop a real extension whose purchase webhook has not landed yet. Coverage past
+    // what we hold means the period is one we have not recorded, and the retry is what
+    // lets it arrive.
     const database = await db();
     await buyFederal("GOLD", MINUTE);
     await revokeFederalStatus(database, USER, {
@@ -308,7 +329,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
         productId: "tnr_federal_gold",
         expirationAt: new Date(Date.now() + DAY),
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow(/No live receipt to extend/);
   });
 
   it("still asks for a retry when the purchase has not arrived yet", async () => {

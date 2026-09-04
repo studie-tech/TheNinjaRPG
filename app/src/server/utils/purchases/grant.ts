@@ -839,8 +839,8 @@ const extendStoreSubscriptionUnlocked = async (
     //
     // If there is no receipt at all, the purchase webhook may simply not have arrived yet,
     // and throwing is what lets a later retry find it.
-    const retired = await client.query.storePurchase.findFirst({
-      columns: { id: true },
+    const retired = await client.query.storePurchase.findMany({
+      columns: { expiresAt: true, purchasedAt: true },
       where: and(
         inArray(storePurchase.userId, possibleOwners),
         eq(storePurchase.store, extension.store),
@@ -850,7 +850,16 @@ const extendStoreSubscriptionUnlocked = async (
         isNotNull(storePurchase.revokedAt),
       ),
     });
-    if (retired) return;
+    // Only when the event asks for no more coverage than a period we already retired. The
+    // mere existence of a retired receipt is not enough: every resubscriber has one, so
+    // acknowledging on that alone would silently drop a genuine extension whose purchase
+    // webhook has not landed yet. Asking for coverage beyond anything we hold means the
+    // event describes a period we have not recorded, and a retry is what lets it arrive.
+    const covered = retired.some((row) => {
+      const through = row.expiresAt ?? row.purchasedAt;
+      return through.getTime() >= extension.expirationAt.getTime();
+    });
+    if (covered) return;
     throw new Error(
       `No live receipt to extend for ${extension.userId}/${extension.productId}`,
     );
