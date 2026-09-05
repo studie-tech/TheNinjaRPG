@@ -17,12 +17,14 @@ import {
   userPushPreference,
   village,
 } from "@/drizzle/schema";
+import { STARTING_REPUTATION_POINTS } from "@/drizzle/constants";
 import { registerRouter } from "@/server/api/routers/register";
 import { deleteUser, staffRouter } from "@/server/api/routers/staff";
 import { pushRouter } from "@/server/api/routers/push";
 import {
   extendStoreSubscription,
   grantStorePurchase,
+  reconcileFederalStatuses,
   transferStorePurchases,
 } from "@/server/utils/purchases/grant";
 import { insertUsers } from "../setup/factories";
@@ -284,26 +286,44 @@ describeWithDatabase("staff user-id rename", () => {
     expect(reborn?.earnedExperience).toBe(2000);
   });
 
-  it("does not let a deleted identity with store history create another character", async () => {
-    // A receipt naming this id means an ownership graph still hangs off it, so the
-    // retirement stands and a fresh character must not inherit it. The player who bought
-    // nothing is the other case, covered above.
+  it("lets a deleted identity with store history make another character, and its subscription follows", async () => {
+    // Deleting a character forfeits what it was granted, but the identity is still the
+    // subscriber's: receipts are kept, each is idempotent by transactionId, and the tier an
+    // active subscription pays for belongs on whichever character the identity has now.
     const database = await getTestDatabase();
-    await database.insert(storePurchase).values({
-      id: nanoid(),
-      userId: OLD_USER_ID,
-      originalUserId: OLD_USER_ID,
-      transactionId: "retired-with-history",
-      productId: "tnr_reps_tier1",
-      store: "APPLE",
-      reputationPoints: 8,
-      federalStatus: null,
-      isSandbox: false,
-      acceptedAt: new Date(),
-      grantedAt: new Date(),
-      purchasedAt: new Date(),
-      rawData: {},
-    });
+    const purchasedAt = new Date();
+    await database.insert(storePurchase).values([
+      {
+        id: nanoid(),
+        userId: OLD_USER_ID,
+        originalUserId: OLD_USER_ID,
+        transactionId: "reps-spent-before-deletion",
+        productId: "tnr_reps_tier1",
+        store: "APPLE",
+        reputationPoints: 8,
+        federalStatus: null,
+        isSandbox: false,
+        acceptedAt: purchasedAt,
+        grantedAt: purchasedAt,
+        purchasedAt,
+        rawData: {},
+      },
+      {
+        id: nanoid(),
+        userId: OLD_USER_ID,
+        originalUserId: OLD_USER_ID,
+        transactionId: "gold-still-paid-for",
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        federalStatus: "GOLD",
+        isSandbox: false,
+        acceptedAt: purchasedAt,
+        grantedAt: purchasedAt,
+        purchasedAt,
+        expiresAt: new Date(purchasedAt.getTime() + 20 * 24 * 60 * 60 * 1000),
+        rawData: {},
+      },
+    ]);
     await deleteUser(database, OLD_USER_ID);
     await Promise.all([
       database.insert(village).values({
@@ -322,33 +342,37 @@ describeWithDatabase("staff user-id rename", () => {
       }),
     ]);
     const caller = await callerFor(registerRouter, OLD_USER_ID);
-
-    await expect(
-      caller.createCharacter({
-        username: "Reborn",
-        gender: "Male",
-        hair_color: "Black",
-        eye_color: "Blue",
-        skin_color: "Light",
-        attribute_1: "Soft features",
-        attribute_2: "Glasses",
-        attribute_3: "Short Hair",
-        read_tos: true,
-        read_privacy: true,
-        read_earlyaccess: true,
-        recruiter_userid: null,
-        utm_source: null,
-        bloodlineId: "registration-bloodline",
-      }),
-    ).resolves.toEqual({
-      success: false,
-      message: "This account was deleted and cannot create another character",
+    const created = await caller.createCharacter({
+      username: "Reborn",
+      gender: "Male",
+      hair_color: "Black",
+      eye_color: "Blue",
+      skin_color: "Light",
+      attribute_1: "Soft features",
+      attribute_2: "Glasses",
+      attribute_3: "Short Hair",
+      read_tos: true,
+      read_privacy: true,
+      read_earlyaccess: true,
+      recruiter_userid: null,
+      utm_source: null,
+      bloodlineId: "registration-bloodline",
     });
-    expect(
-      await database.query.userData.findFirst({
+    expect(created.success).toBe(true);
+    await reconcileFederalStatuses(database);
+    const [reborn, alias] = await Promise.all([
+      database.query.userData.findFirst({
+        columns: { federalStatus: true, reputationPoints: true },
         where: eq(userData.userId, OLD_USER_ID),
       }),
-    ).toBeUndefined();
+      database.query.storeUserIdAlias.findFirst({
+        where: eq(storeUserIdAlias.oldUserId, OLD_USER_ID),
+      }),
+    ]);
+    expect(alias).toBeUndefined();
+    expect(reborn?.federalStatus).toBe("GOLD");
+    // The consumable went to the character that is gone; a new one starts from scratch.
+    expect(reborn?.reputationPoints).toBe(STARTING_REPUTATION_POINTS);
   }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
 
   it("purges a device registration that overlaps account retirement", async () => {

@@ -1,4 +1,4 @@
-import { and, eq, notExists, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -12,7 +12,6 @@ import {
   historicalIp,
   questHistory,
   referralSource,
-  storePurchase,
   storeUserIdAlias,
   userAttribute,
   userData,
@@ -149,33 +148,22 @@ export const registerRouter = createTRPCRouter({
       // The account row is written on its own before anything that references it, so
       // registration never leaves rows behind that look like orphans to the cleaner.
       //
-      // Deleting a character retires the Clerk identity in the store ownership graph, and
-      // the web flow deliberately leaves the player signed in afterwards. Without this they
-      // could never make another character: the check below would see their own tombstone
-      // and refuse, permanently, with no way back short of a new email.
-      //
-      // Reclaiming is safe precisely when there is nothing to route: no receipt names this
-      // id, so no ownership graph hangs off it and a fresh character inherits nothing. A
-      // rename alias is untouched, since its target is a real id rather than a tombstone,
-      // and an identity that did buy something stays retired -- its entitlements are still
-      // tangled and that is a support question, not a signup one.
-      await ctx.drizzle.delete(storeUserIdAlias).where(
-        and(
-          eq(storeUserIdAlias.oldUserId, ctx.userId),
-          sql`LEFT(${storeUserIdAlias.newUserId}, ${DELETED_STORE_USER_PREFIX.length}) = ${DELETED_STORE_USER_PREFIX}`,
-          notExists(
-            ctx.drizzle
-              .select({ one: sql`1` })
-              .from(storePurchase)
-              .where(
-                or(
-                  eq(storePurchase.userId, ctx.userId),
-                  eq(storePurchase.originalUserId, ctx.userId),
-                ),
-              ),
+      // Deleting a character retires the Clerk identity in the store ownership graph so that
+      // store events for a character that no longer exists route nowhere. The identity coming
+      // back to make another character is the ordinary flow, and the web delete deliberately
+      // leaves the player signed in for it, so the tombstone goes. Receipts are kept and each
+      // is idempotent by transactionId, so nothing already granted is granted again; a
+      // subscription still being paid for follows the identity onto the new character at the
+      // next reconcile. A rename alias is different: its target is a live character that this
+      // identity's receipts route to, so it still refuses below.
+      await ctx.drizzle
+        .delete(storeUserIdAlias)
+        .where(
+          and(
+            eq(storeUserIdAlias.oldUserId, ctx.userId),
+            sql`LEFT(${storeUserIdAlias.newUserId}, ${DELETED_STORE_USER_PREFIX.length}) = ${DELETED_STORE_USER_PREFIX}`,
           ),
-        ),
-      );
+        );
       // A plain read rather than a guard folded into the insert. Deletion writes its
       // tombstone first and removes the account row last, dozens of statements apart, so
       // slipping a character past this check would take the same identity deleting and
@@ -188,7 +176,7 @@ export const registerRouter = createTRPCRouter({
       });
       if (retired) {
         return errorResponse(
-          "This account was deleted and cannot create another character",
+          "This account is linked to another character and cannot create a new one",
         );
       }
       const createdUser = await ctx.drizzle
