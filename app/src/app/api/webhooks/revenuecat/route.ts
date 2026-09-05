@@ -190,6 +190,27 @@ export async function POST(request: Request) {
         expiresAt: paidThroughAt(event),
         raw: body,
       });
+      // An unrecognised product is the one ignore worth an alert. The store validated the
+      // purchase and the player was charged, but no catalogue entry means no receipt row,
+      // so nothing records it and nothing can replay it later -- the loss is invisible
+      // until someone complains. The other ignores are routine and expected.
+      if (
+        outcome.status === "ignored" &&
+        outcome.reason.startsWith("Unknown product")
+      ) {
+        Sentry.captureException(
+          new Error(`RevenueCat grant ignored: ${outcome.reason}`),
+          {
+            level: "warning",
+            tags: { source: "revenuecatWebhook" },
+            extra: {
+              productId: event.product_id,
+              transactionId: idempotencyKey(event),
+              appUserId,
+            },
+          },
+        );
+      }
       return Response.json({ handled: outcome.status });
     }
     if (isRefund(event) && !isSandbox(event.environment)) {

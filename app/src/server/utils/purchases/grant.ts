@@ -407,10 +407,19 @@ export const reconcileStorePurchaseOwner = async (
       attempt === 0 ? await receiptQuery : await receiptQuery.for("update");
     if (!receipt) throw new Error(`Missing store receipt ${receiptId}`);
 
-    const canonicalOriginalUserId = await canonicalStoreUserIdForUpdate(
+    // Rename aliases are followed, deletion tombstones are not. A tombstone is a dead end
+    // in the transfer graph -- nothing points out of it -- so taking it as the traversal
+    // origin makes every receipt that was transferred OUT of a since-deleted purchaser
+    // resolve to the tombstone and then fail to find an owner, permanently. The stored id
+    // still names a real node in that graph, so falling back to it walks the chain to
+    // whoever holds the receipt now.
+    const aliasedOriginalUserId = await canonicalStoreUserIdForUpdate(
       client,
       receipt.originalUserId,
     );
+    const canonicalOriginalUserId = isDeletedStoreUserId(aliasedOriginalUserId)
+      ? receipt.originalUserId
+      : aliasedOriginalUserId;
     const resolvedUserId = receipt.federalStatus
       ? await transferredUserId(
           client,
@@ -864,6 +873,12 @@ const extendStoreSubscriptionUnlocked = async (
       `No live receipt to extend for ${extension.userId}/${extension.productId}`,
     );
   }
+  // A period we could not positively identify is not evidence about the receipt we guessed
+  // at. Extending one is harmless; shortening one that is still vouching is not, and a
+  // NULL expiresAt means "open, covered by the 63-day fallback" everywhere except the
+  // COALESCE below, which would read it as having ended at purchasedAt.
+  if (!exact && extension.expirationAt.getTime() <= Date.now()) return;
+
   const ownerUserId = receipt.userId;
 
   await client
@@ -1287,6 +1302,12 @@ const transferStorePurchasesUnlocked = async (
   }
   const toIds = [...new Set(canonicalToIds)];
   if (toIds.length === 0) throw new Error("RevenueCat transfer has no destination");
+  // Account deletion is terminal for the canonical store identity, so no retry can resolve
+  // this destination. Acknowledge rather than asking RevenueCat to retry for days and fire
+  // a Sentry error on every attempt.
+  if (toIds.length === 1 && toIds[0] && isDeletedStoreUserId(toIds[0])) {
+    return { destinationUserId: toIds[0], rowsAffected: 0 };
+  }
 
   const destinations = await client
     .select({ userId: userData.userId })

@@ -452,6 +452,27 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     ).rejects.toThrow(/No live receipt to extend/);
   });
 
+  it("does not shorten a receipt from a period it only guessed at", async () => {
+    // No transaction id to match on, so the candidate loop picks the newest live receipt.
+    // An expiry in the past must not be written onto it: a NULL expiresAt means "open,
+    // covered by the fallback window" everywhere else, and shortening it here would end an
+    // entitlement the player is still paying for.
+    const database = await db();
+    await buyFederal("GOLD", MINUTE);
+    await extendStoreSubscription(database, {
+      userId: USER,
+      store: "APPLE",
+      productId: "tnr_federal_gold",
+      expirationAt: new Date(Date.now() - DAY),
+    });
+    const receipt = await database.query.storePurchase.findFirst({
+      columns: { expiresAt: true },
+      where: eq(storePurchase.userId, USER),
+    });
+    expect(receipt?.expiresAt ?? null).toBeNull();
+    expect(await storeFederalFloor(database, USER)).toBe("GOLD");
+  });
+
   it("retires the receipt an upgrade left behind", async () => {
     // NORMAL upgraded to GOLD a day later; when GOLD expires, the leftover NORMAL receipt
     // is spent too -- it was superseded, not merely older.
