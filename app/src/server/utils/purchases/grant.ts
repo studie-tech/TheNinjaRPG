@@ -1603,9 +1603,15 @@ export const setFederalStatusWithStoreFloor = async (
   // while the period the player paid for is still running. A caller naming a real tier is
   // asserting one, and holding a higher tier over it would change what the web flow has
   // always done -- a subscriber moving to a lower tier has to land on it.
+  //
+  // "At least this tier" rather than "exactly", because the column may have been raised
+  // above the PayPal tier by a store receipt. Gated on equality, a store subscription
+  // ending would leave the CASE unable to see the PayPal period underneath it and would
+  // destroy time the player had paid for. The comparison still cannot raise anyone: it
+  // only permits a tier at or below what they already hold.
   const paypalGrace = (tier: FederalStatus) =>
     paypalStatus === "NONE"
-      ? sql`(${userData.federalStatus} = ${tier} AND EXISTS (
+      ? sql`(FIELD(${userData.federalStatus}, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= ${rankOf(tier) + 1} AND EXISTS (
           SELECT 1 FROM ${paypalSubscription}
           WHERE ${paypalSubscription.affectedUserId} = ${userId}
             AND ${paypalSubscription.updatedAt} >= ${new Date(Date.now() - PAYPAL_WINDOW_MS)}
@@ -1661,10 +1667,12 @@ export const reconcileFederalStatuses = async (
           AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
       ) OR (
         -- Cancelling on the web sets status without moving updatedAt, and the player has
-        -- already paid through the period. Gated on the tier they currently hold, so this
+        -- already paid through the period. Bounded by the tier they currently hold, so it
         -- can only keep what they have -- never hand a tier back to someone the reconcile
-        -- has already cleared, which is what the ACTIVE predicate above is guarding.
-        u.federalStatus = 'GOLD' AND EXISTS (
+        -- has already cleared, which is what the ACTIVE predicate above is guarding. "At
+        -- least", not "exactly", so a store receipt sitting above the PayPal tier does not
+        -- hide the paid period underneath it when that receipt ends.
+        FIELD(u.federalStatus, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 4 AND EXISTS (
           SELECT 1 FROM ${paypalSubscription} p
           WHERE p.affectedUserId = u.userId
             AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
@@ -1687,10 +1695,12 @@ export const reconcileFederalStatuses = async (
           AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
       ) OR (
         -- Cancelling on the web sets status without moving updatedAt, and the player has
-        -- already paid through the period. Gated on the tier they currently hold, so this
+        -- already paid through the period. Bounded by the tier they currently hold, so it
         -- can only keep what they have -- never hand a tier back to someone the reconcile
-        -- has already cleared, which is what the ACTIVE predicate above is guarding.
-        u.federalStatus = 'SILVER' AND EXISTS (
+        -- has already cleared, which is what the ACTIVE predicate above is guarding. "At
+        -- least", not "exactly", so a store receipt sitting above the PayPal tier does not
+        -- hide the paid period underneath it when that receipt ends.
+        FIELD(u.federalStatus, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 3 AND EXISTS (
           SELECT 1 FROM ${paypalSubscription} p
           WHERE p.affectedUserId = u.userId
             AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
@@ -1713,10 +1723,12 @@ export const reconcileFederalStatuses = async (
           AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
       ) OR (
         -- Cancelling on the web sets status without moving updatedAt, and the player has
-        -- already paid through the period. Gated on the tier they currently hold, so this
+        -- already paid through the period. Bounded by the tier they currently hold, so it
         -- can only keep what they have -- never hand a tier back to someone the reconcile
-        -- has already cleared, which is what the ACTIVE predicate above is guarding.
-        u.federalStatus = 'NORMAL' AND EXISTS (
+        -- has already cleared, which is what the ACTIVE predicate above is guarding. "At
+        -- least", not "exactly", so a store receipt sitting above the PayPal tier does not
+        -- hide the paid period underneath it when that receipt ends.
+        FIELD(u.federalStatus, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 2 AND EXISTS (
           SELECT 1 FROM ${paypalSubscription} p
           WHERE p.affectedUserId = u.userId
             AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY

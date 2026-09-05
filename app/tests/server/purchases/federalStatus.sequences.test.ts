@@ -342,6 +342,46 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(await statusOf()).toBe("NONE");
   });
 
+  it("keeps the PayPal period underneath a store tier that ends", async () => {
+    // Cancelled SILVER on the web, still inside its paid window, then a store GOLD on top.
+    // When the store subscription ends, the SILVER they paid for has to reappear -- gated
+    // on the exact column value it could not, because the column still read GOLD.
+    const database = await db();
+    await givePaypal("SILVER", "CANCELLED");
+    await database
+      .update(userData)
+      .set({ federalStatus: "GOLD" })
+      .where(eq(userData.userId, USER));
+    await setFederalStatusWithStoreFloor(database, USER, "NONE");
+    expect(await statusOf()).toBe("SILVER");
+  });
+
+  it("does not raise anyone above the tier they already hold", async () => {
+    // The other edge of "at least": a recent GOLD row must not lift someone sitting on
+    // SILVER, or the grace becomes a restore.
+    const database = await db();
+    await givePaypal("GOLD", "CANCELLED");
+    await database
+      .update(userData)
+      .set({ federalStatus: "SILVER" })
+      .where(eq(userData.userId, USER));
+    await setFederalStatusWithStoreFloor(database, USER, "NONE");
+    expect(await statusOf()).not.toBe("GOLD");
+  });
+
+  it("lets a web downgrade land instead of holding the higher tier", async () => {
+    // Cancel GOLD, then subscribe SILVER. The grace must not hold GOLD over a caller that
+    // is naming a real tier, or the branch changes what the web flow has always done.
+    const database = await db();
+    await givePaypal("GOLD", "CANCELLED");
+    await database
+      .update(userData)
+      .set({ federalStatus: "GOLD" })
+      .where(eq(userData.userId, USER));
+    await setFederalStatusWithStoreFloor(database, USER, "SILVER");
+    expect(await statusOf()).toBe("SILVER");
+  });
+
   it("does not hand a tier back to someone already cleared", async () => {
     // The other half: the same cancelled row must not restore a tier once it is gone, or
     // a reconcile would undo every revocation for anyone holding a stale subscription.
