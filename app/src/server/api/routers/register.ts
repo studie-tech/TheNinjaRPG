@@ -148,32 +148,10 @@ export const registerRouter = createTRPCRouter({
       ].sort();
       // The account row is written on its own before anything that references it, so
       // registration never leaves rows behind that look like orphans to the cleaner.
-      // The one statement in this file the query builder cannot express. `insert().select()`
-      // does support a guarded insert -- the three in push.ts use it -- but it requires the
-      // select to name every column of the target table, and UserData has 168. Listing them
-      // would mean hand-writing the defaults for 150 columns nobody is setting here, which
-      // is precisely how this insert once shipped a new character with 0 experience instead
-      // of the column's own 2000.
       //
-      // One guarded insert rather than a lock. The tombstone test rides in the statement
-      // as a NOT EXISTS, so a retirement committing alongside this either lands first --
-      // and the insert matches nothing -- or lands after, against a row that already
-      // exists and which the retirement then purges. Nothing is held open between the
-      // check and the write, so there is no transaction here to wait on.
-      //
-      // The primary key carries the other guard: a second character for the same account
-      // updates nothing and reports no rows.
-      //
-      // Every nullable binding is written `?? null` on purpose: a raw template renders an
-      // undefined value as nothing at all, which produces a syntax error rather than a
-      // NULL, and the builder API is what normally hides that.
-      //
-      // earnedExperience is named only for the reminder bonus, for the same reason: naming
-      // it always would write a literal where the builder let the column default apply, and
-      // a new character would start with none of the experience they are supposed to have.
       // Deleting a character retires the Clerk identity in the store ownership graph, and
       // the web flow deliberately leaves the player signed in afterwards. Without this they
-      // could never make another character: the guard below would see their own tombstone
+      // could never make another character: the check below would see their own tombstone
       // and refuse, permanently, with no way back short of a new email.
       //
       // Reclaiming is safe precisely when there is nothing to route: no receipt names this
@@ -198,24 +176,44 @@ export const registerRouter = createTRPCRouter({
           ),
         ),
       );
-      const inserted = await ctx.drizzle.execute(
-        sql`INSERT INTO ${userData} (userId, lastIp, recruiterId, username, gender, avatar, villageId, bloodlineId, approvedTos, sector, extraJutsuSlots, immunityUntil, musicOn, sfxOn, buttonSfxOn${reminder ? sql`, earnedExperience` : sql``})
-            SELECT ${ctx.userId}, ${ctx.userIp ?? null}, ${input.recruiter_userid ?? null}, ${input.username}, ${input.gender}, ${IMG_DEFAULT_PROFILE_PICTURE}, ${villageData.id ?? null}, ${selectedBloodline.id ?? null}, true, ${villageData.sector}, 0, ${secondsFromNow(24 * 3600)}, ${input.musicOn ?? true}, ${input.sfxOn ?? true}, ${input.buttonSfxOn ?? true}${reminder ? sql`, 10000` : sql``}
-            WHERE NOT EXISTS (SELECT 1 FROM ${storeUserIdAlias} WHERE oldUserId = ${ctx.userId})
-            ON DUPLICATE KEY UPDATE userId = userId`,
-      );
-      if (Number(inserted.rowsAffected ?? 0) === 0) {
-        // Nothing was written, which is one of the two guards. Only now is it worth a read
-        // to say which, so the successful path stays a single statement.
-        const retired = await ctx.drizzle.query.storeUserIdAlias.findFirst({
-          columns: { oldUserId: true },
-          where: eq(storeUserIdAlias.oldUserId, ctx.userId),
-        });
+      // A plain read rather than a guard folded into the insert. Deletion writes its
+      // tombstone first and removes the account row last, dozens of statements apart, so
+      // slipping a character past this check would take the same identity deleting and
+      // registering at once, with the whole deletion landing inside one round-trip. That
+      // would leave a character the stores refuse to grant to, fixed by removing one alias
+      // row; closing it would take an insert the builder cannot express.
+      const retired = await ctx.drizzle.query.storeUserIdAlias.findFirst({
+        columns: { oldUserId: true },
+        where: eq(storeUserIdAlias.oldUserId, ctx.userId),
+      });
+      if (retired) {
         return errorResponse(
-          retired
-            ? "This account was deleted and cannot create another character"
-            : "Character already created for this account",
+          "This account was deleted and cannot create another character",
         );
+      }
+      const createdUser = await ctx.drizzle
+        .insert(userData)
+        .values({
+          userId: ctx.userId,
+          lastIp: ctx.userIp,
+          recruiterId: input.recruiter_userid,
+          username: input.username,
+          gender: input.gender,
+          avatar: IMG_DEFAULT_PROFILE_PICTURE,
+          villageId: villageData.id,
+          bloodlineId: selectedBloodline.id,
+          approvedTos: true,
+          sector: villageData.sector,
+          extraJutsuSlots: 0,
+          immunityUntil: secondsFromNow(24 * 3600),
+          musicOn: input.musicOn ?? true,
+          sfxOn: input.sfxOn ?? true,
+          buttonSfxOn: input.buttonSfxOn ?? true,
+          ...(reminder ? { earnedExperience: 10000 } : {}),
+        })
+        .onDuplicateKeyUpdate({ set: { userId: sql`userId` } });
+      if (createdUser.rowsAffected === 0) {
+        return errorResponse("Character already created for this account");
       }
       await ctx.drizzle
         .delete(userAttribute)
