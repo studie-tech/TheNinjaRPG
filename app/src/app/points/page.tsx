@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api, onError } from "@/app/_trpc/client";
+import NativeStore from "@/components/native/NativeStore";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -60,6 +61,7 @@ import {
   SKILL_TREE_RESET_FREE_NORMAL,
   SKILL_TREE_RESET_FREE_SILVER,
 } from "@/drizzle/constants";
+import { useNativeShell } from "@/hooks/useNativeShell";
 import BanInfo from "@/layout/BanInfo";
 import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
@@ -112,8 +114,25 @@ const isPayPalCleanupError = (err: unknown): boolean => {
  */
 export default function PaypalShop() {
   const { data: userData } = useRequiredUserData();
+  const isNativeShell = useNativeShell();
 
   if (!userData) return <Loader explanation="Loading userdata" />;
+  if (isNativeShell === undefined) {
+    return <Loader explanation="Loading store" />;
+  }
+
+  // App Store guideline 3.1.1 requires digital goods to be sold through in-app purchase,
+  // and both stores treat a web checkout inside the app as a violation. The native shell
+  // therefore never sees the PayPal flow.
+  if (isNativeShell) {
+    // Scoped to this branch on purpose. The native store is reached without passing through
+    // the sub-components that carry this gate on the web, so without it a banned player
+    // could still buy and the webhook would credit an account the game locks out. Gating
+    // the whole page instead would take away the Subscriptions table below, and with it the
+    // only in-game way for a banned player to stop a recurring PayPal charge.
+    if (userData.isBanned) return <BanInfo />;
+    return <NativeStore />;
+  }
 
   return (
     <>

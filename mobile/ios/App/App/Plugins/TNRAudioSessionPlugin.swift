@@ -1,0 +1,159 @@
+import AVFoundation
+import Capacitor
+import Foundation
+import MediaPlayer
+
+/// Background audio and the Lock Screen transport.
+///
+/// The WebView plays the soundtrack; this only decides whether iOS lets it keep going once
+/// the screen locks, and puts something usable on the Lock Screen when it does. Playback
+/// itself stays in `useAudio`, which already handles the first-play-needs-a-gesture rule.
+@objc(TNRAudioSessionPlugin)
+public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "TNRAudioSessionPlugin"
+    public let jsName = "TNRAudioSession"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "activate", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "deactivate", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setNowPlaying", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setRemoteCommandsEnabled", returnType: CAPPluginReturnPromise),
+    ]
+
+    private var remoteCommandsEnabled = false
+    /// Targets installed on the shared command centre, kept so teardown can remove exactly
+    /// the ones this plugin added.
+    private var commandTokens: [Any] = []
+    private var artworkTask: URLSessionDataTask?
+    /// Identifies the newest artwork request. `URLSessionTask.cancel()` does not stop a
+    /// completion handler that has already been scheduled, so cancellation alone would
+    /// still let a stale image land on top of a newer track.
+    private var artworkRequestId = 0
+
+    @objc func activate(_ call: CAPPluginCall) {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            // .playback is what keeps audio alive behind the lock screen. `.mixWithOthers`
+            // is deliberately absent: a game soundtrack that plays over the player's own
+            // music is worse than one that pauses it, and the player can just mute ours.
+            try session.setCategory(.playback, mode: .default)
+            try session.setActive(true)
+            // Nothing else calls this, and without it the Lock Screen buttons are inert:
+            // AudioSettings subscribes to `remoteCommand` but no target was ever installed
+            // to emit one.
+            setRemoteCommands(enabled: true)
+            call.resolve()
+        } catch {
+            call.reject("Could not activate the audio session", nil, error)
+        }
+    }
+
+    @objc func deactivate(_ call: CAPPluginCall) {
+        do {
+            // Telling other apps we are done is what un-ducks their audio; without the
+            // notification they stay quiet until something else claims the session.
+            try AVAudioSession.sharedInstance().setActive(
+                false,
+                options: [.notifyOthersOnDeactivation]
+            )
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            // An artwork download started before this can still complete, and it re-reads
+            // nowPlayingInfo — leaving the Lock Screen showing an image with no title
+            // after audio was released. Bumping the version drops that completion.
+            artworkTask?.cancel()
+            artworkRequestId += 1
+            setRemoteCommands(enabled: false)
+            call.resolve()
+        } catch {
+            call.reject("Could not release the audio session", nil, error)
+        }
+    }
+
+    @objc func setNowPlaying(_ call: CAPPluginCall) {
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: call.getString("title") ?? "TheNinja-RPG",
+            MPNowPlayingInfoPropertyIsLiveStream: true,
+        ]
+        if let artist = call.getString("artist") {
+            info[MPMediaItemPropertyArtist] = artist
+        }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+
+        if let artworkUrl = call.getString("artworkUrl"), let url = URL(string: artworkUrl) {
+            loadArtwork(from: url)
+        }
+        call.resolve()
+    }
+
+    @objc func setRemoteCommandsEnabled(_ call: CAPPluginCall) {
+        setRemoteCommands(enabled: call.getBool("enabled") ?? true)
+        call.resolve()
+    }
+
+    /// Install or remove the Lock Screen transport targets.
+    ///
+    /// Targets are removed by the token `addTarget` returned, never with `removeTarget(nil)`
+    /// — the command centre is process-wide, and passing nil would also strip the targets
+    /// WebKit installs for the WebView's own media, leaving the player with controls that
+    /// genuinely do nothing.
+    private func setRemoteCommands(enabled: Bool) {
+        let center = MPRemoteCommandCenter.shared()
+
+        center.playCommand.isEnabled = enabled
+        center.pauseCommand.isEnabled = enabled
+        center.togglePlayPauseCommand.isEnabled = enabled
+        // Nothing here is seekable, and leaving these on puts dead controls on the Lock
+        // Screen.
+        center.nextTrackCommand.isEnabled = false
+        center.previousTrackCommand.isEnabled = false
+        center.changePlaybackPositionCommand.isEnabled = false
+
+        if enabled && !remoteCommandsEnabled {
+            commandTokens = [
+                center.playCommand.addTarget { [weak self] _ in
+                    self?.emit("play")
+                    return .success
+                },
+                center.pauseCommand.addTarget { [weak self] _ in
+                    self?.emit("pause")
+                    return .success
+                },
+                center.togglePlayPauseCommand.addTarget { [weak self] _ in
+                    self?.emit("toggle")
+                    return .success
+                }
+            ]
+        } else if !enabled && remoteCommandsEnabled {
+            if commandTokens.count == 3 {
+                center.playCommand.removeTarget(commandTokens[0])
+                center.pauseCommand.removeTarget(commandTokens[1])
+                center.togglePlayPauseCommand.removeTarget(commandTokens[2])
+            }
+            commandTokens = []
+        }
+        remoteCommandsEnabled = enabled
+    }
+
+    private func emit(_ command: String) {
+        notifyListeners("remoteCommand", data: ["command": command])
+    }
+
+    private func loadArtwork(from url: URL) {
+        artworkTask?.cancel()
+        artworkRequestId += 1
+        let requestId = artworkRequestId
+        artworkTask = URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            guard let data, let image = UIImage(data: data) else { return }
+            let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            DispatchQueue.main.async {
+                guard let self, requestId == self.artworkRequestId else { return }
+                // Re-read rather than capturing: the track may have changed while this
+                // download was in flight, and overwriting the whole dictionary would
+                // wipe the newer title.
+                var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+                info[MPMediaItemPropertyArtwork] = artwork
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            }
+        }
+        artworkTask?.resume()
+    }
+}

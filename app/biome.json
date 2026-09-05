@@ -26,7 +26,22 @@
     "rules": {
       "recommended": true,
       "style": {
-        "useImportType": "warn"
+        "useImportType": "warn",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["@capacitor/**"],
+                "message": "Capacitor packages are installed in mobile/, where cap sync needs them. Call the shell through @/libs/native instead."
+              },
+              {
+                "group": ["**/libs/native/bridge"],
+                "message": "The raw bridge is internal to @/libs/native. Import the feature module (haptics, push, ...) instead."
+              }
+            ]
+          }
+        }
       },
       "correctness": {
         "noUnusedVariables": "warn",
@@ -54,5 +69,17 @@
       "quoteStyle": "double",
       "trailingCommas": "all"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/libs/native/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ]
 }

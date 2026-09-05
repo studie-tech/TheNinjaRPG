@@ -118,11 +118,47 @@ The combat system has strict performance requirements. The data flow should be:
 
 **NEVER add intermediate fetch queries during `performAction`**. If you need data during combat that isn't available, add it to the battle state during `initiateBattle` instead. This ensures combat endpoints remain performant.
 
+## Native Apps (iOS / Android)
+
+The native shells live in `mobile/` — a Capacitor project alongside `soketi/` and
+`spacetimedb-towerdefense/`, with its own `package.json`. See `mobile/README.md` for build
+prerequisites and store setup.
+
+- **`app/src/libs/native/` is the only bridge to the shell**, and it has two kinds of
+  export. *Fire-and-forget* ones — `haptics`, `widgets`, `audioSession`, `liveActivity` —
+  no-op off device, so `haptics.impact("HEAVY")` needs no platform check and does nothing
+  in a browser. *Result-bearing* ones — `appleAuth.authorize`, `oauthBrowser.open`,
+  `purchases.purchase`, `push.register` — reject off device instead, because a sign-in that
+  silently resolved without opening a browser would leave the caller waiting on a redirect
+  that never comes. Call those only from a path that has established it is in the shell.
+  A biome `noRestrictedImports` rule blocks `@capacitor/*` and the raw `bridge` module
+  everywhere else under `src/`.
+- **Capacitor packages are installed in `mobile/`, not `app/`.** `cap sync` needs them next
+  to the native projects, and the web app reaches plugins through the `window.Capacitor`
+  bridge the shell injects. Adding a plugin means installing it in `mobile/` *and* adding a
+  wrapper in `libs/native/`.
+- **Ordinary notifications go through `sendPushToUsers` in `@/server/utils/push`** — no
+  router should reach a transport directly. It resolves devices, honours per-category
+  opt-outs, fans out to both transports and prunes dead tokens. It never throws. Live
+  Activities are the one exception, and go through `pushActivityUpdate` in the same
+  directory: they address an ActivityKit push token rather than a device, so they cannot
+  use the device fan-out. `hospital.ts` calls it, deferred with `after()` so a round-trip
+  to Apple stays off the player's response.
+- **The `Notification` table is a global announcement feed, not per-user delivery.** Its
+  `userId` is the author; recipients are whoever the accompanying `unreadNotifications`
+  increment targets. Push is genuinely per-user, so the two are separate systems.
+- **The store gate is client-side.** `useNativeShell()` branches surfaces that must differ
+  in the app: `points/page.tsx` renders `<NativeStore />` in place of the PayPal flow,
+  because App Store guideline 3.1.1 forbids web checkout there. `isNativeUserAgent()` in
+  `libs/native/userAgent.ts` exists and is tested for a server-side branch, but no router
+  uses it yet.
+
 ## Database Patterns
 
 - Uses Drizzle ORM with MySQL hosted on **PlanetScale**
 - Prefer query syntax over raw SQL
-- **⚠️ NEVER use database transactions** - PlanetScale does not support traditional transactions. Instead, use guard clauses with WHERE conditions to ensure atomic updates (e.g., `WHERE balance >= amount` to prevent negative balances).
+- **Prefer guard clauses over transactions** - reach first for a WHERE condition that makes the update atomic on its own (e.g., `WHERE balance >= amount` to prevent negative balances) and check `rowsAffected`. This is cheaper and composes with parallel reads. Transactions *are* supported — the PlanetScale serverless driver runs interactive transactions by chaining a session token through each response, and `home.ts`, `item.ts`, `occupation.ts`, `paypal.ts` and `purchases/grant.ts` all use them — but that chaining forces every statement inside the transaction to be **sequential**, so `Promise.all` does not apply and each statement costs a full round-trip. Use one only when several rows must move together and no single guarded statement can express it, and keep the body as short as possible.
+- **Prefer the readable form when the only race is the player's own.** A guard belongs inside the statement when losing the race costs someone else something or cannot be undone: a balance going negative, a receipt delivered twice, a reward two requests both claim. When the only way to lose is the same account racing itself (deleting while registering a device, toggling a setting mid-deletion) and the worst outcome is a stray row support can remove, write the plain check-then-write instead — `isLivePushUser` then `.insert().values()`, not an `INSERT … SELECT … FROM (SELECT 1) WHERE EXISTS` with a `rowsAffected` heuristic — and say in a comment what the window costs. Never close such a window with a transaction or `FOR UPDATE`: a locking read on a row that does not exist takes a gap lock, which is how this codebase has deadlocked before. `register.ts` and `push.ts` are the reference for the plain form; the atomic claims in `purchases/grant.ts` are the reference for a guard that must stay in the statement.
 - Schema is centralized in `@/drizzle/schema.ts`
 - We use the react compiler, and therefore must use useWatch hook, not watch, for react-hook-form.
 - **No Legacy Fields**: When refactoring database schema, fully remove legacy/deprecated fields rather than keeping them for backward compatibility. Do not leave legacy fields in the schema - migrate all code to use new field names immediately.
@@ -130,7 +166,7 @@ The combat system has strict performance requirements. The data flow should be:
 
 ### CAS / idempotency (rewards and economy)
 
-PlanetScale does not support multi-statement transactions. Use **compare-and-swap** predicates and verify `rowsAffected` before granting irreversible rewards:
+Grants are the case where a transaction is least likely to be worth its latency, because a single guarded statement usually expresses the whole invariant. Use **compare-and-swap** predicates and verify `rowsAffected` before granting irreversible rewards:
 
 - Examples: raid reward JSON guards (`raids.ts`), activity streak `lastClaimDate` (`activityStreak.ts`), helpers in `@/server/utils/concurrency.ts` (`claimUserSnapshot`, `consumeUserItemAtomically`).
 - Prefer **SQL increments** on counters (money, XP, prestige) via `` sql`${userData.money} + ${delta}` `` when parallel grants could otherwise apply the same stale base snapshot—mirror how village tokens and clan points already use atomic `+=` in `updateRewards`.

@@ -23,7 +23,6 @@ import {
   jutsu,
   mpvpBattleQueue,
   mpvpBattleUser,
-  paypalSubscription,
   questHistory,
   rankedPvpQueue,
   trainingLog,
@@ -33,6 +32,7 @@ import {
   userData,
   userItem,
   userJutsu,
+  userLiveActivity,
   userRequest,
   village,
   warKill,
@@ -44,6 +44,7 @@ import {
 } from "@/libs/gamesettings";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { drizzleDB } from "@/server/db";
+import { reconcileFederalStatuses } from "@/server/utils/purchases/grant";
 import { secondsFromNow } from "@/utils/time";
 
 const HOURLY_TIMER_NAME = "cleaner-hourly";
@@ -85,6 +86,12 @@ export async function GET() {
     // Time constants
     const oneHour = 1000 * 60 * 60;
     const oneDay = oneHour * 24;
+
+    // A device can end an orphaned activity after a cold launch without JavaScript knowing
+    // its id. Keep a retry window for failed APNs endings, then drain those dead addresses.
+    await drizzleDB
+      .delete(userLiveActivity)
+      .where(lt(userLiveActivity.endsAt, new Date(Date.now() - oneDay)));
 
     // Battle retention periods:
     // - PVP (72 hours): Explicit PVP types that we want longer retention for
@@ -425,23 +432,9 @@ export async function GET() {
           LIMIT ${rangeCleanupBatchSize}`,
     );
 
-    // Step 32: Clear old paypal subscriptions
-    await drizzleDB.execute(
-      sql`UPDATE ${userData} u SET u.federalStatus = 'NONE' WHERE u.federalStatus != 'NONE' AND NOT EXISTS (
-        SELECT 1 FROM ${paypalSubscription} p WHERE p.affectedUserId = u.userId AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
-      )`,
-    );
-
-    // Step 33: Activate users with active subscriptions
-    await drizzleDB.execute(
-      sql`UPDATE ${userData} u
-          INNER JOIN ${paypalSubscription} ps ON u.userId = ps.affectedUserId
-          SET u.federalStatus = ps.federalStatus
-          WHERE 
-            u.federalStatus = 'NONE'
-            AND ps.status = 'ACTIVE'
-            AND ps.updatedAt > DATE_SUB(NOW(), INTERVAL 31 DAY)`,
-    );
+    // Step 32: Federal status is derived state. Reconcile its exact maximum active tier
+    // across PayPal and both stores, including downgrades when a higher receipt expires.
+    await reconcileFederalStatuses(drizzleDB);
 
     // Step 34: Clear daily bank interest older than 7 days
     await drizzleDB.execute(

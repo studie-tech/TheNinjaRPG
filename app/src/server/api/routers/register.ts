@@ -10,8 +10,11 @@ import {
   bloodlineRolls,
   emailReminder,
   historicalIp,
+  paypalSubscription,
   questHistory,
   referralSource,
+  storePurchase,
+  storeUserIdAlias,
   userAttribute,
   userData,
   village,
@@ -23,6 +26,10 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import {
+  isDeletedStoreUserId,
+  settleRecordedLedger,
+} from "@/server/utils/purchases/grant";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromNow } from "@/utils/time";
 import { registrationSchema, utmSourceSchema } from "@/validators/register";
@@ -92,6 +99,9 @@ export const registerRouter = createTRPCRouter({
         selectedBloodline,
         currentIp,
         moderationResult,
+        storeAlias,
+        storeHistory,
+        paypalHistory,
       ] = await Promise.all([
         ctx.drizzle.query.village.findFirst({
           where: eq(village.name, "Horizon"),
@@ -115,12 +125,32 @@ export const registerRouter = createTRPCRouter({
           ),
         }),
         checkForBadWords(input.username),
+        ctx.drizzle.query.storeUserIdAlias.findFirst({
+          columns: { newUserId: true },
+          where: eq(storeUserIdAlias.oldUserId, ctx.userId),
+        }),
+        ctx.drizzle.query.storePurchase.findFirst({
+          columns: { id: true },
+          where: eq(storePurchase.userId, ctx.userId),
+        }),
+        ctx.drizzle.query.paypalSubscription.findFirst({
+          columns: { id: true },
+          where: eq(paypalSubscription.affectedUserId, ctx.userId),
+        }),
       ]);
+      // Whatever the ledger holds for this identity is settled once a character row exists,
+      // on every path that reaches one. A tombstone seen here means receipts can still be
+      // landing under it until it is removed below; store or PayPal history means there is
+      // a tier or a delivery to derive. A plain first registration has none of these.
+      const hasLedger = Boolean(storeAlias || storeHistory || paypalHistory);
 
       // Guard
       if (!moderationResult.success) return moderationResult;
-      if (existingUser)
+      if (existingUser) {
+        // A retry after registration failed part-way settles what it did not get to.
+        if (hasLedger) await settleRecordedLedger(ctx.drizzle, ctx.userId);
         return errorResponse("Character already created for this account");
+      }
       if (usernameTaken) return errorResponse("Username already taken");
       if (!villageData) return errorResponse("Horizon village not found");
       if (villageData.type !== "VILLAGE")
@@ -145,6 +175,39 @@ export const registerRouter = createTRPCRouter({
       ].sort();
       // The account row is written on its own before anything that references it, so
       // registration never leaves rows behind that look like orphans to the cleaner.
+      //
+      // Deleting a character retires the Clerk identity in the store ledger, so events for a
+      // character that no longer exists are recorded without being delivered. The identity
+      // coming back to make another character is the ordinary flow, and the web delete
+      // deliberately leaves the player signed in for it, so the tombstone goes, and what the
+      // ledger recorded meanwhile -- a renewal, an expiry, a transfer -- is settled as soon
+      // as the character row exists, whichever request that turns out to be. Reputation points delivered to the deleted character stay
+      // with it; every receipt is idempotent by transactionId, so nothing is delivered
+      // twice. A rename alias is different: its target is a live character that this
+      // identity's receipts route to, so it refuses.
+      //
+      // The tombstone delete and the insert are two statements rather than a guard folded
+      // into one. Deletion writes its tombstone first and removes the account row last,
+      // dozens of statements apart, so slipping a character past the alias read would take
+      // the same identity deleting and registering at once, with the whole deletion landing
+      // in between. The ledger records around a tombstone rather than dropping, so what that
+      // would cost is push registration until the alias row is removed; closing it would
+      // take an insert the builder cannot express.
+      if (storeAlias && !isDeletedStoreUserId(storeAlias.newUserId)) {
+        return errorResponse(
+          "This account is linked to another character and cannot create a new one",
+        );
+      }
+      if (storeAlias) {
+        await ctx.drizzle
+          .delete(storeUserIdAlias)
+          .where(
+            and(
+              eq(storeUserIdAlias.oldUserId, ctx.userId),
+              eq(storeUserIdAlias.newUserId, storeAlias.newUserId),
+            ),
+          );
+      }
       const createdUser = await ctx.drizzle
         .insert(userData)
         .values({
@@ -166,6 +229,8 @@ export const registerRouter = createTRPCRouter({
           ...(reminder ? { earnedExperience: 10000 } : {}),
         })
         .onDuplicateKeyUpdate({ set: { userId: sql`userId` } });
+      // The row exists either way now, so settle before answering a duplicate.
+      if (hasLedger) await settleRecordedLedger(ctx.drizzle, ctx.userId);
       if (createdUser.rowsAffected === 0) {
         return errorResponse("Character already created for this account");
       }

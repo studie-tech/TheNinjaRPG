@@ -1,0 +1,98 @@
+# Release automation for both shells.
+#
+# Uploads only. Version and build numbers come from the CI run so two builds can never
+# collide, and signing material is read from the environment rather than the repository.
+#
+#   bundle exec fastlane ios beta
+#   bundle exec fastlane android beta
+
+default_platform(:ios)
+
+# `cap sync` must run before either platform builds: it copies the bundled entry point and
+# the plugin list into the native projects, and a stale copy ships the previous origin.
+def sync_web
+  Dir.chdir("..") { sh("bun", "run", "sync") }
+end
+
+platform :ios do
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    sync_web
+    sh("bun", "run", "configure:ios")
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_filepath: ENV.fetch("ASC_KEY_PATH"),
+      in_house: false
+    )
+
+    # Latest TestFlight build + 1, so a local run and a CI run cannot produce the same
+    # build number and have the second rejected.
+    increment_build_number(
+      xcodeproj: "ios/App/App.xcodeproj",
+      build_number: latest_testflight_build_number(api_key: api_key) + 1
+    )
+
+    build_app(
+      workspace: nil,
+      project: "ios/App/App.xcodeproj",
+      scheme: "App",
+      configuration: "Release",
+      export_method: "app-store",
+      # The widget extension is embedded in the app, so it is signed as part of this build.
+      output_directory: "build",
+      clean: true
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true
+    )
+  end
+end
+
+platform :android do
+  desc "Build and upload an AAB to the Play internal track"
+  lane :beta do
+    sync_web
+
+    # Play rejects an upload whose versionCode it has already seen, anywhere in the app,
+    # and requires each release to carry a higher one than the release it replaces. Asking
+    # a single track for its maximum answers neither question: the moment a build is
+    # promoted out of "internal" that track no longer holds the highest code, and the next
+    # upload collides with one already used.
+    #
+    # Minutes since the epoch is unique and rises on its own, with no dependency on what
+    # Play currently reports. Override it when a specific code has to be reproduced.
+    #
+    # This is one-way: once an AAB ships with a code in the tens of millions, nothing
+    # smaller can ever be used for this app again.
+    next_version_code = Integer(ENV.fetch("ANDROID_VERSION_CODE") { Time.now.to_i / 60 })
+
+    gradle(
+      project_dir: "android",
+      task: "bundle",
+      build_type: "Release",
+      properties: {
+        # An AGP-level override applied after configuration, so it supersedes the value in
+        # defaultConfig without build.gradle needing a second knob for it.
+        "android.injected.version.code" => next_version_code,
+        "android.injected.signing.store.file" => ENV.fetch("ANDROID_KEYSTORE_PATH"),
+        "android.injected.signing.store.password" => ENV.fetch("ANDROID_KEYSTORE_PASSWORD"),
+        "android.injected.signing.key.alias" => ENV.fetch("ANDROID_KEY_ALIAS"),
+        "android.injected.signing.key.password" => ENV.fetch("ANDROID_KEYSTORE_PASSWORD")
+      }
+    )
+
+    # An AAB, not an APK: Play does not accept APKs for new apps, and Play App Signing
+    # re-signs the bundle, which is why assetlinks.json must list that key too.
+    upload_to_play_store(
+      track: "internal",
+      aab: "android/app/build/outputs/bundle/release/app-release.aab",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+end

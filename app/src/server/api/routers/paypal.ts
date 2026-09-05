@@ -10,6 +10,7 @@ import {
   recruitmentRewards,
   userData,
 } from "@/drizzle/schema";
+import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
 import {
   calcFedUgradeCost,
   dollars2reps,
@@ -317,6 +318,14 @@ export const paypalRouter = createTRPCRouter({
     .input(z.object({ userId: z.string(), plan: z.enum(FederalStatuses) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      // Self only, which is all the UI ever offers. Without it the caller can name any
+      // subscriber: the upgrade price is the delta between their tier and the new one, so
+      // buying GOLD against someone else's SILVER costs the difference instead of the full
+      // price, and it rewrites that player's subscription row to a plan they are not being
+      // billed for -- which the hourly reconcile then reads as a tier they own.
+      if (input.userId !== ctx.userId) {
+        return errorResponse("You can only upgrade your own subscription");
+      }
       const [upgrader, target] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, input.userId),
@@ -446,10 +455,14 @@ export const updateSubscription = async (input: {
       : -1;
     const newIdx = FederalStatuses.indexOf(input.federalStatus);
     if (newIdx > otherIdx) {
-      await tx
-        .update(userData)
-        .set({ federalStatus: input.federalStatus })
-        .where(eq(userData.userId, input.affectedUserId));
+      // otherActive only knows about PayPal. A store subscription is billed elsewhere and
+      // is invisible to it, so the tier still has to be floored by what the stores vouch
+      // for or a web sync would strip a subscription Apple or Google is charging for.
+      await setFederalStatusWithStoreFloor(
+        tx,
+        input.affectedUserId,
+        input.federalStatus,
+      );
     }
     // Update subscription
     if (current) {

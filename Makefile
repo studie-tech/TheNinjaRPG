@@ -186,6 +186,37 @@ deps-upgrade: # Upgrade all dependencies to their latest version
 	@echo "${YELLOW}Upgrading all dependencies ${RESET}"
 	cd app && npx npm-check-updates -u
 
+---------------Mobile-----------------: # -------------------------------------------------------
+.PHONY: mobile-install
+mobile-install: # Install Capacitor dependencies for the native shells
+	@echo "${GREEN}mobile-install${RESET}"
+	cd mobile && bun install
+
+.PHONY: mobile-sync
+mobile-sync: # Copy web config and plugins into the native projects
+	@echo "${GREEN}mobile-sync${RESET}"
+	cd mobile && bun run sync
+
+.PHONY: mobile-configure
+mobile-configure: # Apply capabilities and the widget target to the generated Xcode project
+	@echo "${GREEN}mobile-configure${RESET}"
+	cd mobile && bun run configure:ios
+
+.PHONY: mobile-beta
+mobile-beta: mobile-sync # Upload builds to TestFlight and the Play internal track
+	@echo "${GREEN}mobile-beta${RESET}"
+	cd mobile && bun run beta:ios && bun run beta:android
+
+.PHONY: mobile-ios
+mobile-ios: mobile-sync # Build and run the iOS shell in the simulator
+	@echo "${GREEN}mobile-ios${RESET}"
+	cd mobile && bun run run:ios
+
+.PHONY: mobile-android
+mobile-android: mobile-sync # Build and run the Android shell in an emulator
+	@echo "${GREEN}mobile-android${RESET}"
+	cd mobile && bun run run:android
+
 -------------SpacetimeDB---------------: # -------------------------------------------------------
 .PHONY: spacetime-install
 spacetime-install: # Install SpacetimeDB CLI

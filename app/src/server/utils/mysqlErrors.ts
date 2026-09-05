@@ -27,3 +27,19 @@ export const isMysqlDeadlockError = (error: unknown): boolean => {
   }
   return false;
 };
+
+/** Retryable failures which can abort a bounded administrative transaction. */
+export const isMysqlTransactionRetryableError = (error: unknown): boolean => {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
+    if (
+      /deadlock|errno 1213|sqlstate 40001|transaction.*(?:timeout|deadline)|deadline exceeded|exceeded.*transaction/i.test(
+        current.message,
+      )
+    ) {
+      return true;
+    }
+    current = current.cause;
+  }
+  return false;
+};

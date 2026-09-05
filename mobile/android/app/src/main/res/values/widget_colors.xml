@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The launcher tile colour, so the widget reads as part of the same app as the icon
+         sitting next to it. -->
+    <color name="widget_tile">#F0C84C</color>
+    <color name="widget_ink">#23180A</color>
+    <color name="widget_ink_muted">#6B5A33</color>
+    <color name="widget_health">#D94040</color>
+    <color name="widget_chakra">#4073D9</color>
+    <color name="widget_stamina">#40A659</color>
+</resources>
