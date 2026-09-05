@@ -1598,14 +1598,20 @@ export const setFederalStatusWithStoreFloor = async (
   // of the paid period would be gone.
   //
   // Gated on the tier the column already holds, so it can only preserve, never restore.
-  const paypalGrace = (
-    tier: FederalStatus,
-  ) => sql`(${userData.federalStatus} = ${tier} AND EXISTS (
-      SELECT 1 FROM ${paypalSubscription}
-      WHERE ${paypalSubscription.affectedUserId} = ${userId}
-        AND ${paypalSubscription.updatedAt} >= ${new Date(Date.now() - PAYPAL_WINDOW_MS)}
-        AND ${paypalSubscription.federalStatus} = ${tier}
-    ))`;
+  // Only when the caller reports no PayPal tier at all. That is the case the grace exists
+  // for: paypalFederalFloor counts only ACTIVE rows, so a web cancellation reads as NONE
+  // while the period the player paid for is still running. A caller naming a real tier is
+  // asserting one, and holding a higher tier over it would change what the web flow has
+  // always done -- a subscriber moving to a lower tier has to land on it.
+  const paypalGrace = (tier: FederalStatus) =>
+    paypalStatus === "NONE"
+      ? sql`(${userData.federalStatus} = ${tier} AND EXISTS (
+          SELECT 1 FROM ${paypalSubscription}
+          WHERE ${paypalSubscription.affectedUserId} = ${userId}
+            AND ${paypalSubscription.updatedAt} >= ${new Date(Date.now() - PAYPAL_WINDOW_MS)}
+            AND ${paypalSubscription.federalStatus} = ${tier}
+        ))`
+      : sql`FALSE`;
 
   return await client.execute(sql`
     UPDATE ${userData}
