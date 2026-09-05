@@ -1486,11 +1486,12 @@ export const retireStoreUserId = async (
   // the reason this matters without the lock -- a rename or transfer that has already
   // pointed this id somewhere real is not overwritten with a tombstone, which would strand
   // every store lookup for the old id on a deleted identity.
-  await client.execute(
-    sql`INSERT INTO ${storeUserIdAlias} (oldUserId, newUserId, updatedAt)
-        VALUES (${userId}, ${tombstone}, ${new Date()})
-        ON DUPLICATE KEY UPDATE newUserId = newUserId, updatedAt = ${new Date()}`,
-  );
+  await client
+    .insert(storeUserIdAlias)
+    .values({ oldUserId: userId, newUserId: tombstone, updatedAt: new Date() })
+    // newUserId is deliberately absent from the update: leaving it out is what makes the
+    // first writer keep the row.
+    .onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
   // Whatever landed before the tombstone. Store receipts are deliberately left alone --
   // they are an audit ledger and outlive the account by design -- so this reaches only the
   // identity-scoped rows that must not.
@@ -1588,7 +1589,7 @@ export const storeFederalFloor = async (
  * committed source of truth instead of applying a stale pre-read value.
  */
 export const setFederalStatusWithStoreFloor = async (
-  client: Pick<DrizzleClient, "execute">,
+  client: Pick<DrizzleClient, "update">,
   userId: string,
   paypalStatus: FederalStatus,
 ) => {
@@ -1640,16 +1641,17 @@ export const setFederalStatusWithStoreFloor = async (
         ))`
       : sql`FALSE`;
 
-  return await client.execute(sql`
-    UPDATE ${userData}
-    SET ${userData.federalStatus} = CASE
-      WHEN ${paypalRank >= rankOf("GOLD")} OR ${hasTier("GOLD")} OR ${paypalGrace("GOLD")} THEN 'GOLD'
-      WHEN ${paypalRank >= rankOf("SILVER")} OR ${hasTier("SILVER")} OR ${paypalGrace("SILVER")} THEN 'SILVER'
-      WHEN ${paypalRank >= rankOf("NORMAL")} OR ${hasTier("NORMAL")} OR ${paypalGrace("NORMAL")} THEN 'NORMAL'
-      ELSE 'NONE'
-    END
-    WHERE ${userData.userId} = ${userId}
-  `);
+  return await client
+    .update(userData)
+    .set({
+      federalStatus: sql`CASE
+        WHEN ${paypalRank >= rankOf("GOLD")} OR ${hasTier("GOLD")} OR ${paypalGrace("GOLD")} THEN 'GOLD'
+        WHEN ${paypalRank >= rankOf("SILVER")} OR ${hasTier("SILVER")} OR ${paypalGrace("SILVER")} THEN 'SILVER'
+        WHEN ${paypalRank >= rankOf("NORMAL")} OR ${hasTier("NORMAL")} OR ${paypalGrace("NORMAL")} THEN 'NORMAL'
+        ELSE 'NONE'
+      END`,
+    })
+    .where(eq(userData.userId, userId));
 };
 
 /**
@@ -1660,7 +1662,7 @@ export const setFederalStatusWithStoreFloor = async (
  * It therefore performs downgrades as well as clearing or restoring a status.
  */
 export const reconcileFederalStatuses = async (
-  client: Pick<DrizzleClient, "execute">,
+  client: Pick<DrizzleClient, "update">,
 ) => {
   const sandboxUserIds = sandboxGranteeUserIds();
   const sandboxEligibility = sandboxUserIds.length
@@ -1669,18 +1671,19 @@ export const reconcileFederalStatuses = async (
         sql`, `,
       )}))`
     : sql`AND s.isSandbox = FALSE`;
-  return await client.execute(sql`
-    UPDATE ${userData} u
-    SET u.federalStatus = CASE
+  return await client
+    .update(userData)
+    .set({
+      federalStatus: sql`CASE
       WHEN EXISTS (
         SELECT 1 FROM ${paypalSubscription} p
-        WHERE p.affectedUserId = u.userId
+        WHERE p.affectedUserId = ${userData.userId}
           AND p.status = 'ACTIVE'
           AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
           AND p.federalStatus = 'GOLD'
       ) OR EXISTS (
         SELECT 1 FROM ${storePurchase} s
-        WHERE s.userId = u.userId
+        WHERE s.userId = ${userData.userId}
           AND s.federalStatus = 'GOLD'
           AND s.acceptedAt IS NOT NULL
           ${sandboxEligibility}
@@ -1693,22 +1696,22 @@ export const reconcileFederalStatuses = async (
         -- has already cleared, which is what the ACTIVE predicate above is guarding. "At
         -- least", not "exactly", so a store receipt sitting above the PayPal tier does not
         -- hide the paid period underneath it when that receipt ends.
-        FIELD(u.federalStatus, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 4 AND EXISTS (
+        FIELD(${userData.federalStatus}, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 4 AND EXISTS (
           SELECT 1 FROM ${paypalSubscription} p
-          WHERE p.affectedUserId = u.userId
+          WHERE p.affectedUserId = ${userData.userId}
             AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
             AND p.federalStatus = 'GOLD'
         )
       ) THEN 'GOLD'
       WHEN EXISTS (
         SELECT 1 FROM ${paypalSubscription} p
-        WHERE p.affectedUserId = u.userId
+        WHERE p.affectedUserId = ${userData.userId}
           AND p.status = 'ACTIVE'
           AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
           AND p.federalStatus = 'SILVER'
       ) OR EXISTS (
         SELECT 1 FROM ${storePurchase} s
-        WHERE s.userId = u.userId
+        WHERE s.userId = ${userData.userId}
           AND s.federalStatus = 'SILVER'
           AND s.acceptedAt IS NOT NULL
           ${sandboxEligibility}
@@ -1721,22 +1724,22 @@ export const reconcileFederalStatuses = async (
         -- has already cleared, which is what the ACTIVE predicate above is guarding. "At
         -- least", not "exactly", so a store receipt sitting above the PayPal tier does not
         -- hide the paid period underneath it when that receipt ends.
-        FIELD(u.federalStatus, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 3 AND EXISTS (
+        FIELD(${userData.federalStatus}, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 3 AND EXISTS (
           SELECT 1 FROM ${paypalSubscription} p
-          WHERE p.affectedUserId = u.userId
+          WHERE p.affectedUserId = ${userData.userId}
             AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
             AND p.federalStatus = 'SILVER'
         )
       ) THEN 'SILVER'
       WHEN EXISTS (
         SELECT 1 FROM ${paypalSubscription} p
-        WHERE p.affectedUserId = u.userId
+        WHERE p.affectedUserId = ${userData.userId}
           AND p.status = 'ACTIVE'
           AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
           AND p.federalStatus = 'NORMAL'
       ) OR EXISTS (
         SELECT 1 FROM ${storePurchase} s
-        WHERE s.userId = u.userId
+        WHERE s.userId = ${userData.userId}
           AND s.federalStatus = 'NORMAL'
           AND s.acceptedAt IS NOT NULL
           ${sandboxEligibility}
@@ -1749,30 +1752,30 @@ export const reconcileFederalStatuses = async (
         -- has already cleared, which is what the ACTIVE predicate above is guarding. "At
         -- least", not "exactly", so a store receipt sitting above the PayPal tier does not
         -- hide the paid period underneath it when that receipt ends.
-        FIELD(u.federalStatus, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 2 AND EXISTS (
+        FIELD(${userData.federalStatus}, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 2 AND EXISTS (
           SELECT 1 FROM ${paypalSubscription} p
-          WHERE p.affectedUserId = u.userId
+          WHERE p.affectedUserId = ${userData.userId}
             AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
             AND p.federalStatus = 'NORMAL'
         )
       ) THEN 'NORMAL'
       ELSE 'NONE'
-    END
-    WHERE u.federalStatus != 'NONE'
+    END`,
+    })
+    .where(sql`${userData.federalStatus} != 'NONE'
       OR EXISTS (
         SELECT 1 FROM ${paypalSubscription} p
-        WHERE p.affectedUserId = u.userId
+        WHERE p.affectedUserId = ${userData.userId}
           AND p.status = 'ACTIVE'
           AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
       )
       OR EXISTS (
         SELECT 1 FROM ${storePurchase} s
-        WHERE s.userId = u.userId
+        WHERE s.userId = ${userData.userId}
           AND s.federalStatus IS NOT NULL
           AND s.acceptedAt IS NOT NULL
           ${sandboxEligibility}
           AND s.revokedAt IS NULL
           AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
-      )
-  `);
+      )`);
 };

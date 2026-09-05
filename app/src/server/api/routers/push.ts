@@ -213,11 +213,15 @@ export const pushRouter = createTRPCRouter({
       // rename migrates this row to the new id, and an end arriving for the identity being
       // renamed away must be refused rather than delete a row that has already moved --
       // otherwise the countdown the player still has on screen loses its server row.
-      const removed = await ctx.drizzle.execute(
-        sql`DELETE FROM ${userLiveActivity}
-            WHERE userId = ${ctx.userId} AND activityId = ${input.activityId}
-              AND ${livePushUser(ctx.userId)}`,
-      );
+      const removed = await ctx.drizzle
+        .delete(userLiveActivity)
+        .where(
+          and(
+            eq(userLiveActivity.userId, ctx.userId),
+            eq(userLiveActivity.activityId, input.activityId),
+            livePushUser(ctx.userId),
+          ),
+        );
       const ended =
         Number(removed.rowsAffected ?? 0) > 0 ||
         (await isLivePushUser(ctx.drizzle, ctx.userId));
@@ -243,6 +247,11 @@ export const pushRouter = createTRPCRouter({
 
 /**
  * The guard every identity-scoped push write carries, as part of its own statement.
+ *
+ * These three writes are the one place in this router that drops to a raw statement, and
+ * only because the builder cannot attach a condition to an INSERT: the guard has to be
+ * evaluated by the same statement that writes, or there is a window between them. The
+ * guarded DELETE below needs no such thing, since a WHERE is just a WHERE.
  *
  * A write must not outlive the account it names. `retireStoreUserId` lays the tombstone
  * down before it purges, so a write either sees the tombstone and does nothing, or landed

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notExists, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -148,6 +148,10 @@ export const registerRouter = createTRPCRouter({
       ].sort();
       // The account row is written on its own before anything that references it, so
       // registration never leaves rows behind that look like orphans to the cleaner.
+      // Raw because the builder cannot attach a condition to an INSERT, and the guard has
+      // to run in the same statement that writes or there is a window between them. Every
+      // other statement in this file uses the query builder.
+      //
       // One guarded insert rather than a lock. The tombstone test rides in the statement
       // as a NOT EXISTS, so a retirement committing alongside this either lands first --
       // and the insert matches nothing -- or lands after, against a row that already
@@ -174,14 +178,22 @@ export const registerRouter = createTRPCRouter({
       // rename alias is untouched, since its target is a real id rather than a tombstone,
       // and an identity that did buy something stays retired -- its entitlements are still
       // tangled and that is a support question, not a signup one.
-      await ctx.drizzle.execute(
-        sql`DELETE FROM ${storeUserIdAlias}
-            WHERE oldUserId = ${ctx.userId}
-              AND LEFT(newUserId, ${DELETED_STORE_USER_PREFIX.length}) = ${DELETED_STORE_USER_PREFIX}
-              AND NOT EXISTS (
-                SELECT 1 FROM ${storePurchase}
-                WHERE userId = ${ctx.userId} OR originalUserId = ${ctx.userId}
-              )`,
+      await ctx.drizzle.delete(storeUserIdAlias).where(
+        and(
+          eq(storeUserIdAlias.oldUserId, ctx.userId),
+          sql`LEFT(${storeUserIdAlias.newUserId}, ${DELETED_STORE_USER_PREFIX.length}) = ${DELETED_STORE_USER_PREFIX}`,
+          notExists(
+            ctx.drizzle
+              .select({ one: sql`1` })
+              .from(storePurchase)
+              .where(
+                or(
+                  eq(storePurchase.userId, ctx.userId),
+                  eq(storePurchase.originalUserId, ctx.userId),
+                ),
+              ),
+          ),
+        ),
       );
       const inserted = await ctx.drizzle.execute(
         sql`INSERT INTO ${userData} (userId, lastIp, recruiterId, username, gender, avatar, villageId, bloodlineId, approvedTos, sector, extraJutsuSlots, immunityUntil, musicOn, sfxOn, buttonSfxOn${reminder ? sql`, earnedExperience` : sql``})
