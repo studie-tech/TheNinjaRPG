@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -42,29 +42,30 @@ export const pushRouter = createTRPCRouter({
     .input(registerDeviceSchema)
     .output(baseServerResponse.extend({ widgetToken: z.string().nullish() }))
     .mutation(async ({ ctx, input }) => {
+      if (!(await isLivePushUser(ctx.drizzle, ctx.userId))) {
+        return {
+          success: false,
+          message: "Character no longer exists",
+          widgetToken: null,
+        };
+      }
       const now = new Date();
       // Rotated on every registration, so a device that changes hands cannot keep reading
       // the previous account's status.
       const widgetToken = nanoid(32);
-      const deviceId = nanoid();
-      const inserted = await ctx.drizzle
+      await ctx.drizzle
         .insert(userDevice)
-        .select((qb) =>
-          qb
-            .select({
-              id: sql`${deviceId}`.as("id"),
-              userId: sql`${ctx.userId}`.as("userId"),
-              token: sql`${input.token}`.as("token"),
-              platform: sql`${input.platform}`.as("platform"),
-              appVersion: sql`${input.appVersion ?? null}`.as("appVersion"),
-              locale: sql`${input.locale ?? null}`.as("locale"),
-              widgetToken: sql`${widgetToken}`.as("widgetToken"),
-              createdAt: sql`${now}`.as("createdAt"),
-              lastSeenAt: sql`${now}`.as("lastSeenAt"),
-            })
-            .from(sql`(SELECT 1) AS dummy`)
-            .where(livePushUser(ctx.userId)),
-        )
+        .values({
+          id: nanoid(),
+          userId: ctx.userId,
+          token: input.token,
+          platform: input.platform,
+          appVersion: input.appVersion ?? null,
+          locale: input.locale ?? null,
+          widgetToken,
+          createdAt: now,
+          lastSeenAt: now,
+        })
         .onDuplicateKeyUpdate({
           set: {
             userId: ctx.userId,
@@ -75,29 +76,16 @@ export const pushRouter = createTRPCRouter({
             lastSeenAt: now,
           },
         });
-      const registered =
-        Number(inserted.rowsAffected ?? 0) > 0 ||
-        (await isLivePushUser(ctx.drizzle, ctx.userId));
-      if (registered) {
-        // Scoped to this player, so it needs no guard of its own: the row it would evict
-        // is one this account owns, and a retirement purges the lot regardless.
-        const others = await ctx.drizzle
-          .select({ id: userDevice.id })
-          .from(userDevice)
-          .where(
-            and(eq(userDevice.userId, ctx.userId), ne(userDevice.token, input.token)),
-          )
-          .orderBy(desc(userDevice.lastSeenAt));
-        // One slot is spoken for by the device above, hence the cap less one.
-        await evictExcessDevices(ctx.drizzle, others);
-      }
-      if (!registered) {
-        return {
-          success: false,
-          message: "Character no longer exists",
-          widgetToken: null,
-        };
-      }
+      // The row this would evict is one the account owns, and a retirement purges the lot.
+      const others = await ctx.drizzle
+        .select({ id: userDevice.id })
+        .from(userDevice)
+        .where(
+          and(eq(userDevice.userId, ctx.userId), ne(userDevice.token, input.token)),
+        )
+        .orderBy(desc(userDevice.lastSeenAt));
+      // One slot is spoken for by the device above, hence the cap less one.
+      await evictExcessDevices(ctx.drizzle, others);
       return {
         success: true,
         message: "Device registered for notifications",
@@ -186,26 +174,20 @@ export const pushRouter = createTRPCRouter({
     .input(setPushPreferenceSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      if (!(await isLivePushUser(ctx.drizzle, ctx.userId))) {
+        return errorResponse("Character no longer exists");
+      }
       const updatedAt = new Date();
-      const written = await ctx.drizzle
+      await ctx.drizzle
         .insert(userPushPreference)
-        .select((qb) =>
-          qb
-            .select({
-              id: sql`${nanoid()}`.as("id"),
-              userId: sql`${ctx.userId}`.as("userId"),
-              category: sql`${input.category}`.as("category"),
-              enabled: sql`${input.enabled}`.as("enabled"),
-              updatedAt: sql`${updatedAt}`.as("updatedAt"),
-            })
-            .from(sql`(SELECT 1) AS dummy`)
-            .where(livePushUser(ctx.userId)),
-        )
+        .values({
+          id: nanoid(),
+          userId: ctx.userId,
+          category: input.category,
+          enabled: input.enabled,
+          updatedAt,
+        })
         .onDuplicateKeyUpdate({ set: { enabled: input.enabled, updatedAt } });
-      const updated =
-        Number(written.rowsAffected ?? 0) > 0 ||
-        (await isLivePushUser(ctx.drizzle, ctx.userId));
-      if (!updated) return errorResponse("Character no longer exists");
       return {
         success: true,
         message: `${input.category} notifications ${input.enabled ? "enabled" : "disabled"}`,
@@ -221,23 +203,21 @@ export const pushRouter = createTRPCRouter({
     .input(registerActivitySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      if (!(await isLivePushUser(ctx.drizzle, ctx.userId))) {
+        return errorResponse("Character no longer exists");
+      }
       const createdAt = new Date();
-      const written = await ctx.drizzle
+      await ctx.drizzle
         .insert(userLiveActivity)
-        .select((qb) =>
-          qb
-            .select({
-              id: sql`${nanoid()}`.as("id"),
-              userId: sql`${ctx.userId}`.as("userId"),
-              activityId: sql`${input.activityId}`.as("activityId"),
-              kind: sql`${input.kind}`.as("kind"),
-              pushToken: sql`${input.pushToken}`.as("pushToken"),
-              endsAt: sql`${input.endsAt}`.as("endsAt"),
-              createdAt: sql`${createdAt}`.as("createdAt"),
-            })
-            .from(sql`(SELECT 1) AS dummy`)
-            .where(livePushUser(ctx.userId)),
-        )
+        .values({
+          id: nanoid(),
+          userId: ctx.userId,
+          activityId: input.activityId,
+          kind: input.kind,
+          pushToken: input.pushToken,
+          endsAt: input.endsAt,
+          createdAt,
+        })
         .onDuplicateKeyUpdate({
           set: {
             activityId: input.activityId,
@@ -246,10 +226,6 @@ export const pushRouter = createTRPCRouter({
             createdAt,
           },
         });
-      const registered =
-        Number(written.rowsAffected ?? 0) > 0 ||
-        (await isLivePushUser(ctx.drizzle, ctx.userId));
-      if (!registered) return errorResponse("Character no longer exists");
       return { success: true, message: "Activity registered" };
     }),
 
@@ -258,23 +234,19 @@ export const pushRouter = createTRPCRouter({
     .input(endActivitySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Guarded in the statement like the writes above, rather than read-then-delete. A
-      // rename migrates this row to the new id, and an end arriving for the identity being
-      // renamed away must be refused rather than delete a row that has already moved --
-      // otherwise the countdown the player still has on screen loses its server row.
-      const removed = await ctx.drizzle
+      if (!(await isLivePushUser(ctx.drizzle, ctx.userId))) {
+        return errorResponse("Character no longer exists");
+      }
+      // A rename moves this row to the new id before the old one stops resolving, so an
+      // end arriving under the old id matches nothing and the countdown keeps its row.
+      await ctx.drizzle
         .delete(userLiveActivity)
         .where(
           and(
             eq(userLiveActivity.userId, ctx.userId),
             eq(userLiveActivity.activityId, input.activityId),
-            livePushUser(ctx.userId),
           ),
         );
-      const ended =
-        Number(removed.rowsAffected ?? 0) > 0 ||
-        (await isLivePushUser(ctx.drizzle, ctx.userId));
-      if (!ended) return errorResponse("Character no longer exists");
       return { success: true, message: "Activity ended" };
     }),
 
@@ -295,20 +267,11 @@ export const pushRouter = createTRPCRouter({
 });
 
 /**
- * The guard every identity-scoped push write carries, as part of its own statement.
- *
- * A write must not outlive the account it names. `retireStoreUserId` lays the tombstone
- * down before it purges, so a write either sees the tombstone and does nothing, or landed
- * before it and is removed by the purge that follows. Testing this inside the statement is
- * what makes that true without a lock: the check and the write commit together, so there
- * is no window between them for a retirement to slip through.
- */
-const livePushUser = (userId: string) =>
-  sql`EXISTS (SELECT 1 FROM ${userData} WHERE userId = ${userId}) AND NOT EXISTS (SELECT 1 FROM ${storeUserIdAlias} WHERE oldUserId = ${userId})`;
-
-/**
- * Why a guarded write matched nothing. Only worth asking once one has, since an upsert
- * that changed a timestamp always reports a row.
+ * Whether the account a push write names is still there. Deletion lays its tombstone down
+ * before it removes the row, so this refuses for the whole of a deletion. A write that
+ * overlaps one can leave a row the purge has already passed; the fan-out never reads it,
+ * since it addresses live recipients, and the next registration of the token replaces it.
+ * That is cheap enough to keep this a plain read ahead of a plain write.
  */
 const isLivePushUser = async (
   client: DrizzleClient,

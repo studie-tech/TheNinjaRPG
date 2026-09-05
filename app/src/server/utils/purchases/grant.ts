@@ -1551,10 +1551,11 @@ export const retireStoreUserId = async (
   // across these while the cleanup runs is what made that likely. Re-running either
   // converges on the same state, so a failure part-way is repaired by the retry
   // deleteUser already performs.
-  // The tombstone goes down before the cleanup, not after. Identity-scoped writes test for
-  // it in their own statement, so once it exists none can land; the cleanup below then
-  // removes whatever arrived before it. Ordered the other way round, a registration
-  // slipping between the cleanup and the tombstone would outlive the account.
+  // The tombstone goes down before the cleanup, not after. Identity-scoped writes check
+  // for it before they write, so once it exists none begins; the cleanup below removes
+  // whatever arrived before it, and a write already past its check when the tombstone
+  // landed leaves at most a row the fan-out never reads. Ordered the other way round, a
+  // registration slipping between the cleanup and the tombstone would outlive the account.
   //
   // Whoever wrote this row first keeps it. A retry therefore keeps its own marker, and --
   // the reason this matters without the lock -- a rename or transfer that has already
