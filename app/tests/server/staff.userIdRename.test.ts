@@ -652,6 +652,89 @@ describeWithDatabase("staff user-id rename", () => {
     expect(tombstone).toBeUndefined();
   }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
 
+  it("settles on a retry that finds the tombstone already gone", async () => {
+    // The first attempt died between removing the tombstone and settling. Store history
+    // is what triggers settlement, so the retry still delivers and re-derives.
+    const database = await getTestDatabase();
+    const now = Date.now();
+    await database.insert(storePurchase).values([
+      {
+        id: nanoid(),
+        userId: OLD_USER_ID,
+        originalUserId: OLD_USER_ID,
+        transactionId: "gold-across-retry",
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        federalStatus: "GOLD",
+        isSandbox: false,
+        acceptedAt: new Date(now - DAY),
+        grantedAt: new Date(now - DAY),
+        purchasedAt: new Date(now - DAY),
+        expiresAt: new Date(now + 29 * DAY),
+        rawData: {},
+      },
+      {
+        id: nanoid(),
+        userId: OLD_USER_ID,
+        originalUserId: OLD_USER_ID,
+        transactionId: "reps-across-retry",
+        productId: "tnr_reps_tier1",
+        store: "APPLE",
+        reputationPoints: 8,
+        federalStatus: null,
+        isSandbox: false,
+        acceptedAt: new Date(now),
+        purchasedAt: new Date(now),
+        rawData: {},
+      },
+    ]);
+    await deleteUser(database, OLD_USER_ID);
+    await database
+      .delete(storeUserIdAlias)
+      .where(eq(storeUserIdAlias.oldUserId, OLD_USER_ID));
+    const created = await registerAgain(OLD_USER_ID, "retry-window", "Retried");
+    expect(created.success).toBe(true);
+    const reborn = await database.query.userData.findFirst({
+      columns: { federalStatus: true, reputationPoints: true },
+      where: eq(userData.userId, OLD_USER_ID),
+    });
+    expect(reborn?.federalStatus).toBe("GOLD");
+    expect(reborn?.reputationPoints).toBe(STARTING_REPUTATION_POINTS + 8);
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
+
+  it("settles pending receipts when a retry finds the character already created", async () => {
+    const database = await getTestDatabase();
+    const before = await database.query.userData.findFirst({
+      columns: { reputationPoints: true },
+      where: eq(userData.userId, OLD_USER_ID),
+    });
+    await database.insert(storePurchase).values({
+      id: nanoid(),
+      userId: OLD_USER_ID,
+      originalUserId: OLD_USER_ID,
+      transactionId: "reps-pending-on-retry",
+      productId: "tnr_reps_tier1",
+      store: "APPLE",
+      reputationPoints: 8,
+      federalStatus: null,
+      isSandbox: false,
+      acceptedAt: new Date(),
+      purchasedAt: new Date(),
+      rawData: {},
+    });
+    await expect(
+      registerAgain(OLD_USER_ID, "retry-existing", "Existing"),
+    ).resolves.toEqual({
+      success: false,
+      message: "Character already created for this account",
+    });
+    const after = await database.query.userData.findFirst({
+      columns: { reputationPoints: true },
+      where: eq(userData.userId, OLD_USER_ID),
+    });
+    expect(after?.reputationPoints).toBe((before?.reputationPoints ?? 0) + 8);
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
+
   it("purges a device registration that overlaps account retirement", async () => {
     const database = await getTestDatabase();
     const registerConnection = await openTestDatabaseConnection();
