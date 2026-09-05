@@ -47,12 +47,34 @@ export const pushRouter = createTRPCRouter({
       // the previous account's status.
       const widgetToken = nanoid(32);
       const deviceId = nanoid();
-      const inserted = await ctx.drizzle.execute(
-        sql`INSERT INTO ${userDevice} (id, userId, token, platform, appVersion, locale, widgetToken, createdAt, lastSeenAt)
-            SELECT ${deviceId}, ${ctx.userId}, ${input.token}, ${input.platform}, ${input.appVersion ?? null}, ${input.locale ?? null}, ${widgetToken}, ${now}, ${now}
-            WHERE ${livePushUser(ctx.userId)}
-            ON DUPLICATE KEY UPDATE userId = ${ctx.userId}, platform = ${input.platform}, appVersion = ${input.appVersion ?? null}, locale = ${input.locale ?? null}, widgetToken = ${widgetToken}, lastSeenAt = ${now}`,
-      );
+      const inserted = await ctx.drizzle
+        .insert(userDevice)
+        .select((qb) =>
+          qb
+            .select({
+              id: sql`${deviceId}`.as("id"),
+              userId: sql`${ctx.userId}`.as("userId"),
+              token: sql`${input.token}`.as("token"),
+              platform: sql`${input.platform}`.as("platform"),
+              appVersion: sql`${input.appVersion ?? null}`.as("appVersion"),
+              locale: sql`${input.locale ?? null}`.as("locale"),
+              widgetToken: sql`${widgetToken}`.as("widgetToken"),
+              createdAt: sql`${now}`.as("createdAt"),
+              lastSeenAt: sql`${now}`.as("lastSeenAt"),
+            })
+            .from(sql`(SELECT 1) AS dummy`)
+            .where(livePushUser(ctx.userId)),
+        )
+        .onDuplicateKeyUpdate({
+          set: {
+            userId: ctx.userId,
+            platform: input.platform,
+            appVersion: input.appVersion ?? null,
+            locale: input.locale ?? null,
+            widgetToken,
+            lastSeenAt: now,
+          },
+        });
       const registered =
         Number(inserted.rowsAffected ?? 0) > 0 ||
         (await isLivePushUser(ctx.drizzle, ctx.userId));
@@ -165,12 +187,21 @@ export const pushRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const updatedAt = new Date();
-      const written = await ctx.drizzle.execute(
-        sql`INSERT INTO ${userPushPreference} (id, userId, category, enabled, updatedAt)
-            SELECT ${nanoid()}, ${ctx.userId}, ${input.category}, ${input.enabled}, ${updatedAt}
-            WHERE ${livePushUser(ctx.userId)}
-            ON DUPLICATE KEY UPDATE enabled = ${input.enabled}, updatedAt = ${updatedAt}`,
-      );
+      const written = await ctx.drizzle
+        .insert(userPushPreference)
+        .select((qb) =>
+          qb
+            .select({
+              id: sql`${nanoid()}`.as("id"),
+              userId: sql`${ctx.userId}`.as("userId"),
+              category: sql`${input.category}`.as("category"),
+              enabled: sql`${input.enabled}`.as("enabled"),
+              updatedAt: sql`${updatedAt}`.as("updatedAt"),
+            })
+            .from(sql`(SELECT 1) AS dummy`)
+            .where(livePushUser(ctx.userId)),
+        )
+        .onDuplicateKeyUpdate({ set: { enabled: input.enabled, updatedAt } });
       const updated =
         Number(written.rowsAffected ?? 0) > 0 ||
         (await isLivePushUser(ctx.drizzle, ctx.userId));
@@ -191,12 +222,30 @@ export const pushRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const createdAt = new Date();
-      const written = await ctx.drizzle.execute(
-        sql`INSERT INTO ${userLiveActivity} (id, userId, activityId, kind, pushToken, endsAt, createdAt)
-            SELECT ${nanoid()}, ${ctx.userId}, ${input.activityId}, ${input.kind}, ${input.pushToken}, ${input.endsAt}, ${createdAt}
-            WHERE ${livePushUser(ctx.userId)}
-            ON DUPLICATE KEY UPDATE activityId = ${input.activityId}, pushToken = ${input.pushToken}, endsAt = ${input.endsAt}, createdAt = ${createdAt}`,
-      );
+      const written = await ctx.drizzle
+        .insert(userLiveActivity)
+        .select((qb) =>
+          qb
+            .select({
+              id: sql`${nanoid()}`.as("id"),
+              userId: sql`${ctx.userId}`.as("userId"),
+              activityId: sql`${input.activityId}`.as("activityId"),
+              kind: sql`${input.kind}`.as("kind"),
+              pushToken: sql`${input.pushToken}`.as("pushToken"),
+              endsAt: sql`${input.endsAt}`.as("endsAt"),
+              createdAt: sql`${createdAt}`.as("createdAt"),
+            })
+            .from(sql`(SELECT 1) AS dummy`)
+            .where(livePushUser(ctx.userId)),
+        )
+        .onDuplicateKeyUpdate({
+          set: {
+            activityId: input.activityId,
+            pushToken: input.pushToken,
+            endsAt: input.endsAt,
+            createdAt,
+          },
+        });
       const registered =
         Number(written.rowsAffected ?? 0) > 0 ||
         (await isLivePushUser(ctx.drizzle, ctx.userId));
@@ -247,11 +296,6 @@ export const pushRouter = createTRPCRouter({
 
 /**
  * The guard every identity-scoped push write carries, as part of its own statement.
- *
- * These three writes are the one place in this router that drops to a raw statement, and
- * only because the builder cannot attach a condition to an INSERT: the guard has to be
- * evaluated by the same statement that writes, or there is a window between them. The
- * guarded DELETE below needs no such thing, since a WHERE is just a WHERE.
  *
  * A write must not outlive the account it names. `retireStoreUserId` lays the tombstone
  * down before it purges, so a write either sees the tombstone and does nothing, or landed

@@ -148,9 +148,12 @@ export const registerRouter = createTRPCRouter({
       ].sort();
       // The account row is written on its own before anything that references it, so
       // registration never leaves rows behind that look like orphans to the cleaner.
-      // Raw because the builder cannot attach a condition to an INSERT, and the guard has
-      // to run in the same statement that writes or there is a window between them. Every
-      // other statement in this file uses the query builder.
+      // The one statement in this file the query builder cannot express. `insert().select()`
+      // does support a guarded insert -- the three in push.ts use it -- but it requires the
+      // select to name every column of the target table, and UserData has 168. Listing them
+      // would mean hand-writing the defaults for 150 columns nobody is setting here, which
+      // is precisely how this insert once shipped a new character with 0 experience instead
+      // of the column's own 2000.
       //
       // One guarded insert rather than a lock. The tombstone test rides in the statement
       // as a NOT EXISTS, so a retirement committing alongside this either lands first --
