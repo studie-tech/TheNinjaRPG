@@ -6,6 +6,7 @@ import { beforeEach, expect, it } from "vitest";
 import {
   bloodline,
   notification,
+  paypalSubscription,
   storeEntitlementRevocation,
   storeEntitlementState,
   storePurchase,
@@ -733,6 +734,33 @@ describeWithDatabase("staff user-id rename", () => {
       where: eq(userData.userId, OLD_USER_ID),
     });
     expect(after?.reputationPoints).toBe((before?.reputationPoints ?? 0) + 8);
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
+
+  it("lets a deleted PayPal subscriber's tier follow onto the new character", async () => {
+    // PayPal rows survive deletion just as store receipts do, so the same settlement
+    // derives the tier from them; main waited for the cron here.
+    const database = await getTestDatabase();
+    await database.insert(paypalSubscription).values({
+      id: nanoid(),
+      createdById: OLD_USER_ID,
+      affectedUserId: OLD_USER_ID,
+      subscriptionId: nanoid(),
+      federalStatus: "SILVER",
+      status: "ACTIVE",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await deleteUser(database, OLD_USER_ID);
+    const created = await registerAgain(OLD_USER_ID, "paypal-window", "Paypaler");
+    expect(created.success).toBe(true);
+    const reborn = await database.query.userData.findFirst({
+      columns: { federalStatus: true },
+      where: eq(userData.userId, OLD_USER_ID),
+    });
+    expect(reborn?.federalStatus).toBe("SILVER");
+    await database
+      .delete(paypalSubscription)
+      .where(eq(paypalSubscription.affectedUserId, OLD_USER_ID));
   }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
 
   it("purges a device registration that overlaps account retirement", async () => {

@@ -10,6 +10,7 @@ import {
   bloodlineRolls,
   emailReminder,
   historicalIp,
+  paypalSubscription,
   questHistory,
   referralSource,
   storePurchase,
@@ -100,6 +101,7 @@ export const registerRouter = createTRPCRouter({
         moderationResult,
         storeAlias,
         storeHistory,
+        paypalHistory,
       ] = await Promise.all([
         ctx.drizzle.query.village.findFirst({
           where: eq(village.name, "Horizon"),
@@ -131,13 +133,22 @@ export const registerRouter = createTRPCRouter({
           columns: { id: true },
           where: eq(storePurchase.userId, ctx.userId),
         }),
+        ctx.drizzle.query.paypalSubscription.findFirst({
+          columns: { id: true },
+          where: eq(paypalSubscription.affectedUserId, ctx.userId),
+        }),
       ]);
+      // Whatever the ledger holds for this identity is settled once a character row exists,
+      // on every path that reaches one. A tombstone seen here means receipts can still be
+      // landing under it until it is removed below; store or PayPal history means there is
+      // a tier or a delivery to derive. A plain first registration has none of these.
+      const hasLedger = Boolean(storeAlias || storeHistory || paypalHistory);
 
       // Guard
       if (!moderationResult.success) return moderationResult;
       if (existingUser) {
         // A retry after registration failed part-way settles what it did not get to.
-        if (storeHistory) await settleRecordedLedger(ctx.drizzle, ctx.userId);
+        if (hasLedger) await settleRecordedLedger(ctx.drizzle, ctx.userId);
         return errorResponse("Character already created for this account");
       }
       if (usernameTaken) return errorResponse("Username already taken");
@@ -170,8 +181,7 @@ export const registerRouter = createTRPCRouter({
       // coming back to make another character is the ordinary flow, and the web delete
       // deliberately leaves the player signed in for it, so the tombstone goes, and what the
       // ledger recorded meanwhile -- a renewal, an expiry, a transfer -- is settled as soon
-      // as the character row exists. Store history is the trigger for that rather than the
-      // tombstone, so a retry that finds the tombstone already gone still settles. Reputation points delivered to the deleted character stay
+      // as the character row exists, whichever request that turns out to be. Reputation points delivered to the deleted character stay
       // with it; every receipt is idempotent by transactionId, so nothing is delivered
       // twice. A rename alias is different: its target is a live character that this
       // identity's receipts route to, so it refuses.
@@ -219,10 +229,11 @@ export const registerRouter = createTRPCRouter({
           ...(reminder ? { earnedExperience: 10000 } : {}),
         })
         .onDuplicateKeyUpdate({ set: { userId: sql`userId` } });
+      // The row exists either way now, so settle before answering a duplicate.
+      if (hasLedger) await settleRecordedLedger(ctx.drizzle, ctx.userId);
       if (createdUser.rowsAffected === 0) {
         return errorResponse("Character already created for this account");
       }
-      if (storeHistory) await settleRecordedLedger(ctx.drizzle, ctx.userId);
       await ctx.drizzle
         .delete(userAttribute)
         .where(eq(userAttribute.userId, ctx.userId));
