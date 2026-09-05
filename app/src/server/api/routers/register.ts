@@ -24,7 +24,10 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
-import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
+import {
+  isDeletedStoreUserId,
+  settleRecordedLedger,
+} from "@/server/utils/purchases/grant";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromNow } from "@/utils/time";
 import { registrationSchema, utmSourceSchema } from "@/validators/register";
@@ -94,6 +97,7 @@ export const registerRouter = createTRPCRouter({
         selectedBloodline,
         currentIp,
         moderationResult,
+        storeAlias,
       ] = await Promise.all([
         ctx.drizzle.query.village.findFirst({
           where: eq(village.name, "Horizon"),
@@ -117,6 +121,10 @@ export const registerRouter = createTRPCRouter({
           ),
         }),
         checkForBadWords(input.username),
+        ctx.drizzle.query.storeUserIdAlias.findFirst({
+          columns: { newUserId: true },
+          where: eq(storeUserIdAlias.oldUserId, ctx.userId),
+        }),
       ]);
 
       // Guard
@@ -148,36 +156,37 @@ export const registerRouter = createTRPCRouter({
       // The account row is written on its own before anything that references it, so
       // registration never leaves rows behind that look like orphans to the cleaner.
       //
-      // Deleting a character retires the Clerk identity in the store ownership graph so that
-      // store events for a character that no longer exists route nowhere. The identity coming
-      // back to make another character is the ordinary flow, and the web delete deliberately
-      // leaves the player signed in for it, so the tombstone goes. Receipts are kept and each
-      // is idempotent by transactionId, so nothing already granted is granted again; a
-      // subscription still being paid for follows the identity onto the new character at the
-      // next reconcile. A rename alias is different: its target is a live character that this
-      // identity's receipts route to, so it still refuses below.
-      await ctx.drizzle
-        .delete(storeUserIdAlias)
-        .where(
-          and(
-            eq(storeUserIdAlias.oldUserId, ctx.userId),
-            sql`LEFT(${storeUserIdAlias.newUserId}, ${DELETED_STORE_USER_PREFIX.length}) = ${DELETED_STORE_USER_PREFIX}`,
-          ),
-        );
-      // A plain read rather than a guard folded into the insert. Deletion writes its
-      // tombstone first and removes the account row last, dozens of statements apart, so
-      // slipping a character past this check would take the same identity deleting and
-      // registering at once, with the whole deletion landing inside one round-trip. That
-      // would leave a character the stores refuse to grant to, fixed by removing one alias
-      // row; closing it would take an insert the builder cannot express.
-      const retired = await ctx.drizzle.query.storeUserIdAlias.findFirst({
-        columns: { oldUserId: true },
-        where: eq(storeUserIdAlias.oldUserId, ctx.userId),
-      });
-      if (retired) {
+      // Deleting a character retires the Clerk identity in the store ledger, so events for a
+      // character that no longer exists are recorded without being delivered. The identity
+      // coming back to make another character is the ordinary flow, and the web delete
+      // deliberately leaves the player signed in for it, so the tombstone goes, and what the
+      // ledger recorded meanwhile -- a renewal, an expiry, a transfer -- is settled once the
+      // character exists below. Reputation points delivered to the deleted character stay
+      // with it; every receipt is idempotent by transactionId, so nothing is delivered
+      // twice. A rename alias is different: its target is a live character that this
+      // identity's receipts route to, so it refuses.
+      //
+      // The tombstone delete and the insert are two statements rather than a guard folded
+      // into one. Deletion writes its tombstone first and removes the account row last,
+      // dozens of statements apart, so slipping a character past the alias read would take
+      // the same identity deleting and registering at once, with the whole deletion landing
+      // in between. The ledger records around a tombstone rather than dropping, so what that
+      // would cost is push registration until the alias row is removed; closing it would
+      // take an insert the builder cannot express.
+      if (storeAlias && !isDeletedStoreUserId(storeAlias.newUserId)) {
         return errorResponse(
           "This account is linked to another character and cannot create a new one",
         );
+      }
+      if (storeAlias) {
+        await ctx.drizzle
+          .delete(storeUserIdAlias)
+          .where(
+            and(
+              eq(storeUserIdAlias.oldUserId, ctx.userId),
+              eq(storeUserIdAlias.newUserId, storeAlias.newUserId),
+            ),
+          );
       }
       const createdUser = await ctx.drizzle
         .insert(userData)
@@ -257,6 +266,7 @@ export const registerRouter = createTRPCRouter({
             ]
           : []),
       ]);
+      if (storeAlias) await settleRecordedLedger(ctx.drizzle, ctx.userId);
       return { success: true, message: "Character created" };
     }),
 });

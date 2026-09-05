@@ -22,9 +22,11 @@ import { registerRouter } from "@/server/api/routers/register";
 import { deleteUser, staffRouter } from "@/server/api/routers/staff";
 import { pushRouter } from "@/server/api/routers/push";
 import {
+  canonicalStoreUserId,
   extendStoreSubscription,
   grantStorePurchase,
   reconcileFederalStatuses,
+  revokeFederalStatus,
   transferStorePurchases,
 } from "@/server/utils/purchases/grant";
 import { insertUsers } from "../setup/factories";
@@ -175,6 +177,14 @@ describeWithDatabase("staff user-id rename", () => {
         raw: {},
       }),
     ).resolves.toEqual({ status: "ignored", reason: "Deleted user" });
+    // Recorded, not delivered: the ledger keeps what the identity paid for while it has
+    // no character, and a returning one derives its tier from it.
+    const retryReceipt = await database.query.storePurchase.findFirst({
+      columns: { userId: true, acceptedAt: true, grantedAt: true },
+      where: eq(storePurchase.transactionId, "deleted-user-retry"),
+    });
+    expect(retryReceipt).toMatchObject({ userId: OLD_USER_ID, grantedAt: null });
+    expect(retryReceipt?.acceptedAt).not.toBeNull();
     await expect(
       extendStoreSubscription(database, {
         userId: OLD_USER_ID,
@@ -359,7 +369,6 @@ describeWithDatabase("staff user-id rename", () => {
       bloodlineId: "registration-bloodline",
     });
     expect(created.success).toBe(true);
-    await reconcileFederalStatuses(database);
     const [reborn, alias] = await Promise.all([
       database.query.userData.findFirst({
         columns: { federalStatus: true, reputationPoints: true },
@@ -370,9 +379,277 @@ describeWithDatabase("staff user-id rename", () => {
       }),
     ]);
     expect(alias).toBeUndefined();
+    // Settled at registration, and the hourly reconcile agrees.
     expect(reborn?.federalStatus).toBe("GOLD");
+    await reconcileFederalStatuses(database);
+    const reconciled = await database.query.userData.findFirst({
+      columns: { federalStatus: true },
+      where: eq(userData.userId, OLD_USER_ID),
+    });
+    expect(reconciled?.federalStatus).toBe("GOLD");
     // The consumable went to the character that is gone; a new one starts from scratch.
     expect(reborn?.reputationPoints).toBe(STARTING_REPUTATION_POINTS);
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
+
+  const DAY = 86_400_000;
+
+  const registerAgain = async (userId: string, tag: string, username: string) => {
+    const database = await getTestDatabase();
+    await Promise.all([
+      database.insert(village).values({
+        id: `${tag}-horizon`,
+        name: "Horizon",
+        sector: 1,
+        kageId: STAFF,
+      }),
+      database.insert(bloodline).values({
+        id: `${tag}-bloodline`,
+        name: `${tag} bloodline`,
+        image: "/bloodline.png",
+        description: "test",
+        effects: [],
+        rank: "D",
+      }),
+    ]);
+    const caller = await callerFor(registerRouter, userId);
+    return await caller.createCharacter({
+      username,
+      gender: "Male",
+      hair_color: "Black",
+      eye_color: "Blue",
+      skin_color: "Light",
+      attribute_1: "Soft features",
+      attribute_2: "Glasses",
+      attribute_3: "Short Hair",
+      read_tos: true,
+      read_privacy: true,
+      read_earlyaccess: true,
+      recruiter_userid: null,
+      utm_source: null,
+      bloodlineId: `${tag}-bloodline`,
+    });
+  };
+
+  it("records a renewal that lands while the character is gone, and the new character inherits it", async () => {
+    // The old period ends and the store bills the next one between the deletion and the
+    // new character. Dropping that renewal would leave the returning subscriber with
+    // nothing live until the period after, while still being billed.
+    const database = await getTestDatabase();
+    const now = Date.now();
+    await database.insert(storePurchase).values({
+      id: nanoid(),
+      userId: OLD_USER_ID,
+      originalUserId: OLD_USER_ID,
+      transactionId: "period-before-deletion",
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      federalStatus: "GOLD",
+      isSandbox: false,
+      acceptedAt: new Date(now - 20 * DAY),
+      grantedAt: new Date(now - 20 * DAY),
+      purchasedAt: new Date(now - 20 * DAY),
+      expiresAt: new Date(now - 1),
+      rawData: {},
+    });
+    await deleteUser(database, OLD_USER_ID);
+    await expect(
+      grantStorePurchase(database, {
+        userId: OLD_USER_ID,
+        transactionId: "renewal-in-window",
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt: new Date(now),
+        expiresAt: new Date(now + 30 * DAY),
+        raw: {},
+      }),
+    ).resolves.toEqual({ status: "ignored", reason: "Deleted user" });
+    // A billing extension for that period lands in the window as well, and so does a
+    // consumable whose purchase the store completed late.
+    await extendStoreSubscription(database, {
+      userId: OLD_USER_ID,
+      store: "APPLE",
+      productId: "tnr_federal_gold",
+      transactionId: "renewal-in-window",
+      expirationAt: new Date(now + 46 * DAY),
+    });
+    await expect(
+      grantStorePurchase(database, {
+        userId: OLD_USER_ID,
+        transactionId: "reps-in-window",
+        productId: "tnr_reps_tier1",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt: new Date(now),
+        raw: {},
+      }),
+    ).resolves.toEqual({ status: "ignored", reason: "Deleted user" });
+    const created = await registerAgain(OLD_USER_ID, "renewal-window", "Renewed");
+    expect(created.success).toBe(true);
+    // Settled at registration: the tier is there before any reconcile runs, and the
+    // consumable nobody received is delivered to the character that exists.
+    const [reborn, renewal] = await Promise.all([
+      database.query.userData.findFirst({
+        columns: { federalStatus: true, reputationPoints: true },
+        where: eq(userData.userId, OLD_USER_ID),
+      }),
+      database.query.storePurchase.findFirst({
+        columns: { userId: true, grantedAt: true, expiresAt: true },
+        where: eq(storePurchase.transactionId, "renewal-in-window"),
+      }),
+    ]);
+    expect(reborn?.federalStatus).toBe("GOLD");
+    expect(reborn?.reputationPoints).toBe(STARTING_REPUTATION_POINTS + 8);
+    expect(renewal?.userId).toBe(OLD_USER_ID);
+    expect(renewal?.grantedAt).not.toBeNull();
+    expect(renewal?.expiresAt).toEqual(new Date(now + 46 * DAY));
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
+
+  it("keeps an expiry that lands while the character is gone from vouching for the new one", async () => {
+    // The mirror image: a period the store ended in the window must stay ended, or the
+    // returning character would be handed a tier that was cancelled or refunded.
+    const database = await getTestDatabase();
+    const now = Date.now();
+    await database.insert(storePurchase).values({
+      id: nanoid(),
+      userId: OLD_USER_ID,
+      originalUserId: OLD_USER_ID,
+      transactionId: "ended-in-window",
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+      federalStatus: "GOLD",
+      isSandbox: false,
+      acceptedAt: new Date(now - 20 * DAY),
+      grantedAt: new Date(now - 20 * DAY),
+      purchasedAt: new Date(now - 20 * DAY),
+      expiresAt: new Date(now + 10 * DAY),
+      rawData: {},
+    });
+    await deleteUser(database, OLD_USER_ID);
+    // No transaction id, the shape that used to land under the tombstone string.
+    await revokeFederalStatus(database, OLD_USER_ID, {
+      occurredAt: new Date(now),
+      productId: "tnr_federal_gold",
+      store: "APPLE",
+    });
+    const created = await registerAgain(OLD_USER_ID, "expiry-window", "Lapsed");
+    expect(created.success).toBe(true);
+    const [reborn, ended] = await Promise.all([
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, OLD_USER_ID),
+      }),
+      database.query.storePurchase.findFirst({
+        columns: { revokedAt: true },
+        where: eq(storePurchase.transactionId, "ended-in-window"),
+      }),
+    ]);
+    expect(reborn?.federalStatus).toBe("NONE");
+    expect(ended?.revokedAt).not.toBeNull();
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
+
+  it("still retries a purchase for an identity that has not registered yet", async () => {
+    // The store SDK is signed in before the character exists, so a missing recipient
+    // without a tombstone is "not yet", and RevenueCat's retry is what delivers it.
+    const database = await getTestDatabase();
+    await expect(
+      grantStorePurchase(database, {
+        userId: "not-yet-registered",
+        transactionId: nanoid(),
+        productId: "tnr_reps_tier1",
+        store: "APPLE",
+        isSandbox: false,
+        purchasedAt: new Date(),
+        raw: {},
+      }),
+    ).rejects.toThrow(/No user not-yet-registered/);
+  });
+
+  it("moves a transfer to an identity that deleted its character, and the receipts wait for it", async () => {
+    const database = await getTestDatabase();
+    const now = Date.now();
+    await insertUsers([{ userId: "transfer-source", username: "transfer-src" }]);
+    await Promise.all([
+      database.insert(storePurchase).values({
+        id: nanoid(),
+        userId: "transfer-source",
+        originalUserId: "transfer-source",
+        transactionId: "moves-to-deleted",
+        productId: "tnr_federal_gold",
+        store: "APPLE",
+        federalStatus: "GOLD",
+        isSandbox: false,
+        acceptedAt: new Date(now - 5 * DAY),
+        grantedAt: new Date(now - 5 * DAY),
+        purchasedAt: new Date(now - 5 * DAY),
+        expiresAt: new Date(now + 25 * DAY),
+        rawData: {},
+      }),
+      database
+        .update(userData)
+        .set({ federalStatus: "GOLD" })
+        .where(eq(userData.userId, "transfer-source")),
+    ]);
+    await deleteUser(database, OLD_USER_ID);
+    await transferStorePurchases(database, {
+      eventId: "transfer-to-deleted",
+      fromUserIds: ["transfer-source"],
+      toUserIds: [OLD_USER_ID],
+      store: "APPLE",
+      isSandbox: false,
+      occurredAt: new Date(now),
+    });
+    const [moved, source] = await Promise.all([
+      database.query.storePurchase.findFirst({
+        columns: { userId: true },
+        where: eq(storePurchase.transactionId, "moves-to-deleted"),
+      }),
+      database.query.userData.findFirst({
+        columns: { federalStatus: true },
+        where: eq(userData.userId, "transfer-source"),
+      }),
+    ]);
+    // The source stops vouching now; the receipt is under the identity that owns it.
+    expect(moved?.userId).toBe(OLD_USER_ID);
+    expect(source?.federalStatus).toBe("NONE");
+    const created = await registerAgain(OLD_USER_ID, "transfer-window", "Received");
+    expect(created.success).toBe(true);
+    const reborn = await database.query.userData.findFirst({
+      columns: { federalStatus: true },
+      where: eq(userData.userId, OLD_USER_ID),
+    });
+    expect(reborn?.federalStatus).toBe("GOLD");
+  }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
+
+  it("resolves a renamed id to the deleted identity rather than its tombstone", async () => {
+    // A receipt or a delayed webhook naming the old id still belongs to the identity the
+    // rename moved it to, deleted or not, and registration takes only the tombstone.
+    const database = await getTestDatabase();
+    await database.insert(storeUserIdAlias).values({
+      oldUserId: "old-clerk-id",
+      newUserId: OLD_USER_ID,
+      updatedAt: new Date(),
+    });
+    await deleteUser(database, OLD_USER_ID);
+    await expect(canonicalStoreUserId(database, "old-clerk-id")).resolves.toBe(
+      OLD_USER_ID,
+    );
+    await expect(canonicalStoreUserId(database, OLD_USER_ID)).resolves.toBe(
+      OLD_USER_ID,
+    );
+    const created = await registerAgain(OLD_USER_ID, "renamed-window", "Rerouted");
+    expect(created.success).toBe(true);
+    const [rename, tombstone] = await Promise.all([
+      database.query.storeUserIdAlias.findFirst({
+        columns: { newUserId: true },
+        where: eq(storeUserIdAlias.oldUserId, "old-clerk-id"),
+      }),
+      database.query.storeUserIdAlias.findFirst({
+        where: eq(storeUserIdAlias.oldUserId, OLD_USER_ID),
+      }),
+    ]);
+    expect(rename?.newUserId).toBe(OLD_USER_ID);
+    expect(tombstone).toBeUndefined();
   }, REAL_DB_CONCURRENCY_TIMEOUT_MS);
 
   it("purges a device registration that overlaps account retirement", async () => {

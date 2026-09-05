@@ -115,7 +115,37 @@ const federalProduct = (productId: string) =>
       product.productId === productId || product.androidProductId === productId,
   );
 
-/** Follow staff-driven user-id renames so delayed webhooks cannot recreate the old id. */
+export const STORE_USER_MUTATION_LOCK_ID = "__tnr_internal_store_user_mutation_lock__";
+export const DELETED_STORE_USER_PREFIX = "__tnr_deleted_store_user__:";
+
+export const isReservedStoreUserId = (userId: string): boolean =>
+  userId === STORE_USER_MUTATION_LOCK_ID ||
+  userId.startsWith(DELETED_STORE_USER_PREFIX);
+
+export const isDeletedStoreUserId = (userId: string): boolean =>
+  userId.startsWith(DELETED_STORE_USER_PREFIX);
+
+/** Whether deletion has retired this identity: a tombstone alias hangs off it. */
+export const isRetiredStoreUserId = async (
+  client: DrizzleClient,
+  userId: string,
+): Promise<boolean> => {
+  const alias = await client.query.storeUserIdAlias.findFirst({
+    columns: { newUserId: true },
+    where: eq(storeUserIdAlias.oldUserId, userId),
+  });
+  return alias !== undefined && isDeletedStoreUserId(alias.newUserId);
+};
+
+/**
+ * Follow staff-driven user-id renames so delayed webhooks cannot recreate the old id.
+ *
+ * A deletion tombstone is not followed. Deletion retires the character, not the ledger:
+ * the receipts stay under the identity it retired, and so does everything the ledger
+ * records while the character is gone, so that a returning identity finds its coverage.
+ * Resolution therefore stops at that identity, and `isRetiredStoreUserId` answers the
+ * separate question of whether there is a character to deliver to.
+ */
 export const canonicalStoreUserId = async (
   client: DrizzleClient,
   userId: string,
@@ -130,7 +160,13 @@ export const canonicalStoreUserId = async (
       columns: { newUserId: true },
       where: eq(storeUserIdAlias.oldUserId, current),
     });
-    if (!alias || alias.newUserId === current) return current;
+    if (
+      !alias ||
+      alias.newUserId === current ||
+      isDeletedStoreUserId(alias.newUserId)
+    ) {
+      return current;
+    }
     current = alias.newUserId;
   }
 };
@@ -152,7 +188,13 @@ const canonicalStoreUserIdForUpdate = async (
       .from(storeUserIdAlias)
       .where(eq(storeUserIdAlias.oldUserId, current))
       .for("update");
-    if (!alias || alias.newUserId === current) return current;
+    if (
+      !alias ||
+      alias.newUserId === current ||
+      isDeletedStoreUserId(alias.newUserId)
+    ) {
+      return current;
+    }
     current = alias.newUserId;
   }
 };
@@ -166,15 +208,6 @@ const canonicalStoreUserIdForUpdate = async (
  * and staff renames observe one stable graph without requiring a race-prone graph walk
  * before the locks are known. The INSERT itself owns the row until transaction commit.
  */
-export const STORE_USER_MUTATION_LOCK_ID = "__tnr_internal_store_user_mutation_lock__";
-export const DELETED_STORE_USER_PREFIX = "__tnr_deleted_store_user__:";
-
-export const isReservedStoreUserId = (userId: string): boolean =>
-  userId === STORE_USER_MUTATION_LOCK_ID ||
-  userId.startsWith(DELETED_STORE_USER_PREFIX);
-
-export const isDeletedStoreUserId = (userId: string): boolean =>
-  userId.startsWith(DELETED_STORE_USER_PREFIX);
 
 export const acquireStoreUserMutationLock = async (
   client: DrizzleClient,
@@ -407,19 +440,10 @@ export const reconcileStorePurchaseOwner = async (
       attempt === 0 ? await receiptQuery : await receiptQuery.for("update");
     if (!receipt) throw new Error(`Missing store receipt ${receiptId}`);
 
-    // Rename aliases are followed, deletion tombstones are not. A tombstone is a dead end
-    // in the transfer graph -- nothing points out of it -- so taking it as the traversal
-    // origin makes every receipt that was transferred OUT of a since-deleted purchaser
-    // resolve to the tombstone and then fail to find an owner, permanently. The stored id
-    // still names a real node in that graph, so falling back to it walks the chain to
-    // whoever holds the receipt now.
-    const aliasedOriginalUserId = await canonicalStoreUserIdForUpdate(
+    const canonicalOriginalUserId = await canonicalStoreUserIdForUpdate(
       client,
       receipt.originalUserId,
     );
-    const canonicalOriginalUserId = isDeletedStoreUserId(aliasedOriginalUserId)
-      ? receipt.originalUserId
-      : aliasedOriginalUserId;
     const resolvedUserId = receipt.federalStatus
       ? await transferredUserId(
           client,
@@ -443,7 +467,8 @@ export const reconcileStorePurchaseOwner = async (
       .select({ userId: userData.userId })
       .from(userData)
       .where(eq(userData.userId, resolvedUserId));
-    if (!owner) {
+    // A retired owner has no row to find, but the ledger is still theirs to hold.
+    if (!owner && !(await isRetiredStoreUserId(client, resolvedUserId))) {
       throw new Error(`No store receipt owner ${resolvedUserId} for ${receiptId}`);
     }
 
@@ -495,12 +520,6 @@ const grantStorePurchaseUnlocked = async (
   // TRANSFER may arrive first. Consumables stay with their purchaser, but subscriptions
   // follow the durable store-account ownership redirect before any receipt is inserted.
   const originalUserId = await canonicalStoreUserId(client, grant.userId);
-  if (isDeletedStoreUserId(originalUserId)) {
-    // Store receipts are an audit/idempotency ledger and deliberately survive account
-    // deletion. A retry for a tombstoned owner is acknowledged without recreating value
-    // or asking RevenueCat to retry forever for a UserData row that will never return.
-    return { status: "ignored", reason: "Deleted user" };
-  }
   let recipientUserId = federal
     ? await transferredUserId(
         client,
@@ -570,7 +589,11 @@ const grantStorePurchaseUnlocked = async (
     .select({ userId: userData.userId })
     .from(userData)
     .where(eq(userData.userId, recipientUserId));
-  if (!recipient) {
+  // A purchase can precede the character it is for, since the store SDK is signed in
+  // before registration, so a missing recipient is retried. A retired one is different:
+  // the receipt is still recorded, so a returning identity finds the coverage it paid for,
+  // but there is no character to deliver to and no retry that could change that.
+  if (!recipient && !(await isRetiredStoreUserId(client, recipientUserId))) {
     throw new Error(
       `No user ${recipientUserId} for transaction ${grant.transactionId}`,
     );
@@ -661,6 +684,7 @@ const grantStorePurchaseUnlocked = async (
       return { status: "ignored", reason: "Expired purchase" };
     }
 
+    if (!recipient) return { status: "ignored", reason: "Deleted user" };
     // The receipt deliberately remains durable when a later grant fails, so correctness
     // cannot depend on rolling both writes back. This multi-table UPDATE is one atomic SQL
     // statement: only the delivery that changes grantedAt from null can apply value.
@@ -770,6 +794,56 @@ export interface StoreExtension {
 }
 
 /**
+ * Settle what the ledger recorded for an identity while it had no character: deliver each
+ * accepted receipt that was never granted, then re-derive the tier from everything that
+ * vouches now, transferred and PayPal receipts included. Replaying a receipt through the
+ * grant path lands in its duplicate branch, which delivers exactly once; the replay names
+ * the receipt's original owner so that branch recognises it. A replay that fails is already
+ * reported there and leaves the receipt pending for the next attempt.
+ */
+export const settleRecordedLedger = async (
+  client: DrizzleClient,
+  userId: string,
+): Promise<void> => {
+  const recorded = await client.query.storePurchase.findMany({
+    columns: {
+      originalUserId: true,
+      transactionId: true,
+      productId: true,
+      store: true,
+      isSandbox: true,
+      purchasedAt: true,
+      expiresAt: true,
+      rawData: true,
+    },
+    where: and(
+      eq(storePurchase.userId, userId),
+      isNotNull(storePurchase.acceptedAt),
+      isNull(storePurchase.grantedAt),
+      isNull(storePurchase.revokedAt),
+    ),
+  });
+  for (const receipt of recorded) {
+    try {
+      await grantStorePurchase(client, {
+        userId: receipt.originalUserId,
+        transactionId: receipt.transactionId,
+        productId: receipt.productId,
+        store: receipt.store,
+        isSandbox: receipt.isSandbox,
+        purchasedAt: receipt.purchasedAt,
+        expiresAt: receipt.expiresAt,
+        raw: receipt.rawData,
+      });
+    } catch {
+      // Reported by grantStorePurchase; the receipt stays pending for the next attempt.
+    }
+  }
+  const paypal = await paypalFederalFloor(client, userId);
+  await setFederalStatusWithStoreFloor(client, userId, paypal);
+};
+
+/**
  * Apply a store-granted billing extension to the live subscription receipt.
  *
  * Extensions carry no new purchase value, but their paid-through time is durable evidence
@@ -782,11 +856,6 @@ const extendStoreSubscriptionUnlocked = async (
 ): Promise<void> => {
   const canonicalUserId = await canonicalStoreUserId(client, extension.userId);
   const isSandbox = extension.isSandbox ?? false;
-  // Account deletion is terminal for the canonical store identity. RevenueCat can send
-  // SUBSCRIPTION_EXTENDED or BILLING_ISSUE after deletion, and when no receipt exists
-  // there is nothing a later retry can repair. Acknowledge the event instead of asking
-  // RevenueCat to retry forever for an owner that is deliberately gone.
-  if (isDeletedStoreUserId(canonicalUserId)) return;
   const exact = extension.transactionId
     ? await client.query.storePurchase.findFirst({
         columns: { id: true, userId: true, revokedAt: true },
@@ -869,6 +938,8 @@ const extendStoreSubscriptionUnlocked = async (
       return through.getTime() >= extension.expirationAt.getTime();
     });
     if (covered) return;
+    // A retired identity with nothing live has nothing a retry could repair either.
+    if (await isRetiredStoreUserId(client, canonicalUserId)) return;
     throw new Error(
       `No live receipt to extend for ${extension.userId}/${extension.productId}`,
     );
@@ -1302,24 +1373,25 @@ const transferStorePurchasesUnlocked = async (
   }
   const toIds = [...new Set(canonicalToIds)];
   if (toIds.length === 0) throw new Error("RevenueCat transfer has no destination");
-  // Account deletion is terminal for the canonical store identity, so no retry can resolve
-  // this destination. Acknowledge rather than asking RevenueCat to retry for days and fire
-  // a Sentry error on every attempt.
-  if (toIds.length === 1 && toIds[0] && isDeletedStoreUserId(toIds[0])) {
-    return { destinationUserId: toIds[0], rowsAffected: 0 };
-  }
-
   const destinations = await client
     .select({ userId: userData.userId })
     .from(userData)
     .where(inArray(userData.userId, toIds));
-  const [destination] = destinations;
-  if (!destination || destinations.length !== 1) {
+  // The destination may have deleted its character. The receipts move all the same, so
+  // the source stops vouching now and the identity finds them if it comes back.
+  const retiredDestination =
+    destinations.length === 0 &&
+    toIds.length === 1 &&
+    toIds[0] &&
+    (await isRetiredStoreUserId(client, toIds[0]))
+      ? toIds[0]
+      : undefined;
+  const destinationUserId = destinations[0]?.userId ?? retiredDestination;
+  if (!destinationUserId || destinations.length > 1) {
     throw new Error(
       `RevenueCat transfer resolved ${destinations.length} destination users`,
     );
   }
-  const destinationUserId = destination.userId;
   const sourceIds = fromIds.filter((id) => id !== destinationUserId);
   const stores = transfer.store ? [transfer.store] : [...STORE_PLATFORMS];
   const isSandbox = transfer.isSandbox ?? false;
@@ -1460,7 +1532,13 @@ export const transferStorePurchases = async (
   );
 };
 
-/** Tombstone a deleted store identity while retaining receipt idempotency history. */
+/**
+ * Tombstone a deleted store identity while retaining receipt idempotency history.
+ *
+ * One alias row. Rename aliases pointing at this identity are left in place: resolution
+ * stops at the identity a tombstone retires, so they still land here, and registration
+ * removes exactly this row when the identity returns.
+ */
 export const retireStoreUserId = async (
   client: DrizzleClient,
   userId: string,
@@ -1468,15 +1546,11 @@ export const retireStoreUserId = async (
 ): Promise<void> => {
   if (isReservedStoreUserId(userId)) return;
   const tombstone = `${DELETED_STORE_USER_PREFIX}${nanoid()}`;
-  // Three idempotent statements rather than a transaction. Deletion is where this codebase
-  // has actually seen deadlocks -- deleteUser retries them with backoff -- and holding a
-  // lock across these while the cleanup runs is what made that likely. Re-running any of
-  // them converges on the same state, so a failure part-way is repaired by the retry
+  // Idempotent statements rather than a transaction. Deletion is where this codebase has
+  // actually seen deadlocks -- deleteUser retries them with backoff -- and holding a lock
+  // across these while the cleanup runs is what made that likely. Re-running either
+  // converges on the same state, so a failure part-way is repaired by the retry
   // deleteUser already performs.
-  await client
-    .update(storeUserIdAlias)
-    .set({ newUserId: tombstone, updatedAt: new Date() })
-    .where(eq(storeUserIdAlias.newUserId, userId));
   // The tombstone goes down before the cleanup, not after. Identity-scoped writes test for
   // it in their own statement, so once it exists none can land; the cleanup below then
   // removes whatever arrived before it. Ordered the other way round, a registration
