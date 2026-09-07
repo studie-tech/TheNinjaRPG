@@ -26,6 +26,7 @@ import {
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
   isEquippableUserItem,
+  itemStacksIgnoreLevel,
   showsItemLevelBadge,
   userItemActionBadges,
 } from "@/libs/item";
@@ -113,6 +114,16 @@ describe("userItemActionBadges", () => {
 
     expect(badges.counts).toEqual([]);
     expect(badges.levels).toEqual([{ id: "single-weapon", level: 12 }]);
+  });
+});
+
+describe("itemStacksIgnoreLevel", () => {
+  it("allows every stackable item to merge across ownership levels", () => {
+    expect(itemStacksIgnoreLevel({ canStack: true })).toBe(true);
+  });
+
+  it("does not apply the rule to non-stackable items", () => {
+    expect(itemStacksIgnoreLevel({ canStack: false })).toBe(false);
   });
 });
 
@@ -221,6 +232,7 @@ const ui = (over: {
   isInAuction?: boolean;
   craftingFinishedAt?: Date | null;
   imbuements?: Array<{ craftingFinishedAt: Date | null }>;
+  requiredSkillId?: string | null;
 }): UserItemWithRelations =>
   ({
     id: over.id,
@@ -238,6 +250,7 @@ const ui = (over: {
       itemType: over.itemType ?? "WEAPON",
       slot: over.slotType ?? "ITEM",
       maxEquips: over.maxEquips ?? 1,
+      requiredSkillId: over.requiredSkillId ?? null,
     },
   }) as unknown as UserItemWithRelations;
 
@@ -255,6 +268,25 @@ describe("buildItemLoadoutData", () => {
 });
 
 describe("computeLoadoutAssignments", () => {
+  it("skips items whose required skill is inactive", () => {
+    const items = [
+      ui({ id: "active", itemId: "i1", requiredSkillId: "skill-a" }),
+      ui({ id: "inactive", itemId: "i2", requiredSkillId: "skill-b" }),
+    ];
+    const out = computeLoadoutAssignments(
+      [
+        { userItemId: "active", itemId: "i1", slot: "ITEM_1" },
+        { userItemId: "inactive", itemId: "i2", slot: "ITEM_2" },
+      ],
+      items,
+      USER,
+      NOW,
+      new Set(["skill-a"]),
+    );
+    expect(out.assignments).toEqual([{ userItemId: "active", slot: "ITEM_1" }]);
+    expect(out.invalidItems[0]).toMatch(/active skill/);
+  });
+
   it("assigns a simple valid loadout", () => {
     const items = [ui({ id: "r1", itemId: "i1", slotType: "HEAD" })];
     const out = computeLoadoutAssignments(

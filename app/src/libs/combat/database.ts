@@ -1579,6 +1579,14 @@ export const updateUser = async (
           ...(isWinningWarParticipant
             ? { warParticipantUntil: extendWarParticipantSql() }
             : {}),
+          ...(curBattle.battleType === "COMBAT"
+            ? {
+                pvpWins: sql`pvpWins + ${result.outcome === "Won" ? 1 : 0}`,
+                pvpLosses: sql`pvpLosses + ${
+                  result.outcome === "Lost" || result.outcome === "Fled" ? 1 : 0
+                }`,
+              }
+            : {}),
           ...(curBattle.battleType === "RANKED_PVP"
             ? {
                 rankedLp: sql`GREATEST(rankedLp + ${result.lpDiff}, 0)`,

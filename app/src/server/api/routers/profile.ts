@@ -370,6 +370,9 @@ export const profileRouter = createTRPCRouter({
           ...(input.defaultAutoCombat !== undefined
             ? { defaultAutoCombat: input.defaultAutoCombat }
             : {}),
+          ...(input.showPvpRecord !== undefined
+            ? { showPvpRecord: input.showPvpRecord }
+            : {}),
           ...(input.preferredStat !== undefined
             ? { preferredStat: input.preferredStat }
             : {}),
@@ -1985,6 +1988,9 @@ export const profileRouter = createTRPCRouter({
             maxStamina: true,
             movedTooFastCount: true,
             pveFights: true,
+            pvpWins: true,
+            pvpLosses: true,
+            showPvpRecord: true,
             rank: true,
             rankedLp: true,
             reputationPoints: true,
@@ -2092,6 +2098,15 @@ export const profileRouter = createTRPCRouter({
           .update(userData)
           .set({ avatarLight: thumbnail })
           .where(eq(userData.userId, user.userId));
+      }
+      // Hide PvP W/L unless the owner opted in, the viewer is the owner, or staff.
+      // Null (not omit) so the public payload shape stays stable for clients.
+      const canSeePvpRecord =
+        isSelf ||
+        user.showPvpRecord ||
+        Boolean(requester && canSeeSecretData(requester.role));
+      if (!canSeePvpRecord) {
+        return { ...user, pvpWins: null, pvpLosses: null };
       }
       // Return
       return user;

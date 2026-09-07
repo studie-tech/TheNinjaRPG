@@ -17,6 +17,7 @@ export async function POST(req: Request) {
       effects: true,
       villageId: true,
       bloodlineId: true,
+      requiredSkillId: true,
     }),
   );
   const { system, messages } = await prepareChatPrompt(

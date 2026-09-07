@@ -1323,6 +1323,11 @@ export const JutsuValidatorRawSchema = z.object({
     .string()
     .nullable()
     .transform((val) => (val === "" ? null : val)),
+  requiredSkillId: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => (value === "" ? null : value) ?? null),
   villageId: z.string().nullable(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
   battleUsageType: z.enum(BattleUsageTypes).prefault("BOTH"),
@@ -1509,6 +1514,11 @@ export const ItemValidatorRawSchema = z.object({
   craftingExperience: z.coerce.number().int().min(0).prefault(0),
   crystalTargetTypes: z.enum(ItemTypes).nullable(),
   bloodlineId: z.string().nullable(),
+  requiredSkillId: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => (value === "" ? null : value) ?? null),
   battleUsageType: z.enum(BattleUsageTypes).prefault("BOTH"),
   craftingRequirements: z
     .array(
