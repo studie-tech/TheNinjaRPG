@@ -149,6 +149,7 @@ import {
   getBattleClaimIds,
   getBattleGrid,
   getDefaultBattleSizes,
+  getEffectiveMaxPool,
   getTurnControl,
   isEffectActive,
   maskBattle,
@@ -1331,13 +1332,31 @@ export const combatRouter = createTRPCRouter({
 
       // Restore original initiative, direction, and combat pools
       if (usersState[0]) {
-        usersState[0].initiative = originalInitiative;
-        usersState[0].direction = originalDirection;
-        usersState[0].curHealth = Math.min(originalCurHealth, usersState[0].maxHealth);
-        usersState[0].curChakra = Math.min(originalCurChakra, usersState[0].maxChakra);
-        usersState[0].curStamina = Math.min(
+        const updatedUser = usersState[0];
+        // Mirror initiateBattle: apply pool modifiers so _prev*Adj tracking is set and
+        // subsequent rounds do not treat loadout pool effects as a fresh delta.
+        const hasPoolEffects = userEffects.some(
+          (e) =>
+            e.targetId === updatedUser.userId &&
+            (e.type === "increasemaxpools" || e.type === "decreasemaxpools") &&
+            isEffectActive(e),
+        );
+        if (hasPoolEffects) {
+          applyPoolAdjustmentsToBase(updatedUser, userEffects);
+        }
+        updatedUser.initiative = originalInitiative;
+        updatedUser.direction = originalDirection;
+        updatedUser.curHealth = Math.min(
+          originalCurHealth,
+          getEffectiveMaxPool(updatedUser, userEffects, "Health"),
+        );
+        updatedUser.curChakra = Math.min(
+          originalCurChakra,
+          getEffectiveMaxPool(updatedUser, userEffects, "Chakra"),
+        );
+        updatedUser.curStamina = Math.min(
           originalCurStamina,
-          usersState[0].maxStamina,
+          getEffectiveMaxPool(updatedUser, userEffects, "Stamina"),
         );
       }
 

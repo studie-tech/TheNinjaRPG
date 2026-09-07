@@ -791,6 +791,24 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             <p>
               PVE Fights: {`${profile.pveFights} (+${profile.battleHistory.length})`}
             </p>
+            {(profile.showPvpRecord ||
+              userData?.userId === profile.userId ||
+              canSeeSecrets) && (
+              <>
+                <p>PvP Wins: {profile.pvpWins}</p>
+                <p>PvP Losses: {profile.pvpLosses}</p>
+                <p>
+                  PvP Win Rate:{" "}
+                  {profile.pvpWins + profile.pvpLosses > 0
+                    ? (
+                        (profile.pvpWins / (profile.pvpWins + profile.pvpLosses)) *
+                        100
+                      ).toFixed(1)
+                    : "0"}
+                  %
+                </p>
+              </>
+            )}
             <p>Yapper Rank: {profile.tavernMessages}</p>
             {userData && userData.userId !== profile.userId && !profile.isAi && (
               <BracketEligibilityBadge

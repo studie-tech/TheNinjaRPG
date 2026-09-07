@@ -370,6 +370,9 @@ export const profileRouter = createTRPCRouter({
           ...(input.defaultAutoCombat !== undefined
             ? { defaultAutoCombat: input.defaultAutoCombat }
             : {}),
+          ...(input.showPvpRecord !== undefined
+            ? { showPvpRecord: input.showPvpRecord }
+            : {}),
           ...(input.preferredStat !== undefined
             ? { preferredStat: input.preferredStat }
             : {}),
@@ -1985,6 +1988,9 @@ export const profileRouter = createTRPCRouter({
             maxStamina: true,
             movedTooFastCount: true,
             pveFights: true,
+            pvpWins: true,
+            pvpLosses: true,
+            showPvpRecord: true,
             rank: true,
             rankedLp: true,
             reputationPoints: true,

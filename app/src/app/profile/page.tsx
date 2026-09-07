@@ -118,6 +118,19 @@ export default function Profile() {
                     <div>
                       <p>PVP Fights: {userData.pvpFights}</p>
                       <p>PvP Streak: {userData.pvpStreak}</p>
+                      <p>Wins: {userData.pvpWins}</p>
+                      <p>Losses: {userData.pvpLosses}</p>
+                      <p>
+                        Win Rate:{" "}
+                        {userData.pvpWins + userData.pvpLosses > 0
+                          ? (
+                              (userData.pvpWins /
+                                (userData.pvpWins + userData.pvpLosses)) *
+                              100
+                            ).toFixed(1)
+                          : "0"}
+                        %
+                      </p>
                     </div>
                   </TooltipContent>
                 </Tooltip>
@@ -126,10 +139,7 @@ export default function Profile() {
             {topPlayers && (
               <TooltipProvider delayDuration={50}>
                 <div className="flex flex-row items-center gap-1">
-                  <p>
-                    PvP Rank:{" "}
-                    {getRankedRank(userData.rankedLp, topPlayers)}
-                  </p>
+                  <p>PvP Rank: {getRankedRank(userData.rankedLp, topPlayers)}</p>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -277,6 +287,22 @@ export default function Profile() {
           <p>
             <span className="text-muted-foreground">PvP streak:</span>{" "}
             {userData.pvpStreak}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Wins:</span> {userData.pvpWins}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Losses:</span> {userData.pvpLosses}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Win rate:</span>{" "}
+            {userData.pvpWins + userData.pvpLosses > 0
+              ? (
+                  (userData.pvpWins / (userData.pvpWins + userData.pvpLosses)) *
+                  100
+                ).toFixed(1)
+              : "0"}
+            %
           </p>
         </div>
       </Modal2>

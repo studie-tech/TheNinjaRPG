@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "2a23577d-2b0c-4304-8dd1-d5b5c8884727",
+  "id": "574e6150-89e3-4ba9-8d2b-cbbb7278aee8",
   "prevId": "564c721e-6432-408f-bcba-179d39f16ac6",
   "tables": {
     "AbEvent": {
@@ -12668,6 +12668,14 @@
           "autoincrement": false,
           "default": true
         },
+        "showPvpRecord": {
+          "name": "showPvpRecord",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "pvpFights": {
           "name": "pvpFights",
           "type": "int",
@@ -12695,6 +12703,22 @@
         "pvpStreak": {
           "name": "pvpStreak",
           "type": "smallint unsigned",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pvpWins": {
+          "name": "pvpWins",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pvpLosses": {
+          "name": "pvpLosses",
+          "type": "int",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
