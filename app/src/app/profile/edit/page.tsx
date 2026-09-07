@@ -776,6 +776,18 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
             </div>
             <br />
             <Switch
+              id="show-pvp-record"
+              checked={userData?.showPvpRecord}
+              onCheckedChange={(checked) => {
+                updatePreferences({ showPvpRecord: checked });
+                void updateUser({ showPvpRecord: checked });
+              }}
+            />
+            <Label htmlFor="show-pvp-record">
+              Show PvP wins, losses, and win rate on public profile
+            </Label>
+            <br />
+            <Switch
               id="default-auto-combat"
               checked={autoCombat}
               onCheckedChange={setAutoCombat}

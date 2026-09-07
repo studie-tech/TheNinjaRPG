@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "10a255f4-de58-46f7-8a0e-90b82b52c236",
+  "id": "574e6150-89e3-4ba9-8d2b-cbbb7278aee8",
   "prevId": "564c721e-6432-408f-bcba-179d39f16ac6",
   "tables": {
     "AbEvent": {
@@ -5455,6 +5455,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "requiredSkillId": {
+          "name": "requiredSkillId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "battleUsageType": {
           "name": "battleUsageType",
           "type": "enum('PVE','PVP','BOTH')",
@@ -5546,6 +5553,13 @@
           "name": "Item_bloodlineId_idx",
           "columns": [
             "bloodlineId"
+          ],
+          "isUnique": false
+        },
+        "Item_requiredSkillId_idx": {
+          "name": "Item_requiredSkillId_idx",
+          "columns": [
+            "requiredSkillId"
           ],
           "isUnique": false
         },
@@ -6088,6 +6102,13 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "requiredSkillId": {
+          "name": "requiredSkillId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -6145,6 +6166,13 @@
           "name": "Jutsu_requiredBloodlineItemId_idx",
           "columns": [
             "requiredBloodlineItemId"
+          ],
+          "isUnique": false
+        },
+        "Jutsu_requiredSkillId_idx": {
+          "name": "Jutsu_requiredSkillId_idx",
+          "columns": [
+            "requiredSkillId"
           ],
           "isUnique": false
         }
@@ -10291,495 +10319,6 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "StoreEntitlementRevocation": {
-      "name": "StoreEntitlementRevocation",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "eventId": {
-          "name": "eventId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "userId": {
-          "name": "userId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "store": {
-          "name": "store",
-          "type": "enum('APPLE','GOOGLE')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "isSandbox": {
-          "name": "isSandbox",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "productId": {
-          "name": "productId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "transactionId": {
-          "name": "transactionId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "revokedThrough": {
-          "name": "revokedThrough",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "occurredAt": {
-          "name": "occurredAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {
-        "StoreEntitlementRevocation_eventId_userId_store_isSandbox_key": {
-          "name": "StoreEntitlementRevocation_eventId_userId_store_isSandbox_key",
-          "columns": [
-            "eventId",
-            "userId",
-            "store",
-            "isSandbox"
-          ],
-          "isUnique": true
-        },
-        "StoreEntitlementRevocation_owner_env_cutoff_idx": {
-          "name": "StoreEntitlementRevocation_owner_env_cutoff_idx",
-          "columns": [
-            "userId",
-            "store",
-            "isSandbox",
-            "revokedThrough"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "StoreEntitlementRevocation_id": {
-          "name": "StoreEntitlementRevocation_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "StoreEntitlementState": {
-      "name": "StoreEntitlementState",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "userId": {
-          "name": "userId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "store": {
-          "name": "store",
-          "type": "enum('APPLE','GOOGLE')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "isSandbox": {
-          "name": "isSandbox",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "revokedThrough": {
-          "name": "revokedThrough",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {
-        "StoreEntitlementState_userId_store_isSandbox_key": {
-          "name": "StoreEntitlementState_userId_store_isSandbox_key",
-          "columns": [
-            "userId",
-            "store",
-            "isSandbox"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "StoreEntitlementState_id": {
-          "name": "StoreEntitlementState_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "StorePurchase": {
-      "name": "StorePurchase",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "userId": {
-          "name": "userId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "originalUserId": {
-          "name": "originalUserId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "transactionId": {
-          "name": "transactionId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "productId": {
-          "name": "productId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "store": {
-          "name": "store",
-          "type": "enum('APPLE','GOOGLE')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "reputationPoints": {
-          "name": "reputationPoints",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "federalStatus": {
-          "name": "federalStatus",
-          "type": "enum('NONE','NORMAL','SILVER','GOLD')",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "isSandbox": {
-          "name": "isSandbox",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "acceptedAt": {
-          "name": "acceptedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "grantedAt": {
-          "name": "grantedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "purchasedAt": {
-          "name": "purchasedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "expiresAt": {
-          "name": "expiresAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "revokedAt": {
-          "name": "revokedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "rawData": {
-          "name": "rawData",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {
-        "StorePurchase_transactionId_key": {
-          "name": "StorePurchase_transactionId_key",
-          "columns": [
-            "transactionId"
-          ],
-          "isUnique": true
-        },
-        "StorePurchase_userId_createdAt_idx": {
-          "name": "StorePurchase_userId_createdAt_idx",
-          "columns": [
-            "userId",
-            "createdAt"
-          ],
-          "isUnique": false
-        },
-        "StorePurchase_userId_purchasedAt_idx": {
-          "name": "StorePurchase_userId_purchasedAt_idx",
-          "columns": [
-            "userId",
-            "purchasedAt"
-          ],
-          "isUnique": false
-        },
-        "StorePurchase_originalUserId_store_idx": {
-          "name": "StorePurchase_originalUserId_store_idx",
-          "columns": [
-            "originalUserId",
-            "store"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "StorePurchase_id": {
-          "name": "StorePurchase_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "StorePurchaseTransfer": {
-      "name": "StorePurchaseTransfer",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "eventId": {
-          "name": "eventId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "sourceUserId": {
-          "name": "sourceUserId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "destinationUserId": {
-          "name": "destinationUserId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "store": {
-          "name": "store",
-          "type": "enum('APPLE','GOOGLE')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "isSandbox": {
-          "name": "isSandbox",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "transferredAt": {
-          "name": "transferredAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {
-        "StorePurchaseTransfer_eventId_sourceUserId_store_isSandbox_key": {
-          "name": "StorePurchaseTransfer_eventId_sourceUserId_store_isSandbox_key",
-          "columns": [
-            "eventId",
-            "sourceUserId",
-            "store",
-            "isSandbox"
-          ],
-          "isUnique": true
-        },
-        "StorePurchaseTransfer_source_env_time_idx": {
-          "name": "StorePurchaseTransfer_source_env_time_idx",
-          "columns": [
-            "sourceUserId",
-            "store",
-            "isSandbox",
-            "transferredAt"
-          ],
-          "isUnique": false
-        },
-        "StorePurchaseTransfer_destinationUserId_store_isSandbox_idx": {
-          "name": "StorePurchaseTransfer_destinationUserId_store_isSandbox_idx",
-          "columns": [
-            "destinationUserId",
-            "store",
-            "isSandbox"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "StorePurchaseTransfer_id": {
-          "name": "StorePurchaseTransfer_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "StoreUserIdAlias": {
-      "name": "StoreUserIdAlias",
-      "columns": {
-        "oldUserId": {
-          "name": "oldUserId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "newUserId": {
-          "name": "newUserId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "StoreUserIdAlias_oldUserId": {
-          "name": "StoreUserIdAlias_oldUserId",
-          "columns": [
-            "oldUserId"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
     "SupportReview": {
       "name": "SupportReview",
       "columns": {
@@ -13129,6 +12668,14 @@
           "autoincrement": false,
           "default": true
         },
+        "showPvpRecord": {
+          "name": "showPvpRecord",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "pvpFights": {
           "name": "pvpFights",
           "type": "int",
@@ -13156,6 +12703,22 @@
         "pvpStreak": {
           "name": "pvpStreak",
           "type": "smallint unsigned",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pvpWins": {
+          "name": "pvpWins",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pvpLosses": {
+          "name": "pvpLosses",
+          "type": "int",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
@@ -13830,111 +13393,6 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "UserDevice": {
-      "name": "UserDevice",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "userId": {
-          "name": "userId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "token": {
-          "name": "token",
-          "type": "varchar(512)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "platform": {
-          "name": "platform",
-          "type": "enum('ios','android','web')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "appVersion": {
-          "name": "appVersion",
-          "type": "varchar(32)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "locale": {
-          "name": "locale",
-          "type": "varchar(16)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "widgetToken": {
-          "name": "widgetToken",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        },
-        "lastSeenAt": {
-          "name": "lastSeenAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {
-        "UserDevice_token_key": {
-          "name": "UserDevice_token_key",
-          "columns": [
-            "token"
-          ],
-          "isUnique": true
-        },
-        "UserDevice_widgetToken_key": {
-          "name": "UserDevice_widgetToken_key",
-          "columns": [
-            "widgetToken"
-          ],
-          "isUnique": true
-        },
-        "UserDevice_userId_lastSeenAt_idx": {
-          "name": "UserDevice_userId_lastSeenAt_idx",
-          "columns": [
-            "userId",
-            "lastSeenAt"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "UserDevice_id": {
-          "name": "UserDevice_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
     "UserItem": {
       "name": "UserItem",
       "columns": {
@@ -14440,97 +13898,6 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "UserLiveActivity": {
-      "name": "UserLiveActivity",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "userId": {
-          "name": "userId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "activityId": {
-          "name": "activityId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "kind": {
-          "name": "kind",
-          "type": "enum('hospital','training','war')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "pushToken": {
-          "name": "pushToken",
-          "type": "varchar(512)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "endsAt": {
-          "name": "endsAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {
-        "UserLiveActivity_userId_activityId_key": {
-          "name": "UserLiveActivity_userId_activityId_key",
-          "columns": [
-            "userId",
-            "activityId"
-          ],
-          "isUnique": true
-        },
-        "UserLiveActivity_userId_kind_idx": {
-          "name": "UserLiveActivity_userId_kind_idx",
-          "columns": [
-            "userId",
-            "kind"
-          ],
-          "isUnique": false
-        },
-        "UserLiveActivity_endsAt_idx": {
-          "name": "UserLiveActivity_endsAt_idx",
-          "columns": [
-            "endsAt"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "UserLiveActivity_id": {
-          "name": "UserLiveActivity_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
     "UserNindo": {
       "name": "UserNindo",
       "columns": {
@@ -14668,76 +14035,6 @@
       "compositePrimaryKeys": {
         "UserPollVote_id": {
           "name": "UserPollVote_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "UserPushPreference": {
-      "name": "UserPushPreference",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "userId": {
-          "name": "userId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "category": {
-          "name": "category",
-          "type": "enum('combat','recovery','training','war','clan','trade','social','system')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "enabled": {
-          "name": "enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": true
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {
-        "UserPushPreference_userId_category_key": {
-          "name": "UserPushPreference_userId_category_key",
-          "columns": [
-            "userId",
-            "category"
-          ],
-          "isUnique": true
-        },
-        "UserPushPreference_userId_idx": {
-          "name": "UserPushPreference_userId_idx",
-          "columns": [
-            "userId"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "UserPushPreference_id": {
-          "name": "UserPushPreference_id",
           "columns": [
             "id"
           ]

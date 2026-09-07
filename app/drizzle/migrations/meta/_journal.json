@@ -313,29 +313,8 @@
     {
       "idx": 44,
       "version": "5",
-      "when": 1788532162123,
-      "tag": "0044_native_app_foundations",
-      "breakpoints": false
-    },
-    {
-      "idx": 45,
-      "version": "5",
-      "when": 1788964910630,
-      "tag": "0045_nappy_miracleman",
-      "breakpoints": false
-    },
-    {
-      "idx": 46,
-      "version": "5",
-      "when": 1789239047513,
-      "tag": "0046_sudden_outlaw_kid",
-      "breakpoints": false
-    },
-    {
-      "idx": 47,
-      "version": "5",
-      "when": 1789368528373,
-      "tag": "0047_guide_stubs_unpublished",
+      "when": 1788798806497,
+      "tag": "0044_bitter_beast",
       "breakpoints": false
     }
   ]
