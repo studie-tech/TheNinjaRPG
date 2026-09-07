@@ -157,6 +157,7 @@ import {
   rollInitiative,
 } from "@/libs/combat/util";
 import { fetchDmgConfig } from "@/libs/gamesettings";
+import { computeLoadoutAssignments } from "@/libs/item";
 import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
 import { resolveSelectableLoadout } from "@/libs/loadout";
 import {
@@ -1063,26 +1064,68 @@ export const combatRouter = createTRPCRouter({
       // rejecting one the new item loadout has just equipped.
       //
       // Pre-validate explicitly requested loadouts before any write so an invalid
-      // jutsu ID cannot leave a successful item switch persisted while this
-      // endpoint returns an error (PlanetScale has no multi-statement transactions).
+      // jutsu ID / skill / bloodline gate cannot leave a successful item switch
+      // persisted while this endpoint returns an error (PlanetScale has no
+      // multi-statement transactions).
       const itemChanged = !!iId && user.itemLoadout !== iId;
       const jutsuChanged = !!jId && user.jutsuLoadout !== jId;
-      if (itemChanged && iId) {
-        const selectableItem = resolveSelectableLoadout(
-          itemLoadouts,
-          iId,
-          fedItemLoadouts(user),
-        );
-        if (!selectableItem.ok) return errorResponse(selectableItem.message);
+      const selectableItem =
+        itemChanged && iId
+          ? resolveSelectableLoadout(itemLoadouts, iId, fedItemLoadouts(user))
+          : null;
+      if (selectableItem && !selectableItem.ok) {
+        return errorResponse(selectableItem.message);
       }
-      if (jutsuChanged && jId) {
-        const selectableJutsu = resolveSelectableLoadout(
-          jutsuLoadouts,
-          jId,
-          fedJutsuLoadouts(user),
-        );
-        if (!selectableJutsu.ok) return errorResponse(selectableJutsu.message);
+      const selectableJutsu =
+        jutsuChanged && jId
+          ? resolveSelectableLoadout(jutsuLoadouts, jId, fedJutsuLoadouts(user))
+          : null;
+      if (selectableJutsu && !selectableJutsu.ok) {
+        return errorResponse(selectableJutsu.message);
       }
+
+      // When both loadouts change, dry-run the item equip and fail closed on skill /
+      // bloodline jutsu gates against that prospective inventory before persisting
+      // items. selectJutsuLoadout soft-omits gated jutsus with a warning; without this
+      // check the item write would already be committed.
+      if (selectableItem?.ok && selectableJutsu?.ok) {
+        const { assignments } = computeLoadoutAssignments(
+          selectableItem.loadout.itemData,
+          useritems,
+          user,
+          new Date(),
+          activatedSkillIds,
+        );
+        const assignedSlot = new Map(
+          assignments.map((a) => [a.userItemId, a.slot] as const),
+        );
+        const prospectiveSkillEligibleItems = useritems
+          .map((ui) => ({
+            ...ui,
+            equipped: assignedSlot.get(ui.id) ?? ("NONE" as const),
+          }))
+          .filter((ui) =>
+            meetsRequiredSkill(ui.item.requiredSkillId, activatedSkillIds),
+          );
+        const gateFailures: string[] = [];
+        for (const jutsuId of new Set(selectableJutsu.loadout.jutsuIds)) {
+          const owned = userjutsus.find((uj) => uj.jutsuId === jutsuId);
+          if (!owned) continue;
+          if (!meetsRequiredSkill(owned.jutsu.requiredSkillId, activatedSkillIds)) {
+            gateFailures.push(`${owned.jutsu.name}: required skill is not active`);
+            continue;
+          }
+          if (!checkJutsuBloodlineItem(owned.jutsu, prospectiveSkillEligibleItems)) {
+            gateFailures.push(
+              `${owned.jutsu.name}: required bloodline item is not equipped`,
+            );
+          }
+        }
+        if (gateFailures.length > 0) {
+          return errorResponse(`Cannot apply loadouts: ${gateFailures.join(", ")}`);
+        }
+      }
+
       const itemLoadoutResult =
         user.itemLoadout === iId || !iId
           ? { success: true, message: "Item loadout already selected" }

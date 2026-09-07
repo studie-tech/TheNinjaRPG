@@ -533,16 +533,32 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
     },
   });
 
-  // Update highest preferences
+  // Update highest preferences / public profile toggles
   const { mutate: updatePreferences } = api.profile.updatePreferences.useMutation({
-    onSuccess: async (data) => {
-      const values = form.getValues();
+    onSuccess: async (data, variables) => {
       showMutationToast(data);
-      await updateUser({
-        preferredStat: values.preferredStat,
-        preferredGeneral1: values.preferredGeneral1,
-        preferredGeneral2: values.preferredGeneral2,
-      });
+      if (!data.success) {
+        await utils.profile.getUser.invalidate();
+        return;
+      }
+      if (variables.showPvpRecord !== undefined) {
+        await updateUser({ showPvpRecord: variables.showPvpRecord });
+      }
+      if (
+        variables.preferredStat !== undefined ||
+        variables.preferredGeneral1 !== undefined ||
+        variables.preferredGeneral2 !== undefined
+      ) {
+        const values = form.getValues();
+        await updateUser({
+          preferredStat: values.preferredStat,
+          preferredGeneral1: values.preferredGeneral1,
+          preferredGeneral2: values.preferredGeneral2,
+        });
+      }
+    },
+    onError: async () => {
+      await utils.profile.getUser.invalidate();
     },
   });
 
@@ -697,7 +713,6 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
               checked={userData?.showPvpRecord}
               onCheckedChange={(checked) => {
                 updatePreferences({ showPvpRecord: checked });
-                void updateUser({ showPvpRecord: checked });
               }}
             />
             <Label htmlFor="show-pvp-record">
