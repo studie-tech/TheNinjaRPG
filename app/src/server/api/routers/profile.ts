@@ -2100,13 +2100,13 @@ export const profileRouter = createTRPCRouter({
           .where(eq(userData.userId, user.userId));
       }
       // Hide PvP W/L unless the owner opted in, the viewer is the owner, or staff.
+      // Null (not omit) so the public payload shape stays stable for clients.
       const canSeePvpRecord =
         isSelf ||
         user.showPvpRecord ||
         Boolean(requester && canSeeSecretData(requester.role));
       if (!canSeePvpRecord) {
-        const { pvpWins: _pvpWins, pvpLosses: _pvpLosses, ...publicUser } = user;
-        return publicUser;
+        return { ...user, pvpWins: null, pvpLosses: null };
       }
       // Return
       return user;
