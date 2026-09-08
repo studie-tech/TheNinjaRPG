@@ -12,7 +12,14 @@ import { drizzleDB } from "@/server/db";
 // each issuing their own query for the same profile.
 const fetchProfile = cache(async (userid: string) => {
   return await drizzleDB.query.userData.findFirst({
-    columns: { username: true, level: true, rank: true, isOutlaw: true, avatar: true },
+    columns: {
+      username: true,
+      level: true,
+      rank: true,
+      isOutlaw: true,
+      avatar: true,
+      customTitle: true,
+    },
     with: { village: { columns: { name: true } } },
     where: eq(userData.userId, userid),
   });
@@ -59,6 +66,7 @@ export default async function PublicProfile(props: {
         rank: user.rank,
         isOutlaw: user.isOutlaw,
         avatar: user.avatar,
+        customTitle: user.customTitle,
         villageName: user.village?.name,
       }}
       defaultBackHref="/users"
