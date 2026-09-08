@@ -343,12 +343,18 @@ export async function GET() {
 
     // Step 22: Clear training log entries
     await drizzleDB.execute(
-      sql`DELETE FROM ${trainingLog} WHERE trainingFinishedAt < CURRENT_TIMESTAMP(3) - INTERVAL 7 DAY`,
+      sql`DELETE FROM ${trainingLog}
+          WHERE trainingFinishedAt < CURRENT_TIMESTAMP(3) - INTERVAL 7 DAY
+          ORDER BY trainingFinishedAt
+          LIMIT ${rangeCleanupBatchSize}`,
     );
 
     // Step 23: Clear mpvp battle queue entries
     await drizzleDB.execute(
-      sql`DELETE FROM ${mpvpBattleQueue} WHERE createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 7 DAY`,
+      sql`DELETE FROM ${mpvpBattleQueue}
+          WHERE createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 7 DAY
+          ORDER BY createdAt
+          LIMIT ${rangeCleanupBatchSize}`,
     );
 
     // Step 24: Clear mpvp battle user entries
@@ -384,7 +390,10 @@ export async function GET() {
 
     // Step 27: Clear old captcha checks
     await drizzleDB.execute(
-      sql`DELETE FROM ${captcha} WHERE createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 30 DAY`,
+      sql`DELETE FROM ${captcha}
+          WHERE createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 30 DAY
+          ORDER BY createdAt
+          LIMIT ${rangeCleanupBatchSize}`,
     );
 
     // Step 28: Clear old challenges:
