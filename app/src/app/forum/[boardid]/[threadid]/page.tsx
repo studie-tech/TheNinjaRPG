@@ -1,158 +1,25 @@
-"use client";
+import { notFound } from "next/navigation";
+import { FORUM_THREAD_POSTS_PER_PAGE } from "@/drizzle/constants";
+import { fetchForumThreadPage } from "@/routers/comments";
+import { drizzleDB } from "@/server/db";
+import Thread from "./thread";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { use, useState } from "react";
-import { useForm } from "react-hook-form";
-import { api } from "@/app/_trpc/client";
-import NotFoundPage from "@/components/layout/NotFoundPage";
-import { FORUM_MIN_LEVEL, forumLevelMessage } from "@/drizzle/constants";
-import { CommentOnForum } from "@/layout/Comment";
-import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
-import Pagination from "@/layout/Pagination";
-import RichInput from "@/layout/RichInput";
-import { forumText } from "@/layout/seoTexts";
-import { showMutationToast } from "@/libs/toast";
-import { parseHtml } from "@/utils/parse";
-import { useUserData } from "@/utils/UserContext";
-import { type MutateCommentSchema, mutateCommentSchema } from "@/validators/comments";
-
-export default function Thread(props: { params: Promise<{ threadid: string }> }) {
-  const params = use(props.params);
-  const limit = 10;
-  const { data: userData } = useUserData();
-  const [page, setPage] = useState(0);
-  const thread_id = params.threadid;
-
-  const {
-    data: comments,
-    isPending: isPendingComments,
-    refetch,
-  } = api.comments.getForumComments.useQuery(
-    { thread_id: thread_id, limit: limit, cursor: page },
-    {
-      enabled: !!thread_id,
-      placeholderData: (previousData) => previousData,
-    },
-  );
-  const thread = comments?.thread;
-  const allComments = comments?.data;
-  const totalPages = comments?.totalPages ?? 0;
-  const totalComments = comments?.totalComments ?? 0;
-  const belowForumMinLevel = (userData?.level ?? 0) < FORUM_MIN_LEVEL;
-
-  const {
-    handleSubmit,
-    reset,
-    control,
-    formState: { errors },
-  } = useForm<MutateCommentSchema>({
-    defaultValues: {
-      comment: "",
-      object_id: thread_id,
-      quoteIds: null,
-      senderId: null,
-    },
-    resolver: zodResolver(mutateCommentSchema),
+/**
+ * The thread body is rendered client-side, so this server component resolves the first
+ * page up front and hands it to the client query as seed data. It is the same helper the
+ * getForumComments procedure calls, so the two payloads cannot drift apart.
+ */
+export default async function ThreadPage(props: {
+  params: Promise<{ threadid: string }>;
+}) {
+  const params = await props.params;
+  const initialPage = await fetchForumThreadPage(drizzleDB, {
+    thread_id: params.threadid,
+    limit: FORUM_THREAD_POSTS_PER_PAGE,
+    cursor: 0,
   });
-
-  const { mutate: createComment, isPending } =
-    api.comments.createForumComment.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (!data.success) return;
-        reset();
-        if (totalComments && totalPages && allComments) {
-          const newPage = totalComments % limit === 0 ? totalPages : totalPages - 1;
-          if (newPage !== page) {
-            setPage(newPage);
-          } else {
-            await refetch();
-          }
-        }
-      },
-    });
-
-  const handleSubmitComment = handleSubmit(
-    (data) => {
-      if (belowForumMinLevel) {
-        showMutationToast({ success: false, message: forumLevelMessage });
-        return;
-      }
-      createComment(data);
-    },
-    (errors) => console.error(errors),
-  );
-
-  return (
-    <>
-      {!userData && (
-        <ContentBox
-          title="Public Forum"
-          defaultBackHref={thread ? `/forum/${thread.boardId}` : "/forum"}
-        >
-          {forumText}
-        </ContentBox>
-      )}
-      {!thread && !isPendingComments && <NotFoundPage />}
-      {thread && (
-        <ContentBox
-          title="Forum"
-          defaultBackHref={userData ? `/forum/${thread.boardId}` : undefined}
-          initialBreak={!userData}
-          subtitle={thread.title}
-        >
-          {allComments?.map((comment, i) => {
-            return (
-              <div key={comment.id}>
-                <CommentOnForum
-                  title={i === 0 && page === 0 ? thread.title : undefined}
-                  user={comment.user}
-                  hover_effect={false}
-                  comment={comment}
-                >
-                  {parseHtml(comment.content)}
-                </CommentOnForum>
-              </div>
-            );
-          })}
-          {thread &&
-            userData &&
-            !thread.isLocked &&
-            !userData.isBanned &&
-            !userData.isSilenced &&
-            belowForumMinLevel && (
-              <p className="mb-3 text-center text-muted-foreground text-sm">
-                {forumLevelMessage}
-              </p>
-            )}
-          {thread &&
-            userData &&
-            !thread.isLocked &&
-            !userData.isBanned &&
-            !userData.isSilenced &&
-            !belowForumMinLevel && (
-              <div className="relative mb-3">
-                <RichInput
-                  id="comment"
-                  height="200"
-                  refreshKey={totalComments}
-                  placeholder=""
-                  control={control}
-                  disabled={isPending}
-                  error={errors.comment?.message}
-                  onSubmit={handleSubmitComment}
-                />
-                <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 transform flex-row-reverse">
-                  {isPending && <Loader />}
-                </div>
-              </div>
-            )}
-        </ContentBox>
-      )}
-      {totalPages > 0 && (
-        <Pagination current={page} total={totalPages} setPage={setPage} />
-      )}
-    </>
-  );
+  // Matches /username/<name>: an unknown thread answers 404 rather than rendering a
+  // "not found" body under HTTP 200, which Google indexes as a soft 404.
+  if (!initialPage.thread) notFound();
+  return <Thread threadId={params.threadid} initialPage={initialPage} />;
 }

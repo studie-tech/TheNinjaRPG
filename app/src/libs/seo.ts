@@ -82,7 +82,8 @@ export const buildMetadata = ({
   return {
     title: { absolute: fullTitle },
     description,
-    alternates: { canonical: url },
+    // A noindex page must not name a canonical: see noindexMetadata below for why.
+    alternates: { canonical: noindex ? null : url },
     ...(noindex ? { robots: { index: false, follow: false } } : {}),
     openGraph: {
       title: fullTitle,
@@ -118,4 +119,12 @@ export const noindexMetadata = (title: string): Metadata => ({
   // does advertise, and `follow: false` would tell Google to ignore those links -- a
   // good way to strand the very pages this metadata exists to help get indexed.
   robots: { index: false },
+  // Next resolves each metadata key against the nearest ancestor that declares it, so
+  // omitting `alternates` here does not mean "no canonical" -- it means the parent
+  // segment's canonical is inherited. That made every staff route under /manual answer
+  // `noindex` while naming an indexable page as its canonical (/manual/logs pointed at
+  // /manual, /manual/item/balance at /manual/item), which is the one combination Google
+  // asks you not to ship: the noindex can be consolidated onto the canonical target.
+  // Declaring the key with a null value replaces the inherited one and emits no tag.
+  alternates: { canonical: null },
 });

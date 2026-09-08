@@ -145,9 +145,28 @@ import type { UpdateUserSchema } from "@/validators/user";
 import { updateUserSchema } from "@/validators/user";
 import GlowingBorder from "./GlowingBorder";
 
+/**
+ * The handful of profile fields a server component can resolve before this one mounts.
+ *
+ * The full profile is fetched client-side, so without a seed the server render of every
+ * /username/* URL is the same skeleton -- which Search Console read as a soft 404, and
+ * where it saw several of them, folded together as duplicates. Routes that already load
+ * a profile for their metadata pass what they have so the first paint carries the
+ * player's own name, rank and village.
+ */
+export interface PublicUserSeed {
+  username: string;
+  level: number;
+  rank: UserRank;
+  isOutlaw: boolean;
+  avatar: string | null;
+  villageName?: string | null;
+}
+
 interface PublicUserComponentProps {
   userId: string;
   title: string;
+  initialProfile?: PublicUserSeed;
   defaultBackHref?: string;
   initialBreak?: boolean;
   showRecruited?: boolean;
@@ -169,6 +188,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const {
     userId,
     title,
+    initialProfile,
     defaultBackHref,
     initialBreak,
     showRecruited,
@@ -368,6 +388,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         defaultBackHref={defaultBackHref}
         initialBreak={initialBreak}
         isGuest={isGuest}
+        seed={initialProfile}
       />
     );
   }
@@ -1192,6 +1213,8 @@ interface PublicUserSkeletonProps {
   initialBreak?: boolean;
   /** Mirrors the stable signed-in state used by the loaded render. */
   isGuest: boolean;
+  /** Profile fields the route already resolved server-side, when it has them. */
+  seed?: PublicUserSeed;
 }
 
 /**
@@ -1212,42 +1235,69 @@ const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
   defaultBackHref,
   initialBreak,
   isGuest,
+  seed,
 }) => (
   <>
     {isGuest && (
       <ContentBox
         title="Public Profile"
-        subtitle="Loading profile"
+        subtitle={seed ? `Profile: ${seed.username}` : "Loading profile"}
         defaultBackHref={defaultBackHref}
         initialBreak={initialBreak}
       >
-        {/* publicUserText is four fixed paragraphs, not a line. Its rendered height is
-            deterministic -- only the username varies -- so it is reserved to measured
-            size rather than approximated: at 24 rows the panel matches the loaded one to
-            within a few pixels at desktop width. */}
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 24 }, (_, i) => (
-            <Skeleton key={i} className={i % 7 === 6 ? "h-4 w-2/3" : "h-4 w-full"} />
-          ))}
-        </div>
+        {/* With a seed this is the same copy the loaded render shows, so the panel needs
+            no placeholder at all and never resizes. Without one, publicUserText is four
+            fixed paragraphs whose rendered height is deterministic -- only the username
+            varies -- so it is reserved to measured size rather than approximated: at 24
+            rows the panel matches the loaded one to within a few pixels at desktop
+            width. */}
+        {seed ? (
+          publicUserText(seed.username)
+        ) : (
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: 24 }, (_, i) => (
+              <Skeleton key={i} className={i % 7 === 6 ? "h-4 w-2/3" : "h-4 w-full"} />
+            ))}
+          </div>
+        )}
       </ContentBox>
     )}
     <ContentBox
       title={title}
-      subtitle="Loading profile"
+      subtitle={seed ? `Profile: ${seed.username}` : "Loading profile"}
       defaultBackHref={isGuest ? undefined : defaultBackHref}
       initialBreak={isGuest ? true : initialBreak}
     >
       <div className="grid grid-cols-2">
         <div className="flex flex-col gap-2">
-          {Array.from({ length: 23 }, (_, i) => (
+          {seed && (
+            // The three lines the seed can fill are the first three of the loaded
+            // "General" block, in the same order, so nothing below them moves.
+            <div>
+              <b>General</b>
+              <p>
+                Lvl. {seed.level} {showUserRank(seed)}
+              </p>
+              {seed.villageName && <p>Village: {seed.villageName}</p>}
+            </div>
+          )}
+          {Array.from({ length: seed ? 19 : 23 }, (_, i) => (
             <Skeleton key={i} className="h-4 w-11/12" />
           ))}
         </div>
         <div>
           <div className="basis-1/3">
             <div className="relative flex justify-center">
-              <Skeleton className="aspect-square w-full max-w-80 rounded-2xl" />
+              {seed ? (
+                <AvatarImage
+                  href={seed.avatar}
+                  alt={seed.username}
+                  size={100}
+                  priority
+                />
+              ) : (
+                <Skeleton className="aspect-square w-full max-w-80 rounded-2xl" />
+              )}
             </div>
             <div className="mt-2">
               {Array.from({ length: 3 }, (_, i) => (
