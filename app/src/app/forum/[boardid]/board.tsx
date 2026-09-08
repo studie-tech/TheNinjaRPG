@@ -317,6 +317,11 @@ function Board({ boardId, initialThreads }: BoardProps) {
                         width={100}
                         height={100}
                         alt="Forum Icon"
+                        // Reads Date.now(), which the server evaluates at request time
+                        // and the browser again on hydrate. A thread that crosses the
+                        // 24h mark in between would otherwise mismatch; the server's
+                        // answer is at most a second stale, so keep it.
+                        suppressHydrationWarning
                         className={
                           secondsPassed(thread.updatedAt) > 3600 * 24
                             ? "opacity-50"

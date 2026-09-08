@@ -1281,16 +1281,19 @@ const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
           <div className="flex flex-col gap-2">
             {seed && (
               // The three lines the seed can fill are the first three of the loaded
-              // "General" block, in the same order, so nothing below them moves.
+              // "General" block, in the same order, so nothing below them moves. The
+              // village row is rendered even when the seed has no village, because the
+              // loaded panel always renders it -- omitting it would leave the
+              // placeholder a row short and shift everything below it on load.
               <div>
                 <b>General</b>
                 <p>
                   Lvl. {seed.level} {showUserRank(seed)}
                 </p>
-                {seed.villageName && <p>Village: {seed.villageName}</p>}
+                <p>Village: {seed.villageName}</p>
               </div>
             )}
-            {Array.from({ length: seed ? 19 : 23 }, (_, i) => (
+            {Array.from({ length: seed ? 20 : 23 }, (_, i) => (
               <Skeleton key={i} className="h-4 w-11/12" />
             ))}
           </div>
