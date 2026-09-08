@@ -123,6 +123,13 @@ export const getTestDatabase = async (): Promise<DrizzleClient> => {
     const database = drizzle(connection, { schema, mode: "default" });
     client = new Proxy(database, {
       get(target, property, receiver) {
+        if (property === "execute") {
+          const method = Reflect.get(target, property, receiver) as (
+            ...args: unknown[]
+          ) => Promise<unknown>;
+          return async (...args: unknown[]) =>
+            normalize(await method.apply(target, args));
+        }
         if (property === "insert" || property === "update" || property === "delete") {
           const method = Reflect.get(target, property, receiver) as (
             ...args: unknown[]
@@ -136,10 +143,6 @@ export const getTestDatabase = async (): Promise<DrizzleClient> => {
   return client;
 };
 
-/**
- * The connected client, or null before the first `getTestDatabase()`. For callers that must
- * stay synchronous -- the `@/server/db` stand-in in serverModules.ts, which cannot await.
- */
 export const peekTestDatabase = (): DrizzleClient | null => client ?? null;
 
 /** Empty the given tables. Call in `beforeEach` for the tables a suite writes. */
@@ -183,3 +186,9 @@ export const callerFor = async <Context, Caller>(
   userId: string,
 ): Promise<Caller> =>
   router.createCaller({ drizzle: await getTestDatabase(), userId } as Context);
+
+export const callerForDatabase = <Context, Caller>(
+  router: { createCaller: (context: Context) => Caller },
+  userId: string,
+  database: DrizzleClient,
+): Caller => router.createCaller({ drizzle: database, userId } as Context);

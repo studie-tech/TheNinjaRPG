@@ -5507,3 +5507,341 @@ export const farmExtractionRelations = relations(farmExtraction, ({ one }) => ({
     relationName: "farmExtractionSeedItem",
   }),
 }));
+
+// Native push notifications ---------------------------------------------------
+
+export const userDevice = mysqlTable(
+  "UserDevice",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    // APNs tokens are 64 hex chars; FCM registration tokens run to ~200 and are
+    // documented as variable length, so this is sized well above both.
+    token: varchar("token", { length: 512 }).notNull(),
+    platform: mysqlEnum("platform", consts.PUSH_PLATFORMS).notNull(),
+    appVersion: varchar("appVersion", { length: 32 }),
+    locale: varchar("locale", { length: 16 }),
+    /**
+     * Bearer credential for `/api/widget/status`. Home screen widgets run outside the
+     * WebView and cannot see the Clerk session, so they need something of their own; it
+     * is scoped to one device and grants nothing but that device's own status.
+     */
+    widgetToken: varchar("widgetToken", { length: 191 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    lastSeenAt: datetime("lastSeenAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      // A device that signs into a second account must move, not duplicate: the
+      // token is the identity, so re-registering it rebinds the row.
+      tokenKey: uniqueIndex("UserDevice_token_key").on(table.token),
+      widgetTokenKey: uniqueIndex("UserDevice_widgetToken_key").on(table.widgetToken),
+      // Composite, userId first: every read here is scoped to one player and then either
+      // ranges on lastSeenAt or orders by it. A bare lastSeenAt index serves none of them,
+      // because the equality column has to lead.
+      userIdLastSeenAtIdx: index("UserDevice_userId_lastSeenAt_idx").on(
+        table.userId,
+        table.lastSeenAt,
+      ),
+    };
+  },
+);
+export type UserDevice = InferSelectModel<typeof userDevice>;
+
+export const userDeviceRelations = relations(userDevice, ({ one }) => ({
+  user: one(userData, {
+    fields: [userDevice.userId],
+    references: [userData.userId],
+  }),
+}));
+
+/**
+ * Only opt-outs are stored. A missing row means the category is enabled, so adding a
+ * category to `PUSH_CATEGORIES` needs no migration and no backfill.
+ */
+export const userPushPreference = mysqlTable(
+  "UserPushPreference",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    category: mysqlEnum("category", consts.PUSH_CATEGORIES).notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userCategoryKey: uniqueIndex("UserPushPreference_userId_category_key").on(
+        table.userId,
+        table.category,
+      ),
+      userIdIdx: index("UserPushPreference_userId_idx").on(table.userId),
+    };
+  },
+);
+export type UserPushPreference = InferSelectModel<typeof userPushPreference>;
+
+export const userPushPreferenceRelations = relations(userPushPreference, ({ one }) => ({
+  user: one(userData, {
+    fields: [userPushPreference.userId],
+    references: [userData.userId],
+  }),
+}));
+
+/**
+ * Live Activities the device has started and the server can push updates to.
+ *
+ * One row per activity. A player can have the same kind active on multiple devices, and
+ * each ActivityKit instance has its own APNs token.
+ */
+export const userLiveActivity = mysqlTable(
+  "UserLiveActivity",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    /** ActivityKit's identifier, so the device and the server agree which one this is. */
+    activityId: varchar("activityId", { length: 191 }).notNull(),
+    kind: mysqlEnum("kind", consts.LIVE_ACTIVITY_KINDS).notNull(),
+    /** APNs token for this specific activity. Distinct from the device's push token. */
+    pushToken: varchar("pushToken", { length: 512 }).notNull(),
+    endsAt: datetime("endsAt", { mode: "date", fsp: 3 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userActivityKey: uniqueIndex("UserLiveActivity_userId_activityId_key").on(
+        table.userId,
+        table.activityId,
+      ),
+      userKindIdx: index("UserLiveActivity_userId_kind_idx").on(
+        table.userId,
+        table.kind,
+      ),
+      endsAtIdx: index("UserLiveActivity_endsAt_idx").on(table.endsAt),
+    };
+  },
+);
+export type UserLiveActivity = InferSelectModel<typeof userLiveActivity>;
+
+export const userLiveActivityRelations = relations(userLiveActivity, ({ one }) => ({
+  user: one(userData, {
+    fields: [userLiveActivity.userId],
+    references: [userData.userId],
+  }),
+}));
+
+/**
+ * In-app purchases from the App Store and Play Billing.
+ *
+ * The unique index on `transactionId` is the idempotency guard. `grantedAt` is claimed in
+ * the same multi-table UPDATE that changes the user's balance/status, which gives the grant
+ * one atomic commit without relying on transactions PlanetScale cannot provide.
+ */
+export const storePurchase = mysqlTable(
+  "StorePurchase",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    /** Application user id RevenueCat attached to the original purchase event. */
+    originalUserId: varchar("originalUserId", { length: 191 }).notNull(),
+    transactionId: varchar("transactionId", { length: 191 }).notNull(),
+    productId: varchar("productId", { length: 191 }).notNull(),
+    store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
+    reputationPoints: int("reputationPoints").default(0).notNull(),
+    federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses),
+    /** Sandbox receipts are recorded for debugging but never move a balance. */
+    isSandbox: boolean("isSandbox").default(false).notNull(),
+    /**
+     * When this receipt was accepted as real value for its current owner, or null while it
+     * must not be counted.
+     *
+     * Not the same question as `isSandbox`, which records the environment truthfully. A
+     * sandbox receipt normally counts for nothing, but App Review and TestFlight can only
+     * transact in the sandbox, so an allowlisted account's sandbox purchase does count.
+     * Ownership reconciliation refreshes this marker after every transfer. Federal-floor
+     * readers also check the current allowlist so a stale marker can never grant value.
+     */
+    acceptedAt: datetime("acceptedAt", { mode: "date", fsp: 3 }),
+    /** Set atomically with the balance/status write; null receipts are safe to retry. */
+    grantedAt: datetime("grantedAt", { mode: "date", fsp: 3 }),
+    /** Store transaction/billing-period time, independent of webhook delivery order. */
+    purchasedAt: datetime("purchasedAt", { mode: "date", fsp: 3 }).notNull(),
+    /** End of the paid entitlement period, including extensions granted by the store. */
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }),
+    /**
+     * When the store told us the subscription this receipt paid for had ended.
+     *
+     * A receipt outlives the thing it bought, so on its own it cannot say whether the
+     * player is still a subscriber. Everything that asks "does a store subscription still
+     * vouch for this tier" — the reconciliation in /api/cleaner and the floor the PayPal
+     * writers apply — reads this to tell a live subscription from a spent one.
+     */
+    revokedAt: datetime("revokedAt", { mode: "date", fsp: 3 }),
+    rawData: json("rawData").notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      transactionKey: uniqueIndex("StorePurchase_transactionId_key").on(
+        table.transactionId,
+      ),
+      // Same shape: every reader is one player's receipts, then a window on createdAt or
+      // a newest-first limit. Neither single-column index was serving that.
+      userIdCreatedAtIdx: index("StorePurchase_userId_createdAt_idx").on(
+        table.userId,
+        table.createdAt,
+      ),
+      userIdPurchasedAtIdx: index("StorePurchase_userId_purchasedAt_idx").on(
+        table.userId,
+        table.purchasedAt,
+      ),
+      originalUserIdStoreIdx: index("StorePurchase_originalUserId_store_idx").on(
+        table.originalUserId,
+        table.store,
+      ),
+    };
+  },
+);
+export type StorePurchase = InferSelectModel<typeof storePurchase>;
+
+export const storePurchaseRelations = relations(storePurchase, ({ one }) => ({
+  user: one(userData, {
+    fields: [storePurchase.userId],
+    references: [userData.userId],
+  }),
+}));
+
+/**
+ * Latest subscription period known to have ended for each player's store account.
+ *
+ * Unlike a receipt's `revokedAt`, this survives an EXPIRATION that arrives before the
+ * corresponding purchase webhook. A delayed older grant is compared with this watermark
+ * before it is allowed to change federal status.
+ */
+export const storeEntitlementState = mysqlTable(
+  "StoreEntitlementState",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
+    /** RevenueCat environment; production and sandbox billing histories are independent. */
+    isSandbox: boolean("isSandbox").default(false).notNull(),
+    revokedThrough: datetime("revokedThrough", { mode: "date", fsp: 3 }).notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    userStoreKey: uniqueIndex(
+      "StoreEntitlementState_userId_store_isSandbox_key",
+    ).on(
+      table.userId,
+      table.store,
+      table.isSandbox,
+    ),
+  }),
+);
+export type StoreEntitlementState = InferSelectModel<typeof storeEntitlementState>;
+
+/**
+ * Individual expiry facts retained separately from the aggregate watermark.
+ * Transaction-scoped expiries must not spill across a transfer onto a different billing
+ * period, while a transaction-less expiry delivered before its receipt must still block
+ * that delayed receipt once ownership history arrives.
+ */
+export const storeEntitlementRevocation = mysqlTable(
+  "StoreEntitlementRevocation",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    eventId: varchar("eventId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
+    /** RevenueCat environment; never apply this fact to the other environment. */
+    isSandbox: boolean("isSandbox").default(false).notNull(),
+    productId: varchar("productId", { length: 191 }),
+    transactionId: varchar("transactionId", { length: 191 }),
+    revokedThrough: datetime("revokedThrough", { mode: "date", fsp: 3 }).notNull(),
+    occurredAt: datetime("occurredAt", { mode: "date", fsp: 3 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    eventUserStoreKey: uniqueIndex(
+      "StoreEntitlementRevocation_eventId_userId_store_isSandbox_key",
+    ).on(table.eventId, table.userId, table.store, table.isSandbox),
+    ownerStoreCutoffIdx: index(
+      "StoreEntitlementRevocation_owner_env_cutoff_idx",
+    ).on(table.userId, table.store, table.isSandbox, table.revokedThrough),
+  }),
+);
+export type StoreEntitlementRevocation = InferSelectModel<
+  typeof storeEntitlementRevocation
+>;
+
+/** Durable canonicalization for staff-driven application user-id renames. */
+export const storeUserIdAlias = mysqlTable("StoreUserIdAlias", {
+  oldUserId: varchar("oldUserId", { length: 191 }).primaryKey().notNull(),
+  newUserId: varchar("newUserId", { length: 191 }).notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+});
+export type StoreUserIdAlias = InferSelectModel<typeof storeUserIdAlias>;
+
+/**
+ * Durable ownership redirects emitted by RevenueCat TRANSFER events.
+ *
+ * RevenueCat may deliver a transfer before the purchase it moves, and TRANSFER payloads
+ * do not always identify a store. Keeping every chronological ownership epoch lets a
+ * delayed receipt follow the owner at that receipt's point in history instead of whichever
+ * transfer happened to arrive last.
+ */
+export const storePurchaseTransfer = mysqlTable(
+  "StorePurchaseTransfer",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    /** Stable RevenueCat delivery id; retries retain the first stored cutoff. */
+    eventId: varchar("eventId", { length: 191 }).notNull(),
+    sourceUserId: varchar("sourceUserId", { length: 191 }).notNull(),
+    destinationUserId: varchar("destinationUserId", { length: 191 }).notNull(),
+    store: mysqlEnum("store", consts.STORE_PLATFORMS).notNull(),
+    /** RevenueCat environment; sandbox restores must never redirect production receipts. */
+    isSandbox: boolean("isSandbox").default(false).notNull(),
+    transferredAt: datetime("transferredAt", { mode: "date", fsp: 3 }).notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    eventSourceStoreKey: uniqueIndex(
+      "StorePurchaseTransfer_eventId_sourceUserId_store_isSandbox_key",
+    ).on(
+      table.eventId,
+      table.sourceUserId,
+      table.store,
+      table.isSandbox,
+    ),
+    sourceStoreTimeIdx: index(
+      "StorePurchaseTransfer_source_env_time_idx",
+    ).on(
+      table.sourceUserId,
+      table.store,
+      table.isSandbox,
+      table.transferredAt,
+    ),
+    destinationIdx: index(
+      "StorePurchaseTransfer_destinationUserId_store_isSandbox_idx",
+    ).on(table.destinationUserId, table.store, table.isSandbox),
+  }),
+);
+export type StorePurchaseTransfer = InferSelectModel<typeof storePurchaseTransfer>;

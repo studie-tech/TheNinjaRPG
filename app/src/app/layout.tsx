@@ -10,6 +10,7 @@ import { cookies } from "next/headers";
 import { extractRouterConfig } from "uploadthing/server";
 import TrpcClientProvider from "@/app/_trpc/Provider";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
+import NativeBridge from "@/components/native/NativeBridge";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import PWAManager from "@/components/pwa/PWAManager";
 import { Toaster } from "@/components/ui/toaster";
@@ -97,6 +98,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <AcceptWarning />
                   <ActivityStreakPopup />
                   <PWAManager />
+                  <NativeBridge />
                   <InstallPrompt />
                   <SpeedInsights sampleRate={0.03} />
                 </InstallPromptProvider>
@@ -175,7 +177,8 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: "/favicon.ico",
-    apple: "/icons/icon-192x192.png",
+    // iOS wants 180x180 and paints transparent corners black, so this one is flattened.
+    apple: { url: "/icons/icon-180x180.png", sizes: "180x180" },
   },
   manifest: "/manifest.webmanifest",
   appleWebApp: {

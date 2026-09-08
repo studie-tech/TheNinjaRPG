@@ -1,0 +1,9 @@
+# Values come from mobile/.env so nothing account-specific is committed.
+app_identifier ENV.fetch("TNR_APP_ID", "com.theninjarpg.app")
+apple_id ENV["APPLE_ID"]
+team_id ENV["APPLE_TEAM_ID"]
+
+for_platform :android do
+  package_name ENV.fetch("TNR_APP_ID", "com.theninjarpg.app")
+  json_key_file ENV["PLAY_SERVICE_ACCOUNT_JSON"]
+end

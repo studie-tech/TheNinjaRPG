@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <title>TheNinja-RPG</title>
+    <style>
+      /* First and tiny, so the theme colour is settled before anything else is read. */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #8bbccf;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #2a374a;
+        }
+      }
+    </style>
+    <style>
+      :root {
+        --tile: #f0c84c;
+        --ink: #23180a;
+        --muted: #6b5a33;
+        /* Sampled from the launch image so the safe-area strip and the page behind it
+           are the same colour the splash ends on — otherwise the handover flashes. */
+        --edge: #8bbccf;
+        --edge-dark: #2a374a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      html {
+        /* The WebView paints behind the page; without this the area outside the safe
+           inset flashes against the splash. */
+        background: var(--edge);
+      }
+      body {
+        position: relative;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 26px;
+        padding: env(safe-area-inset-top) 28px env(safe-area-inset-bottom);
+        /* The same artwork as the launch image, bundled beside this file rather than
+           embedded in it. It has to be local, because this page exists to be shown when
+           there is no network — but it must not be inline: a stylesheet blocks the first
+           paint until all of it has parsed, so an embedded image holds the screen on the
+           WebView's own colour for as long as it takes to decode. */
+        background:
+          var(--edge) url("launch-bg.jpg") center / cover no-repeat;
+        color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        text-align: center;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      /* Sits between the artwork and the content: holds text legible over a busy sky and
+         carries the night grade in dark mode, so one image serves both. */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: linear-gradient(
+          180deg,
+          rgba(10, 16, 34, 0.15),
+          rgba(10, 16, 34, 0.42)
+        );
+        pointer-events: none;
+      }
+      body > * {
+        position: relative;
+        z-index: 1;
+      }
+      .logo {
+        width: min(300px, 62vw);
+        height: auto;
+        image-rendering: pixelated;
+        filter: drop-shadow(0 6px 14px rgba(6, 10, 26, 0.55));
+      }
+      .card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        max-width: 34ch;
+        padding: 26px 26px 24px;
+        border-radius: 18px;
+        background: rgba(12, 18, 34, 0.62);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.35rem;
+        letter-spacing: -0.02em;
+      }
+      p {
+        margin: 0;
+        max-width: 32ch;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 0.95rem;
+        line-height: 1.5;
+      }
+      .spinner {
+        width: 34px;
+        height: 34px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner {
+          animation-duration: 2.4s;
+        }
+      }
+      @media (prefers-color-scheme: dark) {
+        html {
+          background: var(--edge-dark);
+        }
+        /* Matches the dusk grade baked into splash-dark.png. */
+        body::before {
+          background:
+            linear-gradient(180deg, rgba(18, 24, 56, 0.62), rgba(10, 14, 34, 0.78)),
+            rgba(24, 30, 70, 0.3);
+        }
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 26px;
+        background: var(--tile);
+        color: var(--ink);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.55;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <img class="logo" alt="TheNinja-RPG" src="launch-logo.webp" />
+
+    <div id="loading">
+      <div class="spinner" role="status" aria-label="Connecting"></div>
+    </div>
+
+    <div id="offline" class="card" hidden>
+      <h1>No connection</h1>
+      <p>
+        TheNinja-RPG is a live world, so it needs a connection to play. Check your network
+        and try again.
+      </p>
+      <button id="retry" type="button">Try again</button>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+      // The whole point of this page is that it is bundled in the binary: it paints
+      // instantly on a cold launch with no network, where a WebView pointed straight at
+      // the site would show nothing at all. It hands over to the live origin as soon as
+      // the server answers.
+      (function () {
+        var ORIGIN = window.TNR_ORIGIN || "https://www.theninja-rpg.com";
+        var HEALTH = ORIGIN + "/api/healthcheck";
+        var TIMEOUT_MS = 8000;
+        var RETRY_DELAYS = [1000, 2000, 4000];
+
+        var loading = document.getElementById("loading");
+        var offline = document.getElementById("offline");
+        var retry = document.getElementById("retry");
+        var attempt = 0;
+        var checking = false;
+
+        function showOffline() {
+          loading.hidden = true;
+          offline.hidden = false;
+          retry.disabled = false;
+        }
+
+        function showLoading() {
+          offline.hidden = true;
+          loading.hidden = false;
+        }
+
+        function reachable() {
+          var controller = new AbortController();
+          var timer = setTimeout(function () {
+            controller.abort();
+          }, TIMEOUT_MS);
+          // A cache-busting query rather than cache: "no-store". That cache mode makes
+          // the engine append Cache-Control and Pragma request headers, which are not
+          // CORS-safelisted, and a preflight the route did not answer would leave the app
+          // stuck on the offline screen forever.
+          return fetch(HEALTH + "?t=" + String(new Date().getTime()), {
+            method: "GET",
+            signal: controller.signal,
+          })
+            .then(function (response) {
+              clearTimeout(timer);
+              return response.ok;
+            })
+            .catch(function () {
+              clearTimeout(timer);
+              return false;
+            });
+        }
+
+        function check() {
+          if (checking) return;
+          checking = true;
+          showLoading();
+          reachable().then(function (ok) {
+            checking = false;
+            if (ok) {
+              // replace(), not assign(), so the back gesture cannot land on this page.
+              window.location.replace(ORIGIN);
+              return;
+            }
+            var delay = RETRY_DELAYS[attempt];
+            attempt += 1;
+            if (delay === undefined) {
+              showOffline();
+              return;
+            }
+            setTimeout(check, delay);
+          });
+        }
+
+        retry.addEventListener("click", function () {
+          retry.disabled = true;
+          attempt = 0;
+          check();
+        });
+
+        // Coming back into range should recover on its own, without a tap.
+        window.addEventListener("online", function () {
+          attempt = 0;
+          check();
+        });
+
+        check();
+      })();
+    </script>
+  </body>
+</html>

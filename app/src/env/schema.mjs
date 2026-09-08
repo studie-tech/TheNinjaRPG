@@ -34,6 +34,33 @@ export const serverSchema = z.object({
   AI_TEST_USER_BROKER_TOKEN: z.string().optional(),
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: z.string().optional(),
+  // Apple Push Notification service. APNS_PRIVATE_KEY holds the contents of the .p8
+  // key file; newlines may be escaped as \n because most secret stores are single-line.
+  APNS_KEY_ID: z.string().optional(),
+  APNS_TEAM_ID: z.string().optional(),
+  APNS_PRIVATE_KEY: z.string().optional(),
+  APNS_BUNDLE_ID: z.string().optional(),
+  APNS_USE_SANDBOX: z.enum(["true", "false"]).optional(),
+  // Firebase Cloud Messaging HTTP v1, authenticated with a service account.
+  FCM_PROJECT_ID: z.string().optional(),
+  FCM_CLIENT_EMAIL: z.email().optional(),
+  FCM_PRIVATE_KEY: z.string().optional(),
+  // Deep link association files served from /.well-known.
+  ANDROID_PACKAGE_NAME: z.string().optional(),
+  ANDROID_CERT_FINGERPRINTS: z.string().optional(),
+  // Shared secret sent by RevenueCat in the Authorization header of every webhook.
+  REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
+  // RevenueCat dashboard app ids. TRANSFER can omit store but still includes app_id.
+  REVENUECAT_IOS_APP_ID: z.string().optional(),
+  REVENUECAT_ANDROID_APP_ID: z.string().optional(),
+  /**
+   * Accounts whose sandbox purchases still grant, comma separated.
+   *
+   * TestFlight and App Review always transact in the sandbox, so the reviewer's demo
+   * account belongs here for a submission; leaving it unset means no sandbox receipt ever
+   * moves a balance.
+   */
+  STORE_SANDBOX_USER_IDS: z.string().optional(),
 });
 
 /**
@@ -70,6 +97,26 @@ export const serverEnv = {
   AI_TEST_USER_BROKER_TOKEN: process.env.AI_TEST_USER_BROKER_TOKEN,
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: process.env.TOWER_DEFENSE_HMAC_SECRET,
+  // Apple Push Notification service
+  APNS_KEY_ID: process.env.APNS_KEY_ID,
+  APNS_TEAM_ID: process.env.APNS_TEAM_ID,
+  APNS_PRIVATE_KEY: process.env.APNS_PRIVATE_KEY,
+  APNS_BUNDLE_ID: process.env.APNS_BUNDLE_ID,
+  APNS_USE_SANDBOX: /** @type {"true" | "false" | undefined} */ (
+    process.env.APNS_USE_SANDBOX
+  ),
+  // Firebase Cloud Messaging
+  FCM_PROJECT_ID: process.env.FCM_PROJECT_ID,
+  FCM_CLIENT_EMAIL: process.env.FCM_CLIENT_EMAIL,
+  FCM_PRIVATE_KEY: process.env.FCM_PRIVATE_KEY,
+  // Deep link association files
+  ANDROID_PACKAGE_NAME: process.env.ANDROID_PACKAGE_NAME,
+  ANDROID_CERT_FINGERPRINTS: process.env.ANDROID_CERT_FINGERPRINTS,
+  // RevenueCat
+  REVENUECAT_WEBHOOK_SECRET: process.env.REVENUECAT_WEBHOOK_SECRET,
+  REVENUECAT_IOS_APP_ID: process.env.REVENUECAT_IOS_APP_ID,
+  REVENUECAT_ANDROID_APP_ID: process.env.REVENUECAT_ANDROID_APP_ID,
+  STORE_SANDBOX_USER_IDS: process.env.STORE_SANDBOX_USER_IDS,
 };
 
 /**
@@ -88,6 +135,9 @@ export const clientSchema = z.object({
   NEXT_PUBLIC_SPACETIMEDB_MODULE: z.string().optional(),
   // MCP Server (disabled by default, enable for MCP-enabled deployments)
   NEXT_PUBLIC_MCP_ENABLED: z.enum(["true", "false"]).optional().prefault("false"),
+  // RevenueCat public SDK keys. Public by design -- they only identify the app.
+  NEXT_PUBLIC_REVENUECAT_IOS_KEY: z.string().optional(),
+  NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: z.string().optional(),
 });
 
 /**
@@ -108,4 +158,7 @@ export const clientEnv = {
   // MCP Server
   NEXT_PUBLIC_MCP_ENABLED:
     /** @type {"true" | "false" | undefined} */ (process.env.NEXT_PUBLIC_MCP_ENABLED),
+  // RevenueCat
+  NEXT_PUBLIC_REVENUECAT_IOS_KEY: process.env.NEXT_PUBLIC_REVENUECAT_IOS_KEY,
+  NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: process.env.NEXT_PUBLIC_REVENUECAT_ANDROID_KEY,
 };

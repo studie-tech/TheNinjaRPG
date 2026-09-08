@@ -309,6 +309,13 @@
       "when": 1788188857016,
       "tag": "0043_salty_christian_walker",
       "breakpoints": false
+    },
+    {
+      "idx": 44,
+      "version": "5",
+      "when": 1788532162123,
+      "tag": "0044_native_app_foundations",
+      "breakpoints": false
     }
   ]
 }

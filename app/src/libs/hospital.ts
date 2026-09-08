@@ -41,6 +41,21 @@ const healSecondsLeft = (user: UserData, timeDiff?: number) => {
 };
 
 /**
+ * The fixed moment a hospital stay ends, for countdowns that are set once and left to run.
+ *
+ * Not `calcHealFinish`: that applies the village speed boost by scaling the time *still*
+ * remaining, so the instant it returns depends on when it was called and slides later on
+ * every recomputation — it only converges on this one. A screen that recalculates every
+ * render is happy with that; a Lock Screen countdown or a home-screen widget is given a
+ * single timestamp and would hit zero while the player was still admitted.
+ *
+ * This is also the moment the server itself stops charging for the heal, since
+ * `finishAt <= now` in the heal endpoint can only be true once the unscaled time is up.
+ */
+export const hospitalRecoveryAt = (user: UserData, timeDiff?: number) =>
+  secondsFromNow(healSecondsLeft(user, timeDiff));
+
+/**
  * Calculates the timestamp when a user will finish healing.
  * @param info - The healing information.
  * @param info.user - The user data.
