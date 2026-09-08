@@ -160,6 +160,8 @@ export interface PublicUserSeed {
   rank: UserRank;
   isOutlaw: boolean;
   avatar: string | null;
+  /** Appended in brackets by the loaded render, so the seeded subtitle must match. */
+  customTitle?: string | null;
   villageName?: string | null;
 }
 
@@ -1236,84 +1238,92 @@ const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
   initialBreak,
   isGuest,
   seed,
-}) => (
-  <>
-    {isGuest && (
-      <ContentBox
-        title="Public Profile"
-        subtitle={seed ? `Profile: ${seed.username}` : "Loading profile"}
-        defaultBackHref={defaultBackHref}
-        initialBreak={initialBreak}
-      >
-        {/* With a seed this is the same copy the loaded render shows, so the panel needs
+}) => {
+  const seedName = seed
+    ? `${seed.username}${seed.customTitle ? ` [${seed.customTitle}]` : ""}`
+    : null;
+  return (
+    <>
+      {isGuest && (
+        <ContentBox
+          title="Public Profile"
+          subtitle={seedName ? `Profile: ${seedName}` : "Loading profile"}
+          defaultBackHref={defaultBackHref}
+          initialBreak={initialBreak}
+        >
+          {/* With a seed this is the same copy the loaded render shows, so the panel needs
             no placeholder at all and never resizes. Without one, publicUserText is four
             fixed paragraphs whose rendered height is deterministic -- only the username
             varies -- so it is reserved to measured size rather than approximated: at 24
             rows the panel matches the loaded one to within a few pixels at desktop
             width. */}
-        {seed ? (
-          publicUserText(seed.username)
-        ) : (
-          <div className="flex flex-col gap-2">
-            {Array.from({ length: 24 }, (_, i) => (
-              <Skeleton key={i} className={i % 7 === 6 ? "h-4 w-2/3" : "h-4 w-full"} />
-            ))}
-          </div>
-        )}
-      </ContentBox>
-    )}
-    <ContentBox
-      title={title}
-      subtitle={seed ? `Profile: ${seed.username}` : "Loading profile"}
-      defaultBackHref={isGuest ? undefined : defaultBackHref}
-      initialBreak={isGuest ? true : initialBreak}
-    >
-      <div className="grid grid-cols-2">
-        <div className="flex flex-col gap-2">
-          {seed && (
-            // The three lines the seed can fill are the first three of the loaded
-            // "General" block, in the same order, so nothing below them moves.
-            <div>
-              <b>General</b>
-              <p>
-                Lvl. {seed.level} {showUserRank(seed)}
-              </p>
-              {seed.villageName && <p>Village: {seed.villageName}</p>}
-            </div>
-          )}
-          {Array.from({ length: seed ? 19 : 23 }, (_, i) => (
-            <Skeleton key={i} className="h-4 w-11/12" />
-          ))}
-        </div>
-        <div>
-          <div className="basis-1/3">
-            <div className="relative flex justify-center">
-              {seed ? (
-                <AvatarImage
-                  href={seed.avatar}
-                  alt={seed.username}
-                  size={100}
-                  priority
+          {seed ? (
+            publicUserText(seed.username)
+          ) : (
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: 24 }, (_, i) => (
+                <Skeleton
+                  key={i}
+                  className={i % 7 === 6 ? "h-4 w-2/3" : "h-4 w-full"}
                 />
-              ) : (
-                <Skeleton className="aspect-square w-full max-w-80 rounded-2xl" />
-              )}
-            </div>
-            <div className="mt-2">
-              {Array.from({ length: 3 }, (_, i) => (
-                <div key={i} className="group relative flex-row">
-                  <Skeleton className="h-4 w-1/3 rounded-none" />
-                  <Skeleton className="h-3 w-full rounded-none border-2 border-black" />
-                </div>
               ))}
             </div>
+          )}
+        </ContentBox>
+      )}
+      <ContentBox
+        title={title}
+        subtitle={seedName ? `Profile: ${seedName}` : "Loading profile"}
+        defaultBackHref={isGuest ? undefined : defaultBackHref}
+        initialBreak={isGuest ? true : initialBreak}
+      >
+        <div className="grid grid-cols-2">
+          <div className="flex flex-col gap-2">
+            {seed && (
+              // The three lines the seed can fill are the first three of the loaded
+              // "General" block, in the same order, so nothing below them moves.
+              <div>
+                <b>General</b>
+                <p>
+                  Lvl. {seed.level} {showUserRank(seed)}
+                </p>
+                {seed.villageName && <p>Village: {seed.villageName}</p>}
+              </div>
+            )}
+            {Array.from({ length: seed ? 19 : 23 }, (_, i) => (
+              <Skeleton key={i} className="h-4 w-11/12" />
+            ))}
+          </div>
+          <div>
+            <div className="basis-1/3">
+              <div className="relative flex justify-center">
+                {seed ? (
+                  <AvatarImage
+                    href={seed.avatar}
+                    alt={seed.username}
+                    size={100}
+                    priority
+                  />
+                ) : (
+                  <Skeleton className="aspect-square w-full max-w-80 rounded-2xl" />
+                )}
+              </div>
+              <div className="mt-2">
+                {Array.from({ length: 3 }, (_, i) => (
+                  <div key={i} className="group relative flex-row">
+                    <Skeleton className="h-4 w-1/3 rounded-none" />
+                    <Skeleton className="h-3 w-full rounded-none border-2 border-black" />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-      <Loader explanation="Fetching Public User Data" />
-    </ContentBox>
-  </>
-);
+        <Loader explanation="Fetching Public User Data" />
+      </ContentBox>
+    </>
+  );
+};
 
 interface EditUserComponentProps {
   userId: string;

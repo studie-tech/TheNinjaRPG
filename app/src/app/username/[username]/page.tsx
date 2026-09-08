@@ -19,6 +19,7 @@ const fetchProfile = cache(async (username: string) => {
       rank: true,
       isOutlaw: true,
       avatar: true,
+      customTitle: true,
     },
     with: { village: { columns: { name: true } } },
     where: eq(userData.username, decodeURIComponent(username)),
@@ -66,6 +67,7 @@ export default async function PublicProfile(props: {
         rank: user.rank,
         isOutlaw: user.isOutlaw,
         avatar: user.avatar,
+        customTitle: user.customTitle,
         villageName: user.village?.name,
       }}
       defaultBackHref="/users"
