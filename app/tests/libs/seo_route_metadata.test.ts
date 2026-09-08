@@ -95,4 +95,22 @@ describe("buildMetadata", () => {
     // including the ones pointing at manual and profile URLs the sitemap advertises.
     expect(noindexMetadata("Hospital").robots).toEqual({ index: false });
   });
+
+  it("names no canonical on a noindex page", () => {
+    // Next resolves each metadata key against the nearest ancestor that declares it, so
+    // leaving `alternates` off does not mean "no canonical" -- it inherits the parent
+    // segment's. That put 39 staff routes on `noindex` while pointing at an indexable
+    // page (/manual/logs at /manual, /manual/item/balance at /manual/item), the one
+    // pairing Google asks you not to ship. Only an explicit null replaces the inherited
+    // value; undefined would fall back to it again.
+    expect(noindexMetadata("Content Log").alternates).toEqual({ canonical: null });
+    expect(
+      buildMetadata({
+        title: "Balance",
+        description: "Staff tooling.",
+        path: "/manual/balance",
+        noindex: true,
+      }).alternates,
+    ).toEqual({ canonical: null });
+  });
 });
