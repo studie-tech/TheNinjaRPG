@@ -35,17 +35,21 @@ const WALLPAPER_WIDTHS = { mobile: 828, tablet: 1280, full: 1600 } as const;
  * browser cannot start it until the parser reaches the body. Search Console reported
  * every LCP group at 4.0s, so the fetch is moved into <head>.
  *
- * The media queries are mutually exclusive, unlike the <source> ones, which rely on
- * first-match. A preload keyed to `(max-width: 1279px)` would also match a phone and
- * pull down a second copy of an image the page never shows.
+ * The media queries have to be mutually exclusive, unlike the <source> ones, which rely
+ * on first-match: a preload keyed to `(max-width: 1279px)` would also match a phone and
+ * pull down a second copy of an image the page never shows. They also have to leave no
+ * gap, or a viewport that lands in one preloads nothing. Hence the .02px lower bounds
+ * rather than the +1px that reads more naturally -- viewport widths are fractional under
+ * browser zoom and on some devices, and `(min-width: 769px)` skips 768.5 while the
+ * <source> above still resolves it to the tablet rendition.
  */
 const WALLPAPER_PRELOADS = [
   { media: "(max-width: 768px)", width: WALLPAPER_WIDTHS.mobile },
   {
-    media: "(min-width: 769px) and (max-width: 1279px)",
+    media: "(min-width: 768.02px) and (max-width: 1279px)",
     width: WALLPAPER_WIDTHS.tablet,
   },
-  { media: "(min-width: 1280px)", width: WALLPAPER_WIDTHS.full },
+  { media: "(min-width: 1279.02px)", width: WALLPAPER_WIDTHS.full },
 ] as const;
 
 interface WallpaperProps {
