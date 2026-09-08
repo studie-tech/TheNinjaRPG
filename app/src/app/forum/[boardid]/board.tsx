@@ -384,7 +384,12 @@ function Board({ boardId, initialThreads }: BoardProps) {
                   }
                 >
                   Started by {thread.user.username},{" "}
-                  {thread.createdAt.toLocaleDateString()}
+                  {/* Server-rendered since this board seeds its first page, so the date
+                      is formatted in the server's locale before the browser reformats
+                      it. Matches how FancyForumThreads handles the same value. */}
+                  <span suppressHydrationWarning>
+                    {thread.createdAt.toLocaleDateString()}
+                  </span>
                 </Post>
               </Link>
             </div>

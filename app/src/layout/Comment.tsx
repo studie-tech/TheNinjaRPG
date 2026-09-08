@@ -308,7 +308,10 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
         <>
           <div className="mb-6">{props.children}</div>
           <div className="absolute right-2 bottom-0 flex flex-row items-end gap-1">
-            <p className="pr-2 text-gray-600 text-xs italic">
+            {/* Rendered on the server for forum threads, so the server's locale and
+                timezone format it first and the browser's reformats it on hydrate.
+                Same opt-out FancyForumThreads already applies to its dates. */}
+            <p className="pr-2 text-gray-600 text-xs italic" suppressHydrationWarning>
               @{props.comment.createdAt.toLocaleString()}
             </p>
             {props.user && props.system && !props.comment?.isReported && (
