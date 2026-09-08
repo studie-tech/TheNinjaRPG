@@ -36,6 +36,13 @@ const DeleteUserButton: React.FC<DeleteUserButtonProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
+          // Clerk intentionally remains signed in after character deletion. Remove the
+          // cached profile immediately: NativeStore closes checkout and NativeBridge's
+          // missing-profile path clears push/widget/purchase/activity state before the
+          // invalidation round-trip completes.
+          utils.profile.getUser.setData(undefined, (current) =>
+            current ? { ...current, userData: undefined } : current,
+          );
           await Promise.all([
             utils.profile.getUser.invalidate(),
             utils.profile.getPublicUser.invalidate(),

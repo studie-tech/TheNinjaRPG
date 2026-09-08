@@ -3032,3 +3032,103 @@ export const DMG_SETTING_DEFAULTS: Record<string, number> = {
   DMG_ADVANTAGE_MAX,
 };
 export const DMG_SETTING_NAMES = Object.keys(DMG_SETTING_DEFAULTS);
+
+// ---------------------------------------------------------------------------
+// Native apps (iOS / Android)
+// ---------------------------------------------------------------------------
+
+/** Platforms a push token can belong to. `web` is reserved for a future Web Push transport. */
+export const PUSH_PLATFORMS = ["ios", "android", "web"] as const;
+export type PushPlatform = (typeof PUSH_PLATFORMS)[number];
+
+/**
+ * Notification categories the player can mute individually. Each maps to an Android
+ * notification channel and an APNs `thread-id`, so adding one here means adding a
+ * channel in the native shell too.
+ */
+export const PUSH_CATEGORIES = [
+  "combat",
+  "recovery",
+  "training",
+  "war",
+  "clan",
+  "trade",
+  "social",
+  "system",
+] as const;
+export type PushCategory = (typeof PUSH_CATEGORIES)[number];
+
+/** Live Activity kinds the iOS shell knows how to render. */
+export const LIVE_ACTIVITY_KINDS = ["hospital", "training", "war"] as const;
+export type LiveActivityKind = (typeof LIVE_ACTIVITY_KINDS)[number];
+
+/** Longest a device token is allowed to stay in the table without being seen again. */
+export const PUSH_TOKEN_STALE_DAYS = 90;
+
+/** Devices a single account may register before the oldest are evicted. */
+export const PUSH_MAX_DEVICES_PER_USER = 10;
+
+/**
+ * Oldest shell build the site still supports. Raise it when a release depends on a plugin
+ * or a native behaviour an older binary cannot provide; anything below is shown an update
+ * wall instead of a half-working game.
+ */
+export const MIN_NATIVE_APP_VERSION = "1.0.0";
+
+/**
+ * Marker appended to the WebView user agent by the native shell, e.g.
+ * `... TNR-Native/1.0.0 (ios)`. The server branches on this to hide web-only
+ * purchase flows that would breach App Store guideline 3.1.1.
+ */
+export const NATIVE_UA_MARKER = "TNR-Native/";
+
+// ---------------------------------------------------------------------------
+// In-app purchases (App Store / Play Billing)
+// ---------------------------------------------------------------------------
+
+/** Which store a purchase came through. */
+export const STORE_PLATFORMS = ["APPLE", "GOOGLE"] as const;
+export type StorePlatform = (typeof STORE_PLATFORMS)[number];
+
+/**
+ * Consumable reputation bundles.
+ *
+ * Store purchases need fixed price points, so these replace the web's free-form amount.
+ * The rep totals are `dollars2reps(usd)` at the current web rate, which means in-app and
+ * web buy the same reputation for the same dollars and the store's cut is absorbed rather
+ * than passed on. A test asserts they stay in step; change `usd` and the test tells you
+ * the new rep figure. Product ids must match App Store Connect and the Play Console.
+ */
+export const STORE_REP_PRODUCTS = [
+  { productId: "tnr_reps_tier1", usd: 4.99, reputationPoints: 8 },
+  { productId: "tnr_reps_tier2", usd: 9.99, reputationPoints: 20 },
+  { productId: "tnr_reps_tier3", usd: 19.99, reputationPoints: 49 },
+  { productId: "tnr_reps_tier4", usd: 49.99, reputationPoints: 164 },
+  { productId: "tnr_reps_tier5", usd: 99.99, reputationPoints: 407 },
+] as const;
+
+/**
+ * Federal status subscriptions. On Apple these belong to one subscription group so
+ * upgrades and downgrades are handled by the system; Play models the same thing as base
+ * plans on a single subscription.
+ */
+export const STORE_FEDERAL_PRODUCTS = [
+  {
+    productId: "tnr_federal_normal",
+    androidProductId: "tnr_federal:normal",
+    federalStatus: "NORMAL",
+  },
+  {
+    productId: "tnr_federal_silver",
+    androidProductId: "tnr_federal:silver",
+    federalStatus: "SILVER",
+  },
+  {
+    productId: "tnr_federal_gold",
+    androidProductId: "tnr_federal:gold",
+    federalStatus: "GOLD",
+  },
+] as const;
+
+/** RevenueCat entitlement that grants federal status, whichever plan is active. */
+export const STORE_FEDERAL_ENTITLEMENT = "federal";

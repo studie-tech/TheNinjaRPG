@@ -27,3 +27,39 @@ export const isMysqlDeadlockError = (error: unknown): boolean => {
   }
   return false;
 };
+
+/**
+ * Run a mutation again when InnoDB picked it as a deadlock victim. Two single statements
+ * can deadlock on index order alone, with no transaction anywhere, and InnoDB resolves it
+ * at once by rolling one of them back, so the loser only needs another go. Only for work
+ * that is safe to start over: every statement guarded, all progress durable.
+ */
+export const retryOnDeadlock = async <T>(
+  run: () => Promise<T>,
+  attempts = 4,
+): Promise<T> => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      if (!isMysqlDeadlockError(error) || attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * 2 ** (attempt - 1)));
+    }
+  }
+};
+
+/** Retryable failures which can abort a bounded administrative transaction. */
+export const isMysqlTransactionRetryableError = (error: unknown): boolean => {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
+    if (
+      /deadlock|errno 1213|sqlstate 40001|transaction.*(?:timeout|deadline)|deadline exceeded|exceeded.*transaction/i.test(
+        current.message,
+      )
+    ) {
+      return true;
+    }
+    current = current.cause;
+  }
+  return false;
+};

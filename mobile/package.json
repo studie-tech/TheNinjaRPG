@@ -1,0 +1,39 @@
+{
+  "name": "tnr-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Native iOS and Android shells for TheNinja-RPG",
+  "scripts": {
+    "add:ios": "cap add ios",
+    "add:android": "cap add android",
+    "prepare:web": "node scripts/write-config.mjs",
+    "sync": "bun run prepare:web && cap sync",
+    "open:ios": "bun run configure:ios && cap open ios",
+    "open:android": "cap open android",
+    "run:ios": "bun run configure:ios && cap run ios",
+    "run:android": "cap run android",
+    "beta:ios": "bundle exec fastlane ios beta",
+    "beta:android": "bundle exec fastlane android beta",
+    "configure:ios": "bundle exec ruby scripts/configure-xcode.rb"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/browser": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/haptics": "^8.0.0",
+    "@capacitor/ios": "^8.0.0",
+    "@capacitor/keyboard": "^8.0.0",
+    "@capacitor/network": "^8.0.0",
+    "@capacitor/push-notifications": "^8.0.0",
+    "@capacitor/splash-screen": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0",
+    "@revenuecat/purchases-capacitor": "^13.4.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.0.0",
+    "typescript": "^7.0.2"
+  }
+}

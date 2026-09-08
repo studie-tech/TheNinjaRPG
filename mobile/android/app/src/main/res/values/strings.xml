@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TheNinja-RPG</string>
+    <string name="title_activity_main">TheNinja-RPG</string>
+    <string name="package_name">com.theninjarpg.app</string>
+    <string name="custom_url_scheme">com.theninjarpg.app</string>
+    <string name="widget_signed_out">Open TheNinja-RPG</string>
+    <string name="widget_status_description">Health, chakra and stamina at a glance.</string>
+    <string name="sentry_dsn">https://c35c54f99b73b4a3b8a7e60936bc2967@o4507797256601600.ingest.de.sentry.io/4507797262958672</string>
+</resources>

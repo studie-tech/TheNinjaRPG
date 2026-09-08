@@ -49,6 +49,8 @@ import {
   ryoTrade,
   sector,
   staffApplication,
+  storePurchase,
+  storeUserIdAlias,
   supportReview,
   trainingLog,
   user2conversation,
@@ -57,11 +59,14 @@ import {
   userBadge,
   userBlackList,
   userData,
+  userDevice,
   userItem,
   userJutsu,
   userLikes,
+  userLiveActivity,
   userNindo,
   userPollVote,
+  userPushPreference,
   userQuestAttempt,
   userRaidBuff,
   userReport,
@@ -87,6 +92,13 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDeadlockError } from "@/server/utils/mysqlErrors";
+import {
+  isDeletedStoreUserId,
+  migrateStoreEntitlementRevocations,
+  migrateStoreEntitlementStates,
+  migrateStorePurchaseTransfers,
+  retireStoreUserId,
+} from "@/server/utils/purchases/grant";
 import {
   canClearSectors,
   canCloneUser,
@@ -769,36 +781,97 @@ export const staffRouter = createTRPCRouter({
       });
       return activityEvents;
     }),
-  // Update all occurances of a user ID in the database to another userId.
+  // Update all occurrences of a user ID in the database to another userId.
   // VERY dangerous - used to e.g. link up unlinked accounts with new userIds from clerk
   updateUserId: protectedProcedure
     .input(z.object({ userId: z.string(), newUserId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, fromUser, toUser] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
-        ctx.drizzle.query.userData.findFirst({
-          where: eq(userData.userId, input.newUserId),
-        }),
-      ]);
+      const [user, fromUser, toUser, sourceAlias, destinationAlias] = await Promise.all(
+        [
+          fetchUser(ctx.drizzle, ctx.userId),
+          ctx.drizzle.query.userData.findFirst({
+            where: eq(userData.userId, input.userId),
+          }),
+          ctx.drizzle.query.userData.findFirst({
+            where: eq(userData.userId, input.newUserId),
+          }),
+          ctx.drizzle.query.storeUserIdAlias.findFirst({
+            columns: { newUserId: true },
+            where: eq(storeUserIdAlias.oldUserId, input.userId),
+          }),
+          ctx.drizzle.query.storeUserIdAlias.findFirst({
+            columns: { newUserId: true },
+            where: eq(storeUserIdAlias.oldUserId, input.newUserId),
+          }),
+        ],
+      );
       // Guard
-      if (toUser) {
-        return { success: false, message: "UserId already exists" };
-      }
       if (user.username !== "Terriator") {
         return { success: false, message: "You are not Terriator" };
       }
-      if (fromUser.role !== "USER") {
+      if (isDeletedStoreUserId(input.userId) || isDeletedStoreUserId(input.newUserId)) {
+        return { success: false, message: "UserId is reserved" };
+      }
+      if (destinationAlias) {
+        return {
+          success: false,
+          message: "UserId was previously used and is reserved",
+        };
+      }
+      if (sourceAlias && isDeletedStoreUserId(sourceAlias.newUserId)) {
+        return {
+          success: false,
+          message: "UserId is being deleted and cannot be renamed",
+        };
+      }
+      // A rename that failed part-way left its alias behind, and may already have moved the
+      // account row. Running it again with the same ids finishes it.
+      const resuming = sourceAlias?.newUserId === input.newUserId;
+      const movedAlready = resuming && !fromUser;
+      if (sourceAlias && !resuming) {
+        return { success: false, message: "UserId was already renamed to another id" };
+      }
+      if (!fromUser && !resuming) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+      if (toUser && !movedAlready) {
+        return { success: false, message: "UserId already exists" };
+      }
+      if (fromUser && fromUser.role !== "USER") {
         return { success: false, message: "Cannot change staff member's userId " };
       }
-      // Mutate
+      // Mutate. The alias goes first, as durable intent: from here a store event naming the
+      // old id resolves to the new one, and a rename that fails part-way is finished by
+      // running it again. Whoever writes that row first owns the identity, and it is read
+      // back rather than assumed: a deletion that got in between the check above and this
+      // write keeps its tombstone, and the rename stops here before moving anything.
+      // Everything else then moves in parallel, as it always has. A receipt that lands
+      // under the old id in between is re-homed by the ledger's own owner reconciliation,
+      // so nothing here holds a lock.
+      await ctx.drizzle
+        .insert(storeUserIdAlias)
+        .values({
+          oldUserId: input.userId,
+          newUserId: input.newUserId,
+          updatedAt: new Date(),
+        })
+        .onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+      const claim = await ctx.drizzle.query.storeUserIdAlias.findFirst({
+        columns: { newUserId: true },
+        where: eq(storeUserIdAlias.oldUserId, input.userId),
+      });
+      if (claim && isDeletedStoreUserId(claim.newUserId)) {
+        return {
+          success: false,
+          message: "UserId is being deleted and cannot be renamed",
+        };
+      }
+      if (claim?.newUserId !== input.newUserId) {
+        return { success: false, message: "UserId was already renamed to another id" };
+      }
       await Promise.all([
-        ctx.drizzle
-          .update(userData)
-          .set({ userId: input.newUserId })
-          .where(eq(userData.userId, input.userId)),
         ctx.drizzle
           .update(aiProfile)
           .set({ userId: input.newUserId })
@@ -1039,8 +1112,38 @@ export const staffRouter = createTRPCRouter({
           .update(userUpload)
           .set({ userId: input.newUserId })
           .where(eq(userUpload.userId, input.userId)),
+        ctx.drizzle
+          .update(userDevice)
+          .set({ userId: input.newUserId })
+          .where(eq(userDevice.userId, input.userId)),
+        ctx.drizzle
+          .update(userPushPreference)
+          .set({ userId: input.newUserId })
+          .where(eq(userPushPreference.userId, input.userId)),
+        ctx.drizzle
+          .update(userLiveActivity)
+          .set({ userId: input.newUserId })
+          .where(eq(userLiveActivity.userId, input.userId)),
+        ctx.drizzle
+          .update(storeUserIdAlias)
+          .set({ newUserId: input.newUserId, updatedAt: new Date() })
+          .where(eq(storeUserIdAlias.newUserId, input.userId)),
+        migrateStoreEntitlementStates(ctx.drizzle, input.userId, input.newUserId),
+        migrateStoreEntitlementRevocations(ctx.drizzle, input.userId, input.newUserId),
+        migrateStorePurchaseTransfers(ctx.drizzle, input.userId, input.newUserId),
+        ctx.drizzle
+          .update(storePurchase)
+          .set({ userId: input.newUserId })
+          .where(eq(storePurchase.userId, input.userId)),
+        ctx.drizzle
+          .update(storePurchase)
+          .set({ originalUserId: input.newUserId })
+          .where(eq(storePurchase.originalUserId, input.userId)),
+        ctx.drizzle
+          .update(userData)
+          .set({ userId: input.newUserId })
+          .where(eq(userData.userId, input.userId)),
       ]);
-
       return { success: true, message: "UserId updated" };
     }),
   // Delete referral from user
@@ -1148,6 +1251,20 @@ export const deleteUser = async (client: DrizzleClient, userId: string) => {
  * @param userId - The ID of the user to delete.
  */
 const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
+  // Claim deletion before any cleanup. The durable alias remains through every later
+  // batch and the final UserData delete, so a concurrent staff rename cannot move the
+  // identity midway through cleanup and overwrite its tombstone.
+  await retireStoreUserId(client, userId, async (lockedClient) => {
+    // Push writes check for the tombstone before they write; this removes what landed first.
+    await lockedClient.delete(userDevice).where(eq(userDevice.userId, userId));
+    await lockedClient
+      .delete(userLiveActivity)
+      .where(eq(userLiveActivity.userId, userId));
+    await lockedClient
+      .delete(userPushPreference)
+      .where(eq(userPushPreference.userId, userId));
+  });
+
   // Batch 1: AI templates may own placement rows. Their lookup is independent of the
   // prerequisite sensei-reference cleanup, so run both together before destructive deletes.
   const [aiPlacements] = await Promise.all([

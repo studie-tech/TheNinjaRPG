@@ -5,6 +5,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { toast } from "@/components/ui/use-toast";
 import type { Quest } from "@/drizzle/schema";
 import Image from "@/layout/Image";
+import { haptics } from "@/libs/native";
 import { registerParticlePlugins } from "@/libs/particlePlugins";
 import { parseHtml } from "@/utils/parse";
 import type { PostProcessedRewards } from "@/validators/rewards";
@@ -82,6 +83,10 @@ export const showMutationToast = (data: {
 }) => {
   // Only show non-trivial messages
   if (data.message && data.message !== "OK") {
+    // Every mutation outcome in the app funnels through here, so this one call gives the
+    // native shells feedback everywhere. It no-ops in a browser and when the player has
+    // haptics switched off.
+    void haptics.notify(data.success ? "SUCCESS" : "ERROR");
     if (data.success) {
       toast({
         title: data?.title ?? "Success",
