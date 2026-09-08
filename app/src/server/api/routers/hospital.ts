@@ -3,8 +3,6 @@ import { and, asc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-or
 import { after } from "next/server";
 import { z } from "zod";
 import {
-  MEDNIN_EXP_CAP,
-  MEDNIN_HEAL_TO_EXP,
   MEDNIN_HEALABLE_STATES,
   MEDNIN_MIN_RANK,
   SENSEI_GENIN_MED_EXP_SHARE_PERC,
@@ -15,6 +13,7 @@ import {
   calcHealCost,
   calcHealFinish,
   calcHealthToChakra,
+  calcHospitalHealExperience,
   calcHowMuchToHeal,
 } from "@/libs/hospital";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
@@ -127,10 +126,13 @@ export const hospitalRouter = createTRPCRouter({
       // Derived
       const { toHeal, pools } = calcHowMuchToHeal(u, t, input.healPercentage);
       const chakraCost = calcHealthToChakra(u, toHeal);
-      // Calculate experience gain, capped at 4 million
-      const rawExpGain = t.userId !== u.userId ? MEDNIN_HEAL_TO_EXP * toHeal : 0;
-      const expGain =
-        rawExpGain > 0 ? Math.min(rawExpGain, MEDNIN_EXP_CAP - u.medicalExperience) : 0;
+      // Calculate experience gain, capped at 4 million. Self-heals award half.
+      const expGain = calcHospitalHealExperience({
+        healerId: u.userId,
+        targetId: t.userId,
+        toHeal,
+        medicalExperience: u.medicalExperience,
+      });
       // Guard
       if (u.isBanned) return errorResponse("You are banned");
       if (t.isBanned) return errorResponse("Target is banned");
