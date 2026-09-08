@@ -161,44 +161,7 @@ export const commentsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
-      const [thread, comments, counts] = await Promise.all([
-        fetchThread(ctx.drizzle, input.thread_id),
-        ctx.drizzle.query.forumPost.findMany({
-          offset: skip,
-          limit: input.limit,
-          where: eq(forumPost.threadId, input.thread_id),
-          with: {
-            user: {
-              columns: {
-                userId: true,
-                username: true,
-                avatar: true,
-                rank: true,
-                isOutlaw: true,
-                level: true,
-                role: true,
-                federalStatus: true,
-              },
-            },
-          },
-          orderBy: [asc(forumPost.createdAt)],
-        }),
-        ctx.drizzle
-          .select({ count: sql`count(*)`.mapWith(Number) })
-          .from(forumPost)
-          .where(eq(forumPost.threadId, input.thread_id)),
-      ]);
-      const nextCursor = comments.length < input.limit ? null : currentCursor + 1;
-      const totalComments = counts?.[0]?.count || 0;
-      return {
-        thread: thread,
-        data: comments,
-        nextCursor: nextCursor,
-        totalComments: totalComments,
-        totalPages: Math.ceil(totalComments / input.limit),
-      };
+      return await fetchForumThreadPage(ctx.drizzle, input);
     }),
   createForumComment: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Post a comment on a forum thread" } })
@@ -1178,4 +1141,56 @@ export const fetchUsersToNotify = async (
   }
 
   return notifiedUserIds;
+};
+
+/**
+ * One page of a forum thread: the thread row, its posts and the totals the pager needs.
+ *
+ * Lives here rather than inline in getForumComments because the thread route also calls
+ * it during its server render, to seed the client query. Sharing the function is what
+ * keeps the seeded payload the same shape as the one the procedure returns -- a
+ * hand-rolled copy in the page would drift the moment a column is added here.
+ */
+export const fetchForumThreadPage = async (
+  client: DrizzleClient,
+  input: { thread_id: string; limit: number; cursor?: number | null },
+) => {
+  const currentCursor = input.cursor ? input.cursor : 0;
+  const skip = currentCursor * input.limit;
+  const [thread, comments, counts] = await Promise.all([
+    fetchThread(client, input.thread_id),
+    client.query.forumPost.findMany({
+      offset: skip,
+      limit: input.limit,
+      where: eq(forumPost.threadId, input.thread_id),
+      with: {
+        user: {
+          columns: {
+            userId: true,
+            username: true,
+            avatar: true,
+            rank: true,
+            isOutlaw: true,
+            level: true,
+            role: true,
+            federalStatus: true,
+          },
+        },
+      },
+      orderBy: [asc(forumPost.createdAt)],
+    }),
+    client
+      .select({ count: sql`count(*)`.mapWith(Number) })
+      .from(forumPost)
+      .where(eq(forumPost.threadId, input.thread_id)),
+  ]);
+  const nextCursor = comments.length < input.limit ? null : currentCursor + 1;
+  const totalComments = counts?.[0]?.count || 0;
+  return {
+    thread: thread,
+    data: comments,
+    nextCursor: nextCursor,
+    totalComments: totalComments,
+    totalPages: Math.ceil(totalComments / input.limit),
+  };
 };

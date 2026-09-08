@@ -311,6 +311,8 @@ export type AutomoderationCategory = (typeof AutomoderationCategories)[number];
 
 // Forum pagination
 export const FORUM_BOARD_THREADS_PER_PAGE = 20;
+/** Posts per page in a forum thread. The thread route server-renders this many. */
+export const FORUM_THREAD_POSTS_PER_PAGE = 10;
 
 export const UserRoles = [
   "USER",

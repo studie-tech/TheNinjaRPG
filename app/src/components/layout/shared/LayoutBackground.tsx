@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ReactDOM from "react-dom";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
 import { bunnyImageUrl } from "@/utils/image";
@@ -26,6 +27,27 @@ interface LayoutBackgroundProps {
  */
 const WALLPAPER_WIDTHS = { mobile: 828, tablet: 1280, full: 1600 } as const;
 
+/**
+ * The same three renditions the <picture> below selects between, as preload hints.
+ *
+ * The wallpaper is the largest contentful paint on most pages, and marking it eager and
+ * high priority only reorders it against other work the browser has already found -- the
+ * browser cannot start it until the parser reaches the body. Search Console reported
+ * every LCP group at 4.0s, so the fetch is moved into <head>.
+ *
+ * The media queries are mutually exclusive, unlike the <source> ones, which rely on
+ * first-match. A preload keyed to `(max-width: 1279px)` would also match a phone and
+ * pull down a second copy of an image the page never shows.
+ */
+const WALLPAPER_PRELOADS = [
+  { media: "(max-width: 768px)", width: WALLPAPER_WIDTHS.mobile },
+  {
+    media: "(min-width: 769px) and (max-width: 1279px)",
+    width: WALLPAPER_WIDTHS.tablet,
+  },
+  { media: "(min-width: 1280px)", width: WALLPAPER_WIDTHS.full },
+] as const;
+
 interface WallpaperProps {
   src: string;
   className: string;
@@ -42,30 +64,43 @@ const Wallpaper: React.FC<WallpaperProps> = ({
   priority,
   ariaHidden,
   onLoad,
-}) => (
-  <picture>
-    <source
-      media="(max-width: 768px)"
-      srcSet={bunnyImageUrl(src, WALLPAPER_WIDTHS.mobile)}
-    />
-    <source
-      media="(max-width: 1279px)"
-      srcSet={bunnyImageUrl(src, WALLPAPER_WIDTHS.tablet)}
-    />
-    <img
-      className={className}
-      src={bunnyImageUrl(src, WALLPAPER_WIDTHS.full)}
-      width={1600}
-      height={800}
-      alt={alt}
-      loading="eager"
-      fetchPriority={priority ? "high" : undefined}
-      decoding="async"
-      aria-hidden={ariaHidden}
-      onLoad={onLoad}
-    />
-  </picture>
-);
+}) => {
+  // Only the priority layer is the LCP candidate. The user's own wallpaper fades in over
+  // it and must not compete with it for bandwidth.
+  if (priority) {
+    for (const { media, width } of WALLPAPER_PRELOADS) {
+      ReactDOM.preload(bunnyImageUrl(src, width), {
+        as: "image",
+        media,
+        fetchPriority: "high",
+      });
+    }
+  }
+  return (
+    <picture>
+      <source
+        media="(max-width: 768px)"
+        srcSet={bunnyImageUrl(src, WALLPAPER_WIDTHS.mobile)}
+      />
+      <source
+        media="(max-width: 1279px)"
+        srcSet={bunnyImageUrl(src, WALLPAPER_WIDTHS.tablet)}
+      />
+      <img
+        className={className}
+        src={bunnyImageUrl(src, WALLPAPER_WIDTHS.full)}
+        width={1600}
+        height={800}
+        alt={alt}
+        loading="eager"
+        fetchPriority={priority ? "high" : undefined}
+        decoding="async"
+        aria-hidden={ariaHidden}
+        onLoad={onLoad}
+      />
+    </picture>
+  );
+};
 
 export const LayoutBackground: React.FC<LayoutBackgroundProps> = ({
   variant,

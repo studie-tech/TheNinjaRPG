@@ -57,6 +57,17 @@ export default async function PublicProfile(props: {
     <PublicUserComponent
       userId={user.userId}
       title="Users"
+      // Same lookup that built the metadata above, handed to the client component so the
+      // server render carries this player's name, rank and village instead of a
+      // placeholder identical to every other profile's.
+      initialProfile={{
+        username: user.username,
+        level: user.level,
+        rank: user.rank,
+        isOutlaw: user.isOutlaw,
+        avatar: user.avatar,
+        villageName: user.village?.name,
+      }}
       defaultBackHref="/users"
       showRecruited
       showStudents

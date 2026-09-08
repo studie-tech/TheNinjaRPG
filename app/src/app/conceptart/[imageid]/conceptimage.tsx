@@ -10,9 +10,19 @@ import Loader from "@/layout/Loader";
 interface ConceptBox_ConceptImageProps
   extends Omit<ContentBoxProps, "title" | "subtitle" | "children"> {
   imageid?: string;
+  /**
+   * Prompt and creator resolved during the server render.
+   *
+   * The media itself still arrives with the client query, but seeding these two means
+   * the served HTML describes this particular piece rather than being the same spinner
+   * on every /conceptart/* URL.
+   */
+  seed?: { prompt: string; creator: string | null };
 }
 
 const ConceptBox_ConceptImage: React.FC<ConceptBox_ConceptImageProps> = (props) => {
+  const { seed, ...boxProps } = props;
+
   // Fetch data
   // Use isLoading (not isFetching) to only show loader on initial load
   // This prevents unmounting ConceptImage during background refetches
@@ -22,12 +32,24 @@ const ConceptBox_ConceptImage: React.FC<ConceptBox_ConceptImageProps> = (props) 
   );
 
   // Guard - only show loader on initial load, not background refetches
-  if (isLoading) return <Loader explanation="Fetching media" />;
+  if (isLoading) {
+    if (!seed) return <Loader explanation="Fetching media" />;
+    return (
+      <ContentBox
+        {...boxProps}
+        title="Concept Art"
+        subtitle={`Created by ${seed.creator || "unknown"}`}
+      >
+        <p className="mb-3">{seed.prompt}</p>
+        <Loader explanation="Fetching media" />
+      </ContentBox>
+    );
+  }
 
   // Render
   return (
     <ContentBox
-      {...props}
+      {...boxProps}
       title="Concept Art"
       subtitle={`Created by ${image?.user?.username || "unknown"}`}
       topRightContent={

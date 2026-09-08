@@ -47,11 +47,20 @@ export default async function PublicProfile(props: {
 }) {
   const params = await props.params;
   // Matches /username/<name>: an unknown id answers 404 rather than a 200 soft 404.
-  if (!(await fetchProfile(params.userid))) notFound();
+  const user = await fetchProfile(params.userid);
+  if (!user) notFound();
   return (
     <PublicUserComponent
       userId={params.userid}
       title="Users"
+      initialProfile={{
+        username: user.username,
+        level: user.level,
+        rank: user.rank,
+        isOutlaw: user.isOutlaw,
+        avatar: user.avatar,
+        villageName: user.village?.name,
+      }}
       defaultBackHref="/users"
       showRecruited
       showStudents
