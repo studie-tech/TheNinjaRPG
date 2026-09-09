@@ -76,7 +76,11 @@ const createRaidProgressClient = ({
   const participationValues = vi.fn(async () => {
     calls.push("insertClaim");
     if (!insertSucceeds) {
-      throw new Error("Duplicate entry 'raid-quest-1-raid-user' for key 'RaidParticipation_questId_userId'");
+      throw new Error("Failed query: insert into `RaidParticipation`", {
+        cause: new Error(
+          "Duplicate entry 'raid-quest-1-raid-user' for key 'RaidParticipation_questId_userId'",
+        ),
+      });
     }
     return { rowsAffected: 1 };
   });

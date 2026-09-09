@@ -42,6 +42,22 @@ describe("isMysqlDuplicateKeyError", () => {
     );
   });
 
+  it("returns true when Drizzle wraps the driver error as Failed query", () => {
+    const driver = new Error(
+      "Duplicate entry 'raid-quest-1-raid-user' for key 'RaidParticipation.RaidParticipation_questId_userId'",
+    );
+    (driver as { sqlMessage?: string }).sqlMessage =
+      "Duplicate entry 'raid-quest-1-raid-user' for key 'RaidParticipation.RaidParticipation_questId_userId'";
+    expect(
+      isMysqlDuplicateKeyError(
+        new Error(
+          "Failed query: insert into `RaidParticipation` (`id`, `questId`, `userId`) values (?, ?, ?)",
+          { cause: driver },
+        ),
+      ),
+    ).toBe(true);
+  });
+
   it("returns false for unrelated errors and non-errors", () => {
     expect(isMysqlDuplicateKeyError(new Error("connection timeout"))).toBe(false);
     expect(isMysqlDuplicateKeyError(null)).toBe(false);
