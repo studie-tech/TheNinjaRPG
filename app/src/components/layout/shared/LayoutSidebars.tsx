@@ -250,11 +250,15 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
         <span
           data-sidebar-keep-open="true"
           data-clerk-element="true"
-          className="inline-flex items-center"
+          className="inline-flex items-center [color-scheme:light]"
         >
           <UserButton
             appearance={{
-              elements: { userButtonPopoverCard: { pointerEvents: "initial" } },
+              elements: {
+                rootBox: "[color-scheme:light]",
+                userButtonPopoverCard: "[color-scheme:light] [pointer-events:initial]",
+                userButtonPopoverMain: "[color-scheme:light]",
+              },
             }}
           />
         </span>
