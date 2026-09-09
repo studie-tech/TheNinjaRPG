@@ -82,14 +82,24 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ plotId: z.string(), seedItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, userItems, plot, seedItem, questState] = await Promise.all([
+      const seedItemQuery = ctx.drizzle.query.item.findFirst({
+        where: eq(item.id, input.seedItemId),
+      });
+      const [user, userItems, plot, seedItem, questState, yieldItem] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.farmPlot.findFirst({
           where: and(eq(farmPlot.id, input.plotId), eq(farmPlot.userId, ctx.userId)),
         }),
-        ctx.drizzle.query.item.findFirst({ where: eq(item.id, input.seedItemId) }),
+        seedItemQuery,
         fetchFarmingQuestState(ctx.drizzle, ctx.userId),
+        seedItemQuery.then((loadedSeed) =>
+          loadedSeed?.farmYieldItemId
+            ? ctx.drizzle.query.item.findFirst({
+                where: eq(item.id, loadedSeed.farmYieldItemId),
+              })
+            : null,
+        ),
       ]);
 
       const guard = guardFarmingMutation(user);
@@ -214,9 +224,7 @@ export const farmingRouter = createTRPCRouter({
             lastWateredAt: null,
             fertilizerApplied: false,
             seedItem,
-            yieldItem: await ctx.drizzle.query.item.findFirst({
-              where: eq(item.id, seedItem.farmYieldItemId),
-            }),
+            yieldItem,
           },
           now,
         ),
@@ -1651,21 +1659,30 @@ export const buildFarmState = async (
   ]);
   const totalPlots = getTotalFarmPlots(user.farmPlotsPurchased);
 
-  const [plotsRaw, userItems, shopEntries, collectionLog] = await Promise.all([
-    ensureFarmPlots(client, userId, totalPlots),
-    fetchUserItems(client, userId),
-    buildShopEntries(client, user),
-    getFarmCollectionState(client, userId),
-  ]);
+  const plotsPromise = ensureFarmPlots(client, userId, totalPlots);
+  const userItemsPromise = fetchUserItems(client, userId);
+  const shopEntriesPromise = buildShopEntries(client, user);
+  const collectionLogPromise = getFarmCollectionState(client, userId);
 
+  const [plotsRaw, userItems] = await Promise.all([
+    plotsPromise,
+    userItemsPromise,
+  ]);
   const yieldIds = [
-    ...plotsRaw.map((plot) => plot.seedItem?.farmYieldItemId),
-    ...userItems.map((userItem) => userItem.item.farmYieldItemId),
-  ].filter(Boolean) as string[];
-  const yieldItems =
+    ...new Set(
+      [
+        ...plotsRaw.map((plot) => plot.seedItem?.farmYieldItemId),
+        ...userItems.map((owned) => owned.item.farmYieldItemId),
+      ].filter((itemId): itemId is string => !!itemId),
+    ),
+  ];
+  const [shopEntries, collectionLog, yieldItems] = await Promise.all([
+    shopEntriesPromise,
+    collectionLogPromise,
     yieldIds.length > 0
-      ? await client.query.item.findMany({ where: inArray(item.id, yieldIds) })
-      : [];
+      ? client.query.item.findMany({ where: inArray(item.id, yieldIds) })
+      : Promise.resolve([]),
+  ]);
 
   const yieldItemsById = new Map(
     yieldItems.map((yieldItem) => [yieldItem.id, yieldItem]),

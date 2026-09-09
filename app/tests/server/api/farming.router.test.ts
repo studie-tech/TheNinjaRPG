@@ -159,6 +159,52 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     expect(stack?.quantity).toBe(2);
   });
 
+  it("plants a seed and returns the prefetched yield on the updated plot", async () => {
+    await farmer();
+    await giveItem("ui-seed", "seed-1", 2);
+    const database = await getTestDatabase();
+    await database.insert(farmPlot).values({
+      id: "plot-plant",
+      userId: "farm-user",
+      slotIndex: 0,
+    } as never);
+    const api = await caller("farm-user");
+    const result = await api.plantSeed({ plotId: "plot-plant", seedItemId: "seed-1" });
+    expect(result.success).toBe(true);
+    expect(result.updatedPlot?.cropName).toBe("Test Crop");
+    expect(result.updatedPlot?.cropImage).toBe("/crop.png");
+    expect(result.updatedPlot?.harvestExperience).toBe(10);
+    expect(result.updatedPlot?.seedItemId).toBe("seed-1");
+    const [stack] = await database.select().from(userItem).where(eq(userItem.id, "ui-seed"));
+    expect(stack?.quantity).toBe(1);
+    const [plot] = await database.select().from(farmPlot).where(eq(farmPlot.id, "plot-plant"));
+    expect(plot?.seedItemId).toBe("seed-1");
+    expect(plot?.finishAt).toBeTruthy();
+  });
+
+  it("resolves planted crop names from the overlapped yield catalog", async () => {
+    await farmer();
+    await giveItem("ui-seed", "seed-1", 1);
+    const database = await getTestDatabase();
+    await database.insert(farmPlot).values({
+      id: "plot-state",
+      userId: "farm-user",
+      slotIndex: 0,
+      seedItemId: "seed-1",
+      plantedAt: new Date(),
+      finishAt: new Date(Date.now() + 60_000),
+    } as never);
+    const api = await caller("farm-user");
+    const state = await api.getFarmState();
+    if ("success" in state && state.success === false) {
+      throw new Error(state.message);
+    }
+    expect(state.plots.find((plot) => plot.id === "plot-state")?.cropName).toBe("Test Crop");
+    expect(state.availableSeeds.find((seed) => seed.itemId === "seed-1")?.yieldName).toBe(
+      "Test Crop",
+    );
+  });
+
   it("grants every distinct crop exactly once when a mixed harvest is settled together", async () => {
     await farmer();
     const database = await getTestDatabase();
