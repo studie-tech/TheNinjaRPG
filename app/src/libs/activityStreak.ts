@@ -61,3 +61,25 @@ export const isActivityStreakPopupBlocking = (
   !state.dismissedToday &&
   !state.userClosed &&
   (state.isLoading || state.shouldShowPopup || state.isOpen);
+
+/**
+ * True when the root-layout popup is still allowed to open, so `getUserStreaks`
+ * is worth sending. There is no claim-eligibility field on `userData`; the
+ * suppressions below are the ones that already forbid the dialog, and skipping
+ * the query for them cannot drop an unclaimed-reward popup.
+ *
+ * Do not defer this query behind first paint: `isActivityStreakPopupBlocking`
+ * treats a not-yet-started fetch as non-blocking, which lets the overworld
+ * arrival prompt win the login race.
+ */
+export const shouldFetchActivityStreaksForPopup = ({
+  hasUser,
+  tutorialActive,
+  dismissedToday,
+  userClosed,
+}: {
+  hasUser: boolean;
+  tutorialActive: boolean;
+  dismissedToday: boolean;
+  userClosed: boolean;
+}): boolean => hasUser && !tutorialActive && !dismissedToday && !userClosed;

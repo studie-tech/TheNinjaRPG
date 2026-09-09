@@ -19,6 +19,7 @@ import {
   isActivityStreakPopupBlocking,
   resolveActivityStreakDateLatches,
   resolveActivityStreakPopupOpen,
+  shouldFetchActivityStreaksForPopup,
 } from "@/libs/activityStreak";
 import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
@@ -54,11 +55,20 @@ const ActivityStreakPopup: React.FC = () => {
   // the very first render, with no window where both can be on screen.
   const tutorialActive = isTutorialActive(userData);
 
-  // Always query streaks if we have a user (we check dismissedToday separately)
+  // Only fetch while the dialog is still allowed to open. Tutorial / dismissed-today /
+  // session-close already forbid it; querying then is 13KB on every signed-in page
+  // for a popup that cannot appear. Re-enables when those latches clear (tutorial
+  // finished, date rollover) so an unclaimed reward is not dropped.
+  const shouldFetchStreaks = shouldFetchActivityStreaksForPopup({
+    hasUser: !!userData,
+    tutorialActive,
+    dismissedToday,
+    userClosed,
+  });
   const { data: userStreaks, isLoading } = api.activityStreak.getUserStreaks.useQuery(
     undefined,
     {
-      enabled: !!userData,
+      enabled: shouldFetchStreaks,
       staleTime: 1000 * 60 * 5, // 5 minutes
     },
   );

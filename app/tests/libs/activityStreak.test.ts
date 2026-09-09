@@ -3,6 +3,7 @@ import {
   isActivityStreakPopupBlocking,
   resolveActivityStreakDateLatches,
   resolveActivityStreakPopupOpen,
+  shouldFetchActivityStreaksForPopup,
   type ActivityStreakPopupState,
 } from "@/libs/activityStreak";
 
@@ -115,5 +116,93 @@ describe("activity streak popup compatibility", () => {
         state({ shouldShowPopup: true, tutorialActive: false }),
       ),
     ).toBe(true);
+  });
+});
+
+describe("shouldFetchActivityStreaksForPopup", () => {
+  it("fetches for a signed-in user who can still see the popup", () => {
+    expect(
+      shouldFetchActivityStreaksForPopup({
+        hasUser: true,
+        tutorialActive: false,
+        dismissedToday: false,
+        userClosed: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("skips the query when the popup cannot open", () => {
+    expect(
+      shouldFetchActivityStreaksForPopup({
+        hasUser: false,
+        tutorialActive: false,
+        dismissedToday: false,
+        userClosed: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldFetchActivityStreaksForPopup({
+        hasUser: true,
+        tutorialActive: true,
+        dismissedToday: false,
+        userClosed: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldFetchActivityStreaksForPopup({
+        hasUser: true,
+        tutorialActive: false,
+        dismissedToday: true,
+        userClosed: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldFetchActivityStreaksForPopup({
+        hasUser: true,
+        tutorialActive: false,
+        dismissedToday: false,
+        userClosed: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("resumes fetching after the tutorial ends so an unclaimed reward is not dropped", () => {
+    expect(
+      shouldFetchActivityStreaksForPopup({
+        hasUser: true,
+        tutorialActive: true,
+        dismissedToday: false,
+        userClosed: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldFetchActivityStreaksForPopup({
+        hasUser: true,
+        tutorialActive: false,
+        dismissedToday: false,
+        userClosed: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not hold competing popups when the streaks query is gated off", () => {
+    expect(
+      isActivityStreakPopupBlocking(
+        true,
+        state({ isLoading: false, tutorialActive: true }),
+      ),
+    ).toBe(false);
+    expect(
+      isActivityStreakPopupBlocking(
+        true,
+        state({ isLoading: false, dismissedToday: true }),
+      ),
+    ).toBe(false);
+    expect(
+      isActivityStreakPopupBlocking(
+        true,
+        state({ isLoading: false, userClosed: true }),
+      ),
+    ).toBe(false);
   });
 });
