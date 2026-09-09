@@ -1049,9 +1049,9 @@ export const updateVillageAnbuClan = async (
  *
  * Protection against duplicate processing:
  * 1. Each user deducts only their share of damage (totalDamage / numAttackers)
- * 2. battleCount is used as an optimistic lock - the upsert only succeeds if
- *    battleCount matches the value stored at battle start
- * 3. rowsAffected === 0 indicates a duplicate call - skip HP deduction
+ * 2. battleCount is the optimistic lock: first battle inserts, later battles
+ *    UPDATE only while battleCount still equals the start-of-battle value
+ * 3. A duplicate reports 0 changed rows and skips HP deduction and inbox writes
  * 4. This ensures each user's damage is only counted once, regardless of how
  *    many times their endpoint is called
  */
@@ -1100,30 +1100,45 @@ export const updateRaidProgress = async (
   // Get the battleCount at the start of this battle (0 if user hasn't participated before)
   const startBattleCount = curBattle.extraState.raidStartBattleCount?.[userId] ?? 0;
 
-  // Claim this battle's damage for this user. battleCount is the optimistic lock:
-  // a retry sees the same startBattleCount and the IF clauses write the existing
-  // values, so rowsAffected is 0 and we stop before touching HP or the inbox.
-  const upsertResult = await client
-    .insert(raidParticipation)
-    .values({
-      id: nanoid(),
-      questId: raidQuestId,
-      userId: userId,
-      damageDealt: userDamage,
-      battleCount: 1,
-      rewardsClaimed: [],
-    })
-    .onDuplicateKeyUpdate({
-      set: {
-        damageDealt: sql`IF(${raidParticipation.battleCount} = ${startBattleCount}, ${raidParticipation.damageDealt} + ${userDamage}, ${raidParticipation.damageDealt})`,
-        battleCount: sql`IF(${raidParticipation.battleCount} = ${startBattleCount}, ${raidParticipation.battleCount} + 1, ${raidParticipation.battleCount})`,
-        updatedAt: sql`IF(${raidParticipation.battleCount} = ${startBattleCount}, NOW(), ${raidParticipation.updatedAt})`,
-      },
-    });
+  // Claim this battle's damage for this user. `battleCount` is the optimistic
+  // lock. An IF() upsert that writes the existing values still reports
+  // rowsAffected > 0 on MySQL, so a retry would decrement shared HP and notify
+  // again. First participation inserts; later ones update only while
+  // battleCount still equals the value captured at battle start. A no-op
+  // `id = id` duplicate insert reports 0 changed rows.
+  let claimed = false;
+  if (startBattleCount === 0) {
+    const insertResult = await client
+      .insert(raidParticipation)
+      .values({
+        id: nanoid(),
+        questId: raidQuestId,
+        userId: userId,
+        damageDealt: userDamage,
+        battleCount: 1,
+        rewardsClaimed: [],
+      })
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    claimed = insertResult.rowsAffected === 1;
+  } else {
+    const updateResult = await client
+      .update(raidParticipation)
+      .set({
+        damageDealt: sql`${raidParticipation.damageDealt} + ${userDamage}`,
+        battleCount: sql`${raidParticipation.battleCount} + 1`,
+        updatedAt: sql`NOW()`,
+      })
+      .where(
+        and(
+          eq(raidParticipation.questId, raidQuestId),
+          eq(raidParticipation.userId, userId),
+          eq(raidParticipation.battleCount, startBattleCount),
+        ),
+      );
+    claimed = updateResult.rowsAffected === 1;
+  }
 
-  // rowsAffected = 1 (insert) or 2 (update that changed) → this call owns the claim
-  // rowsAffected = 0 (battleCount already advanced) → duplicate, skip
-  if (upsertResult.rowsAffected === 0) {
+  if (!claimed) {
     return;
   }
 
