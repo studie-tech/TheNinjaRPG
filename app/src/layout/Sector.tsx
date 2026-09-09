@@ -1480,6 +1480,9 @@ const Sector: React.FC<SectorProps> = (props) => {
         await runJourneySegment(data);
       }
     },
+    onSettled: () => {
+      document.body.style.cursor = "default";
+    },
   });
 
   /** Step one tile beyond the border: the server resolves this as a crossing */
@@ -1562,6 +1565,9 @@ const Sector: React.FC<SectorProps> = (props) => {
           message: data.message,
         });
       }
+    },
+    onSettled: () => {
+      document.body.style.cursor = "default";
     },
   });
 

@@ -307,6 +307,9 @@ const Combat: React.FC<CombatProps> = (props) => {
       document.body.style.cursor = "wait";
       setBattleState({ battle: battleRef.current, result: null, isPending: true });
     },
+    onSettled: () => {
+      document.body.style.cursor = "default";
+    },
     onSuccess: async (data) => {
       // Clear the selected action only when control actually hands off to (or
       // away from) another actor — e.g. to/from a piloted summon. On the

@@ -50,10 +50,6 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
                 ? key[0].join(".")
                 : undefined;
             onMutateCheck(mutationPath);
-            document.body.style.cursor = "wait";
-          },
-          onSettled: () => {
-            document.body.style.cursor = "default";
           },
         }),
       }),
