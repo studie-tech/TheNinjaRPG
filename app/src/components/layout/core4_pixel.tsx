@@ -120,7 +120,6 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                       onClick={async () => {
                         if (link.onClick) await link.onClick();
                       }}
-                      prefetch={false}
                     >
                       <span className="relative flex min-w-0 items-center gap-1">
                         {link.icon}
