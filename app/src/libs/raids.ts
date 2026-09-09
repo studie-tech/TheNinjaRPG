@@ -17,7 +17,12 @@ export const isRaidChatConversationId = (conversationId: string) =>
  * Raid type is implicit from the objective task (open_raid or exclusive_raid).
  * Both raid types have sector for map location.
  */
-export const getRaidObjectiveData = (questData: { content: Quest["content"] }) => {
+/** Listing/join helpers only read objectives; they do not need a full QuestContentType. */
+type RaidObjectiveSource = {
+  content?: { objectives?: { task?: string }[] | null } | null;
+};
+
+export const getRaidObjectiveData = (questData: RaidObjectiveSource) => {
   const objective = questData.content?.objectives?.[0];
   if (!objective) return null;
 
@@ -76,11 +81,10 @@ export const validateRaidIsActive = (
  * precomputed owned/attacker sector sets are required — not a full user row.
  */
 export const isRaidListedForVillage = (
-  raid: {
+  raid: RaidObjectiveSource & {
     raidEndsAt: Date | null;
     raidCaptureDeadline: Date | null;
     raidGracePeriodEnd: Date | null;
-    content: Quest["content"];
   },
   villageId: string | null,
   ownedSectorNumbers: Set<number>,
