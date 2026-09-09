@@ -107,50 +107,65 @@ export default function BlackMarket() {
       </ContentBox>
       {tab === "Bloodline" && <Bloodline userData={userData} />}
       {tab === "Ryo" && <RyoShop userData={userData} />}
-      {tab === "Item" && (
-        <>
-          <Shop
-            userData={userData}
-            defaultType="CONSUMABLE"
-            initialBreak={true}
-            minRepsCost={1}
-            title="Reputation Shop"
-            subtitle="Browse categories, search the catalog, then open a card to buy."
-            catalog={{
-              silverLabel: "silver",
-              heroTitle: "Reputation catalog",
-              heroDescription:
-                "Spend reputation on rare stock. Category tabs and search match the village shop; filters refine rarity, slot, and effects.",
-              heroBadge: "Reputation pricing",
-              searchId: "blackmarket-rep-catalog-search",
-              listId: false,
-              filterTriggerId: "blackmarket-rep-filter",
-            }}
-          />
-          <Shop
-            userData={userData}
-            defaultType="CONSUMABLE"
-            initialBreak={true}
-            minSeichiSilverCost={1}
-            title="Silver Shop"
-            subtitle="Browse categories, search the catalog, then open a card to buy."
-            catalog={{
-              silverLabel: "silver",
-              heroTitle: "Silver catalog",
-              heroDescription:
-                "Spend silver on exclusive goods. Use tabs and search, then tap a card to review and purchase.",
-              heroBadge: "Silver pricing",
-              searchId: "blackmarket-seichi-catalog-search",
-              listId: false,
-              filterTriggerId: "blackmarket-seichi-filter",
-            }}
-          />
-          {PITY_SYSTEM_ENABLED && <PityBloodlineRoll userData={userData} />}
-        </>
-      )}
+      {tab === "Item" && <BlackMarketItemCatalog userData={userData} />}
     </>
   );
 }
+
+const itemCurrencyTabs = ["Reputation", "Silver"] as const;
+
+/**
+ * Reputation and silver catalogs share Shop, but only one is mounted so we do
+ * not fire two item.getAll infinite queries or render two card grids at once.
+ */
+const BlackMarketItemCatalog: React.FC<{
+  userData: NonNullable<UserWithRelations>;
+}> = ({ userData }) => {
+  const [itemCurrency, setItemCurrency] = useLocalStorage<
+    (typeof itemCurrencyTabs)[number]
+  >("blackmarketItemCurrency", "Reputation");
+  const isSilver = itemCurrency === "Silver";
+  const currencyNav = (
+    <NavTabs
+      id="blackmarket-item-currency"
+      current={itemCurrency}
+      options={itemCurrencyTabs}
+      setValue={setItemCurrency}
+    />
+  );
+
+  return (
+    <>
+      <Shop
+        key={itemCurrency}
+        userData={userData}
+        defaultType="CONSUMABLE"
+        initialBreak={true}
+        minRepsCost={isSilver ? undefined : 1}
+        minSeichiSilverCost={isSilver ? 1 : undefined}
+        title={isSilver ? "Silver Shop" : "Reputation Shop"}
+        subtitle="Browse categories, search the catalog, then open a card to buy."
+        catalog={{
+          silverLabel: "silver",
+          heroTitle: isSilver ? "Silver catalog" : "Reputation catalog",
+          heroDescription: isSilver
+            ? "Spend silver on exclusive goods. Use tabs and search, then tap a card to review and purchase."
+            : "Spend reputation on rare stock. Category tabs and search match the village shop; filters refine rarity, slot, and effects.",
+          heroBadge: isSilver ? "Silver pricing" : "Reputation pricing",
+          searchId: isSilver
+            ? "blackmarket-seichi-catalog-search"
+            : "blackmarket-rep-catalog-search",
+          listId: false,
+          filterTriggerId: isSilver
+            ? "blackmarket-seichi-filter"
+            : "blackmarket-rep-filter",
+          headerExtra: currencyNav,
+        }}
+      />
+      {PITY_SYSTEM_ENABLED && <PityBloodlineRoll userData={userData} />}
+    </>
+  );
+};
 
 /**
  * For every 150 failed rolls, let the user get a free bloodline of the given rank
