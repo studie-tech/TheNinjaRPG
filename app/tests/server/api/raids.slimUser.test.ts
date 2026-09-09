@@ -1,12 +1,21 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from "vitest";
+import type { Quest } from "@/drizzle/schema";
 import { isRaidListedForVillage } from "@/libs/raids";
 import { fetchRaidJoinUser, fetchRaidListUser } from "@/server/utils/raidUser";
-import { RaidObjective } from "@/validators/objectives";
+import { RaidObjective, type QuestContentType } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
 
 const villageId = "village-1";
 const now = new Date("2026-06-01T00:00:00.000Z");
+
+type RaidListingInput = {
+  content: Quest["content"];
+  raidEndsAt: Date | null;
+  raidCaptureDeadline: Date | null;
+  raidGracePeriodEnd: Date | null;
+};
 
 const raid = (
   task: "open_raid" | "exclusive_raid",
@@ -16,7 +25,7 @@ const raid = (
     raidCaptureDeadline?: Date | null;
     raidGracePeriodEnd?: Date | null;
   } = {},
-) => ({
+): RaidListingInput => ({
   raidEndsAt: extras.raidEndsAt ?? new Date("2026-12-01T00:00:00.000Z"),
   raidCaptureDeadline: extras.raidCaptureDeadline ?? null,
   raidGracePeriodEnd: extras.raidGracePeriodEnd ?? null,
@@ -29,7 +38,10 @@ const raid = (
         opponentAIs: [{ ids: ["ai-1"], number: 100, quantity: 1 }],
       }),
     ],
-  },
+    reward: ObjectiveReward.parse({}),
+    sceneBackground: "",
+    sceneCharacters: [],
+  } satisfies QuestContentType,
 });
 
 describe("raid list/join slim user fetches", () => {
