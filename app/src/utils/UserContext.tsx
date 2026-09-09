@@ -6,7 +6,14 @@ import { atom } from "jotai";
 import { useRouter } from "next/navigation";
 import type Pusher from "pusher-js";
 import type React from "react";
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type { AchievementProgress, UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import type { StructureRoute } from "@/drizzle/constants";
@@ -39,7 +46,7 @@ export const blockingPopupOpenAtom = atom<boolean>(false);
 /**
  * Context for managing user data and state.
  */
-export const UserContext = createContext<{
+type UserContextValue = {
   data: UserWithRelations;
   /**
    * Achievement progress, carried beside `data` rather than inside `data.userQuests`: the
@@ -60,7 +67,9 @@ export const UserContext = createContext<{
   updateNotifications: (
     notifications: NavBarDropdownLink[] | undefined,
   ) => Promise<void>;
-}>({
+};
+
+export const UserContext = createContext<UserContextValue>({
   data: undefined,
   achievementProgress: undefined,
   notifications: undefined,
@@ -115,22 +124,26 @@ export function UserContextProvider(props: {
   const pusher = usePusherHandler(userId, data?.userData);
 
   // Optimistic user info update function
-  const updateUser = async (updatedData: Partial<UserWithRelations>) => {
-    await utils.profile.getUser.cancel();
-    utils.profile.getUser.setData(undefined, (old) => {
-      return { ...old, userData: { ...old?.userData, ...updatedData } } as typeof old;
-    });
-  };
+  const updateUser = useCallback(
+    async (updatedData: Partial<UserWithRelations>) => {
+      await utils.profile.getUser.cancel();
+      utils.profile.getUser.setData(undefined, (old) => {
+        return { ...old, userData: { ...old?.userData, ...updatedData } } as typeof old;
+      });
+    },
+    [utils],
+  );
 
   // Optimistic notification update function
-  const updateNotifications = async (
-    notifications: NavBarDropdownLink[] | undefined,
-  ) => {
-    await utils.profile.getUser.cancel();
-    utils.profile.getUser.setData(undefined, (old) => {
-      return { ...old, notifications } as typeof old;
-    });
-  };
+  const updateNotifications = useCallback(
+    async (notifications: NavBarDropdownLink[] | undefined) => {
+      await utils.profile.getUser.cancel();
+      utils.profile.getUser.setData(undefined, (old) => {
+        return { ...old, notifications } as typeof old;
+      });
+    },
+    [utils],
+  );
 
   // Time diff setting
   useEffect(() => {
@@ -178,26 +191,41 @@ export function UserContextProvider(props: {
     }
   }, [data?.userData, user?.primaryEmailAddress?.emailAddress]);
 
-  return (
-    <UserContext
-      value={{
-        data: data?.userData,
-        achievementProgress: data?.achievementProgress,
-        notifications: data?.notifications,
-        userAgent: data?.userAgent,
-        pusher: pusher,
-        status: userStatus,
-        timeDiff: timeDiff,
-        userId: userId,
-        isClerkLoaded: isLoaded,
-        isSignedIn: effectiveIsSignedIn,
-        updateUser: updateUser,
-        updateNotifications: updateNotifications,
-      }}
-    >
-      {props.children}
-    </UserContext>
+  // Keep this object identity stable so useUserData consumers do not re-render
+  // when the provider re-renders without user/auth changes (parent updates,
+  // getUser background refetch with structural sharing, etc.).
+  const value = useMemo<UserContextValue>(
+    () => ({
+      data: data?.userData,
+      achievementProgress: data?.achievementProgress,
+      notifications: data?.notifications,
+      userAgent: data?.userAgent,
+      pusher: pusher,
+      status: userStatus,
+      timeDiff: timeDiff,
+      userId: userId,
+      isClerkLoaded: isLoaded,
+      isSignedIn: effectiveIsSignedIn,
+      updateUser: updateUser,
+      updateNotifications: updateNotifications,
+    }),
+    [
+      data?.userData,
+      data?.achievementProgress,
+      data?.notifications,
+      data?.userAgent,
+      pusher,
+      userStatus,
+      timeDiff,
+      userId,
+      isLoaded,
+      effectiveIsSignedIn,
+      updateUser,
+      updateNotifications,
+    ],
   );
+
+  return <UserContext value={value}>{props.children}</UserContext>;
 }
 
 // Easy hook for getting the current user data

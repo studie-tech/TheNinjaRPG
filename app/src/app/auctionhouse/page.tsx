@@ -263,6 +263,7 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       refetchInterval: 10000,
+      refetchIntervalInBackground: false,
     },
   );
 

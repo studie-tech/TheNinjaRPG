@@ -4,11 +4,13 @@ import { z } from "zod";
 import { RYO_CAP } from "@/drizzle/constants";
 import { bankTransfers, dailyBankInterest, userData } from "@/drizzle/schema";
 import { fetchUser } from "@/routers/profile";
+import type { DrizzleClient } from "@/server/db";
 import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  serverError,
 } from "../trpc";
 
 export const bankRouter = createTRPCRouter({
@@ -44,8 +46,7 @@ export const bankRouter = createTRPCRouter({
       if (result.rowsAffected === 0) {
         return { success: false, message: "Not enough money in pocket" };
       }
-      // Re-fetch user to get accurate balances after concurrent updates
-      const updatedUser = await fetchUser(ctx.drizzle, ctx.userId);
+      const updatedUser = await fetchUserBalances(ctx.drizzle, ctx.userId);
       return {
         success: true,
         message: `Successfully deposited ${value} ryo`,
@@ -84,8 +85,7 @@ export const bankRouter = createTRPCRouter({
       if (result.rowsAffected === 0) {
         return { success: false, message: "Not enough money in bank" };
       }
-      // Re-fetch user to get accurate balances after concurrent updates
-      const updatedUser = await fetchUser(ctx.drizzle, ctx.userId);
+      const updatedUser = await fetchUserBalances(ctx.drizzle, ctx.userId);
       return {
         success: true,
         message: `Successfully withdrew ${value} ryo`,
@@ -316,3 +316,22 @@ export const bankRouter = createTRPCRouter({
       };
     }),
 });
+
+/**
+ * Post-CAS pocket/bank read. Concurrent grants can change either column after
+ * the increment, so callers cannot derive balances from the pre-update snapshot.
+ * Only these two columns are returned to the UI.
+ */
+export const fetchUserBalances = async (client: DrizzleClient, userId: string) => {
+  const user = await client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    columns: { money: true, bank: true },
+  });
+  if (!user) {
+    throw serverError(
+      "NOT_FOUND",
+      `User not found: ${userId}. Please complete registration.`,
+    );
+  }
+  return user;
+};
