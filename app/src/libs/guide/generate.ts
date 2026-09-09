@@ -1,3 +1,4 @@
+import { escapeUTF8 } from "entities";
 import type { GuideCategory } from "@/drizzle/constants";
 import { IMG_MANUAL_BLOODLINE, IMG_MANUAL_ITEM } from "@/drizzle/constants";
 import type { GuideSeedArticle } from "@/libs/guide/articles";
@@ -22,17 +23,10 @@ interface ItemEntity extends NamedEntity {
   hidden?: boolean | null;
 }
 
-const escapeHtml = (value: string) =>
-  value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-
 const paragraph = (text: string) => `<p>${text}</p>`;
-const heading = (text: string) => `<h2>${escapeHtml(text)}</h2>`;
+const heading = (text: string) => `<h2>${escapeUTF8(text)}</h2>`;
 const link = (href: string, label: string) =>
-  `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
+  `<a href="${escapeUTF8(href)}">${escapeUTF8(label)}</a>`;
 
 const articleFor = (word: string) => (/^[aeiou]/i.test(word.trim()) ? "an" : "a");
 
@@ -42,7 +36,7 @@ export const isGuideworthyEntityName = (name: string) =>
 const loreParagraph = (description: string | null | undefined) => {
   const plain = htmlToPlainText(description ?? "");
   if (plain.length < 40) return "";
-  return paragraph(escapeHtml(plain.slice(0, 600)));
+  return paragraph(escapeUTF8(plain.slice(0, 600)));
 };
 
 export const generateBloodlineGuide = (
@@ -63,7 +57,7 @@ export const generateBloodlineGuide = (
     published: true,
     content: [
       paragraph(
-        `${escapeHtml(bloodline.name)} is ${articleFor(rank)} ${escapeHtml(rank)}-rank bloodline in TheNinja-RPG. This page is the how-to: where to get it and how it plays. Numbers stay on the encyclopedia.`,
+        `${escapeUTF8(bloodline.name)} is ${articleFor(rank)} ${escapeUTF8(rank)}-rank bloodline in TheNinja-RPG. This page is the how-to: where to get it and how it plays. Numbers stay on the encyclopedia.`,
       ),
       loreParagraph(bloodline.description),
       heading("How to obtain"),
@@ -98,7 +92,7 @@ export const generateItemGuide = (item: ItemEntity): GuideSeedArticle => {
     published: true,
     content: [
       paragraph(
-        `${escapeHtml(item.name)} is listed in TheNinja-RPG as ${articleFor(String(rarity))} ${escapeHtml(String(rarity).toLowerCase())} item. Use this page for context; the live stack size, cost and tags are on the encyclopedia.`,
+        `${escapeUTF8(item.name)} is listed in TheNinja-RPG as ${articleFor(String(rarity))} ${escapeUTF8(String(rarity).toLowerCase())} item. Use this page for context; the live stack size, cost and tags are on the encyclopedia.`,
       ),
       loreParagraph(item.description),
       heading("In game data"),

@@ -72,7 +72,7 @@ describe("factCheckGuideProse", () => {
     expect(factCheckGuideProse("Open the item page for current power.")).toEqual([]);
   });
 
-  it("flags redirected wiki village titles", () => {
+  it("flags Village of Current leftovers", () => {
     expect(factCheckGuideProse("Visit the Village of Current.")).not.toEqual([]);
   });
 });

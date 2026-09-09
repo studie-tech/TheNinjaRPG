@@ -4,9 +4,8 @@ export interface GuideFactCheckIssue {
 }
 
 /**
- * Flag leftover Core 3 rank names and village names the wiki still uses as
- * if they were current. Used by seed and unit-tested so a stale rewrite
- * cannot ship as published without reviewNotes.
+ * Reject guide copy that still uses retired village names or rank spellings.
+ * Seed and tests both run this so those leftovers cannot ship without reviewNotes.
  */
 export const factCheckGuideProse = (text: string): GuideFactCheckIssue[] => {
   const issues: GuideFactCheckIssue[] = [];
@@ -26,12 +25,12 @@ export const factCheckGuideProse = (text: string): GuideFactCheckIssue[] => {
     });
   }
 
-  // "Current" and "Shine" are common English words; only flag the wiki village titles.
+  // "current" and "shine" are ordinary English words; only flag the village titles.
   if (/\bvillage of (current|shine)\b/.test(lower)) {
     issues.push({
       field: "content",
       message:
-        "Mentions a redirected wiki village (Current / Shine) — use the live village name",
+        "Mentions a retired village title (Current / Shine); use the live village name",
     });
   }
 
