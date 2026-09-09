@@ -124,16 +124,17 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
   const [pendingConvoId, setPendingConvoId] = useState<string | null>(null);
   const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
 
-  // Fetch conversations. selectedConvo is part of the key so opening a thread still
-  // refetches. The open thread itself updates over Pusher; the list does not need
-  // to be immediately stale on every window focus.
+  // This list unmounts while a thread is open, so selectedConvo is always null here
+  // and cannot bust the cache. Refetch on remount so going back after reading or
+  // creating a conversation picks up lastReadAt and new threads. staleTime still
+  // skips window-focus refetches while the list stays mounted.
   const {
     data: allConversations,
     refetch,
     isPending,
   } = api.comments.getUserConversations.useQuery(
     { selectedConvo: selectedConvo },
-    { enabled: !!userData, staleTime: 30_000 },
+    { enabled: !!userData, staleTime: 30_000, refetchOnMount: "always" },
   );
 
   // Mutations
@@ -320,6 +321,7 @@ export interface NewConversationPromptProps {
 
 export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (props) => {
   const { data: userData } = useRequiredUserData();
+  const utils = api.useUtils();
   const maxUsers = 5;
 
   const create = useForm<CreateConversationSchema>({
@@ -374,6 +376,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
       showMutationToast(data);
       if (data.success) {
         create.reset();
+        void utils.comments.getUserConversations.invalidate();
         if (data.conversationId) props.setSelectedConvo?.(data.conversationId);
       }
     },
