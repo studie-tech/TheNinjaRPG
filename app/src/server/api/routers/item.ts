@@ -3416,6 +3416,17 @@ export const itemDatabaseFilter = (
     // Shop filter
     ...(input?.onlyInShop !== undefined ? [eq(item.inShop, input.onlyInShop)] : []),
 
+    // Timed store listings: match Shop's client hide so paged catalogs do not
+    // fill a page with expired rows and stall the infinite-scroll sentinel.
+    ...(input?.excludeExpiredFromStore
+      ? [
+          or(
+            isNull(item.expireFromStoreAt),
+            gt(item.expireFromStoreAt, new Date().toISOString().slice(0, 10)),
+          ),
+        ]
+      : []),
+
     // Hidden filter (default to false if not specified)
     ...(input?.hidden !== undefined
       ? [eq(item.hidden, input.hidden)]

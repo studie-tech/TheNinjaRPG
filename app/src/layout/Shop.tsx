@@ -50,7 +50,7 @@ import Modal2 from "@/layout/Modal2";
 import { UncontrolledSliderField } from "@/layout/SliderField";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
-import { getMaxItemShopPurchaseQuantity } from "@/libs/shop";
+import { getMaxItemShopPurchaseQuantity, isItemAvailableInStore } from "@/libs/shop";
 import { showMutationToast } from "@/libs/toast";
 import { isTutorialItemBuyStep, isTutorialPageMatch } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
@@ -278,6 +278,7 @@ const Shop: React.FC<ShopProps> = (props) => {
         eventItems: props.eventItems,
         ...getShopFilter(filteringState),
         onlyInShop: true,
+        excludeExpiredFromStore: true,
         limit: SHOP_CATALOG_PAGE_SIZE,
         hidden: false,
         maxLevel: userData.level,
@@ -292,9 +293,7 @@ const Shop: React.FC<ShopProps> = (props) => {
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
   const allItems = items?.pages
     .flatMap((page) => page.data)
-    .filter(
-      (row) => !row.expireFromStoreAt || new Date(row.expireFromStoreAt) > new Date(),
-    );
+    .filter((row) => isItemAvailableInStore(row.expireFromStoreAt));
 
   const pathname = usePathname();
   const { currentStep, handleNextStep } = useTutorialStep();

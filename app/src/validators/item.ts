@@ -50,6 +50,8 @@ export const itemFilteringSchema = z.object({
   minSeichiSilverCost: z.number().prefault(0),
   maxSeichiSilverCost: z.number().optional(),
   onlyInShop: z.boolean().optional(),
+  /** Drop rows whose store listing date has passed. Shop catalogs page on this. */
+  excludeExpiredFromStore: z.boolean().optional(),
   eventItems: z.boolean().optional(),
   slot: z.enum(ItemSlotTypes).optional(),
   target: z.enum(AttackTargets).optional(),
