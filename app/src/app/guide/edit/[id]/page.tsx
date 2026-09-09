@@ -3,6 +3,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
+import type { UseFormReturn } from "react-hook-form";
 import { useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { GuideArticle } from "@/drizzle/schema";
 import { useGuideEditForm } from "@/hooks/guide";
+import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
@@ -19,7 +21,7 @@ import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { canChangeContent } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { GuideArticleValidator } from "@/validators/guide";
+import { GuideArticleValidator, type ZodGuideArticleType } from "@/validators/guide";
 
 export default function GuideEdit(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
@@ -70,15 +72,18 @@ const SingleEditGuide: React.FC<{
       subtitle={`Guide: ${title}`}
       defaultBackHref="/guide"
       topRightContent={
-        <Button
-          variant="destructive"
-          size="sm"
-          disabled={isPending}
-          onClick={() => remove({ id: article.id })}
+        <Confirm2
+          title="Delete Guide"
+          button={
+            <Button variant="destructive" size="sm" disabled={isPending}>
+              <Trash2 className="mr-1 h-4 w-4" />
+              Delete
+            </Button>
+          }
+          onAccept={() => remove({ id: article.id })}
         >
-          <Trash2 className="mr-1 h-4 w-4" />
-          Delete
-        </Button>
+          <p>Delete this guide article? This cannot be undone.</p>
+        </Confirm2>
       }
     >
       <Tabs defaultValue="edit">
@@ -89,7 +94,7 @@ const SingleEditGuide: React.FC<{
         <TabsContent value="edit" className="mt-4">
           <EditContent
             schema={GuideArticleValidator}
-            form={form}
+            form={form as unknown as UseFormReturn<ZodGuideArticleType>}
             formData={formData}
             showSubmit={true}
             buttonTxt="Save to Database"

@@ -6,10 +6,10 @@ import type { GuideArticle } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
-import type { ZodGuideArticleType } from "@/validators/guide";
+import type { ZodGuideArticleInput, ZodGuideArticleType } from "@/validators/guide";
 import { GuideArticleValidator } from "@/validators/guide";
 
-const toFormValues = (article: GuideArticle): ZodGuideArticleType => ({
+const toFormValues = (article: GuideArticle): ZodGuideArticleInput => ({
   slug: article.slug,
   title: article.title,
   subtitle: article.subtitle ?? "",
@@ -30,7 +30,7 @@ const toFormValues = (article: GuideArticle): ZodGuideArticleType => ({
 });
 
 export const useGuideEditForm = (article: GuideArticle, refetch: () => void) => {
-  const form = useForm<ZodGuideArticleType>({
+  const form = useForm<ZodGuideArticleInput, unknown, ZodGuideArticleType>({
     mode: "all",
     criteriaMode: "all",
     values: toFormValues(article),

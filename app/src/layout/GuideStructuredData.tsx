@@ -77,12 +77,17 @@ export const GuideStructuredData: React.FC<GuideStructuredDataProps> = ({
       })),
     });
   }
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": graph,
+  }).replace(/</g, "\\u003c");
+
   return (
     <script
       type="application/ld+json"
-      // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD is built from staff-sanitized guide fields, not raw request input.
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD is escaped so `<` cannot close the script tag.
       dangerouslySetInnerHTML={{
-        __html: JSON.stringify({ "@context": "https://schema.org", "@graph": graph }),
+        __html: jsonLd,
       }}
     />
   );

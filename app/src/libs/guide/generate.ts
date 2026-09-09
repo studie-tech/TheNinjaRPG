@@ -31,9 +31,17 @@ interface JutsuEntity extends NamedEntity {
   hidden?: boolean | null;
 }
 
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+
 const paragraph = (text: string) => `<p>${text}</p>`;
-const heading = (text: string) => `<h2>${text}</h2>`;
-const link = (href: string, label: string) => `<a href="${href}">${label}</a>`;
+const heading = (text: string) => `<h2>${escapeHtml(text)}</h2>`;
+const link = (href: string, label: string) =>
+  `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
 
 const articleFor = (word: string) => (/^[aeiou]/i.test(word.trim()) ? "an" : "a");
 
@@ -49,7 +57,7 @@ const stripHtml = (value: string | null | undefined) =>
 const loreParagraph = (description: string | null | undefined) => {
   const plain = stripHtml(description);
   if (plain.length < 40) return "";
-  return paragraph(plain.slice(0, 600));
+  return paragraph(escapeHtml(plain.slice(0, 600)));
 };
 
 export const generateBloodlineGuide = (
@@ -74,7 +82,7 @@ export const generateBloodlineGuide = (
       : undefined,
     content: [
       paragraph(
-        `${bloodline.name} is ${articleFor(rank)} ${rank}-rank bloodline in TheNinja-RPG. This page is the how-to: where to get it and how it plays. Numbers stay on the encyclopedia.`,
+        `${escapeHtml(bloodline.name)} is ${articleFor(rank)} ${escapeHtml(rank)}-rank bloodline in TheNinja-RPG. This page is the how-to: where to get it and how it plays. Numbers stay on the encyclopedia.`,
       ),
       loreParagraph(wikiLore) || loreParagraph(bloodline.description),
       heading("How to obtain"),
@@ -115,7 +123,7 @@ export const generateItemGuide = (
       : undefined,
     content: [
       paragraph(
-        `${item.name} is listed in TheNinja-RPG as ${articleFor(String(rarity))} ${String(rarity).toLowerCase()} item. Use this page for context; the live stack size, cost and tags are on the encyclopedia.`,
+        `${escapeHtml(item.name)} is listed in TheNinja-RPG as ${articleFor(String(rarity))} ${escapeHtml(String(rarity).toLowerCase())} item. Use this page for context; the live stack size, cost and tags are on the encyclopedia.`,
       ),
       loreParagraph(wikiLore) || loreParagraph(item.description),
       heading("In game data"),
@@ -149,7 +157,7 @@ export const generateJutsuGuide = (
       : undefined,
     content: [
       paragraph(
-        `${jutsu.name} is ${articleFor(rank)} ${rank}-rank ${String(type).toLowerCase()} jutsu. Damage, cooldown and tags change with balance — this page will not copy a wiki stat block.`,
+        `${escapeHtml(jutsu.name)} is ${articleFor(rank)} ${escapeHtml(rank)}-rank ${escapeHtml(String(type).toLowerCase())} jutsu. Damage, cooldown and tags change with balance — this page will not copy a wiki stat block.`,
       ),
       loreParagraph(wikiLore) || loreParagraph(jutsu.description),
       heading("In game data"),
