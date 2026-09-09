@@ -1480,6 +1480,30 @@ const resetEdgePool = (pool: HighlightEdgePool) => {
 };
 
 /**
+ * Cache key for skipping highlightTiles rebuilds. Hover tile and canUseTile
+ * must be included: action/version/position alone would freeze hover selection
+ * and leave range highlights up after the local turn expires.
+ */
+export const getHighlightTilesCacheKey = (info: {
+  actionId: string | undefined;
+  battleVersion: number;
+  userId: string;
+  longitude: number;
+  latitude: number;
+  canUseTile: boolean;
+  hoverTileName: string;
+}) =>
+  [
+    info.actionId ?? "",
+    info.battleVersion,
+    info.userId,
+    info.longitude,
+    info.latitude,
+    info.canUseTile ? "1" : "0",
+    info.hoverTileName,
+  ].join("|");
+
+/**
  * Highlight possible squares based on action
  * Uses cached intersections to avoid redundant raycasting
  * Performance optimized: Uses geometry caching and object pooling
@@ -1511,6 +1535,7 @@ export const highlightTiles = (info: {
   } = info;
   const battleTileIntersects = info.cachedIntersections.battleTiles;
   const hit = battleTileIntersects.length > 0 && battleTileIntersects[0];
+  const hoverTileName = hit ? (hit.object as HexagonalFaceMesh).name : "";
 
   // Get or create the edge mesh pool (stored on group userData for persistence)
   let pool = group_highlight_edges.userData.edgePool as HighlightEdgePool | undefined;
@@ -1518,13 +1543,6 @@ export const highlightTiles = (info: {
     pool = { meshes: [], activeCount: 0 };
     group_highlight_edges.userData.edgePool = pool;
   }
-
-  // Reset pool - hide all previously active meshes
-  resetEdgePool(pool);
-
-  // Get user's origin and possible tiles for highlighting
-  const origin = user && grid.getHex({ col: user.longitude, row: user.latitude });
-  const highlights = getPossibleActionTiles(action, origin, grid);
 
   // Check if user can use tiles (actor check + action points). `user` is the
   // actor the human controls (self, or piloted summon on its turn — Combat.tsx
@@ -1536,6 +1554,27 @@ export const highlightTiles = (info: {
   });
   const { canAct } = actionPointsAfterAction(user, battle, action);
   const canUseTile = actor.userId === user.userId && canAct;
+
+  const cacheKey = getHighlightTilesCacheKey({
+    actionId: action?.id,
+    battleVersion: battle.version,
+    userId: user.userId,
+    longitude: user.longitude,
+    latitude: user.latitude,
+    canUseTile,
+    hoverTileName,
+  });
+  if (group_highlight_edges.userData.highlightTilesKey === cacheKey) {
+    endMark();
+    return currentHighlights;
+  }
+
+  // Reset pool - hide all previously active meshes
+  resetEdgePool(pool);
+
+  // Get user's origin and possible tiles for highlighting
+  const origin = user && grid.getHex({ col: user.longitude, row: user.latitude });
+  const highlights = getPossibleActionTiles(action, origin, grid);
 
   // Highlight fields on the map where action can be applied
   const newHighlights = new Set<string>();
@@ -1696,8 +1735,10 @@ export const highlightTiles = (info: {
     }
   });
 
+  const result = new Set([...newHighlights, ...newSelection]);
+  group_highlight_edges.userData.highlightTilesKey = cacheKey;
   endMark();
-  return new Set([...newHighlights, ...newSelection]);
+  return result;
 };
 
 /**
