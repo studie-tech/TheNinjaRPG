@@ -379,13 +379,13 @@ export interface EquippedConstraintState {
 }
 
 /**
- * Category equip limits shared by loadout application, buyItem auto-equip, and
- * toggleEquipItem: at most one bloodline-gated item, one hand armor, and one
- * accessory. maxEquips is intentionally excluded — callers count that against
- * their own notion of already-equipped instances (assignments built so far vs
- * live equipped rows that may include the candidate when re-slotting). Returns
- * an error message if `candidate` cannot be equipped given `equippedItems`,
- * otherwise null.
+ * Category equip limits shared by loadout application, buyItem auto-equip,
+ * autoEquipOptimal planning, and toggleEquipItem: at most one bloodline-gated
+ * item, one hand armor, and one accessory. maxEquips is intentionally excluded
+ * — callers count that against their own notion of already-equipped instances
+ * (assignments built so far vs live equipped rows that may include the
+ * candidate when re-slotting). Returns an error message if `candidate` cannot
+ * be equipped given `equippedItems`, otherwise null.
  */
 export const canEquipAdditional = (
   candidate: Pick<EquipConstraintInfo, "bloodlineId" | "itemType" | "slot">,
@@ -414,7 +414,7 @@ export const canEquipAdditional = (
 
 /**
  * Equip-limit rules (per-item max + category limits from canEquipAdditional)
- * for the loadout application path. toggleEquipItem / buyItem call
+ * for the loadout and auto-equip planning paths. toggleEquipItem / buyItem call
  * canEquipAdditional directly and apply maxEquips against live equipped state
  * themselves. Returns an error message if `candidate` cannot be equipped given
  * `current`, otherwise null.
@@ -590,6 +590,103 @@ export const computeLoadoutAssignments = (
   }
 
   return { assignments, invalidItems };
+};
+
+/** Inventory row shape read by auto-equip planning. */
+export interface AutoEquipUserItem {
+  id: string;
+  itemId: string;
+  equipped: ItemSlot;
+  storedAtHome: boolean;
+  isInAuction: boolean;
+  craftingFinishedAt: Date | null;
+  imbuements: { craftingFinishedAt: Date | null }[];
+  item: {
+    cost: number;
+    slot: string;
+    itemType: string;
+    bloodlineId: string | null;
+    requiredLevel: number;
+    maxEquips: number;
+  };
+}
+
+export interface ComputedAutoEquip {
+  assignments: LoadoutAssignment[];
+  hasUnequipped: boolean;
+  hasAvailableSlots: boolean;
+}
+
+/**
+ * Pure decision logic for auto-equipping unequipped inventory into empty slots,
+ * highest catalog cost first. Slot exclusivity and equip limits are applied
+ * against a single in-memory snapshot so two items never share a slot and
+ * category / maxEquips checks see prior assignments in this batch. Does not
+ * unequip occupied slots. No database access — fully unit-testable.
+ */
+export const computeAutoEquipAssignments = (
+  useritems: AutoEquipUserItem[],
+  user: { level: number; bloodlineId: string | null },
+  now: Date = new Date(),
+): ComputedAutoEquip => {
+  const candidates = useritems.filter(
+    (ui) =>
+      ui.equipped === "NONE" &&
+      !ui.storedAtHome &&
+      !ui.isInAuction &&
+      (!ui.craftingFinishedAt || ui.craftingFinishedAt < now),
+  );
+  const initialAvailableSlots = ItemSlots.filter(
+    (slot) => !useritems.some((ui) => ui.equipped === slot),
+  );
+  let availableSlots = initialAvailableSlots;
+  const current: EquippedAssignment[] = useritems
+    .filter((ui) => ui.equipped !== "NONE")
+    .map((ui) => ({
+      slot: ui.equipped,
+      info: {
+        itemId: ui.itemId,
+        bloodlineId: ui.item.bloodlineId,
+        itemType: ui.item.itemType,
+        slot: ui.item.slot,
+        maxEquips: ui.item.maxEquips,
+      },
+    }));
+
+  const assignments: LoadoutAssignment[] = [];
+  const ranked = [...candidates].sort((a, b) => b.item.cost - a.item.cost);
+
+  for (const useritem of ranked) {
+    const slot = availableSlots.find((candidate) =>
+      candidate.includes(useritem.item.slot),
+    );
+    if (!slot) continue;
+    if (useritem.item.requiredLevel > user.level) continue;
+    if (useritem.item.bloodlineId && useritem.item.bloodlineId !== user.bloodlineId) {
+      continue;
+    }
+    if (isImbuing(useritem, now)) continue;
+
+    const info: EquipConstraintInfo = {
+      itemId: useritem.itemId,
+      bloodlineId: useritem.item.bloodlineId,
+      itemType: useritem.item.itemType,
+      slot: useritem.item.slot,
+      maxEquips: useritem.item.maxEquips,
+    };
+    const constraintError = checkEquipConstraints(info, current);
+    if (constraintError) continue;
+
+    assignments.push({ userItemId: useritem.id, slot });
+    availableSlots = availableSlots.filter((s) => s !== slot);
+    current.push({ slot, info });
+  }
+
+  return {
+    assignments,
+    hasUnequipped: candidates.length > 0,
+    hasAvailableSlots: initialAvailableSlots.length > 0,
+  };
 };
 
 /** Gear that can meaningfully level — hide badges on consumables, mats, cooking, crystals, thrown. */

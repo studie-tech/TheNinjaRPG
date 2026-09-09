@@ -16,6 +16,7 @@ import {
   calcMaxMaterials,
   canEquipAdditional,
   checkEquipConstraints,
+  computeAutoEquipAssignments,
   computeLoadoutAssignments,
   type EquipConstraintInfo,
   type EquippedAssignment,
@@ -220,11 +221,14 @@ const ui = (over: {
   storedAtHome?: boolean;
   isInAuction?: boolean;
   craftingFinishedAt?: Date | null;
+  equipped?: ItemSlot;
+  cost?: number;
   imbuements?: Array<{ craftingFinishedAt: Date | null }>;
 }): UserItemWithRelations =>
   ({
     id: over.id,
     itemId: over.itemId,
+    equipped: over.equipped ?? "NONE",
     storedAtHome: over.storedAtHome ?? false,
     isInAuction: over.isInAuction ?? false,
     craftingFinishedAt: over.craftingFinishedAt ?? null,
@@ -238,6 +242,7 @@ const ui = (over: {
       itemType: over.itemType ?? "WEAPON",
       slot: over.slotType ?? "ITEM",
       maxEquips: over.maxEquips ?? 1,
+      cost: over.cost ?? 0,
     },
   }) as unknown as UserItemWithRelations;
 
@@ -569,6 +574,171 @@ describe("computeLoadoutAssignments", () => {
     );
     expect(out.assignments).toEqual([{ userItemId: "r1", slot: "HEAD" }]);
     expect(out.invalidItems).toEqual([]);
+  });
+});
+
+describe("computeAutoEquipAssignments", () => {
+  it("assigns the highest-cost item to a contended slot", () => {
+    const items = [
+      ui({ id: "cheap", itemId: "c", slotType: "HEAD", cost: 10 }),
+      ui({ id: "dear", itemId: "d", slotType: "HEAD", cost: 500 }),
+    ];
+    const out = computeAutoEquipAssignments(items, USER, NOW);
+    expect(out.assignments).toEqual([{ userItemId: "dear", slot: "HEAD" }]);
+    expect(out.hasUnequipped).toBe(true);
+    expect(out.hasAvailableSlots).toBe(true);
+  });
+
+  it("never assigns two items to the same slot", () => {
+    const items = [
+      ui({ id: "r1", itemId: "i1", slotType: "HEAD", cost: 20 }),
+      ui({ id: "r2", itemId: "i2", slotType: "HEAD", cost: 10 }),
+    ];
+    const out = computeAutoEquipAssignments(items, USER, NOW);
+    const slots = out.assignments.map((a) => a.slot);
+    expect(new Set(slots).size).toBe(slots.length);
+    expect(out.assignments.length).toBe(1);
+  });
+
+  it("does not steal an already-occupied slot", () => {
+    const items = [
+      ui({ id: "worn", itemId: "i1", slotType: "HEAD", equipped: "HEAD", cost: 1 }),
+      ui({ id: "spare", itemId: "i2", slotType: "HEAD", cost: 999 }),
+    ];
+    const out = computeAutoEquipAssignments(items, USER, NOW);
+    expect(out.assignments).toEqual([]);
+    expect(out.hasUnequipped).toBe(true);
+    expect(out.hasAvailableSlots).toBe(true);
+  });
+
+  it("fills distinct compatible slots in ItemSlots order", () => {
+    const items = [
+      ui({ id: "r1", itemId: "i1", slotType: "ITEM", cost: 30 }),
+      ui({ id: "r2", itemId: "i2", slotType: "ITEM", cost: 20 }),
+    ];
+    const out = computeAutoEquipAssignments(items, USER, NOW);
+    expect(out.assignments).toEqual([
+      { userItemId: "r1", slot: "ITEM_1" },
+      { userItemId: "r2", slot: "ITEM_2" },
+    ]);
+  });
+
+  it("lets a cheaper item take a slot when the costlier one fails validation", () => {
+    const items = [
+      ui({
+        id: "locked",
+        itemId: "high",
+        slotType: "HEAD",
+        cost: 999,
+        requiredLevel: 999,
+      }),
+      ui({ id: "ok", itemId: "low", slotType: "HEAD", cost: 1 }),
+    ];
+    const out = computeAutoEquipAssignments(items, USER, NOW);
+    expect(out.assignments).toEqual([{ userItemId: "ok", slot: "HEAD" }]);
+  });
+
+  it("enforces a single accessory across already-equipped and new assignments", () => {
+    const items = [
+      ui({
+        id: "worn",
+        itemId: "acc1",
+        slotType: "ITEM",
+        itemType: "ACCESSORY",
+        equipped: "ITEM_1",
+        cost: 1,
+      }),
+      ui({
+        id: "spare",
+        itemId: "acc2",
+        slotType: "ITEM",
+        itemType: "ACCESSORY",
+        cost: 999,
+      }),
+    ];
+    const out = computeAutoEquipAssignments(items, USER, NOW);
+    expect(out.assignments).toEqual([]);
+  });
+
+  it("enforces maxEquips against already-equipped instances", () => {
+    const items = [
+      ui({
+        id: "worn",
+        itemId: "i1",
+        slotType: "ITEM",
+        maxEquips: 1,
+        equipped: "ITEM_1",
+        cost: 1,
+      }),
+      ui({ id: "spare", itemId: "i1", slotType: "ITEM", maxEquips: 1, cost: 999 }),
+    ];
+    const out = computeAutoEquipAssignments(items, USER, NOW);
+    expect(out.assignments).toEqual([]);
+  });
+
+  it("skips home / auction / crafting / imbuing / bloodline items", () => {
+    const items = [
+      ui({ id: "home", itemId: "h", slotType: "HEAD", storedAtHome: true, cost: 9 }),
+      ui({ id: "auc", itemId: "a", slotType: "CHEST", isInAuction: true, cost: 9 }),
+      ui({
+        id: "craft",
+        itemId: "c",
+        slotType: "LEGS",
+        craftingFinishedAt: FUTURE,
+        cost: 9,
+      }),
+      ui({
+        id: "imbue",
+        itemId: "i",
+        slotType: "FEET",
+        imbuements: [{ craftingFinishedAt: FUTURE }],
+        cost: 9,
+      }),
+      ui({
+        id: "bl",
+        itemId: "b",
+        slotType: "WAIST",
+        bloodlineId: "other",
+        cost: 9,
+      }),
+    ];
+    const out = computeAutoEquipAssignments(items, USER, NOW);
+    expect(out.assignments).toEqual([]);
+    expect(out.hasUnequipped).toBe(true);
+  });
+
+  it("reports no unequipped items when everything is already worn", () => {
+    const items = [
+      ui({ id: "r1", itemId: "i1", slotType: "HEAD", equipped: "HEAD" }),
+    ];
+    const out = computeAutoEquipAssignments(items, USER, NOW);
+    expect(out.hasUnequipped).toBe(false);
+    expect(out.assignments).toEqual([]);
+  });
+
+  it("allows two hand weapons but only one hand armor", () => {
+    const weapons = computeAutoEquipAssignments(
+      [
+        ui({ id: "w1", itemId: "w1", slotType: "HAND", itemType: "WEAPON", cost: 2 }),
+        ui({ id: "w2", itemId: "w2", slotType: "HAND", itemType: "WEAPON", cost: 1 }),
+      ],
+      USER,
+      NOW,
+    );
+    expect(weapons.assignments).toEqual([
+      { userItemId: "w1", slot: "HAND_1" },
+      { userItemId: "w2", slot: "HAND_2" },
+    ]);
+
+    const armor = computeAutoEquipAssignments(
+      [
+        ui({ id: "a1", itemId: "a1", slotType: "HAND", itemType: "ARMOR", cost: 2 }),
+        ui({ id: "a2", itemId: "a2", slotType: "HAND", itemType: "ARMOR", cost: 1 }),
+      ],
+      USER,
+      NOW,
+    );
+    expect(armor.assignments).toEqual([{ userItemId: "a1", slot: "HAND_1" }]);
   });
 });
 
