@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { GUIDE_SYSTEM_COVERS } from "@/drizzle/constants";
 import { bloodline, guideArticle, item } from "@/drizzle/schema";
 import { SYSTEM_GUIDE_ARTICLES } from "@/libs/guide/articles";
-import { GUIDE_SYSTEM_COVERS } from "@/libs/guide/covers";
 import { factCheckGuideProse } from "@/libs/guide/factcheck";
 import {
   generateBloodlineGuide,
