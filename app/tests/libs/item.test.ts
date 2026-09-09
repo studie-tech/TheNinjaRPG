@@ -740,6 +740,15 @@ describe("computeAutoEquipAssignments", () => {
     );
     expect(armor.assignments).toEqual([{ userItemId: "a1", slot: "HAND_1" }]);
   });
+
+  it("does not assign the NONE sentinel for a NONE slot type", () => {
+    const items = [
+      ui({ id: "r1", itemId: "i1", name: "Junk", slotType: "NONE", cost: 9 }),
+    ];
+    const out = computeAutoEquipAssignments(items, USER, NOW);
+    expect(out.assignments).toEqual([]);
+    expect(out.hasUnequipped).toBe(true);
+  });
 });
 
 describe("COOKING item type", () => {

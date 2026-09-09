@@ -637,7 +637,7 @@ export const computeAutoEquipAssignments = (
       (!ui.craftingFinishedAt || ui.craftingFinishedAt < now),
   );
   const initialAvailableSlots = ItemSlots.filter(
-    (slot) => !useritems.some((ui) => ui.equipped === slot),
+    (slot) => slot !== "NONE" && !useritems.some((ui) => ui.equipped === slot),
   );
   let availableSlots = initialAvailableSlots;
   const current: EquippedAssignment[] = useritems
@@ -658,7 +658,7 @@ export const computeAutoEquipAssignments = (
 
   for (const useritem of ranked) {
     const slot = availableSlots.find((candidate) =>
-      candidate.includes(useritem.item.slot),
+      isCompatibleEquipSlot(candidate, useritem.item.slot),
     );
     if (!slot) continue;
     if (useritem.item.requiredLevel > user.level) continue;
