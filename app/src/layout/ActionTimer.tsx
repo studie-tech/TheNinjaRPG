@@ -50,19 +50,10 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
 
   // Active updating of this component
   useEffect(() => {
-    const interval = setInterval(() => {
-      // If not in focus, nothing
+    const nextTimerState = () => {
       if (!document.hasFocus() && process.env.NODE_ENV !== "development") {
-        // Keep the previous object, or an unfocused tab re-renders ten times a second
-        // to say the same thing
-        setState((prev) =>
-          prev.label === "Not in Focus" && !prev.canAct && !prev.waiting
-            ? prev
-            : { label: `Not in Focus`, canAct: false, waiting: false },
-        );
-        return;
+        return { label: "Not in Focus", canAct: false, waiting: false };
       }
-      // Set label
       const {
         actor,
         mseconds,
@@ -71,19 +62,29 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
         precomputedUserId: user.userId,
         precomputedActions,
       });
-      // Is it the user in question
       const canAct = actor.userId === user.userId;
       const waiting = user.userId !== actor.userId;
-      // Update state
       if (mseconds >= 0) {
-        const inform = !waiting ? "You" : `Opponent`;
+        const inform = !waiting ? "You" : "Opponent";
         const info = left > 0 ? `${inform}: ${left.toFixed(1)}s` : "Finished!";
-        setState({ label: info, canAct, waiting });
-      } else {
-        setState({ label: `Lobby`, canAct, waiting });
+        return { label: info, canAct, waiting };
       }
-      // Set action points
-    }, 100);
+      return { label: "Lobby", canAct, waiting };
+    };
+
+    const updateState = () => {
+      const next = nextTimerState();
+      setState((prev) =>
+        prev.label === next.label &&
+        prev.canAct === next.canAct &&
+        prev.waiting === next.waiting
+          ? prev
+          : next,
+      );
+    };
+
+    updateState();
+    const interval = setInterval(updateState, 100);
     return () => clearInterval(interval);
   }, [isPending, battle, user, timeDiff, precomputedActions]);
 
