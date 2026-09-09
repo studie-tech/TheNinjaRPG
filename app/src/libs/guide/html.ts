@@ -13,10 +13,10 @@ export const headingPlainText = (html: string) =>
   html
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -57,7 +57,10 @@ export const extractGuideHeadings = (html: string): GuideHeading[] => {
     const level = Number(match[1]) as 2 | 3;
     const text = headingPlainText(match[3] ?? "");
     if (!text) continue;
-    headings.push({ id: uniqueHeadingId(text, used), text, level });
+    const existingId = match[2]?.match(/\sid=["']([^"']+)["']/i)?.[1];
+    const id = existingId || uniqueHeadingId(text, used);
+    if (existingId) used.add(existingId);
+    headings.push({ id, text, level });
   }
   return headings;
 };

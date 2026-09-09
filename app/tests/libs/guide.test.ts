@@ -11,6 +11,7 @@ import { factCheckGuideProse, isPvpRestrictedRank, normalizeRankName } from "@/l
 import { isGuideworthyEntityName } from "@/libs/guide/generate";
 import {
   extractGuideHeadings,
+  headingPlainText,
   isReservedGuideSlug,
   slugifyGuideTitle,
   withGuideHeadingIds,
@@ -59,6 +60,16 @@ describe("guide headings", () => {
     const withIds = withGuideHeadingIds(html);
     expect(withIds).toContain('id="how-to-obtain"');
     expect(withIds).toContain('id="how-to-obtain-2"');
+  });
+
+  it("decodes &amp; after other entities so &amp;lt; stays a literal <", () => {
+    expect(headingPlainText("A &amp;lt; B")).toBe("A &lt; B");
+  });
+
+  it("reuses an existing heading id so the TOC matches the rendered anchor", () => {
+    const html = withGuideHeadingIds('<h2 id="custom">Combat</h2>');
+    expect(html).toContain('id="custom"');
+    expect(extractGuideHeadings(html).map((heading) => heading.id)).toEqual(["custom"]);
   });
 });
 

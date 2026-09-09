@@ -52,7 +52,6 @@ const upsertArticle = async (
     where: eq(guideArticle.slug, article.slug),
   });
   if (existing) {
-    await client.update(guideArticle).set(values).where(eq(guideArticle.id, existing.id));
     return;
   }
   await client.insert(guideArticle).values({ id: nanoid(), ...values });

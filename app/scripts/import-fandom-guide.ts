@@ -122,7 +122,7 @@ const upsert = async (values: {
   if (existing) {
     await drizzleDB
       .update(guideArticle)
-      .set(values)
+      .set({ ...values, updatedAt: new Date() })
       .where(eq(guideArticle.id, existing.id));
     return "updated";
   }
