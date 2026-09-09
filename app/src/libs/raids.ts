@@ -17,7 +17,7 @@ export const isRaidChatConversationId = (conversationId: string) =>
  * Raid type is implicit from the objective task (open_raid or exclusive_raid).
  * Both raid types have sector for map location.
  */
-export const getRaidObjectiveData = (questData: Quest) => {
+export const getRaidObjectiveData = (questData: { content: Quest["content"] }) => {
   const objective = questData.content?.objectives?.[0];
   if (!objective) return null;
 
@@ -69,6 +69,56 @@ export const validateRaidIsActive = (
     return { isValid: false, error: "The raid boss has been defeated" };
   }
   return { isValid: true };
+};
+
+/**
+ * Exclusive/open listing rules for getAvailableRaids. Only villageId plus
+ * precomputed owned/attacker sector sets are required — not a full user row.
+ */
+export const isRaidListedForVillage = (
+  raid: {
+    raidEndsAt: Date | null;
+    raidCaptureDeadline: Date | null;
+    raidGracePeriodEnd: Date | null;
+    content: Quest["content"];
+  },
+  villageId: string | null,
+  ownedSectorNumbers: Set<number>,
+  attackerDefeatedShrineSectors: Set<number>,
+  now: Date,
+): boolean => {
+  if (raid.raidEndsAt && raid.raidEndsAt < now) {
+    return false;
+  }
+
+  const raidData = getRaidObjectiveData(raid);
+  if (!raidData) return false;
+
+  if (raidData.isOpen) {
+    return true;
+  }
+  if (raidData.isExclusive) {
+    if (!villageId || raidData.sector === null) {
+      return false;
+    }
+    const ownsCurrentSector = ownedSectorNumbers.has(raidData.sector);
+    const isAttackerWithDefeatedShrine = attackerDefeatedShrineSectors.has(
+      raidData.sector,
+    );
+
+    if (raid.raidCaptureDeadline && raid.raidCaptureDeadline < now) {
+      if (!raid.raidGracePeriodEnd) {
+        return false;
+      }
+      if (raid.raidGracePeriodEnd >= now) {
+        return ownsCurrentSector || isAttackerWithDefeatedShrine;
+      }
+      return false;
+    }
+
+    return ownsCurrentSector || isAttackerWithDefeatedShrine;
+  }
+  return false;
 };
 
 /**
