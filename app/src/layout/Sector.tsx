@@ -409,8 +409,10 @@ const Sector: React.FC<SectorProps> = (props) => {
       enabled: sector !== undefined,
       placeholderData: (previous) => previous,
       // Presence and fights change while the tab is open; pusher events can be
-      // missed, so poll the sector snapshot on a short interval.
+      // missed, so poll the sector snapshot on a short interval. Pause that
+      // interval while the tab is in the background.
       refetchInterval: 10_000,
+      refetchIntervalInBackground: false,
     },
   );
   const villageData = data?.village;

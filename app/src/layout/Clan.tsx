@@ -477,7 +477,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   // Query
   const { data } = api.clan.getClanBattles.useQuery(
     { clanId: clanId },
-    { refetchInterval: 10000 },
+    { refetchInterval: 10000, refetchIntervalInBackground: false },
   );
 
   // Clan search
