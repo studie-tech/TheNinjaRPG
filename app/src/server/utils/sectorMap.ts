@@ -152,13 +152,7 @@ export const publishedMapsToPrefetchForMove = (
   const outNorth = dest.y === SECTOR_HEIGHT;
   const outCount = [outWest, outEast, outNorth, outSouth].filter(Boolean).length;
   if (outCount !== 1) return [sector];
-  const direction = outWest
-    ? "west"
-    : outEast
-      ? "east"
-      : outNorth
-        ? "north"
-        : "south";
+  const direction = outWest ? "west" : outEast ? "east" : outNorth ? "north" : "south";
   const neighbor = getSectorNeighborIds(sector)[direction];
   return neighbor >= 0 ? [sector, neighbor] : [sector];
 };
