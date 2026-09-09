@@ -65,12 +65,12 @@ describe("runStaleShrineLobbyCleanup", () => {
     // subquery reads from mpvpBattleUser, so if the delete ran first the subquery
     // would return zero rows and users would stay QUEUED permanently.
     // mpvpBattleQueue (parent) must be deleted last.
-    expect(db.update.mock.invocationCallOrder[0]).toBeLessThan(
-      db.delete.mock.invocationCallOrder[0],
-    );
-    expect(db.delete.mock.invocationCallOrder[0]).toBeLessThan(
-      db.delete.mock.invocationCallOrder[1],
-    );
+    const updateOrder = db.update.mock.invocationCallOrder[0] ?? -1;
+    const deleteChildrenOrder = db.delete.mock.invocationCallOrder[0] ?? -1;
+    const deleteParentOrder = db.delete.mock.invocationCallOrder[1] ?? -1;
+    expect(updateOrder).toBeGreaterThan(0);
+    expect(deleteChildrenOrder).toBeGreaterThan(updateOrder);
+    expect(deleteParentOrder).toBeGreaterThan(deleteChildrenOrder);
     expect(db.delete).toHaveBeenNthCalledWith(1, mpvpBattleUser);
     expect(db.delete).toHaveBeenNthCalledWith(2, mpvpBattleQueue);
 
