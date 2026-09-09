@@ -259,7 +259,7 @@ const Shop: React.FC<ShopProps> = (props) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [item, setItem] = useState<Item | undefined>(undefined);
   const [stacksize, setStacksize] = useState<number>(1);
-  const [lastElement, setLastElement] = useState<HTMLLIElement | null>(null);
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const filteringState = useShopFiltering(defaultType);
   const isAwake = useAwake(userData);
   const itemTypeTabOptions = useMemo(
@@ -655,9 +655,12 @@ const Shop: React.FC<ShopProps> = (props) => {
               </div>
 
               <div className="px-1.5 py-2 sm:px-3 sm:py-3 md:p-5" id={catalogListDomId}>
-                {isFetching && !catalogItems.length ? (
-                  <div className="flex min-h-[40vh] items-center justify-center">
+                {!catalogItems.length && (isFetching || hasNextPage) ? (
+                  <div className="flex min-h-[40vh] flex-col items-center justify-center">
                     <Loader explanation="Loading catalog…" />
+                    {hasNextPage ? (
+                      <div ref={setLastElement} className="h-px w-full" aria-hidden />
+                    ) : null}
                   </div>
                 ) : !catalogItems.length ? (
                   <div className="flex min-h-[36vh] flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 px-6 py-16 text-center">
@@ -672,7 +675,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                 ) : (
                   <>
                     <ul className="mx-auto grid max-w-7xl list-none grid-cols-3 gap-1 sm:gap-2 md:grid-cols-4 md:gap-3 lg:grid-cols-6">
-                      {catalogItems.map((row, index) => {
+                      {catalogItems.map((row) => {
                         const rowFactor = shopItemDiscountFactor(
                           row,
                           sDiscount,
@@ -689,11 +692,6 @@ const Shop: React.FC<ShopProps> = (props) => {
                         return (
                           <li
                             key={row.id}
-                            ref={
-                              index === catalogItems.length - 1
-                                ? setLastElement
-                                : undefined
-                            }
                             id={
                               row.id === TUTORIAL_ITEM_ID && !isOpen
                                 ? "tutorial-itemshop-item"
@@ -723,6 +721,9 @@ const Shop: React.FC<ShopProps> = (props) => {
                         );
                       })}
                     </ul>
+                    {hasNextPage ? (
+                      <div ref={setLastElement} className="h-px w-full" aria-hidden />
+                    ) : null}
                     {isFetching && catalogItems.length > 0 && (
                       <div className="flex justify-center py-8">
                         <Loader explanation="Updating catalog…" />
