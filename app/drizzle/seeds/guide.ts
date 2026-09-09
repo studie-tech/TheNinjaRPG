@@ -85,6 +85,8 @@ export const seedGuides = async (client: DrizzleClient) => {
         itemType: true,
         rarity: true,
         hidden: true,
+        isFarmSeed: true,
+        farmYieldItemId: true,
       },
       where: eq(item.hidden, false),
     }),
@@ -100,10 +102,15 @@ export const seedGuides = async (client: DrizzleClient) => {
     });
   }
 
+  const farmYieldItemIds = new Set(
+    items.flatMap((row) =>
+      row.isFarmSeed && row.farmYieldItemId ? [row.farmYieldItemId] : [],
+    ),
+  );
   const herbs = items.filter(
     (row) =>
       isGuideworthyEntityName(row.name) &&
-      /herb|petal|bloom|root|moss|leaf|seed|thorn|frond|thistle/i.test(row.name),
+      (row.isFarmSeed || farmYieldItemIds.has(row.id)),
   );
   for (const row of herbs) {
     const generated = generateItemGuide(row);
