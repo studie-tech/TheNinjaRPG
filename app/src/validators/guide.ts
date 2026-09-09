@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { GUIDE_RESERVED_SLUGS, GuideCategories } from "@/drizzle/constants";
+import { GuideCategories } from "@/drizzle/constants";
+import { isReservedGuideSlug } from "@/libs/guide/html";
 
 export const GuideFaqItemSchema = z.object({
   question: z.string().trim().min(1).max(200),
@@ -13,7 +14,7 @@ export const GuideSlugSchema = z
   .min(1)
   .max(80)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers and hyphens")
-  .refine((slug) => !(GUIDE_RESERVED_SLUGS as readonly string[]).includes(slug), {
+  .refine((slug) => !isReservedGuideSlug(slug), {
     message: "That slug is reserved",
   });
 
@@ -40,7 +41,7 @@ export const GuideArticleValidator = z.object({
     .union([z.url(), z.literal("")])
     .optional()
     .nullable(),
-  reviewNotes: z.string().max(4000).optional().nullable(),
+  reviewNotes: z.string().trim().max(4000).optional().nullable(),
 });
 
 export type ZodGuideArticleType = z.infer<typeof GuideArticleValidator>;

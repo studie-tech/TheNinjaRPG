@@ -1,4 +1,5 @@
 import { GUIDE_RESERVED_SLUGS } from "@/drizzle/constants";
+import { htmlToPlainText } from "@/utils/sanitize";
 
 export interface GuideHeading {
   id: string;
@@ -9,16 +10,7 @@ export interface GuideHeading {
 const HEADING_RE = /<h([23])(\s[^>]*)?>([\s\S]*?)<\/h\1>/gi;
 
 /** Strip tags from a heading so the TOC shows readable text. */
-export const headingPlainText = (html: string) =>
-  html
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ")
-    .trim();
+export const headingPlainText = (html: string) => htmlToPlainText(html);
 
 export const slugifyGuideTitle = (title: string) => {
   const slug = title

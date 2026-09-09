@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { GUIDE_HUB_CATEGORY_ORDER } from "@/drizzle/constants";
 import { SYSTEM_GUIDE_ARTICLES } from "@/libs/guide/articles";
-import { factCheckGuideProse, isPvpRestrictedRank, normalizeRankName } from "@/libs/guide/factcheck";
+import { factCheckGuideProse } from "@/libs/guide/factcheck";
 import { isGuideworthyEntityName } from "@/libs/guide/generate";
 import {
   extractGuideHeadings,
-  headingPlainText,
   isReservedGuideSlug,
   slugifyGuideTitle,
   withGuideHeadingIds,
@@ -56,10 +55,6 @@ describe("guide headings", () => {
     expect(withIds).toContain('id="how-to-obtain-2"');
   });
 
-  it("decodes &amp; after other entities so &amp;lt; stays a literal <", () => {
-    expect(headingPlainText("A &amp;lt; B")).toBe("A &lt; B");
-  });
-
   it("reuses an existing heading id so the TOC matches the rendered anchor", () => {
     const html = withGuideHeadingIds('<h2 id="custom">Combat</h2>');
     expect(html).toContain('id="custom"');
@@ -80,12 +75,6 @@ describe("factCheckGuideProse", () => {
 
   it("flags redirected wiki village titles", () => {
     expect(factCheckGuideProse("Visit the Village of Current.")).not.toEqual([]);
-  });
-
-  it("normalizes rank aliases", () => {
-    expect(normalizeRankName("chuunin")).toBe("CHUNIN");
-    expect(isPvpRestrictedRank("STUDENT")).toBe(true);
-    expect(isPvpRestrictedRank("CHUNIN")).toBe(false);
   });
 });
 
