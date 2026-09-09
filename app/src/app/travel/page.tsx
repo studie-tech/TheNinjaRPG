@@ -499,8 +499,10 @@ export default function Travel() {
           status: userData.status,
           travelFinishAt: userData.travelFinishAt ?? null,
         };
+        // startGlobalMoveSchema coerces the sector, so the mutate input type is unknown.
+        const destinationSector = Number(variables.sector);
         const travelTime = globe
-          ? calcGlobalTravelTime(userData.sector, variables.sector, globe)
+          ? calcGlobalTravelTime(userData.sector, destinationSector, globe)
           : 0;
         await updateUser(optimisticGlobalTravelStart(travelTime));
         return previous;
