@@ -966,9 +966,9 @@ export const updateWars = async (
   await Promise.all([...otherPromises, ...shrineUpdatePromises]);
 
   // Broadcast pusher notifications after mutations complete
-  for (const sector of sectorsToNotify) {
-    await broadcastRaidAvailability(pusher, sector);
-  }
+  await Promise.all(
+    sectorsToNotify.map((sector) => broadcastRaidAvailability(pusher, sector)),
+  );
 };
 
 export const updateTournament = async (

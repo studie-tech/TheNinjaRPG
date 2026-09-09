@@ -124,14 +124,16 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
   const [pendingConvoId, setPendingConvoId] = useState<string | null>(null);
   const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
 
-  // Fetch conversations. Note we pass the selected convo to automatically re-fetch when it changes
+  // Fetch conversations. selectedConvo is part of the key so opening a thread still
+  // refetches. The open thread itself updates over Pusher; the list does not need
+  // to be immediately stale on every window focus.
   const {
     data: allConversations,
     refetch,
     isPending,
   } = api.comments.getUserConversations.useQuery(
     { selectedConvo: selectedConvo },
-    { enabled: !!userData, staleTime: 0 },
+    { enabled: !!userData, staleTime: 30_000 },
   );
 
   // Mutations

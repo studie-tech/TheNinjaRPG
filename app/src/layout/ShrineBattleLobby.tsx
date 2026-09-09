@@ -48,7 +48,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
   // Query for shrine battles
   const { data: shrineBattles, isLoading } = api.shrine.getShrineBattles.useQuery(
     { sectorNumber },
-    { refetchInterval: 5000 },
+    { refetchInterval: 5000, refetchIntervalInBackground: false },
   );
 
   // Mutations
