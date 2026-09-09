@@ -11,7 +11,10 @@ import { toast } from "@/components/ui/use-toast";
 
 /** A set of type-safe react-query hooks for your tRPC API. */
 export const api = createTRPCReact<AppRouter>({
-  // Abort on onmount, see: https://trpc.io/docs/client/react/aborting-procedure-calls
+  // Queries only (TanStack Query does not abort mutations). Left false so an in-flight
+  // query can still fill the Infinity staleTime cache after navigation — e.g. sector
+  // data started on /travel and read on the sector map. See:
+  // https://trpc.io/docs/client/react/aborting-procedure-calls
   abortOnUnmount: false,
 });
 

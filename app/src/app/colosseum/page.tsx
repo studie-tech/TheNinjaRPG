@@ -40,7 +40,7 @@ export default function ColosseumPage() {
   const [selectedType, setSelectedType] = useState<BattleType>("RANKED_PVP");
   const { data: battles, isLoading } = api.combat.listOngoingBattles.useQuery(
     { battleType: selectedType },
-    { refetchInterval: 5000 },
+    { refetchInterval: 5000, refetchIntervalInBackground: false },
   );
 
   const tableData =
