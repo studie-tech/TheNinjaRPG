@@ -43,7 +43,6 @@ describe("runStaleShrineLobbyCleanup", () => {
     const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
     const deleteLobbyUsersWhere = vi.fn().mockResolvedValue({ rowsAffected: 3 });
     const deleteLobbiesWhere = vi.fn().mockResolvedValue({ rowsAffected: 2 });
-    const writes: string[] = [];
 
     const db = {
       select: vi
@@ -51,16 +50,11 @@ describe("runStaleShrineLobbyCleanup", () => {
         .mockReturnValueOnce(staleLobbies.chain)  // 1: initial stale lobby fetch (awaited)
         .mockReturnValueOnce(unclaimedChain)       // 2: unclaimedSubquery (not awaited)
         .mockReturnValueOnce(unclaimedUsersChain), // 3: unclaimedUsersSubquery (not awaited)
-      update: vi.fn((table: unknown) => {
-        writes.push(table === userData ? "update-users" : "update");
-        return { set: updateSet };
-      }),
-      delete: vi.fn((table: unknown) => {
-        writes.push(table === mpvpBattleUser ? "delete-children" : "delete-parent");
-        return table === mpvpBattleUser
-          ? { where: deleteLobbyUsersWhere }
-          : { where: deleteLobbiesWhere };
-      }),
+      update: vi.fn().mockReturnValue({ set: updateSet }),
+      delete: vi
+        .fn()
+        .mockReturnValueOnce({ where: deleteLobbyUsersWhere }) // 1st: mpvpBattleUser (children)
+        .mockReturnValueOnce({ where: deleteLobbiesWhere }),   // 2nd: mpvpBattleQueue (parent)
     };
 
     const result = await runStaleShrineLobbyCleanup(new Date("2026-04-12T12:00:00.000Z"), db);
@@ -71,7 +65,12 @@ describe("runStaleShrineLobbyCleanup", () => {
     // subquery reads from mpvpBattleUser, so if the delete ran first the subquery
     // would return zero rows and users would stay QUEUED permanently.
     // mpvpBattleQueue (parent) must be deleted last.
-    expect(writes).toEqual(["update-users", "delete-children", "delete-parent"]);
+    expect(db.update.mock.invocationCallOrder[0]).toBeLessThan(
+      db.delete.mock.invocationCallOrder[0],
+    );
+    expect(db.delete.mock.invocationCallOrder[0]).toBeLessThan(
+      db.delete.mock.invocationCallOrder[1],
+    );
     expect(db.delete).toHaveBeenNthCalledWith(1, mpvpBattleUser);
     expect(db.delete).toHaveBeenNthCalledWith(2, mpvpBattleQueue);
 
