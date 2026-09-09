@@ -35,7 +35,6 @@ export interface GuideSeedArticle {
 const p = (...paragraphs: string[]) =>
   paragraphs.map((text) => `<p>${text}</p>`).join("");
 const h2 = (text: string) => `<h2>${text}</h2>`;
-const h3 = (text: string) => `<h3>${text}</h3>`;
 const ul = (items: string[]) =>
   `<ul>${items.map((item) => `<li>${item}</li>`).join("")}</ul>`;
 const link = (href: string, label: string) => `<a href="${href}">${label}</a>`;
