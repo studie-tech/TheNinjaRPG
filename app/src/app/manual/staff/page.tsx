@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FileUser, Info, List } from "lucide-react";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -50,6 +50,8 @@ export default function Staff() {
     resolver: zodResolver(createApplicationSchema),
     defaultValues: { targetRole: "CONTENT", motivation: "" },
   });
+  const targetRole = useWatch({ control: form.control, name: "targetRole" });
+  const motivation = useWatch({ control: form.control, name: "motivation" }) ?? "";
   const createApp = api.applications.create.useMutation({
     onSuccess: async (res) => {
       showMutationToast(res);
@@ -103,7 +105,7 @@ export default function Staff() {
                           shouldValidate: true,
                         })
                       }
-                      value={form.watch("targetRole")}
+                      value={targetRole}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select role" />
@@ -123,7 +125,7 @@ export default function Staff() {
                     </div>
                     <Textarea
                       placeholder="Tell us why you want to join the staff..."
-                      value={form.watch("motivation")}
+                      value={motivation}
                       onChange={(e) =>
                         form.setValue("motivation", e.target.value, {
                           shouldValidate: true,
@@ -137,12 +139,12 @@ export default function Staff() {
                       </span>
                       <span
                         className={
-                          form.watch("motivation").length < 10
+                          motivation.length < 10
                             ? "text-muted-foreground"
                             : "text-green-600"
                         }
                       >
-                        {form.watch("motivation").length}/10 min
+                        {motivation.length}/10 min
                       </span>
                     </div>
                   </div>
