@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,6 +87,8 @@ export default function SeasonForm({
       paused: false,
     },
   });
+
+  const watchedRewards = useWatch({ control: form.control, name: "rewards" }) ?? [];
 
   const createSeason = api.pvpRank.createSeason.useMutation({
     onSuccess: (data) => {
@@ -317,7 +319,7 @@ export default function SeasonForm({
             </Button>
           </div>
 
-          {form.watch("rewards").map((division, divisionIndex) => (
+          {watchedRewards.map((division, divisionIndex) => (
             <Card key={`division-${division.division}-${divisionIndex}`}>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
@@ -411,7 +413,10 @@ const RewardDialog: React.FC<RewardDialogProps> = ({
   parentForm,
   buildRewardFormData,
 }) => {
-  const parentReward = parentForm.watch(`rewards.${divisionIndex}.rewards`);
+  const parentReward = useWatch({
+    control: parentForm.control,
+    name: `rewards.${divisionIndex}.rewards`,
+  });
   const rewardForm = useForm<RankedSeasonRewardInput, unknown, RankedSeasonReward>({
     resolver: zodResolver(rewardSchema),
     values: parentReward ?? rewardSchema.parse({}),

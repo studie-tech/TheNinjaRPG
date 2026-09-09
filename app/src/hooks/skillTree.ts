@@ -91,10 +91,15 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
     name: "image",
   });
 
+  const watchedTier = useWatch({
+    control: form.control,
+    name: "tier",
+  });
+
   // Get available prerequisite skills (lower tier than current)
   const allSkillsFlat = allSkills?.pages.flatMap((p) => p.data) ?? [];
   const availablePrereqSkills = allSkillsFlat.filter(
-    (s) => s.id !== skillTree.id && s.tier < (form.watch("tier") as number),
+    (s) => s.id !== skillTree.id && s.tier < (watchedTier as number),
   );
 
   // Object for form values
