@@ -1,4 +1,4 @@
-/** Generated cover URLs for first-party system guides (UploadThing, served via Bunny). */
+/** Hosted cover URLs for first-party system guides. */
 export const GUIDE_SYSTEM_COVERS: Record<string, string> = {
   "getting-started": "https://ui0arpl8sm.ufs.sh/f/guide-getting-started-v3.webp",
   combat: "https://ui0arpl8sm.ufs.sh/f/guide-combat-v3.webp",

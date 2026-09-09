@@ -1,13 +1,12 @@
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { bloodline, guideArticle, item, jutsu } from "@/drizzle/schema";
+import { bloodline, guideArticle, item } from "@/drizzle/schema";
 import { SYSTEM_GUIDE_ARTICLES } from "@/libs/guide/articles";
 import { GUIDE_SYSTEM_COVERS } from "@/libs/guide/covers";
 import { factCheckGuideProse } from "@/libs/guide/factcheck";
 import {
   generateBloodlineGuide,
   generateItemGuide,
-  generateJutsuGuide,
   isGuideworthyEntityName,
 } from "@/libs/guide/generate";
 import { isReservedGuideSlug } from "@/libs/guide/html";
@@ -65,7 +64,7 @@ export const seedGuides = async (client: DrizzleClient) => {
     await upsertArticle(client, article);
   }
 
-  const [bloodlines, items, jutsus] = await Promise.all([
+  const [bloodlines, items] = await Promise.all([
     client.query.bloodline.findMany({
       columns: {
         id: true,
@@ -88,18 +87,6 @@ export const seedGuides = async (client: DrizzleClient) => {
         hidden: true,
       },
       where: eq(item.hidden, false),
-    }),
-    client.query.jutsu.findMany({
-      columns: {
-        id: true,
-        name: true,
-        description: true,
-        image: true,
-        jutsuType: true,
-        jutsuRank: true,
-        hidden: true,
-      },
-      where: eq(jutsu.hidden, false),
     }),
   ]);
 
@@ -124,16 +111,6 @@ export const seedGuides = async (client: DrizzleClient) => {
     await upsertArticle(client, {
       ...generated,
       relatedItemId: row.id,
-    });
-  }
-
-  // Only generate jutsu pages that would otherwise collide with a system slug if we
-  // dumped every jutsu. Limit to named techniques that are not generic.
-  const featuredJutsus = jutsus.filter((row) => row.name.length > 8).slice(0, 0);
-  for (const row of featuredJutsus) {
-    await upsertArticle(client, {
-      ...generateJutsuGuide(row),
-      relatedJutsuId: row.id,
     });
   }
 

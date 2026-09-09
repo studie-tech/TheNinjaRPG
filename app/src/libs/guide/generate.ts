@@ -1,9 +1,5 @@
 import type { GuideCategory } from "@/drizzle/constants";
-import {
-  IMG_MANUAL_BLOODLINE,
-  IMG_MANUAL_ITEM,
-  IMG_MANUAL_JUTSU,
-} from "@/drizzle/constants";
+import { IMG_MANUAL_BLOODLINE, IMG_MANUAL_ITEM } from "@/drizzle/constants";
 import type { GuideSeedArticle } from "@/libs/guide/articles";
 import { slugifyGuideTitle } from "@/libs/guide/html";
 
@@ -22,12 +18,6 @@ interface BloodlineEntity extends NamedEntity {
 interface ItemEntity extends NamedEntity {
   itemType?: string | null;
   rarity?: string | null;
-  hidden?: boolean | null;
-}
-
-interface JutsuEntity extends NamedEntity {
-  jutsuType?: string | null;
-  jutsuRank?: string | null;
   hidden?: boolean | null;
 }
 
@@ -62,7 +52,6 @@ const loreParagraph = (description: string | null | undefined) => {
 
 export const generateBloodlineGuide = (
   bloodline: BloodlineEntity,
-  wikiLore?: string,
 ): GuideSeedArticle => {
   const rank = bloodline.rank ?? "unranked";
   const slug = slugifyGuideTitle(bloodline.name);
@@ -77,14 +66,11 @@ export const generateBloodlineGuide = (
     image: bloodline.image || IMG_MANUAL_BLOODLINE,
     sortOrder: 80,
     published: true,
-    sourceUrl: wikiLore
-      ? `https://the-ninja-rpg.fandom.com/wiki/${encodeURIComponent(bloodline.name.replaceAll(" ", "_"))}`
-      : undefined,
     content: [
       paragraph(
         `${escapeHtml(bloodline.name)} is ${articleFor(rank)} ${escapeHtml(rank)}-rank bloodline in TheNinja-RPG. This page is the how-to: where to get it and how it plays. Numbers stay on the encyclopedia.`,
       ),
-      loreParagraph(wikiLore) || loreParagraph(bloodline.description),
+      loreParagraph(bloodline.description),
       heading("How to obtain"),
       paragraph(
         `Travel to ${link("/guide/wake-island", "Wake Island")} and roll or purchase the line. Rank prices and free starter rolls are listed there. S-rank lines are event-only.`,
@@ -101,10 +87,7 @@ export const generateBloodlineGuide = (
   };
 };
 
-export const generateItemGuide = (
-  item: ItemEntity,
-  wikiLore?: string,
-): GuideSeedArticle => {
+export const generateItemGuide = (item: ItemEntity): GuideSeedArticle => {
   const rarity = item.rarity ?? item.itemType ?? "item";
   const slug = slugifyGuideTitle(item.name);
   return {
@@ -118,51 +101,14 @@ export const generateItemGuide = (
     image: item.image || IMG_MANUAL_ITEM,
     sortOrder: 90,
     published: true,
-    sourceUrl: wikiLore
-      ? `https://the-ninja-rpg.fandom.com/wiki/${encodeURIComponent(item.name.replaceAll(" ", "_"))}`
-      : undefined,
     content: [
       paragraph(
         `${escapeHtml(item.name)} is listed in TheNinja-RPG as ${articleFor(String(rarity))} ${escapeHtml(String(rarity).toLowerCase())} item. Use this page for context; the live stack size, cost and tags are on the encyclopedia.`,
       ),
-      loreParagraph(wikiLore) || loreParagraph(item.description),
+      loreParagraph(item.description),
       heading("In game data"),
       paragraph(
         `${link(`/manual/item/${item.id}`, `Open ${item.name}`)} for current stats. Herbs and crops also appear in the ${link("/guide/farming", "farming guide")}.`,
-      ),
-    ].join(""),
-  };
-};
-
-export const generateJutsuGuide = (
-  jutsu: JutsuEntity,
-  wikiLore?: string,
-): GuideSeedArticle => {
-  const rank = jutsu.jutsuRank ?? "unranked";
-  const type = jutsu.jutsuType ?? "jutsu";
-  const slug = slugifyGuideTitle(jutsu.name);
-  return {
-    slug,
-    title: jutsu.name,
-    subtitle: `${rank} ${type}`,
-    excerpt: `${jutsu.name} is ${articleFor(rank)} ${rank}-rank ${String(type).toLowerCase()} jutsu in TheNinja-RPG.`,
-    seoTitle: `${jutsu.name} TheNinja-RPG`,
-    seoDescription: `${jutsu.name} is ${articleFor(rank)} ${rank}-rank ${String(type).toLowerCase()} jutsu in TheNinja-RPG. Read playstyle here and live numbers in the jutsu encyclopedia.`,
-    category: "reference" satisfies GuideCategory,
-    image: jutsu.image || IMG_MANUAL_JUTSU,
-    sortOrder: 100,
-    published: true,
-    sourceUrl: wikiLore
-      ? `https://the-ninja-rpg.fandom.com/wiki/${encodeURIComponent(jutsu.name.replaceAll(" ", "_"))}`
-      : undefined,
-    content: [
-      paragraph(
-        `${escapeHtml(jutsu.name)} is ${articleFor(rank)} ${escapeHtml(rank)}-rank ${escapeHtml(String(type).toLowerCase())} jutsu. Damage, cooldown and tags change with balance — this page will not copy a wiki stat block.`,
-      ),
-      loreParagraph(wikiLore) || loreParagraph(jutsu.description),
-      heading("In game data"),
-      paragraph(
-        `${link(`/manual/jutsu/${jutsu.id}`, `Open ${jutsu.name}`)} for the live card. See ${link("/guide/combat-tags", "game tags")} for what those effects mean.`,
       ),
     ].join(""),
   };
