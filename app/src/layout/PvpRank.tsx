@@ -46,6 +46,7 @@ export const RankedArenaMain: React.FC = () => {
   const { data: queueData } = api.pvpRank.getRankedPvpQueue.useQuery(undefined, {
     enabled: !!userData,
     refetchInterval: 5000, // Refetch queue status every 5 seconds
+    refetchIntervalInBackground: false,
   });
 
   // Get current season
