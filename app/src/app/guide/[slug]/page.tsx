@@ -5,11 +5,7 @@ import { GUIDE_CATEGORY_LABELS } from "@/drizzle/constants";
 import { GuideArticleView } from "@/layout/GuideArticleView";
 import { GuideStructuredData } from "@/layout/GuideStructuredData";
 import { buildMetadata, metaDescription } from "@/libs/seo";
-import {
-  fetchGuideBySlug,
-  fetchNeighborGuides,
-  fetchPublishedGuides,
-} from "@/server/api/routers/guide";
+import { fetchGuideBySlug, fetchNeighborGuides } from "@/server/api/routers/guide";
 import { drizzleDB } from "@/server/db";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -41,27 +37,11 @@ export default async function GuideArticlePage(props: Props) {
   const article = await getPublishedGuide(slug);
   if (!article) notFound();
 
-  const [neighbors, catalog] = await Promise.all([
-    fetchNeighborGuides(drizzleDB, article.category, article.slug),
-    fetchPublishedGuides(drizzleDB),
-  ]);
-  const neighborSlugs = new Set(
-    [neighbors.previous?.slug, neighbors.next?.slug].filter(Boolean),
+  const neighbors = await fetchNeighborGuides(
+    drizzleDB,
+    article.category,
+    article.slug,
   );
-  const related = catalog
-    .filter(
-      (row) =>
-        row.category === article.category &&
-        row.slug !== article.slug &&
-        !neighborSlugs.has(row.slug),
-    )
-    .slice(0, 4)
-    .map((row) => ({
-      slug: row.slug,
-      title: row.title,
-      excerpt: row.excerpt,
-      image: row.image,
-    }));
 
   const description = metaDescription(
     article.seoDescription || article.excerpt || article.content,
@@ -82,7 +62,7 @@ export default async function GuideArticlePage(props: Props) {
         article={article}
         previous={neighbors.previous}
         next={neighbors.next}
-        related={related}
+        related={neighbors.related}
       />
     </>
   );

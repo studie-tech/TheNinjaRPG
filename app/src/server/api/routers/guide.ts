@@ -4,11 +4,7 @@ import { z } from "zod";
 import { baseServerResponse, errorResponse, serverError } from "@/api/trpc";
 import type { GuideCategory } from "@/drizzle/constants";
 import { actionLog, guideArticle, userData } from "@/drizzle/schema";
-import {
-  isReservedGuideSlug,
-  slugifyGuideTitle,
-  withGuideHeadingIds,
-} from "@/libs/guide/html";
+import { withGuideHeadingIds } from "@/libs/guide/html";
 import { fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
@@ -17,12 +13,6 @@ import { moderateUserText } from "@/utils/profanity";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { GuideArticleValidator, GuideListFilterSchema } from "@/validators/guide";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-
-const emptyToNull = (value: string | null | undefined) => {
-  if (value === undefined) return undefined;
-  const trimmed = value?.trim() ?? "";
-  return trimmed.length > 0 ? trimmed : null;
-};
 
 export const guideRouter = createTRPCRouter({
   getAll: publicProcedure
@@ -126,9 +116,6 @@ export const guideRouter = createTRPCRouter({
       if (!entry) return errorResponse("Guide not found");
       if (!canChangeContent(user.role))
         return errorResponse("Not allowed to edit guides");
-      if (isReservedGuideSlug(input.data.slug)) {
-        return errorResponse("That slug is reserved");
-      }
       if (slugOwner && slugOwner.id !== entry.id) {
         return errorResponse("Another guide already uses that slug");
       }
@@ -139,16 +126,6 @@ export const guideRouter = createTRPCRouter({
       const next = {
         ...input.data,
         content: withGuideHeadingIds(moderated.sanitized),
-        image: emptyToNull(input.data.image),
-        sourceUrl: emptyToNull(input.data.sourceUrl),
-        subtitle: emptyToNull(input.data.subtitle),
-        excerpt: emptyToNull(input.data.excerpt),
-        seoTitle: emptyToNull(input.data.seoTitle),
-        seoDescription: emptyToNull(input.data.seoDescription),
-        reviewNotes: emptyToNull(input.data.reviewNotes),
-        relatedBloodlineId: emptyToNull(input.data.relatedBloodlineId),
-        relatedItemId: emptyToNull(input.data.relatedItemId),
-        relatedJutsuId: emptyToNull(input.data.relatedJutsuId),
         faq: input.data.faq?.length ? input.data.faq : null,
         updatedAt: new Date(),
         updatedByUserId: ctx.userId,
@@ -228,15 +205,17 @@ export const fetchNeighborGuides = async (
       title: true,
       excerpt: true,
       image: true,
-      category: true,
     },
     orderBy: [asc(guideArticle.sortOrder), asc(guideArticle.title)],
   });
   const index = siblings.findIndex((row) => row.slug === slug);
+  const previous = index > 0 ? siblings[index - 1] : undefined;
+  const next =
+    index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : undefined;
+  const neighborSlugs = new Set([slug, previous?.slug, next?.slug]);
   return {
-    previous: index > 0 ? siblings[index - 1] : undefined,
-    next: index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : undefined,
+    previous,
+    next,
+    related: siblings.filter((row) => !neighborSlugs.has(row.slug)).slice(0, 4),
   };
 };
-
-export const suggestGuideSlug = slugifyGuideTitle;

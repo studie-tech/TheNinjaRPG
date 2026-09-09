@@ -2,6 +2,7 @@ import type { GuideCategory } from "@/drizzle/constants";
 import { IMG_MANUAL_BLOODLINE, IMG_MANUAL_ITEM } from "@/drizzle/constants";
 import type { GuideSeedArticle } from "@/libs/guide/articles";
 import { slugifyGuideTitle } from "@/libs/guide/html";
+import { htmlToPlainText } from "@/utils/sanitize";
 
 interface NamedEntity {
   id: string;
@@ -38,14 +39,8 @@ const articleFor = (word: string) => (/^[aeiou]/i.test(word.trim()) ? "an" : "a"
 export const isGuideworthyEntityName = (name: string) =>
   !/^qa\b/i.test(name.trim()) && !/\s-\s*copy$/i.test(name.trim());
 
-const stripHtml = (value: string | null | undefined) =>
-  (value ?? "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
 const loreParagraph = (description: string | null | undefined) => {
-  const plain = stripHtml(description);
+  const plain = htmlToPlainText(description ?? "");
   if (plain.length < 40) return "";
   return paragraph(escapeHtml(plain.slice(0, 600)));
 };
