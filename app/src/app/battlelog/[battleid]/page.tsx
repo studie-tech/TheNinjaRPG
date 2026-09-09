@@ -67,7 +67,7 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
         />
       )
     );
-  }, [versionId, userId, config.showGridNumbers]);
+  }, [battleState, userId, config.showGridNumbers]);
 
   // Render functions for layout components
   const renderTimer = useCallback(() => {
