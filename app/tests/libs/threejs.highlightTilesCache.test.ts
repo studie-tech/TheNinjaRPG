@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getHighlightTilesCacheKey } from "@/libs/threejs/combat";
+import { getHighlightTilesCacheKey } from "@/libs/threejs/highlightTilesCache";
 
 const base = {
   actionId: "move",
