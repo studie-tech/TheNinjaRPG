@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAX_ITEM_SHOP_PURCHASE_QUANTITY } from "@/drizzle/constants";
 import { getMaxItemShopPurchaseQuantity } from "@/libs/shop";
 
 describe("getMaxItemShopPurchaseQuantity", () => {
@@ -7,6 +8,6 @@ describe("getMaxItemShopPurchaseQuantity", () => {
   });
 
   it("caps large item stacks at the server purchase limit", () => {
-    expect(getMaxItemShopPurchaseQuantity(9_999)).toBe(50);
+    expect(getMaxItemShopPurchaseQuantity(9_999)).toBe(MAX_ITEM_SHOP_PURCHASE_QUANTITY);
   });
 });
