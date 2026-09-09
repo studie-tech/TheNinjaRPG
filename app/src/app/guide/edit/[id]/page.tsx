@@ -16,7 +16,7 @@ import Confirm2 from "@/layout/Confirm2";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
-import { withGuideHeadingIds } from "@/libs/guide/html";
+import { prepareGuideHtml } from "@/libs/guide/html";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { canChangeContent } from "@/utils/permissions";
@@ -161,7 +161,7 @@ const SingleEditGuide: React.FC<{
         </TabsContent>
         <TabsContent value="preview" className="mt-4">
           <article className="space-y-3 [&_a]:font-bold [&_a]:text-orange-500 [&_h2]:mt-5 [&_h2]:font-bold [&_h2]:text-xl [&_h3]:mt-4 [&_h3]:font-semibold [&_ul]:ml-5 [&_ul]:list-disc">
-            {parseHtml(withGuideHeadingIds(content))}
+            {parseHtml(prepareGuideHtml(content).html)}
           </article>
         </TabsContent>
       </Tabs>

@@ -1,10 +1,9 @@
-import { and, asc, eq, like, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { baseServerResponse, errorResponse, serverError } from "@/api/trpc";
 import type { GuideCategory } from "@/drizzle/constants";
 import { actionLog, guideArticle, userData } from "@/drizzle/schema";
-import { withGuideHeadingIds } from "@/libs/guide/html";
 import { fetchUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
@@ -27,32 +26,12 @@ export const guideRouter = createTRPCRouter({
         : null;
       const canSeeDrafts = Boolean(viewer && canChangeContent(viewer.role));
       const includeDrafts = Boolean(input?.includeDrafts && canSeeDrafts);
-      const search = input?.search?.trim();
-
+      if (!includeDrafts) {
+        return await fetchPublishedGuides(ctx.drizzle);
+      }
       return await ctx.drizzle.query.guideArticle.findMany({
-        where: and(
-          includeDrafts ? undefined : eq(guideArticle.published, true),
-          input?.category ? eq(guideArticle.category, input.category) : undefined,
-          search
-            ? or(
-                like(guideArticle.title, `%${search}%`),
-                like(guideArticle.excerpt, `%${search}%`),
-                like(guideArticle.slug, `%${search}%`),
-              )
-            : undefined,
-        ),
         orderBy: [asc(guideArticle.sortOrder), asc(guideArticle.title)],
       });
-    }),
-  getBySlug: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get a published guide by slug" } })
-    .input(z.object({ slug: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const article = await fetchGuideBySlug(ctx.drizzle, input.slug);
-      if (!article || !article.published) {
-        throw serverError("NOT_FOUND", "Guide not found");
-      }
-      return article;
     }),
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a guide article by ID" } })
@@ -125,7 +104,7 @@ export const guideRouter = createTRPCRouter({
 
       const next = {
         ...input.data,
-        content: withGuideHeadingIds(moderated.sanitized),
+        content: moderated.sanitized,
         faq: input.data.faq?.length ? input.data.faq : null,
         updatedAt: new Date(),
         updatedByUserId: ctx.userId,

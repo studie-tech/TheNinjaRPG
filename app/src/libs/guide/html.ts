@@ -9,9 +9,6 @@ export interface GuideHeading {
 
 const HEADING_RE = /<h([23])(\s[^>]*)?>([\s\S]*?)<\/h\1>/gi;
 
-/** Strip tags from a heading so the TOC shows readable text. */
-export const headingPlainText = (html: string) => htmlToPlainText(html);
-
 export const slugifyGuideTitle = (title: string) => {
   const slug = title
     .toLowerCase()
@@ -30,7 +27,7 @@ export const isReservedGuideSlug = (slug: string) =>
  * Turn a heading into a URL-safe id. Collisions get a numeric suffix so two
  * "How to obtain" sections on the same page still get unique anchors.
  */
-export const uniqueHeadingId = (text: string, used: Set<string>) => {
+const uniqueHeadingId = (text: string, used: Set<string>) => {
   const base = slugifyGuideTitle(text) || "section";
   let id = base;
   let n = 2;
@@ -42,33 +39,25 @@ export const uniqueHeadingId = (text: string, used: Set<string>) => {
   return id;
 };
 
-export const extractGuideHeadings = (html: string): GuideHeading[] => {
+/** Inject heading ids and collect the TOC in one walk. */
+export const prepareGuideHtml = (
+  html: string,
+): { html: string; headings: GuideHeading[] } => {
   const used = new Set<string>();
   const headings: GuideHeading[] = [];
-  for (const match of html.matchAll(HEADING_RE)) {
-    const level = Number(match[1]) as 2 | 3;
-    const text = headingPlainText(match[3] ?? "");
-    if (!text) continue;
-    const existingId = match[2]?.match(/\sid=["']([^"']+)["']/i)?.[1];
-    const id = existingId || uniqueHeadingId(text, used);
-    if (existingId) used.add(existingId);
-    headings.push({ id, text, level });
-  }
-  return headings;
-};
-
-/** Inject id attributes onto h2/h3 so in-page TOC links resolve. */
-export const withGuideHeadingIds = (html: string) => {
-  const used = new Set<string>();
-  return html.replace(
+  const nextHtml = html.replace(
     HEADING_RE,
     (_full, level: string, attrs: string, inner: string) => {
+      const text = htmlToPlainText(inner);
       const existingId = attrs?.match(/\sid=["']([^"']+)["']/i)?.[1];
-      const text = headingPlainText(inner);
       const id = existingId || uniqueHeadingId(text, used);
       if (existingId) used.add(existingId);
+      if (text) {
+        headings.push({ id, text, level: Number(level) as 2 | 3 });
+      }
       const cleanedAttrs = (attrs ?? "").replace(/\s+id=["'][^"']*["']/i, "");
       return `<h${level} id="${id}"${cleanedAttrs}>${inner}</h${level}>`;
     },
   );
+  return { html: nextHtml, headings };
 };

@@ -6,7 +6,7 @@ import { GUIDE_CATEGORY_LABELS, type GuideCategory } from "@/drizzle/constants";
 import type { GuideArticle } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
-import { extractGuideHeadings, withGuideHeadingIds } from "@/libs/guide/html";
+import { prepareGuideHtml } from "@/libs/guide/html";
 import { parseHtml } from "@/utils/parse";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
@@ -33,8 +33,7 @@ export const GuideArticleView: React.FC<GuideArticleViewProps> = ({
 }) => {
   const { data: userData } = useUserData();
   const isStaff = Boolean(userData && canChangeContent(userData.role));
-  const html = withGuideHeadingIds(article.content);
-  const headings = extractGuideHeadings(html);
+  const { html, headings } = prepareGuideHtml(article.content);
   const categoryLabel = GUIDE_CATEGORY_LABELS[article.category as GuideCategory];
   const dataHref = relatedManualHref(article);
   const hasKeepReading = Boolean(previous || next || related.length > 0);
