@@ -90,7 +90,11 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
   const { data: leaderboardData } = api.raids.getRaidLeaderboard.useQuery(
     { questId: selectedRaidId ?? "", limit: 10 },
-    { enabled: !!selectedRaidId, refetchInterval: 10000 },
+    {
+      enabled: !!selectedRaidId,
+      refetchInterval: 10000,
+      refetchIntervalInBackground: false,
+    },
   );
 
   const { data: activeTeamsData } = api.raids.getActiveRaidTeams.useQuery(

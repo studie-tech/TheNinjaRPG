@@ -189,6 +189,7 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
   // Queries
   const { data: hospitalized } = api.hospital.getHospitalizedUsers.useQuery(undefined, {
     refetchInterval: 5000,
+    refetchIntervalInBackground: false,
     enabled: !!userData,
   });
 
