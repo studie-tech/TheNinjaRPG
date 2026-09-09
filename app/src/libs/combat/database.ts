@@ -63,6 +63,7 @@ import { extendWarParticipantSql, findWarsWithUser } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { reduceActiveFarmPlotTimers } from "@/server/utils/farming";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
 
 type DataBattleAction = {
@@ -1051,7 +1052,7 @@ export const updateVillageAnbuClan = async (
  * 1. Each user deducts only their share of damage (totalDamage / numAttackers)
  * 2. battleCount is the optimistic lock: first battle inserts, later battles
  *    UPDATE only while battleCount still equals the start-of-battle value
- * 3. A duplicate reports 0 changed rows and skips HP deduction and inbox writes
+ * 3. A duplicate unique key or a missed battleCount UPDATE skips HP and inbox writes
  * 4. This ensures each user's damage is only counted once, regardless of how
  *    many times their endpoint is called
  */
@@ -1101,25 +1102,26 @@ export const updateRaidProgress = async (
   const startBattleCount = curBattle.extraState.raidStartBattleCount?.[userId] ?? 0;
 
   // Claim this battle's damage for this user. `battleCount` is the optimistic
-  // lock. An IF() upsert that writes the existing values still reports
-  // rowsAffected > 0 on MySQL, so a retry would decrement shared HP and notify
-  // again. First participation inserts; later ones update only while
-  // battleCount still equals the value captured at battle start. A no-op
-  // `id = id` duplicate insert reports 0 changed rows.
+  // lock. ON DUPLICATE KEY UPDATE (IF() or `id = id`) still reports
+  // rowsAffected > 0 on MySQL when the row is only found, so a retry would
+  // decrement shared HP and notify again. First participation is a plain
+  // insert: a duplicate unique key is a lost claim. Later battles UPDATE
+  // only while battleCount still equals the start-of-battle value.
   let claimed = false;
   if (startBattleCount === 0) {
-    const insertResult = await client
-      .insert(raidParticipation)
-      .values({
+    try {
+      await client.insert(raidParticipation).values({
         id: nanoid(),
         questId: raidQuestId,
         userId: userId,
         damageDealt: userDamage,
         battleCount: 1,
         rewardsClaimed: [],
-      })
-      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-    claimed = insertResult.rowsAffected === 1;
+      });
+      claimed = true;
+    } catch (error) {
+      if (!isMysqlDuplicateKeyError(error)) throw error;
+    }
   } else {
     const updateResult = await client
       .update(raidParticipation)
@@ -1143,7 +1145,7 @@ export const updateRaidProgress = async (
   }
 
   // Shared raid HP is not itself idempotent, so it runs only after the claim.
-  // Parallelizing this with the upsert would double-decrement on a duplicate call.
+  // Parallelizing this with the claim would double-decrement on a duplicate call.
   await client
     .update(quest)
     .set({
