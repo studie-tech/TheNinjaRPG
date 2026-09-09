@@ -17,7 +17,13 @@ import {
   Ticket,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
+import {
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+  useMemo,
+  useState,
+} from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -42,6 +48,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal2 from "@/layout/Modal2";
 import { UncontrolledSliderField } from "@/layout/SliderField";
+import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import { getMaxItemShopPurchaseQuantity } from "@/libs/shop";
 import { showMutationToast } from "@/libs/toast";
@@ -50,7 +57,10 @@ import type { UserWithRelations } from "@/routers/profile";
 import { useAwake } from "@/utils/routing";
 import { getStrucBoost } from "@/utils/village";
 
-/** Optional overrides for the catalog UI (e.g. black market uses several at once). */
+/** First-page catalog size; further rows load through the existing infinite-query cursor. */
+const SHOP_CATALOG_PAGE_SIZE = 30;
+
+/** Optional overrides for the catalog UI (e.g. black-market reputation vs silver). */
 export interface ShopCatalogOverrides {
   heroTitle?: string;
   heroDescription?: string;
@@ -61,6 +71,8 @@ export interface ShopCatalogOverrides {
   filterTriggerId?: string;
   /** User-facing Seichi silver wording (`silver` on black market; default village: seichi). */
   silverLabel?: "silver" | "seichi";
+  /** Extra controls next to the filter button (e.g. black-market currency tabs). */
+  headerExtra?: ReactNode;
 }
 
 interface ShopProps {
@@ -247,6 +259,7 @@ const Shop: React.FC<ShopProps> = (props) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [item, setItem] = useState<Item | undefined>(undefined);
   const [stacksize, setStacksize] = useState<number>(1);
+  const [lastElement, setLastElement] = useState<HTMLLIElement | null>(null);
   const filteringState = useShopFiltering(defaultType);
   const isAwake = useAwake(userData);
   const itemTypeTabOptions = useMemo(
@@ -256,25 +269,27 @@ const Shop: React.FC<ShopProps> = (props) => {
 
   const utils = api.useUtils();
 
-  const { data: items, isFetching } = api.item.getAll.useInfiniteQuery(
-    {
-      minCost,
-      minRepsCost,
-      minSeichiSilverCost,
-      eventItems: props.eventItems,
-      limit: 500,
-      ...getShopFilter(filteringState),
-      onlyInShop: true,
-      hidden: false,
-      maxLevel: userData.level,
-    },
-    {
-      enabled: userData !== undefined,
-      staleTime: Infinity,
-      getNextPageParam: (lastPage) => lastPage.nextCursor,
-      placeholderData: (previousData) => previousData,
-    },
-  );
+  const { data: items, isFetching, fetchNextPage, hasNextPage } =
+    api.item.getAll.useInfiniteQuery(
+      {
+        minCost,
+        minRepsCost,
+        minSeichiSilverCost,
+        eventItems: props.eventItems,
+        ...getShopFilter(filteringState),
+        onlyInShop: true,
+        limit: SHOP_CATALOG_PAGE_SIZE,
+        hidden: false,
+        maxLevel: userData.level,
+      },
+      {
+        enabled: userData !== undefined,
+        staleTime: Infinity,
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+        placeholderData: (previousData) => previousData,
+      },
+    );
+  useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
   const allItems = items?.pages
     .flatMap((page) => page.data)
     .filter(
@@ -514,6 +529,7 @@ const Shop: React.FC<ShopProps> = (props) => {
           padding={false}
           topRightContent={
             <div className="flex flex-row flex-wrap items-center justify-end gap-2">
+              {catalog?.headerExtra}
               <ItemShopFiltering
                 state={filteringState}
                 defaultType={defaultType}
@@ -657,7 +673,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                 ) : (
                   <>
                     <ul className="mx-auto grid max-w-7xl list-none grid-cols-3 gap-1 sm:gap-2 md:grid-cols-4 md:gap-3 lg:grid-cols-6">
-                      {catalogItems.map((row) => {
+                      {catalogItems.map((row, index) => {
                         const rowFactor = shopItemDiscountFactor(
                           row,
                           sDiscount,
@@ -674,6 +690,11 @@ const Shop: React.FC<ShopProps> = (props) => {
                         return (
                           <li
                             key={row.id}
+                            ref={
+                              index === catalogItems.length - 1
+                                ? setLastElement
+                                : undefined
+                            }
                             id={
                               row.id === TUTORIAL_ITEM_ID && !isOpen
                                 ? "tutorial-itemshop-item"
