@@ -2673,9 +2673,12 @@ export const itemRouter = createTRPCRouter({
 
       // Slot exclusivity and category / maxEquips limits are decided against one
       // in-memory snapshot. Writes are a single Promise.all so validation is not
-      // serialized per item.
+      // serialized per item. The same `now` is reused in the write predicates so
+      // a row that moves home / auction / crafting / imbue after the snapshot
+      // is not equipped.
+      const now = new Date();
       const { assignments, hasUnequipped, hasAvailableSlots } =
-        computeAutoEquipAssignments(useritems, user);
+        computeAutoEquipAssignments(useritems, user, now);
 
       if (!hasUnequipped) {
         return errorResponse("No unequipped items available");
@@ -2684,8 +2687,9 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("No available slots to equip items");
       }
 
+      let nEquipped = 0;
       if (assignments.length > 0) {
-        await Promise.all(
+        const results = await Promise.all(
           assignments.map((assignment) =>
             ctx.drizzle
               .update(userItem)
@@ -2694,16 +2698,35 @@ export const itemRouter = createTRPCRouter({
                 and(
                   eq(userItem.id, assignment.userItemId),
                   eq(userItem.userId, user.userId),
+                  eq(userItem.equipped, "NONE"),
+                  eq(userItem.storedAtHome, false),
+                  eq(userItem.isInAuction, false),
                   gt(userItem.quantity, 0),
+                  or(
+                    isNull(userItem.craftingFinishedAt),
+                    lte(userItem.craftingFinishedAt, now),
+                  ),
+                  notExists(
+                    ctx.drizzle
+                      .select({ one: sql`1` })
+                      .from(userItemImbuement)
+                      .where(
+                        and(
+                          eq(userItemImbuement.userItemId, assignment.userItemId),
+                          gt(userItemImbuement.craftingFinishedAt, now),
+                        ),
+                      ),
+                  ),
                 ),
               ),
           ),
         );
+        nEquipped = results.reduce((sum, result) => sum + result.rowsAffected, 0);
       }
 
       return {
         success: true,
-        message: `Equipped ${assignments.length} item${assignments.length === 1 ? "" : "s"}`,
+        message: `Equipped ${nEquipped} item${nEquipped === 1 ? "" : "s"}`,
       };
     }),
   getItemLoadouts: protectedProcedure
