@@ -1,63 +1,24 @@
 import { useCallback, useMemo } from "react";
 import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
-import type { GroundEffect, ReturnedBattle, UserEffect } from "@/libs/combat/types";
-import { isEffectActive } from "@/libs/combat/util";
+import { type BattleMaps, computeBattleMaps } from "@/libs/combat/battleMaps";
+import type { ReturnedBattle } from "@/libs/combat/types";
 import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
 
-/**
- * Precomputed maps for efficient combat tile lookups
- */
-export interface BattleMaps {
-  groundEffectsByTile: Map<string, GroundEffect[]>;
-  userEffectsByUserId: Map<string, UserEffect[]>;
-  usersByTile: Map<string, string>;
-}
-
-const EMPTY_BATTLE_MAPS: BattleMaps = {
-  groundEffectsByTile: new Map<string, GroundEffect[]>(),
-  userEffectsByUserId: new Map<string, UserEffect[]>(),
-  usersByTile: new Map<string, string>(),
-};
+export type { BattleMaps } from "@/libs/combat/battleMaps";
+export {
+  computeBattleMaps,
+  shouldInvalidateEndedBattleCaches,
+} from "@/libs/combat/battleMaps";
 
 /**
- * Hook to precompute maps for ground effects, user effects, and user positions
- * Only recomputes when battle version changes
+ * Hook to precompute maps for ground effects, user effects, and user positions.
+ * Only recomputes when battle id or version changes — a new battle object with
+ * the same snapshot must not rebuild the maps (isPending toggles do this).
  */
 export const useBattleMaps = (battle: ReturnedBattle | null): BattleMaps => {
-  return useMemo(() => {
-    if (!battle) return EMPTY_BATTLE_MAPS;
-
-    const groundEffectsByTile = new Map<string, GroundEffect[]>();
-    const userEffectsByUserId = new Map<string, UserEffect[]>();
-    const usersByTile = new Map<string, string>();
-
-    // Populate ground effects
-    battle.groundEffects.forEach((effect) => {
-      const key = `${effect.longitude},${effect.latitude}`;
-      const existing = groundEffectsByTile.get(key) || [];
-      existing.push(effect);
-      groundEffectsByTile.set(key, existing);
-    });
-
-    // Populate user effects
-    battle.usersEffects.forEach((effect) => {
-      if (!isEffectActive(effect)) return;
-      const existing = userEffectsByUserId.get(effect.targetId) || [];
-      existing.push(effect);
-      userEffectsByUserId.set(effect.targetId, existing);
-    });
-
-    // Populate user positions
-    battle.usersState.forEach((user) => {
-      if (user.curHealth > 0 && !user.fledBattle) {
-        usersByTile.set(`${user.longitude},${user.latitude}`, user.userId);
-      }
-    });
-
-    return { groundEffectsByTile, userEffectsByUserId, usersByTile };
-  }, [battle]);
+  return useMemo(() => computeBattleMaps(battle), [battle?.id, battle?.version]);
 };
 
 /**
@@ -137,29 +98,54 @@ export const useCombatPreferences = () => {
     [setLayoutOrder],
   );
 
-  return {
-    showGridNumbers,
-    setShowGridNumbers,
-    toggleGridNumbers,
-    useSmallActions,
-    setUseSmallActions,
-    toggleSmallActions,
-    showBattleLog,
-    setShowBattleLog,
-    toggleBattleLog,
-    showTimeline,
-    setShowTimeline,
-    toggleTimeline,
-    showBasicActions,
-    setShowBasicActions,
-    toggleBasicActions,
-    layoutOrder,
-    setLayoutOrder,
-    useTabs,
-    setUseTabs,
-    toggleUseTabs,
-    resetLayoutOrder,
-  };
+  return useMemo(
+    () => ({
+      showGridNumbers,
+      setShowGridNumbers,
+      toggleGridNumbers,
+      useSmallActions,
+      setUseSmallActions,
+      toggleSmallActions,
+      showBattleLog,
+      setShowBattleLog,
+      toggleBattleLog,
+      showTimeline,
+      setShowTimeline,
+      toggleTimeline,
+      showBasicActions,
+      setShowBasicActions,
+      toggleBasicActions,
+      layoutOrder,
+      setLayoutOrder,
+      useTabs,
+      setUseTabs,
+      toggleUseTabs,
+      resetLayoutOrder,
+    }),
+    [
+      showGridNumbers,
+      setShowGridNumbers,
+      toggleGridNumbers,
+      useSmallActions,
+      setUseSmallActions,
+      toggleSmallActions,
+      showBattleLog,
+      setShowBattleLog,
+      toggleBattleLog,
+      showTimeline,
+      setShowTimeline,
+      toggleTimeline,
+      showBasicActions,
+      setShowBasicActions,
+      toggleBasicActions,
+      layoutOrder,
+      setLayoutOrder,
+      useTabs,
+      setUseTabs,
+      toggleUseTabs,
+      resetLayoutOrder,
+    ],
+  );
 };
 
 export type CombatPreferences = ReturnType<typeof useCombatPreferences>;

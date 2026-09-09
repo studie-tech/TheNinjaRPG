@@ -14,8 +14,12 @@ import {
   IMG_INITIATIVE_D20,
   PvpBattleTypes,
 } from "@/drizzle/constants";
-import type { CombatPreferences } from "@/hooks/combat";
-import { useAutoCombatSetting, useBattleMaps } from "@/hooks/combat";
+import {
+  type CombatPreferences,
+  shouldInvalidateEndedBattleCaches,
+  useAutoCombatSetting,
+  useBattleMaps,
+} from "@/hooks/combat";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -129,6 +133,9 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Track if component is mounted to prevent stale render callbacks
   const isMountedRef = useRef<boolean>(false);
+  // getUser / travel / raid invalidation after a result must run once per
+  // ended battle, not on every later props identity change while result is set.
+  const endedBattleInvalidationRef = useRef<string | null>(null);
 
   // Tutorial step
   const { currentStep, handleNextStepAsync } = useTutorialStep();
@@ -571,21 +578,38 @@ const Combat: React.FC<CombatProps> = (props) => {
     // the ref following a piloted summon on its turn.
     userIdRef.current = props.userId;
     battleRef.current = props.battleState.battle;
-    if (props.battleState.result) {
-      void Promise.all([
-        utils.profile.getUser.invalidate(),
-        utils.travel.getSectorData.invalidate(),
-        // Invalidate raid queries when a RAID battle ends so boss HP is refreshed
-        ...(props.battleState.battle?.battleType === "RAID"
-          ? [
-              utils.raids.getRaidDetails.invalidate(),
-              utils.raids.getAvailableRaids.invalidate(),
-              utils.raids.getRaidLeaderboard.invalidate(),
-            ]
-          : []),
-      ]);
+  }, [props.action, props.userId, props.battleState.battle]);
+
+  useEffect(() => {
+    const endedBattleId = props.battleState.battle?.id;
+    const hasResult = !!props.battleState.result;
+    if (!hasResult) {
+      endedBattleInvalidationRef.current = null;
+      return;
     }
-  }, [props]);
+    if (
+      !shouldInvalidateEndedBattleCaches(
+        endedBattleInvalidationRef.current,
+        endedBattleId,
+        hasResult,
+      )
+    ) {
+      return;
+    }
+    endedBattleInvalidationRef.current = endedBattleId ?? null;
+    void Promise.all([
+      utils.profile.getUser.invalidate(),
+      utils.travel.getSectorData.invalidate(),
+      // Invalidate raid queries when a RAID battle ends so boss HP is refreshed
+      ...(props.battleState.battle?.battleType === "RAID"
+        ? [
+            utils.raids.getRaidDetails.invalidate(),
+            utils.raids.getAvailableRaids.invalidate(),
+            utils.raids.getRaidLeaderboard.invalidate(),
+          ]
+        : []),
+    ]);
+  }, [props.battleState.result, props.battleState.battle?.id]);
 
   useEffect(() => {
     if (battleId && pusher) {
@@ -616,6 +640,8 @@ const Combat: React.FC<CombatProps> = (props) => {
     }
   }, [battleRef.current?.version, timeDiff, isInLobby]);
 
+  // WebGL scene. Keep this list narrow: Combat re-renders when battleState
+  // isPending / result change, and those updates must not tear the renderer down.
   useEffect(() => {
     // Reference to the mount
     const sceneRef = mountRef.current;
