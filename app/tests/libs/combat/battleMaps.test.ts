@@ -17,13 +17,14 @@ const battleUser = (overrides: {
   latitude?: number;
   curHealth?: number;
   fledBattle?: boolean;
-}) => ({
-  longitude: 0,
-  latitude: 0,
-  curHealth: 10,
-  fledBattle: false,
-  ...overrides,
-});
+}): ReturnedBattle["usersState"][number] =>
+  ({
+    longitude: 0,
+    latitude: 0,
+    curHealth: 10,
+    fledBattle: false,
+    ...overrides,
+  }) as ReturnedBattle["usersState"][number];
 
 const battle = (overrides: Partial<ReturnedBattle> = {}): ReturnedBattle =>
   ({
