@@ -3,6 +3,8 @@ import type { NormalizedSectorTile } from "@/libs/sector-map/types";
 import {
   findGlobalTravelDestination,
   getBiomeAtSectorAnchor,
+  optimisticGlobalTravelFinish,
+  optimisticGlobalTravelStart,
 } from "@/libs/travel";
 
 const makeTile = (
@@ -84,5 +86,29 @@ describe("getBiomeAtSectorAnchor", () => {
     expect(getBiomeAtSectorAnchor(makeMap(3, 3), "shrine.default", 3)).toBe(
       "ice",
     );
+  });
+});
+
+describe("optimisticGlobalTravelStart", () => {
+  it("omits travelFinishAt for instant journeys so arrival cannot race start", () => {
+    expect(optimisticGlobalTravelStart(0)).toEqual({ status: "TRAVEL" });
+  });
+
+  it("sets a future travelFinishAt when the journey takes time", () => {
+    const before = Date.now();
+    const patch = optimisticGlobalTravelStart(12);
+    expect(patch.status).toBe("TRAVEL");
+    expect(patch.travelFinishAt).toBeInstanceOf(Date);
+    expect(patch.travelFinishAt?.getTime()).toBeGreaterThanOrEqual(before + 12_000);
+    expect(patch.travelFinishAt?.getTime()).toBeLessThanOrEqual(Date.now() + 12_000);
+  });
+});
+
+describe("optimisticGlobalTravelFinish", () => {
+  it("returns to AWAKE and clears the countdown", () => {
+    expect(optimisticGlobalTravelFinish()).toEqual({
+      status: "AWAKE",
+      travelFinishAt: null,
+    });
   });
 });

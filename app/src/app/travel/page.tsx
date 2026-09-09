@@ -83,7 +83,11 @@ import { getStealthStatus } from "@/libs/stealth";
 import type { GlobalTile, SectorPoint } from "@/libs/threejs/types";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
-import { calcGlobalTravelTime } from "@/libs/travel";
+import {
+  calcGlobalTravelTime,
+  optimisticGlobalTravelFinish,
+  optimisticGlobalTravelStart,
+} from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { getReadableVillageHexColor } from "@/utils/color";
@@ -485,11 +489,36 @@ export default function Travel() {
   // Mutations
   const { mutate: startGlobalMove, isPending: isStartingTravel } =
     api.travel.startGlobalMove.useMutation({
-      onSuccess: async (result) => {
+      onMutate: async (variables) => {
+        // A pending local walk must not keep a target after we flip status;
+        // Sector writes arrival coordinates only from UserContext, and a
+        // leftover target could overwrite them once the start mutation lands.
+        setTargetPosition(null);
+        if (!userData) return;
+        const previous = {
+          status: userData.status,
+          travelFinishAt: userData.travelFinishAt ?? null,
+        };
+        const travelTime = globe
+          ? calcGlobalTravelTime(userData.sector, variables.sector, globe)
+          : 0;
+        await updateUser(optimisticGlobalTravelStart(travelTime));
+        return previous;
+      },
+      onError: async (_error, _variables, previous) => {
+        if (!previous) return;
+        await updateUser({
+          status: previous.status,
+          travelFinishAt: previous.travelFinishAt,
+        });
+      },
+      onSuccess: async (result, _variables, previous) => {
         showMutationToast(result);
         if (result.success && result.data) {
           // Clear any local-sector movement target before the destination
           // coordinates enter UserContext so it cannot overwrite the arrival.
+          // Do not write sector/coords until this payload arrives — they are
+          // server-chosen, and an in-flight sector walk must not land on them.
           setTargetPosition(null);
           setTargetSector(null);
           setShowModal(false);
@@ -501,6 +530,11 @@ export default function Travel() {
               setCurrentTile(tile);
             }
           }
+        } else if (previous) {
+          await updateUser({
+            status: previous.status,
+            travelFinishAt: previous.travelFinishAt,
+          });
         }
       },
     });
@@ -513,7 +547,7 @@ export default function Travel() {
           await handleNextStepAsync();
         }
         if (result.success) {
-          await updateUser({ status: "AWAKE", travelFinishAt: null });
+          await updateUser(optimisticGlobalTravelFinish());
           setActiveTab(sectorLink);
         }
       },
@@ -1071,14 +1105,16 @@ export default function Travel() {
         {userData?.travelFinishAt && (
           <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
             <div className="m-auto text-center text-white">
-              <p className="p-5 text-3xl">Traveling to Sector {userData?.sector}</p>
+              <p className="p-5 text-3xl">
+                Traveling to Sector {targetSector ?? userData?.sector}
+              </p>
               <p className="text-5xl">
                 Time Left:{" "}
                 <Countdown
                   targetDate={userData?.travelFinishAt}
                   timeDiff={timeDiff}
                   onFinish={() => {
-                    if (!isFinishingTravel) finishGlobalMove();
+                    if (!isFinishingTravel && !isStartingTravel) finishGlobalMove();
                   }}
                 />
               </p>
