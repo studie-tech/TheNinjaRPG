@@ -50,13 +50,13 @@ const raidBattle = (
   });
 
 type RaidProgressClientOptions = {
-  insertRowsAffected: number;
+  insertSucceeds?: boolean;
   claimUpdateRowsAffected?: number;
   bossHpAfterDecrement: number;
 };
 
 const createRaidProgressClient = ({
-  insertRowsAffected,
+  insertSucceeds = true,
   claimUpdateRowsAffected = 0,
   bossHpAfterDecrement,
 }: RaidProgressClientOptions) => {
@@ -73,11 +73,13 @@ const createRaidProgressClient = ({
     calls.push("notify");
     return { rowsAffected: 1 };
   });
-  const onDuplicateKeyUpdate = vi.fn(async () => {
+  const participationValues = vi.fn(async () => {
     calls.push("insertClaim");
-    return { rowsAffected: insertRowsAffected };
+    if (!insertSucceeds) {
+      throw new Error("Duplicate entry 'raid-quest-1-raid-user' for key 'RaidParticipation_questId_userId'");
+    }
+    return { rowsAffected: 1 };
   });
-  const participationValues = vi.fn().mockReturnValue({ onDuplicateKeyUpdate });
   const claimUpdateWhere = vi.fn(async () => {
     calls.push("updateClaim");
     return { rowsAffected: claimUpdateRowsAffected };
@@ -134,7 +136,6 @@ const createRaidProgressClient = ({
 describe("updateRaidProgress", () => {
   it("does not write when the battle is not a raid", async () => {
     const { client, calls } = createRaidProgressClient({
-      insertRowsAffected: 1,
       bossHpAfterDecrement: 0,
     });
 
@@ -145,7 +146,6 @@ describe("updateRaidProgress", () => {
 
   it("does not write when the boss took no damage", async () => {
     const { client, calls } = createRaidProgressClient({
-      insertRowsAffected: 1,
       bossHpAfterDecrement: 0,
     });
 
@@ -160,7 +160,7 @@ describe("updateRaidProgress", () => {
 
   it("stops after a lost battleCount claim and does not decrement HP or notify", async () => {
     const { client, calls, findMany } = createRaidProgressClient({
-      insertRowsAffected: 0,
+      insertSucceeds: false,
       bossHpAfterDecrement: 0,
     });
 
@@ -172,7 +172,6 @@ describe("updateRaidProgress", () => {
 
   it("does not decrement HP when a later battle's battleCount guard misses", async () => {
     const { client, calls, findMany } = createRaidProgressClient({
-      insertRowsAffected: 1,
       claimUpdateRowsAffected: 0,
       bossHpAfterDecrement: 0,
     });
@@ -189,7 +188,6 @@ describe("updateRaidProgress", () => {
 
   it("decrements HP after a successful claim and skips notify while the boss lives", async () => {
     const { client, calls, findMany } = createRaidProgressClient({
-      insertRowsAffected: 1,
       bossHpAfterDecrement: 400,
     });
 
@@ -201,7 +199,6 @@ describe("updateRaidProgress", () => {
 
   it("notifies only after the post-decrement HP read, without scanning participants", async () => {
     const { client, calls, findMany, notificationValues } = createRaidProgressClient({
-      insertRowsAffected: 1,
       bossHpAfterDecrement: 0,
     });
 
@@ -221,7 +218,6 @@ describe("updateRaidProgress", () => {
 
   it("splits battle damage evenly across human attackers and ignores summons", async () => {
     const { client, participationValues } = createRaidProgressClient({
-      insertRowsAffected: 1,
       bossHpAfterDecrement: 500,
     });
 
