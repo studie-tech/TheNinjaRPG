@@ -41,6 +41,14 @@ describe("getHighlightTilesCacheKey", () => {
     expect(key).not.toEqual(getHighlightTilesCacheKey({ ...base, userId: "user-2" }));
   });
 
+  it("does not collide when a field contains the key delimiter", () => {
+    expect(
+      getHighlightTilesCacheKey({ ...base, actionId: "a|3", battleVersion: 4 }),
+    ).not.toEqual(
+      getHighlightTilesCacheKey({ ...base, actionId: "a", battleVersion: 3, userId: "4|user-1" }),
+    );
+  });
+
   it("treats a missing action id as empty", () => {
     expect(getHighlightTilesCacheKey({ ...base, actionId: undefined })).toEqual(
       getHighlightTilesCacheKey({ ...base, actionId: undefined }),
