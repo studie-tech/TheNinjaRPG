@@ -1,6 +1,11 @@
 import { and, eq, inArray } from "drizzle-orm";
 import * as globalMapData from "@/data/hexasphere.json";
-import { MAP_SECTOR_ID_MAX, MAP_SECTOR_ID_MIN } from "@/drizzle/constants";
+import {
+  MAP_SECTOR_ID_MAX,
+  MAP_SECTOR_ID_MIN,
+  SECTOR_HEIGHT,
+  SECTOR_WIDTH,
+} from "@/drizzle/constants";
 import { sectorMap } from "@/drizzle/schema";
 import {
   type EdgeIndex,
@@ -127,6 +132,35 @@ export const getSectorNeighborIds = (
     south: neighbors[2]!,
     west: neighbors[3]!,
   };
+};
+
+/**
+ * Sectors whose published maps a moveInSector call should load together.
+ * When the destination is exactly one step past a default-sized (26×26)
+ * border, include that neighbour so the crossing does not wait on a second
+ * sequential query. Authored maps with a different size, diagonals, and
+ * polar gaps fall back to just the current sector; the router then loads
+ * the real neighbour after it sees the actual map dimensions.
+ */
+export const publishedMapsToPrefetchForMove = (
+  sector: number,
+  dest: { x: number; y: number },
+): number[] => {
+  const outWest = dest.x === -1;
+  const outEast = dest.x === SECTOR_WIDTH;
+  const outSouth = dest.y === -1;
+  const outNorth = dest.y === SECTOR_HEIGHT;
+  const outCount = [outWest, outEast, outNorth, outSouth].filter(Boolean).length;
+  if (outCount !== 1) return [sector];
+  const direction = outWest
+    ? "west"
+    : outEast
+      ? "east"
+      : outNorth
+        ? "north"
+        : "south";
+  const neighbor = getSectorNeighborIds(sector)[direction];
+  return neighbor >= 0 ? [sector, neighbor] : [sector];
 };
 
 /**

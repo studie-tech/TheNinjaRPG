@@ -51,7 +51,9 @@ import { fetchSector, fetchSectorVillage } from "@/routers/village";
 import { isTransientDatabaseError } from "@/server/dbRetry";
 import {
   fetchPublishedSectorMap,
+  fetchPublishedSectorMaps,
   getSectorNeighborIds,
+  publishedMapsToPrefetchForMove,
   resolveSectorCrossing,
 } from "@/server/utils/sectorMap";
 import { findRelationship } from "@/utils/alliance";
@@ -702,9 +704,14 @@ export const travelRouter = createTRPCRouter({
       const userVillage = villageId ?? "syndicate";
       // Return a graceful response instead of a raw 500 if the sector has no
       // published map (mutations must return baseServerResponse per CLAUDE.md).
-      const sectorMap = await fetchPublishedSectorMap(ctx.drizzle, sector).catch(
-        () => null,
-      );
+      // When the destination looks like a default-sized border crossing, load
+      // that neighbour in the same query so the walk does not wait on a
+      // second sequential published-map read.
+      const maps = await fetchPublishedSectorMaps(
+        ctx.drizzle,
+        publishedMapsToPrefetchForMove(sector, { x: longitude, y: latitude }),
+      ).catch(() => null);
+      const sectorMap = maps?.get(sector);
       if (!sectorMap) return errorResponse("This sector has no published map yet");
       // If a republish blocked the tile the player is standing on, snap them to
       // the nearest walkable tile instead of locking them in place forever.
@@ -735,10 +742,9 @@ export const travelRouter = createTRPCRouter({
         if (targetSector < 0) {
           return errorResponse("The polar wastes block your path");
         }
-        const neighbourMap = await fetchPublishedSectorMap(
-          ctx.drizzle,
-          targetSector,
-        ).catch(() => null);
+        const neighbourMap =
+          maps?.get(targetSector) ??
+          (await fetchPublishedSectorMap(ctx.drizzle, targetSector).catch(() => null));
         if (!neighbourMap) {
           return errorResponse("The neighbouring sector has no published map yet");
         }

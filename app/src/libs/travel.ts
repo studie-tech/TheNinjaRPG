@@ -6,6 +6,7 @@ import {
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { getSectorTile } from "@/libs/sector-map/validation";
 import type { GlobalMapData, GlobalTile, SectorPoint } from "@/libs/threejs/types";
+import { secondsFromNow } from "@/utils/time";
 
 /**
  * Gets the biome for a globe tile terrain type (0=ocean, 1=land, 2=desert, 3=ice)
@@ -109,6 +110,25 @@ export const calcGlobalTravelTime = (
   }
   return MAP_GLOBAL_TRAVEL_TIME_CAP_SECS;
 };
+
+/**
+ * Client cache patch when globe travel starts. Instant journeys (Wake Island
+ * is 0 seconds) omit travelFinishAt so the arrival countdown cannot call
+ * finishGlobalMove before startGlobalMove commits — that would no-op on the
+ * still-AWAKE row, after which start would leave the player stuck traveling.
+ */
+export const optimisticGlobalTravelStart = (travelTimeSeconds: number) => ({
+  status: "TRAVEL" as const,
+  ...(travelTimeSeconds > 0
+    ? { travelFinishAt: secondsFromNow(travelTimeSeconds) }
+    : {}),
+});
+
+/** Client cache patch when globe travel ends. */
+export const optimisticGlobalTravelFinish = () => ({
+  status: "AWAKE" as const,
+  travelFinishAt: null,
+});
 
 /**
  * Whether a position sits in a village zone. When a sector map is provided
