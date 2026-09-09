@@ -20,7 +20,9 @@ export const getHighlightTilesCacheKey = (info: {
     info.latitude,
     info.canUseTile ? "1" : "0",
     info.hoverTileName,
-  ].join("|");
+  ]
+    .map((value) => JSON.stringify(value))
+    .join("|");
 
 export type CombatHoverCursor = "pointer" | "default";
 
