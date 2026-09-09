@@ -10,13 +10,13 @@ import {
   MenubarMenu,
   MenubarTrigger,
 } from "@/components/ui/menubar";
-import { getMainNavbarLinks } from "@/libs/menus";
+import { BUGS_NAV_LINK, getMainNavbarLinks } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
 import { useUserData } from "@/utils/UserContext";
 
 const PixelPublicMenuDropdown: React.FC<{ className?: string }> = ({ className }) => {
   const { notifications } = useUserData();
-  const menuItems = getMainNavbarLinks(notifications);
+  const menuItems = [...getMainNavbarLinks(notifications), BUGS_NAV_LINK];
 
   return (
     <Menubar

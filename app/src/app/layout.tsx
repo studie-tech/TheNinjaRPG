@@ -77,6 +77,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             variables: {
               colorPrimary: "#ce7e00",
               colorForeground: "black",
+              colorBackground: "#ffffff",
+            },
+            elements: {
+              rootBox: "[color-scheme:light]",
             },
           }}
         >

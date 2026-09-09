@@ -8,6 +8,7 @@ import { seedItems } from "./seeds/items";
 import { seedQuests } from "./seeds/quests";
 import { seedAI } from "./seeds/ai";
 import { seedAssets } from "./seeds/assets";
+import { seedGuides } from "./seeds/guide";
 
 // Seed the database
 async function main() {
@@ -19,6 +20,7 @@ async function main() {
   await seedForum(drizzleDB);
   await seedVillages(drizzleDB);
   await seedQuests(drizzleDB);
+  await seedGuides(drizzleDB);
 }
 
 // Run the seeding & close databse connection

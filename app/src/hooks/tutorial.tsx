@@ -611,7 +611,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   //     "That's it for the tutorial, you can now start playing the game! You can find further information on how to play the game at this link",
   //   elementIds: ["tutorial-logo"],
   //   page: "/academy",
-  //   externalLink: "https://the-ninja-rpg.fandom.com/wiki/Getting_Started",
+  //   externalLink: "/guide",
   //   showNextButton: true,
   // },
 ];

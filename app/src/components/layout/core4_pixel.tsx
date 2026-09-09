@@ -109,7 +109,7 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                   loading="lazy"
                 />
               </Link>
-              <div className="grid min-w-0 flex-1 grid-cols-6 items-center gap-1 px-4 uppercase tracking-[0.08em]">
+              <div className="grid min-w-0 flex-1 grid-cols-5 items-center gap-1 px-4 uppercase tracking-[0.08em]">
                 {navbarMenuItems.map((link) => {
                   const count = link.notificationCount ?? 0;
                   return (

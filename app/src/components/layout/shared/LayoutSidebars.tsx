@@ -2,7 +2,7 @@
 
 import { UserButton, useUser } from "@clerk/nextjs";
 import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
-import { Bell, Eclipse, Link2 } from "lucide-react";
+import { Bell, Bug, Eclipse, Link2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type React from "react";
@@ -247,16 +247,31 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
   return (
     <div className="flex flex-row items-center">
       {userData && (
-        <span data-sidebar-keep-open="true" data-clerk-element="true">
+        <span
+          data-sidebar-keep-open="true"
+          data-clerk-element="true"
+          className="inline-flex h-6 w-6 items-center justify-center leading-none xl:h-7 xl:w-7"
+        >
           <UserButton
             appearance={{
-              elements: { userButtonPopoverCard: { pointerEvents: "initial" } },
+              elements: {
+                userButtonPopoverCard: { pointerEvents: "initial" },
+                rootBox: "flex items-center leading-none",
+                userButtonBox: "flex items-center",
+                userButtonTrigger:
+                  "flex h-6 w-6 items-center justify-center overflow-hidden rounded-full leading-none focus:shadow-none xl:h-7 xl:w-7",
+                userButtonAvatarBox: "h-6 w-6 xl:h-7 xl:w-7",
+                avatarBox: "h-6 w-6 xl:h-7 xl:w-7",
+              },
             }}
           />
         </span>
       )}
       <Link href="/event" onClick={onEventClick} aria-label="Event Notifications">
         <Bell className="mx-1 ml-2 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
+      </Link>
+      <Link href="/help" id="tutorial-bugs" aria-label="Bugs">
+        <Bug className="mx-1 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
       </Link>
       <GameSettingsPopover userData={userData} updateUser={updateUser} />
       {variant === "beta" && (

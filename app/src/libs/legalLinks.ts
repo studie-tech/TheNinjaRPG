@@ -25,6 +25,7 @@ export const LEGAL_LINKS: LegalLink[] = [
 
 export const SITE_FOOTER_LINKS: LegalLink[] = [
   ...LEGAL_LINKS,
+  { href: "/guide", label: "Guide" },
   { href: "/rules", label: "Rules" },
   { href: "/manual/staff", label: "Staff" },
 ];

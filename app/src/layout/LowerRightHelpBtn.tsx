@@ -169,12 +169,12 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
                 in question.
               </p>
               <p className="italic">
-                3. Maybe you can find the answer you are looking for on our{" "}
+                3. Maybe you can find the answer you are looking for in the{" "}
                 <Link
-                  href="https://the-ninja-rpg.fandom.com/wiki/Getting_Started"
+                  href="/guide"
                   className="font-bold text-orange-500 hover:text-orange-700"
                 >
-                  community manual
+                  player guide
                 </Link>
                 .
               </p>

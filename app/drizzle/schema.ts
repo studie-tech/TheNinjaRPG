@@ -49,6 +49,7 @@ import type {
   CharacterAssetConfig,
 } from "@/validators/towerDefense";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import type { GuideFaqItem } from "@/validators/guide";
 
 export const vector = customType<{
   data: ArrayBuffer;
@@ -5845,3 +5846,65 @@ export const storePurchaseTransfer = mysqlTable(
   }),
 );
 export type StorePurchaseTransfer = InferSelectModel<typeof storePurchaseTransfer>;
+
+export const guideArticle = mysqlTable(
+  "GuideArticle",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    slug: varchar("slug", { length: 191 }).notNull(),
+    title: varchar("title", { length: 191 }).notNull(),
+    subtitle: varchar("subtitle", { length: 255 }),
+    excerpt: text("excerpt"),
+    seoTitle: varchar("seoTitle", { length: 80 }),
+    seoDescription: varchar("seoDescription", { length: 180 }),
+    category: mysqlEnum("category", consts.GuideCategories).notNull(),
+    content: mediumtext("content").notNull(),
+    image: varchar("image", { length: 512 }),
+    faq: json("faq").$type<GuideFaqItem[]>(),
+    sortOrder: int("sortOrder").default(0).notNull(),
+    published: boolean("published").default(false).notNull(),
+    relatedBloodlineId: varchar("relatedBloodlineId", { length: 191 }),
+    relatedItemId: varchar("relatedItemId", { length: 191 }),
+    relatedJutsuId: varchar("relatedJutsuId", { length: 191 }),
+    sourceUrl: varchar("sourceUrl", { length: 512 }),
+    reviewNotes: text("reviewNotes"),
+    updatedByUserId: varchar("updatedByUserId", { length: 191 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      slugKey: uniqueIndex("GuideArticle_slug_key").on(table.slug),
+      categoryPublishedIdx: index("GuideArticle_category_published_idx").on(
+        table.category,
+        table.published,
+      ),
+      publishedIdx: index("GuideArticle_published_idx").on(table.published),
+    };
+  },
+);
+export type GuideArticle = InferSelectModel<typeof guideArticle>;
+export type GuideArticleInsert = InferInsertModel<typeof guideArticle>;
+
+export const guideArticleRelations = relations(guideArticle, ({ one }) => ({
+  updatedBy: one(userData, {
+    fields: [guideArticle.updatedByUserId],
+    references: [userData.userId],
+  }),
+  relatedBloodline: one(bloodline, {
+    fields: [guideArticle.relatedBloodlineId],
+    references: [bloodline.id],
+  }),
+  relatedItem: one(item, {
+    fields: [guideArticle.relatedItemId],
+    references: [item.id],
+  }),
+  relatedJutsu: one(jutsu, {
+    fields: [guideArticle.relatedJutsuId],
+    references: [jutsu.id],
+  }),
+}));

@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -89,7 +90,8 @@ export type FormEntry<K> = {
   readonly?: boolean;
 } & (
   | { type: "text" }
-  | { type: "richinput" }
+  | { type: "textarea"; rows?: number }
+  | { type: "richinput"; height?: string }
   | { type: "date" }
   | { type: "number" }
   | { type: "boolean" }
@@ -534,7 +536,10 @@ export const EditContent = <
                 <div
                   className={cn(
                     "p-2",
-                    ["avatar", "avatar3d"].includes(type) ? "row-span-5" : "",
+                    ["avatar", "avatar3d"].includes(type) &&
+                      !(formEntry.type === "avatar" && formEntry.size === "landscape")
+                      ? "row-span-5"
+                      : "",
                     formEntry.doubleWidth ? "md:col-span-2" : "",
                     props.fixedWidths
                       ? `h-32 shrink-0 grow-0 px-2 pt-3 ${props.fixedWidths}`
@@ -601,6 +606,36 @@ export const EditContent = <
                       }}
                     />
                   )}
+                  {type === "textarea" && (
+                    <FormField
+                      control={form.control}
+                      name={id}
+                      render={({ field, fieldState }) => {
+                        return (
+                          <FormItem>
+                            <FormLabel>
+                              {formEntry.label ? formEntry.label : id}
+                            </FormLabel>
+                            <FormControl>
+                              <Textarea
+                                id={id}
+                                rows={
+                                  formEntry.type === "textarea"
+                                    ? (formEntry.rows ?? 5)
+                                    : 5
+                                }
+                                isDirty={fieldState.isDirty}
+                                readOnly={formEntry.readonly}
+                                {...field}
+                                value={(field.value as string | undefined) ?? ""}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  )}
                   {"boolean" === type && (
                     <FormField
                       control={form.control}
@@ -634,12 +669,17 @@ export const EditContent = <
                             <FormControl>
                               <RichInput
                                 id={id}
-                                height="200"
+                                height={
+                                  "height" in formEntry && formEntry.height
+                                    ? formEntry.height
+                                    : "200"
+                                }
                                 placeholder={currentValues[id] as string}
                                 label={formEntry.label ? formEntry.label : id}
                                 control={form.control}
                                 isDirty={fieldState.isDirty}
                                 error={form.formState.errors[id]?.message as string}
+                                allowClipboardPaste={true}
                               />
                             </FormControl>
                             <FormMessage />
@@ -794,7 +834,7 @@ export const EditContent = <
                                                   className={cn(
                                                     "ml-auto",
                                                     String(option.value) ===
-                                                    String(field.value)
+                                                      String(field.value)
                                                       ? "opacity-100"
                                                       : "opacity-0",
                                                   )}

@@ -49,13 +49,13 @@ export default function SignupUser() {
       defaultBackHref="/"
     >
       <NativeSignIn />
-      <div className="flex flex-row items-center justify-center">
+      <div className="flex flex-row items-center justify-center [color-scheme:light]">
         <SignUp
           path="/signup"
           routing="path"
           appearance={{
             elements: {
-              rootBox: "!w-full",
+              rootBox: "!w-full [color-scheme:light]",
               cardBox: "!w-full",
               // Clerk's social buttons open in the WebView, which Google rejects and
               // Apple will not accept. NativeSignIn replaces them in the shell.
