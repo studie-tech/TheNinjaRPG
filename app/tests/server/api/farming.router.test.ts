@@ -196,8 +196,8 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     } as never);
     const api = await caller("farm-user");
     const state = await api.getFarmState();
-    if ("success" in state && state.success === false) {
-      throw new Error(state.message);
+    if (!("plots" in state)) {
+      throw new Error("message" in state ? state.message : "getFarmState failed");
     }
     expect(state.plots.find((plot) => plot.id === "plot-state")?.cropName).toBe("Test Crop");
     expect(state.availableSeeds.find((seed) => seed.itemId === "seed-1")?.yieldName).toBe(
