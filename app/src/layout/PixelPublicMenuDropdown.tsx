@@ -41,7 +41,7 @@ const PixelPublicMenuDropdown: React.FC<{ className?: string }> = ({ className }
                 }}
                 className="tnr-ink-menu-item"
               >
-                <Link href={item.href} prefetch={false}>
+                <Link href={item.href}>
                   {item.icon}
                   <span>{item.name}</span>
                   {count > 0 && (

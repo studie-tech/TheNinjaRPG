@@ -155,7 +155,6 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
                         await link.onClick();
                       }
                     }}
-                    prefetch={false}
                   >
                     {link.icon}
                     {link.name}
@@ -177,7 +176,6 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
                   onClick={async () => {
                     if (link.onClick) await link.onClick();
                   }}
-                  prefetch={false}
                 >
                   {link.icon}
                   {link.name}
