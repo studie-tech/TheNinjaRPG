@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
+import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
 import { showMutationToast } from "@/libs/toast";
@@ -133,14 +134,25 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
       >
         <DialogTrigger asChild>
           <div className="group relative cursor-pointer">
-            <AvatarImage
-              href={displayUrl ?? IMG_AVATAR_DEFAULT}
-              alt={`${id}-avatar`}
-              size={100}
-              hover_effect={true}
-              className={size === "square" ? "aspect-square" : "aspect-auto"}
-              priority
-            />
+            {size === "landscape" ? (
+              <Image
+                className="relative m-auto aspect-[2/1] w-full rounded-2xl border-2 border-black object-cover hover:border-amber-500 hover:opacity-80"
+                src={displayUrl ?? IMG_AVATAR_DEFAULT}
+                alt={`${id}-avatar`}
+                width={1280}
+                height={640}
+                priority
+              />
+            ) : (
+              <AvatarImage
+                href={displayUrl ?? IMG_AVATAR_DEFAULT}
+                alt={`${id}-avatar`}
+                size={100}
+                hover_effect={true}
+                className={size === "square" ? "aspect-square" : "aspect-auto"}
+                priority
+              />
+            )}
             {allowImageUpload && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-opacity-0 transition-all duration-200 group-hover:bg-opacity-50">
                 <Edit

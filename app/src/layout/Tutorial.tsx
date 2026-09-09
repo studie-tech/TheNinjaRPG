@@ -246,7 +246,7 @@ const TUTORIAL_STEPS: TutorialStepConfig[] = [
       "That's it for the tutorial, you can now start playing the game! You can find further information on how to play the game at this link",
     elementId: "tutorial-logo",
     page: "/academy",
-    externalLink: "https://the-ninja-rpg.fandom.com/wiki/Getting_Started",
+    externalLink: "/guide",
   },
 ];
 
@@ -793,7 +793,15 @@ const Tutorial: React.FC<TutorialProps> = ({
                 className="pointer-events-auto mb-2 w-full"
                 variant="outline"
                 size="sm"
-                onClick={() => window.open(currentTutorialStep.externalLink, "_blank")}
+                onClick={() => {
+                  const href = currentTutorialStep.externalLink;
+                  if (!href) return;
+                  if (href.startsWith("/")) {
+                    window.location.assign(href);
+                    return;
+                  }
+                  window.open(href, "_blank");
+                }}
               >
                 Read Getting Started Guide
               </Button>

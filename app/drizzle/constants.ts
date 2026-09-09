@@ -90,8 +90,49 @@ export const ContentTypes = [
   "skillTree",
   "towerDefenseCharacter",
   "towerDefenseUpgrade",
+  "guide",
 ] as const;
 export type ContentType = (typeof ContentTypes)[number];
+
+export const GuideCategories = [
+  "getting-started",
+  "combat",
+  "world",
+  "villages",
+  "bloodlines",
+  "farming",
+  "economy",
+  "ranks",
+  "reference",
+] as const;
+export type GuideCategory = (typeof GuideCategories)[number];
+
+export const GUIDE_CATEGORY_LABELS: Record<GuideCategory, string> = {
+  "getting-started": "Getting Started",
+  combat: "Combat",
+  world: "World & Travel",
+  villages: "Villages",
+  bloodlines: "Bloodlines",
+  farming: "Farming",
+  economy: "Economy",
+  ranks: "Ranks",
+  reference: "Reference",
+};
+
+/** Hub and tab order. Kept separate from `GuideCategories` so the SQL enum does not change. */
+export const GUIDE_HUB_CATEGORY_ORDER: GuideCategory[] = [
+  "getting-started",
+  "combat",
+  "world",
+  "villages",
+  "economy",
+  "ranks",
+  "bloodlines",
+  "farming",
+  "reference",
+];
+
+export const GUIDE_RESERVED_SLUGS = ["edit", "new"] as const;
 
 export const MAP_RESERVED_SECTORS = [
   73, 72, 75, 78, 275, 279, 201, 183, 272, 264, 270, 308, 289, 259, 260, 253, 304, 307,
@@ -192,6 +233,7 @@ export const LOG_TYPES = [
   "battleAction",
   "bloodline",
   "clan",
+  "guide",
   "item",
   "jutsu",
   "poll",

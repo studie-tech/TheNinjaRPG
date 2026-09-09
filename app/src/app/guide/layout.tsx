@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import { buildMetadata } from "@/libs/seo";
 
 export const metadata: Metadata = buildMetadata({
-  title: "World Map Tools",
+  title: "TheNinja-RPG Guide",
   description:
-    "Staff tools for editing TheNinja-RPG sector maps and tilesets. Player travel docs are in the guide.",
-  path: "/manual/world",
+    "How to play TheNinja-RPG: getting started in Seichi, combat, farming, bloodlines, villages and ranks. The official first-party wiki for this free ninja browser game.",
+  path: "/guide",
 });
 
 export default function Layout({ children }: { children: React.ReactNode }) {

@@ -31,7 +31,13 @@ export interface SitemapEntry {
 }
 
 /** Child sitemaps listed by the index, in the order they are advertised. */
-export const SITEMAP_SECTIONS = ["pages", "manual", "forum", "profiles"] as const;
+export const SITEMAP_SECTIONS = [
+  "pages",
+  "manual",
+  "guide",
+  "forum",
+  "profiles",
+] as const;
 
 export type SitemapSection = (typeof SITEMAP_SECTIONS)[number];
 

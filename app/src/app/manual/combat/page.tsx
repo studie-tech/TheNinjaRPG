@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { BattleLengthHistogram } from "@/layout/BattleLengthHistogram";
 import ContentBox from "@/layout/ContentBox";
 import { DmgConfigDialog } from "@/layout/DmgConfigDialog";
@@ -22,8 +23,14 @@ export default function ManualCombat() {
         Combat is based on a turn-based system, where each user gets to perform their
         action in turns of {COMBAT_SECONDS} seconds. The user with the highest
         initiative goes first. Each action has a action point cost, and so one or more
-        actions may be possible in each turn.
-        <h2 className="mt-5 font-bold text-xl">Initiative</h2>
+        actions may be possible in each turn. For a full how-to, read the{" "}
+        <Link
+          href="/guide/combat"
+          className="font-bold text-orange-500 hover:text-orange-700"
+        >
+          combat guide
+        </Link>
+        .<h2 className="mt-5 font-bold text-xl">Initiative</h2>
         Initiative is calculated by rolling a random number between 1 and 20 for each
         user. Several modifiers are added to this number:
         <ul className="ml-5 list-disc">

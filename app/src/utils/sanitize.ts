@@ -13,6 +13,8 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
     p: ["style"],
     div: ["style"],
     span: ["style"],
+    h2: ["id"],
+    h3: ["id"],
     blockquote: ["author", "date"],
     iframe: [
       "src",
@@ -99,10 +101,7 @@ const htmlToText = (html: string, breakText: string, collapse: RegExp) => {
     },
   });
 
-  return decodeHTML(text)
-    .replace(/\r\n?/g, "\n")
-    .replace(collapse, " ")
-    .trim();
+  return decodeHTML(text).replace(/\r\n?/g, "\n").replace(collapse, " ").trim();
 };
 
 /** Converts stored HTML to normalized text without retaining script/style contents. */

@@ -92,11 +92,10 @@ const config = {
         destination: "/forum",
         permanent: true,
       },
-      // /manual/travel is linked from off-site and 404s; the travel documentation lives
-      // under the world section of the manual.
+      // /manual/travel is linked from off-site and 404s; travel docs live in the guide.
       {
         source: "/manual/travel",
-        destination: "/manual/world",
+        destination: "/guide/world",
         permanent: true,
       },
     ];
@@ -117,7 +116,7 @@ const config = {
         // and a stale copy for an hour is harmless. The section names are listed rather
         // than matched with a wildcard so a typo'd /sitemap-<anything>.xml does not get
         // its 404 cached at the edge for an hour. Keep in step with SITEMAP_SECTIONS.
-        source: "/:sitemap(sitemap|sitemap-pages|sitemap-manual|sitemap-forum|sitemap-profiles).xml",
+        source: "/:sitemap(sitemap|sitemap-pages|sitemap-manual|sitemap-guide|sitemap-forum|sitemap-profiles).xml",
         headers: [
           {
             key: "Cache-Control",

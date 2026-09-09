@@ -3,6 +3,7 @@ import {
   bloodline,
   forumBoard,
   forumThread,
+  guideArticle,
   item,
   jutsu,
   userData,
@@ -32,12 +33,13 @@ const STATIC_ROUTES: {
   { path: "/", priority: 1, changeFrequency: "daily" },
   { path: "/news", priority: 0.8, changeFrequency: "daily" },
   { path: "/manual", priority: 0.8, changeFrequency: "weekly" },
+  { path: "/guide", priority: 0.9, changeFrequency: "weekly" },
   { path: "/forum", priority: 0.7, changeFrequency: "daily" },
   { path: "/manual/bloodline", priority: 0.7, changeFrequency: "weekly" },
   { path: "/manual/jutsu", priority: 0.7, changeFrequency: "weekly" },
   { path: "/manual/item", priority: 0.7, changeFrequency: "weekly" },
   { path: "/manual/combat", priority: 0.7, changeFrequency: "monthly" },
-  { path: "/manual/world", priority: 0.6, changeFrequency: "monthly" },
+  { path: "/guide/world", priority: 0.7, changeFrequency: "monthly" },
   { path: "/manual/quest", priority: 0.6, changeFrequency: "monthly" },
   { path: "/manual/ai", priority: 0.6, changeFrequency: "monthly" },
   { path: "/manual/skillTree", priority: 0.6, changeFrequency: "monthly" },
@@ -50,7 +52,6 @@ const STATIC_ROUTES: {
   { path: "/manual/activityStreak", priority: 0.4, changeFrequency: "monthly" },
   { path: "/manual/towerDefense", priority: 0.4, changeFrequency: "monthly" },
   { path: "/manual/towerDefense/leaderboard", priority: 0.4, changeFrequency: "daily" },
-  { path: "/manual/world/sector-maps", priority: 0.4, changeFrequency: "monthly" },
   { path: "/manual/polls", priority: 0.4, changeFrequency: "weekly" },
   { path: "/manual/staff", priority: 0.4, changeFrequency: "monthly" },
   { path: "/manual/opinions", priority: 0.5, changeFrequency: "weekly" },
@@ -111,6 +112,23 @@ const manualEntries = async (): Promise<SitemapEntry[]> => {
       priority: 0.6,
     })),
   ];
+};
+
+const guideEntries = async (): Promise<SitemapEntry[]> => {
+  const now = new Date();
+  const articles = await drizzleDB
+    .select({
+      slug: guideArticle.slug,
+      updatedAt: guideArticle.updatedAt,
+    })
+    .from(guideArticle)
+    .where(eq(guideArticle.published, true));
+  return articles.map((row) => ({
+    url: absoluteUrl(`/guide/${row.slug}`),
+    lastModified: row.updatedAt ?? now,
+    changeFrequency: "monthly" as const,
+    priority: row.slug === "getting-started" ? 0.8 : 0.6,
+  }));
 };
 
 const forumEntries = async (): Promise<SitemapEntry[]> => {
@@ -180,6 +198,7 @@ const profileEntries = async (): Promise<SitemapEntry[]> => {
 export const SITEMAP_SECTION_LOADERS = {
   pages: staticEntries,
   manual: manualEntries,
+  guide: guideEntries,
   forum: forumEntries,
   profiles: profileEntries,
 } satisfies Record<SitemapSection, () => Promise<SitemapEntry[]> | SitemapEntry[]>;

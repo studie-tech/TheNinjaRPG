@@ -6,6 +6,7 @@ import {
   Bug,
   CheckCircle,
   Clock,
+  Database,
   Flag,
   Gavel,
   Globe2,
@@ -16,7 +17,6 @@ import {
   Newspaper,
   Paintbrush,
   Receipt,
-  Scale,
   ShieldHalf,
   User,
   XCircle,
@@ -64,9 +64,9 @@ export const getMainNavbarLinks = (notifications?: NavBarDropdownLink[]) => {
     },
     {
       id: "tutorial-manual",
-      href: "/manual",
-      name: "Info",
-      icon: <Scale className="h-6 w-6" />,
+      href: "/guide",
+      name: "Guide",
+      icon: <BookOpenText className="h-6 w-6" />,
     },
     {
       id: "tutorial-forum",
@@ -75,10 +75,10 @@ export const getMainNavbarLinks = (notifications?: NavBarDropdownLink[]) => {
       icon: <MessagesSquare className="h-6 w-6" />,
     },
     {
-      id: "tutorial-bugs",
-      href: "/help",
-      name: "Bugs",
-      icon: <Bug className="h-6 w-6" />,
+      id: "tutorial-data",
+      href: "/manual",
+      name: "Data",
+      icon: <Database className="h-6 w-6" />,
     },
     {
       id: "tutorial-art",
@@ -88,6 +88,14 @@ export const getMainNavbarLinks = (notifications?: NavBarDropdownLink[]) => {
     },
   ];
   return links;
+};
+
+/** Icon-only bugs entry for the header circles and compact menus. */
+export const BUGS_NAV_LINK: NavBarDropdownLink = {
+  id: "tutorial-bugs",
+  href: "/help",
+  name: "Bugs",
+  icon: <Bug className="h-6 w-6" />,
 };
 
 export const useGameMenu = (userData?: UserWithRelations | null) => {
