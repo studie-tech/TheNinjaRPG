@@ -50,12 +50,14 @@ const raidBattle = (
   });
 
 type RaidProgressClientOptions = {
-  upsertRowsAffected: number;
+  insertRowsAffected: number;
+  claimUpdateRowsAffected?: number;
   bossHpAfterDecrement: number;
 };
 
 const createRaidProgressClient = ({
-  upsertRowsAffected,
+  insertRowsAffected,
+  claimUpdateRowsAffected = 0,
   bossHpAfterDecrement,
 }: RaidProgressClientOptions) => {
   const calls: string[] = [];
@@ -72,10 +74,14 @@ const createRaidProgressClient = ({
     return { rowsAffected: 1 };
   });
   const onDuplicateKeyUpdate = vi.fn(async () => {
-    calls.push("upsert");
-    return { rowsAffected: upsertRowsAffected };
+    calls.push("insertClaim");
+    return { rowsAffected: insertRowsAffected };
   });
   const participationValues = vi.fn().mockReturnValue({ onDuplicateKeyUpdate });
+  const claimUpdateWhere = vi.fn(async () => {
+    calls.push("updateClaim");
+    return { rowsAffected: claimUpdateRowsAffected };
+  });
   const questWhere = vi.fn(async () => {
     calls.push("hp");
     return { rowsAffected: 1 };
@@ -98,6 +104,9 @@ const createRaidProgressClient = ({
       throw new Error("unexpected insert");
     }),
     update: vi.fn((table: unknown) => {
+      if (table === raidParticipation) {
+        return { set: vi.fn().mockReturnValue({ where: claimUpdateWhere }) };
+      }
       if (table === quest) {
         return { set: vi.fn().mockReturnValue({ where: questWhere }) };
       }
@@ -125,7 +134,7 @@ const createRaidProgressClient = ({
 describe("updateRaidProgress", () => {
   it("does not write when the battle is not a raid", async () => {
     const { client, calls } = createRaidProgressClient({
-      upsertRowsAffected: 1,
+      insertRowsAffected: 1,
       bossHpAfterDecrement: 0,
     });
 
@@ -136,7 +145,7 @@ describe("updateRaidProgress", () => {
 
   it("does not write when the boss took no damage", async () => {
     const { client, calls } = createRaidProgressClient({
-      upsertRowsAffected: 1,
+      insertRowsAffected: 1,
       bossHpAfterDecrement: 0,
     });
 
@@ -151,37 +160,54 @@ describe("updateRaidProgress", () => {
 
   it("stops after a lost battleCount claim and does not decrement HP or notify", async () => {
     const { client, calls, findMany } = createRaidProgressClient({
-      upsertRowsAffected: 0,
+      insertRowsAffected: 0,
       bossHpAfterDecrement: 0,
     });
 
     await updateRaidProgress(client, raidBattle(), USER_ID);
 
-    expect(calls).toEqual(["upsert"]);
+    expect(calls).toEqual(["insertClaim"]);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it("does not decrement HP when a later battle's battleCount guard misses", async () => {
+    const { client, calls, findMany } = createRaidProgressClient({
+      insertRowsAffected: 1,
+      claimUpdateRowsAffected: 0,
+      bossHpAfterDecrement: 0,
+    });
+
+    await updateRaidProgress(
+      client,
+      raidBattle({ raidStartBattleCount: { [USER_ID]: 2 } }),
+      USER_ID,
+    );
+
+    expect(calls).toEqual(["updateClaim"]);
     expect(findMany).not.toHaveBeenCalled();
   });
 
   it("decrements HP after a successful claim and skips notify while the boss lives", async () => {
     const { client, calls, findMany } = createRaidProgressClient({
-      upsertRowsAffected: 1,
+      insertRowsAffected: 1,
       bossHpAfterDecrement: 400,
     });
 
     await updateRaidProgress(client, raidBattle({ bossHealth: 400 }), USER_ID);
 
-    expect(calls).toEqual(["upsert", "hp", "fetchHp"]);
+    expect(calls).toEqual(["insertClaim", "hp", "fetchHp"]);
     expect(findMany).not.toHaveBeenCalled();
   });
 
   it("notifies only after the post-decrement HP read, without scanning participants", async () => {
     const { client, calls, findMany, notificationValues } = createRaidProgressClient({
-      upsertRowsAffected: 2,
+      insertRowsAffected: 1,
       bossHpAfterDecrement: 0,
     });
 
     await updateRaidProgress(client, raidBattle(), USER_ID);
 
-    expect(calls.slice(0, 3)).toEqual(["upsert", "hp", "fetchHp"]);
+    expect(calls.slice(0, 3)).toEqual(["insertClaim", "hp", "fetchHp"]);
     expect([...calls.slice(3)].sort()).toEqual(["notify", "unread"]);
     expect(findMany).not.toHaveBeenCalled();
     expect(notificationValues).toHaveBeenCalledWith([
@@ -195,7 +221,7 @@ describe("updateRaidProgress", () => {
 
   it("splits battle damage evenly across human attackers and ignores summons", async () => {
     const { client, participationValues } = createRaidProgressClient({
-      upsertRowsAffected: 1,
+      insertRowsAffected: 1,
       bossHpAfterDecrement: 500,
     });
 
@@ -295,5 +321,47 @@ describeWithDatabase("updateRaidProgress against MySQL", () => {
     expect(participants[0]?.damageDealt).toBe(400);
     expect(notices).toHaveLength(0);
     expect(user?.unreadNotifications).toBe(0);
+  });
+
+  it("does not decrement shared HP again when the same battleCount is retried", async () => {
+    const database = await seedRaid(1000);
+    const battle = raidBattle({ raidInitialBossHp: 1000, bossHealth: 600 });
+
+    await updateRaidProgress(database, battle, USER_ID);
+    await updateRaidProgress(database, battle, USER_ID);
+
+    const { raid, participants, notices } = await readRaid();
+    expect(raid?.raidBossCurrentHealth).toBe(600);
+    expect(participants[0]?.damageDealt).toBe(400);
+    expect(participants[0]?.battleCount).toBe(1);
+    expect(notices).toHaveLength(0);
+  });
+
+  it("claims a later battle with an UPDATE guard and ignores a stale retry", async () => {
+    const database = await seedRaid(800);
+    await database.insert(raidParticipation).values({
+      id: "existing-participation",
+      questId: QUEST_ID,
+      userId: USER_ID,
+      damageDealt: 200,
+      battleCount: 1,
+      rewardsClaimed: [],
+    });
+
+    const laterBattle = raidBattle({
+      raidInitialBossHp: 800,
+      bossHealth: 300,
+      raidStartBattleCount: { [USER_ID]: 1 },
+    });
+
+    await updateRaidProgress(database, laterBattle, USER_ID);
+    await updateRaidProgress(database, laterBattle, USER_ID);
+
+    const { raid, participants, notices } = await readRaid();
+    expect(raid?.raidBossCurrentHealth).toBe(300);
+    expect(participants).toHaveLength(1);
+    expect(participants[0]?.damageDealt).toBe(700);
+    expect(participants[0]?.battleCount).toBe(2);
+    expect(notices).toHaveLength(0);
   });
 });
