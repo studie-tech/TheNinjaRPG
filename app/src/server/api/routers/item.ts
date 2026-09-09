@@ -79,6 +79,7 @@ import {
   calcItemRepairCost,
   calcItemSellingPrice,
   canEquipAdditional,
+  computeAutoEquipAssignments,
   computeLoadoutAssignments,
   getInventoryBucket,
   getInventoryBucketCapacity,
@@ -2665,67 +2666,44 @@ export const itemRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Auto-equip best items by cost" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
-      // Fetch user items
-      const [fetchedItems, user] = await Promise.all([
+      const [useritems, user] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
-      // Mutable inventory snapshot so each successful equip is visible to the next
-      // toggleEquipItem call (canEquipAdditional category limits).
-      let useritems = fetchedItems;
 
-      // Get unequipped items that are not stored at home, sorted by cost (descending)
-      const unequippedItems = useritems
-        .filter(
-          (ui) =>
-            ui.equipped === "NONE" &&
-            !ui.storedAtHome &&
-            !ui.isInAuction &&
-            (!ui.craftingFinishedAt || ui.craftingFinishedAt < new Date()),
-        )
-        .sort((a, b) => b.item.cost - a.item.cost);
-      let availableSlots = ItemSlots.filter(
-        (slot) => !useritems.find((ui) => ui.equipped === slot),
-      );
+      // Slot exclusivity and category / maxEquips limits are decided against one
+      // in-memory snapshot. Writes are a single Promise.all so validation is not
+      // serialized per item.
+      const { assignments, hasUnequipped, hasAvailableSlots } =
+        computeAutoEquipAssignments(useritems, user);
 
-      // Guard
-      if (unequippedItems.length === 0) {
+      if (!hasUnequipped) {
         return errorResponse("No unequipped items available");
       }
-      if (availableSlots.length === 0) {
+      if (!hasAvailableSlots) {
         return errorResponse("No available slots to equip items");
       }
 
-      // Try to equip each unequipped item
-      const updatePromises = [];
-      let nEquipped = 0;
-      for (const useritem of unequippedItems) {
-        const slot = availableSlots.find((slot) => slot.includes(useritem.item.slot));
-        if (slot) {
-          const result = await toggleEquipItem(
-            ctx.drizzle,
-            useritem.id,
-            useritems,
-            user,
-            slot,
-          );
-          if (result.success && "promises" in result && result.promises.length > 0) {
-            nEquipped++;
-            updatePromises.push(...result.promises);
-            availableSlots = availableSlots.filter((s) => s !== slot);
-            useritems = result.newUserItems;
-          }
-        }
-      }
-
-      // Execute all updates
-      if (updatePromises.length > 0) {
-        await Promise.all(updatePromises);
+      if (assignments.length > 0) {
+        await Promise.all(
+          assignments.map((assignment) =>
+            ctx.drizzle
+              .update(userItem)
+              .set({ equipped: assignment.slot })
+              .where(
+                and(
+                  eq(userItem.id, assignment.userItemId),
+                  eq(userItem.userId, user.userId),
+                  gt(userItem.quantity, 0),
+                ),
+              ),
+          ),
+        );
       }
 
       return {
         success: true,
-        message: `Equipped ${nEquipped} item${nEquipped === 1 ? "" : "s"}`,
+        message: `Equipped ${assignments.length} item${assignments.length === 1 ? "" : "s"}`,
       };
     }),
   getItemLoadouts: protectedProcedure
