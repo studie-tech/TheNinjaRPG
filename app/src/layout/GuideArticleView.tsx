@@ -67,21 +67,25 @@ export const GuideArticleView: React.FC<GuideArticleViewProps> = ({
           />
         )}
         {headings.length > 1 && (
-          <details className="mb-4 rounded-md border p-3 lg:hidden">
-            <summary className="cursor-pointer font-bold">On this page</summary>
+          <details className="mb-4 rounded-md border bg-popover p-3 shadow-sm lg:hidden">
+            <summary className="cursor-pointer font-bold text-muted-foreground text-xs uppercase tracking-[0.14em]">
+              On this page
+            </summary>
             <GuideToc headings={headings} />
           </details>
         )}
-        <div className="lg:grid lg:grid-cols-[1fr_14rem] lg:gap-6">
-          <article className="min-w-0 space-y-3 [&_a]:font-bold [&_a]:text-orange-500 hover:[&_a]:text-orange-700 [&_h2]:mt-5 [&_h2]:scroll-mt-24 [&_h2]:font-bold [&_h2]:text-xl [&_h3]:mt-4 [&_h3]:scroll-mt-24 [&_h3]:font-semibold [&_h3]:text-lg [&_ul]:ml-5 [&_ul]:list-disc">
+        <div className="lg:grid lg:grid-cols-[1fr_13rem] lg:items-start lg:gap-6">
+          <article className="min-w-0 space-y-3 [&_a]:font-bold [&_a]:text-orange-500 [&_a]:hover:text-orange-700 [&_h2]:mt-5 [&_h2]:scroll-mt-24 [&_h2]:font-bold [&_h2]:text-xl [&_h3]:mt-4 [&_h3]:scroll-mt-24 [&_h3]:font-semibold [&_h3]:text-lg [&_ul]:ml-5 [&_ul]:list-disc">
             {parseHtml(html)}
           </article>
           {headings.length > 1 && (
             <nav
-              className="sticky top-24 hidden h-fit lg:block"
+              className="sticky top-24 hidden h-fit rounded-md border bg-popover p-3 shadow-sm lg:block"
               aria-label="On this page"
             >
-              <p className="mb-2 font-bold text-sm">On this page</p>
+              <p className="mb-2 font-bold text-muted-foreground text-xs uppercase tracking-[0.14em]">
+                On this page
+              </p>
               <GuideToc headings={headings} />
             </nav>
           )}
@@ -150,10 +154,13 @@ export const GuideArticleView: React.FC<GuideArticleViewProps> = ({
 const GuideToc: React.FC<{
   headings: { id: string; text: string; level: 2 | 3 }[];
 }> = ({ headings }) => (
-  <ol className="mt-2 space-y-1 text-sm">
+  <ol className="mt-2 space-y-0.5 border-l pl-3 text-sm">
     {headings.map((heading) => (
       <li key={heading.id} className={heading.level === 3 ? "ml-3" : undefined}>
-        <a href={`#${heading.id}`} className="text-orange-500 hover:text-orange-700">
+        <a
+          href={`#${heading.id}`}
+          className="block rounded-sm py-0.5 text-orange-600 hover:text-orange-800"
+        >
           {heading.text}
         </a>
       </li>
