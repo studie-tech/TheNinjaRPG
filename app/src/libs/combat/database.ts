@@ -1100,9 +1100,9 @@ export const updateRaidProgress = async (
   // Get the battleCount at the start of this battle (0 if user hasn't participated before)
   const startBattleCount = curBattle.extraState.raidStartBattleCount?.[userId] ?? 0;
 
-  // Step 1: Try to upsert participation record with battleCount guard
-  // The IF conditions ensure the update only happens if battleCount matches startBattleCount
-  // If battleCount has changed (another call already processed), values stay the same
+  // Claim this battle's damage for this user. battleCount is the optimistic lock:
+  // a retry sees the same startBattleCount and the IF clauses write the existing
+  // values, so rowsAffected is 0 and we stop before touching HP or the inbox.
   const upsertResult = await client
     .insert(raidParticipation)
     .values({
@@ -1121,14 +1121,14 @@ export const updateRaidProgress = async (
       },
     });
 
-  // Step 2: Check rowsAffected to see if the upsert actually changed data
-  // rowsAffected = 1 (new insert) or 2 (update with changes) → proceed
-  // rowsAffected = 0 (no changes because battleCount didn't match) → skip
+  // rowsAffected = 1 (insert) or 2 (update that changed) → this call owns the claim
+  // rowsAffected = 0 (battleCount already advanced) → duplicate, skip
   if (upsertResult.rowsAffected === 0) {
     return;
   }
 
-  // Step 3: Deduct this user's share of damage from boss HP
+  // Shared raid HP is not itself idempotent, so it runs only after the claim.
+  // Parallelizing this with the upsert would double-decrement on a duplicate call.
   await client
     .update(quest)
     .set({
@@ -1136,27 +1136,22 @@ export const updateRaidProgress = async (
     })
     .where(and(eq(quest.id, raidQuestId), eq(quest.questType, "raid")));
 
-  // Step 4: Fetch updated quest and participants in PARALLEL
-  const [updatedQuest, participants] = await Promise.all([
-    client.query.quest.findFirst({
-      where: eq(quest.id, raidQuestId),
-      columns: { raidBossCurrentHealth: true, name: true },
-    }),
-    client.query.raidParticipation.findMany({
-      where: eq(raidParticipation.questId, raidQuestId),
-      columns: { userId: true },
-    }),
-  ]);
+  // Read committed global HP. A successful claim already means this user is a
+  // participant, so we do not scan RaidParticipation.
+  const updatedQuest = await client.query.quest.findFirst({
+    where: eq(quest.id, raidQuestId),
+    columns: { raidBossCurrentHealth: true, name: true },
+  });
 
   const bossDefeated = (updatedQuest?.raidBossCurrentHealth ?? 0) <= 0;
-  if (!bossDefeated || participants.length === 0) {
+  if (!bossDefeated) {
     return;
   }
 
-  // Step 5: Send notifications in PARALLEL
+  // Notify only after the post-decrement read, and only this acting user.
+  // Doing this beside the HP write would announce a kill from a stale HP
+  // snapshot, or insert a second inbox row if the claim gate were skipped.
   const raidName = updatedQuest?.name ?? "the raid";
-
-  // Only update the user this is being called for
   await Promise.all([
     client.insert(notification).values([
       {
