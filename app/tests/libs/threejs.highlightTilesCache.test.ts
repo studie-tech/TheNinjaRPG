@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { getHighlightTilesCacheKey } from "@/libs/threejs/highlightTilesCache";
+import {
+  getHighlightTilesCacheKey,
+  nextCombatHoverCursor,
+} from "@/libs/threejs/highlightTilesCache";
 
 const base = {
   actionId: "move",
@@ -45,5 +48,21 @@ describe("getHighlightTilesCacheKey", () => {
     expect(getHighlightTilesCacheKey({ ...base, actionId: undefined })).not.toEqual(
       getHighlightTilesCacheKey(base),
     );
+  });
+});
+
+describe("nextCombatHoverCursor", () => {
+  it("restores pointer after a mutation settles back to default", () => {
+    expect(nextCombatHoverCursor("pointer", "default")).toBe("pointer");
+    expect(nextCombatHoverCursor("pointer", "")).toBe("pointer");
+  });
+
+  it("does not override an in-flight wait cursor", () => {
+    expect(nextCombatHoverCursor("pointer", "wait")).toBe("wait");
+    expect(nextCombatHoverCursor("default", "wait")).toBe("wait");
+  });
+
+  it("clears pointer when the hover is no longer a valid target", () => {
+    expect(nextCombatHoverCursor("default", "pointer")).toBe("default");
   });
 });

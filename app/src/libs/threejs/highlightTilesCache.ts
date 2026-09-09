@@ -21,3 +21,23 @@ export const getHighlightTilesCacheKey = (info: {
     info.canUseTile ? "1" : "0",
     info.hoverTileName,
   ].join("|");
+
+export type CombatHoverCursor = "pointer" | "default";
+
+/**
+ * Next body cursor after a highlight pass. Never overrides an in-flight "wait"
+ * (set while a mutation is pending); restores pointer after settle-to-default.
+ */
+export const nextCombatHoverCursor = (
+  desired: CombatHoverCursor | undefined,
+  current: string,
+): string => {
+  if (current === "wait") return current;
+  if (desired === "pointer" && (current === "default" || current === "")) {
+    return "pointer";
+  }
+  if (desired === "default" && current === "pointer") {
+    return "default";
+  }
+  return current;
+};

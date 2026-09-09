@@ -90,7 +90,11 @@ import { playPreloadedAudio } from "@/utils/audio";
 import type { BarrierTagType } from "@/validators/combat";
 import type { HexagonalFaceMesh, TerrainHex } from "../hexgrid";
 import { findHex, getPossibleActionTiles, PathCalculator } from "../hexgrid";
-import { getHighlightTilesCacheKey } from "./highlightTilesCache";
+import {
+  type CombatHoverCursor,
+  getHighlightTilesCacheKey,
+  nextCombatHoverCursor,
+} from "./highlightTilesCache";
 
 // Queue for non-movement SFX that should play after movement completes
 type PendingSfx = { url: string; volume: number };
@@ -1542,6 +1546,15 @@ export const highlightTiles = (info: {
     hoverTileName,
   });
   if (group_highlight_edges.userData.highlightTilesKey === cacheKey) {
+    const nextCursor = nextCombatHoverCursor(
+      group_highlight_edges.userData.highlightTilesCursor as
+        | CombatHoverCursor
+        | undefined,
+      document.body.style.cursor,
+    );
+    if (nextCursor !== document.body.style.cursor) {
+      document.body.style.cursor = nextCursor;
+    }
     endMark();
     return currentHighlights;
   }
@@ -1583,6 +1596,7 @@ export const highlightTiles = (info: {
 
   // Highlight intersected tile using shared validation
   const newSelection = new Set<string>();
+  let desiredCursor: CombatHoverCursor = "default";
   if (hit && action && canUseTile) {
     const intersected = hit.object as HexagonalFaceMesh;
     const targetTile = intersected.userData.tile as TerrainHex;
@@ -1665,19 +1679,8 @@ export const highlightTiles = (info: {
           newSelection.add(name);
         }
       });
-      // Set cursor type on highlight
-      if (
-        (document.body.style.cursor === "default" ||
-          document.body.style.cursor === "") &&
-        green.size > 0 &&
-        isValid
-      ) {
-        document.body.style.cursor = "pointer";
-      } else if (
-        document.body.style.cursor === "pointer" &&
-        (green.size === 0 || !isValid)
-      ) {
-        document.body.style.cursor = "default";
+      if (green.size > 0 && isValid) {
+        desiredCursor = "pointer";
       }
     }
   }
@@ -1714,6 +1717,11 @@ export const highlightTiles = (info: {
 
   const result = new Set([...newHighlights, ...newSelection]);
   group_highlight_edges.userData.highlightTilesKey = cacheKey;
+  group_highlight_edges.userData.highlightTilesCursor = desiredCursor;
+  const nextCursor = nextCombatHoverCursor(desiredCursor, document.body.style.cursor);
+  if (nextCursor !== document.body.style.cursor) {
+    document.body.style.cursor = nextCursor;
+  }
   endMark();
   return result;
 };
