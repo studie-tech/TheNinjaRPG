@@ -44,6 +44,7 @@ import { postProcessRewards } from "@/libs/quest";
 import {
   getRaidChatConversationId,
   getRaidObjectiveData,
+  isRaidListedForVillage,
   validateRaidIsActive,
 } from "@/libs/raids";
 import { fetchActiveUserMpvpBattles } from "@/routers/clan";
@@ -55,6 +56,7 @@ import {
   purgeAllRaidChatMembershipsForUser,
   purgeRaidChatMembership,
 } from "@/server/utils/raidChat";
+import { fetchRaidJoinUser, fetchRaidListUser } from "@/server/utils/raidUser";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
 import { AllTags } from "@/validators/combat";
@@ -141,17 +143,9 @@ export const raidsRouter = createTRPCRouter({
     })
     .input(z.object({ sector: z.number().optional() }).nullish())
     .query(async ({ ctx, input }) => {
-      // Query
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
-
-      // Guard
-      if (!user) return { raids: [] };
-
-      // Query - parallel fetch for cleanup, raids, sectors, and active sector wars
-      const [, raids, userVillageSectors, activeSectorWars] = await Promise.all([
+      // Query - slim user + cleanup, raids, and shrine-down sector wars in one hop
+      const [user, , raids, activeSectorWars] = await Promise.all([
+        fetchRaidListUser(ctx.drizzle, ctx.userId),
         cleanupExpiredExclusiveRaids(ctx.drizzle),
         ctx.drizzle.query.quest.findMany({
           where: and(
@@ -167,35 +161,32 @@ export const raidsRouter = createTRPCRouter({
           },
           orderBy: desc(quest.createdAt),
         }),
-        user.villageId
-          ? ctx.drizzle.query.sector.findMany({
-              where: eq(sector.villageId, user.villageId),
-              columns: { sector: true },
-            })
-          : Promise.resolve([]),
-        // Fetch active sector wars where shrine is defeated (for given sector if provided)
-        // This allows attackers to see exclusive raids before war is finalized
-        user.villageId
-          ? ctx.drizzle.query.war.findMany({
-              where: and(
-                eq(war.type, "SECTOR_WAR"),
-                isNull(war.endedAt),
-                lte(war.defenderShrineHp, 0),
-                input?.sector !== undefined ? eq(war.sector, input.sector) : undefined,
-              ),
-              columns: { id: true, sector: true, attackerVillageId: true },
-              with: {
-                warAllies: {
-                  columns: { villageId: true, supportVillageId: true },
-                },
-              },
-            })
-          : Promise.resolve([]),
+        // Always fetched so this stays in the same round-trip as the user row.
+        // Users without a village never match the attacker/ally filter below.
+        ctx.drizzle.query.war.findMany({
+          where: and(
+            eq(war.type, "SECTOR_WAR"),
+            isNull(war.endedAt),
+            lte(war.defenderShrineHp, 0),
+            input?.sector !== undefined ? eq(war.sector, input.sector) : undefined,
+          ),
+          columns: { id: true, sector: true, attackerVillageId: true },
+          with: {
+            warAllies: {
+              columns: { villageId: true, supportVillageId: true },
+            },
+          },
+        }),
       ]);
+
+      // Guard
+      if (!user) return { raids: [] };
 
       // Derived
       const now = new Date();
-      const ownedSectorNumbers = new Set(userVillageSectors.map((s) => s.sector));
+      const ownedSectorNumbers = new Set(
+        user.village?.sectors?.map((s) => s.sector) ?? [],
+      );
       // Sectors where user's village is attacker (or ally of attacker) and shrine is defeated
       const attackerDefeatedShrineSectors = new Set(
         activeSectorWars
@@ -212,51 +203,15 @@ export const raidsRouter = createTRPCRouter({
           .map((w) => w.sector),
       );
 
-      const filteredRaids = raids.filter((raid) => {
-        // Check if raid has ended
-        if (raid.raidEndsAt && raid.raidEndsAt < now) {
-          return false;
-        }
-
-        // Get raid type from objective
-        const raidData = getRaidObjectiveData(raid);
-        if (!raidData) return false;
-
-        if (raidData.isOpen) {
-          return true;
-        }
-        if (raidData.isExclusive) {
-          // Check if user's village owns the sector
-          if (!user.villageId || raidData.sector === null) {
-            return false;
-          }
-          const ownsCurrentSector = ownedSectorNumbers.has(raidData.sector);
-          // Also allow attackers who have defeated the shrine but war not yet finalized
-          const isAttackerWithDefeatedShrine = attackerDefeatedShrineSectors.has(
-            raidData.sector,
-          );
-
-          // Check capture deadline and grace period logic
-          if (raid.raidCaptureDeadline && raid.raidCaptureDeadline < now) {
-            // Capture deadline has passed
-            if (!raid.raidGracePeriodEnd) {
-              // No grace period configured - raid is no longer accessible after deadline
-              return false;
-            }
-            if (raid.raidGracePeriodEnd >= now) {
-              // Still in grace period - only villages that owned at deadline can access
-              // Since we can't track historical ownership, we allow current owners during grace
-              return ownsCurrentSector || isAttackerWithDefeatedShrine;
-            } else if (raid.raidGracePeriodEnd < now) {
-              // Grace period has ended - raid is no longer accessible
-              return false;
-            }
-          }
-
-          return ownsCurrentSector || isAttackerWithDefeatedShrine;
-        }
-        return false;
-      });
+      const filteredRaids = raids.filter((raid) =>
+        isRaidListedForVillage(
+          raid,
+          user.villageId,
+          ownedSectorNumbers,
+          attackerDefeatedShrineSectors,
+          now,
+        ),
+      );
 
       // Filter by sector if provided
       const sectorFilteredRaids =
@@ -898,8 +853,8 @@ export const raidsRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ teamId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Query - parallel fetch all required data upfront
-      const [{ user }, raid, teamData, existingQueueEntries] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+      const [user, raid, teamData, existingQueueEntries] = await Promise.all([
+        fetchRaidJoinUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.quest.findFirst({
           where: and(eq(quest.id, input.questId), eq(quest.questType, "raid")),
         }),
