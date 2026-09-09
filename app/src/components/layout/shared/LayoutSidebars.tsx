@@ -250,19 +250,11 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
         <span
           data-sidebar-keep-open="true"
           data-clerk-element="true"
-          className="inline-flex h-6 w-6 items-center justify-center leading-none xl:h-7 xl:w-7"
+          className="inline-flex items-center"
         >
           <UserButton
             appearance={{
-              elements: {
-                userButtonPopoverCard: { pointerEvents: "initial" },
-                rootBox: "flex items-center leading-none",
-                userButtonBox: "flex items-center",
-                userButtonTrigger:
-                  "flex h-6 w-6 items-center justify-center overflow-hidden rounded-full leading-none focus:shadow-none xl:h-7 xl:w-7",
-                userButtonAvatarBox: "h-6 w-6 xl:h-7 xl:w-7",
-                avatarBox: "h-6 w-6 xl:h-7 xl:w-7",
-              },
+              elements: { userButtonPopoverCard: { pointerEvents: "initial" } },
             }}
           />
         </span>
