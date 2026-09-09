@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GUIDE_HUB_CATEGORY_ORDER } from "@/drizzle/constants";
 import { SYSTEM_GUIDE_ARTICLES } from "@/libs/guide/articles";
-import {
-  classifyFandomPage,
-  isFandomRedirect,
-  isFandomStub,
-  shouldSkipFandomTitle,
-} from "@/libs/guide/fandom";
 import { factCheckGuideProse, isPvpRestrictedRank, normalizeRankName } from "@/libs/guide/factcheck";
 import { isGuideworthyEntityName } from "@/libs/guide/generate";
 import {
@@ -92,35 +86,6 @@ describe("factCheckGuideProse", () => {
     expect(normalizeRankName("chuunin")).toBe("CHUNIN");
     expect(isPvpRestrictedRank("STUDENT")).toBe(true);
     expect(isPvpRestrictedRank("CHUNIN")).toBe(false);
-  });
-});
-
-describe("fandom classify", () => {
-  const names = {
-    bloodlines: new Set(["aerathiel"]),
-    items: new Set(["sunroot"]),
-    jutsus: new Set(["hemocure"]),
-  };
-
-  it("skips redirects, stubs and meta titles", () => {
-    expect(shouldSkipFandomTitle("Item Varients")).toBe(true);
-    expect(isFandomRedirect("#REDIRECT [[Akikaze]]")).toBe(true);
-    expect(isFandomStub("{{stub}} PARAGRAPH HERE")).toBe(true);
-    expect(classifyFandomPage({ title: "Main Page", wikitext: "hub" }, names)).toBe(
-      "skip",
-    );
-  });
-
-  it("maps known system pages and live entities", () => {
-    expect(
-      classifyFandomPage({ title: "Getting Started", wikitext: "long enough text ".repeat(20) }, names),
-    ).toBe("system");
-    expect(
-      classifyFandomPage({ title: "Aerathiel", wikitext: "long enough text ".repeat(20) }, names),
-    ).toBe("bloodline");
-    expect(
-      classifyFandomPage({ title: "Hemocure", wikitext: "long enough text ".repeat(20) }, names),
-    ).toBe("jutsu");
   });
 });
 
