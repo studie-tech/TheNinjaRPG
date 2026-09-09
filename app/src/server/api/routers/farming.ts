@@ -1667,10 +1667,7 @@ export const buildFarmState = async (
   const shopEntriesPromise = buildShopEntries(client, user);
   const collectionLogPromise = getFarmCollectionState(client, userId);
 
-  const [plotsRaw, userItems] = await Promise.all([
-    plotsPromise,
-    userItemsPromise,
-  ]);
+  const [plotsRaw, userItems] = await Promise.all([plotsPromise, userItemsPromise]);
   const yieldIds = [
     ...new Set(
       [
