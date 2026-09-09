@@ -82,25 +82,16 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ plotId: z.string(), seedItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const seedItemQuery = ctx.drizzle.query.item.findFirst({
-        where: eq(item.id, input.seedItemId),
-      });
-      const [user, userItems, plot, seedItem, questState, yieldItem] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId),
-        ctx.drizzle.query.farmPlot.findFirst({
-          where: and(eq(farmPlot.id, input.plotId), eq(farmPlot.userId, ctx.userId)),
-        }),
-        seedItemQuery,
-        fetchFarmingQuestState(ctx.drizzle, ctx.userId),
-        seedItemQuery.then((loadedSeed) =>
-          loadedSeed?.farmYieldItemId
-            ? ctx.drizzle.query.item.findFirst({
-                where: eq(item.id, loadedSeed.farmYieldItemId),
-              })
-            : null,
-        ),
-      ]);
+      const [user, userItems, plot, { seedItem, yieldItem }, questState] =
+        await Promise.all([
+          fetchUser(ctx.drizzle, ctx.userId),
+          fetchUserItems(ctx.drizzle, ctx.userId),
+          ctx.drizzle.query.farmPlot.findFirst({
+            where: and(eq(farmPlot.id, input.plotId), eq(farmPlot.userId, ctx.userId)),
+          }),
+          fetchFarmSeedAndYield(ctx.drizzle, input.seedItemId),
+          fetchFarmingQuestState(ctx.drizzle, ctx.userId),
+        ]);
 
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
@@ -1317,6 +1308,18 @@ const guardFarmingMutation = (user: Awaited<ReturnType<typeof fetchUser>>) => {
     return errorResponse("Cannot farm on Wake Island");
   }
   return null;
+};
+
+const fetchFarmSeedAndYield = async (client: DrizzleClient, seedItemId: string) => {
+  const seedItem = await client.query.item.findFirst({
+    where: eq(item.id, seedItemId),
+  });
+  const yieldItem = seedItem?.farmYieldItemId
+    ? await client.query.item.findFirst({
+        where: eq(item.id, seedItem.farmYieldItemId),
+      })
+    : null;
+  return { seedItem, yieldItem };
 };
 
 const fetchFarmPlotWithItems = async (
