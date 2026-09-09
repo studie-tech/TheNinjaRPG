@@ -17,6 +17,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { z } from "zod";
 import {
   baseServerResponse,
@@ -844,9 +845,10 @@ export const combatRouter = createTRPCRouter({
               }
             }
 
-            // Stop profiling
+            // Stop profiling. Flush after the response so the client is not
+            // blocked; after() keeps the Vercel lambda alive via waitUntil.
             Sentry.profiler.stopProfiler();
-            await Sentry.flush(15000);
+            after(() => Sentry.flush(15000));
 
             // Return the new battle + result state if applicable
             // Note: battleUpdate excludes extraState - frontend merges with existing
