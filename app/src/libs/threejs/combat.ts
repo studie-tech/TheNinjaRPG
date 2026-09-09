@@ -90,6 +90,7 @@ import { playPreloadedAudio } from "@/utils/audio";
 import type { BarrierTagType } from "@/validators/combat";
 import type { HexagonalFaceMesh, TerrainHex } from "../hexgrid";
 import { findHex, getPossibleActionTiles, PathCalculator } from "../hexgrid";
+import { getHighlightTilesCacheKey } from "./highlightTilesCache";
 
 // Queue for non-movement SFX that should play after movement completes
 type PendingSfx = { url: string; volume: number };
@@ -1478,30 +1479,6 @@ const resetEdgePool = (pool: HighlightEdgePool) => {
   }
   pool.activeCount = 0;
 };
-
-/**
- * Cache key for skipping highlightTiles rebuilds. Hover tile and canUseTile
- * must be included: action/version/position alone would freeze hover selection
- * and leave range highlights up after the local turn expires.
- */
-export const getHighlightTilesCacheKey = (info: {
-  actionId: string | undefined;
-  battleVersion: number;
-  userId: string;
-  longitude: number;
-  latitude: number;
-  canUseTile: boolean;
-  hoverTileName: string;
-}) =>
-  [
-    info.actionId ?? "",
-    info.battleVersion,
-    info.userId,
-    info.longitude,
-    info.latitude,
-    info.canUseTile ? "1" : "0",
-    info.hoverTileName,
-  ].join("|");
 
 /**
  * Highlight possible squares based on action
