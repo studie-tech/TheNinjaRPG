@@ -1,4 +1,3 @@
-// sum.test.js
 import { expect, test } from "vitest";
 import { calcLevelRequirements, calcLevel, getExpBracket, canAttackBracket, passesBracketFilter } from "@/libs/profile";
 

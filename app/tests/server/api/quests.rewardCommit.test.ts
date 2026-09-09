@@ -86,7 +86,10 @@ const makeClient = (
   const sets: Record<string, unknown>[] = [];
   const update = vi.fn(() => ({
     set: (value: Record<string, unknown>) => {
-      const result = updateResults[sets.length] ?? { rowsAffected: 1 };
+      const result = updateResults[sets.length];
+      if (!result) {
+        throw new Error(`Unexpected update #${sets.length + 1}; list every write this path issues`);
+      }
       sets.push(value);
       return { where: vi.fn().mockResolvedValue(result) };
     },
@@ -142,6 +145,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
   it("keeps completion, snapshot claim, and payout in the legacy order", async () => {
     const { user, missionHistory } = makeUser();
     const { client, sets } = makeClient([
+      { rowsAffected: 1 },
       { rowsAffected: 1 },
       { rowsAffected: 1 },
       { rowsAffected: 1 },
@@ -265,6 +269,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
   it("drops the resolved quest tracker so replayed assignments start with fresh objectives", async () => {
     const { user, missionHistory } = makeUser();
     const { client, sets } = makeClient([
+      { rowsAffected: 1 },
       { rowsAffected: 1 },
       { rowsAffected: 1 },
       { rowsAffected: 1 },

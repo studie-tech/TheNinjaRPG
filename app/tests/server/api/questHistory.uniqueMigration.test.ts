@@ -60,10 +60,19 @@ describeWithDatabase("QuestHistory unique (userId, questId) migration", () => {
 
   afterEach(async () => {
     // Leave the schema as the rest of the suite expects, whatever this test did.
+    // DROP may already have been applied by the migration under test; ADD must
+    // succeed so later suites still see the unique key production upserts rely on.
     await resetTables(questHistory);
     await runRawSql(
-      "ALTER TABLE `QuestHistory` ADD CONSTRAINT `uniqueUserIdQuestId` UNIQUE(`userId`,`questId`)",
+      "ALTER TABLE `QuestHistory` DROP INDEX `uniqueUserIdQuestId`",
     ).catch(() => undefined);
+    await runRawSql(
+      "ALTER TABLE `QuestHistory` ADD CONSTRAINT `uniqueUserIdQuestId` UNIQUE(`userId`,`questId`)",
+    );
+    expect(await indexColumns("QuestHistory", "uniqueUserIdQuestId")).toEqual({
+      columns: ["userId", "questId"],
+      unique: true,
+    });
   });
 
   it("has the three statements the assertions below depend on", () => {

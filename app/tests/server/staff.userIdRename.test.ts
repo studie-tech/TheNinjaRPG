@@ -56,6 +56,7 @@ describeWithDatabase("staff user-id rename", () => {
       storePurchaseTransfer,
       storeUserIdAlias,
       storePurchase,
+      paypalSubscription,
       userData,
       village,
     );

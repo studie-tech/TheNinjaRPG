@@ -11,6 +11,7 @@
  * With neither set, `describeWithDatabase` skips and nothing here connects.
  */
 import { execFileSync } from "node:child_process";
+import { getTableName, type Table } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import { describe } from "vitest";
@@ -38,7 +39,7 @@ export const hasTestDatabase = !!url && allowDestructive;
 /** `describe` that skips wholesale when no test database is configured. */
 export const describeWithDatabase = hasTestDatabase ? describe : describe.skip;
 
-let connection: mysql.Connection | undefined;
+let pool: mysql.Pool | undefined;
 let client: DrizzleClient | undefined;
 
 /**
@@ -116,11 +117,17 @@ const truncateEveryTable = async () => {
 /**
  * Drizzle client against the shared test database, shaped like the app's `DrizzleClient` so
  * server functions can be called directly. The schema is pushed on first use.
+ *
+ * This is a pool, not a single connection. Production talks to PlanetScale over HTTP, so
+ * every query in a `Promise.all` is an independent request. A lone mysql2 connection cannot
+ * do that: interleaved packets come back as empty reads (`User not found`, `Missing store
+ * receipt`) even though the rows are there. The pool is the local equivalent of that
+ * concurrent model, which is the whole point of driving the real procedures.
  */
 export const getTestDatabase = async (): Promise<DrizzleClient> => {
   if (!client) {
-    connection = await mysql.createConnection({ uri: url, multipleStatements: true });
-    const database = drizzle(connection, { schema, mode: "default" });
+    pool = mysql.createPool({ uri: url, multipleStatements: true, connectionLimit: 10 });
+    const database = drizzle(pool, { schema, mode: "default" });
     client = new Proxy(database, {
       get(target, property, receiver) {
         if (property === "execute") {
@@ -145,32 +152,50 @@ export const getTestDatabase = async (): Promise<DrizzleClient> => {
 
 export const peekTestDatabase = (): DrizzleClient | null => client ?? null;
 
-/** Empty the given tables. Call in `beforeEach` for the tables a suite writes. */
-export const resetTables = async (...tables: { _: { name: string } }[]) => {
-  const database = await getTestDatabase();
-  await Promise.all(tables.map((table) => database.delete(table as never)));
+/**
+ * Empty the given tables. Call in `beforeEach` for the tables a suite writes.
+ *
+ * Runs as one session with foreign-key checks off. Parallel drizzle `DELETE`s on
+ * the pool race parent against child and leave rows behind (duplicate userId on
+ * the next insert, or a leftover revocation that silently retires the next
+ * grant). `TRUNCATE` is not a substitute: MySQL still refuses to truncate a
+ * parent that other tables reference, even with foreign-key checks off.
+ */
+export const resetTables = async (...tables: Table[]) => {
+  if (!url || tables.length === 0) return;
+  const deletions = tables
+    .map((table) => `DELETE FROM \`${getTableName(table)}\`;`)
+    .join(" ");
+  const active = await mysql.createConnection({ uri: url, multipleStatements: true });
+  try {
+    await active.query(
+      `SET FOREIGN_KEY_CHECKS = 0; ${deletions} SET FOREIGN_KEY_CHECKS = 1;`,
+    );
+  } finally {
+    await active.end();
+  }
 };
 
 /** Run one raw statement, for the few cases that need DDL (applying a migration, for example). */
 export const runRawSql = async (statement: string) => {
   await getTestDatabase();
-  await connection?.query(statement);
+  await pool?.query(statement);
 };
 
 /** Current index columns for a table, so a suite can assert on constraints. */
 export const indexColumns = async (table: string, keyName: string) => {
   await getTestDatabase();
-  const [rows] = (await connection?.query(
+  const [rows] = (await pool?.query(
     "SELECT COLUMN_NAME AS col, NON_UNIQUE AS nonUnique FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX",
     [table, keyName],
   )) as [{ col: string; nonUnique: number }[], unknown];
   return { columns: rows.map((row) => row.col), unique: rows.every((row) => !row.nonUnique) };
 };
 
-/** Release the shared connection. Registered once by the test preload. */
+/** Release the shared pool. Registered once by the test preload. */
 export const closeTestDatabase = async () => {
-  await connection?.end();
-  connection = undefined;
+  await pool?.end();
+  pool = undefined;
   client = undefined;
 };
 

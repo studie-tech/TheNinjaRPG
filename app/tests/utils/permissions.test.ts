@@ -3,6 +3,7 @@ import type { UserRole } from "@/drizzle/constants";
 import { UserRoles } from "@/drizzle/constants";
 import {
   canApproveApplications,
+  canChangeContent,
   canDeleteConceptArt,
   canEditSeichiSilver,
   canModifyCombatSettings,
@@ -11,21 +12,6 @@ import {
   canViewAllApplications,
   getApprovalGroup,
 } from "@/utils/permissions";
-
-const combatSettingsRoles = [
-  "OWNER",
-  "CODING-ADMIN",
-  "CONTENT-ADMIN",
-  "EVENT-ADMIN",
-  "MODERATOR-ADMIN",
-  "HEAD_CONTENT",
-  "HEAD_BALANCE",
-  "CONTENT",
-  "BALANCE",
-  "HEAD_EVENT",
-  "EVENT",
-  "CODER",
-] as const satisfies readonly UserRole[];
 
 test("approval groups are assigned to the correct admin roles", () => {
   expect(getApprovalGroup("CODER")).toBeNull();
@@ -100,9 +86,8 @@ test("non-approval staff do not get application approval access", () => {
 });
 
 test("combat settings use balance/content permissions instead of event gain permissions", () => {
-  const expectedRoles = new Set<UserRole>(combatSettingsRoles);
   for (const role of UserRoles) {
-    expect(canModifyCombatSettings(role)).toBe(expectedRoles.has(role));
+    expect(canModifyCombatSettings(role)).toBe(canChangeContent(role));
   }
 
   expect(canModifyEventGains("CODER")).toBe(false);
