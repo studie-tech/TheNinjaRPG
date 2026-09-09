@@ -4,10 +4,9 @@ import { SYSTEM_GUIDE_ARTICLES } from "@/libs/guide/articles";
 import { factCheckGuideProse } from "@/libs/guide/factcheck";
 import { isGuideworthyEntityName } from "@/libs/guide/generate";
 import {
-  extractGuideHeadings,
   isReservedGuideSlug,
+  prepareGuideHtml,
   slugifyGuideTitle,
-  withGuideHeadingIds,
 } from "@/libs/guide/html";
 
 describe("guide hub category order", () => {
@@ -43,22 +42,22 @@ describe("slugifyGuideTitle", () => {
 
 describe("guide headings", () => {
   it("extracts h2/h3 text and injects stable ids", () => {
-    const html = "<h2>How to obtain</h2><p>x</p><h3>Prices</h3><h2>How to obtain</h2>";
-    const headings = extractGuideHeadings(html);
+    const { html, headings } = prepareGuideHtml(
+      "<h2>How to obtain</h2><p>x</p><h3>Prices</h3><h2>How to obtain</h2>",
+    );
     expect(headings.map((heading) => heading.id)).toEqual([
       "how-to-obtain",
       "prices",
       "how-to-obtain-2",
     ]);
-    const withIds = withGuideHeadingIds(html);
-    expect(withIds).toContain('id="how-to-obtain"');
-    expect(withIds).toContain('id="how-to-obtain-2"');
+    expect(html).toContain('id="how-to-obtain"');
+    expect(html).toContain('id="how-to-obtain-2"');
   });
 
   it("reuses an existing heading id so the TOC matches the rendered anchor", () => {
-    const html = withGuideHeadingIds('<h2 id="custom">Combat</h2>');
+    const { html, headings } = prepareGuideHtml('<h2 id="custom">Combat</h2>');
     expect(html).toContain('id="custom"');
-    expect(extractGuideHeadings(html).map((heading) => heading.id)).toEqual(["custom"]);
+    expect(headings.map((heading) => heading.id)).toEqual(["custom"]);
   });
 });
 

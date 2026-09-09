@@ -48,7 +48,5 @@ export type ZodGuideArticleType = z.infer<typeof GuideArticleValidator>;
 export type ZodGuideArticleInput = z.input<typeof GuideArticleValidator>;
 
 export const GuideListFilterSchema = z.object({
-  category: z.enum(GuideCategories).optional(),
-  search: z.string().trim().max(80).optional(),
   includeDrafts: z.boolean().optional(),
 });

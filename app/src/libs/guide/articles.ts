@@ -6,11 +6,6 @@ import {
   FARMING_MAX_LEVEL,
   type GuideCategory,
   HOSPITAL_BASE_HEAL_SECONDS,
-  IMG_MANUAL_BLOODLINE,
-  IMG_MANUAL_COMBAT,
-  IMG_MANUAL_ITEM,
-  IMG_MANUAL_JUTSU,
-  IMG_MANUAL_TRAVEL,
   MAP_WAKE_ISLAND_SECTOR,
   RANKS_RESTRICTED_FROM_PVP,
   REGEN_SECONDS,
@@ -18,11 +13,7 @@ import {
   ROLL_CHANCE_PERCENTAGE,
 } from "@/drizzle/constants";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
-import { GUIDE_SYSTEM_COVERS } from "@/libs/guide/covers";
 import type { GuideFaqItem } from "@/validators/guide";
-
-const cover = (slug: string, fallback?: string) =>
-  GUIDE_SYSTEM_COVERS[slug] ?? fallback;
 
 export interface GuideSeedArticle {
   slug: string;
@@ -64,7 +55,6 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     seoDescription:
       "How to play TheNinja-RPG: create a ninja, finish the academy tutorial, train stats, buy gear and rank up to Genin in Seichi.",
     category: "getting-started",
-    image: cover("getting-started", IMG_MANUAL_COMBAT),
     sortOrder: 1,
     published: true,
     sourceUrl: "https://the-ninja-rpg.fandom.com/wiki/Getting_Started",
@@ -130,7 +120,6 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     seoDescription:
       "How combat works in TheNinja-RPG: 60-second rounds, action points, initiative, movement and basic attacks on the hex battlefield.",
     category: "combat",
-    image: cover("combat", IMG_MANUAL_COMBAT),
     sortOrder: 10,
     published: true,
     sourceUrl: "https://the-ninja-rpg.fandom.com/wiki/Combat",
@@ -187,7 +176,6 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     seoDescription:
       "Every combat tag in TheNinja-RPG explained: damage, pierce, stun, cleanse, shield and the prevent family. Link through to live jutsu data.",
     category: "combat",
-    image: cover("combat-tags", IMG_MANUAL_JUTSU),
     sortOrder: 11,
     published: true,
     sourceUrl: "https://the-ninja-rpg.fandom.com/wiki/Game_Tags",
@@ -458,7 +446,6 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     seoDescription:
       "How farming works in TheNinja-RPG: plots, watering, seed extractors, crop tiers and the level 100 cap.",
     category: "farming",
-    image: cover("farming", IMG_MANUAL_ITEM),
     sortOrder: 20,
     published: true,
     sourceUrl: "https://the-ninja-rpg.fandom.com/wiki/Farming",
@@ -504,7 +491,6 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     seoDescription:
       "TheNinja-RPG villages in Seichi: Shirohana, Tsukimori, Hyorin, Akasumi, Akikaze and later settlements. How joining a village works.",
     category: "villages",
-    image: cover("villages", IMG_MANUAL_TRAVEL),
     sortOrder: 30,
     published: true,
     sourceUrl: "https://the-ninja-rpg.fandom.com/wiki/Villages",
@@ -537,7 +523,6 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     seoDescription:
       "How travel works in TheNinja-RPG: sector hexes, the global map of Seichi, Wake Island and staying safe in the wild.",
     category: "world",
-    image: cover("world", IMG_MANUAL_TRAVEL),
     sortOrder: 31,
     published: true,
     content: [
@@ -564,7 +549,6 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     seoDescription:
       "Wake Island in TheNinja-RPG is where you roll or buy a bloodline. Free starter rolls, prices by rank, and how to get there.",
     category: "world",
-    image: cover("wake-island", IMG_MANUAL_BLOODLINE),
     sortOrder: 32,
     published: true,
     content: [
@@ -591,7 +575,6 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     seoDescription:
       "TheNinja-RPG bloodlines by rank: how to roll on Wake Island, reputation prices, and where to read each line's jutsu.",
     category: "bloodlines",
-    image: cover("bloodlines", IMG_MANUAL_BLOODLINE),
     sortOrder: 40,
     published: true,
     sourceUrl: "https://the-ninja-rpg.fandom.com/wiki/Bloodlines",
