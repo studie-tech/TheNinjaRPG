@@ -1456,6 +1456,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   const { mutate: move, isPending: isMoving } = api.travel.moveInSector.useMutation({
     onSuccess: async (res) => {
+      document.body.style.cursor = "default";
       // Stop moving if failed
       if (res.success === false) {
         pendingCrossRef.current = null;
@@ -1480,7 +1481,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         await runJourneySegment(data);
       }
     },
-    onSettled: () => {
+    onError: () => {
       document.body.style.cursor = "default";
     },
   });
@@ -1553,6 +1554,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   const { mutate: attack, isPending: isAttacking } = api.combat.attackUser.useMutation({
     onSuccess: async (data) => {
+      document.body.style.cursor = "default";
       if (data.success) {
         await updateUser({
           status: "BATTLE",
@@ -1566,7 +1568,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         });
       }
     },
-    onSettled: () => {
+    onError: () => {
       document.body.style.cursor = "default";
     },
   });
