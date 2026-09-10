@@ -38,9 +38,10 @@ const PARTICLE_RECOVERY_SAMPLE_LIMIT = 6;
 const PARTICLE_OPTIONS: ISourceOptions = {
   autoPlay: true,
   clear: true,
-  // We own a reserved, position:fixed host. fullScreen/resize both recreate or
-  // restyle the canvas after first paint, which is what Speed Insights blamed
-  // for desktop CLS of 1.0 on #tsparticles>canvas.
+  // We own a reserved, position:fixed host so the engine must not also apply
+  // fullScreen (that is what inserted #tsparticles>canvas in document flow).
+  // Resize stays on so the drawing buffer tracks the overlay after a viewport
+  // change; the host CSS keeps that from shifting layout.
   fullScreen: {
     enable: false,
     zIndex: PARTICLES_OVERLAY_Z_INDEX,
@@ -58,7 +59,7 @@ const PARTICLE_OPTIONS: ISourceOptions = {
     events: {
       onClick: { enable: false },
       onHover: { enable: false },
-      resize: { enable: false },
+      resize: { enable: true },
     },
   },
   particles: {

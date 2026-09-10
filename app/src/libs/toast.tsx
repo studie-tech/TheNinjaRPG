@@ -25,35 +25,33 @@ type FireConfetti = (options: {
   origin: { x: number; y: number };
 }) => Promise<unknown>;
 
-let fireConfetti: FireConfetti | null = null;
+let confettiLoader: Promise<FireConfetti | null> | null = null;
 
-const loadConfetti = async (): Promise<FireConfetti | null> => {
-  if (fireConfetti) {
-    return fireConfetti;
-  }
+const loadConfetti = (): Promise<FireConfetti | null> => {
+  confettiLoader ??= (async () => {
+    // Dynamically import confetti only in browser. Registration is shared with the
+    // particle background so that whichever loads the engine first cannot lock the other
+    // out of registering its plugins.
+    const [{ confetti }] = await Promise.all([
+      import("@tsparticles/confetti"),
+      registerParticlePlugins(),
+    ]);
 
-  // Dynamically import confetti only in browser. Registration is shared with the
-  // particle background so that whichever loads the engine first cannot lock the other
-  // out of registering its plugins.
-  const [{ confetti }] = await Promise.all([
-    import("@tsparticles/confetti"),
-    registerParticlePlugins(),
-  ]);
+    // Bind to a pre-styled canvas so confetti does not insert a new #confetti
+    // host (fullScreen: true) that Speed Insights blamed for CLS of 1.0.
+    const canvas = ensureParticleOverlayCanvas(
+      CONFETTI_OVERLAY_ID,
+      CONFETTI_OVERLAY_Z_INDEX,
+    );
+    if (!canvas) {
+      return null;
+    }
 
-  // Bind to a pre-styled canvas so confetti does not insert a new #confetti
-  // host (fullScreen: true) that Speed Insights blamed for CLS of 1.0.
-  const canvas = ensureParticleOverlayCanvas(
-    CONFETTI_OVERLAY_ID,
-    CONFETTI_OVERLAY_Z_INDEX,
-  );
-  if (!canvas) {
-    return null;
-  }
-
-  fireConfetti = (await confetti.create(canvas, {
-    disableForReducedMotion: true,
-  })) as FireConfetti;
-  return fireConfetti;
+    return (await confetti.create(canvas, {
+      disableForReducedMotion: true,
+    })) as FireConfetti;
+  })();
+  return confettiLoader;
 };
 
 /**
