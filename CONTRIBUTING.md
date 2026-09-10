@@ -22,6 +22,7 @@
   subsequent commits to that branch will be added to the open pull request
   automatically.
 - When the PR is approved it will be merged into main and automatically deployed onto [www.theninja-rpg.com](www.theninja-rpg.com)
+- Pull requests do not get a Vercel preview by default (to avoid paying for every open PR). A collaborator with write access can comment `/tnr-create-preview` on the PR to deploy one of the current head commit. Later pushes do not refresh that URL; run the command again if you need an updated preview.
 
 ## Code Conventions
 

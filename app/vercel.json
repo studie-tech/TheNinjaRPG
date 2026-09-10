@@ -1,4 +1,13 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "tnr-preview/*": true,
+      "tnr-preview/**": true,
+      "*": false,
+      "**": false
+    }
+  },
   "crons": [
     {
       "path": "/api/subscriptions",

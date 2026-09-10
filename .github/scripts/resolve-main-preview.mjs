@@ -27,11 +27,12 @@
  * Outputs (via GITHUB_OUTPUT):
  *   is_ready, preview_url, reason, check_name, details_url, head_sha
  */
+import { setOutput, createGithubClient, toTrustedPreviewUrl } from "./ci-helpers.mjs";
 import {
-  setOutput,
-  createGithubClient,
-  toTrustedPreviewUrl,
-} from "./ci-helpers.mjs";
+  createPreviewDeploymentClient,
+  requirePreview,
+  withRetry,
+} from "./preview-deployments.mjs";
 
 const githubToken = process.env.GITHUB_TOKEN;
 const pushToken = process.env.PUSH_TOKEN || "";
@@ -63,40 +64,15 @@ if (!owner || !repo) {
 const githubRequest = createGithubClient(githubToken);
 const pushRequest = pushToken ? createGithubClient(pushToken) : null;
 const environmentRegex = new RegExp(environmentPatternRaw, "i");
+const preview = createPreviewDeploymentClient({
+  githubRequest,
+  pushRequest,
+  owner,
+  repo,
+  environmentRegex,
+});
 
-// An `inactive` deployment was built and then superseded or skipped; its
-// environment_url (when present) still serves an immutable preview of exactly
-// this SHA, so it is reusable. Without a URL it is as dead as a failed build.
-// Vercel's integration runs with auto_inactive off, so neither case has been
-// observed here — both are handled defensively.
-const REUSABLE_STATES = ["success", "inactive"];
-const TERMINAL_STATES = ["failure", "error", "inactive"];
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * Retry a read-only GitHub API call across transient failures (rate limits,
- * 5xx). 404 is a real answer, not a transient failure, so it is rethrown
- * immediately for callers that branch on it.
- */
-const withRetry = async (fn, { attempts = 3, delayMs = 5_000 } = {}) => {
-  let lastError;
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      return await fn();
-    } catch (error) {
-      if (error?.status === 404) throw error;
-      lastError = error;
-      if (attempt < attempts) {
-        console.log(
-          `Transient GitHub API error (attempt ${attempt}/${attempts}): ${error.message}`,
-        );
-        await sleep(delayMs);
-      }
-    }
-  }
-  throw lastError;
-};
+const waitOptions = { pollIntervalMs, deadline: waitBudgetDeadline };
 
 const notReady = (reason, extras = {}) => {
   setOutput("is_ready", "false");
@@ -133,214 +109,6 @@ const fetchDefaultBranchSha = async () => {
   return { defaultBranch, sha };
 };
 
-const listDeploymentsForSha = async (sha) => {
-  const deployments = await githubRequest(
-    `/repos/${owner}/${repo}/deployments?sha=${encodeURIComponent(sha)}&per_page=30`,
-  );
-  return Array.isArray(deployments) ? deployments : [];
-};
-
-const getLatestStatus = async (deploymentId) => {
-  const statuses = await githubRequest(
-    `/repos/${owner}/${repo}/deployments/${deploymentId}/statuses?per_page=10`,
-  );
-  return Array.isArray(statuses) ? statuses[0] : null;
-};
-
-const matchingDeployments = (deployments) =>
-  deployments.filter((deployment) =>
-    environmentRegex.test(deployment?.environment ?? ""),
-  );
-
-const inspectPreview = async (sha) => {
-  const matching = matchingDeployments(await listDeploymentsForSha(sha));
-  const statuses = await Promise.all(
-    matching.map((deployment) => getLatestStatus(deployment.id)),
-  );
-  const inspected = matching.map((deployment, index) => {
-    const status = statuses[index];
-    return {
-      id: deployment.id,
-      environment: deployment.environment ?? "",
-      state: status?.state ?? "unknown",
-      url: toTrustedPreviewUrl(
-        status?.environment_url || status?.target_url || "",
-      ),
-      detailsUrl: status?.target_url ?? "",
-    };
-  });
-  const successful = inspected.find(
-    (item) => REUSABLE_STATES.includes(item.state) && item.url,
-  );
-  const inProgress = inspected.find((item) =>
-    ["pending", "queued", "in_progress"].includes(item.state),
-  );
-  // Every matching deployment is dead — waiting longer cannot help.
-  const allTerminal =
-    inspected.length > 0 &&
-    !successful &&
-    !inProgress &&
-    inspected.every((item) => TERMINAL_STATES.includes(item.state));
-  return { successful, inProgress, inspected, allTerminal };
-};
-
-const encodeHeadsRef = (branch) =>
-  branch.split("/").map(encodeURIComponent).join("/");
-
-const readPreviewBranchSha = async () => {
-  if (!pushRequest) return "";
-  try {
-    const ref = await withRetry(() =>
-      pushRequest(
-        `/repos/${owner}/${repo}/git/refs/heads/${encodeHeadsRef(previewBranch)}`,
-      ),
-    );
-    return ref?.object?.sha ?? "";
-  } catch (error) {
-    if (error?.status === 404) return "";
-    throw error;
-  }
-};
-
-const pointPreviewBranchAtSha = async (sha) => {
-  if (!pushRequest) {
-    throw new Error(
-      "PUSH_TOKEN is required to update the tnr-preview/main ref so Vercel can build a preview of main",
-    );
-  }
-
-  const currentSha = await readPreviewBranchSha();
-  if (currentSha === sha) {
-    return { changed: false };
-  }
-
-  if (currentSha) {
-    await pushRequest(
-      `/repos/${owner}/${repo}/git/refs/heads/${encodeHeadsRef(previewBranch)}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({ sha, force: true }),
-      },
-    );
-    return { changed: true, action: "updated" };
-  }
-
-  await pushRequest(`/repos/${owner}/${repo}/git/refs`, {
-    method: "POST",
-    body: JSON.stringify({
-      ref: `refs/heads/${previewBranch}`,
-      sha,
-    }),
-  });
-  return { changed: true, action: "created" };
-};
-
-/**
- * Poll until the preview for `sha` succeeds, dies, or the timeout expires.
- * Returns { successful } on success, { failed } when every matching
- * deployment reached a terminal state, and { lastNote } alone on timeout.
- * Transient API errors are tolerated; only a persistent streak aborts.
- */
-const waitForPreview = async (sha, timeoutMs = pollTimeoutMs) => {
-  const deadline = Math.min(Date.now() + timeoutMs, waitBudgetDeadline);
-  const maxConsecutiveErrors = 5;
-  let lastNote = "waiting for Vercel to create a Preview – tnr deployment";
-  let consecutiveErrors = 0;
-
-  while (Date.now() < deadline) {
-    let inspection;
-    try {
-      inspection = await inspectPreview(sha);
-    } catch (error) {
-      consecutiveErrors += 1;
-      if (consecutiveErrors >= maxConsecutiveErrors) {
-        throw new Error(
-          `GitHub API kept failing while polling for the preview: ${error.message}`,
-        );
-      }
-      console.log(
-        `Transient GitHub API error while polling (${consecutiveErrors}/${maxConsecutiveErrors}): ${error.message}`,
-      );
-      await sleep(pollIntervalMs);
-      continue;
-    }
-    consecutiveErrors = 0;
-
-    const { successful, inProgress, inspected, allTerminal } = inspection;
-    if (successful) {
-      return { successful };
-    }
-    if (allTerminal) {
-      const failed = inspected
-        .map((item) => `${item.environment}=${item.state}`)
-        .join(", ");
-      console.log(`Preview build reached a terminal state: ${failed}`);
-      return { successful: null, failed };
-    }
-    lastNote = inProgress
-      ? `Vercel preview is ${inProgress.state} (${inProgress.environment})`
-      : inspected.length
-        ? `Preview deployments exist but none are successful yet: ${inspected
-            .map((item) => `${item.environment}=${item.state}`)
-            .join(", ")}`
-        : "No Preview – tnr deployment yet for this SHA";
-    console.log(lastNote);
-    await sleep(pollIntervalMs);
-  }
-
-  return { successful: null, lastNote };
-};
-
-const requirePreview = (result, sha) => {
-  if (result.successful) return result.successful;
-  if (result.failed) {
-    throw new Error(
-      `Vercel preview build failed for ${sha.slice(0, 7)}: ${result.failed}`,
-    );
-  }
-  throw new Error(
-    `Timed out waiting for a Preview – tnr deployment of ${sha.slice(0, 7)}. Last status: ${result.lastNote}`,
-  );
-};
-
-/** Empty commit on top of main so Vercel sees a unique non-production SHA. */
-const createMainSnapshotSha = async (baseSha) => {
-  if (!pushRequest) {
-    throw new Error(
-      "PUSH_TOKEN is required to create a unique preview snapshot of main",
-    );
-  }
-  const baseCommit = await withRetry(() =>
-    pushRequest(`/repos/${owner}/${repo}/git/commits/${baseSha}`),
-  );
-  const snapshot = await pushRequest(`/repos/${owner}/${repo}/git/commits`, {
-    method: "POST",
-    body: JSON.stringify({
-      message: `tnr-preview: snapshot of ${baseSha.slice(0, 7)}`,
-      tree: baseCommit.tree.sha,
-      parents: [baseSha],
-    }),
-  });
-  if (!snapshot?.sha) {
-    throw new Error("Failed to create tnr-preview snapshot commit");
-  }
-  return snapshot.sha;
-};
-
-const isSnapshotOf = async (candidateSha, parentSha) => {
-  try {
-    const commit = await withRetry(() =>
-      githubRequest(`/repos/${owner}/${repo}/git/commits/${candidateSha}`),
-    );
-    return (commit?.parents ?? []).some((parent) => parent.sha === parentSha);
-  } catch (error) {
-    // A missing commit genuinely isn't a snapshot; anything else (rate limit,
-    // 5xx) must propagate rather than silently forcing a redundant rebuild.
-    if (error?.status === 404) return false;
-    throw error;
-  }
-};
-
 const main = async () => {
   const { sha: resolvedSha } = process.env.MAIN_SHA
     ? { sha: process.env.MAIN_SHA }
@@ -368,7 +136,7 @@ const main = async () => {
     return;
   }
 
-  const existing = await withRetry(() => inspectPreview(resolvedSha));
+  const existing = await withRetry(() => preview.inspectPreview(resolvedSha));
   if (existing.successful) {
     ready({
       previewUrl: existing.successful.url,
@@ -384,7 +152,7 @@ const main = async () => {
     console.log(
       `Preview already in progress (${existing.inProgress.state}); waiting`,
     );
-    const waited = await waitForPreview(resolvedSha);
+    const waited = await preview.waitForPreview(resolvedSha, waitOptions);
     if (waited.successful) {
       ready({
         previewUrl: waited.successful.url,
@@ -402,12 +170,15 @@ const main = async () => {
   }
 
   // A previous run may already have a unique snapshot commit of this main SHA.
-  const currentBranchSha = await readPreviewBranchSha();
+  const currentBranchSha = await preview.readBranchSha(previewBranch);
   if (currentBranchSha && currentBranchSha !== resolvedSha) {
-    const snapshotOfMain = await isSnapshotOf(currentBranchSha, resolvedSha);
+    const snapshotOfMain = await preview.isSnapshotOf(
+      currentBranchSha,
+      resolvedSha,
+    );
     if (snapshotOfMain) {
       const snapshotPreview = await withRetry(() =>
-        inspectPreview(currentBranchSha),
+        preview.inspectPreview(currentBranchSha),
       );
       if (snapshotPreview.successful) {
         ready({
@@ -420,7 +191,10 @@ const main = async () => {
         return;
       }
       if (snapshotPreview.inProgress) {
-        const waited = await waitForPreview(currentBranchSha);
+        const waited = await preview.waitForPreview(
+          currentBranchSha,
+          waitOptions,
+        );
         if (waited.successful) {
           ready({
             previewUrl: waited.successful.url,
@@ -442,13 +216,16 @@ const main = async () => {
   // No reusable preview: build one from a fresh snapshot commit. The unique
   // SHA guarantees Vercel treats it as new work, even though the tree is
   // identical to main.
-  const snapshotSha = await createMainSnapshotSha(resolvedSha);
-  await pointPreviewBranchAtSha(snapshotSha);
+  const snapshotSha = await preview.createSnapshotCommit(
+    resolvedSha,
+    `tnr-preview: snapshot of ${resolvedSha.slice(0, 7)}`,
+  );
+  await preview.pointBranchAtSha(previewBranch, snapshotSha);
   console.log(
     `Created snapshot ${snapshotSha.slice(0, 7)} of main ${resolvedSha.slice(0, 7)} on ${previewBranch}`,
   );
   const successful = requirePreview(
-    await waitForPreview(snapshotSha),
+    await preview.waitForPreview(snapshotSha, waitOptions),
     snapshotSha,
   );
   ready({
