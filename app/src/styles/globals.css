@@ -857,3 +857,42 @@
     will-change: auto;
   }
 }
+
+/*
+  tsParticles canvases default to 300×150 in normal flow. Speed Insights blamed
+  #tsparticles>canvas and #confetti for desktop CLS around 1.0. Keep both hosts
+  and any engine-inserted canvas out of document flow even if inline styles
+  land a frame late.
+*/
+#tsparticles,
+#confetti,
+.tnr-particle-overlay {
+  position: fixed !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+  display: block;
+}
+
+#tsparticles,
+.tnr-particle-overlay {
+  z-index: 0;
+}
+
+#confetti {
+  z-index: 50;
+}
+
+#tsparticles canvas,
+.tnr-particle-overlay canvas {
+  position: absolute !important;
+  inset: 0;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}

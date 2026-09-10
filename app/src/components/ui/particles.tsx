@@ -4,6 +4,14 @@ import type { Container, ISourceOptions } from "@tsparticles/engine";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import {
+  CONFETTI_OVERLAY_ID,
+  CONFETTI_OVERLAY_Z_INDEX,
+  ensureParticleOverlayCanvas,
+  PARTICLES_OVERLAY_ID,
+  PARTICLES_OVERLAY_Z_INDEX,
+  particleOverlayStyle,
+} from "@/libs/particleOverlay";
 import { registerParticlePlugins } from "@/libs/particlePlugins";
 import { useActiveLayout } from "@/utils/LayoutContext";
 
@@ -30,19 +38,27 @@ const PARTICLE_RECOVERY_SAMPLE_LIMIT = 6;
 const PARTICLE_OPTIONS: ISourceOptions = {
   autoPlay: true,
   clear: true,
+  // We own a reserved, position:fixed host. fullScreen/resize both recreate or
+  // restyle the canvas after first paint, which is what Speed Insights blamed
+  // for desktop CLS of 1.0 on #tsparticles>canvas.
   fullScreen: {
-    enable: true,
-    zIndex: 0,
+    enable: false,
+    zIndex: PARTICLES_OVERLAY_Z_INDEX,
   },
   detectRetina: false,
   pauseOnBlur: true,
   pauseOnOutsideViewport: true,
   fpsLimit: 15,
+  style: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+  },
   interactivity: {
     events: {
       onClick: { enable: false },
       onHover: { enable: false },
-      resize: { enable: true },
+      resize: { enable: false },
     },
   },
   particles: {
@@ -108,6 +124,10 @@ const ParticleProvider = () => {
   const [lightLayout] = useLocalStorage<boolean>("lightLayout", false);
   const shouldRender = isDesktop && !lightLayout && !reducedMotion;
   const pauseWhileScrolling = activeLayout === "pixel";
+
+  useEffect(() => {
+    ensureParticleOverlayCanvas(CONFETTI_OVERLAY_ID, CONFETTI_OVERLAY_Z_INDEX);
+  }, []);
 
   // this should be run only once per application lifetime
   useEffect(() => {
@@ -277,7 +297,9 @@ const ParticleProvider = () => {
   return (
     <ParticlesProvider init={particles.init}>
       <Particles
-        id="tsparticles"
+        id={PARTICLES_OVERLAY_ID}
+        className="tnr-particle-overlay"
+        style={particleOverlayStyle(PARTICLES_OVERLAY_Z_INDEX)}
         options={PARTICLE_OPTIONS}
         particlesLoaded={handleParticlesLoaded}
       />
