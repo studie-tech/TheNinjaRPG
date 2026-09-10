@@ -6,9 +6,55 @@ import { toast } from "@/components/ui/use-toast";
 import type { Quest } from "@/drizzle/schema";
 import Image from "@/layout/Image";
 import { haptics } from "@/libs/native";
+import {
+  CONFETTI_OVERLAY_ID,
+  CONFETTI_OVERLAY_Z_INDEX,
+  ensureParticleOverlayCanvas,
+} from "@/libs/particleOverlay";
 import { registerParticlePlugins } from "@/libs/particlePlugins";
 import { parseHtml } from "@/utils/parse";
 import type { PostProcessedRewards } from "@/validators/rewards";
+
+type FireConfetti = (options: {
+  startVelocity: number;
+  spread: number;
+  ticks: number;
+  colors: string[];
+  disableForReducedMotion: boolean;
+  particleCount: number;
+  origin: { x: number; y: number };
+}) => Promise<unknown>;
+
+let fireConfetti: FireConfetti | null = null;
+
+const loadConfetti = async (): Promise<FireConfetti | null> => {
+  if (fireConfetti) {
+    return fireConfetti;
+  }
+
+  // Dynamically import confetti only in browser. Registration is shared with the
+  // particle background so that whichever loads the engine first cannot lock the other
+  // out of registering its plugins.
+  const [{ confetti }] = await Promise.all([
+    import("@tsparticles/confetti"),
+    registerParticlePlugins(),
+  ]);
+
+  // Bind to a pre-styled canvas so confetti does not insert a new #confetti
+  // host (fullScreen: true) that Speed Insights blamed for CLS of 1.0.
+  const canvas = ensureParticleOverlayCanvas(
+    CONFETTI_OVERLAY_ID,
+    CONFETTI_OVERLAY_Z_INDEX,
+  );
+  if (!canvas) {
+    return null;
+  }
+
+  fireConfetti = (await confetti.create(canvas, {
+    disableForReducedMotion: true,
+  })) as FireConfetti;
+  return fireConfetti;
+};
 
 /**
  * Trigger a confetti animation
@@ -25,20 +71,16 @@ export const triggerConfetti = async (
     return;
   }
 
-  // Dynamically import confetti only in browser. Registration is shared with the
-  // particle background so that whichever loads the engine first cannot lock the other
-  // out of registering its plugins.
-  const [{ confetti }] = await Promise.all([
-    import("@tsparticles/confetti"),
-    registerParticlePlugins(),
-  ]);
+  const fire = await loadConfetti();
+  if (!fire) {
+    return;
+  }
 
   const animationEnd = Date.now() + duration;
   const defaults = {
     startVelocity: 30,
     spread: 360,
     ticks: 60,
-    zIndex: 50, // Lower than toasts (which are typically 100+)
     colors,
     disableForReducedMotion: true,
   };
@@ -57,12 +99,12 @@ export const triggerConfetti = async (
     const particleCount = 50 * (timeLeft / duration);
 
     // Shoot confetti from left and right sides
-    void confetti({
+    void fire({
       ...defaults,
       particleCount,
       origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
     });
-    void confetti({
+    void fire({
       ...defaults,
       particleCount,
       origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
