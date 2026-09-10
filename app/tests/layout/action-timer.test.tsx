@@ -11,31 +11,39 @@ import {
 
 ensureDom();
 
-const lobbyBattle = () => {
-  const now = Date.now();
-  return makeCompleteBattle({
-    usersState: [
-      makeBattleUser("p1", { curHealth: 100 }),
-      makeBattleUser("p2", { curHealth: 100 }),
-    ],
-    activeUserId: "p1",
-    roundStartAt: new Date(now + 60_000),
-    version: 1,
-  });
+vi.mock("@/utils/UserContext", () => ({
+  useUserData: () => ({ timeDiff: 0 }),
+}));
+
+const FROZEN_NOW = Date.UTC(2026, 0, 1, 12, 0, 0);
+let nowMs = FROZEN_NOW;
+
+const advanceTimers = (ms: number) => {
+  nowMs += ms;
+  vi.advanceTimersByTime(ms);
 };
 
-const countdownBattle = () => {
-  const now = Date.now();
-  return makeCompleteBattle({
+const lobbyBattle = () =>
+  makeCompleteBattle({
     usersState: [
       makeBattleUser("p1", { curHealth: 100 }),
       makeBattleUser("p2", { curHealth: 100 }),
     ],
     activeUserId: "p1",
-    roundStartAt: new Date(now - 1000),
+    roundStartAt: new Date(FROZEN_NOW + 60_000),
     version: 1,
   });
-};
+
+const countdownBattle = () =>
+  makeCompleteBattle({
+    usersState: [
+      makeBattleUser("p1", { curHealth: 100 }),
+      makeBattleUser("p2", { curHealth: 100 }),
+    ],
+    activeUserId: "p1",
+    roundStartAt: new Date(FROZEN_NOW - 1000),
+    version: 1,
+  });
 
 const renderTimer = (battle: ReturnType<typeof makeCompleteBattle>) => {
   let commits = 0;
@@ -54,7 +62,16 @@ const renderTimer = (battle: ReturnType<typeof makeCompleteBattle>) => {
   return { commits: () => commits, getByText: view.getByText };
 };
 
+const flushMount = () => {
+  act(() => {
+    vi.advanceTimersByTime(0);
+  });
+};
+
 beforeEach(() => {
+  nowMs = FROZEN_NOW;
+  vi.useFakeTimers();
+  vi.spyOn(Date, "now").mockImplementation(() => nowMs);
   vi.spyOn(document, "hasFocus").mockReturnValue(true);
 });
 
@@ -66,28 +83,42 @@ afterEach(() => {
 
 describe("ActionTimer interval commits", () => {
   it("does not re-commit when the timer label and flags stay the same", () => {
-    vi.useFakeTimers();
     const { commits, getByText } = renderTimer(lobbyBattle());
+    flushMount();
     expect(getByText("Lobby")).toBeTruthy();
     const afterMount = commits();
 
     act(() => {
-      vi.advanceTimersByTime(2000);
+      advanceTimers(2000);
     });
 
-    // 20 interval ticks. A stray child rAF/layout commit is fine; a commit per tick is not.
-    expect(commits() - afterMount).toBeLessThan(5);
+    expect(commits() - afterMount).toBe(0);
     expect(getByText("Lobby")).toBeTruthy();
   });
 
+  it("does not re-commit while the tab is unfocused", () => {
+    vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    const { commits, getByText } = renderTimer(lobbyBattle());
+    flushMount();
+    expect(getByText("Not in Focus")).toBeTruthy();
+    const afterMount = commits();
+
+    act(() => {
+      advanceTimers(2000);
+    });
+
+    expect(commits() - afterMount).toBe(0);
+    expect(getByText("Not in Focus")).toBeTruthy();
+  });
+
   it("re-commits when the displayed tenth-second label changes", () => {
-    vi.useFakeTimers();
     const { commits, getByText } = renderTimer(countdownBattle());
+    flushMount();
     expect(getByText(`You: ${(COMBAT_SECONDS - 1).toFixed(1)}s`)).toBeTruthy();
     const afterMount = commits();
 
     act(() => {
-      vi.advanceTimersByTime(100);
+      advanceTimers(100);
     });
 
     expect(commits()).toBeGreaterThan(afterMount);
