@@ -108,7 +108,7 @@ export const createPreviewDeploymentClient = ({
     const reader = pushRequest || githubRequest;
     try {
       const ref = await withRetry(() =>
-        reader(`/repos/${owner}/${repo}/git/refs/heads/${encodeHeadsRef(branch)}`),
+        reader(`/repos/${owner}/${repo}/git/ref/heads/${encodeHeadsRef(branch)}`),
       );
       return ref?.object?.sha ?? "";
     } catch (error) {
