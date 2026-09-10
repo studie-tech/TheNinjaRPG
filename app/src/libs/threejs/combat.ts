@@ -1686,8 +1686,9 @@ export const highlightTiles = (info: {
   }
 
   // Apply colors to all tiles based on their state
-  // Process all tiles that were previously highlighted or selected
-  currentHighlights.forEach((name) => {
+  // Finish new range colors in this pass: cache hits skip subsequent frames.
+  // Include previous highlights so tiles leaving the range are reset as well.
+  new Set([...currentHighlights, ...newHighlights]).forEach((name) => {
     const isHighlighted = newHighlights.has(name);
     const isSelected = newSelection.has(name);
     const mesh = group_tiles.getObjectByName(name) as HexagonalFaceMesh;
