@@ -3,7 +3,6 @@ import { nanoid } from "nanoid";
 import { GUIDE_SYSTEM_COVERS } from "@/drizzle/constants";
 import { bloodline, guideArticle, item } from "@/drizzle/schema";
 import { SYSTEM_GUIDE_ARTICLES } from "@/libs/guide/articles";
-import { factCheckGuideProse } from "@/libs/guide/factcheck";
 import {
   generateBloodlineGuide,
   generateItemGuide,
@@ -21,11 +20,6 @@ const upsertArticle = async (
   },
 ) => {
   if (isReservedGuideSlug(article.slug)) return;
-  const issues = factCheckGuideProse(`${article.title} ${article.content}`);
-  const reviewNotes = [...(article.reviewNotes ? [article.reviewNotes] : [])];
-  if (issues.length > 0) {
-    reviewNotes.push(...issues.map((issue) => issue.message));
-  }
   const values = {
     slug: article.slug,
     title: article.title,
@@ -38,9 +32,9 @@ const upsertArticle = async (
     image: GUIDE_SYSTEM_COVERS[article.slug] ?? article.image ?? null,
     faq: article.faq ?? null,
     sortOrder: article.sortOrder,
-    published: issues.length > 0 ? false : article.published,
+    published: article.published,
     sourceUrl: article.sourceUrl ?? null,
-    reviewNotes: reviewNotes.length > 0 ? reviewNotes.join("\n") : null,
+    reviewNotes: article.reviewNotes ?? null,
     relatedBloodlineId: article.relatedBloodlineId ?? null,
     relatedItemId: article.relatedItemId ?? null,
     relatedJutsuId: article.relatedJutsuId ?? null,

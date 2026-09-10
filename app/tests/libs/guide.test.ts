@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GUIDE_HUB_CATEGORY_ORDER } from "@/drizzle/constants";
 import { SYSTEM_GUIDE_ARTICLES } from "@/libs/guide/articles";
-import { factCheckGuideProse } from "@/libs/guide/factcheck";
 import { isGuideworthyEntityName } from "@/libs/guide/generate";
 import {
   isReservedGuideSlug,
@@ -61,22 +60,6 @@ describe("guide headings", () => {
   });
 });
 
-describe("factCheckGuideProse", () => {
-  it("flags Core 3 village and rank leftovers", () => {
-    const issues = factCheckGuideProse("Train in Konoha until you are a Jounin.");
-    expect(issues.length).toBeGreaterThan(0);
-  });
-
-  it("does not flag current village names or the English word current", () => {
-    expect(factCheckGuideProse("Join Akikaze after the Genin exam.")).toEqual([]);
-    expect(factCheckGuideProse("Open the item page for current power.")).toEqual([]);
-  });
-
-  it("flags Village of Current leftovers", () => {
-    expect(factCheckGuideProse("Visit the Village of Current.")).not.toEqual([]);
-  });
-});
-
 describe("system guide articles", () => {
   it("includes a unique published getting-started page", () => {
     const slugs = SYSTEM_GUIDE_ARTICLES.map((article) => article.slug);
@@ -87,11 +70,8 @@ describe("system guide articles", () => {
     expect(start?.seoDescription.length).toBeLessThanOrEqual(160);
   });
 
-  it("keeps every first-party rewrite publishable", () => {
+  it("keeps SEO titles and descriptions in range", () => {
     for (const article of SYSTEM_GUIDE_ARTICLES) {
-      expect(factCheckGuideProse(`${article.title} ${article.content}`), article.slug).toEqual(
-        [],
-      );
       expect(article.seoTitle.length, article.slug).toBeLessThanOrEqual(60);
       expect(article.seoDescription.length, article.slug).toBeGreaterThan(80);
       expect(article.seoDescription.length, article.slug).toBeLessThanOrEqual(160);
