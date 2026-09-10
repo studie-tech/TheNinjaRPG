@@ -4,7 +4,7 @@ import type React from "react";
 import { useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import QueueLengthFiltering, {
@@ -168,7 +168,7 @@ export const QueueLengthHistogram: React.FC<QueueLengthHistogramProps> = ({
         <div className="flex items-center gap-2">
           <QueueLengthFiltering state={filteringState} />
           {canDelete && (
-            <Confirm2
+            <Confirm
               title="Clear All Queue Length Data"
               button={
                 <Button size="icon">
@@ -191,7 +191,7 @@ export const QueueLengthHistogram: React.FC<QueueLengthHistogramProps> = ({
                   action will be logged for future audit and review.
                 </>
               )}
-            </Confirm2>
+            </Confirm>
           )}
         </div>
       }

@@ -1,12 +1,6 @@
 import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-} from "@/api/trpc";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import {
   actionLog,
@@ -19,6 +13,12 @@ import { getRewardPreview } from "@/libs/objectives";
 import { postProcessRewards } from "@/libs/quest";
 import { fetchUser } from "@/routers/profile";
 import { updateRewards } from "@/server/api/routers/quests";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canChangeContent } from "@/utils/permissions";
 import { hoursSince, isToday, isWithinDateRange } from "@/utils/time";
@@ -28,6 +28,7 @@ import {
   claimStreakDaySchema,
   purchaseEventPassSchema,
 } from "@/validators/activityStreak";
+import { idSchema } from "@/validators/misc";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 
 const STREAK_CONTINUITY_HOURS = 36;
@@ -642,19 +643,17 @@ export const activityStreakRouter = createTRPCRouter({
     }),
 
   // Get single config with rewards
-  getConfig: protectedProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const config = await ctx.drizzle.query.activityStreakConfig.findFirst({
-        where: eq(activityStreakConfig.id, input.id),
-        with: {
-          rewards: {
-            orderBy: [activityStreakReward.dayNumber],
-          },
+  getConfig: protectedProcedure.input(idSchema).query(async ({ ctx, input }) => {
+    const config = await ctx.drizzle.query.activityStreakConfig.findFirst({
+      where: eq(activityStreakConfig.id, input.id),
+      with: {
+        rewards: {
+          orderBy: [activityStreakReward.dayNumber],
         },
-      });
-      return config;
-    }),
+      },
+    });
+    return config;
+  }),
 
   // Create new streak configuration
   createConfig: protectedProcedure
@@ -756,7 +755,7 @@ export const activityStreakRouter = createTRPCRouter({
 
   // Delete configuration
   deleteConfig: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch user
@@ -787,7 +786,7 @@ export const activityStreakRouter = createTRPCRouter({
 
   // Toggle config active status
   toggleConfigActive: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch user and config

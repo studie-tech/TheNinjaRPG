@@ -15,6 +15,12 @@ import {
   userData,
 } from "@/drizzle/schema";
 import { fetchUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import { canSeeHiddenBountyInfo } from "@/utils/permissions";
 import {
   addBountyMoneySchema,
@@ -25,12 +31,6 @@ import {
   retractBountySchema,
   signupBountySchema,
 } from "@/validators/bounty";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-} from "../trpc";
 
 export const bountyRouter = createTRPCRouter({
   // Get open bounty board

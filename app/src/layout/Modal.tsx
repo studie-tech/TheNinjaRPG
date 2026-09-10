@@ -20,7 +20,7 @@ export const modalViewportClassName =
 export const modalScrollableBodyClassName =
   "min-h-0 space-y-2 overflow-y-auto overscroll-contain py-4";
 
-interface Modal2Props {
+interface ModalProps {
   id?: string;
   title: string;
   children: string | React.ReactNode;
@@ -47,7 +47,7 @@ interface Modal2Props {
   footerExtra?: React.ReactNode;
 }
 
-const Modal2: React.FC<Modal2Props> = (props) => {
+export const Modal: React.FC<ModalProps> = (props) => {
   const confirmBtnClassName = props.confirmClassName
     ? props.confirmClassName
     : "bg-blue-600 text-white hover:bg-blue-700";
@@ -178,4 +178,4 @@ const Modal2: React.FC<Modal2Props> = (props) => {
   );
 };
 
-export default Modal2;
+export default Modal;

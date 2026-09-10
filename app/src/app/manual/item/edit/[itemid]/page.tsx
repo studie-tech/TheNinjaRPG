@@ -21,7 +21,7 @@ import { MAX_ITEM_VARIANTS, VARIANT_COST_TYPES } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
 import { useItemEditForm } from "@/hooks/item";
 import ChatInputField from "@/layout/ChatInputField";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { ItemHelper } from "@/layout/ContentHelp";
 import ContentImageSelector from "@/layout/ContentImageSelector";
@@ -265,7 +265,6 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
   });
 
   const form = useForm<VariantFormInput, unknown, ZodItemVariantType>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(ItemVariantValidator) as any,
     defaultValues: {
       name: "",
@@ -293,7 +292,6 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
     // variants?.length intentionally omitted: order is computed once at form-open time,
     // not on every background refetch. showForm is included so the default order
     // re-computes when the blank editor opens with the latest variants count.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingVariant, form, showForm]);
 
   const imageValue = useWatch({ control: form.control, name: "image" });
@@ -354,7 +352,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                     >
                       Edit
                     </Button>
-                    <Confirm2
+                    <Confirm
                       title="Delete Variant"
                       button={
                         <Button variant="destructive" size="sm">
@@ -367,7 +365,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                         Delete this variant? Players who have already unlocked it will
                         lose access.
                       </p>
-                    </Confirm2>
+                    </Confirm>
                   </div>
                 </td>
               </tr>

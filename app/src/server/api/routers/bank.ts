@@ -4,14 +4,14 @@ import { z } from "zod";
 import { RYO_CAP } from "@/drizzle/constants";
 import { bankTransfers, dailyBankInterest, userData } from "@/drizzle/schema";
 import { fetchUser } from "@/routers/profile";
-import type { DrizzleClient } from "@/server/db";
 import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
   serverError,
-} from "../trpc";
+} from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 
 export const bankRouter = createTRPCRouter({
   toBank: protectedProcedure
@@ -23,35 +23,7 @@ export const bankRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      // Derived
-      const raw = input.amount;
-      const overCap = user.bank + raw > RYO_CAP;
-      const value = overCap ? RYO_CAP - user.bank : raw;
-      // Guard
-      if (value <= 0 && overCap) return errorResponse("Ryo cap reached");
-      if (user.money < value) return errorResponse("Not enough money in pocket");
-      if (user.isBanned) return errorResponse("You are banned");
-      if (user.status === "BATTLE")
-        return errorResponse("Cannot access bank while in combat");
-      // Update
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({
-          money: sql`${userData.money} - ${value}`,
-          bank: sql`${userData.bank} + ${value}`,
-        })
-        .where(and(eq(userData.userId, ctx.userId), gte(userData.money, value)));
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Not enough money in pocket" };
-      }
-      const updatedUser = await fetchUserBalances(ctx.drizzle, ctx.userId);
-      return {
-        success: true,
-        message: `Successfully deposited ${value} ryo`,
-        data: { bank: updatedUser.bank, money: updatedUser.money },
-      };
+      return transferRyo(ctx.drizzle, ctx.userId, input.amount, "toBank");
     }),
   toPocket: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Withdraw ryo from bank to pocket" } })
@@ -62,35 +34,7 @@ export const bankRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      // Derived
-      const raw = input.amount;
-      const overCap = user.money + raw > RYO_CAP;
-      const value = overCap ? RYO_CAP - user.money : raw;
-      // Guard
-      if (value <= 0 && overCap) return errorResponse("Ryo cap reached");
-      if (user.bank < value) return errorResponse("Not enough money in bank");
-      if (user.isBanned) return errorResponse("You are banned");
-      if (user.status === "BATTLE")
-        return errorResponse("Cannot access bank while in combat");
-      // Update
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({
-          money: sql`${userData.money} + ${value}`,
-          bank: sql`${userData.bank} - ${value}`,
-        })
-        .where(and(eq(userData.userId, ctx.userId), gte(userData.bank, value)));
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Not enough money in bank" };
-      }
-      const updatedUser = await fetchUserBalances(ctx.drizzle, ctx.userId);
-      return {
-        success: true,
-        message: `Successfully withdrew ${value} ryo`,
-        data: { bank: updatedUser.bank, money: updatedUser.money },
-      };
+      return transferRyo(ctx.drizzle, ctx.userId, input.amount, "toPocket");
     }),
   transfer: protectedProcedure
     .meta({
@@ -316,6 +260,62 @@ export const bankRouter = createTRPCRouter({
       };
     }),
 });
+
+const transferRyo = async (
+  client: DrizzleClient,
+  userId: string,
+  amount: number,
+  direction: "toBank" | "toPocket",
+) => {
+  const user = await fetchUser(client, userId);
+  const fromPocket = direction === "toBank";
+  const capColumn = fromPocket ? user.bank : user.money;
+  const sourceColumn = fromPocket ? user.money : user.bank;
+  const overCap = capColumn + amount > RYO_CAP;
+  const value = overCap ? RYO_CAP - capColumn : amount;
+  if (value <= 0 && overCap) return errorResponse("Ryo cap reached");
+  if (sourceColumn < value) {
+    return errorResponse(
+      fromPocket ? "Not enough money in pocket" : "Not enough money in bank",
+    );
+  }
+  if (user.isBanned) return errorResponse("You are banned");
+  if (user.status === "BATTLE")
+    return errorResponse("Cannot access bank while in combat");
+  const result = await client
+    .update(userData)
+    .set(
+      fromPocket
+        ? {
+            money: sql`${userData.money} - ${value}`,
+            bank: sql`${userData.bank} + ${value}`,
+          }
+        : {
+            money: sql`${userData.money} + ${value}`,
+            bank: sql`${userData.bank} - ${value}`,
+          },
+    )
+    .where(
+      and(
+        eq(userData.userId, userId),
+        gte(fromPocket ? userData.money : userData.bank, value),
+      ),
+    );
+  if (result.rowsAffected === 0) {
+    return {
+      success: false,
+      message: fromPocket ? "Not enough money in pocket" : "Not enough money in bank",
+    };
+  }
+  const updatedUser = await fetchUserBalances(client, userId);
+  return {
+    success: true,
+    message: fromPocket
+      ? `Successfully deposited ${value} ryo`
+      : `Successfully withdrew ${value} ryo`,
+    data: { bank: updatedUser.bank, money: updatedUser.money },
+  };
+};
 
 /**
  * Post-CAS pocket/bank read. Concurrent grants can change either column after

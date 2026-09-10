@@ -18,6 +18,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
+import { idSchema } from "@/validators/misc";
 
 const pusher = getServerPusher();
 
@@ -69,7 +70,7 @@ export const sparringRouter = createTRPCRouter({
     }),
   acceptChallenge: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Accept a sparring challenge" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
@@ -161,7 +162,7 @@ export const sparringRouter = createTRPCRouter({
     }),
   rejectChallenge: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Reject a sparring challenge" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const challenge = await fetchRequest(ctx.drizzle, input.id, "SPAR");
@@ -181,7 +182,7 @@ export const sparringRouter = createTRPCRouter({
     }),
   cancelChallenge: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Cancel your sparring challenge" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const challenge = await fetchRequest(ctx.drizzle, input.id, "SPAR");

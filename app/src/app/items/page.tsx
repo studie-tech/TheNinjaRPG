@@ -39,7 +39,7 @@ import type {
   UserItemWithVariants,
 } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
@@ -48,7 +48,7 @@ import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
@@ -253,7 +253,7 @@ export default function MyItems() {
               options={availableTabs}
               setValue={setActiveTab}
             />
-            <Confirm2
+            <Confirm
               title="Extra Item Slot"
               proceed_label={
                 canAfford
@@ -276,7 +276,7 @@ export default function MyItems() {
                 reputation points. You currently have {userData.reputationPoints}{" "}
                 points. Are you sure?
               </p>
-            </Confirm2>
+            </Confirm>
           </div>
         }
       >
@@ -314,7 +314,7 @@ export default function MyItems() {
       <div className="mt-1 flex w-full flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <ItemLoadoutSelector />
-          <Confirm2
+          <Confirm
             title="Unequip all items"
             proceed_label={isUnequippingAll ? undefined : "Unequip all"}
             isValid={!isUnequippingAll}
@@ -333,11 +333,11 @@ export default function MyItems() {
               Remove every equipped item from your character and clear equipment on your
               current item loadout. Your loadout slot selection stays the same.
             </p>
-          </Confirm2>
+          </Confirm>
         </div>
         <div className="flex gap-2">
           {itemsNeedingRepair.length > 0 && (repairKits.length > 0 || isCrafter) && (
-            <Confirm2
+            <Confirm
               title="Repair All Items"
               proceed_label={
                 canRepairWithKits && !isRepairAllPending ? "Repair with Kits" : null
@@ -442,9 +442,9 @@ export default function MyItems() {
                   </div>
                 )}
               </div>
-            </Confirm2>
+            </Confirm>
           )}
-          <Confirm2
+          <Confirm
             title="Auto Equip"
             isValid={!isPending}
             button={
@@ -462,7 +462,7 @@ export default function MyItems() {
               You are about to auto-equip your items. This will equip unequipped items
               in the best possible way. Are you sure?
             </p>
-          </Confirm2>
+          </Confirm>
         </div>
       </div>
     </>
@@ -494,7 +494,7 @@ function RepairItemSelectionModal({
   if (!isOpen || !targetItem) return null;
 
   return (
-    <Modal2
+    <Modal
       title="Select Repair Item"
       isOpen={isOpen}
       setIsOpen={setIsOpen}
@@ -573,7 +573,7 @@ function RepairItemSelectionModal({
           </div>
         )}
       </div>
-    </Modal2>
+    </Modal>
   );
 }
 
@@ -660,7 +660,7 @@ function ItemDurabilityRepairActions({
         Use Repair Item
       </Button>
       {isCrafter && (
-        <Confirm2
+        <Confirm
           title="Repair with Ryo"
           proceed_label={
             canAffordItemRyoRepair && !isRepairingWithRyo
@@ -688,7 +688,7 @@ function ItemDurabilityRepairActions({
               </span>
             )}
           </p>
-        </Confirm2>
+        </Confirm>
       )}
     </>
   );
@@ -924,7 +924,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         }}
       />
       {isOpen && useritem && (
-        <Modal2
+        <Modal
           title="Item Details"
           isOpen={isOpen}
           setIsOpen={setIsOpen}
@@ -970,7 +970,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                       new Date(imbuement.craftingFinishedAt) <= new Date(),
                   )
                   .map((imbuement) => (
-                    <Confirm2
+                    <Confirm
                       key={imbuement.id}
                       title="Remove Imbuement"
                       proceed_label="Remove & Return Crystal"
@@ -995,7 +995,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                         <b>{useritem.item.name}</b>? The crystal will be returned to
                         your inventory.
                       </p>
-                    </Confirm2>
+                    </Confirm>
                   ))}
               </div>
             )}
@@ -1081,7 +1081,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                   hasRequiredLevel(userData.level, evo.requiredLevel) &&
                   (!evo.bloodlineId || evo.bloodlineId === userData.bloodlineId);
                 return (
-                  <Confirm2
+                  <Confirm
                     key={evo.id}
                     title={`Evolve to ${evo.name}`}
                     confirmDisabled={!canEvolve}
@@ -1151,11 +1151,11 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                         Required Character Level: <b>{evo.requiredLevel}</b>
                       </p>
                     )}
-                  </Confirm2>
+                  </Confirm>
                 );
               })}
               <div className="grow"></div>
-              <Confirm2
+              <Confirm
                 title="Security Confirmation"
                 proceed_label="Submit"
                 button={
@@ -1175,7 +1175,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
               >
                 Are you absolutely sure you wish to remove this item from your
                 inventory?
-              </Confirm2>
+              </Confirm>
             </div>
           )}
           {isMerging && <Loader explanation={`Merging ${useritem.item.name} stacks`} />}
@@ -1186,7 +1186,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           {isRepairingWithRyo && (
             <Loader explanation={`Repairing ${useritem.item.name}`} />
           )}
-        </Modal2>
+        </Modal>
       )}
       {isSplitDialogOpen && useritem && (
         <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
@@ -1407,7 +1407,7 @@ const Character: React.FC<CharacterProps> = (props) => {
         <Equip slot={"ITEM_5"} act={act} txt="Item" pos={l + t5} items={items} />
         <Equip slot={"ITEM_6"} act={act} txt="Item" pos={r + t5} items={items} />
         {isOpen && slot && (
-          <Modal2
+          <Modal
             title="Select Item to Equip"
             isOpen={isOpen}
             setIsOpen={setIsOpen}
@@ -1440,10 +1440,10 @@ const Character: React.FC<CharacterProps> = (props) => {
             ) : (
               <Loader explanation={`Swapping ${useritem?.item.name}`} />
             )}
-          </Modal2>
+          </Modal>
         )}
         {showItemDetails && useritem && (
-          <Modal2
+          <Modal
             title="Item Details"
             isOpen={showItemDetails}
             setIsOpen={setShowItemDetails}
@@ -1512,7 +1512,7 @@ const Character: React.FC<CharacterProps> = (props) => {
                 explanation={`${isEquipping ? "Unequipping" : "Repairing"} ${useritem.item.name}`}
               />
             )}
-          </Modal2>
+          </Modal>
         )}
         {/* Repair Item Selection Modal */}
         <RepairModalWrapper
@@ -1675,7 +1675,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   };
 
   return (
-    <Modal2
+    <Modal
       title={`Variants — ${userItem.item.name}`}
       isOpen={isOpen}
       setIsOpen={handleClose}
@@ -1783,6 +1783,6 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
           );
         })}
       </div>
-    </Modal2>
+    </Modal>
   );
 };

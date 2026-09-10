@@ -10,7 +10,7 @@ import { IMG_PROFILE_LEVELUPGUY } from "@/drizzle/constants";
 import { useTutorialStep } from "@/hooks/tutorial";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { calcCP, calcHP, calcLevelRequirements, calcSP } from "@/libs/profile";
 import { showMutationToast, triggerConfetti } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -96,7 +96,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
         </div>
       )}
       {showModal && (
-        <Modal2
+        <Modal
           id="tutorial-level-up-modal"
           title={`Level up to Lvl ${userData.level + 1}!`}
           isOpen={showModal}
@@ -138,7 +138,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
               </p>
             </>
           )}
-        </Modal2>
+        </Modal>
       )}
     </>
   );

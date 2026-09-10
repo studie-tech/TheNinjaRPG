@@ -19,7 +19,7 @@ import { MAP_SECTOR_ID_MAX } from "@/drizzle/constants";
 import { useDelayState } from "@/hooks/useDelayState";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import SectorPreview from "@/layout/SectorPreview";
 import { mergeDecorationAssets } from "@/libs/sector-map/decorations";
 import { isValidSectorId } from "@/libs/sector-map/sector-ids";
@@ -726,7 +726,7 @@ function SectorMapEditorContent() {
         </div>
       </ContentBox>
       {pendingMove && (
-        <Modal2
+        <Modal
           title="Relocate structure"
           isOpen={!!pendingMove}
           setIsOpen={(open) => {
@@ -744,7 +744,7 @@ function SectorMapEditorContent() {
         >
           Move <b>{pendingMove.name}</b> to tile ({pendingMove.x}, {pendingMove.y}) in
           sector {sector}? This changes where every player finds the building.
-        </Modal2>
+        </Modal>
       )}
     </>
   );

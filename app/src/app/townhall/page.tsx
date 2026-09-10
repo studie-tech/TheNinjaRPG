@@ -54,12 +54,12 @@ import type { VillageAlliance } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import PublicUserComponent from "@/layout/PublicUser";
 import { ShrineHall } from "@/layout/ShrineHall";
@@ -482,7 +482,7 @@ const ElderHall: React.FC<{
                       {ELDER_KAGE_REMOVAL_VOTE_DAYS} days, the kage will be removed and
                       lose all village prestige.
                     </p>
-                    <Confirm2
+                    <Confirm
                       title="Initiate Kage Removal Vote"
                       button={
                         <Button size="sm" variant="destructive">
@@ -498,7 +498,7 @@ const ElderHall: React.FC<{
                       will be open for {ELDER_KAGE_REMOVAL_VOTE_DAYS} days. If a
                       majority of elders vote YES, the kage will be removed and their
                       village prestige reset to 0.
-                    </Confirm2>
+                    </Confirm>
                   </>
                 ) : (
                   <p className="text-muted-foreground text-sm">
@@ -991,7 +991,7 @@ const KageChallenge: React.FC<{
 
       {/* Take Kage Modal */}
       {showTakeKageModal && (
-        <Modal2
+        <Modal
           title="Take Kage as Staff"
           isOpen={showTakeKageModal}
           setIsOpen={setShowTakeKageModal}
@@ -1029,7 +1029,7 @@ const KageChallenge: React.FC<{
               </p>
             </div>
           </div>
-        </Modal2>
+        </Modal>
       )}
     </ContentBox>
   );
@@ -1392,7 +1392,7 @@ const AllianceCard: React.FC<{
             </Button>
           )}
           {enemy.success && status !== "ENEMY" && (
-            <Confirm2
+            <Confirm
               title="Declare Enemy"
               onAccept={(e) => {
                 e.preventDefault();
@@ -1418,7 +1418,7 @@ const AllianceCard: React.FC<{
                   Broken alliances: {newNeutrals.map((v) => v.name).join(", ")}
                 </p>
               )}
-            </Confirm2>
+            </Confirm>
           )}
           {status === "ENEMY" && (
             <Button

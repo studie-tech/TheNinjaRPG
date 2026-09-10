@@ -35,7 +35,7 @@ import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import {
   byItemName,
   calcMaxHouseCookingItems,
@@ -696,7 +696,7 @@ export default function HomePage() {
 
             {/* Stored Items Modal */}
             {isModalOpen && selectedItem && (
-              <Modal2
+              <Modal
                 title="Item Details"
                 isOpen={isModalOpen}
                 setIsOpen={setIsModalOpen}
@@ -734,7 +734,7 @@ export default function HomePage() {
                 {isTogglingStoreItem && (
                   <Loader explanation={`Moving ${selectedItem.item.name}`} />
                 )}
-              </Modal2>
+              </Modal>
             )}
           </ContentBox>
         </>

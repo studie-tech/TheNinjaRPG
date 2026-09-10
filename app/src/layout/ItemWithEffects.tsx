@@ -15,7 +15,7 @@ import type {
   Quest,
   SageMode,
 } from "@/drizzle/schema";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
@@ -327,7 +327,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {showEdit && userData && canChangeContent(userData.role) && (
                 <>
                   {showCopy === "quest" && (
-                    <Confirm2
+                    <Confirm
                       title="Clone Quest"
                       button={
                         <Copy className="h-6 w-6 hover:text-popover-foreground/50" />
@@ -339,10 +339,10 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     >
                       This will create a copy of this quest. You will be redirected to
                       edit the new quest.
-                    </Confirm2>
+                    </Confirm>
                   )}
                   {showCopy === "ai" && (
-                    <Confirm2
+                    <Confirm
                       title="Clone AI"
                       button={
                         <Copy className="h-6 w-6 hover:text-popover-foreground/50" />
@@ -354,10 +354,10 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     >
                       This will create a copy of this AI. You will be redirected to edit
                       the new AI.
-                    </Confirm2>
+                    </Confirm>
                   )}
                   {showCopy === "item" && (
-                    <Confirm2
+                    <Confirm
                       title="Clone Item"
                       button={
                         <Copy className="h-6 w-6 hover:text-popover-foreground/50" />
@@ -369,10 +369,10 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     >
                       This will create a copy of this item. You will be redirected to
                       edit the new item.
-                    </Confirm2>
+                    </Confirm>
                   )}
                   {show3d && "avatar" in item && "avatar3d" in item && item.avatar3d ? (
-                    <Confirm2
+                    <Confirm
                       title="3d Model"
                       button={
                         <Box className="h-6 w-6 hover:cursor-pointer hover:text-popover-foreground/50" />
@@ -384,13 +384,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                         alt={item.name}
                         size={100}
                       />
-                    </Confirm2>
+                    </Confirm>
                   ) : undefined}
                   <Link href={`/manual/${showEdit}/edit/${item.id}`}>
                     <SquarePen className="h-6 w-6 hover:text-popover-foreground/50" />
                   </Link>
                   {onDelete && canChangeContent(userData.role) && (
-                    <Confirm2
+                    <Confirm
                       title="Confirm Deletion"
                       button={
                         <Trash2 className="h-6 w-6 hover:cursor-pointer hover:text-popover-foreground/50" />
@@ -402,7 +402,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     >
                       You are about to delete this. Are you sure? This will affect ALL
                       USERS WHO HAS THE CONTENT IN QUESTION.
-                    </Confirm2>
+                    </Confirm>
                   )}
                 </>
               )}

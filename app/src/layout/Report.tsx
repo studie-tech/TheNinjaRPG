@@ -14,7 +14,7 @@ import {
   type UserReportSchema,
   userReportSchema,
 } from "../validators/reports";
-import Modal2 from "./Modal2";
+import Modal from "./Modal";
 import Post from "./Post";
 import RichInput from "./RichInput";
 
@@ -86,7 +86,7 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
   if (showModal) {
     return (
       <form onSubmit={onSubmit}>
-        <Modal2
+        <Modal
           title="Report User"
           isOpen={showModal}
           setIsOpen={setShowModal}
@@ -123,7 +123,7 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
               />
             </>
           )}
-        </Modal2>
+        </Modal>
       </form>
     );
   } else {

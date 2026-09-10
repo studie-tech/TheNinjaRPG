@@ -25,7 +25,7 @@ import type { SkillTreeFolder } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -321,7 +321,7 @@ export default function ManualSkillTreeFolder() {
       </ContentBox>
 
       {/* Create Modal */}
-      <Modal2
+      <Modal
         title="Create New Folder"
         isOpen={isCreateOpen}
         setIsOpen={setIsCreateOpen}
@@ -343,10 +343,10 @@ export default function ManualSkillTreeFolder() {
           hidden={formHidden}
           setHidden={setFormHidden}
         />
-      </Modal2>
+      </Modal>
 
       {/* Edit Modal */}
-      <Modal2
+      <Modal
         title="Edit Folder"
         isOpen={!!editFolder}
         setIsOpen={(open) => {
@@ -373,10 +373,10 @@ export default function ManualSkillTreeFolder() {
           hidden={formHidden}
           setHidden={setFormHidden}
         />
-      </Modal2>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal2
+      <Modal
         title="Delete Folder"
         isOpen={!!deleteFolder}
         setIsOpen={(open) => {
@@ -401,7 +401,7 @@ export default function ManualSkillTreeFolder() {
             </div>
           )}
         </div>
-      </Modal2>
+      </Modal>
     </>
   );
 }

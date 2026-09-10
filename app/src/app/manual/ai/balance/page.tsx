@@ -11,7 +11,7 @@ import AiBalanceFiltering, {
   getFilter,
   useFiltering,
 } from "@/layout/AiBalanceFiltering";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
@@ -148,7 +148,7 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
           {navTabs}
           <AiBalanceFiltering state={filterState} />
           {canDelete && (
-            <Confirm2
+            <Confirm
               title="Clear All AI Battle Data"
               button={
                 <Button size="icon">
@@ -171,7 +171,7 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
                   will be logged for future audit and review.
                 </>
               )}
-            </Confirm2>
+            </Confirm>
           )}
         </div>
       }

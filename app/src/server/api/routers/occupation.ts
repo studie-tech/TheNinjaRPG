@@ -23,11 +23,11 @@ import {
   getInventoryBucketFullMessage,
 } from "@/libs/item";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import {
   fetchItemWithCraftingRequirements,
   fetchUserItems,
 } from "@/server/api/routers/item";
-import { fetchUpdatedUser, fetchUser } from "@/server/api/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,

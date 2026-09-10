@@ -3,7 +3,7 @@ import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { REMOVAL_COST } from "@/drizzle/constants";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
@@ -49,7 +49,7 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
       {!isFetching && data && userData && (
         <>
           <ItemWithEffects item={data} key={data.id} />
-          <Confirm2
+          <Confirm
             title="Sage Mode Removal"
             proceed_label={
               canAfford
@@ -84,7 +84,7 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
                 </>
               )}
             </p>
-          </Confirm2>
+          </Confirm>
         </>
       )}
     </>

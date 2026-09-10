@@ -60,14 +60,14 @@ import type { Jutsu } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import PublicUserComponent from "@/layout/PublicUser";
 import UserRequestSystem from "@/layout/UserRequestSystem";
@@ -328,7 +328,7 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
                     size={100}
                   />
                   {user.rank === "GENIN" && (
-                    <Confirm2
+                    <Confirm
                       title="Remove Student"
                       button={
                         <XCircle className="absolute top-[3%] right-[13%] h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
@@ -339,7 +339,7 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
                       }}
                     >
                       You are about to remove this user as your student. Confirm?
-                    </Confirm2>
+                    </Confirm>
                   )}
                   <div>
                     <div className="font-bold">{user.username}</div>
@@ -923,7 +923,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
             setLastElement={setLastElement}
           />
           {isOpen && jutsu && (
-            <Modal2
+            <Modal
               id="tutorial-traininggrounds-trainJutsu"
               title="Confirm Purchase"
               proceed_label={proceed_label}
@@ -958,7 +958,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                 )}
                 {isPending && <Loader explanation={`Training ${jutsu.name}`} />}
               </div>
-            </Modal2>
+            </Modal>
           )}
         </div>
       )}

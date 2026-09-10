@@ -1,17 +1,24 @@
 import { and, asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { baseServerResponse, errorResponse, serverError } from "@/api/trpc";
 import type { GuideCategory } from "@/drizzle/constants";
 import { actionLog, guideArticle, userData } from "@/drizzle/schema";
 import { fetchUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { moderateUserText } from "@/utils/profanity";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { GuideArticleValidator, GuideListFilterSchema } from "@/validators/guide";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { idSchema } from "@/validators/misc";
 
 export const guideRouter = createTRPCRouter({
   getAll: publicProcedure
@@ -35,7 +42,7 @@ export const guideRouter = createTRPCRouter({
     }),
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a guide article by ID" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       const article = await fetchGuide(ctx.drizzle, input.id);
       if (!article) throw serverError("NOT_FOUND", "Guide not found");
@@ -125,7 +132,7 @@ export const guideRouter = createTRPCRouter({
       return { success: true, message: `Guide updated: ${diff.join(". ")}` };
     }),
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, entry] = await Promise.all([

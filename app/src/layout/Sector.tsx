@@ -49,7 +49,7 @@ import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
 import Image from "@/layout/Image";
 import { LogbookEntry, QuestDialogScene } from "@/layout/Logbook";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import RaidBrowser from "@/layout/RaidBrowser";
 import SliderField from "@/layout/SliderField";
 import WebGlError from "@/layout/WebGLError";
@@ -2761,7 +2761,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         </div>
       )}
       {showRaidModal && userData && (
-        <Modal2 isOpen={showRaidModal} setIsOpen={setShowRaidModal} title="Sector Raid">
+        <Modal isOpen={showRaidModal} setIsOpen={setShowRaidModal} title="Sector Raid">
           <RaidBrowser
             title="Sector Raid"
             subtitle={`Sector ${userData.sector}`}
@@ -2769,7 +2769,7 @@ const Sector: React.FC<SectorProps> = (props) => {
             viewOnly={false}
             sectorFilter={userData.sector}
           />
-        </Modal2>
+        </Modal>
       )}
       {props.showSorrounding && sorrounding && userData && originRef.current && (
         <SorroundingUsers
@@ -2812,7 +2812,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         />
       )}
       {logbookModalOpen && modalUserQuest && modalTracker && (
-        <Modal2
+        <Modal
           isOpen={logbookModalOpen}
           setIsOpen={setLogbookModalOpen}
           title="Quest Update"
@@ -2823,7 +2823,7 @@ const Sector: React.FC<SectorProps> = (props) => {
             showScene={true}
             hideTitle={false}
           />
-        </Modal2>
+        </Modal>
       )}
       {targetUser && (isAttacking || userData?.status === "BATTLE") && (
         <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black">
@@ -2861,7 +2861,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         </div>
       )}
       {arrivalNpc && (
-        <Modal2
+        <Modal
           isOpen={!!arrivalNpc}
           setIsOpen={(open) => {
             if (!open) setArrivalNpc(null);
@@ -2901,10 +2901,10 @@ const Sector: React.FC<SectorProps> = (props) => {
               </Button>
             </div>
           </div>
-        </Modal2>
+        </Modal>
       )}
       {npcDialog && pendingNpcInteractRef.current && (
-        <Modal2
+        <Modal
           isOpen={!!npcDialog}
           setIsOpen={(open) => {
             if (!open) setNpcDialog(null);
@@ -2945,7 +2945,7 @@ const Sector: React.FC<SectorProps> = (props) => {
               </Button>
             ))}
           </div>
-        </Modal2>
+        </Modal>
       )}
     </>
   );
@@ -3036,7 +3036,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
   }, [watchedBracket]);
 
   return (
-    <Modal2
+    <Modal
       isOpen={true}
       title={`Scouting. Your position: [${props.hex.col}, ${props.hex.row}]`}
       setIsOpen={props.setIsOpen}
@@ -3190,6 +3190,6 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
           <Label>Attack button on allies</Label>
         </div>
       </div>
-    </Modal2>
+    </Modal>
   );
 };

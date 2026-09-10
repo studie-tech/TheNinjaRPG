@@ -46,7 +46,7 @@ import {
 } from "@/layout/ItemShopFiltering";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { UncontrolledSliderField } from "@/layout/SliderField";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
@@ -269,27 +269,31 @@ const Shop: React.FC<ShopProps> = (props) => {
 
   const utils = api.useUtils();
 
-  const { data: items, isFetching, fetchNextPage, hasNextPage } =
-    api.item.getAll.useInfiniteQuery(
-      {
-        minCost,
-        minRepsCost,
-        minSeichiSilverCost,
-        eventItems: props.eventItems,
-        ...getShopFilter(filteringState),
-        onlyInShop: true,
-        excludeExpiredFromStore: true,
-        limit: SHOP_CATALOG_PAGE_SIZE,
-        hidden: false,
-        maxLevel: userData.level,
-      },
-      {
-        enabled: userData !== undefined,
-        staleTime: Infinity,
-        getNextPageParam: (lastPage) => lastPage.nextCursor,
-        placeholderData: (previousData) => previousData,
-      },
-    );
+  const {
+    data: items,
+    isFetching,
+    fetchNextPage,
+    hasNextPage,
+  } = api.item.getAll.useInfiniteQuery(
+    {
+      minCost,
+      minRepsCost,
+      minSeichiSilverCost,
+      eventItems: props.eventItems,
+      ...getShopFilter(filteringState),
+      onlyInShop: true,
+      excludeExpiredFromStore: true,
+      limit: SHOP_CATALOG_PAGE_SIZE,
+      hidden: false,
+      maxLevel: userData.level,
+    },
+    {
+      enabled: userData !== undefined,
+      staleTime: Infinity,
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      placeholderData: (previousData) => previousData,
+    },
+  );
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
   const allItems = items?.pages
     .flatMap((page) => page.data)
@@ -419,7 +423,7 @@ const Shop: React.FC<ShopProps> = (props) => {
   if (!isAwake) return <Loader explanation="Redirecting because not awake" />;
 
   const purchaseModal = userData && isOpen && item && (
-    <Modal2
+    <Modal
       id="tutorial-itemshop-confirmPurchase"
       title="Confirm Purchase"
       proceed_label={isPurchasing ? undefined : canAfford ? costString : missingString}
@@ -511,7 +515,7 @@ const Shop: React.FC<ShopProps> = (props) => {
         </>
       )}
       {isPurchasing && <Loader explanation={`Purchasing ${item.name}`} />}
-    </Modal2>
+    </Modal>
   );
 
   return (

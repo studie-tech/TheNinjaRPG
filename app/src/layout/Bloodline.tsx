@@ -11,11 +11,11 @@ import {
 import type { Bloodline } from "@/drizzle/schema";
 import BloodFiltering, { getFilter, useFiltering } from "@/layout/BloodlineFiltering";
 import { ActionSelector } from "@/layout/CombatActions";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -127,7 +127,7 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
       )}
       {isFetching && <Loader explanation="Loading bloodlines" />}
       {isOpen && userData && bloodline && (
-        <Modal2
+        <Modal
           title="Confirm Purchase"
           proceed_label={
             isPurchasing
@@ -154,7 +154,7 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
         >
           {!isPurchasing && <ItemWithEffects item={bloodline} key={bloodline.id} />}
           {isPurchasing && <Loader explanation={`Purchasing ${bloodline.name}`} />}
-        </Modal2>
+        </Modal>
       )}
     </ContentBox>
   );
@@ -202,7 +202,7 @@ export const CurrentBloodline: React.FC<CurrentBloodlineProps> = (props) => {
       {!isFetching && data && userData && (
         <>
           <ItemWithEffects item={data} key={data.id} />
-          <Confirm2
+          <Confirm
             title="Bloodline Removal"
             proceed_label={
               canAfford
@@ -225,7 +225,7 @@ export const CurrentBloodline: React.FC<CurrentBloodlineProps> = (props) => {
               Confirm using <b>{REMOVAL_COST} reputation points</b> to have the doctors
               at the hospital remove your bloodline.
             </p>
-          </Confirm2>
+          </Confirm>
         </>
       )}
     </ContentBox>
@@ -255,7 +255,7 @@ export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
   return (
     <div className="p-3">
       {isRolling && <Loader explanation="Rolling bloodline" />}
-      <Confirm2
+      <Confirm
         title="Confirm Roll - Check Genetics"
         proceed_label="Roll"
         isValid={!isRolling}
@@ -285,7 +285,7 @@ export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
           event a bloodline would be rewarded, if no bloodline would be rewarded your
           previous bloodline will not be removed.
         </p>
-      </Confirm2>
+      </Confirm>
     </div>
   );
 };

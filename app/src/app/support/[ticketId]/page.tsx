@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { use, useState } from "react";
-import { toast } from "sonner";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +39,11 @@ import {
   getStatusColor,
 } from "@/libs/support";
 import { showMutationToast } from "@/libs/toast";
-import { canEditCannedResponses, canEscalateToGithub } from "@/utils/permissions";
+import {
+  canEditCannedResponses,
+  canEscalateToGithub,
+  isStaffRole,
+} from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function TicketDetail(props: { params: Promise<{ ticketId: string }> }) {
@@ -60,7 +63,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
   const [isManagementOpen, setIsManagementOpen] = useState(false);
 
   // Derived
-  const isStaff = userData?.role && userData?.role !== "USER";
+  const isStaff = userData?.role ? isStaffRole(userData.role) : false;
 
   // Get utils
   const utils = api.useUtils();
@@ -116,10 +119,13 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
     void navigator.clipboard
       .writeText(description)
       .then(() => {
-        toast.success("Canned response copied to clipboard!");
+        showMutationToast({
+          success: true,
+          message: "Canned response copied to clipboard!",
+        });
       })
       .catch(() => {
-        toast.error("Failed to copy to clipboard");
+        showMutationToast({ success: false, message: "Failed to copy to clipboard" });
       });
   };
 

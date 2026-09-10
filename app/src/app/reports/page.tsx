@@ -15,6 +15,7 @@ import ReportFiltering, { getFilter, useFiltering } from "@/layout/ReportFilteri
 import ParsedReportJson from "@/layout/ReportReason";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
+import { isStaffRole } from "@/utils/permissions";
 import { reportCommentColor, reportCommentExplain } from "@/utils/reports";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -66,7 +67,7 @@ export default function Reports() {
       topRightContent={
         <div>
           <div className="flex flex-col items-start">
-            {userData?.role !== "USER" && (
+            {userData && isStaffRole(userData.role) && (
               <div className="flex w-full flex-row items-center gap-1">
                 <Link href="/reports/statistics">
                   <Button id="report-statistics" hoverText="Staff Activity Overview">

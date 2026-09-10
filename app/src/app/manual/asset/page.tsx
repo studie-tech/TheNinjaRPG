@@ -14,7 +14,7 @@ import GameAssetFiltering, {
 } from "@/layout/GameAssetFiltering";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
@@ -186,7 +186,7 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
       />
       {isPending && <Loader explanation="Loading data" />}
       {isOpen && userData && asset && (
-        <Modal2
+        <Modal
           title="Asset Details"
           isOpen={isOpen}
           setIsOpen={setIsOpen}
@@ -208,7 +208,7 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
             </div>
           )}
           {isPending && <Loader explanation={`Processing ${asset.name}`} />}
-        </Modal2>
+        </Modal>
       )}
     </>
   );

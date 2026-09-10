@@ -1,16 +1,22 @@
 import { and, desc, eq, getTableColumns, inArray, like, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { baseServerResponse, serverError } from "@/api/trpc";
 import { GameAssetTypes, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { actionLog, contentTag, gameAsset, gameAssetTag } from "@/drizzle/schema";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { gameAssetSchema, gameAssetValidator } from "@/validators/asset";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { idSchema } from "@/validators/misc";
 
 export const gameAssetRouter = createTRPCRouter({
   getNameTags: publicProcedure
@@ -146,9 +152,9 @@ export const gameAssetRouter = createTRPCRouter({
     }),
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a game asset by ID" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
-      const result = await fetchgameAsset(ctx.drizzle, input.id);
+      const result = await fetchGameAsset(ctx.drizzle, input.id);
       if (!result) {
         throw serverError("NOT_FOUND", "gameAsset not found");
       }
@@ -158,8 +164,10 @@ export const gameAssetRouter = createTRPCRouter({
     .input(z.object({ id: z.string(), data: gameAssetValidator }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const entry = await fetchgameAsset(ctx.drizzle, input.id);
+      const [user, entry] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchGameAsset(ctx.drizzle, input.id),
+      ]);
       if (entry && canChangeContent(user.role)) {
         // Calculate diff
         const diff = calculateContentDiff(entry, {
@@ -209,11 +217,13 @@ export const gameAssetRouter = createTRPCRouter({
     }
   }),
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const entry = await fetchgameAsset(ctx.drizzle, input.id);
+      const [user, entry] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchGameAsset(ctx.drizzle, input.id),
+      ]);
       if (entry && canChangeContent(user.role)) {
         await Promise.all([
           ctx.drizzle.delete(gameAsset).where(eq(gameAsset.id, input.id)),
@@ -238,7 +248,7 @@ export const gameAssetRouter = createTRPCRouter({
  * COMMON QUERIES WHICH ARE REUSED
  */
 
-export const fetchgameAsset = async (client: DrizzleClient, id: string) => {
+export const fetchGameAsset = async (client: DrizzleClient, id: string) => {
   return await client.query.gameAsset.findFirst({
     where: eq(gameAsset.id, id),
   });

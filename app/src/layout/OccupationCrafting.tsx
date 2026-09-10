@@ -14,13 +14,13 @@ import {
 } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
 import Countdown from "@/layout/Countdown";
 import CraftingCatalog from "@/layout/CraftingCatalog";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import {
   getCraftingRankProgress,
   getCurrentCraftingStatus,
@@ -466,7 +466,7 @@ export default function OccupationCrafting() {
                     {isImbueModalOpen &&
                       selectedImbuableItem &&
                       selectedCrystalUserItem && (
-                        <Modal2
+                        <Modal
                           title="Imbue Item"
                           proceed_label={
                             imbueItemMutation.isPending ? undefined : "Imbue Item"
@@ -508,7 +508,7 @@ export default function OccupationCrafting() {
                               </p>
                             </div>
                           </div>
-                        </Modal2>
+                        </Modal>
                       )}
                   </>
                 )}
@@ -602,7 +602,7 @@ export default function OccupationCrafting() {
                                       {imbuement.item.name}
                                     </span>
                                   </div>
-                                  <Confirm2
+                                  <Confirm
                                     title="Remove Imbuement"
                                     proceed_label="Remove"
                                     button={
@@ -633,7 +633,7 @@ export default function OccupationCrafting() {
                                         get the crystal back.
                                       </p>
                                     )}
-                                  </Confirm2>
+                                  </Confirm>
                                 </div>
                               ))}
                           </div>
@@ -690,7 +690,7 @@ export default function OccupationCrafting() {
                             )}
                           </p>
                         </div>
-                        <Confirm2
+                        <Confirm
                           title="Repair All Items"
                           proceed_label={
                             repairAllMutation.isPending ? undefined : "Repair All"
@@ -713,7 +713,7 @@ export default function OccupationCrafting() {
                             {itemsNeedingRepair.length !== 1 ? "s" : ""} for{" "}
                             <strong>{totalRepairCost.toLocaleString()} ryo</strong>?
                           </p>
-                        </Confirm2>
+                        </Confirm>
                       </div>
                     );
                   })()}

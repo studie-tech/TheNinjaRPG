@@ -10,7 +10,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
@@ -92,7 +92,7 @@ export default function ManualBadges() {
         emptyText="No badges exist yet."
       />
       {isOpen && userData && badge && (
-        <Modal2
+        <Modal
           title="Badge Details"
           isOpen={isOpen}
           setIsOpen={setIsOpen}
@@ -114,7 +114,7 @@ export default function ManualBadges() {
             </div>
           )}
           {isPending && <Loader explanation={`Processing ${badge.name}`} />}
-        </Modal2>
+        </Modal>
       )}
     </ContentBox>
   );

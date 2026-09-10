@@ -135,10 +135,6 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     // Reference to the mount
     const sceneRef = mountRef.current;
     if (sceneRef) {
-      // Performance stats
-      // const stats = new Stats();
-      // document.body.appendChild(stats.dom);
-
       const WIDTH = sceneRef.getBoundingClientRect().width;
       const HEIGHT = WIDTH;
 

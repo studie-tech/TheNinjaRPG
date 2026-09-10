@@ -13,14 +13,14 @@ import { energyPerSecond, trainEfficiency, trainingMultiplier } from "@/libs/tra
 import { calcIsInVillage } from "@/libs/travel";
 import { validateCaptcha } from "@/routers/misc";
 import { fetchUpdatedUser } from "@/routers/profile";
-import { getShrineBoost, getStrucBoost } from "@/utils/village";
-import { QuestTracker } from "@/validators/objectives";
 import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
-} from "../trpc";
+} from "@/server/api/trpc";
+import { getShrineBoost, getStrucBoost } from "@/utils/village";
+import { QuestTracker } from "@/validators/objectives";
 
 export const trainRouter = createTRPCRouter({
   // Start training of a specific attribute

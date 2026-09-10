@@ -11,6 +11,12 @@ import {
   usesVillageWalls,
 } from "@/libs/sector-map/village-walls";
 import { fetchUser } from "@/routers/profile";
+import {
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import {
   buildSectorWindowLayout,
@@ -22,12 +28,6 @@ import {
 import { canChangeContent } from "@/utils/permissions";
 // Reuse the centralized sector-id bounds instead of redefining them here
 import { sectorIdSchema as sectorSchema } from "@/validators/travel";
-import {
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-  serverError,
-} from "../trpc";
 
 const sectorMapStatusSchema = z.enum(SectorMapStatuses);
 
@@ -86,8 +86,8 @@ export const worldMapRouter = createTRPCRouter({
           orderBy: (table, { desc }) => [desc(table.createdAt)],
         }),
       ]);
-      if (user.isBanned) throw new Error("You are banned");
-      if (!canChangeContent(user.role)) throw new Error("Not allowed");
+      if (user.isBanned) throw serverError("FORBIDDEN", "You are banned");
+      if (!canChangeContent(user.role)) throw serverError("FORBIDDEN", "Not allowed");
       return rows;
     }),
 
@@ -187,13 +187,13 @@ export const worldMapRouter = createTRPCRouter({
       // Guard (kept before the query: the row carries heavy raw/normalized JSON
       // blobs we don't want to fetch for an unauthorized caller)
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (user.isBanned) throw new Error("You are banned");
-      if (!canChangeContent(user.role)) throw new Error("Not allowed");
+      if (user.isBanned) throw serverError("FORBIDDEN", "You are banned");
+      if (!canChangeContent(user.role)) throw serverError("FORBIDDEN", "Not allowed");
       // Query
       const map = await ctx.drizzle.query.sectorMap.findFirst({
         where: eq(sectorMap.id, input.id),
       });
-      if (!map) throw new Error("Map does not exist");
+      if (!map) throw serverError("NOT_FOUND", "Map does not exist");
       return map;
     }),
 

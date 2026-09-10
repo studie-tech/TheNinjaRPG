@@ -21,16 +21,6 @@ import {
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  hasUserMiddleware,
-  protectedProcedure,
-  publicProcedure,
-  ratelimitMiddleware,
-  serverError,
-} from "@/api/trpc";
 import type { ItemSlot } from "@/drizzle/constants";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
@@ -111,6 +101,15 @@ import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { fetchUserSkills } from "@/routers/skillTree";
 import { fetchStructures } from "@/routers/village";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  ratelimitMiddleware,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import {
   consumeUserItemAtomically,
@@ -154,6 +153,7 @@ import {
   UserUnlockedVariantResponseSchema,
 } from "@/validators/item";
 import { renameLoadoutSchema } from "@/validators/loadout";
+import { idSchema } from "@/validators/misc";
 import type { PostProcessedRewards } from "@/validators/rewards";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 import { updateRewards } from "./quests";
@@ -202,7 +202,7 @@ export const itemRouter = createTRPCRouter({
         description: "Get a specific item by ID, or null if no such item exists",
       },
     })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       // Deleted items stay reachable through stale links on this public endpoint,
       // so a missing row is an ordinary answer rather than an error
@@ -214,7 +214,7 @@ export const itemRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Get item with crafting requirements" },
     })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       const result = await fetchItemWithCraftingRequirements(ctx.drizzle, input.id);
       if (!result) {
@@ -224,7 +224,7 @@ export const itemRouter = createTRPCRouter({
     }),
   getUserItem: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get a specific user item" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       const result = await fetchUserItem(ctx.drizzle, ctx.userId, input.id);
       if (!result) {
@@ -261,7 +261,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Clone an existing item
   clone: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
@@ -318,7 +318,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Delete a item
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, entry, childEvolutions, variants] = await Promise.all([
@@ -1522,7 +1522,6 @@ export const itemRouter = createTRPCRouter({
   splitStack: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Split an item stack" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         userItemId: z.string(),
@@ -2770,7 +2769,7 @@ export const itemRouter = createTRPCRouter({
     }),
   selectItemLoadout: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Select an item loadout" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query

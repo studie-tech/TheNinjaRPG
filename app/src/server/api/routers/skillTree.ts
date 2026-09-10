@@ -2,14 +2,6 @@ import { and, asc, eq, gte, inArray, isNull, like, lt, not, sql } from "drizzle-
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-  publicProcedure,
-  serverError,
-} from "@/api/trpc";
-import {
   COST_SKILL_RESET,
   IMG_AVATAR_DEFAULT,
   SKILL_TREE_RESET_FREE_GOLD,
@@ -26,6 +18,14 @@ import {
 } from "@/drizzle/schema";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUpdatedUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
 import { getUserFederalStatus } from "@/utils/paypal";
@@ -35,6 +35,7 @@ import {
   isStaffMember,
 } from "@/utils/permissions";
 import { SkillTreeValidator } from "@/validators/combat";
+import { idSchema } from "@/validators/misc";
 import {
   type SkillTreeFilteringSchema,
   skillTreeFilteringSchema,
@@ -54,7 +55,7 @@ export const skillTreeRouter = createTRPCRouter({
   // Get single skill by ID
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a skill by ID" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       const skill = await ctx.drizzle.query.skillTree.findFirst({
         where: eq(skillTree.id, input.id),
@@ -283,7 +284,7 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Admin: Delete skill
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions
@@ -664,7 +665,7 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Admin: Delete folder (with guard for non-empty folders)
   deleteFolder: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Check permissions, fetch folder, and fetch skills in folder in parallel

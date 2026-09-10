@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import Countdown from "@/layout/Countdown";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -81,7 +81,7 @@ const DeleteUserButton: React.FC<DeleteUserButtonProps> = (props) => {
   }
 
   return (
-    <Confirm2
+    <Confirm
       title="Confirm Deletion"
       button={
         <Trash2
@@ -135,7 +135,7 @@ const DeleteUserButton: React.FC<DeleteUserButtonProps> = (props) => {
           </Button>
         )}
       </span>
-    </Confirm2>
+    </Confirm>
   );
 };
 

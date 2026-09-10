@@ -4,7 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLocalStorage } from "@/hooks/localstorage";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 
 interface AutoAttackModalProps {
   isOpen: boolean;
@@ -32,7 +32,7 @@ export default function AutoAttackModal({
   };
 
   return (
-    <Modal2
+    <Modal
       title="Auto Attack Configuration"
       isOpen={isOpen}
       setIsOpen={setIsOpen}
@@ -89,6 +89,6 @@ export default function AutoAttackModal({
           </Button>
         </div>
       </div>
-    </Modal2>
+    </Modal>
   );
 }

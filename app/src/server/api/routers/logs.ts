@@ -8,10 +8,14 @@ import {
   village,
 } from "@/drizzle/schema";
 import { fetchUser } from "@/routers/profile";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+} from "@/server/api/trpc";
 import { canSeeSecretData } from "@/utils/permissions";
 import { extractValueFromJson } from "@/utils/regex";
 import { actionLogSchema } from "@/validators/logs";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
 export const logsRouter = createTRPCRouter({
   getContentChanges: publicProcedure

@@ -2,7 +2,6 @@
 
 import { Copy, Edit2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { CannedResponse } from "@/drizzle/schema";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
 import { canEditCannedResponses } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
@@ -103,10 +102,13 @@ export default function CannedResponsesManagement({
     void navigator.clipboard
       .writeText(description)
       .then(() => {
-        toast.success("Canned response copied to clipboard!");
+        showMutationToast({
+          success: true,
+          message: "Canned response copied to clipboard!",
+        });
       })
       .catch(() => {
-        toast.error("Failed to copy to clipboard");
+        showMutationToast({ success: false, message: "Failed to copy to clipboard" });
       });
   };
 
@@ -118,7 +120,7 @@ export default function CannedResponsesManagement({
 
   return (
     <>
-      <Modal2 isOpen={isOpen} setIsOpen={setIsOpen} title="Manage Canned Responses">
+      <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="Manage Canned Responses">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-gray-600 text-sm">
@@ -189,9 +191,9 @@ export default function CannedResponsesManagement({
             </div>
           )}
         </div>
-      </Modal2>
+      </Modal>
 
-      <Modal2
+      <Modal
         isOpen={isCreateModalOpen || !!editingResponse}
         setIsOpen={closeModal}
         title={editingResponse ? "Edit Canned Response" : "Create Canned Response"}
@@ -236,7 +238,7 @@ export default function CannedResponsesManagement({
             </Button>
           </div>
         </form>
-      </Modal2>
+      </Modal>
     </>
   );
 }

@@ -22,7 +22,7 @@ import { QueueTimer } from "@/layout/Countdown";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import {
   getJutsuCapFlags,
   getJutsuCategoryDef,
@@ -667,7 +667,7 @@ export const RankedLoadoutSelector: React.FC = () => {
 
       {/* Item Modal */}
       {isItemModalOpen && selectedItem && (
-        <Modal2
+        <Modal
           title={selectedItem.name}
           isOpen={isItemModalOpen}
           setIsOpen={setIsItemModalOpen}
@@ -729,12 +729,12 @@ export const RankedLoadoutSelector: React.FC = () => {
                 </div>
               )}
           </div>
-        </Modal2>
+        </Modal>
       )}
 
       {/* Jutsu Modal */}
       {isOpen && selectedJutsu && (
-        <Modal2
+        <Modal
           title={selectedJutsu.name}
           isOpen={isOpen}
           setIsOpen={setIsOpen}
@@ -777,7 +777,7 @@ export const RankedLoadoutSelector: React.FC = () => {
                 );
               })}
           </div>
-        </Modal2>
+        </Modal>
       )}
     </>
   );

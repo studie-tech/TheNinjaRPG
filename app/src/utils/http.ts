@@ -33,7 +33,7 @@ export const fetchWithTimeout = async (
  * withRetry. Non-2xx responses throw (and are retried), so callers always get
  * a usable Response. Every attempt issues a FRESH request, so the body is
  * never pre-consumed by retry internals - unlike the fetch-retry package this
- * replaced (THENINJARPG-2GY), no response.clone() workaround is needed. By
+ * replaced, no response.clone() workaround is needed. By
  * default ANY failure retries (network error, timeout, non-2xx), which fits
  * asset/CDN fetches; pass retry.isTransient to be selective.
  */

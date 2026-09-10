@@ -6,8 +6,6 @@ export const getVotingLink = (
   current: UserVote,
 ) => {
   switch (site) {
-    // case "top100Arena":
-    //   return `https://www.top100arena.com/listing/101116/vote?incentive=${current.secret}-top100arena`;
     case "mmoHub":
       return `https://mmohub.com/site/1054/vote/${current.secret}-mmohub`;
     case "arenaTop100":

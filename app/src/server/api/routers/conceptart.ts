@@ -16,6 +16,13 @@ import {
   uploadCompletedVideo,
 } from "@/libs/replicate";
 import { fetchUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+} from "@/server/api/trpc";
 import { canDeleteConceptArt, getBanOrSilenceRestriction } from "@/utils/permissions";
 import {
   conceptArtFilterSchema,
@@ -23,14 +30,8 @@ import {
   conceptVideoPromptSchema,
   getTimeFrameinSeconds,
 } from "@/validators/art";
+import { idSchema } from "@/validators/misc";
 import type { DrizzleClient } from "../../db";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-  publicProcedure,
-} from "../trpc";
 
 export const CONCEPT_PROMPT = `, trending on ArtStation, trending on CGSociety, Intricate, High Detail, Sharp focus, dramatic`;
 
@@ -79,7 +80,7 @@ export const conceptartRouter = createTRPCRouter({
       return { success: true, message: "Emotion toggled" };
     }),
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -250,7 +251,7 @@ export const conceptartRouter = createTRPCRouter({
     }),
   // Read-only query for polling video status - no DB updates or uploads
   checkVideoStatusRead: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       // Query the concept image
       const record = await ctx.drizzle.query.conceptImage.findFirst({
@@ -338,7 +339,7 @@ export const conceptartRouter = createTRPCRouter({
     }),
   // Mutation to finalize video upload - performs DB updates and upload
   finalizeVideoUpload: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse.extend({ videoUrl: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -482,12 +483,10 @@ export const conceptartRouter = createTRPCRouter({
         nextCursor: nextCursor,
       };
     }),
-  get: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const image = await fetchImage(ctx.drizzle, input.id, ctx.userId ?? "");
-      return image || null;
-    }),
+  get: publicProcedure.input(idSchema).query(async ({ ctx, input }) => {
+    const image = await fetchImage(ctx.drizzle, input.id, ctx.userId ?? "");
+    return image || null;
+  }),
 });
 
 export const fetchImage = async (

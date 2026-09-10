@@ -19,11 +19,11 @@ import { Textarea } from "@/components/ui/textarea";
 import type { StaffApplicationTargetRole } from "@/drizzle/constants";
 import { StaffApplicationTargetRoles } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { getBanOrSilenceRestriction } from "@/utils/permissions";
+import { getBanOrSilenceRestriction, isStaffRole } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import type { CreateApplicationSchema } from "@/validators/applications";
 import { createApplicationSchema } from "@/validators/applications";
@@ -31,7 +31,7 @@ import { createApplicationSchema } from "@/validators/applications";
 export default function Staff() {
   // User Data
   const { data: me } = useUserData();
-  const isStaff = me?.role && me.role !== "USER";
+  const isStaff = me?.role ? isStaffRole(me.role) : false;
   const applicationRestriction = me ? getBanOrSilenceRestriction(me) : null;
 
   // Users Query
@@ -84,7 +84,7 @@ export default function Staff() {
               </Link>
             )}
             {!pending && !applicationRestriction && (
-              <Confirm2
+              <Confirm
                 title="Apply for Staff"
                 proceed_label="Submit Application"
                 button={
@@ -149,7 +149,7 @@ export default function Staff() {
                     </div>
                   </div>
                 </div>
-              </Confirm2>
+              </Confirm>
             )}
           </div>
         }

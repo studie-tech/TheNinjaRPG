@@ -135,6 +135,14 @@ import { fetchKageReplacement } from "@/routers/kage";
 import { handleQuestConsequences, insertNextQuest } from "@/routers/quests";
 import { fetchVillage, fetchVillages } from "@/routers/village";
 import { deleteUser } from "@/server/api/routers/staff";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { scopedRead } from "@/server/requestScope";
 import { adjustSeichiSilverAtomically } from "@/server/utils/concurrency";
@@ -176,6 +184,7 @@ import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { getShrineBoost } from "@/utils/village";
 import { createStatSchema } from "@/validators/combat";
 import { mutateContentSchema } from "@/validators/comments";
+import { idSchema } from "@/validators/misc";
 import { attributes, colors, skin_colors, usernameSchema } from "@/validators/register";
 import {
   isReservedCustomTitle,
@@ -189,14 +198,6 @@ import {
   updateUserPreferencesSchema,
   updateUserSchema,
 } from "@/validators/user";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-  publicProcedure,
-  serverError,
-} from "../trpc";
 
 const pusher = getServerPusher();
 
@@ -1174,7 +1175,7 @@ export const profileRouter = createTRPCRouter({
         description: "Clone an existing AI character (content editors)",
       },
     })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
@@ -1238,7 +1239,7 @@ export const profileRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Delete an AI character (content editors)" },
     })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);

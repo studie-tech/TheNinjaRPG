@@ -2,10 +2,10 @@ import { ensureDom } from "../setup-dom.mjs";
 import { render } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Modal2, {
+import Modal, {
   modalScrollableBodyClassName,
   modalViewportClassName,
-} from "@/layout/Modal2";
+} from "@/layout/Modal";
 
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ open, children }: { open?: boolean; children: ReactNode }) =>
@@ -40,14 +40,14 @@ vi.mock("@/components/ui/dialog", () => ({
   ),
 }));
 
-describe("Modal2", () => {
+describe("Modal", () => {
   beforeEach(ensureDom);
 
   it("keeps the footer outside the scrollable body on small viewports", () => {
     const { getByRole } = render(
-      <Modal2 isOpen setIsOpen={vi.fn()} title="Test Modal">
+      <Modal isOpen setIsOpen={vi.fn()} title="Test Modal">
         Scrollable body content
-      </Modal2>,
+      </Modal>,
     );
 
     const dialog = getByRole("dialog");

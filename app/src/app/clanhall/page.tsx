@@ -20,7 +20,7 @@ import {
   CLAN_RANK_REQUIREMENT,
 } from "@/drizzle/constants";
 import { ClanProfile, ClansOverview } from "@/layout/Clan";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
@@ -95,7 +95,7 @@ export default function Clans() {
         topRightContent={
           hasRequiredRank(userData.rank, CLAN_RANK_REQUIREMENT) &&
           !inClan && (
-            <Confirm2
+            <Confirm
               title={`Create new ${groupLabel}`}
               proceed_label={proceedLabel}
               button={
@@ -144,7 +144,7 @@ export default function Clans() {
                   </form>
                 </Form>
               )}
-            </Confirm2>
+            </Confirm>
           )
         }
       >

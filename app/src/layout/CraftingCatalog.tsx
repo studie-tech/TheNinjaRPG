@@ -23,10 +23,10 @@ import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { getCraftingRank, getTotalItemQuantity } from "@/libs/crafting";
 import { showMutationToast } from "@/libs/toast";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/routers/profile";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { getShrineBoost } from "@/utils/village";
 
@@ -253,7 +253,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
       </div>
 
       {/* Category Modal */}
-      <Modal2
+      <Modal
         title={
           selectedCategory
             ? `${CATEGORY_CONFIG[selectedCategory].label} Recipes`
@@ -316,10 +316,10 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
             emptyText="No recipes found"
           />
         </div>
-      </Modal2>
+      </Modal>
 
       {/* Item Detail Modal */}
-      <Modal2
+      <Modal
         title="Recipe Details"
         isOpen={selectedItem !== null}
         setIsOpen={(open) => {
@@ -461,7 +461,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
             )}
           </div>
         )}
-      </Modal2>
+      </Modal>
     </>
   );
 };

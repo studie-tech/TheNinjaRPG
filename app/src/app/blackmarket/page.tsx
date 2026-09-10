@@ -35,7 +35,7 @@ import {
 import { useLocalStorage } from "@/hooks/localstorage";
 import AvatarImage from "@/layout/Avatar";
 import { CurrentBloodline, PurchaseBloodline } from "@/layout/Bloodline";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import GraphBlackmarketLedger from "@/layout/GraphBlackmarketLedger";
 import Loader from "@/layout/Loader";
@@ -620,7 +620,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                     />
                   </div>
                   <div className="col-span-2 px-1 py-2">
-                    <Confirm2
+                    <Confirm
                       title="Create Offer"
                       proceed_label={
                         offerReps > 0 && offerRyo > 0 ? "Confirm" : "Fill in values"
@@ -662,7 +662,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                       {(offerReps === 0 || offerRyo === 0) && (
                         <p>Must enter reputation & reputation values above 0.</p>
                       )}
-                    </Confirm2>
+                    </Confirm>
                   </div>
                 </div>
               </form>

@@ -2,13 +2,13 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { userData, villageAlliance } from "@/drizzle/schema";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { fetchUpdatedUser } from "@/routers/profile";
-import { secondsFromNow } from "@/utils/time";
 import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
-} from "../trpc";
+} from "@/server/api/trpc";
+import { secondsFromNow } from "@/utils/time";
 
 const pusher = getServerPusher();
 

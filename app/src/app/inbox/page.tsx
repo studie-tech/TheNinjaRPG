@@ -34,11 +34,11 @@ import {
 import type { FederalStatus, UserRank } from "@/drizzle/constants";
 import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Conversation from "@/layout/Conversation";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -257,11 +257,11 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
               );
             })}
           </ul>
-          <Modal2
+          <Modal
             title="Confirm exiting conversation"
             isOpen={isExitConfirmOpen}
             setIsOpen={setIsExitConfirmOpen}
-            // Keep Modal2 from self-closing on accept, so this destructive action
+            // Keep Modal from self-closing on accept, so this destructive action
             // stays visible in its disabled "Exiting..." state until the request
             // settles and onSettled closes the dialog.
             isValid={false}
@@ -295,7 +295,7 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
             {pendingConversation
               ? `You are about to exit "${pendingConversation.title}". Are you sure?`
               : "You are about to exit this conversation. Are you sure?"}
-          </Modal2>
+          </Modal>
           <div className="m-3 italic">- Messages deleted after 14 days</div>
         </div>
       )}
@@ -426,7 +426,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
         </TooltipProvider>
       )}
       {userData && !composeRestriction && (
-        <Confirm2
+        <Confirm
           title="Create a new conversation"
           proceed_label="Submit"
           isValid={create.formState.isValid}
@@ -480,7 +480,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
               error={create.formState.errors.comment?.message}
             />
           </Form>
-        </Confirm2>
+        </Confirm>
       )}
     </div>
   );

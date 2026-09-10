@@ -19,15 +19,6 @@ import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { after } from "next/server";
 import { z } from "zod";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  hasUserMiddleware,
-  protectedProcedure,
-  ratelimitMiddleware,
-  serverError,
-} from "@/api/trpc";
 import * as mapData from "@/data/hexasphere.json";
 import type { BattleType } from "@/drizzle/constants";
 import {
@@ -35,6 +26,7 @@ import {
   AutoBattleTypes,
   AutoCombatBattleTypes,
   BATTLE_ARENA_DAILY_LIMIT,
+  BATTLE_ARENA_HEAL_COST,
   BattleTypes,
   COMBAT_BIOMES,
   type CombatBiome,
@@ -204,6 +196,14 @@ import {
   selectJutsuLoadout,
 } from "@/server/api/routers/jutsu";
 import { fetchUserSkills } from "@/server/api/routers/skillTree";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  ratelimitMiddleware,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
@@ -564,7 +564,6 @@ export const combatRouter = createTRPCRouter({
   performAction: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Perform action in battle" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(performActionSchema)
     .mutation(async ({ ctx, input }) => {
       Sentry.profiler.startProfiler();
@@ -875,18 +874,24 @@ export const combatRouter = createTRPCRouter({
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
-      if (user.money < 500) return errorResponse("You don't have enough money");
+      if (user.money < BATTLE_ARENA_HEAL_COST)
+        return errorResponse("You don't have enough money");
       if (user.isBanned) return errorResponse("You are banned");
       // Mutate with guard
       const result = await ctx.drizzle
         .update(userData)
         .set({
-          money: user.money - 500,
+          money: user.money - BATTLE_ARENA_HEAL_COST,
           curHealth: user.maxHealth,
           curStamina: user.maxStamina,
           curChakra: user.maxChakra,
         })
-        .where(and(eq(userData.userId, ctx.userId), gte(userData.money, 500)));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.money, BATTLE_ARENA_HEAL_COST),
+          ),
+        );
       if (result.rowsAffected === 0) {
         return errorResponse("Error trying to heal and continue. Try again.");
       } else {
@@ -898,7 +903,6 @@ export const combatRouter = createTRPCRouter({
       mcp: { enabled: true, description: "Start battle arena fight against AI" },
     })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         aiId: z.string(),
@@ -960,7 +964,6 @@ export const combatRouter = createTRPCRouter({
       mcp: { enabled: true, description: "Attack another user to initiate combat" },
     })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         // Coordinate bounds are enforced here (zod), so no sector-map read is
@@ -1410,7 +1413,6 @@ export const combatRouter = createTRPCRouter({
       },
     })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(z.object({ battleId: z.string(), enabled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       // Maximum number of retry attempts
@@ -1506,7 +1508,6 @@ export const combatRouter = createTRPCRouter({
   startShrineBattle: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Start battle at war shrine" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(z.object({ sector: sectorIdSchema }))
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {

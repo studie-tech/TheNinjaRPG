@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MONTH_S, WEEK_S, YEAR_S } from "@/utils/time";
 
 export const sortOptions = ["Most Recent", "Most Liked"] as const;
 export type SortOption = (typeof sortOptions)[number];
@@ -48,11 +49,11 @@ export const getTimeFrameinSeconds = (
 ): number | null => {
   switch (timeString) {
     case "Week":
-      return 7 * 24 * 60 * 60;
+      return WEEK_S;
     case "Month":
-      return 30 * 24 * 60 * 60;
+      return MONTH_S;
     case "Year":
-      return 365 * 24 * 60 * 60;
+      return YEAR_S;
     case "All Time":
       return null;
     default:

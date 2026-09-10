@@ -35,14 +35,14 @@ import {
 import type { UserItemWithItem, UserJutsuWithRelations } from "@/drizzle/schema";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { getFreeTransfers } from "@/libs/jutsu";
 import { showUserRank } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
@@ -419,7 +419,7 @@ export default function MyJutsu() {
               <JutsuLoadoutSelector />
               <JutsuFiltering state={state} />
               {userData.extraJutsuSlots < MAX_EXTRA_JUTSU_SLOTS && (
-                <Confirm2
+                <Confirm
                   title="Extra Jutsu Slot"
                   proceed_label={
                     canUpgrade
@@ -442,7 +442,7 @@ export default function MyJutsu() {
                     {COST_EXTRA_JUTSU_SLOT} reputation points. You currently have{" "}
                     {userData.reputationPoints} points. Are you sure?
                   </p>
-                </Confirm2>
+                </Confirm>
               )}
             </div>
           )
@@ -560,7 +560,7 @@ export default function MyJutsu() {
           )}
 
         {isOpen && userData && userjutsu && (
-          <Modal2
+          <Modal
             title="Edit Jutsu"
             isOpen={isOpen}
             setIsOpen={setIsOpen}
@@ -643,7 +643,7 @@ export default function MyJutsu() {
                   <div className="grow"></div>
                   {userjutsu.level >= JUTSU_TRANSFER_MINIMUM_LEVEL &&
                     userjutsu.level <= JUTSU_TRANSFER_MAX_LEVEL && (
-                      <Confirm2
+                      <Confirm
                         title="Transfer Level"
                         button={
                           <Button id="transfer" variant="secondary">
@@ -741,7 +741,7 @@ export default function MyJutsu() {
                             />
                           </div>
                         )}
-                      </Confirm2>
+                      </Confirm>
                     )}
                   {availableEvolutions &&
                     availableEvolutions.length > 0 &&
@@ -762,7 +762,7 @@ export default function MyJutsu() {
                         checkJutsuBloodlineItem(evo, userItems) &&
                         checkJutsuElements(evo, userElements);
                       return (
-                        <Confirm2
+                        <Confirm
                           key={evo.id}
                           title={`Evolve to ${evo.name}`}
                           confirmDisabled={!canEvolve}
@@ -838,11 +838,11 @@ export default function MyJutsu() {
                                 Required {label}: <b>{evo[key]}</b>
                               </p>
                             ))}
-                        </Confirm2>
+                        </Confirm>
                       );
                     })}
                   {userjutsu.activeReskin ? (
-                    <Confirm2
+                    <Confirm
                       title="Remove Reskin"
                       button={
                         <Button id="remove-reskin" variant="destructive">
@@ -859,7 +859,7 @@ export default function MyJutsu() {
                         Are you sure you want to remove the reskin for this jutsu? This
                         will restore the original name and description.
                       </p>
-                    </Confirm2>
+                    </Confirm>
                   ) : (
                     <Button
                       id="reskin"
@@ -891,7 +891,7 @@ export default function MyJutsu() {
                       <p className="hidden sm:block">Reskin</p>
                     </Button>
                   )}
-                  <Confirm2
+                  <Confirm
                     title="Forget Jutsu"
                     button={
                       <Button id="return" variant="destructive">
@@ -905,15 +905,15 @@ export default function MyJutsu() {
                     }}
                   >
                     <p>Confirm to forget this jutsu and get back {forgetRyo} ryo.</p>
-                  </Confirm2>
+                  </Confirm>
                 </div>
               </>
             )}
             {isPending && <Loader explanation={`Processing ${userjutsu.jutsu.name}`} />}
-          </Modal2>
+          </Modal>
         )}
         {modalType === "reskin" && userjutsu && isReskinOpen && (
-          <Modal2
+          <Modal
             title={
               userjutsu.activeReskin ? "Update Jutsu Reskin" : "Create Jutsu Reskin"
             }
@@ -1108,10 +1108,10 @@ export default function MyJutsu() {
                 </div>
               </div>
             </div>
-          </Modal2>
+          </Modal>
         )}
         {isConfirmOpen && reskinData && userjutsu && (
-          <Modal2
+          <Modal
             isOpen={isConfirmOpen}
             setIsOpen={setIsConfirmOpen}
             title={
@@ -1141,7 +1141,7 @@ export default function MyJutsu() {
                 removal of your reskin.
               </p>
             </div>
-          </Modal2>
+          </Modal>
         )}
       </ContentBox>
       {/* Free Transfer Timer */}

@@ -14,7 +14,6 @@ import {
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { baseServerResponse, errorResponse, serverError } from "@/api/trpc";
 import type { QuestType, UserRole } from "@/drizzle/constants";
 import {
   ERRANDS_PER_DAY,
@@ -102,6 +101,14 @@ import {
 import { deleteRequests } from "@/routers/sensei";
 import { fetchSectorVillage } from "@/routers/village";
 import { fetchActiveWars } from "@/routers/war";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import {
@@ -122,13 +129,13 @@ import { periodStart, secondsFromNow } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { canAccessStructure } from "@/utils/village";
+import { idSchema } from "@/validators/misc";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import { QuestTracker, QuestValidator } from "@/validators/objectives";
 import { questFilteringSchema } from "@/validators/quest";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import type { QuestCounterFieldName } from "@/validators/user";
 import { getQuestCounterFieldName } from "@/validators/user";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
 export const questsRouter = createTRPCRouter({
   getAllNames: publicProcedure
@@ -214,7 +221,7 @@ export const questsRouter = createTRPCRouter({
     }),
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a single quest by ID" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       const [result, user] = await Promise.all([
         fetchQuest(ctx.drizzle, input.id),
@@ -611,7 +618,7 @@ export const questsRouter = createTRPCRouter({
     }),
   abandon: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Abandon an active quest" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const { user } = await fetchUpdatedUser({
@@ -929,7 +936,7 @@ export const questsRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Clone an existing quest (content editors)" },
     })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -989,7 +996,7 @@ export const questsRouter = createTRPCRouter({
     }),
   delete: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Delete a quest (content editors)" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query

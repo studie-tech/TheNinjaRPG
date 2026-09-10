@@ -2,7 +2,13 @@ import { asc, eq, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { FORUM_MIN_LEVEL, forumLevelMessage } from "@/drizzle/constants";
-import { forumBoard, forumPost, forumThread, userData } from "@/drizzle/schema";
+import {
+  forumBoard,
+  forumPost,
+  forumThread,
+  userData,
+  userDevice,
+} from "@/drizzle/schema";
 import { resolveSenderId } from "@/libs/comments";
 import { fetchBoard, getInfiniteThreads, readNews } from "@/libs/forum";
 import { moderateContent } from "@/libs/moderator";
@@ -21,6 +27,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/api/trpc";
+import { announcement, isPushEnabled, sendPushToUsers } from "@/server/utils/push";
 import { canCreateNews, canModerate } from "@/utils/permissions";
 import { checkForBadWords, moderateUserText } from "@/utils/profanity";
 import { forumBoardSchema } from "@/validators/forum";
@@ -142,13 +149,9 @@ export const forumRouter = createTRPCRouter({
       }
       if (isNews) {
         void Promise.allSettled(
-          publishNewsToSocialMedia(
-            input.title,
-            sanitized,
-            user.avatar,
-            input.image,
-          ),
+          publishNewsToSocialMedia(input.title, sanitized, user.avatar, input.image),
         );
+        void Promise.allSettled([notifyNewsSubscribers(ctx.drizzle, sanitized)]);
       }
       return { success: true, message: "Thread created" };
     }),
@@ -244,6 +247,20 @@ export const forumRouter = createTRPCRouter({
       return { success: true, message: "Thread deleted" };
     }),
 });
+
+/**
+ * Push the news announcement to every registered device. Listing tokens and sending
+ * both stay off the mutation response path; sendPushToUsers never throws.
+ */
+const notifyNewsSubscribers = async (client: DrizzleClient, content: string) => {
+  if (!isPushEnabled()) return;
+  const devices = await client
+    .selectDistinct({ userId: userDevice.userId })
+    .from(userDevice);
+  const userIds = devices.map((device) => device.userId);
+  if (userIds.length === 0) return;
+  await sendPushToUsers(client, userIds, announcement(content));
+};
 
 /**
  * Publish news post to social media platforms.

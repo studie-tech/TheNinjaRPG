@@ -28,7 +28,7 @@ import {
 } from "@/drizzle/constants";
 import { useTutorialStep } from "@/hooks/tutorial";
 import Building, { StructureRewardEntries } from "@/layout/Building";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
@@ -211,7 +211,7 @@ export default function VillageOverview() {
             </div>
 
             {!userData.isOutlaw && canLeave && ownSector && (
-              <Confirm2
+              <Confirm
                 title="Leave Village"
                 proceed_label="Submit"
                 button={
@@ -226,7 +226,7 @@ export default function VillageOverview() {
                 reset to 0. Please be aware that if you join another{" "}
                 {userData?.isOutlaw ? "faction" : "village"} your training benefits &
                 regen will be reduced for {VILLAGE_REDUCED_GAINS_DAYS} days.
-              </Confirm2>
+              </Confirm>
             )}
           </div>
         }
@@ -258,7 +258,7 @@ export default function VillageOverview() {
           initialBreak={true}
           topRightContent={
             isKage && (
-              <Confirm2
+              <Confirm
                 title="Update Notice"
                 proceed_label="Submit"
                 button={
@@ -276,7 +276,7 @@ export default function VillageOverview() {
                   control={control}
                   error={errors.content?.message}
                 />
-              </Confirm2>
+              </Confirm>
             )
           }
         >

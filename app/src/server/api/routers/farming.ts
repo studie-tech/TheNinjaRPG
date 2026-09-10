@@ -48,8 +48,8 @@ import {
   getNewTrackers,
   type ObjectiveTrackerTaskInput,
 } from "@/libs/quest";
+import { fetchUser } from "@/routers/profile";
 import { fetchUserItems } from "@/server/api/routers/item";
-import { fetchUser } from "@/server/api/routers/profile";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import {

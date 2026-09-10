@@ -8,7 +8,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
@@ -77,7 +77,7 @@ export default function ManualAssetsFolderPage() {
       />
       {isPending && <Loader explanation="Loading data" />}
       {isOpen && userData && asset && (
-        <Modal2
+        <Modal
           title="Asset Details"
           isOpen={isOpen}
           setIsOpen={setIsOpen}
@@ -101,7 +101,7 @@ export default function ManualAssetsFolderPage() {
             </div>
           )}
           {isPending && <Loader explanation={`Processing ${asset.name}`} />}
-        </Modal2>
+        </Modal>
       )}
     </ContentBox>
   );

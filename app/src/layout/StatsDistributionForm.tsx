@@ -26,7 +26,7 @@ import {
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import NavTabs from "@/layout/NavTabs";
@@ -251,7 +251,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
         const cappedStats = getCappedStats(option);
 
         return (
-          <Confirm2
+          <Confirm
             id="tutorial-specialization-confirm"
             key={option.id}
             title={`Confirm ${option.name} Specialization`}
@@ -304,7 +304,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
                 })}
               </ul>
             </div>
-          </Confirm2>
+          </Confirm>
         );
       })}
     </div>

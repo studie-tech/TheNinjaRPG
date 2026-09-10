@@ -32,26 +32,6 @@ export const isMobile = (): boolean => {
 };
 
 /**
- * Test if autoplay is supported in the current browser
- */
-export const testAutoplaySupport = async (): Promise<boolean> => {
-  if (typeof window === "undefined") return false;
-
-  // Create a silent test audio element
-  const audio = new Audio();
-  audio.volume = 0;
-  audio.muted = true;
-
-  try {
-    await audio.play();
-    audio.pause();
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-/**
  * Check if user interaction has occurred (needed for audio playback on some browsers)
  */
 export const hasUserInteracted = (): boolean => {

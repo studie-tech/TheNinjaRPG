@@ -2,14 +2,6 @@ import { and, eq, gte, isNull, like, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-  publicProcedure,
-  serverError,
-} from "@/api/trpc";
-import {
   IMG_AVATAR_DEFAULT,
   REMOVAL_COST,
   SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
@@ -18,12 +10,21 @@ import type { UserData } from "@/drizzle/schema";
 import { actionLog, sageMode, userData } from "@/drizzle/schema";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent, canEditBloodline } from "@/utils/permissions";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import type { ZodAllTags } from "@/validators/combat";
 import { SageModeValidator } from "@/validators/combat";
+import { idSchema } from "@/validators/misc";
 import type { SageModeFilteringSchema } from "@/validators/sageMode";
 import { sageModeFilteringSchema } from "@/validators/sageMode";
 
@@ -121,22 +122,20 @@ export const sageModeRouter = createTRPCRouter({
    * Single catalog row by id, including hidden. Matches bloodline `get` so the
    * equipped-mode removal UI can still load a hidden mode the player already wears.
    */
-  get: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const result = await fetchSageMode(ctx.drizzle, input.id);
-      if (!result) {
-        throw serverError("NOT_FOUND", "Sage Mode not found");
-      }
-      return result as Omit<
-        typeof result,
-        "effects" | "afterEffects" | "level2Effects"
-      > & {
-        effects: ZodAllTags[];
-        afterEffects: ZodAllTags[];
-        level2Effects: ZodAllTags[];
-      };
-    }),
+  get: publicProcedure.input(idSchema).query(async ({ ctx, input }) => {
+    const result = await fetchSageMode(ctx.drizzle, input.id);
+    if (!result) {
+      throw serverError("NOT_FOUND", "Sage Mode not found");
+    }
+    return result as Omit<
+      typeof result,
+      "effects" | "afterEffects" | "level2Effects"
+    > & {
+      effects: ZodAllTags[];
+      afterEffects: ZodAllTags[];
+      level2Effects: ZodAllTags[];
+    };
+  }),
 
   /** Create a hidden placeholder row and return its id for the staff editor. */
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
@@ -167,7 +166,7 @@ export const sageModeRouter = createTRPCRouter({
    * (up to 10 usernames are listed in the error).
    */
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, entry, usersWithSageMode] = await Promise.all([

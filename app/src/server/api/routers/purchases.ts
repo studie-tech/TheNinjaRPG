@@ -1,6 +1,5 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "@/api/trpc";
 import {
   STORE_FEDERAL_PRODUCTS,
   STORE_PLATFORMS,
@@ -8,6 +7,7 @@ import {
 } from "@/drizzle/constants";
 import { storePurchase } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
+import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 
 export const purchasesRouter = createTRPCRouter({
   /**

@@ -44,7 +44,6 @@ export default function SageModeEdit(props: {
     if (userData && !canChangeContent(userData.role)) {
       void router.push("/profile");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData]);
 
   if (isPending || !userData || !canChangeContent(userData.role) || !normalizedData) {

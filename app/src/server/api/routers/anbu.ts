@@ -50,13 +50,14 @@ import {
   anbuEditSchema,
   strictAnbuNameField,
 } from "@/validators/anbu";
+import { idSchema } from "@/validators/misc";
 
 const pusher = getServerPusher();
 
 export const anbuRouter = createTRPCRouter({
   get: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get ANBU squad details" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       // Query
       const [user, squad] = await Promise.all([
@@ -116,12 +117,12 @@ export const anbuRouter = createTRPCRouter({
     .mutation(createAnbuRequest),
   rejectRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Reject ANBU join request" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(rejectAnbuRequest),
   cancelRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Cancel ANBU join request" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const request = await fetchRequest(ctx.drizzle, input.id, "ANBU");
@@ -143,7 +144,7 @@ export const anbuRouter = createTRPCRouter({
     }),
   acceptRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Accept ANBU join request" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(acceptAnbuRequest),
   createSquad: protectedProcedure

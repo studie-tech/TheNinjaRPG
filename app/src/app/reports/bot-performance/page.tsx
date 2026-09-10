@@ -7,6 +7,7 @@ import Toggle from "@/components/control/Toggle";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { groupBy } from "@/utils/grouping";
+import { isStaffRole } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function BotPerformance() {
@@ -22,7 +23,7 @@ export default function BotPerformance() {
   // Query
   const { data, isFetching } = api.reports.getModBotPerformance.useQuery(
     { timeframe },
-    { enabled: !!userData && userData.role !== "USER" },
+    { enabled: !!userData && isStaffRole(userData.role) },
   );
   const totalUserReports = data?.totalUserReports;
   const totalBotReports = data?.totalBotReports;

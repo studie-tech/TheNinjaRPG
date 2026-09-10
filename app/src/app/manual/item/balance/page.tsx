@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { useLocalStorage } from "@/hooks/localstorage";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ItemBalanceFiltering, {
   getFilter,
@@ -19,7 +19,7 @@ import ItemFiltering, {
 } from "@/layout/ItemFiltering";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { showMutationToast } from "@/libs/toast";
@@ -156,7 +156,7 @@ const ItemEffectsBalance: React.FC<ItemEffectsBalanceProps> = (props) => {
       )}
 
       {/* Item Details Modal */}
-      <Modal2
+      <Modal
         title="Item Details"
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
@@ -167,7 +167,7 @@ const ItemEffectsBalance: React.FC<ItemEffectsBalanceProps> = (props) => {
         ) : (
           itemDetails && <ItemWithEffects item={itemDetails} showStatistic="item" />
         )}
-      </Modal2>
+      </Modal>
     </ContentBox>
   );
 };
@@ -296,7 +296,7 @@ const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
           {props.navTabs}
           <ItemBalanceFiltering state={filterState} />
           {canDelete && (
-            <Confirm2
+            <Confirm
               title="Clear All Item Battle Data"
               button={
                 <Button size="icon">
@@ -319,7 +319,7 @@ const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
                   action will be logged for future audit and review.
                 </>
               )}
-            </Confirm2>
+            </Confirm>
           )}
         </div>
       }

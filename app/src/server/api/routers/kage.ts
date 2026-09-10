@@ -53,6 +53,7 @@ import { calculateDailyLockedTime, canChallengeKage } from "@/utils/kage";
 import { canTakeKage } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { calcStructureUpgrade } from "@/utils/village";
+import { idSchema } from "@/validators/misc";
 
 const pusher = getServerPusher();
 
@@ -179,7 +180,7 @@ export const kageRouter = createTRPCRouter({
     }),
   acceptChallenge: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Accept a kage challenge" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch village and war data
@@ -236,7 +237,7 @@ export const kageRouter = createTRPCRouter({
     }),
   rejectChallenge: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Reject a kage challenge" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -276,7 +277,7 @@ export const kageRouter = createTRPCRouter({
     }),
   cancelChallenge: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Cancel a kage challenge" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Query

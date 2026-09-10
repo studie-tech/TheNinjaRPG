@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/tooltip";
 import { CLANS_PER_STRUCTURE_LEVEL } from "@/drizzle/constants";
 import type { Village, VillageStructure } from "@/drizzle/schema";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import Image from "@/layout/Image";
 import StatusBar from "@/layout/StatusBar";
 import { cn } from "@/libs/shadui";
@@ -127,7 +127,7 @@ const RestoreStructureButton = ({ structureId }: { structureId: string }) => {
     });
 
   return (
-    <Confirm2
+    <Confirm
       title="Restore Structure Points"
       proceed_label="Restore"
       onAccept={() => restorePoints({ structureId })}
@@ -142,7 +142,7 @@ const RestoreStructureButton = ({ structureId }: { structureId: string }) => {
     >
       <p>Are you sure you want to restore this structure to full health?</p>
       <p>This will set the structure points to maximum.</p>
-    </Confirm2>
+    </Confirm>
   );
 };
 
@@ -246,7 +246,7 @@ const UpgradeButton = ({
   return (
     <div>
       {canAfford && canLevel && (
-        <Confirm2
+        <Confirm
           title="Upgrade Structure"
           proceed_label="Upgrade"
           onAccept={() =>
@@ -296,7 +296,7 @@ const UpgradeButton = ({
               </div>
             );
           })()}
-        </Confirm2>
+        </Confirm>
       )}
     </div>
   );

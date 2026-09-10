@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { STARTER_VILLAGES, UserRanks } from "@/drizzle/constants";
 import { EditContent, EffectFormWrapper, type FormEntry } from "@/layout/EditContent";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
 import { canAwardReputation } from "@/utils/permissions";
@@ -337,7 +337,7 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
       </Button>
 
       {/* Edit/Create Modal */}
-      <Modal2
+      <Modal
         title={editingId ? "Edit Damage Threshold" : "Add Damage Threshold"}
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
@@ -491,7 +491,7 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
             </div>
           </form>
         </Form>
-      </Modal2>
+      </Modal>
     </div>
   );
 };

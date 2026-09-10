@@ -3,13 +3,17 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { linkPromotion, userData } from "@/drizzle/schema";
 import { fetchUser } from "@/routers/profile";
-import { baseServerResponse, errorResponse } from "@/server/api/trpc";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import { canReviewLinkPromotions } from "@/utils/permissions";
 import {
   linkPromotionReviewSchema,
   linkPromotionSchema,
 } from "@/validators/linkPromotion";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const linkPromotionRouter = createTRPCRouter({
   getLinkPromotions: protectedProcedure

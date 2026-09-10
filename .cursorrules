@@ -28,7 +28,7 @@ You are an expert in TypeScript, Node.js, Next.js App Router, React, Shadcn UI, 
 - The entire schema is located in `@/drizzle/schema.ts`.
 - Always preferthe query-syntax of drizzle, only as a last resort use raw SQL.
 - Always try to use `Promise.all()` for parallel database operations. It is very important to minimize the amounts of back and forth between database for speed.
-- Never use direct database transactions, instead use guards with where-statements and check return results.
+- Prefer guarded statements over transactions. Reach first for a WHERE condition that makes the update atomic on its own and check `rowsAffected`. Short transactions are supported when several rows must move together and no single guarded statement can express it (see `home.ts`, `item.ts`, `occupation.ts`, `paypal.ts`). Keep the body as short as possible — PlanetScale sessions are sequential, so `Promise.all` does not apply inside a transaction.
 - Never create database migrations manually, instead use `make makemigrations` in the root of the project after having changed the schema file.
 
 # tRPC endpoints
@@ -66,7 +66,7 @@ A particularly complex feature in the game is the combat system, which thus also
 
 - `/app/src/libs/combat/tags.ts`: this file defined the logic of each tag (effect) in the game, e.g. damage, shield, heal, etc.
 
-- `/app/src/libs/combat/types.ts`: this file defines various zod schemas and types relevant across the combat system. This is also where the tag types are defines in terms of zod schemas; i.e. their schema and type is defined in the `types.ts` file, and their logic in the `tags.ts` file.
+- `/app/src/libs/combat/types.ts`: TypeScript battle-state types. Tag Zod schemas live in `/app/src/validators/combat.ts`; their logic is in `tags.ts`.
 
 - `/app/src/libs/combat/util.ts`: this file contains various utility functions used throughout the combat system both on the backend and frontend code.
 
@@ -76,7 +76,7 @@ A particularly complex feature in the game is the combat system, which thus also
 
 - `/app/src/libs/combat/ai_v2.ts`: This file contains the logic for how the AI behaves in combat and which actions it takes. It's based off a sequential rule-based system.
 
-- `/app/src/libs/combat/constants.ts`: TO BE MOVED to `@/drizzle/constants`
+- `/app/src/libs/combat/constants.ts`: remaining combat-only constants. Shared numeric game values belong in `@/drizzle/constants`.
 
 # Building, testing, linting etc
 

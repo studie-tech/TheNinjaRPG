@@ -207,6 +207,15 @@ export const formatDateTimeShort = (date: Date): string => {
   return date.toISOString().replace("T", " ").slice(0, 16);
 };
 
+export const formatTimeAgo = (date: Date) => {
+  const diffInSeconds = Math.floor((Date.now() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return "Just now";
+  if (diffInSeconds < HOUR_S) return `${Math.floor(diffInSeconds / MINUTE_S)}m ago`;
+  if (diffInSeconds < DAY_S) return `${Math.floor(diffInSeconds / HOUR_S)}h ago`;
+  return `${Math.floor(diffInSeconds / DAY_S)}d ago`;
+};
+
 /**
  * Combine a date and time string (HH:MM) into a single Date object
  *

@@ -3,7 +3,7 @@ import { Trash2 } from "lucide-react";
 import { use } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import StatisticsFiltering, {
@@ -93,7 +93,7 @@ export default function JutsuStatistics(props: {
           <div className="flex items-center gap-2">
             <StatisticsFiltering state={statsFilter} />
             {canDelete && (
-              <Confirm2
+              <Confirm
                 title={`Clear ${name} Battle Data`}
                 button={
                   <Button size="icon">
@@ -117,7 +117,7 @@ export default function JutsuStatistics(props: {
                     future audit and review.
                   </>
                 )}
-              </Confirm2>
+              </Confirm>
             )}
           </div>
         }

@@ -36,10 +36,18 @@ import {
 import { getServerPusher } from "@/libs/pusher";
 import { createUserAvatar } from "@/routers/avatar";
 import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  serverError,
+} from "@/server/api/trpc";
+import {
   canBanUsers,
   canClearReport,
   canClearUserNindo,
   canEscalateBan,
+  canMarkAdminResolved,
   canModerateReports,
   canModerateRoles,
   canSeeReport,
@@ -50,6 +58,7 @@ import {
 } from "@/utils/permissions";
 import sanitize from "@/utils/sanitize";
 import { getMillisecondsFromTimeUnit, secondsFromNow } from "@/utils/time";
+import { idSchema } from "@/validators/misc";
 import type { AdditionalContext, ReportCommentSchema } from "@/validators/reports";
 import {
   reportCommentSchema,
@@ -59,13 +68,6 @@ import {
   userReviewSchema,
 } from "@/validators/reports";
 import type { DrizzleClient } from "../../db";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-  serverError,
-} from "../trpc";
 import { fetchImage } from "./conceptart";
 import { fetchUser } from "./profile";
 
@@ -401,25 +403,23 @@ export const reportsRouter = createTRPCRouter({
       return { success: true, message: "Warning accepted" };
     }),
   // Get a single report
-  get: protectedProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      // Query
-      const [user, report] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserReport(ctx.drizzle, input.id, ctx.userId),
-      ]);
-      // Guard
-      if (!canSeeReport(user, report)) {
-        throw serverError("UNAUTHORIZED", "You have no access to the report");
-      }
-      // Get previous reports
-      const prevReports = canSeeSecretData(user.role)
-        ? await getRelatedReports(ctx.drizzle, report.aiInterpretation)
-        : [];
-      // Return
-      return { report, prevReports };
-    }),
+  get: protectedProcedure.input(idSchema).query(async ({ ctx, input }) => {
+    // Query
+    const [user, report] = await Promise.all([
+      fetchUser(ctx.drizzle, ctx.userId),
+      fetchUserReport(ctx.drizzle, input.id, ctx.userId),
+    ]);
+    // Guard
+    if (!canSeeReport(user, report)) {
+      throw serverError("UNAUTHORIZED", "You have no access to the report");
+    }
+    // Get previous reports
+    const prevReports = canSeeSecretData(user.role)
+      ? await getRelatedReports(ctx.drizzle, report.aiInterpretation)
+      : [];
+    // Return
+    return { report, prevReports };
+  }),
   // Create a new user report
   create: protectedProcedure
     .input(userReportSchema)
@@ -555,7 +555,7 @@ export const reportsRouter = createTRPCRouter({
           .update(userReport)
           .set({
             status: "BAN_ACTIVATED",
-            adminResolved: user.role.includes("ADMIN") || user.role === "OWNER",
+            adminResolved: canMarkAdminResolved(user.role),
             updatedAt: new Date(),
             banEnd: getBanEndDate(input),
           })
@@ -603,7 +603,7 @@ export const reportsRouter = createTRPCRouter({
           .update(userReport)
           .set({
             status: "SILENCE_ACTIVATED",
-            adminResolved: user.role.includes("ADMIN") || user.role === "OWNER",
+            adminResolved: canMarkAdminResolved(user.role),
             updatedAt: new Date(),
             banEnd: getBanEndDate(input),
           })
@@ -684,7 +684,7 @@ export const reportsRouter = createTRPCRouter({
           .update(userReport)
           .set({
             status: "OFFICIAL_WARNING",
-            adminResolved: user.role.includes("ADMIN") || user.role === "OWNER",
+            adminResolved: canMarkAdminResolved(user.role),
             updatedAt: new Date(),
             banEnd: null,
           })
@@ -815,7 +815,7 @@ export const reportsRouter = createTRPCRouter({
         ctx.drizzle
           .update(userReport)
           .set({
-            adminResolved: user.role.includes("ADMIN") || user.role === "OWNER",
+            adminResolved: canMarkAdminResolved(user.role),
             status: "REPORT_CLEARED",
             updatedAt: new Date(),
           })
@@ -1051,7 +1051,7 @@ export const reportsRouter = createTRPCRouter({
           .update(userReport)
           .set({
             status: "TRADE_BAN_ACTIVATED",
-            adminResolved: user.role.includes("ADMIN") || user.role === "OWNER",
+            adminResolved: canMarkAdminResolved(user.role),
             updatedAt: new Date(),
             banEnd: getBanEndDate(input),
           })
