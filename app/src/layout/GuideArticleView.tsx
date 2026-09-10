@@ -60,8 +60,8 @@ export const GuideArticleView: React.FC<GuideArticleViewProps> = ({
           <Image
             src={article.image}
             alt={article.title}
-            width={1280}
-            height={640}
+            width={768}
+            height={384}
             className="mb-4 max-h-72 w-full rounded-md object-cover"
           />
         )}

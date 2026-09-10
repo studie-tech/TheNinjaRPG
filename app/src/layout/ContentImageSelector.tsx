@@ -139,8 +139,8 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                 className="relative m-auto aspect-[2/1] w-full rounded-2xl border-2 border-black object-cover hover:border-amber-500 hover:opacity-80"
                 src={displayUrl ?? IMG_AVATAR_DEFAULT}
                 alt={`${id}-avatar`}
-                width={1280}
-                height={640}
+                width={768}
+                height={384}
                 priority
               />
             ) : (
