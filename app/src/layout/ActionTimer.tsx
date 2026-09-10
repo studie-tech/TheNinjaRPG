@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Progress } from "@/components/ui/progress";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
@@ -31,6 +31,8 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
     canAct: false,
     waiting: false,
   });
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // Derived values
   const stunReduction = calcApReduction(battle, user.userId);
@@ -74,13 +76,16 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
 
     const updateState = () => {
       const next = nextTimerState();
-      setState((prev) =>
+      const prev = stateRef.current;
+      if (
         prev.label === next.label &&
         prev.canAct === next.canAct &&
         prev.waiting === next.waiting
-          ? prev
-          : next,
-      );
+      ) {
+        return;
+      }
+      stateRef.current = next;
+      setState(next);
     };
 
     updateState();
