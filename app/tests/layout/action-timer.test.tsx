@@ -59,7 +59,11 @@ const renderTimer = (battle: ReturnType<typeof makeCompleteBattle>) => {
       />
     </Profiler>,
   );
-  return { commits: () => commits, getByText: view.getByText };
+  return {
+    commits: () => commits,
+    getByText: view.getByText,
+    queryByText: view.queryByText,
+  };
 };
 
 const flushMount = () => {
@@ -82,6 +86,12 @@ afterEach(() => {
 });
 
 describe("ActionTimer interval commits", () => {
+  it("does not paint the ellipsis fallback after the first timer state", () => {
+    const { queryByText, getByText } = renderTimer(lobbyBattle());
+    expect(queryByText("...")).toBeNull();
+    expect(getByText("Lobby")).toBeTruthy();
+  });
+
   it("does not re-commit when the timer label and flags stay the same", () => {
     const { commits, getByText } = renderTimer(lobbyBattle());
     flushMount();
