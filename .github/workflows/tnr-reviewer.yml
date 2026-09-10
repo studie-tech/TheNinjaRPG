@@ -17,7 +17,8 @@
 #
 # Pipeline: command_gate → preview_check → run_tnr_reviewer
 #   1. command_gate: validates the trigger, checks actor permissions, fetches metadata
-#   2. preview_check: PR → existing Vercel check URL; issue → resolve/create main preview
+#   2. preview_check: PR → existing Vercel check/deployment or tnr-preview/pr-{N}
+#      snapshot (created by `/tnr-create-preview`); issue → resolve/create main preview
 #   3. run_tnr_reviewer: checks out the target SHA, builds a prompt, runs Codex, posts results
 name: TNR Reviewer
 
@@ -337,6 +338,7 @@ jobs:
           if [ "$MODE" = "issue-repro" ]; then
             node .github/scripts/resolve-main-preview.mjs
           else
+            export PREVIEW_BRANCH="tnr-preview/pr-${PR_NUMBER}"
             node .github/scripts/check-preview-ready.mjs
           fi
         env:

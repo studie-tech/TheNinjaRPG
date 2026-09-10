@@ -1,0 +1,333 @@
+# On-demand Vercel previews for pull requests.
+#
+# Triggers:
+#   • `/tnr-create-preview` as the first line of a PR comment
+#   • Manual workflow_dispatch with a PR number
+#   • New PRs get an instructions comment (no deploy)
+#   • Closed PRs delete the `tnr-preview/pr-{N}` snapshot branch
+#
+# Regular PR branches do not auto-deploy (see app/vercel.json
+# git.deploymentEnabled). This workflow snapshots the PR head onto
+# `tnr-preview/pr-{N}` so Vercel's GitHub integration builds one preview.
+name: TNR Create Preview
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to deploy a preview for"
+        required: true
+        type: number
+
+jobs:
+  welcome:
+    if: github.event_name == 'pull_request_target' && github.event.action == 'opened'
+    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Post preview instructions
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const marker = '<!-- tnr-preview-instructions -->';
+            const prNumber = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              per_page: 30,
+            });
+            if (comments.some((comment) => (comment.body ?? '').includes(marker))) {
+              core.info('Preview instructions already posted.');
+              return;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: [
+                marker,
+                '## Vercel preview',
+                '',
+                'This repository does **not** deploy a Vercel preview for every pull request.',
+                '',
+                'To deploy a preview of the current PR head, a collaborator with write access can comment:',
+                '',
+                '```',
+                '/tnr-create-preview',
+                '```',
+                '',
+                'That builds one preview of the current head commit. Later pushes do not refresh it — run the command again if you need an updated URL.',
+                '',
+                'Once the preview is ready, `/tnr-review-now` can review against it.',
+              ].join('\n'),
+            });
+
+  cleanup:
+    if: github.event_name == 'pull_request_target' && github.event.action == 'closed'
+    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Delete PR preview snapshot branch
+        continue-on-error: true
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const branch = `tnr-preview/pr-${prNumber}`;
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${branch}`,
+              });
+              core.info(`Deleted ${branch}`);
+            } catch (error) {
+              if (error.status === 404) {
+                core.info(`${branch} did not exist`);
+                return;
+              }
+              throw error;
+            }
+
+  command_gate:
+    if: >-
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       startsWith(github.event.comment.body, '/tnr-create-preview')) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    permissions:
+      issues: write
+      pull-requests: write
+    outputs:
+      should_run: ${{ steps.parse.outputs.should_run }}
+      pr_number: ${{ steps.parse.outputs.pr_number }}
+      comment_id: ${{ steps.initial_comment.outputs.comment_id }}
+      head_sha: ${{ steps.parse.outputs.head_sha }}
+    steps:
+      - name: Parse command and validate actor
+        id: parse
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const isWorkflowDispatch = context.eventName === 'workflow_dispatch';
+            const actor = isWorkflowDispatch
+              ? context.actor
+              : context.payload.comment.user.login;
+            const teamPermissions = new Set(['admin', 'maintain', 'write']);
+            const commandExact = /^\/tnr-create-preview\s*$/i;
+
+            let prNumber = 0;
+            if (isWorkflowDispatch) {
+              prNumber = Number(context.payload.inputs?.pr_number);
+            } else {
+              const firstLine = (context.payload.comment.body ?? '')
+                .split(/\r?\n/, 1)[0]
+                .trim();
+              if (!commandExact.test(firstLine)) {
+                core.setOutput('should_run', 'false');
+                return;
+              }
+              prNumber = context.issue.number;
+            }
+
+            if (!Number.isInteger(prNumber) || prNumber <= 0) {
+              if (isWorkflowDispatch) {
+                core.setFailed('Provide a valid pr_number.');
+              }
+              core.setOutput('should_run', 'false');
+              return;
+            }
+
+            if (!isWorkflowDispatch) {
+              let permission = '';
+              try {
+                const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  username: actor,
+                });
+                permission = data.permission ?? '';
+              } catch {
+                permission = '';
+              }
+              if (!teamPermissions.has(permission)) {
+                core.setOutput('should_run', 'false');
+                return;
+              }
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            if (pr.state !== 'open') {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `PR #${prNumber} is not open, so a preview was not created.`,
+              });
+              core.setOutput('should_run', 'false');
+              return;
+            }
+
+            core.setOutput('should_run', 'true');
+            core.setOutput('pr_number', String(pr.number));
+            core.setOutput('head_sha', pr.head.sha);
+
+      - name: Post initial comment
+        if: steps.parse.outputs.should_run == 'true'
+        id: initial_comment
+        continue-on-error: true
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const prNumber = Number('${{ steps.parse.outputs.pr_number }}');
+            const headSha = '${{ steps.parse.outputs.head_sha }}';
+            const { data: comment } = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: [
+                '## Vercel preview started',
+                '',
+                `Building a preview of \`${headSha.slice(0, 7)}\`. Later pushes will not update this URL unless you run \`/tnr-create-preview\` again.`,
+                `Run: [View workflow run](${runUrl})`,
+                '',
+                '> This comment will be updated when the preview is ready.',
+              ].join('\n'),
+            });
+            core.setOutput('comment_id', String(comment.id));
+
+  create_preview:
+    needs: command_gate
+    if: needs.command_gate.outputs.should_run == 'true'
+    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    timeout-minutes: 35
+    concurrency:
+      group: tnr-create-preview-${{ needs.command_gate.outputs.pr_number }}
+      cancel-in-progress: false
+    permissions:
+      checks: read
+      pull-requests: write
+      issues: write
+      contents: read
+      deployments: read
+    outputs:
+      is_ready: ${{ steps.create.outputs.is_ready }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create or reuse Vercel preview
+        id: create
+        run: node .github/scripts/create-pr-preview.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PUSH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR_NUMBER: ${{ needs.command_gate.outputs.pr_number }}
+          PREVIEW_BRANCH: tnr-preview/pr-${{ needs.command_gate.outputs.pr_number }}
+          PREVIEW_ENVIRONMENT_PATTERN: ${{ vars.TNR_MAIN_PREVIEW_ENV_PATTERN || '' }}
+
+      - name: Post preview result
+        uses: actions/github-script@v9
+        env:
+          IS_READY: ${{ steps.create.outputs.is_ready }}
+          PREVIEW_URL: ${{ steps.create.outputs.preview_url }}
+          REASON: ${{ steps.create.outputs.reason }}
+          HEAD_SHA: ${{ steps.create.outputs.head_sha }}
+          COMMENT_ID: ${{ needs.command_gate.outputs.comment_id }}
+          PR_NUMBER: ${{ needs.command_gate.outputs.pr_number }}
+        with:
+          script: |
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const isReady = process.env.IS_READY === 'true';
+            const previewUrl = process.env.PREVIEW_URL || '';
+            const reason = process.env.REASON || '';
+            const headSha = (process.env.HEAD_SHA || '').slice(0, 7);
+            const prNumber = Number(process.env.PR_NUMBER);
+            const commentId = Number(process.env.COMMENT_ID);
+            const body = isReady
+              ? [
+                  '## Vercel preview ready',
+                  '',
+                  `Preview of \`${headSha}\`: ${previewUrl}`,
+                  '',
+                  'Later pushes do not refresh this URL. Comment `/tnr-create-preview` again if you need an updated deploy.',
+                  `Run: [View workflow run](${runUrl})`,
+                ].join('\n')
+              : [
+                  '## Vercel preview failed',
+                  '',
+                  reason ? `Reason: ${reason}` : 'Reason: unknown',
+                  `Run: [View workflow run](${runUrl})`,
+                ].join('\n');
+
+            if (Number.isInteger(commentId) && commentId > 0) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: commentId,
+                body,
+              });
+              return;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body,
+            });
+
+  report_interrupted:
+    needs: [command_gate, create_preview]
+    if: always() && needs.command_gate.outputs.should_run == 'true' && (needs.create_preview.result == 'cancelled' || needs.create_preview.result == 'failure')
+    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Mark run as interrupted
+        uses: actions/github-script@v9
+        env:
+          COMMENT_ID: ${{ needs.command_gate.outputs.comment_id }}
+          PR_NUMBER: ${{ needs.command_gate.outputs.pr_number }}
+        with:
+          script: |
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const commentId = Number(process.env.COMMENT_ID);
+            const prNumber = Number(process.env.PR_NUMBER);
+            const body = [
+              '## Vercel preview interrupted',
+              '',
+              'This run was interrupted before the preview was ready — either a newer run took its concurrency slot or the preview wait hit the job timeout. Comment `/tnr-create-preview` again if it is still needed.',
+              `Run: [View workflow run](${runUrl})`,
+            ].join('\n');
+            if (Number.isInteger(commentId) && commentId > 0) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: commentId,
+                body,
+              });
+              return;
+            }
+            if (Number.isInteger(prNumber) && prNumber > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
