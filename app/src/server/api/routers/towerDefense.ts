@@ -12,7 +12,6 @@ import {
   TD_RANGE_VISUAL_FACTOR,
   TD_SCORE_PER_KILL,
   TD_SCORE_TO_POINTS_RATIO,
-  TowerDefenseUpgradeTypes,
 } from "@/drizzle/constants";
 import {
   type TowerDefenseCharacterDb,
@@ -36,12 +35,21 @@ import {
 } from "@/libs/towerDefense/game";
 import { servedUfsUrl } from "@/libs/uploadthing";
 import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  ratelimitMiddleware,
+} from "@/server/api/trpc";
+import {
   generateSessionNonce,
   type SessionParams,
   signSessionParams,
 } from "@/server/utils/towerDefenseCrypto";
 import { canChangeContent } from "@/utils/permissions";
 import { validateUrlForSsrf } from "@/utils/ssrf";
+import { idSchema } from "@/validators/misc";
 import type {
   SignedEnemyDefinition,
   SignedUpgradeDefinition,
@@ -54,16 +62,8 @@ import {
   signedEnemyDefinitionSchema,
   signedUpgradeDefinitionSchema,
   towerDefenseAbilitySchema,
+  updateTowerDefenseUpgradeSchema,
 } from "@/validators/towerDefense";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  hasUserMiddleware,
-  protectedProcedure,
-  publicProcedure,
-  ratelimitMiddleware,
-} from "../trpc";
 
 /**
  * Tower Defense tRPC Router
@@ -114,7 +114,6 @@ export const towerDefenseRouter = createTRPCRouter({
   getUserUpgrades: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get user's tower defense upgrades" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .query(async ({ ctx }) => {
       const [upgrades, user] = await Promise.all([
         ctx.drizzle.query.userTowerDefenseUpgrade.findMany({
@@ -154,7 +153,6 @@ export const towerDefenseRouter = createTRPCRouter({
       mcp: { enabled: true, description: "Start a secure tower defense session" },
     })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .mutation(async ({ ctx }) => {
       const [userUpgrades, upgradeDefinitions, enemyDefinitionsDb, playerCharactersDb] =
         await Promise.all([
@@ -239,7 +237,6 @@ export const towerDefenseRouter = createTRPCRouter({
       mcp: { enabled: true, description: "Get user's tower defense run history" },
     })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         cursor: z.string().optional(),
@@ -294,7 +291,6 @@ export const towerDefenseRouter = createTRPCRouter({
   purchasePermanentUpgrade: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Purchase tower defense upgrade" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(purchaseUpgradeInputSchema)
     .output(
       baseServerResponse.extend({
@@ -398,7 +394,6 @@ export const towerDefenseRouter = createTRPCRouter({
   claimCompletedRun: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Claim completed tower defense run" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         spacetimeSessionId: z.string(),
@@ -599,7 +594,7 @@ export const towerDefenseRouter = createTRPCRouter({
    */
   getCharacter: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a tower defense character" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       return await ctx.drizzle.query.towerDefenseCharacter.findFirst({
         where: eq(towerDefenseCharacter.id, input.id),
@@ -635,7 +630,6 @@ export const towerDefenseRouter = createTRPCRouter({
    */
   createCharacter: protectedProcedure
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(z.object({ isPlayer: z.boolean().prefault(false) }))
     .output(baseServerResponse.extend({ id: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
@@ -664,7 +658,6 @@ export const towerDefenseRouter = createTRPCRouter({
    */
   updateCharacter: protectedProcedure
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         id: z.string(),
@@ -706,8 +699,7 @@ export const towerDefenseRouter = createTRPCRouter({
    */
   deleteCharacter: protectedProcedure
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await ctx.drizzle.query.userData.findFirst({
@@ -731,7 +723,6 @@ export const towerDefenseRouter = createTRPCRouter({
    */
   processCharacterZip: protectedProcedure
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         characterId: z.string(),
@@ -929,7 +920,6 @@ export const towerDefenseRouter = createTRPCRouter({
    */
   updateAssetConfig: protectedProcedure
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         characterId: z.string(),
@@ -967,7 +957,7 @@ export const towerDefenseRouter = createTRPCRouter({
    */
   getUpgrade: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a tower defense upgrade by ID" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       return await ctx.drizzle.query.towerDefenseUpgrade.findFirst({
         where: eq(towerDefenseUpgrade.id, input.id),
@@ -980,19 +970,10 @@ export const towerDefenseRouter = createTRPCRouter({
    */
   updateUpgrade: protectedProcedure
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         id: z.string(),
-        data: z.object({
-          name: z.string().min(1).max(191),
-          description: z.string(),
-          maxLevel: z.int().min(1),
-          baseCost: z.int().min(0),
-          costMultiplier: z.number().min(1),
-          upgradeType: z.enum(TowerDefenseUpgradeTypes),
-          effectValue: z.number().min(0),
-        }),
+        data: updateTowerDefenseUpgradeSchema,
       }),
     )
     .output(baseServerResponse)

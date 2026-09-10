@@ -3,12 +3,6 @@ import { and, asc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-} from "@/api/trpc";
-import {
   RANKED_ENTRY_COST,
   RANKED_LEGEND_LP_REQUIREMENT,
   RANKED_PVP_STATS,
@@ -37,11 +31,18 @@ import { hasRequiredRank } from "@/libs/train";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUser } from "@/routers/profile";
 import { updateRewards } from "@/server/api/routers/quests";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { secondsPassed } from "@/utils/time";
+import { idSchema } from "@/validators/misc";
 import { rankedLoadoutSchema, rankedSeasonSchema } from "@/validators/pvpRank";
 
 export const pvpRankRouter = createTRPCRouter({
@@ -116,7 +117,7 @@ export const pvpRankRouter = createTRPCRouter({
   // Get a specific season
   getSeason: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get a specific ranked season" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       const season = await ctx.drizzle.query.rankedSeason.findFirst({
         where: eq(rankedSeason.id, input.id),
@@ -188,7 +189,7 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Update an existing season
   updateSeason: protectedProcedure
-    .input(z.object({ id: z.string() }).extend(rankedSeasonSchema.shape))
+    .input(idSchema.extend(rankedSeasonSchema.shape))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -245,7 +246,7 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Delete a season
   deleteSeason: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -266,7 +267,7 @@ export const pvpRankRouter = createTRPCRouter({
 
   // End a season manually
   endSeason: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch user & permission guard

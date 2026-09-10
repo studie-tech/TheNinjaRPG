@@ -53,12 +53,12 @@ import {
 import type { Village, VillageAlliance, VillageStructure } from "@/drizzle/schema";
 import { useMap } from "@/hooks/map";
 import Building from "@/layout/Building";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import MapError from "@/layout/MapError";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import StatusBar from "@/layout/StatusBar";
 import type { ColumnDefinitionType } from "@/layout/Table";
@@ -598,7 +598,7 @@ export const WarMap: React.FC<{
       )}
       {mapError && <MapError />}
       {showModal && globe && userData && targetSector && (
-        <Modal2
+        <Modal
           title={modalTitle}
           isOpen={showModal}
           setIsOpen={setShowModal}
@@ -607,7 +607,7 @@ export const WarMap: React.FC<{
         >
           {isLoading && <Loader explanation="Execution Action" />}
           {!isLoading && modalContent}
-        </Modal2>
+        </Modal>
       )}
     </div>
   );
@@ -668,7 +668,7 @@ export const SectorWar: React.FC<{
         <div className="flex flex-col items-center gap-2">
           <div className="flex w-full justify-end">
             {canAdministrateWars(user.role) && (
-              <Confirm2
+              <Confirm
                 title="End War"
                 button={
                   <Button variant="destructive" size="icon">
@@ -685,7 +685,7 @@ export const SectorWar: React.FC<{
                   remove all information about the war. No losses will be incurred for
                   either side.
                 </p>
-              </Confirm2>
+              </Confirm>
             )}
           </div>
           <Image
@@ -735,7 +735,7 @@ export const SectorWar: React.FC<{
               )}
             </div>
             {canBuildShrine && (
-              <Confirm2
+              <Confirm
                 title="Build Shrine"
                 button={
                   <Button className="w-full" loading={isBuilding}>
@@ -754,7 +754,7 @@ export const SectorWar: React.FC<{
                   {WAR_PURCHASE_SHRINE_TOKEN_COST.toLocaleString()} village tokens. Are
                   you sure?
                 </p>
-              </Confirm2>
+              </Confirm>
             )}
           </div>
         </div>
@@ -1188,7 +1188,7 @@ export const VillageWar: React.FC<{
 
   const offerForm = useForm<AllianceOfferSchemaInput, unknown, AllianceOfferSchema>({
     resolver: zodResolver(offerSchema),
-    defaultValues: { amount: 1000 },
+    defaultValues: { amount: WAR_ALLY_OFFER_MIN },
     mode: "onChange",
   });
 
@@ -1342,7 +1342,7 @@ export const VillageWar: React.FC<{
             <Trophy className="h-5 w-5" />
           </Button>
           {isKage && war.status === "ACTIVE" && (
-            <Confirm2
+            <Confirm
               title="Confirm Surrender"
               button={
                 <Button variant="destructive" size="icon">
@@ -1358,10 +1358,10 @@ export const VillageWar: React.FC<{
                 Are you sure you want to surrender this war? This will result in an
                 immediate loss to your village.
               </p>
-            </Confirm2>
+            </Confirm>
           )}
           {canAdministrateWars(user.role) && (
-            <Confirm2
+            <Confirm
               title="End War"
               button={
                 <Button variant="destructive" size="icon">
@@ -1378,13 +1378,13 @@ export const VillageWar: React.FC<{
                 remove all information about the war. No losses will be incurred for
                 either side.
               </p>
-            </Confirm2>
+            </Confirm>
           )}
         </div>
       </div>
 
       {/* Add dialog for war kills */}
-      <Modal2
+      <Modal
         title={`War Kills - ${war.attackerVillage.name} vs ${war.defenderVillage.name}`}
         isOpen={showKills}
         setIsOpen={setShowKills}
@@ -1407,10 +1407,10 @@ export const VillageWar: React.FC<{
             <p className="text-center text-muted-foreground">No kills recorded yet</p>
           )}
         </div>
-      </Modal2>
+      </Modal>
 
       {/* Add dialog for war kill stats */}
-      <Modal2
+      <Modal
         title={`War Statistics - ${war.attackerVillage.name} vs ${war.defenderVillage.name}`}
         isOpen={showStats}
         setIsOpen={setShowStats}
@@ -1453,7 +1453,7 @@ export const VillageWar: React.FC<{
             )}
           </div>
         </div>
-      </Modal2>
+      </Modal>
 
       {/* Town Halls Section */}
       <div className="rounded-lg border border-border p-4">
@@ -1513,7 +1513,7 @@ export const VillageWar: React.FC<{
               <Info className="mr-1 h-4 w-4" />
               Shrine Mechanics
             </Button>
-            <Modal2
+            <Modal
               title="Shrine Mechanics"
               isOpen={showShrineMechanics}
               setIsOpen={setShowShrineMechanics}
@@ -1563,7 +1563,7 @@ export const VillageWar: React.FC<{
                   </p>
                 </div>
               </div>
-            </Modal2>
+            </Modal>
           </div>
         </div>
       )}
@@ -1613,7 +1613,7 @@ export const VillageWar: React.FC<{
                         {village.type === "VILLAGE" ? "Ally" : "Faction"}
                       </p>
                     </div>
-                    <Confirm2
+                    <Confirm
                       title={`Send Offer to ${village.name}`}
                       button={
                         <Button
@@ -1659,7 +1659,7 @@ export const VillageWar: React.FC<{
                           : war.attackerVillage?.name}
                         . They can choose to accept or reject this offer.
                       </p>
-                    </Confirm2>
+                    </Confirm>
                   </div>
                 </div>
               ))}

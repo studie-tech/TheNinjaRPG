@@ -26,7 +26,7 @@ import {
   forumLevelMessage,
   IMG_ICON_FORUM,
 } from "@/drizzle/constants";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import Image from "@/layout/Image";
@@ -180,7 +180,7 @@ function Board({ boardId, initialThreads }: BoardProps) {
           !userData.isSilenced &&
           !belowForumMinLevel && (
             <div className="flex flex-row items-center">
-              <Confirm2
+              <Confirm
                 title="Create a new thread"
                 proceed_label="Submit"
                 button={
@@ -254,7 +254,7 @@ function Board({ boardId, initialThreads }: BoardProps) {
                     )}
                   </form>
                 </Form>
-              </Confirm2>
+              </Confirm>
             </div>
           )
         }
@@ -335,7 +335,7 @@ function Board({ boardId, initialThreads }: BoardProps) {
                       <div className="mt-2 flex flex-row items-center">
                         {userData && canModerate(userData.role) ? (
                           <>
-                            <Confirm2
+                            <Confirm
                               title={`Confirm ${pinAction}ning thread`}
                               button={MyBookmark}
                               disabled={isPinningThread}
@@ -348,8 +348,8 @@ function Board({ boardId, initialThreads }: BoardProps) {
                               }}
                             >
                               You are about to {pinAction} a thread. Are you sure?
-                            </Confirm2>
-                            <Confirm2
+                            </Confirm>
+                            <Confirm
                               title={`Confirm ${lockAction}ing thread`}
                               button={MyLockIcon}
                               disabled={isLockingThread}
@@ -362,8 +362,8 @@ function Board({ boardId, initialThreads }: BoardProps) {
                               }}
                             >
                               You are about to {lockAction} a thread. Are you sure?
-                            </Confirm2>
-                            <Confirm2
+                            </Confirm>
+                            <Confirm
                               title={`Confirm deleting thread`}
                               button={MyDeleteIcon}
                               disabled={isDeletingThread}
@@ -373,7 +373,7 @@ function Board({ boardId, initialThreads }: BoardProps) {
                               }}
                             >
                               You are about to delete a thread. Are you sure?
-                            </Confirm2>
+                            </Confirm>
                           </>
                         ) : (
                           <>

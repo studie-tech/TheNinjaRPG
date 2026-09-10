@@ -37,7 +37,7 @@ import ContentAudioSelector from "@/layout/ContentAudioSelector";
 import ContentImage from "@/layout/ContentImage";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import Image from "@/layout/Image";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import Table from "@/layout/Table";
@@ -266,22 +266,6 @@ export const EditContent = <
     };
   }, []);
 
-  // Mutations
-  // const { mutate: create3dModel } =
-  //   api.openai.create3dModel.useMutation({
-  //     onSuccess: (data, variables) => {
-  //       showMutationToast({
-  //         success: true,
-  //         message: "3D model generated. Now fetching",
-  //       });
-  //       fetchReplicateResult({
-  //         replicateId: data.replicateId,
-  //         field: variables.field,
-  //         removeBg: false,
-  //       });
-  //     },
-  //   });
-
   // If this is a quest, deduce the quest-type
   const questType =
     props.type === "quest" ? form.getValues("questType" as Path<S>) : undefined;
@@ -323,7 +307,6 @@ export const EditContent = <
       return "scene";
     if (["nextObjectiveId", "failObjectiveId", "resetObjectiveId"].includes(id))
       return "graph";
-    if (id === "reason") return "xxx";
     return "default";
   };
 
@@ -331,7 +314,6 @@ export const EditContent = <
   let columnCount = 0;
   let lastCategory = "default";
 
-  // const load = isLoading || load1 || load2 || load3;
   return (
     <Form {...form}>
       <form
@@ -342,7 +324,7 @@ export const EditContent = <
       >
         {/* Asset Picker Dialog */}
         {assetPickerOpen && (
-          <Modal2
+          <Modal
             title={
               assetPickerType === "ANIMATION"
                 ? "Pick Animation"
@@ -446,7 +428,7 @@ export const EditContent = <
                 />
               )}
             </div>
-          </Modal2>
+          </Modal>
         )}
         {formData
           .filter((formEntry) => formEntry.type !== "avatar3d")
@@ -1576,7 +1558,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   });
 
   // Form for handling the specific tag
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const form = useForm<any>({
     defaultValues: shownTag,
     values: shownTag,
@@ -2057,7 +2038,6 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   });
 
   // Form for handling the specific tag
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const form = useForm<any>({
     defaultValues: shownTag,
     values: shownTag,
@@ -2516,7 +2496,6 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
   const { data: sageModeData } = api.sageMode.getAllNames.useQuery();
 
   // Form for handling the reward
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const form = useForm<any>({
     defaultValues: shownReward,
     values: shownReward,

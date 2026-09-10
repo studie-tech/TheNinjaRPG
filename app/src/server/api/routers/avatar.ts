@@ -1,11 +1,5 @@
 import { and, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-} from "@/api/trpc";
 import { ContentTypes } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { historicalAvatar, userData } from "@/drizzle/schema";
@@ -15,6 +9,12 @@ import {
   getAvatarPrompt,
 } from "@/libs/replicate";
 import { fetchUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canChangeContent } from "@/utils/permissions";
 

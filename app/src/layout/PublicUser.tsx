@@ -87,7 +87,7 @@ import ActionLogFiltering, {
 } from "@/layout/ActionLogFiltering";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import DeleteUserButton from "@/layout/DeleteUserButton";
 import { EditContent } from "@/layout/EditContent";
@@ -95,7 +95,7 @@ import GraphCombatLog from "@/layout/GraphCombatLog";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { ModerationSummary } from "@/layout/ModerationSummary";
 import Post from "@/layout/Post";
 import ReportUser from "@/layout/Report";
@@ -498,7 +498,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   </Tooltip>
                 </TooltipProvider>
 
-                <Modal2
+                <Modal
                   title="Update User Data"
                   isOpen={showEditModal}
                   setIsOpen={setShowEditModal}
@@ -515,11 +515,11 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                       }}
                     />
                   )}
-                </Modal2>
+                </Modal>
               </>
             )}
             {userData && canAwardReputation(userData.role) && (
-              <Confirm2
+              <Confirm
                 title="Award Reputation Points"
                 proceed_label="Award Points"
                 button={
@@ -597,7 +597,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     />
                   </form>
                 </Form>
-              </Confirm2>
+              </Confirm>
             )}
 
             {userData && canEditSeichiSilver(userData.role) && !profile.isAi && (
@@ -613,7 +613,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             )}
 
             {userData && canAwardExperience(userData) && (
-              <Confirm2
+              <Confirm
                 title="Award Experience Points"
                 proceed_label="Award Experience"
                 button={
@@ -668,7 +668,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     />
                   </form>
                 </Form>
-              </Confirm2>
+              </Confirm>
             )}
 
             {userData && (userData.userId === profile.userId || canSeeSecrets) && (
@@ -869,7 +869,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   />
                 </GlowingBorder>
                 {canChange && !profile.isAi && (
-                  <Confirm2
+                  <Confirm
                     title="Confirm Deletion"
                     button={
                       <RefreshCcwDot className="absolute top-[3%] right-[13%] z-10 h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
@@ -883,7 +883,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     abuse of this feature is forbidden, it is solely intended for
                     removing potentially inappropriate avatars. The action will be
                     logged. Are you sure?
-                  </Confirm2>
+                  </Confirm>
                 )}
               </div>
               <div className="mt-2">
@@ -996,7 +996,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 topRightContent={
                   <div className="flex flex-row gap-1">
                     {canChange && (
-                      <Confirm2
+                      <Confirm
                         title="Clear User Nindo"
                         proceed_label="Done"
                         button={
@@ -1006,7 +1006,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                       >
                         Confirm that you wish to clear this nindo. The action will be
                         logged.
-                      </Confirm2>
+                      </Confirm>
                     )}
                   </div>
                 }
@@ -1159,7 +1159,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
 
       {/* Force Awake Modal */}
       {showForceAwakeModal && (
-        <Modal2
+        <Modal
           title="Force User Awake"
           isOpen={showForceAwakeModal}
           setIsOpen={setShowForceAwakeModal}
@@ -1201,7 +1201,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               </p>
             </div>
           </div>
-        </Modal2>
+        </Modal>
       )}
     </>
   );
@@ -1798,7 +1798,7 @@ const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
   });
 
   return (
-    <Confirm2
+    <Confirm
       title="Update User ID"
       proceed_label="Update"
       button={<IdCard className="h-6 w-6 cursor-pointer hover:text-orange-500" />}
@@ -1826,7 +1826,7 @@ const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
           />
         </form>
       </Form>
-    </Confirm2>
+    </Confirm>
   );
 };
 
@@ -2440,7 +2440,7 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
                 </div>
               </Link>
               {canDelete && (
-                <Confirm2
+                <Confirm
                   title="Delete Referral"
                   proceed_label="Delete"
                   button={
@@ -2451,7 +2451,7 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
                   Are you sure you want to delete the referral relationship between{" "}
                   <strong>{parentUsername}</strong> and <strong>{user.username}</strong>
                   ? This action will remove the referral and cannot be undone.
-                </Confirm2>
+                </Confirm>
               )}
             </div>
           ))}
@@ -2730,12 +2730,12 @@ const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
           <TooltipContent>Adjust Seichi Silver</TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <Modal2
+      <Modal
         title="Adjust Seichi Silver"
         isOpen={isOpen}
         setIsOpen={setIsOpen}
         proceed_label={isPending ? "Saving..." : "Apply"}
-        // Modal2 auto-closes on Apply when isValid is true/undefined. Pass false so a
+        // Modal auto-closes on Apply when isValid is true/undefined. Pass false so a
         // failed mutation (AI rejection / insufficient balance) keeps the form open
         // with the entered amount + reason; we close in onSuccess instead. The accept
         // button stays gated via proceedDisabled below.
@@ -2773,7 +2773,7 @@ const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
             />
           </div>
         </div>
-      </Modal2>
+      </Modal>
     </>
   );
 };
@@ -2834,7 +2834,7 @@ const BloodlinePoolManager: React.FC<BloodlinePoolManagerProps> = ({
           <TooltipContent>Manage Bloodline Pool</TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <Modal2
+      <Modal
         title={`Manage Bloodline Pool — ${username}`}
         isOpen={isOpen}
         setIsOpen={setIsOpen}
@@ -2895,7 +2895,7 @@ const BloodlinePoolManager: React.FC<BloodlinePoolManagerProps> = ({
             })}
           </div>
         </div>
-      </Modal2>
+      </Modal>
     </>
   );
 };

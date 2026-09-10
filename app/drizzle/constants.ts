@@ -1441,6 +1441,7 @@ export const EVOLUTION_MAX_DEPTH = 3;
 
 // Combat config
 export const BATTLE_ARENA_DAILY_LIMIT = 99999;
+export const BATTLE_ARENA_HEAL_COST = 500;
 export const BATTLE_TAG_STACKING = true;
 export const RANKS_RESTRICTED_FROM_PVP = ["STUDENT", "GENIN"];
 export const STREAK_LEVEL_DIFF = 10;

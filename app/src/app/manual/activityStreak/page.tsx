@@ -22,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
@@ -187,7 +187,7 @@ export default function ActivityStreakListPage() {
       </Tabs>
 
       {isOpen && userData && selectedConfig && (
-        <Modal2
+        <Modal
           title="Configuration Details"
           isOpen={isOpen}
           setIsOpen={setIsOpen}
@@ -331,7 +331,7 @@ export default function ActivityStreakListPage() {
             </div>
           )}
           {isPending && <Loader explanation="Processing..." />}
-        </Modal2>
+        </Modal>
       )}
     </ContentBox>
   );

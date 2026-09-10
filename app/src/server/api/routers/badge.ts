@@ -1,17 +1,24 @@
 import { asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { baseServerResponse, errorResponse, serverError } from "@/api/trpc";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { actionLog, badge, userBadge } from "@/drizzle/schema";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { BadgeValidator } from "@/validators/badge";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { idSchema } from "@/validators/misc";
 
 export const badgeRouter = createTRPCRouter({
   getAllNames: publicProcedure
@@ -49,7 +56,7 @@ export const badgeRouter = createTRPCRouter({
     }),
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get badge by ID" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       const result = await fetchBadge(ctx.drizzle, input.id);
       if (!result) {
@@ -119,11 +126,13 @@ export const badgeRouter = createTRPCRouter({
     }
   }),
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const entry = await fetchBadge(ctx.drizzle, input.id);
+      const [user, entry] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchBadge(ctx.drizzle, input.id),
+      ]);
       if (entry && canChangeContent(user.role)) {
         await Promise.all([
           ctx.drizzle.delete(badge).where(eq(badge.id, input.id)),

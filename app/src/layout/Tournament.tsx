@@ -19,7 +19,7 @@ import type { TournamentType } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT, TOURNAMENT_ROUND_SECONDS } from "@/drizzle/constants";
 import type { TournamentMatch } from "@/drizzle/schema";
 import AvatarImage from "@/layout/Avatar";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Loader from "@/layout/Loader";
@@ -132,7 +132,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
       topRightContent={
         <>
           {data && props.canJoin && (
-            <Confirm2
+            <Confirm
               title="Join tournament"
               proceed_label="Join"
               button={
@@ -147,10 +147,10 @@ const Tournament: React.FC<TournamentProps> = (props) => {
               }}
             >
               Do you wish to join this tournament?
-            </Confirm2>
+            </Confirm>
           )}
           {!data && props.canCreate && (
-            <Confirm2
+            <Confirm
               title="Create new tournament"
               proceed_label="Create"
               button={
@@ -237,7 +237,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                   </div>
                 </form>
               </Form>
-            </Confirm2>
+            </Confirm>
           )}
         </>
       }

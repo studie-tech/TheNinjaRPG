@@ -16,8 +16,8 @@ import {
   supportTicketActivity,
 } from "@/drizzle/schema";
 import { anonymizeStaffInfo } from "@/libs/support";
+import { fetchUser } from "@/routers/profile";
 import { createConvo } from "@/server/api/routers/comments";
-import { fetchUser } from "@/server/api/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -26,7 +26,6 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { reduceByKey } from "@/utils/grouping";
-import sanitize from "@/utils/sanitize";
 import {
   canAssignSupportTicket,
   canDeleteSupportTicket,
@@ -38,6 +37,8 @@ import {
   canViewSupportStatistics,
   canViewSupportTicket,
 } from "@/utils/permissions";
+import sanitize from "@/utils/sanitize";
+import { idSchema } from "@/validators/misc";
 import {
   createSupportTicketSchema,
   escalateToGithubSchema,
@@ -508,7 +509,7 @@ export const supportRouter = createTRPCRouter({
     }),
 
   deleteCannedResponse: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, response] = await Promise.all([

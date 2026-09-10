@@ -3,7 +3,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { cookies, headers } from "next/headers";
 import type { NextRequest } from "next/server";
 import { appRouter } from "@/api/root";
-import { createAppTRPCContext } from "@/api/trpc";
+import { createAppTRPCContext } from "@/server/api/trpc";
 import { withRequestScope } from "@/server/requestScope";
 
 export const runtime = "nodejs";

@@ -16,14 +16,6 @@ import {
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-  publicProcedure,
-  serverError,
-} from "@/api/trpc";
-import {
   ACTION_LOG_RELATED_MSG_MAX_LENGTH,
   BLOODLINE_COST,
   BLOODLINE_SWAP_COOLDOWN_HOURS,
@@ -53,6 +45,14 @@ import {
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import {
   claimUserSnapshot,
@@ -68,7 +68,6 @@ import { getUserFederalStatus } from "@/utils/paypal";
 import {
   canChangeContent,
   canRemoveBloodlineFromPool,
-  canSwapBloodline,
   isStaffMember,
 } from "@/utils/permissions";
 import {
@@ -88,6 +87,7 @@ import {
 } from "@/validators/bloodline";
 import type { ZodAllTags } from "@/validators/combat";
 import { BloodlineValidator } from "@/validators/combat";
+import { idSchema } from "@/validators/misc";
 
 const ALREADY_HAS_BLOODLINE_ERROR = "Already have a bloodline, please remove it first";
 
@@ -132,7 +132,7 @@ export const bloodlineRouter = createTRPCRouter({
   // Get a specific bloodline
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a specific bloodline by ID" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       const result = await fetchBloodline(ctx.drizzle, input.id);
       if (!result) {
@@ -263,9 +263,6 @@ export const bloodlineRouter = createTRPCRouter({
 
       if (!isFreeSwap && COST_SWAP_BLOODLINE > user.reputationPoints) {
         return errorResponse("Not enough reputation points");
-      }
-      if (!canSwapBloodline(user.role)) {
-        return errorResponse("Not allowed to swap bloodline");
       }
       if (!historicBloodlines.find((b) => b.id === line.id)) {
         return errorResponse("Bloodline is not in your history");
@@ -583,7 +580,7 @@ export const bloodlineRouter = createTRPCRouter({
     }),
   // Delete a bloodline
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch

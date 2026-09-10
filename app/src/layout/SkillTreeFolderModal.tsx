@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { SkillTree, SkillTreeFolder, UserSkill } from "@/drizzle/schema";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { parseHtml } from "@/utils/parse";
 
 interface SkillTreeFolderModalProps {
@@ -131,7 +131,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
   if (!folder) return null;
 
   return (
-    <Modal2
+    <Modal
       title={selectedSkill ? selectedSkill.name : folder.name}
       isOpen={isOpen}
       setIsOpen={setIsOpen}
@@ -232,7 +232,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
           )}
         </div>
       )}
-    </Modal2>
+    </Modal>
   );
 };
 

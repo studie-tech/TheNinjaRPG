@@ -1,13 +1,13 @@
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
+import { historicalSoundEffect, userData } from "@/drizzle/schema";
+import { generateAndUploadAudio } from "@/libs/replicate";
 import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
-} from "@/api/trpc";
-import { historicalSoundEffect, userData } from "@/drizzle/schema";
-import { generateAndUploadAudio } from "@/libs/replicate";
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canChangeContent } from "@/utils/permissions";
 import type { GenerateAudioInput } from "@/validators/audio";

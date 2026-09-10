@@ -88,6 +88,7 @@ import {
   factionEditSchema,
   strictClanNameField,
 } from "@/validators/clan";
+import { idSchema } from "@/validators/misc";
 
 const pusher = getServerPusher();
 
@@ -182,9 +183,7 @@ export const clanRouter = createTRPCRouter({
           villageGraphic: IMG_VILLAGE_FACTION,
         }),
       ]);
-      // return { success: true, message: "Hideout purchased successfully" };
-      // Temporary block for hideout creation
-      return errorResponse("Hideout creation is currently disabled");
+      return { success: true, message: "Hideout purchased successfully" };
     }),
   upgradeHideoutToTown: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Upgrade hideout to town" } })
@@ -462,7 +461,7 @@ export const clanRouter = createTRPCRouter({
     }),
   rejectRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Reject clan join request" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [request, user] = await Promise.all([
@@ -491,7 +490,7 @@ export const clanRouter = createTRPCRouter({
     }),
   cancelRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Cancel your clan join request" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const request = await fetchRequest(ctx.drizzle, input.id, "CLAN");
@@ -505,7 +504,7 @@ export const clanRouter = createTRPCRouter({
     }),
   acceptRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Accept clan join request" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch

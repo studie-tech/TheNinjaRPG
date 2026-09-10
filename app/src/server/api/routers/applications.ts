@@ -24,6 +24,7 @@ import {
   createApplicationSchema,
   listApplicationsInfiniteSchema,
 } from "@/validators/applications";
+import { idSchema } from "@/validators/misc";
 
 export const applicationsRouter = createTRPCRouter({
   create: protectedProcedure
@@ -77,7 +78,7 @@ export const applicationsRouter = createTRPCRouter({
 
   get: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get a staff application by ID" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       // Query
       const [user, app] = await Promise.all([
@@ -177,7 +178,7 @@ export const applicationsRouter = createTRPCRouter({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query: fetch the user and the application in parallel for efficiency
@@ -203,7 +204,7 @@ export const applicationsRouter = createTRPCRouter({
     }),
 
   approve: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query

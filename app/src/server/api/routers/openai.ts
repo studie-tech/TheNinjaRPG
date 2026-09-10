@@ -3,32 +3,17 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { IMG_ORIENTATIONS } from "@/drizzle/constants";
 import { historicalAvatar } from "@/drizzle/schema";
-import { img2model, txt2imgNanoBanana } from "@/libs/replicate";
+import { txt2imgNanoBanana } from "@/libs/replicate";
 import { fetchUser } from "@/routers/profile";
-import { canChangeContent } from "@/utils/permissions";
 import {
   baseServerResponse,
   createTRPCRouter,
   protectedProcedure,
   serverError,
-} from "../trpc";
+} from "@/server/api/trpc";
+import { canChangeContent } from "@/utils/permissions";
 
 export const generativeAiRouter = createTRPCRouter({
-  create3dModel: protectedProcedure
-    .input(
-      z.object({
-        imgUrl: z.url("imgUrl must be a valid http/https URL"),
-        field: z.string(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (!canChangeContent(user.role)) {
-        throw serverError("UNAUTHORIZED", "You are not allowed to change content");
-      }
-      const result = await img2model(input.imgUrl);
-      return { replicateId: result.id };
-    }),
   createImg: protectedProcedure
     .input(
       z.object({

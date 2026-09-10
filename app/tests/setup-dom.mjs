@@ -34,13 +34,4 @@ export const ensureDom = () => {
   installed = true;
 };
 
-/**
- * @deprecated Shared-process suites must not tear down jsdom; another file may still
- * need it. Prefer `ensureDom()` only. Kept as a no-op for existing imports.
- */
-export const cleanupDom = () => {
-  // Intentionally empty: tearing down shared globals races with parallel test files.
-  void installed;
-};
-
 ensureDom();

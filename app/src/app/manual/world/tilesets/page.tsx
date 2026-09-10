@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
@@ -152,7 +152,7 @@ export default function MapTilesets() {
                       Edit
                     </Button>
                   </Link>
-                  <Confirm2
+                  <Confirm
                     title="Delete map asset"
                     button={
                       <Button variant="destructive" size="sm" aria-label="Delete">
@@ -163,7 +163,7 @@ export default function MapTilesets() {
                   >
                     Delete {asset.name} ({asset.key})? Maps referencing this key will
                     stop rendering the decoration until the key exists again.
-                  </Confirm2>
+                  </Confirm>
                 </div>
               )}
             </div>
@@ -283,7 +283,7 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   </Button>
                 </Link>
                 {!terrain.protected && (
-                  <Confirm2
+                  <Confirm
                     title="Delete terrain"
                     button={
                       <Button variant="destructive" size="sm" aria-label="Delete">
@@ -294,7 +294,7 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   >
                     Delete {terrain.name} ({terrain.key})? Map tiles painted with this
                     terrain will render as grassland until the key exists again.
-                  </Confirm2>
+                  </Confirm>
                 )}
               </div>
             )}

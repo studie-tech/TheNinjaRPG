@@ -68,7 +68,7 @@ import { useTutorialStep } from "@/hooks/tutorial";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
 import AutoAttackModal from "@/layout/AutoAttackModal";
 import { ActionSelector } from "@/layout/CombatActions";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
@@ -76,7 +76,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Loader from "@/layout/Loader";
 import MapError from "@/layout/MapError";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { nonCombatConsume } from "@/libs/item";
 import { getStealthStatus } from "@/libs/stealth";
@@ -1029,7 +1029,7 @@ export default function Travel() {
               </>
             )}
             {joinVillageBtn && (
-              <Confirm2
+              <Confirm
                 title={`Join Village [${sectorVillage.name}]`}
                 proceed_label="Submit"
                 button={<GitMerge className={`mx-1 h-7 w-7 hover:text-orange-500`} />}
@@ -1038,10 +1038,10 @@ export default function Travel() {
                 Do you confirm that you wish to join {sectorVillage.name}? Please be
                 aware that if you join this village your training benefits & regen will
                 be reduced for {VILLAGE_REDUCED_GAINS_DAYS} days.
-              </Confirm2>
+              </Confirm>
             )}
             {canCreateHideout && (
-              <Confirm2
+              <Confirm
                 title="Purchase Hideout"
                 proceed_label={canAffordHideout ? "Submit" : "Not enough ryo"}
                 button={<HousePlus className={`mx-1 h-7 w-7 hover:text-orange-500`} />}
@@ -1059,7 +1059,7 @@ export default function Travel() {
                 syndicate of outlaws. The purchase costs <b>{HIDEOUT_COST} ryo</b>, and
                 the faction currently has <b>{userData?.clan?.bank} ryo</b>. Do you want
                 to create your faction hideout in this sector?
-              </Confirm2>
+              </Confirm>
             )}
 
             <NavTabs
@@ -1075,7 +1075,7 @@ export default function Travel() {
         {showSector && SectorComponent}
         {!villages && <Loader explanation="Loading data" />}
         {showModal && globe && userData && targetSector !== null && (
-          <Modal2
+          <Modal
             id="tutorial-global-travel"
             title="World Travel"
             isOpen={showModal}
@@ -1102,7 +1102,7 @@ export default function Travel() {
                 Do you confirm?
               </div>
             )}
-          </Modal2>
+          </Modal>
         )}
         {userData?.travelFinishAt && (
           <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
@@ -1157,7 +1157,7 @@ export default function Travel() {
             }}
           />
           {isOpen && useritem && (
-            <Modal2
+            <Modal
               title="Item Details"
               isOpen={isOpen}
               setIsOpen={setIsOpen}
@@ -1185,7 +1185,7 @@ export default function Travel() {
                 </div>
               )}
               {isConsuming && <Loader explanation={`Using ${useritem.item.name}`} />}
-            </Modal2>
+            </Modal>
           )}
         </div>
       )}
@@ -1199,7 +1199,7 @@ export default function Travel() {
 
       {/* Revealed Players Modal (from Sensory Scan) */}
       {showRevealedPlayersModal && revealedPlayers.length > 0 && (
-        <Modal2
+        <Modal
           title="Players Revealed by Sensory!"
           isOpen={showRevealedPlayersModal}
           setIsOpen={setShowRevealedPlayersModal}
@@ -1234,7 +1234,7 @@ export default function Travel() {
               <Label>Attack button on allies</Label>
             </div>
           </div>
-        </Modal2>
+        </Modal>
       )}
     </>
   );

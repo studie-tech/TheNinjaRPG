@@ -1,29 +1,16 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { TowerDefenseUpgradeTypes } from "@/drizzle/constants";
 import type { TowerDefenseUpgrade } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
-
-// Schema for editing tower defense upgrades
-export const updateTowerDefenseUpgradeSchema = z.object({
-  name: z.string().min(1).max(191),
-  description: z.string(),
-  maxLevel: z.coerce.number().int().min(1),
-  baseCost: z.coerce.number().int().min(0),
-  costMultiplier: z.coerce.number().min(1),
-  upgradeType: z.enum(TowerDefenseUpgradeTypes),
-  effectValue: z.coerce.number().min(0),
-});
-export type UpdateTowerDefenseUpgrade = z.output<
-  typeof updateTowerDefenseUpgradeSchema
->;
-export type UpdateTowerDefenseUpgradeInput = z.input<
-  typeof updateTowerDefenseUpgradeSchema
->;
+import {
+  type UpdateTowerDefenseUpgrade,
+  type UpdateTowerDefenseUpgradeInput,
+  updateTowerDefenseUpgradeSchema,
+} from "@/validators/towerDefense";
 
 /**
  * Hook used when creating frontend forms for editing Tower Defense upgrades

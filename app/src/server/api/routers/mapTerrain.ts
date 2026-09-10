@@ -1,20 +1,22 @@
 import { asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { baseServerResponse, serverError } from "@/api/trpc";
 import { actionLog, mapTerrain } from "@/drizzle/schema";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUser } from "@/routers/profile";
-import type { DrizzleClient } from "@/server/db";
-import { calculateContentDiff } from "@/utils/diff";
-import { canChangeContent } from "@/utils/permissions";
-import { mapTerrainValidator } from "@/validators/mapTerrain";
 import {
+  baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
   publicProcedure,
-} from "../trpc";
+  serverError,
+} from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
+import { calculateContentDiff } from "@/utils/diff";
+import { canChangeContent } from "@/utils/permissions";
+import { mapTerrainValidator } from "@/validators/mapTerrain";
+import { idSchema } from "@/validators/misc";
 
 export const mapTerrainRouter = createTRPCRouter({
   /** The whole terrain library (public; the travel page session-caches it) */
@@ -33,17 +35,15 @@ export const mapTerrainRouter = createTRPCRouter({
       });
     }),
   /** Single terrain by id; throws NOT_FOUND (query, not baseServerResponse) */
-  get: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      // Public/MCP-exposed: omit the internal authoring user-id
-      const entry = await ctx.drizzle.query.mapTerrain.findFirst({
-        columns: { createdByUserId: false },
-        where: eq(mapTerrain.id, input.id),
-      });
-      if (!entry) throw serverError("NOT_FOUND", "Terrain not found");
-      return entry;
-    }),
+  get: publicProcedure.input(idSchema).query(async ({ ctx, input }) => {
+    // Public/MCP-exposed: omit the internal authoring user-id
+    const entry = await ctx.drizzle.query.mapTerrain.findFirst({
+      columns: { createdByUserId: false },
+      where: eq(mapTerrain.id, input.id),
+    });
+    if (!entry) throw serverError("NOT_FOUND", "Terrain not found");
+    return entry;
+  }),
   /**
    * Insert a placeholder terrain with a generated unique key
    * (new.terrain.<id>) and a default green color ramp; the new row's id is
@@ -147,7 +147,7 @@ export const mapTerrainRouter = createTRPCRouter({
    * terrains cannot be deleted — the world map and combat fall back to them.
    */
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries (parallel: editor + target row)

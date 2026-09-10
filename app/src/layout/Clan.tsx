@@ -82,7 +82,7 @@ import ActionLogs from "@/layout/ActionLog";
 import { getFilter, useFiltering } from "@/layout/ActionLogFiltering";
 import AvatarImage from "@/layout/Avatar";
 import ClanSearchSelect from "@/layout/ClanSearchSelect";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Loader from "@/layout/Loader";
@@ -260,7 +260,7 @@ export const ClanOrders: React.FC<ClanOrdersProps> = (props) => {
         <div>
           {canPost && (
             <div className="flex flex-row items-center gap-1">
-              <Confirm2
+              <Confirm
                 title="Update Orders"
                 proceed_label="Submit"
                 button={
@@ -278,7 +278,7 @@ export const ClanOrders: React.FC<ClanOrdersProps> = (props) => {
                   control={control}
                   error={errors.content?.message}
                 />
-              </Confirm2>
+              </Confirm>
             </div>
           )}
         </div>
@@ -588,7 +588,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
         <div>
           {canCreate && clanId && (
             <div className="flex flex-row items-center gap-1">
-              <Confirm2
+              <Confirm
                 title={`Challenge Other ${groupLabel}`}
                 proceed_label="Submit"
                 button={
@@ -616,7 +616,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                   userClanId={clanId}
                   maxClans={1}
                 />
-              </Confirm2>
+              </Confirm>
             </div>
           )}
         </div>
@@ -951,7 +951,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       topRightContent={
         <div className="flex flex-row gap-1">
           {isLeader && hadHideout && (
-            <Confirm2
+            <Confirm
               title={`Edit ${groupLabel} Color`}
               proceed_label="Submit"
               button={
@@ -987,10 +987,10 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   />
                 </form>
               </Form>
-            </Confirm2>
+            </Confirm>
           )}
           {isLeader && (
-            <Confirm2
+            <Confirm
               title={`Edit ${groupLabel}`}
               proceed_label="Submit"
               button={
@@ -1053,10 +1053,10 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   />
                 </form>
               </Form>
-            </Confirm2>
+            </Confirm>
           )}
           {inClan && (
-            <Confirm2
+            <Confirm
               title={`Village ${groupLabel} Overview`}
               button={
                 <Button id="send" hoverText={`${groupLabel} Overview`}>
@@ -1065,10 +1065,10 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               }
             >
               <ClansOverview />
-            </Confirm2>
+            </Confirm>
           )}
           {inClan && (
-            <Confirm2
+            <Confirm
               title={`Leave ${groupLabel}`}
               proceed_label="Submit"
               button={
@@ -1079,7 +1079,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               onAccept={() => leave({ clanId })}
             >
               Confirm leaving this {groupLabel.toLowerCase()}
-            </Confirm2>
+            </Confirm>
           )}
         </div>
       }
@@ -1135,7 +1135,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               <p>Points: {clanData.points}</p>
               <div className="flex flex-row items-center">
                 <p>Bank: {clanData.bank}</p>{" "}
-                <Confirm2
+                <Confirm
                   title="Donate to clan"
                   proceed_label="Submit"
                   button={
@@ -1177,13 +1177,13 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                       />
                     </form>
                   </Form>
-                </Confirm2>
+                </Confirm>
               </div>
               {!hadTown && hadHideout && userData?.isOutlaw && (
                 <div className="flex flex-row items-center">
                   <p>Town Upgrade: {clanData.repTreasury} reps</p>
                   {leaderLike && (
-                    <Confirm2
+                    <Confirm
                       title="Donate reputation points"
                       proceed_label="Donate"
                       button={
@@ -1212,7 +1212,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                         placeholder="Reputation points to donate"
                         onChange={(e) => setDonateReps(Number(e.target.value))}
                       />
-                    </Confirm2>
+                    </Confirm>
                   )}
                 </div>
               )}
@@ -1423,7 +1423,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
             </Button>
           )}
           {isLeader && (
-            <Confirm2
+            <Confirm
               title="Clear Leadership"
               proceed_label="Clear All"
               button={
@@ -1436,10 +1436,10 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
             >
               This will remove all co-leaders and assassins from their positions. They
               will become regular members. This action cannot be undone.
-            </Confirm2>
+            </Confirm>
           )}
           {!isLeader && canEditClans(userData.role) && (
-            <Confirm2
+            <Confirm
               title="Instantly Join & Take Leadership"
               proceed_label="Confirm"
               button={
@@ -1452,7 +1452,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
             >
               You have the permission to instantly join this clan and take leadership.
               Are you sure you want to proceed?
-            </Confirm2>
+            </Confirm>
           )}
         </div>
       </div>
@@ -1533,7 +1533,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
               <>
                 {/* KICK BUTTON (Now allows kicking leaders if canEdit is true) */}
                 {canKick && (
-                  <Confirm2
+                  <Confirm
                     title="Kick Member"
                     proceed_label="Submit"
                     button={
@@ -1546,13 +1546,13 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
                     {memberIsLeader
                       ? "You are about to kick the leader. Ensure leadership transition is planned."
                       : "Confirm that you want to kick this member from the clan."}
-                  </Confirm2>
+                  </Confirm>
                 )}
 
                 {/* DEMOTE BUTTON */}
                 {(isLeader || canEdit) &&
                   (memberIsAssassin || memberIsLeader || memberIsColeader) && (
-                    <Confirm2
+                    <Confirm
                       title="Demote Member"
                       button={
                         <Button
@@ -1565,14 +1565,14 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
                       onAccept={() => demote({ clanId, memberId: member.userId })}
                     >
                       Confirm that you want to demote this member.
-                    </Confirm2>
+                    </Confirm>
                   )}
 
                 {/* PROMOTE BUTTON */}
                 {(isLeader ||
                   (isColeader && !memberIsLeader && !memberIsColeader) ||
                   canEdit) && (
-                  <Confirm2
+                  <Confirm
                     title="Promote Member"
                     button={
                       <Button
@@ -1585,7 +1585,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
                     onAccept={() => promote({ clanId, memberId: member.userId })}
                   >
                     Confirm that you want to promote this member.
-                  </Confirm2>
+                  </Confirm>
                 )}
               </>
             )}
@@ -1765,7 +1765,7 @@ const BoostRow: React.FC<BoostRowProps> = ({
         {label}: {currentBoost}%
       </p>
       {canPurchase && (
-        <Confirm2
+        <Confirm
           title={`Purchase ${label}`}
           proceed_label={!isMaxed && canAfford ? "Purchase" : "Cannot purchase"}
           button={
@@ -1796,7 +1796,7 @@ const BoostRow: React.FC<BoostRowProps> = ({
               </p>
             </div>
           )}
-        </Confirm2>
+        </Confirm>
       )}
     </div>
   );

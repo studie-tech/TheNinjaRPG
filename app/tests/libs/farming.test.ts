@@ -190,15 +190,8 @@ describe("farming", () => {
   });
 
   it("uses seed plant xp without affecting harvest xp field on crop", () => {
-    expect(
-      getFarmPlantExperience({ farmPlantExperience: 10, farmHarvestExperience: 0 }),
-    ).toBe(10);
-    expect(
-      getFarmPlantExperience({ farmPlantExperience: 0, farmHarvestExperience: 10 }),
-    ).toBe(10);
-    expect(
-      getFarmPlantExperience({ farmPlantExperience: 0, farmHarvestExperience: 0 }),
-    ).toBe(0);
+    expect(getFarmPlantExperience({ farmPlantExperience: 10 })).toBe(10);
+    expect(getFarmPlantExperience({ farmPlantExperience: 0 })).toBe(0);
   });
 
   it("uses fertilizer apply xp from item config", () => {

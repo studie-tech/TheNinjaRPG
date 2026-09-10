@@ -409,34 +409,6 @@ export const removeBackgroundReplicate = async (imageUrl: string) => {
   return file;
 };
 /**
- * Create a 3D model from an image
- * @param url The URL of the image to create a 3D model from
- */
-export const img2model = async (url: string) => {
-  const replicate = getReplicateInstance();
-  const output = await replicate.predictions.create({
-    version: "4876f2a8da1c544772dffa32e8889da4a1bab3a1f5c1937bfcfccb99ae347251",
-    input: {
-      seed: Math.floor(Math.random() * 1000000),
-      images: [url],
-      texture_size: 2048,
-      mesh_simplify: 0.9,
-      generate_color: false,
-      generate_model: true,
-      randomize_seed: true,
-      generate_normal: false,
-      save_gaussian_ply: false,
-      ss_sampling_steps: 50,
-      slat_sampling_steps: 50,
-      return_no_background: false,
-      ss_guidance_strength: 7.5,
-      slat_guidance_strength: 3,
-    },
-  });
-  return output;
-};
-
-/**
  * Upload an image from OpenAI to UploadThing
  * @param img - The image to upload
  * @param generationId - The generation ID

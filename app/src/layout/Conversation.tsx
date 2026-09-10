@@ -560,7 +560,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                 data?.username &&
                 data?.emoji
               ) {
-                console.log("Reaction", data);
                 void optimisticReactionUpdate(
                   data.commentId,
                   data.emoji,
@@ -569,7 +568,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
               }
               break;
             case "typing":
-              console.log(data);
               if (data?.fromId && data?.fromId !== userData?.userId && data?.username) {
                 const fromId = data.fromId;
                 const username = data.username;

@@ -63,7 +63,7 @@ import {
 } from "@/drizzle/constants";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import BanInfo from "@/layout/BanInfo";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
@@ -580,7 +580,7 @@ const PayPalSubscriptionButton = (props: {
           <Check className="absolute top-0 right-0 h-8 w-8 rounded-full bg-green-500 p-1" />
         )}
         {hasSubscription && canUpgrade && (
-          <Confirm2
+          <Confirm
             title="Confirm Upgrade"
             button={
               <ChevronsUp className="absolute top-0 right-0 h-8 w-8 cursor-pointer rounded-full bg-blue-500 p-1 hover:bg-green-500" />
@@ -596,7 +596,7 @@ const PayPalSubscriptionButton = (props: {
             character. Note that this action is permanent and will cost {upgradeCost}{" "}
             reputation points. You currently have {userData?.reputationPoints}{" "}
             reputation points. Are you sure?
-          </Confirm2>
+          </Confirm>
         )}
       </div>
       <div>
@@ -688,7 +688,7 @@ const PayPalSubscriptionButton = (props: {
         )}
       </div>
       {!hasSubscription && (
-        <Confirm2
+        <Confirm
           title="Confirm Upgrade"
           button={
             <div className="mt-2 rounded-lg border-2 border-black bg-amber-200 p-2 text-center text-black hover:cursor-pointer hover:bg-orange-200">
@@ -718,7 +718,7 @@ const PayPalSubscriptionButton = (props: {
         >
           You are about to purchase a federal subscription with reputation points. You
           currently have {userData?.reputationPoints} reputation points. Are you sure?
-        </Confirm2>
+        </Confirm>
       )}
     </div>
   );

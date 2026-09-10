@@ -31,7 +31,6 @@ import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
-  hasUserMiddleware,
   protectedProcedure,
   publicProcedure,
   ratelimitMiddleware,
@@ -126,7 +125,6 @@ export const commentsRouter = createTRPCRouter({
   createReportComment: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Add a comment to a user report" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .output(baseServerResponse)
     .input(reportCommentSchema)
     .mutation(async ({ ctx, input }) => {
@@ -166,7 +164,6 @@ export const commentsRouter = createTRPCRouter({
   createForumComment: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Post a comment on a forum thread" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(mutateCommentSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -342,7 +339,6 @@ export const commentsRouter = createTRPCRouter({
   createConversation: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Create a new private conversation" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(createConversationSchema)
     .output(baseServerResponse.extend({ conversationId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
@@ -641,7 +637,6 @@ export const commentsRouter = createTRPCRouter({
   createConversationComment: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Send a message in a conversation" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(mutateCommentSchema)
     .output(baseServerResponse.extend({ commentId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {

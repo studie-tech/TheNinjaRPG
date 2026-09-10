@@ -24,6 +24,7 @@ import {
   getStatusColor,
 } from "@/libs/support";
 import { parseHtml } from "@/utils/parse";
+import { isStaffRole } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function SupportPage() {
@@ -34,7 +35,7 @@ export default function SupportPage() {
   const filterState = useSupportTicketFiltering();
 
   // Determine if user is staff
-  const isStaff = userData?.role && userData?.role !== "USER";
+  const isStaff = userData?.role ? isStaffRole(userData.role) : false;
 
   // Query for tickets
   const { data, isFetching, fetchNextPage, hasNextPage } =

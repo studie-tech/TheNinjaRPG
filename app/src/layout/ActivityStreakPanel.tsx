@@ -27,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import { getRewardPreview } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
@@ -253,7 +253,7 @@ export function ActivityStreakPanel() {
 
                 {/* Action buttons */}
                 <div className="flex gap-2">
-                  <Confirm2
+                  <Confirm
                     title="Reset Streak"
                     button={
                       <Button
@@ -278,7 +278,7 @@ export function ActivityStreakPanel() {
                         Your current progress (day {streak.currentDay}) will be lost.
                       </p>
                     </div>
-                  </Confirm2>
+                  </Confirm>
                   <Button
                     variant="default"
                     disabled={claimStreak.isPending}

@@ -24,12 +24,12 @@ export const drizzleDB =
     ? global.drizzleClient
     : createDrizzle(
         new Client({
-          url: process.env.DATABASE_URL,
+          url: env.DATABASE_URL,
           // Vitess drops pooled connections under load; re-issue reads rather than
           // surfacing "vttablet: rpc error: code = Unavailable" to the player.
           fetch: createRetryingFetch(),
         }),
-        { schema }, // ,  logger: true
+        { schema },
       );
 
 if (env.NODE_ENV !== "production") {

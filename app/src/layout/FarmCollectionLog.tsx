@@ -3,7 +3,7 @@
 import { Check } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import Image from "@/layout/Image";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import { cn } from "@/libs/shadui";
 import type { FarmCollectionLogState } from "@/validators/farming";
 
@@ -25,7 +25,7 @@ export function FarmCollectionLog({
   setIsOpen,
 }: FarmCollectionLogProps) {
   return (
-    <Modal2
+    <Modal
       title={`Collection Log — ${collectionLog.collected}/${collectionLog.total}`}
       isOpen={isOpen}
       setIsOpen={setIsOpen}
@@ -91,6 +91,6 @@ export function FarmCollectionLog({
           ))}
         </ul>
       )}
-    </Modal2>
+    </Modal>
   );
 }

@@ -48,6 +48,14 @@ import { initiateBattle } from "@/routers/combat";
 import { fetchUser } from "@/routers/profile";
 import { breakStealth } from "@/routers/stealth";
 import { fetchSector, fetchSectorVillage } from "@/routers/village";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  ratelimitMiddleware,
+  serverError,
+} from "@/server/api/trpc";
 import { isTransientDatabaseError } from "@/server/dbRetry";
 import {
   fetchPublishedSectorMap,
@@ -61,17 +69,6 @@ import { groupBy } from "@/utils/grouping";
 import { secondsFromNow } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
 import { sectorIdSchema, startGlobalMoveSchema } from "@/validators/travel";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  hasUserMiddleware,
-  protectedProcedure,
-  ratelimitMiddleware,
-  serverError,
-} from "../trpc";
-
-// const redis = Redis.fromEnv();
 
 const pusher = getServerPusher();
 
@@ -80,7 +77,6 @@ export const travelRouter = createTRPCRouter({
   robPlayer: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Rob another player for ryo" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         // Coordinate bounds via zod (no sector-map read needed): the co-location

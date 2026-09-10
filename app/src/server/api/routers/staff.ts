@@ -111,6 +111,7 @@ import {
   canUnstuckVillage,
   canUseMonitoringTests,
 } from "@/utils/permissions";
+import { idSchema } from "@/validators/misc";
 import { fetchSector } from "./village";
 
 export const staffRouter = createTRPCRouter({
@@ -196,7 +197,7 @@ export const staffRouter = createTRPCRouter({
     }),
 
   pushBackupToDev: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query

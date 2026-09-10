@@ -5,21 +5,22 @@ import { z } from "zod";
 import { AI_PROFILE_MAX_RULES } from "@/drizzle/constants";
 import { aiProfile, item, jutsu, quest, userData } from "@/drizzle/schema";
 import { fetchUser } from "@/routers/profile";
-import type { DrizzleClient } from "@/server/db";
-import { canChangeContent, canChangeDefaultAiProfile } from "@/utils/permissions";
-import { AiRule } from "@/validators/ai";
 import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
   publicProcedure,
-} from "../trpc";
+} from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
+import { canChangeContent, canChangeDefaultAiProfile } from "@/utils/permissions";
+import { AiRule } from "@/validators/ai";
+import { idSchema } from "@/validators/misc";
 
 export const aiRouter = createTRPCRouter({
   getAiProfile: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get AI profile by ID" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       // Query
       const [user, profile] = await Promise.all([

@@ -15,7 +15,7 @@ import type { UserQuest } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
 import Accordion from "@/layout/Accordion";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
@@ -572,7 +572,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                 "anbu",
                 "overworld",
               ].includes(quest.questType) && (
-                <Confirm2
+                <Confirm
                   title="Confirm deleting quest"
                   button={
                     <X className="ml-2 h-8 w-8 cursor-pointer rounded-full border-2 bg-popover p-1 hover:text-orange-500" />
@@ -584,7 +584,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                 >
                   Are you sure you want to abandon this quest? Note that even though you
                   abandon this quest, you have still used one of your daily attempts.
-                </Confirm2>
+                </Confirm>
               )}
           </div>
         </div>

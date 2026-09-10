@@ -56,3 +56,5 @@ export const experienceAwardSchema = z.object({
   amount: z.number().min(1).max(100000),
 });
 export type ExperienceAwardSchema = z.infer<typeof experienceAwardSchema>;
+
+export const idSchema = z.object({ id: z.string() });

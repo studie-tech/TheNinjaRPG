@@ -110,6 +110,7 @@ import {
   jutsuReskinUpdateSchema,
 } from "@/validators/jutsu";
 import { renameLoadoutSchema } from "@/validators/loadout";
+import { idSchema } from "@/validators/misc";
 import { QuestTracker } from "@/validators/objectives";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 
@@ -265,7 +266,7 @@ export const jutsuRouter = createTRPCRouter({
 
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a specific jutsu by ID" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       const result = await fetchJutsu(ctx.drizzle, input.id);
       if (!result) {
@@ -360,7 +361,7 @@ export const jutsuRouter = createTRPCRouter({
 
   selectJutsuLoadout: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Select a jutsu loadout" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // fetchUpdatedUser (not fetchUser) so the full relations canUseJutsu reads
@@ -415,7 +416,7 @@ export const jutsuRouter = createTRPCRouter({
   }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query in parallel for performance
@@ -473,7 +474,7 @@ export const jutsuRouter = createTRPCRouter({
 
   forget: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Forget a learned jutsu" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const userjutsus = await fetchUserJutsus(ctx.drizzle, ctx.userId);

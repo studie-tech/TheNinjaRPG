@@ -256,8 +256,6 @@ export const performAIaction = (
 
     // Go through rules
     for (const rule of aiProfile?.rules ?? []) {
-      // if (debug) console.log("Rule: ", rule);
-
       /** ************************ */
       /** CHECK CONDITIONS         */
       /** ************************ */
@@ -439,7 +437,6 @@ export const performAIaction = (
       /** CHECK IF ACTION IS VALID */
       /** ************************ */
       if (nextAction) {
-        // if (debug) console.log("Action: ", nextAction.action.name);
         const check = actionPointsAfterAction(user, nextBattle, nextAction?.action);
         const result = performBattleAction({
           battle: returnBattle,

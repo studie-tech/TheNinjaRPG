@@ -94,7 +94,7 @@ bun: install ensure-env ensure-services ## Execute bun command in local developm
 	cd app && bun $(ARGS)
 
 .PHONY: start
-start: ensure-env # Run Next.js server, access at http://127.0.0.1:PORT
+start: ensure-env # Run Next.js server, access at http://localhost:PORT
 	@echo "${GREEN}start on port $(PORT)${RESET}"
 	rm -rf app/.next
 	@FORCE_COLOR=1 make bun -- dev -p $(PORT) 2>&1 | grep -v "Ignoring Unsecure message event"
@@ -161,7 +161,7 @@ emptymigration: ensure-env # Create database migration file
 	
 ----------------Tests-------------------: # -------------------------------------------------------
 .PHONY: test
-test: # Push schema to db without creating migrations
+test: # Run unit tests with vitest
 	@echo "${YELLOW}Running unit tests ${RESET}"
 	cd app && bun test
 

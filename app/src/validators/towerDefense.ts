@@ -1,6 +1,6 @@
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { TD_ENEMY_DIRECTIONS } from "@/drizzle/constants";
+import { TD_ENEMY_DIRECTIONS, TowerDefenseUpgradeTypes } from "@/drizzle/constants";
 import { towerDefenseCharacter } from "@/drizzle/schema";
 
 // ============================================
@@ -317,4 +317,20 @@ export type InsertTowerDefenseCharacter = z.output<
 >;
 export type InsertTowerDefenseCharacterInput = z.input<
   typeof insertTowerDefenseCharacterSchema
+>;
+
+export const updateTowerDefenseUpgradeSchema = z.object({
+  name: z.string().min(1).max(191),
+  description: z.string(),
+  maxLevel: z.coerce.number().int().min(1),
+  baseCost: z.coerce.number().int().min(0),
+  costMultiplier: z.coerce.number().min(1),
+  upgradeType: z.enum(TowerDefenseUpgradeTypes),
+  effectValue: z.coerce.number().min(0),
+});
+export type UpdateTowerDefenseUpgrade = z.output<
+  typeof updateTowerDefenseUpgradeSchema
+>;
+export type UpdateTowerDefenseUpgradeInput = z.input<
+  typeof updateTowerDefenseUpgradeSchema
 >;

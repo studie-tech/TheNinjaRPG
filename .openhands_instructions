@@ -18,9 +18,9 @@ Directory Structure:
 
 Setup:
 
-- Run `yes | sudo npm install -g bun && cp app/.env.example app/.env &&cd app && bun install` to install dependencies
-- Run `CI=true bun test` for testing
-- Run `bun lint` for linting
+- Run `make start` from the repo root to install deps, link env, and start the dev server
+- Run `make test` for unit tests
+- Run `make lint` for linting
 
 Guidelines:
 
@@ -88,7 +88,7 @@ A particularly complex feature in the game is the combat system, which thus also
 
 - `/app/src/libs/combat/tags.ts`: this file defined the logic of each tag (effect) in the game, e.g. damage, shield, heal, etc.
 
-- `/app/src/libs/combat/types.ts`: this file defines various zod schemas and types relevant across the combat system. This is also where the tag types are defines in terms of zod schemas; i.e. their schema and type is defined in the `types.ts` file, and their logic in the `tags.ts` file.
+- `/app/src/libs/combat/types.ts`: TypeScript battle-state types. Tag Zod schemas live in `/app/src/validators/combat.ts`; their logic is in `tags.ts`.
 
 - `/app/src/libs/combat/util.ts`: this file contains various utility functions used throughout the combat system both on the backend and frontend code.
 
@@ -98,4 +98,4 @@ A particularly complex feature in the game is the combat system, which thus also
 
 - `/app/src/libs/combat/ai_v2.ts`: This file contains the logic for how the AI behaves in combat and which actions it takes. It's based off a sequential rule-based system.
 
-- `/app/src/libs/combat/constants.ts`: TO BE MOVED to `@/drizzle/constants`
+- `/app/src/libs/combat/constants.ts`: remaining combat-only constants. Shared numeric game values belong in `@/drizzle/constants`.

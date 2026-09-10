@@ -32,13 +32,18 @@ import {
   userData,
   userItem,
 } from "@/drizzle/schema";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import type { QueryCondition } from "@/utils/typeutils";
 import {
   createAuctionListingSchema,
   getAuctionListingsSchema,
 } from "@/validators/auction";
-import { createTRPCRouter, errorResponse, protectedProcedure } from "../trpc";
 import { splitItemStack } from "./item";
 import { fetchUser } from "./profile";
 
@@ -289,6 +294,7 @@ export const auctionRouter = createTRPCRouter({
       mcp: { enabled: true, description: "Create new auction listing for item" },
     })
     .input(createAuctionListingSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const {
         userItemId,
@@ -486,6 +492,7 @@ export const auctionRouter = createTRPCRouter({
         amount: z.number().int().min(1),
       }),
     )
+    .output(baseServerResponse.extend({ amountToDeduct: z.number().optional() }))
     .mutation(async ({ ctx, input }) => {
       const { auctionId, amount } = input;
 
@@ -705,6 +712,7 @@ export const auctionRouter = createTRPCRouter({
   completeAuction: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Complete expired auction" } })
     .input(z.object({ auctionId: z.string() }))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const { auctionId } = input;
 
@@ -740,6 +748,7 @@ export const auctionRouter = createTRPCRouter({
       mcp: { enabled: true, description: "Cancel your auction listing with no bids" },
     })
     .input(z.object({ auctionId: z.string() }))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const { auctionId } = input;
 

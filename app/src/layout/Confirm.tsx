@@ -4,9 +4,9 @@
  */
 import type React from "react";
 import { useState } from "react";
-import Modal2 from "./Modal2";
+import Modal from "./Modal";
 
-interface Confirm2Props {
+interface ConfirmProps {
   id?: string;
   title: string;
   button: React.ReactNode;
@@ -27,7 +27,7 @@ interface Confirm2Props {
   onClose?: () => void;
 }
 
-const Confirm2: React.FC<Confirm2Props> = (props) => {
+export const Confirm: React.FC<ConfirmProps> = (props) => {
   const [showModal, setShowModal] = useState<boolean>(false);
   const footerExtra =
     typeof props.footerExtra === "function"
@@ -58,7 +58,7 @@ const Confirm2: React.FC<Confirm2Props> = (props) => {
         {props.button}
       </div>
 
-      <Modal2
+      <Modal
         id={props.id}
         title={props.title}
         isOpen={showModal}
@@ -75,9 +75,9 @@ const Confirm2: React.FC<Confirm2Props> = (props) => {
         footerExtra={footerExtra}
       >
         {props.children}
-      </Modal2>
+      </Modal>
     </>
   );
 };
 
-export default Confirm2;
+export default Confirm;

@@ -12,14 +12,6 @@ import {
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-  publicProcedure,
-  serverError,
-} from "@/api/trpc";
 import type { AllianceState, AllianceVillageType } from "@/drizzle/constants";
 import {
   ALLIANCE_VILLAGE_TYPES,
@@ -50,12 +42,21 @@ import { createConvo } from "@/routers/comments";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { deleteRequests } from "@/routers/sensei";
 import { fetchRequests, insertRequest, updateRequestState } from "@/routers/sparring";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canAlly, canEnemy, canSurrender, findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
 import { canAdministrateWars, canSwapVillage } from "@/utils/permissions";
 import { calcRamenCost, getRamenHealPercentage, ramenOptions } from "@/utils/ramen";
 import { canAccessStructure, getStrucBoost } from "@/utils/village";
+import { idSchema } from "@/validators/misc";
 
 const availRequests = ["SURRENDER", "ALLIANCE"];
 
@@ -106,7 +107,7 @@ export const villageRouter = createTRPCRouter({
   // Get a specific village & its structures∂
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get village details and structures" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .query(async ({ ctx, input }) => {
       // Fetch in parallel
       const [villageData, sectorCount, defendedChallenges] = await Promise.all([
@@ -509,7 +510,7 @@ export const villageRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Accept alliance or surrender request" },
     })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
@@ -556,7 +557,7 @@ export const villageRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Reject alliance or surrender request" },
     })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
@@ -577,7 +578,7 @@ export const villageRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Cancel alliance or surrender request" },
     })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches

@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { GuideArticle } from "@/drizzle/schema";
 import { useGuideEditForm } from "@/hooks/guide";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
@@ -72,7 +72,7 @@ const SingleEditGuide: React.FC<{
       subtitle={`Guide: ${title}`}
       defaultBackHref="/guide"
       topRightContent={
-        <Confirm2
+        <Confirm
           title="Delete Guide"
           button={
             <Button variant="destructive" size="sm" disabled={isPending}>
@@ -83,7 +83,7 @@ const SingleEditGuide: React.FC<{
           onAccept={() => remove({ id: article.id })}
         >
           <p>Delete this guide article? This cannot be undone.</p>
-        </Confirm2>
+        </Confirm>
       }
     >
       <Tabs defaultValue="edit">

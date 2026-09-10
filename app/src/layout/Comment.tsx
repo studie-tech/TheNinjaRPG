@@ -15,7 +15,7 @@ import type {
   ForumPost,
   UserReportComment,
 } from "@/drizzle/schema";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import EmojiPicker from "@/layout/EmojiPicker";
 import { ModerationSummary } from "@/layout/ModerationSummary";
 import ReportUser from "@/layout/Report";
@@ -329,7 +329,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
               userData &&
               canDeleteComment(userData, props.user.userId) &&
               props.deleteComment && (
-                <Confirm2
+                <Confirm
                   title="Confirm Deletion"
                   button={<Trash2 className="h-6 w-6 hover:text-orange-500" />}
                   onAccept={(e) => {
@@ -340,7 +340,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
                   }}
                 >
                   You are about to delete a comment. Are you sure?
-                </Confirm2>
+                </Confirm>
               )}
           </div>
 

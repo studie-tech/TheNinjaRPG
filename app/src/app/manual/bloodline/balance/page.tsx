@@ -15,11 +15,11 @@ import BloodlineFiltering, {
   getFilter as getBloodlineFilter,
   useFiltering as useBloodlineFiltering,
 } from "@/layout/BloodlineFiltering";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { showMutationToast } from "@/libs/toast";
@@ -162,7 +162,7 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
       )}
 
       {/* Bloodline Details Modal */}
-      <Modal2
+      <Modal
         title="Bloodline Details"
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
@@ -175,7 +175,7 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
             <ItemWithEffects item={bloodlineDetails} showStatistic="bloodline" />
           )
         )}
-      </Modal2>
+      </Modal>
     </ContentBox>
   );
 };
@@ -299,7 +299,7 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
           {props.navTabs}
           <BloodlineBalanceFiltering state={filterState} />
           {canDelete && (
-            <Confirm2
+            <Confirm
               title="Clear All Bloodline Battle Data"
               button={
                 <Button size="icon">
@@ -322,7 +322,7 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
                   This action will be logged for future audit and review.
                 </>
               )}
-            </Confirm2>
+            </Confirm>
           )}
         </div>
       }
@@ -336,7 +336,7 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
       {!isPending && tableData && <Table data={tableData} columns={columns} />}
 
       {/* Bloodline Details Modal */}
-      <Modal2
+      <Modal
         title="Bloodline Details"
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
@@ -349,7 +349,7 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
             <ItemWithEffects item={bloodlineDetails} showStatistic="bloodline" />
           )
         )}
-      </Modal2>
+      </Modal>
     </ContentBox>
   );
 };

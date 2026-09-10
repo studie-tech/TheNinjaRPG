@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { ACTIVE_VOTING_SITES } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
@@ -344,7 +344,7 @@ const RecruitGuideTab: React.FC = () => {
       ) : null,
     actions:
       !promotion.reviewed && userData && canReviewLinkPromotions(userData.role) ? (
-        <Confirm2
+        <Confirm
           title="Review Link Promotion"
           button={<Button>Review</Button>}
           proceed_label="Award Points"
@@ -373,7 +373,7 @@ const RecruitGuideTab: React.FC = () => {
               />
             </form>
           </Form>
-        </Confirm2>
+        </Confirm>
       ) : null,
   }));
 

@@ -14,6 +14,7 @@ import {
   getDaysHoursMinutesSeconds,
   getTimeLeftStr,
   getWeekNumber,
+  isDifferentDay,
   secondsPassed,
 } from "@/utils/time";
 
@@ -140,11 +141,7 @@ export const lockWithDailyTimer = async (client: DrizzleClient, name: string) =>
   const timer = await getGameSetting(client, name);
   const prevTime = timer.time;
   const now = new Date();
-  const isDifferentDay =
-    now.getUTCFullYear() !== prevTime.getUTCFullYear() ||
-    now.getUTCMonth() !== prevTime.getUTCMonth() ||
-    now.getUTCDate() !== prevTime.getUTCDate();
-  const claim = isDifferentDay
+  const claim = isDifferentDay(now, prevTime)
     ? await client
         .update(gameSetting)
         .set({ value: 0, time: now })
@@ -225,21 +222,6 @@ export const checkGameTimer = async (
     `${prefix}-${hours}${unit}`,
     1000 * 60 * 60 * hours,
   );
-};
-
-/**
- * Checks a game timer expressed in minutes.
- *
- * This is intentionally separate from checkGameTimer so existing callers that
- * historically pass hour fractions together with an "m" label retain their
- * current timing behavior.
- */
-export const checkGameTimerMinutes = async (
-  client: DrizzleClient,
-  minutes: number,
-  prefix = "timer",
-) => {
-  return checkGameTimerDuration(client, `${prefix}-${minutes}m`, 1000 * 60 * minutes);
 };
 
 const checkGameTimerDuration = async (

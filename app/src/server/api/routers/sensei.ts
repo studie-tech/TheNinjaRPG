@@ -17,6 +17,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { idSchema } from "@/validators/misc";
 
 const pusher = getServerPusher();
 
@@ -70,7 +71,7 @@ export const senseiRouter = createTRPCRouter({
     }),
   rejectRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Reject a sensei request" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const request = await fetchRequest(ctx.drizzle, input.id, "SENSEI");
@@ -90,7 +91,7 @@ export const senseiRouter = createTRPCRouter({
     }),
   cancelRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Cancel your sensei request" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const request = await fetchRequest(ctx.drizzle, input.id, "SENSEI");
@@ -104,7 +105,7 @@ export const senseiRouter = createTRPCRouter({
     }),
   acceptRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Accept a sensei request" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch

@@ -95,7 +95,7 @@ import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import Table from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
@@ -795,21 +795,21 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   // Guards
   if (isLoading || !listing) {
     return (
-      <Modal2 title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>
+      <Modal title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>
         <Loader />
-      </Modal2>
+      </Modal>
     );
   }
   if (!listing.userItem?.item) {
     return (
-      <Modal2 title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>
+      <Modal title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>
         <div className="p-4 text-center">
           <p className="text-red-600">This auction is no longer available.</p>
           <p className="mt-2 text-muted-foreground text-sm">
             The item associated with this auction could not be found.
           </p>
         </div>
-      </Modal2>
+      </Modal>
     );
   }
   if (!userData) return null;
@@ -877,7 +877,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   };
 
   return (
-    <Modal2
+    <Modal
       title={
         listing.userItem.item.canStack && listing.userItem.quantity > 1
           ? `${listing.userItem.item.name} (${listing.userItem.quantity})`
@@ -1301,7 +1301,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Modal2>
+    </Modal>
   );
 };
 

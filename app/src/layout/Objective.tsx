@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { Quest } from "@/drizzle/schema";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import StatusBar from "@/layout/StatusBar";
 import { getObjectiveImage, isObjectiveComplete } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
@@ -136,13 +136,13 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                 onClick={() => setModalOpen(true)}
               />
               {modalOpen && (
-                <Modal2
+                <Modal
                   title="Objective Details"
                   setIsOpen={() => setModalOpen(false)}
                   isOpen={modalOpen}
                 >
                   {parseHtml(objective.description)}
-                </Modal2>
+                </Modal>
               )}
             </>
           )}

@@ -5,21 +5,6 @@ import {
   LEGACY_AB_LAYOUT_COOKIE,
 } from "@/libs/layoutPreference";
 
-// import type { NextRequest } from "next/server";
-// import * as UAParser from "ua-parser-js";
-
-// export function uaMiddleware(request: NextRequest) {
-//   const userAgent = request.headers.get("user-agent") || undefined;
-//   const userAgentParsed = new UAParser.UAParser(userAgent);
-//   if (userAgentParsed.getBrowser().name === undefined) {
-//     return NextResponse.json(
-//       { message: "Forbidden. Only access through browser" },
-//       { status: 403 },
-//     );
-//   }
-//   return NextResponse.next();
-// }
-
 const isMcpRoute = (pathname: string) =>
   pathname === "/api/mcp" ||
   pathname.startsWith("/api/mcp/") ||
@@ -96,8 +81,6 @@ export default clerkMiddleware(
       });
     }
 
-    // Ensure valid user agent
-    // return uaMiddleware(request);
     const { userId } = await auth();
     if (!userId) {
       const cookie = request.cookies.get(LEGACY_AB_LAYOUT_COOKIE);

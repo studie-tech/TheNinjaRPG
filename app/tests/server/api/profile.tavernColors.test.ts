@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "vitest";
 import { actionLog, userData } from "@/drizzle/schema";
-import { profileRouter } from "@/server/api/routers/profile";
+import { profileRouter } from "@/routers/profile";
 import { insertUsers } from "../../setup/factories";
 import {
   callerFor,

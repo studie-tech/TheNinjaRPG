@@ -40,6 +40,21 @@ export const isStaffMember = (user: Pick<UserData, "staffAccount">) => {
   return user.staffAccount;
 };
 
+export const isStaffRole = (role?: UserRole | null) => {
+  return !!role && role !== "USER";
+};
+
+export const canMarkAdminResolved = (role: UserRole) => {
+  return (
+    role === "OWNER" ||
+    role === "HEAD_MODERATOR" ||
+    role === "CODING-ADMIN" ||
+    role === "CONTENT-ADMIN" ||
+    role === "EVENT-ADMIN" ||
+    role === "MODERATOR-ADMIN"
+  );
+};
+
 export const canTakeKage = (role: UserRole) => {
   return [
     "CONTENT",
@@ -60,7 +75,7 @@ export const canTakeKage = (role: UserRole) => {
 };
 
 export const canModerateReskin = (role: UserRole) => {
-  return role !== "USER";
+  return isStaffRole(role);
 };
 
 export const canControlBackups = (role: UserRole) => {
@@ -69,7 +84,7 @@ export const canControlBackups = (role: UserRole) => {
 
 // Recruitment analytics visibility (admins only)
 export const canViewRecruitmentAnalytics = (role: UserRole) => {
-  return role !== "USER";
+  return isStaffRole(role);
 };
 
 // Revenue analytics visibility (coding admin only)
@@ -218,15 +233,11 @@ export const canChangeUserRolesTo = (role: UserRole): UserRole[] => {
 };
 
 export const canSwapVillage = (role: UserRole) => {
-  return role !== "USER";
+  return isStaffRole(role);
 };
 
 export const canUnstuckVillage = (role: UserRole) => {
-  return role !== "USER";
-};
-
-export const canSwapBloodline = (role: UserRole) => {
-  return !!role; // Allow all roles to swap bloodline
+  return isStaffRole(role);
 };
 
 export const canSeeSecretData = (role: UserRole) => {
@@ -251,7 +262,7 @@ export const canSeeIps = (role: UserRole) => {
 };
 
 export const canSeeActivityEvents = (role: UserRole) => {
-  return role !== "USER";
+  return isStaffRole(role);
 };
 
 export const canModifyUserBadges = (role: UserRole) => {
@@ -291,7 +302,7 @@ export const canModerate = (role: UserRole) => {
 };
 
 export const canCreateNews = (role: UserRole) => {
-  return role !== "USER";
+  return isStaffRole(role);
 };
 
 export const canSeeReport = (user: UserData, report: UserReport) => {
@@ -897,7 +908,7 @@ export const canRemoveBloodlineFromPool = (role: UserRole) => {
 };
 
 export const canSeeHiddenBountyInfo = (role: UserRole) => {
-  return role !== "USER";
+  return isStaffRole(role);
 };
 
 export const canReskinFreely = (role: UserRole) => {
@@ -928,7 +939,7 @@ export const canViewSupportTicket = (
 ) => {
   if (ticket.createdByUserId === userId) return true;
   if (ticket.isPublic) return true;
-  if (userRole !== "USER") return true;
+  if (isStaffRole(userRole)) return true;
   if (ticket.assignedToUserId === userId) return true;
   return false;
 };
@@ -938,7 +949,7 @@ export const canEditSupportTicket = (
   userId: string,
   userRole: UserRole,
 ) => {
-  if (userRole !== "USER") return true;
+  if (isStaffRole(userRole)) return true;
   if (ticket.assignedToUserId === userId) return true;
   if (
     ticket.createdByUserId === userId &&
@@ -953,7 +964,7 @@ export const canDeleteSupportTicket = (
   userId: string,
   userRole: UserRole,
 ) => {
-  if (userRole !== "USER") return true;
+  if (isStaffRole(userRole)) return true;
   if (ticket.createdByUserId === userId) {
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     return ticket.createdAt > dayAgo && !ticket.assignedToUserId;
@@ -961,11 +972,12 @@ export const canDeleteSupportTicket = (
   return false;
 };
 
-export const canAssignSupportTicket = (userRole: UserRole) => {
-  return userRole !== "USER";
+export const canAssignSupportTicket = (userRole?: UserRole | null) => {
+  return isStaffRole(userRole);
 };
 
-export function canEscalateToGithub(userRole: UserRole): boolean {
+export function canEscalateToGithub(userRole?: UserRole | null): boolean {
+  if (!userRole) return false;
   return [
     "OWNER",
     "CODER",
@@ -980,16 +992,16 @@ export function canEscalateToGithub(userRole: UserRole): boolean {
   ].includes(userRole);
 }
 
-export const canMergeSupportTickets = (userRole: UserRole) => {
-  return userRole !== "USER";
+export const canMergeSupportTickets = (userRole?: UserRole | null) => {
+  return isStaffRole(userRole);
 };
 
-export const canViewSupportStatistics = (userRole: UserRole) => {
-  return userRole !== "USER";
+export const canViewSupportStatistics = (userRole?: UserRole | null) => {
+  return isStaffRole(userRole);
 };
 
-export function canViewStaffOnlyComments(userRole: UserRole): boolean {
-  return userRole !== "USER";
+export function canViewStaffOnlyComments(userRole?: UserRole | null): boolean {
+  return isStaffRole(userRole);
 }
 
 export function canTransitionStatus(
@@ -1009,12 +1021,12 @@ export const canViewConversation = (
   const inConversation = conversation.users.some((u) => u.userId === userId);
   const isStaffAvailable = conversation.isStaffAvailable;
   if (isPublic || inConversation) return true;
-  if (isStaffAvailable && userRole !== "USER") return true;
+  if (isStaffAvailable && isStaffRole(userRole)) return true;
   return false;
 };
 
-export const canEditCannedResponses = (userRole: UserRole) => {
-  return userRole !== "USER";
+export const canEditCannedResponses = (userRole?: UserRole | null) => {
+  return isStaffRole(userRole);
 };
 
 export const canAwardExperience = (user: UserData) => {

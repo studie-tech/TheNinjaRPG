@@ -18,7 +18,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Loader from "@/layout/Loader";
 import Logbook from "@/layout/Logbook";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
 import { calcMedninRank } from "@/libs/hospital";
 import { calcLevelRequirements, showUserRank } from "@/libs/profile";
@@ -126,10 +126,7 @@ export default function Profile() {
             {topPlayers && (
               <TooltipProvider delayDuration={50}>
                 <div className="flex flex-row items-center gap-1">
-                  <p>
-                    PvP Rank:{" "}
-                    {getRankedRank(userData.rankedLp, topPlayers)}
-                  </p>
+                  <p>PvP Rank: {getRankedRank(userData.rankedLp, topPlayers)}</p>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -258,7 +255,7 @@ export default function Profile() {
         <LevelUpBtn id="tutorial-level-up-btn" />
       </ContentBox>
 
-      <Modal2
+      <Modal
         title="PvP activity"
         className="w-full max-w-[min(16rem,calc(100%-2rem))] gap-2 p-4 md:!max-w-[16rem]"
         centerText
@@ -279,10 +276,10 @@ export default function Profile() {
             {userData.pvpStreak}
           </p>
         </div>
-      </Modal2>
+      </Modal>
 
       {topPlayers && (
-        <Modal2
+        <Modal
           title="PvP rank"
           className="w-full max-w-[min(17rem,calc(100%-2rem))] gap-2 p-4 md:!max-w-[17rem]"
           centerText
@@ -320,7 +317,7 @@ export default function Profile() {
               {userData.seichiSilver}
             </p>
           </div>
-        </Modal2>
+        </Modal>
       )}
 
       <StrengthWeaknesses />

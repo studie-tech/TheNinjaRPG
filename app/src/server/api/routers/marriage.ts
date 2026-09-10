@@ -20,6 +20,7 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { idSchema } from "@/validators/misc";
 
 const pusher = getServerPusher();
 
@@ -60,7 +61,7 @@ export const marriageRouter = createTRPCRouter({
     }),
   rejectRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Reject a marriage proposal" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const request = await fetchRequest(ctx.drizzle, input.id, "MARRIAGE");
@@ -76,7 +77,7 @@ export const marriageRouter = createTRPCRouter({
     }),
   cancelRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Cancel your marriage proposal" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const request = await fetchRequest(ctx.drizzle, input.id, "MARRIAGE");
@@ -92,7 +93,7 @@ export const marriageRouter = createTRPCRouter({
     }),
   acceptRequest: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Accept a marriage proposal" } })
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch

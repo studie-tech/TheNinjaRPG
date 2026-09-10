@@ -78,7 +78,7 @@ The combat system is the most complex feature with dedicated organization:
 - `/app/src/libs/combat/actions.ts` - User action logic and availability
 - `/app/src/libs/combat/process.ts` - Round processing and effect application
 - `/app/src/libs/combat/tags.ts` - Effect definitions (damage, heal, shield, etc.)
-- `/app/src/libs/combat/types.ts` - Zod schemas and types for combat system
+- `/app/src/libs/combat/types.ts` - TypeScript battle-state types (tag Zod schemas live in `validators/combat.ts`)
 - `/app/src/libs/combat/util.ts` - Utility functions for combat
 - `/app/src/libs/combat/database.ts` - Database operations for combat
 - `/app/src/libs/combat/ai_v2.ts` - AI behavior logic (rule-based system)

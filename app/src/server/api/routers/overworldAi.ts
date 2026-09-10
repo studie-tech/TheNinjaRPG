@@ -38,18 +38,19 @@ import {
   questTypeConcurrentBlockMessage,
 } from "@/routers/quests";
 import { fetchActiveWars } from "@/routers/war";
-import type { DrizzleClient } from "@/server/db";
-import { claimActiveNpcQuest, clearActiveNpcQuest } from "@/server/utils/concurrency";
-import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
-import { canChangeContent } from "@/utils/permissions";
-import { OverworldPlacementSchema } from "@/validators/overworldAi";
 import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
   serverError,
-} from "../trpc";
+} from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
+import { claimActiveNpcQuest, clearActiveNpcQuest } from "@/server/utils/concurrency";
+import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
+import { canChangeContent } from "@/utils/permissions";
+import { idSchema } from "@/validators/misc";
+import { OverworldPlacementSchema } from "@/validators/overworldAi";
 
 /** Shown when a player asks an NPC for a mission while their single active-NPC-mission slot is
  *  still held — both on the pre-roll slot decision and when the atomic claim loses a race. */
@@ -286,7 +287,7 @@ export const overworldAiRouter = createTRPCRouter({
     }),
 
   deletePlacement: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch

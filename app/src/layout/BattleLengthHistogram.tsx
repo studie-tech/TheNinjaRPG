@@ -8,7 +8,7 @@ import BattleLengthFiltering, {
   getFilter,
   useFiltering,
 } from "@/layout/BattleLengthFiltering";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
@@ -169,7 +169,7 @@ export const BattleLengthHistogram: React.FC<BattleLengthHistogramProps> = ({
         <div className="flex items-center gap-2">
           <BattleLengthFiltering state={filteringState} />
           {canDelete && (
-            <Confirm2
+            <Confirm
               title="Clear All Battle Length Data"
               button={
                 <Button size="icon">
@@ -192,7 +192,7 @@ export const BattleLengthHistogram: React.FC<BattleLengthHistogramProps> = ({
                   action will be logged for future audit and review.
                 </>
               )}
-            </Confirm2>
+            </Confirm>
           )}
         </div>
       }

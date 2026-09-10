@@ -9,6 +9,7 @@ import { Clock, Group, OrthographicCamera, Vector2 } from "three";
 import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
+  BATTLE_ARENA_HEAL_COST,
   HEX_ASPECT_RATIO,
   HEX_STACKING_DISPLACEMENT,
   IMG_INITIATIVE_D20,
@@ -28,7 +29,7 @@ import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import { LogbookEntry } from "@/layout/Logbook";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import WebGlError from "@/layout/WebGLError";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
@@ -1433,7 +1434,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                       className="mt-1 w-full basis-1/2"
                       onClick={() => battleArenaHealAndGo()}
                     >
-                      Heal and Go Again (-500 Ryo)
+                      Heal and Go Again (-{BATTLE_ARENA_HEAL_COST} Ryo)
                     </Button>
                   </div>
                 )}
@@ -1471,7 +1472,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         </div>
       )}
       {logbookModalOpen && modalUserQuest && modalTracker && (
-        <Modal2
+        <Modal
           isOpen={logbookModalOpen}
           setIsOpen={setLogbookModalOpen}
           title="Quest Update"
@@ -1482,7 +1483,7 @@ const Combat: React.FC<CombatProps> = (props) => {
             showScene={true}
             hideTitle={false}
           />
-        </Modal2>
+        </Modal>
       )}
     </>
   );

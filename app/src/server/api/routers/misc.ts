@@ -21,6 +21,14 @@ import { fetchDmgConfig, getGameSetting, updateGameSetting } from "@/libs/gamese
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import { randomString } from "@/libs/random";
 import { fetchUser } from "@/routers/profile";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+  ratelimitMiddleware,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import {
   canAwardReputation,
@@ -33,15 +41,6 @@ import { DAY_S, secondsFromNow } from "@/utils/time";
 import { confSchema } from "@/validators/combat";
 import { changeSettingSchema } from "@/validators/misc";
 import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  hasUserMiddleware,
-  protectedProcedure,
-  publicProcedure,
-  ratelimitMiddleware,
-} from "../trpc";
 
 export const miscRouter = createTRPCRouter({
   trackVisitor: publicProcedure
@@ -106,7 +105,6 @@ export const miscRouter = createTRPCRouter({
   getCaptcha: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get captcha for verification" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .query(async ({ ctx }) => {
       return await generateCaptcha(ctx.drizzle, ctx.userId);
     }),

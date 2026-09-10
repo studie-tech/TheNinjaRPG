@@ -81,8 +81,8 @@ export const hasLiveSummon = (
 /** Why a summon cast must be refused, or null when it may proceed.
  *
  *  Two independent caps:
- *   - **One of each creature.** Preserves the pre-PR rule, so a player with two
- *     different summon jutsus can still have both creatures out at once.
+ *   - **One of each creature.** A player with two different summon jutsus can
+ *     still have both creatures out at once.
  *   - **One piloted summon overall.** Each piloted summon hands its owner an
  *     extra turn per round, so a second one is a turn-economy problem no matter
  *     which creature it is. Non-piloted summons are unaffected.
@@ -96,9 +96,8 @@ export const summonCastBlockedReason = (
   effects: UserEffect[],
 ): string | null => {
   const live = liveSummonsOf(usersState, controllerId, effects);
-  // Legacy fallback for battles that started before summonSourceId existed:
-  // compare against the template's username, which is what the pre-PR rule used
-  // and which a spawned summon still inherits.
+  // Battles that started before summonSourceId existed compare against the
+  // template username, which a spawned summon still inherits.
   const template = usersState.find((u) => u.controllerId === sourceAiId);
   const duplicate = live.find((u) =>
     u.summonSourceId

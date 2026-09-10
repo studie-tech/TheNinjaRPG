@@ -5,11 +5,7 @@ import { use, useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { TowerDefenseUpgrade } from "@/drizzle/schema";
-import {
-  type UpdateTowerDefenseUpgrade,
-  updateTowerDefenseUpgradeSchema,
-  useTowerDefenseUpgradeEditForm,
-} from "@/hooks/towerDefenseUpgrade";
+import { useTowerDefenseUpgradeEditForm } from "@/hooks/towerDefenseUpgrade";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
@@ -17,6 +13,10 @@ import { getUpgradeColor, getUpgradeIcon } from "@/libs/towerDefense/upgrades";
 import { canChangeContent } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
+import {
+  type UpdateTowerDefenseUpgrade,
+  updateTowerDefenseUpgradeSchema,
+} from "@/validators/towerDefense";
 
 export default function TowerDefenseUpgradeEdit(props: {
   params: Promise<{ upgradeid: string }>;

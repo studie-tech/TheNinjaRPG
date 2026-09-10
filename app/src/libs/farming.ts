@@ -320,14 +320,9 @@ export const mapPlotToState = (
   };
 };
 
-export const getFarmPlantExperience = (
-  seedItem: Pick<Item, "farmPlantExperience" | "farmHarvestExperience">,
-) => {
+export const getFarmPlantExperience = (seedItem: Pick<Item, "farmPlantExperience">) => {
   const plantXp = Number(seedItem.farmPlantExperience) || 0;
-  const legacyPlantXp = Number(seedItem.farmHarvestExperience) || 0;
-  if (plantXp > 0) return plantXp;
-  if (legacyPlantXp > 0) return legacyPlantXp;
-  return 0;
+  return plantXp > 0 ? plantXp : 0;
 };
 
 export const getFarmHarvestExperience = (

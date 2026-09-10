@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { useLocalStorage } from "@/hooks/localstorage";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuBalanceFiltering, {
@@ -19,7 +19,7 @@ import JutsuFiltering, {
   useFiltering as useJutsuFiltering,
 } from "@/layout/JutsuFiltering";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { showMutationToast } from "@/libs/toast";
@@ -153,7 +153,7 @@ const JutsuEffectsBalance: React.FC<JutsuEffectsBalanceProps> = (props) => {
       )}
 
       {/* Jutsu Details Modal */}
-      <Modal2
+      <Modal
         title="Jutsu Details"
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
@@ -164,7 +164,7 @@ const JutsuEffectsBalance: React.FC<JutsuEffectsBalanceProps> = (props) => {
         ) : (
           jutsuDetails && <ItemWithEffects item={jutsuDetails} showStatistic="jutsu" />
         )}
-      </Modal2>
+      </Modal>
     </ContentBox>
   );
 };
@@ -307,7 +307,7 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
           {props.navTabs}
           <JutsuBalanceFiltering state={filterState} />
           {canDelete && (
-            <Confirm2
+            <Confirm
               title="Clear All Jutsu Battle Data"
               button={
                 <Button size="icon">
@@ -330,7 +330,7 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
                   This action will be logged for future audit and review.
                 </>
               )}
-            </Confirm2>
+            </Confirm>
           )}
         </div>
       }
@@ -344,7 +344,7 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
       {!isPending && tableData && <Table data={tableData} columns={columns} />}
 
       {/* Jutsu Details Modal */}
-      <Modal2
+      <Modal
         title="Jutsu Details"
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
@@ -355,7 +355,7 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
         ) : (
           jutsuDetails && <ItemWithEffects item={jutsuDetails} showStatistic="jutsu" />
         )}
-      </Modal2>
+      </Modal>
     </ContentBox>
   );
 };

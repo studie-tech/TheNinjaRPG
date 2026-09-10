@@ -135,8 +135,6 @@ const ApprovalBadge: React.FC<{
   );
 };
 
-//
-
 const ApproveButton: React.FC<{ applicationId: string }> = ({ applicationId }) => {
   const utils = api.useUtils();
   const { mutate, isPending } = api.applications.approve.useMutation({

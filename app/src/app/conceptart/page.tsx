@@ -54,10 +54,10 @@ import {
 } from "@/components/ui/tooltip";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import ConceptImage from "@/layout/ConceptImage";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { useInfinitePagination } from "@/libs/pagination";
-import { showMutationToast } from "@/libs/toast";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { getBanOrSilenceRestriction } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import { UploadDropzone } from "@/utils/uploadthing";
@@ -201,38 +201,32 @@ export default function ConceptArt() {
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Handle image creation
-  const handleCreateImage = promptForm.handleSubmit(
-    (data) => {
-      if (userData) {
-        if (userData.reputationPoints >= COST_CONCEPT_IMAGE) {
-          if (!isPending) create(data);
-        } else {
-          showMutationToast({
-            success: false,
-            message: "No reputation points left.",
-          });
-        }
+  const handleCreateImage = promptForm.handleSubmit((data) => {
+    if (userData) {
+      if (userData.reputationPoints >= COST_CONCEPT_IMAGE) {
+        if (!isPending) create(data);
+      } else {
+        showMutationToast({
+          success: false,
+          message: "No reputation points left.",
+        });
       }
-    },
-    (errors) => console.log(errors),
-  );
+    }
+  }, showFormErrorsToast);
 
   // Handle video creation
-  const handleCreateVideo = videoPromptForm.handleSubmit(
-    (data) => {
-      if (userData) {
-        if (userData.reputationPoints >= COST_CONCEPT_VIDEO) {
-          if (!isPending) createVideo(data);
-        } else {
-          showMutationToast({
-            success: false,
-            message: `Not enough reputation points. Video costs ${COST_CONCEPT_VIDEO} points.`,
-          });
-        }
+  const handleCreateVideo = videoPromptForm.handleSubmit((data) => {
+    if (userData) {
+      if (userData.reputationPoints >= COST_CONCEPT_VIDEO) {
+        if (!isPending) createVideo(data);
+      } else {
+        showMutationToast({
+          success: false,
+          message: `Not enough reputation points. Video costs ${COST_CONCEPT_VIDEO} points.`,
+        });
       }
-    },
-    (errors) => console.log(errors),
-  );
+    }
+  }, showFormErrorsToast);
 
   // Handle form submit based on creation type
   const handleCreateNew = () => {
@@ -311,7 +305,7 @@ export default function ConceptArt() {
             </TooltipProvider>
           )}
           {userData && !conceptArtCreateRestriction && (
-            <Confirm2
+            <Confirm
               title="Create New"
               button={
                 <Button id="new-art">
@@ -361,7 +355,7 @@ export default function ConceptArt() {
                   advertisement purposes by TheNinja-RPG.
                 </p>
               </div>
-            </Confirm2>
+            </Confirm>
           )}
         </div>
       }

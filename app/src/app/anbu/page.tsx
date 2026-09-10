@@ -20,7 +20,7 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import AutoAttackModal from "@/layout/AutoAttackModal";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
@@ -183,7 +183,7 @@ export default function ANBU() {
                 </Button>
               ))}
             {canCreateMore && (isKage || isElder) && (
-              <Confirm2
+              <Confirm
                 title="Create a new squad"
                 proceed_label="Submit"
                 button={
@@ -222,7 +222,7 @@ export default function ANBU() {
                     />
                   </form>
                 </Form>
-              </Confirm2>
+              </Confirm>
             )}
           </>
         }

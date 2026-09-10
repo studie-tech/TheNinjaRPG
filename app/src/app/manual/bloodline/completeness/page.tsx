@@ -10,7 +10,7 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import WordCloud from "@/layout/Wordcloud";
@@ -187,7 +187,7 @@ export default function ManualBloodlineBalance() {
       </ContentBox>
 
       {/* Bloodline Details Modal */}
-      <Modal2
+      <Modal
         title="Bloodline Details"
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
@@ -200,7 +200,7 @@ export default function ManualBloodlineBalance() {
             <ItemWithEffects item={bloodlineDetails} showStatistic="bloodline" />
           )
         )}
-      </Modal2>
+      </Modal>
     </>
   );
 }

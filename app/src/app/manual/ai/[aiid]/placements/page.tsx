@@ -27,7 +27,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { OverworldInteractionTypes } from "@/drizzle/constants";
 import type { OverworldAiPlacement, OverworldAiPlacementQuest } from "@/drizzle/schema";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
@@ -571,7 +571,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Confirm2
+                  <Confirm
                     title="Delete Placement"
                     button={
                       <Button variant="ghost" size="icon" disabled={isLoading}>
@@ -583,7 +583,7 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                     Deleting this placement will permanently remove it and fail any
                     player quest objectives that are bound to this placement. Are you
                     sure?
-                  </Confirm2>
+                  </Confirm>
                 </div>
               </div>
             ))}

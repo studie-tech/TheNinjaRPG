@@ -9,7 +9,7 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import SkillTreeBalanceFiltering, {
   getFilter,
@@ -141,7 +141,7 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
       </ContentBox>
 
       {/* Modal for skill details */}
-      <Modal2
+      <Modal
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
         onClose={() => {
@@ -157,7 +157,7 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
             showEdit={canEdit ? "skillTree" : undefined}
           />
         )}
-      </Modal2>
+      </Modal>
     </>
   );
 };
@@ -252,7 +252,7 @@ const SkillTreeUsageBalance: React.FC<SkillTreeUsageBalanceProps> = (props) => {
       </ContentBox>
 
       {/* Modal for skill details */}
-      <Modal2
+      <Modal
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
         onClose={() => {
@@ -268,7 +268,7 @@ const SkillTreeUsageBalance: React.FC<SkillTreeUsageBalanceProps> = (props) => {
             showEdit={canEdit ? "skillTree" : undefined}
           />
         )}
-      </Modal2>
+      </Modal>
     </>
   );
 };

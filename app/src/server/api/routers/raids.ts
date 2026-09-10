@@ -51,6 +51,13 @@ import { fetchActiveUserMpvpBattles } from "@/routers/clan";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { updateRewards } from "@/routers/quests";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  ratelimitMiddleware,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import {
   purgeAllRaidChatMembershipsForUser,
@@ -62,14 +69,6 @@ import { secondsFromDate } from "@/utils/time";
 import { AllTags } from "@/validators/combat";
 import type { RaidObjectiveType } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  hasUserMiddleware,
-  protectedProcedure,
-  ratelimitMiddleware,
-} from "../trpc";
 
 export const raidsRouter = createTRPCRouter({
   /**
@@ -667,7 +666,6 @@ export const raidsRouter = createTRPCRouter({
    */
   readyToQueue: protectedProcedure
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query
@@ -843,7 +841,6 @@ export const raidsRouter = createTRPCRouter({
       mcp: { enabled: true, description: "Join or create a raid team queue" },
     })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         questId: z.string(),
@@ -1107,7 +1104,6 @@ export const raidsRouter = createTRPCRouter({
   leaveRaidQueue: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Leave the raid queue" } })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query - parallel fetch user and queue entry
@@ -1203,7 +1199,6 @@ export const raidsRouter = createTRPCRouter({
       mcp: { enabled: true, description: "Start a raid battle with the team" },
     })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(z.object({ teamId: z.string() }))
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
@@ -1403,7 +1398,6 @@ export const raidsRouter = createTRPCRouter({
       },
     })
     .use(ratelimitMiddleware)
-    .use(hasUserMiddleware)
     .input(
       z.object({
         questId: z.string(),

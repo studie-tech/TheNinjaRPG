@@ -73,7 +73,7 @@ export const fetchMap = async () => {
  * Create a user avatar sprite for the global map
  *
  * MEMORY OPTIMIZATION: Border textures are cached in util.ts to prevent memory leaks.
- * Previously, each call created a new canvas, causing OOM errors on Firefox (THENINJARPG-2HY).
+ * Previously, each call created a new canvas, causing OOM errors on Firefox.
  * Now border textures are cached by color and disposed during component cleanup.
  */
 export const createUserAvatarSprite = (info: {

@@ -8,7 +8,7 @@ import ApplicationsFiltering, {
   getApplicationsFilter,
   useApplicationsFiltering,
 } from "@/layout/ApplicationsFiltering";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
@@ -102,7 +102,7 @@ export default function ApplicationsPage() {
     actions: (
       <div>
         {me && canDeleteStaffApplication(me.role) && (
-          <Confirm2
+          <Confirm
             title="Confirm delete"
             button={
               <Button
@@ -128,7 +128,7 @@ export default function ApplicationsPage() {
             proceed_label="Delete"
           >
             Delete this application? This cannot be undone.
-          </Confirm2>
+          </Confirm>
         )}
       </div>
     ),

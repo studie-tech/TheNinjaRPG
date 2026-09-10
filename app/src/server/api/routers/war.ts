@@ -56,18 +56,17 @@ import {
   fetchVillage,
   fetchVillages,
 } from "@/routers/village";
-import type { DrizzleClient } from "@/server/db";
-
-import { findRelationship } from "@/utils/alliance";
-import { isKage } from "@/utils/kage";
-import { canAdministrateWars, canSeeSecretData } from "@/utils/permissions";
-import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
-} from "../trpc";
+} from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
+import { findRelationship } from "@/utils/alliance";
+import { isKage } from "@/utils/kage";
+import { canAdministrateWars, canSeeSecretData } from "@/utils/permissions";
+import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 
 export const warRouter = createTRPCRouter({
   // Get active wars for a village

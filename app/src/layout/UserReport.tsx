@@ -27,7 +27,7 @@ import type { FederalStatus, TimeUnit, UserRank, UserRole } from "@/drizzle/cons
 import { REPORT_CONTEXT_WINDOW, TERR_BOT_ID, TimeUnits } from "@/drizzle/constants";
 import type { UserReport } from "@/drizzle/schema";
 import { CommentOnReport } from "@/layout/Comment";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Loader from "@/layout/Loader";
@@ -325,7 +325,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
             {!isPending && (
               <div className="mt-2 flex flex-row-reverse gap-1">
                 {canComment && (
-                  <Confirm2
+                  <Confirm
                     title="Confirm Posting Comment"
                     button={
                       <Button id="submit_comment">
@@ -339,10 +339,10 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                   >
                     You are about to post a comment on this report. Please note that
                     this comment can not be edited or deleted afterwards
-                  </Confirm2>
+                  </Confirm>
                 )}
                 {!canModerate && canEscalate && (
-                  <Confirm2
+                  <Confirm
                     title="Confirm Escalating Report"
                     button={
                       <Button id="submit_comment">
@@ -357,10 +357,10 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                     this if you feel strongly the decision is wrong, and know that if
                     you do not have good reason for escalating, it may result in further
                     extension of the ban.
-                  </Confirm2>
+                  </Confirm>
                 )}
                 {canModerate && canSilence && (
-                  <Confirm2
+                  <Confirm
                     title="Confirm Silencing User"
                     button={
                       <Button id="submit_resolve" variant="destructive">
@@ -375,10 +375,10 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                     You are about to silence the user. Please note that the comment and
                     decision can not be edited or deleted. You can unsilence the person
                     by posting another comment and &rdquo;Clear&rdquo; the report.
-                  </Confirm2>
+                  </Confirm>
                 )}
                 {canModerate && canTimeout && (
-                  <Confirm2
+                  <Confirm
                     title="Confirm Timeout (1 hour)"
                     button={
                       <Button id="submit_timeout" variant="destructive">
@@ -394,10 +394,10 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                     silence. Please note that the comment and decision can not be edited
                     or deleted. You can unsilence the person by posting another comment
                     and &rdquo;Clear&rdquo; the report.
-                  </Confirm2>
+                  </Confirm>
                 )}
                 {canModerate && canBan && (
-                  <Confirm2
+                  <Confirm
                     title="Confirm Banning User"
                     button={
                       <Button id="submit_resolve" variant="destructive">
@@ -412,10 +412,10 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                     You are about to ban the user. Please note that the comment and
                     decision can not be edited or deleted. You can unban the person by
                     posting another comment and &rdquo;Clear&rdquo; the report.
-                  </Confirm2>
+                  </Confirm>
                 )}
                 {canModerate && canBan && (
-                  <Confirm2
+                  <Confirm
                     title="Confirm Trade Ban"
                     button={
                       <Button id="submit_tradeban" variant="destructive">
@@ -430,10 +430,10 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                     You are about to trade-ban the user. Please note that the comment
                     and decision can not be edited or deleted. You can remove the trade
                     ban by posting another comment and &rdquo;Clear&rdquo; the report.
-                  </Confirm2>
+                  </Confirm>
                 )}
                 {canModerate && canWarn && (
-                  <Confirm2
+                  <Confirm
                     title="Confirm Warning"
                     button={
                       <Button id="submit_resolve" className="bg-orange-400">
@@ -447,10 +447,10 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                   >
                     You are about to warn this user. Please note that the comment and
                     decision can not be edited or deleted.
-                  </Confirm2>
+                  </Confirm>
                 )}
                 {canModerate && canClear && (
-                  <Confirm2
+                  <Confirm
                     title="Confirm Clearing Report"
                     button={
                       <Button id="submit_resolve" className="bg-green-600">
@@ -464,7 +464,7 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
                   >
                     You are about to clear the report. Please note that the comment and
                     decision can not be edited or deleted.
-                  </Confirm2>
+                  </Confirm>
                 )}
               </div>
             )}

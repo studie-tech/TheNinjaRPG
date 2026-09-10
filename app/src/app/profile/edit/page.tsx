@@ -88,12 +88,12 @@ import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
-import Confirm2 from "@/layout/Confirm2";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import Modal2 from "@/layout/Modal2";
+import Modal from "@/layout/Modal";
 import NindoChange from "@/layout/NindoChange";
 import { CurrentSageMode } from "@/layout/SageMode";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
@@ -125,10 +125,10 @@ import {
   canChangeContent,
   canClearSectors,
   canEnableGlobalTavern,
-  canSwapBloodline,
   canSwapVillage,
   canUnequipAllUsers,
   isStaffMember,
+  isStaffRole,
 } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useUserSearch } from "@/utils/search";
@@ -397,22 +397,20 @@ export default function EditProfile() {
         >
           <FontScaleSettings />
         </Accordion>
-        {canSwapBloodline(userData.role) && (
-          <Accordion
-            title="Swap Bloodline"
-            selectedTitle={activeElement}
-            unselectedSubtitle="Change your bloodline of choice"
-            selectedSubtitle={
-              isStaffMember(userData)
-                ? `You can swap your bloodline to any bloodline your character has previously possessed for free as a staff member. You must still wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps. Note: Bloodlines purchased directly before 14/06/2025 have not been recorded and can therefore not be swapped. You have ${userData.reputationPoints} reputation points.`
-                : `You can swap your bloodline to any bloodline your character has previously possessed for ${COST_SWAP_BLOODLINE} reputation points. You must wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps. Note: Bloodlines purchased directly before 14/06/2025 have not been recorded and can therefore not be swapped. You have ${userData.reputationPoints} reputation points.`
-            }
-            icon={Droplets}
-            onClick={setActiveElement}
-          >
-            <SwapBloodline />
-          </Accordion>
-        )}
+        <Accordion
+          title="Swap Bloodline"
+          selectedTitle={activeElement}
+          unselectedSubtitle="Change your bloodline of choice"
+          selectedSubtitle={
+            isStaffMember(userData)
+              ? `You can swap your bloodline to any bloodline your character has previously possessed for free as a staff member. You must still wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps. Note: Bloodlines purchased directly before 14/06/2025 have not been recorded and can therefore not be swapped. You have ${userData.reputationPoints} reputation points.`
+              : `You can swap your bloodline to any bloodline your character has previously possessed for ${COST_SWAP_BLOODLINE} reputation points. You must wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps. Note: Bloodlines purchased directly before 14/06/2025 have not been recorded and can therefore not be swapped. You have ${userData.reputationPoints} reputation points.`
+          }
+          icon={Droplets}
+          onClick={setActiveElement}
+        >
+          <SwapBloodline />
+        </Accordion>
         <Accordion
           title="Sage Mode"
           selectedTitle={activeElement}
@@ -443,7 +441,7 @@ export default function EditProfile() {
             <SwapVillage />
           </Accordion>
         )}
-        {userData && userData.role !== "USER" && (
+        {userData && isStaffRole(userData.role) && (
           <Accordion
             title="Management Commands"
             selectedTitle={activeElement}
@@ -702,7 +700,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
             </Label>
             <br />
             <br />
-            <Confirm2
+            <Confirm
               title="Reset AI Profile"
               button={
                 <Button
@@ -730,7 +728,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
             >
               This will reset your AI profile to default settings. This action cannot be
               undone. Are you sure you want to continue?
-            </Confirm2>
+            </Confirm>
           </TabsContent>
           <TabsContent value="aiprofile">
             <AiProfileEdit userData={profile} hideTitle />
@@ -929,7 +927,7 @@ const NewAiAvatar: React.FC = () => {
         {userData && userData?.reputationPoints > 0 ? (
           <>
             <p className="italic">- Costs 1 reputation point</p>
-            <Confirm2
+            <Confirm
               title="Confirm Avatar Change"
               button={
                 <Button id="create" className="w-full">
@@ -947,7 +945,7 @@ const NewAiAvatar: React.FC = () => {
               NVidia A100 GPU cluster, and each generation costs a little bit of money.
               We are working on a solution to make this free, but for now, we need to
               charge a small fee to cover the cost of the GPU cluster.
-            </Confirm2>
+            </Confirm>
           </>
         ) : (
           <p className="text-red-500">Requires 1 reputation point</p>
@@ -1047,7 +1045,7 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
                 size={200}
                 className={size === "square" ? "aspect-square" : "aspect-auto"}
               />
-              <Confirm2
+              <Confirm
                 title="Confirm Deletion"
                 button={
                   <Trash2 className="absolute top-0 right-[8%] h-9 w-9 cursor-pointer rounded-full border-2 border-black bg-amber-100 fill-slate-500 p-1 hover:text-orange-500" />
@@ -1060,7 +1058,7 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
               >
                 You are about to delete an avatar. Note that this action is permanent.
                 Are you sure?
-              </Confirm2>
+              </Confirm>
             </button>
           ))}
         </div>
@@ -1133,7 +1131,7 @@ const SwapVillage: React.FC = () => {
         />
       )}
       {isFetching && <Loader explanation="Loading villages" />}
-      <Modal2
+      <Modal
         title="Confirm Purchase"
         proceed_label={
           isSwapping
@@ -1160,7 +1158,7 @@ const SwapVillage: React.FC = () => {
       >
         {village && !isSwapping && <ItemWithEffects item={village} key={village.id} />}
         {isSwapping && village && <Loader explanation={`Purchasing ${village.name}`} />}
-      </Modal2>
+      </Modal>
     </div>
   );
 };
@@ -1286,7 +1284,7 @@ const SwapBloodline: React.FC = () => {
           build your history.
         </div>
       )}
-      <Modal2
+      <Modal
         title="Confirm Purchase"
         proceed_label={
           isSwapping
@@ -1319,7 +1317,7 @@ const SwapBloodline: React.FC = () => {
         {isSwapping && bloodline && (
           <Loader explanation={`Purchasing ${bloodline.name}`} />
         )}
-      </Modal2>
+      </Modal>
     </div>
   );
 };
@@ -1646,7 +1644,7 @@ const ElementRerollButton: React.FC<ElementRerollButtonProps> = ({
   canChange,
   onReroll,
 }) => (
-  <Confirm2
+  <Confirm
     title={`Confirm ${elementType.charAt(0).toUpperCase() + elementType.slice(1)} Element Re-Roll`}
     button={
       <Button
@@ -1665,7 +1663,7 @@ const ElementRerollButton: React.FC<ElementRerollButtonProps> = ({
   >
     Rerolling your {elementType} element costs {COST_REROLL_ELEMENT} reputation points.
     Are you sure you want to re-roll your {elementType} element?
-  </Confirm2>
+  </Confirm>
 );
 
 /**
@@ -1775,7 +1773,7 @@ const NameChange: React.FC = () => {
               </FormItem>
             )}
           />
-          <Confirm2
+          <Confirm
             title="Confirm New Username"
             button={
               <Button
@@ -1795,7 +1793,7 @@ const NameChange: React.FC = () => {
             Changing your username costs {COST_CHANGE_USERNAME} reputation points, and
             can only be reverted by purchasing another name change. Are you sure you
             want to change your username to {searchTerm}?
-          </Confirm2>
+          </Confirm>
         </form>
       </Form>
     </div>
@@ -1854,7 +1852,7 @@ const CustomTitle: React.FC = () => {
               </FormItem>
             )}
           />
-          <Confirm2
+          <Confirm
             title="Confirm Custom Title"
             disabled={disabled}
             button={
@@ -1872,7 +1870,7 @@ const CustomTitle: React.FC = () => {
             Changing your custom title costs {COST_CUSTOM_TITLE} reputation points, and
             can only be changed by requesting another change. Are you sure you want to
             change your title to {curTitle}?
-          </Confirm2>
+          </Confirm>
         </form>
       </Form>
     </div>
@@ -2000,7 +1998,7 @@ const TavernColors: React.FC = () => {
               )}
             </div>
 
-            <Confirm2
+            <Confirm
               title={`Confirm ${control.label}`}
               disabled={disabled}
               button={
@@ -2026,7 +2024,7 @@ const TavernColors: React.FC = () => {
             >
               Change your tavern {control.target} color to{" "}
               {TAVERN_COLOR_STYLES[control.value].label} for {cost} reputation points?
-            </Confirm2>
+            </Confirm>
           </section>
         );
       })}
@@ -2127,7 +2125,7 @@ const ChangeGender: React.FC = () => {
               </div>
             )}
           />
-          <Confirm2
+          <Confirm
             title="Confirm Gender Change"
             disabled={!canBuyUsername}
             button={
@@ -2145,7 +2143,7 @@ const ChangeGender: React.FC = () => {
             Changing your gender costs {COST_CHANGE_GENDER} reputation points, and can
             only be changed by requesting another change. Are you sure you want to
             change your gender to {watchGender}?
-          </Confirm2>
+          </Confirm>
         </form>
       </Form>
     </div>
@@ -2245,7 +2243,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
   return (
     <div className="grid grid-cols-3 items-center gap-4 p-4">
       {canUnequipAllUsers(user) && (
-        <Confirm2
+        <Confirm
           title="Confirm Unequip All Gear"
           button={
             <Button variant="destructive" disabled={isUnequipping} className="w-full">
@@ -2267,10 +2265,10 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
           This will unequip all currently equipped gear <b>FOR ALL NON-AI USERS</b> and
           clear all of their item loadouts (AI opponents are left unchanged). Are you
           sure you want to continue?
-        </Confirm2>
+        </Confirm>
       )}
       {canUnequipAllUsers(user) && (
-        <Confirm2
+        <Confirm
           title="Confirm Unequip All Jutsus"
           button={
             <Button
@@ -2296,10 +2294,10 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
           This will unequip all currently equipped jutsus <b>FOR ALL NON-AI USERS</b>{" "}
           and clear all of their jutsu loadouts (AI opponents are left unchanged). Are
           you sure you want to continue?
-        </Confirm2>
+        </Confirm>
       )}
       {canUnequipAllUsers(user) && (
-        <Confirm2
+        <Confirm
           title="Confirm Reset All Skill Trees"
           button={
             <Button
@@ -2324,10 +2322,10 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
         >
           This will reset all users&apos; skill trees and refund their skill points{" "}
           <b>FOR ALL USERS</b>. Are you sure you want to continue?
-        </Confirm2>
+        </Confirm>
       )}
       {canAwardExperience(user) && (
-        <Confirm2
+        <Confirm
           title="Confirm Mass Experience Award"
           button={
             <Button
@@ -2370,10 +2368,10 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
               <b>ALL USERS</b>. Are you sure you want to continue?
             </p>
           </div>
-        </Confirm2>
+        </Confirm>
       )}
       {canClearSectors(user.role) && (
-        <Confirm2
+        <Confirm
           title="Confirm Clear Sector"
           button={
             <Button
@@ -2413,7 +2411,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
               Are you sure you want to continue?
             </p>
           </div>
-        </Confirm2>
+        </Confirm>
       )}
       {canEnableGlobalTavern(user.role) && (
         <div className="flex items-center justify-between gap-2 rounded-md border bg-popover px-3 py-2">
@@ -2511,7 +2509,7 @@ const ResetSkills: React.FC = () => {
         </p>
       </div>
 
-      <Confirm2
+      <Confirm
         title="Confirm Skill Reset"
         button={
           <Button
@@ -2549,7 +2547,7 @@ const ResetSkills: React.FC = () => {
             : " (Free GOLD monthly reset)"
           : ` for ${COST_SKILL_RESET} reputation points`}
         . This action cannot be undone. Are you sure you want to continue?
-      </Confirm2>
+      </Confirm>
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { isStaffRole } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -11,7 +12,7 @@ export default function Reports() {
   const { data: userData } = useRequiredUserData();
 
   const { data, isFetching } = api.reports.getReportStatistics.useQuery(undefined, {
-    enabled: !!userData && userData.role !== "USER",
+    enabled: !!userData && isStaffRole(userData.role),
   });
 
   if (!userData) return <Loader explanation="Loading userdata" />;
