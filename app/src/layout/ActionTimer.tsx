@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Progress } from "@/components/ui/progress";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
@@ -51,7 +51,7 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
   }, [battle?.version, user.userId]);
 
   // Active updating of this component
-  useEffect(() => {
+  useLayoutEffect(() => {
     const nextTimerState = () => {
       if (!document.hasFocus() && process.env.NODE_ENV !== "development") {
         return { label: "Not in Focus", canAct: false, waiting: false };
@@ -109,7 +109,11 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
                   <span
                     className={`h-2 w-2 rounded-full ${state.waiting ? "bg-amber-300" : "bg-emerald-300"}`}
                   />
-                  <span className="font-semibold">{state.label || "..."}</span>
+                  <span
+                    className={`font-semibold ${state.label ? "" : "invisible"}`}
+                  >
+                    {state.label || "..."}
+                  </span>
                 </div>
               </div>
             </div>
