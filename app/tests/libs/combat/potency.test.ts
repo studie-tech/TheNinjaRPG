@@ -486,7 +486,14 @@ describe("potency combat lifecycle", () => {
         battle,
         makeAction([
           makeTag(type, { power: initialPower, rounds: 3, calculation: "percentage" }),
-        ]),
+        ], {
+          // Lifesteal reads outgoing damage credited to its target. Targeting SELF
+          // keeps that target aligned with the attacker's damage userId; the
+          // afterburn and reflect cases retain their existing opponent targeting.
+          target: type === "lifesteal" ? "SELF" : "OPPONENT",
+        }),
+        "attacker",
+        type === "lifesteal" ? 0 : 1,
       );
       battle = applyEffects(battle, "attacker").newBattle;
       battle.round++;
