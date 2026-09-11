@@ -1105,9 +1105,11 @@ export const isEffectActive = (effect: UserEffect | GroundEffect) => {
 /** Potency for distinct selections or calculation modes can coexist. */
 export const getEffectStackKey = (effect: UserEffect) => {
   const key = `${effect.type}-${effect.creatorId}-${effect.targetId}-${effect.fromType}`;
-  return effect.type === "increasepotency" || effect.type === "decreasepotency"
-    ? `${key}-${effect.affectedTag}-${effect.calculation}`
-    : key;
+  if (effect.type === "increasepotency" || effect.type === "decreasepotency") {
+    const elements = [...new Set(effect.affectedElements ?? [])].sort().join(",");
+    return `${key}-${effect.affectedTag}-${effect.calculation}-${elements || "all"}`;
+  }
+  return key;
 };
 
 /**

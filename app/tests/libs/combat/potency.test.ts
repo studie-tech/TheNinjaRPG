@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { OUT_OF_COMBAT_BASE_DAMAGE_INCREASE, OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION } from "@/drizzle/constants";
+import {
+  ElementNames,
+  OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,
+  OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
+} from "@/drizzle/constants";
 import { insertAction } from "@/libs/combat/actions";
 import { getPotencyDescription, resolvePotencyTags } from "@/libs/combat/potency";
 import { applyEffects } from "@/libs/combat/process";
@@ -105,6 +109,7 @@ describe("potency configuration", () => {
           const tag = schema.parse({
             calculation,
             affectedTag,
+            affectedElements: [...ElementNames],
             power: 20,
             powerPerLevel: 0.5,
             rounds: 3,
@@ -115,6 +120,8 @@ describe("potency configuration", () => {
     }
     expect(IncreasePotencyTag.parse({}).target).toBe("SELF");
     expect(DecreasePotencyTag.parse({}).target).toBe("INHERIT");
+    expect(IncreasePotencyTag.parse({}).affectedElements).toEqual([]);
+    expect(DecreasePotencyTag.parse({}).affectedElements).toEqual([]);
     expect(isPositiveUserEffect(IncreasePotencyTag.parse({}))).toBe(true);
     expect(isNegativeUserEffect(DecreasePotencyTag.parse({}))).toBe(true);
   });
@@ -124,6 +131,7 @@ describe("potency configuration", () => {
       for (const fields of [
         { affectedTag: "pierce" },
         { affectedTag: "increasepotency" },
+        { affectedElements: ["Unknown"] },
         { calculation: "formula" },
         { power: -1 },
         { rounds: 0 },
@@ -148,6 +156,25 @@ describe("potency configuration", () => {
     ).toBe(
       "The power of all supported tags on the target's subsequent jutsu is decreased by 15% for 3 rounds.",
     );
+  });
+
+  it("describes element selections and non-elemental tags", () => {
+    expect(
+      getPotencyDescription(
+        IncreasePotencyTag.parse({
+          affectedTag: "damage",
+          affectedElements: ["Fire", "Water"],
+          power: 20,
+        }),
+      ),
+    ).toBe(
+      "The power of Damage tags on your subsequent jutsu is increased by 20 power points for 3 rounds. Affected elements (match any): Fire, Water.",
+    );
+    expect(
+      getPotencyDescription(
+        DecreasePotencyTag.parse({ affectedElements: ["None"] }),
+      ),
+    ).toContain("Affected elements (match any): None (non-elemental).");
   });
 });
 
@@ -268,7 +295,165 @@ describe("potency arithmetic", () => {
   });
 });
 
+describe("potency element matching", () => {
+  it.each(
+    PotencyTagTypes.filter((type) => type !== "heal" && type !== "increaseheal"),
+  )(
+    "matches elements on %s in both directions and modes",
+    (type) => {
+      const action = makeAction([
+        makeTag(type, { power: 40, elements: ["Fire"] }),
+        makeTag(type, { power: 40, elements: ["Water"] }),
+        makeTag(type, { power: 40, elements: ["Wind", "Fire"] }),
+        makeTag(type, { power: 40 }),
+      ]);
+      for (const [kind, calculation, expected] of [
+        ["increasepotency", "static", 60],
+        ["increasepotency", "percentage", 48],
+        ["decreasepotency", "static", 20],
+        ["decreasepotency", "percentage", 32],
+      ] as const) {
+        const tags = resolvePotencyTags(
+          action,
+          [
+            makePotency({
+              type: kind,
+              calculation,
+              affectedTag: type,
+              affectedElements: ["Fire"],
+              power: 20,
+            }),
+          ],
+          "attacker",
+        );
+        expect(tags.map((tag) => tag.power)).toEqual([expected, 40, expected, 40]);
+        expect(action.effects.map((tag) => tag.power)).toEqual([40, 40, 40, 40]);
+      }
+    },
+  );
+
+  it("requires the selected tag type and matches any selected element only once", () => {
+    const action = makeAction([
+      makeTag("damage", { power: 40, elements: ["Fire", "Water"] }),
+      makeTag("damage", { power: 40, elements: ["Water"] }),
+      makeTag("afterburn", { power: 40, elements: ["Fire"] }),
+      makeTag("pierce", { power: 40, elements: ["Fire"] }),
+      makeTag("heal", { power: 40 }),
+    ]);
+    for (const [affectedTag, expected] of [
+      ["damage", [60, 60, 40, 40, 40]],
+      ["all", [60, 60, 60, 40, 40]],
+    ] as const) {
+      const tags = resolvePotencyTags(
+        action,
+        [makePotency({ affectedTag, affectedElements: ["Fire", "Water"], power: 20 })],
+        "attacker",
+      );
+      expect(tags.map((tag) => tag.power)).toEqual(expected);
+    }
+  });
+
+  it("matches None to explicit, empty, and missing tag elements", () => {
+    const action = makeAction([
+      makeTag("damage", { power: 40, elements: ["None"] }),
+      makeTag("damage", { power: 40, elements: [] }),
+      makeTag("damage", { power: 40 }),
+      makeTag("heal", { power: 40 }),
+      makeTag("increaseheal", { power: 40 }),
+      makeTag("damage", { power: 40, elements: ["Fire"] }),
+    ]);
+    const tags = resolvePotencyTags(
+      action,
+      [makePotency({ affectedElements: ["None"], power: 20 })],
+      "attacker",
+    );
+    expect(tags.map((tag) => tag.power)).toEqual([60, 60, 60, 60, 60, 40]);
+  });
+
+  it("keeps existing potency effects without an element selection unrestricted", () => {
+    const action = makeAction([
+      makeTag("damage", { power: 40, elements: ["Fire"] }),
+      makeTag("damage", { power: 40, elements: ["Ice"] }),
+      makeTag("heal", { power: 40 }),
+    ]);
+    const effect = makePotency({ power: 20 });
+    const legacyEffect = { ...effect };
+    Reflect.deleteProperty(legacyEffect, "affectedElements");
+    expect(getEffectStackKey(legacyEffect)).toBe(getEffectStackKey(effect));
+    for (const potency of [effect, legacyEffect]) {
+      expect(
+        resolvePotencyTags(action, [potency], "attacker").map((tag) => tag.power),
+      ).toEqual([60, 60, 60]);
+    }
+  });
+
+  it("stacks distinct element selections and normalizes element order and duplicates", () => {
+    const action = makeAction([
+      makeTag("damage", { power: 40, elements: ["Fire"] }),
+      makeTag("damage", { power: 40, elements: ["Water"] }),
+      makeTag("damage", { power: 40, elements: ["Fire", "Water"] }),
+    ]);
+    const effects = [
+      makePotency({ affectedElements: ["Fire"], power: 10 }),
+      makePotency({ affectedElements: ["Water"], power: 20 }),
+      makePotency({
+        affectedElements: ["Fire"],
+        power: 20,
+        calculation: "percentage",
+      }),
+    ];
+    expect(new Set(effects.map(getEffectStackKey)).size).toBe(3);
+    for (const orderedEffects of [effects, [...effects].reverse()]) {
+      expect(
+        resolvePotencyTags(action, orderedEffects, "attacker").map((tag) => tag.power),
+      ).toEqual([60, 60, 84]);
+    }
+    const ordered = makePotency({ affectedElements: ["Fire", "Water"] });
+    const reversed = makePotency({ affectedElements: ["Water", "Fire", "Fire"] });
+    expect(getEffectStackKey(ordered)).toBe(getEffectStackKey(reversed));
+    expect("affectedElements" in reversed && reversed.affectedElements).toEqual([
+      "Water",
+      "Fire",
+      "Fire",
+    ]);
+  });
+});
+
 describe("potency combat lifecycle", () => {
+  it.each(["increasepotency", "decreasepotency"] as const)(
+    "preserves %s element selections through casting and effect processing",
+    (type) => {
+      let battle = makeBattle();
+      cast(
+        battle,
+        makeAction([makeTag(type, { affectedElements: ["Fire"], power: 20 })]),
+      );
+      battle = applyEffects(battle, "attacker").newBattle;
+      battle.round++;
+      const casterId = type === "increasepotency" ? "attacker" : "defender";
+      expect(battle.usersEffects.find((effect) => effect.type === type)).toMatchObject({
+        affectedElements: ["Fire"],
+        targetId: casterId,
+        isNew: false,
+      });
+      cast(
+        battle,
+        makeAction([
+          makeTag("damage", { power: 40, calculation: "static", elements: ["Fire"] }),
+          makeTag("afterburn", { power: 40, rounds: 3, elements: ["Water"] }),
+        ]),
+        casterId,
+        casterId === "attacker" ? 1 : 0,
+      );
+      expect(
+        battle.usersEffects.find((effect) => effect.type === "damage")?.power,
+      ).toBe(type === "increasepotency" ? 60 : 20);
+      expect(
+        battle.usersEffects.find((effect) => effect.type === "afterburn")?.power,
+      ).toBe(40);
+    },
+  );
+
   it("starts on subsequent casts and never modifies saved tags or compounds ticks", () => {
     let battle = makeBattle();
     const original = [
@@ -425,11 +610,21 @@ describe("potency combat lifecycle", () => {
             calculation: "percentage",
             power: 10,
           }),
+          IncreasePotencyTag.parse({
+            affectedTag: "damage",
+            affectedElements: ["Fire"],
+            power: 20,
+          }),
+          IncreasePotencyTag.parse({
+            affectedTag: "damage",
+            affectedElements: ["Water"],
+            power: 20,
+          }),
         ],
         { target, method: "AOE_CIRCLE_SPAWN" },
       ),
     );
-    expect(battle.usersEffects).toHaveLength(3);
+    expect(battle.usersEffects).toHaveLength(5);
     expect(
       battle.usersEffects.every(
         (e) => e.targetId === "attacker" && e.fromType === "jutsu",

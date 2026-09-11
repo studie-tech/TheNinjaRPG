@@ -1919,6 +1919,15 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
       ) {
         const enumValues = (innerType.element as unknown as { options: string[] })
           .options;
+        if (String(value) === "affectedElements") {
+          return {
+            id: value,
+            label: "Affected Elements",
+            type: "str_array",
+            values: enumValues,
+            multiple: true,
+          };
+        }
         return { id: value, type: "str_array", values: enumValues, multiple: true };
       } else if (innerType instanceof z.ZodBoolean) {
         return { id: value, label: value, type: "boolean" };
@@ -1957,7 +1966,10 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           Static adds or subtracts power points. Percentage scales the selected tag’s
           power. For power 40, an increase of 20 gives 60 in Static mode or 48 in
           Percentage mode. All affects every supported tag on subsequent jutsu. Active
-          modifiers add together within each mode; Static applies first.
+          modifiers add together within each mode; Static applies first. Affected
+          Elements limits those tags to any of the selected elements. Leave it empty to
+          affect all elements, including non-elemental tags. Select None to affect tags
+          without an element.
         </p>
       )}
       <EditContent

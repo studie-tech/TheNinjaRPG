@@ -1,4 +1,8 @@
-import { BATTLE_TAG_STACKING, isPreBattleGearFromType } from "@/drizzle/constants";
+import {
+  BATTLE_TAG_STACKING,
+  type ElementName,
+  isPreBattleGearFromType,
+} from "@/drizzle/constants";
 import type { CombatAction, UserEffect } from "@/libs/combat/types";
 import { getEffectStackKey, isEffectActive } from "@/libs/combat/util";
 import type { PotencyTag, PotencyTagType, ZodAllTags } from "@/validators/combat";
@@ -31,7 +35,12 @@ export const getPotencyDescription = (
   const units =
     effect.calculation === "percentage" ? `${amount}%` : `${amount} power points`;
   const change = effect.type === "increasepotency" ? "increased" : "decreased";
-  return `The power of ${affected} on ${owner} subsequent jutsu is ${change} by ${units} for ${effect.rounds} rounds.`;
+  const elements = effect.affectedElements?.length
+    ? ` Affected elements (match any): ${effect.affectedElements
+        .map((element) => (element === "None" ? "None (non-elemental)" : element))
+        .join(", ")}.`
+    : "";
+  return `The power of ${affected} on ${owner} subsequent jutsu is ${change} by ${units} for ${effect.rounds} rounds.${elements}`;
 };
 
 const supportedTags: ReadonlySet<string> = new Set(PotencyTagTypes);
@@ -50,7 +59,10 @@ export const resolvePotencyTags = (
   if (action.type !== "jutsu") return tags;
 
   const seen = new Set<string>();
-  const modifiers = new Map<string, { flat: number; percentage: number }>();
+  const modifiers: (Pick<PotencyTag, "affectedTag" | "affectedElements"> & {
+    flat: number;
+    percentage: number;
+  })[] = [];
   for (const effect of usersEffects) {
     if (
       (effect.type !== "increasepotency" && effect.type !== "decreasepotency") ||
@@ -74,22 +86,28 @@ export const resolvePotencyTags = (
     seen.add(key);
     const amount = effect.power + effect.level * effect.powerPerLevel;
     const sign = effect.type === "increasepotency" ? 1 : -1;
-    const modifier = modifiers.get(effect.affectedTag) ?? { flat: 0, percentage: 0 };
-    if (effect.calculation === "percentage") {
-      modifier.percentage += sign * Math.min(100, amount);
-    } else {
-      modifier.flat += sign * amount;
-    }
-    modifiers.set(effect.affectedTag, modifier);
+    modifiers.push({
+      affectedTag: effect.affectedTag,
+      affectedElements: effect.affectedElements ?? [],
+      flat: effect.calculation === "static" ? sign * amount : 0,
+      percentage:
+        effect.calculation === "percentage" ? sign * Math.min(100, amount) : 0,
+    });
   }
 
   for (const tag of tags) {
     if (!supportedTags.has(tag.type)) continue;
-    const all = modifiers.get("all");
-    const selected = modifiers.get(tag.type);
-    if (!all && !selected) continue;
-    const flat = (all?.flat ?? 0) + (selected?.flat ?? 0);
-    const percentage = (all?.percentage ?? 0) + (selected?.percentage ?? 0);
+    const elements: readonly ElementName[] =
+      "elements" in tag && tag.elements?.length ? tag.elements : ["None"];
+    const matching = modifiers.filter(
+      (modifier) =>
+        (modifier.affectedTag === "all" || modifier.affectedTag === tag.type) &&
+        (modifier.affectedElements.length === 0 ||
+          modifier.affectedElements.some((element) => elements.includes(element))),
+    );
+    if (matching.length === 0) continue;
+    const flat = matching.reduce((sum, modifier) => sum + modifier.flat, 0);
+    const percentage = matching.reduce((sum, modifier) => sum + modifier.percentage, 0);
     const base = tag.power + (action.level ?? 0) * tag.powerPerLevel;
     // Clamp each stage: two negative factors must never create positive power.
     const power = Math.max(0, base + flat) * Math.max(0, 1 + percentage / 100);

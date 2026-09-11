@@ -1049,6 +1049,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                             {POTENCY_TAG_LABELS[parsedEffect.affectedTag]}
                           </span>
                         )}
+                        {"affectedElements" in parsedEffect && (
+                          <span>
+                            <b>Affected Elements: </b>
+                            {parsedEffect.affectedElements.length > 0
+                              ? parsedEffect.affectedElements.join(", ")
+                              : "All (including non-elemental)"}
+                          </span>
+                        )}
                         {"power" in parsedEffect && (
                           <span>
                             <b>Effect Power: </b>
