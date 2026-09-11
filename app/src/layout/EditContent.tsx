@@ -41,6 +41,7 @@ import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import Table from "@/layout/Table";
+import { POTENCY_TAG_LABELS } from "@/libs/combat/potency";
 import {
   isSupportedOverworldBindingTask,
   placementsForObjective,
@@ -1736,7 +1737,17 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     })
     .map((value) => {
       const innerType = getInner(tagSchema.shape[value]);
-      if ((value as string) === "aiId" && aiData) {
+      if (String(value) === "affectedTag") {
+        return {
+          id: value,
+          label: "Affected Tag",
+          type: "db_values",
+          values: Object.entries(POTENCY_TAG_LABELS).map(([id, name]) => ({
+            id,
+            name,
+          })),
+        };
+      } else if ((value as string) === "aiId" && aiData) {
         return {
           id: value,
           label: FORM_LABEL_MAP[value] ?? value,
@@ -1940,15 +1951,25 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
 
   // Re-used EditContent component for actually showing the form
   return (
-    <EditContent
-      schema={tagSchema}
-      form={form}
-      formData={formData}
-      formClassName={formClassName}
-      showSubmit={false}
-      buttonTxt="Confirm Changes (No database sync)"
-      fixedWidths={props.fixedWidths}
-    />
+    <>
+      {(tag.type === "increasepotency" || tag.type === "decreasepotency") && (
+        <p className="mb-3 text-muted-foreground text-sm">
+          Static adds or subtracts power points. Percentage scales the selected tag’s
+          power. For power 40, an increase of 20 gives 60 in Static mode or 48 in
+          Percentage mode. All affects every supported tag on subsequent jutsu. Active
+          modifiers add together within each mode; Static applies first.
+        </p>
+      )}
+      <EditContent
+        schema={tagSchema}
+        form={form}
+        formData={formData}
+        formClassName={formClassName}
+        showSubmit={false}
+        buttonTxt="Confirm Changes (No database sync)"
+        fixedWidths={props.fixedWidths}
+      />
+    </>
   );
 };
 

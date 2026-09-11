@@ -83,6 +83,7 @@ import {
   onehitkill,
   onehitkillPrevent,
   poison,
+  potency,
   realizeTag,
   recoil,
   redirection,
@@ -125,6 +126,7 @@ import {
   creditDamageDealt,
   findBarrier,
   findUser,
+  getEffectStackKey,
   getEffectStage,
   getItem,
   isEffectActive,
@@ -1104,7 +1106,7 @@ export const applySingleEffect = (
   const curUser = usersState.find((u) => u.userId === effect.creatorId);
   const newUser = newUsersState.find((u) => u.userId === effect.creatorId);
   // Remember the effect
-  const idx = `${effect.type}-${effect.creatorId}-${effect.targetId}-${effect.fromType}`;
+  const idx = getEffectStackKey(effect);
   // Determine whether the tags should stack
   const cacheCheck = BATTLE_TAG_STACKING
     ? true
@@ -1223,6 +1225,11 @@ export const applySingleEffect = (
           info = increaseDamageTaken(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "decreasedamagetaken") {
           info = decreaseDamageTaken(effect, usersEffects, consequences, curTarget);
+        } else if (
+          effect.type === "increasepotency" ||
+          effect.type === "decreasepotency"
+        ) {
+          info = potency(effect, usersEffects, curTarget);
         } else if (effect.type === "increaseheal") {
           info = increaseHealGiven(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "decreaseheal") {

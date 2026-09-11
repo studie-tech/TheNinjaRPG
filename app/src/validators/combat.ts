@@ -149,6 +149,45 @@ export const PreventTagTypes = [
 
 export type PreventTagType = (typeof PreventTagTypes)[number];
 
+export const PotencyTagTypes = [
+  "damage",
+  "increasedamagegiven",
+  "decreasedamagegiven",
+  "increasedamagetaken",
+  "decreasedamagetaken",
+  "afterburn",
+  "lifesteal",
+  "reflect",
+  "increaseheal",
+  "heal",
+] as const;
+export type PotencyTagType = (typeof PotencyTagTypes)[number];
+
+const PotencyAttributes = {
+  ...BaseAttributes,
+  ...PowerAttributes,
+  affectedTag: z.enum(["all", ...PotencyTagTypes]).prefault("all"),
+  calculation: z.enum(["static", "percentage"]).prefault("static"),
+  rounds: z.coerce.number().int().min(1).max(100).prefault(3),
+};
+
+export const IncreasePotencyTag = z.object({
+  ...PotencyAttributes,
+  type: z.literal("increasepotency").prefault("increasepotency"),
+  target: z.enum(BaseTagTargets).prefault("SELF"),
+  description: msg("Increase the power of selected tags on subsequent jutsu"),
+});
+
+export const DecreasePotencyTag = z.object({
+  ...PotencyAttributes,
+  type: z.literal("decreasepotency").prefault("decreasepotency"),
+  description: msg(
+    "Decrease the power of selected tags on the target's subsequent jutsu",
+  ),
+});
+
+export type PotencyTag = z.infer<typeof IncreasePotencyTag | typeof DecreasePotencyTag>;
+
 export const AbsorbTag = z.object({
   ...BaseAttributes,
   ...IncludeStats,
@@ -888,6 +927,7 @@ export const AllTags = z.union([
   DecreaseDamageGivenTag.prefault({}),
   DecreaseDamageTakenTag.prefault({}),
   DecreaseHealGivenTag.prefault({}),
+  DecreasePotencyTag.prefault({}),
   DecreasePoolCostTag.prefault({}),
   DecreaseMaxPoolsTag.prefault({}),
   DecreaseStatTag.prefault({}),
@@ -903,6 +943,7 @@ export const AllTags = z.union([
   IncreaseDamageGivenTag.prefault({}),
   IncreaseDamageTakenTag.prefault({}),
   IncreaseHealGivenTag.prefault({}),
+  IncreasePotencyTag.prefault({}),
   IncreaseMarriageSlots.prefault({}),
   IncreaseReskinSlots.prefault({}),
   InjectJutsusTag.prefault({}),
@@ -976,6 +1017,7 @@ export const isPositiveUserEffect = (tag: ZodAllTags) => {
       "heal",
       "increasedamagegiven",
       "increaseheal",
+      "increasepotency",
       "increasemaxpools",
       "increasestat",
       "increaserange",
@@ -1017,6 +1059,7 @@ export const isNegativeUserEffect = (tag: ZodAllTags) => {
       "damage",
       "decreasedamagegiven",
       "decreaseheal",
+      "decreasepotency",
       "decreasestat",
       "decreasemaxpools",
       "disarm",

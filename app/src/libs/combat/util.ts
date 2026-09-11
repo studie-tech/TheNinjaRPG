@@ -1033,6 +1033,8 @@ export const calcApplyRatio = (
     "increasedamagegiven",
     "increasedamagetaken",
     "increaseheal",
+    "increasepotency",
+    "decreasepotency",
     "increasepoolcost",
     "increasestat",
     "lifesteal",
@@ -1098,6 +1100,14 @@ export const isEffectActive = (effect: UserEffect | GroundEffect) => {
   if (effect.rounds > 0) return true;
   // If none of the above, then no longer active
   return false;
+};
+
+/** Potency for distinct selections or calculation modes can coexist. */
+export const getEffectStackKey = (effect: UserEffect) => {
+  const key = `${effect.type}-${effect.creatorId}-${effect.targetId}-${effect.fromType}`;
+  return effect.type === "increasepotency" || effect.type === "decreasepotency"
+    ? `${key}-${effect.affectedTag}-${effect.calculation}`
+    : key;
 };
 
 /**
@@ -1171,6 +1181,8 @@ export const sortEffects = (
     "activatesagemode",
     "cleanse",
     "clear",
+    "increasepotency",
+    "decreasepotency",
     "decreasepoolcost",
     "decreasestat",
     "increasepoolcost",
