@@ -166,7 +166,7 @@ export type PotencyTagType = (typeof PotencyTagTypes)[number];
 const PotencyAttributes = {
   ...BaseAttributes,
   ...PowerAttributes,
-  affectedTag: z.enum(["all", ...PotencyTagTypes]).prefault("all"),
+  affectedTag: z.enum(["none", "all", ...PotencyTagTypes]).prefault("all"),
   affectedElements: z.array(z.enum(ElementNames)).prefault([]),
   calculation: z.enum(["static", "percentage"]).prefault("static"),
   rounds: z.coerce.number().int().min(1).max(100).prefault(3),

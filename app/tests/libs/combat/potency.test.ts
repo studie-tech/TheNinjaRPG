@@ -105,7 +105,7 @@ describe("potency configuration", () => {
   it("round-trips both modes and every supported selection through AllTags", () => {
     for (const schema of [IncreasePotencyTag, DecreasePotencyTag]) {
       for (const calculation of ["static", "percentage"] as const) {
-        for (const affectedTag of ["all", ...PotencyTagTypes] as const) {
+        for (const affectedTag of ["none", "all", ...PotencyTagTypes] as const) {
           const tag = schema.parse({
             calculation,
             affectedTag,
@@ -175,6 +175,25 @@ describe("potency configuration", () => {
         DecreasePotencyTag.parse({ affectedElements: ["None"] }),
       ),
     ).toContain("Affected elements (match any): None (non-elemental).");
+  });
+
+  it("describes None as element-only selection or no affected tags", () => {
+    expect(
+      getPotencyDescription(
+        IncreasePotencyTag.parse({
+          affectedTag: "none",
+          affectedElements: ["Fire"],
+          power: 20,
+        }),
+      ),
+    ).toBe(
+      "The power of all supported tags on your subsequent jutsu is increased by 20 power points for 3 rounds. Affected elements (match any): Fire.",
+    );
+    expect(
+      getPotencyDescription(DecreasePotencyTag.parse({ affectedTag: "none" })),
+    ).toBe(
+      "No tags are affected. Select Affected Elements to apply potency by element.",
+    );
   });
 });
 
@@ -296,6 +315,41 @@ describe("potency arithmetic", () => {
 });
 
 describe("potency element matching", () => {
+  it.each([
+    ["increasepotency", "static", 60],
+    ["increasepotency", "percentage", 48],
+    ["decreasepotency", "static", 20],
+    ["decreasepotency", "percentage", 32],
+  ] as const)(
+    "uses only elements for None with %s in %s mode",
+    (type, calculation, expected) => {
+      const action = makeAction([
+        makeTag("damage", { power: 40, elements: ["Fire", "Water"] }),
+        makeTag("afterburn", { power: 40, elements: ["Fire"] }),
+        makeTag("damage", { power: 40, elements: ["Earth"] }),
+        makeTag("pierce", { power: 40, elements: ["Fire"] }),
+        makeTag("heal", { power: 40 }),
+      ]);
+      const potency = makePotency({
+        type,
+        calculation,
+        affectedTag: "none",
+        affectedElements: ["Fire", "Water"],
+        power: 20,
+      });
+      expect(
+        resolvePotencyTags(action, [potency], "attacker").map((tag) => tag.power),
+      ).toEqual([expected, expected, 40, 40, 40]);
+      const noSelection = makePotency({
+        type,
+        calculation,
+        affectedTag: "none",
+        power: 20,
+      });
+      expect(resolvePotencyTags(action, [noSelection], "attacker")).toEqual(action.effects);
+    },
+  );
+
   it.each(
     PotencyTagTypes.filter((type) => type !== "heal" && type !== "increaseheal"),
   )(
@@ -362,12 +416,14 @@ describe("potency element matching", () => {
       makeTag("increaseheal", { power: 40 }),
       makeTag("damage", { power: 40, elements: ["Fire"] }),
     ]);
-    const tags = resolvePotencyTags(
-      action,
-      [makePotency({ affectedElements: ["None"], power: 20 })],
-      "attacker",
-    );
-    expect(tags.map((tag) => tag.power)).toEqual([60, 60, 60, 60, 60, 40]);
+    for (const affectedTag of ["all", "none"] as const) {
+      const tags = resolvePotencyTags(
+        action,
+        [makePotency({ affectedTag, affectedElements: ["None"], power: 20 })],
+        "attacker",
+      );
+      expect(tags.map((tag) => tag.power)).toEqual([60, 60, 60, 60, 60, 40]);
+    }
   });
 
   it("keeps existing potency effects without an element selection unrestricted", () => {

@@ -1967,9 +1967,11 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           power. For power 40, an increase of 20 gives 60 in Static mode or 48 in
           Percentage mode. All affects every supported tag on subsequent jutsu. Active
           modifiers add together within each mode; Static applies first. Affected
-          Elements limits those tags to any of the selected elements. Leave it empty to
-          affect all elements, including non-elemental tags. Select None to affect tags
-          without an element.
+          Elements limits those tags to any of the selected elements. With All or a
+          specific Affected Tag, leave elements empty to affect all elements, including
+          non-elemental tags. Choose None under Affected Tag to use elements only;
+          without selected elements, no tags are affected. None under Affected Elements
+          matches tags without an element.
         </p>
       )}
       <EditContent

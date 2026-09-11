@@ -5,10 +5,11 @@ import {
 } from "@/drizzle/constants";
 import type { CombatAction, UserEffect } from "@/libs/combat/types";
 import { getEffectStackKey, isEffectActive } from "@/libs/combat/util";
-import type { PotencyTag, PotencyTagType, ZodAllTags } from "@/validators/combat";
+import type { PotencyTag, ZodAllTags } from "@/validators/combat";
 import { PotencyTagTypes } from "@/validators/combat";
 
-export const POTENCY_TAG_LABELS: Record<PotencyTagType | "all", string> = {
+export const POTENCY_TAG_LABELS: Record<PotencyTag["affectedTag"], string> = {
+  none: "None",
   all: "All supported tags",
   damage: "Damage",
   increasedamagegiven: "Increase Damage Given",
@@ -27,8 +28,11 @@ export const getPotencyDescription = (
   power = effect.power,
   owner = effect.target === "SELF" ? "your" : "the target's",
 ) => {
+  if (effect.affectedTag === "none" && !effect.affectedElements?.length) {
+    return "No tags are affected. Select Affected Elements to apply potency by element.";
+  }
   const affected =
-    effect.affectedTag === "all"
+    effect.affectedTag === "all" || effect.affectedTag === "none"
       ? "all supported tags"
       : `${POTENCY_TAG_LABELS[effect.affectedTag]} tags`;
   const amount = Number(power.toFixed(2));
@@ -99,12 +103,16 @@ export const resolvePotencyTags = (
     if (!supportedTags.has(tag.type)) continue;
     const elements: readonly ElementName[] =
       "elements" in tag && tag.elements?.length ? tag.elements : ["None"];
-    const matching = modifiers.filter(
-      (modifier) =>
+    const matching = modifiers.filter((modifier) => {
+      const matchesElement = modifier.affectedElements.some((element) =>
+        elements.includes(element),
+      );
+      if (modifier.affectedTag === "none") return matchesElement;
+      return (
         (modifier.affectedTag === "all" || modifier.affectedTag === tag.type) &&
-        (modifier.affectedElements.length === 0 ||
-          modifier.affectedElements.some((element) => elements.includes(element))),
-    );
+        (modifier.affectedElements.length === 0 || matchesElement)
+      );
+    });
     if (matching.length === 0) continue;
     const flat = matching.reduce((sum, modifier) => sum + modifier.flat, 0);
     const percentage = matching.reduce((sum, modifier) => sum + modifier.percentage, 0);
