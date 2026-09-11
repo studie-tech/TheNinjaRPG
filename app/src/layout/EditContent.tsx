@@ -41,6 +41,7 @@ import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import Table from "@/layout/Table";
+import { POTENCY_TAG_LABELS } from "@/libs/combat/potency";
 import {
   isSupportedOverworldBindingTask,
   placementsForObjective,
@@ -1736,7 +1737,17 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     })
     .map((value) => {
       const innerType = getInner(tagSchema.shape[value]);
-      if ((value as string) === "aiId" && aiData) {
+      if (String(value) === "affectedTag") {
+        return {
+          id: value,
+          label: "Affected Tag",
+          type: "db_values",
+          values: Object.entries(POTENCY_TAG_LABELS).map(([id, name]) => ({
+            id,
+            name,
+          })),
+        };
+      } else if ((value as string) === "aiId" && aiData) {
         return {
           id: value,
           label: FORM_LABEL_MAP[value] ?? value,
@@ -1908,6 +1919,15 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
       ) {
         const enumValues = (innerType.element as unknown as { options: string[] })
           .options;
+        if (String(value) === "affectedElements") {
+          return {
+            id: value,
+            label: "Affected Elements",
+            type: "str_array",
+            values: enumValues,
+            multiple: true,
+          };
+        }
         return { id: value, type: "str_array", values: enumValues, multiple: true };
       } else if (innerType instanceof z.ZodBoolean) {
         return { id: value, label: value, type: "boolean" };
@@ -1940,15 +1960,30 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
 
   // Re-used EditContent component for actually showing the form
   return (
-    <EditContent
-      schema={tagSchema}
-      form={form}
-      formData={formData}
-      formClassName={formClassName}
-      showSubmit={false}
-      buttonTxt="Confirm Changes (No database sync)"
-      fixedWidths={props.fixedWidths}
-    />
+    <>
+      {(tag.type === "increasepotency" || tag.type === "decreasepotency") && (
+        <p className="mb-3 text-muted-foreground text-sm">
+          Static adds or subtracts power points. Percentage scales the selected tag’s
+          power. For power 40, an increase of 20 gives 60 in Static mode or 48 in
+          Percentage mode. All affects every supported tag on subsequent jutsu. Active
+          modifiers add together within each mode; Static applies first. Affected
+          Elements limits those tags to any of the selected elements. With All or a
+          specific Affected Tag, leave elements empty to affect all elements, including
+          non-elemental tags. Choose None under Affected Tag to use elements only;
+          without selected elements, no tags are affected. None under Affected Elements
+          matches tags without an element.
+        </p>
+      )}
+      <EditContent
+        schema={tagSchema}
+        form={form}
+        formData={formData}
+        formClassName={formClassName}
+        showSubmit={false}
+        buttonTxt="Confirm Changes (No database sync)"
+        fixedWidths={props.fixedWidths}
+      />
+    </>
   );
 };
 
