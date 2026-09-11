@@ -8,12 +8,14 @@ import {
   Copy,
   Edit,
   ExternalLink,
+  Loader2,
   Plus,
   Tag,
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { use, useState } from "react";
+import { use, useRef, useState } from "react";
+import { toast } from "sonner";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +48,18 @@ import {
 } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+type TicketUpdateAction = {
+  kind:
+    | "status"
+    | "priority"
+    | "category"
+    | "assignment"
+    | "visibility"
+    | "tag"
+    | "comment-status";
+  label: string;
+};
+
 export default function TicketDetail(props: { params: Promise<{ ticketId: string }> }) {
   // State
   const params = use(props.params);
@@ -58,6 +72,10 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [tagOpen, setTagOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<TicketUpdateAction | null>(null);
+  const ticketUpdateInFlightRef = useRef(false);
+  const queuedCommentStatusRef = useRef(false);
 
   // Canned responses state
   const [isManagementOpen, setIsManagementOpen] = useState(false);
@@ -98,7 +116,48 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
         setRefreshKey((prev) => prev + 1);
       }
     },
+    onError: (error) => {
+      toast.error(error.message || "Could not update the ticket. Please try again.");
+    },
   });
+
+  const startTicketUpdate = (
+    input: Parameters<typeof updateTicket.mutateAsync>[0],
+    action: TicketUpdateAction,
+    onSuccess?: () => void,
+  ) => {
+    if (ticketUpdateInFlightRef.current) return false;
+
+    ticketUpdateInFlightRef.current = true;
+    setPendingAction(action);
+    void updateTicket
+      .mutateAsync(input)
+      .then((data) => {
+        if (data.success) onSuccess?.();
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        ticketUpdateInFlightRef.current = false;
+        setPendingAction(null);
+
+        if (queuedCommentStatusRef.current) {
+          queuedCommentStatusRef.current = false;
+          void Promise.resolve().then(() => {
+            startTicketUpdate(
+              { ticketId: params.ticketId, status: "IN_PROGRESS" },
+              {
+                kind: "comment-status",
+                label: "Updating status after your reply…",
+              },
+            );
+          });
+        }
+      });
+
+    return true;
+  };
+
+  const isUpdatingTicket = pendingAction !== null;
 
   // Escalate to GitHub mutation
   const escalateToGithub = api.support.escalateToGithub.useMutation({
@@ -230,12 +289,29 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
             {/* Status, Priority, Category & Public Badges with inline controls */}
             <div className="flex flex-wrap items-center gap-2">
               {/* Status */}
-              <Popover open={statusOpen} onOpenChange={setStatusOpen}>
-                <PopoverTrigger asChild disabled={!canUpdateTicket}>
-                  <Badge className={getStatusColor(ticket.status)} role="button">
-                    {getStatusIcon(ticket.status)}
-                    <span className="ml-1">{ticket.status.replace("_", " ")}</span>
-                    {canUpdateTicket && <Edit className="ml-1 h-3 w-3" />}
+              <Popover
+                open={statusOpen}
+                onOpenChange={(open) => !isUpdatingTicket && setStatusOpen(open)}
+              >
+                <PopoverTrigger asChild disabled={!canUpdateTicket || isUpdatingTicket}>
+                  <Badge
+                    className={`${getStatusColor(ticket.status)} ${isUpdatingTicket ? "cursor-not-allowed opacity-70" : ""}`}
+                    role="button"
+                    aria-disabled={!canUpdateTicket || isUpdatingTicket}
+                    aria-busy={pendingAction?.kind === "status"}
+                  >
+                    {pendingAction?.kind === "status" ? (
+                      <>
+                        <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden />
+                        <span>{pendingAction.label}</span>
+                      </>
+                    ) : (
+                      <>
+                        {getStatusIcon(ticket.status)}
+                        <span className="ml-1">{ticket.status.replace("_", " ")}</span>
+                        {canUpdateTicket && <Edit className="ml-1 h-3 w-3" />}
+                      </>
+                    )}
                   </Badge>
                 </PopoverTrigger>
                 {canUpdateTicket && (
@@ -244,14 +320,18 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                       <button
                         type="button"
                         key={status}
+                        disabled={isUpdatingTicket}
                         onClick={() => {
-                          updateTicket.mutate({
-                            ticketId: params.ticketId,
-                            status,
-                          });
-                          setStatusOpen(false);
+                          const accepted = startTicketUpdate(
+                            { ticketId: params.ticketId, status },
+                            {
+                              kind: "status",
+                              label: `Updating status to ${status.replace("_", " ")}…`,
+                            },
+                          );
+                          if (accepted) setStatusOpen(false);
                         }}
-                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${status === ticket.status ? "font-semibold" : ""}`}
+                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${status === ticket.status ? "font-semibold" : ""}`}
                       >
                         <span className="flex items-center gap-2 whitespace-nowrap">
                           {getStatusIcon(status)} {status.replace("_", " ")}
@@ -266,11 +346,28 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
               </Popover>
 
               {/* Priority */}
-              <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
-                <PopoverTrigger asChild disabled={!canUpdateTicket}>
-                  <Badge className={getPriorityColor(ticket.priority)} role="button">
-                    {ticket.priority}
-                    {canUpdateTicket && <Edit className="ml-1 h-3 w-3" />}
+              <Popover
+                open={priorityOpen}
+                onOpenChange={(open) => !isUpdatingTicket && setPriorityOpen(open)}
+              >
+                <PopoverTrigger asChild disabled={!canUpdateTicket || isUpdatingTicket}>
+                  <Badge
+                    className={`${getPriorityColor(ticket.priority)} ${isUpdatingTicket ? "cursor-not-allowed opacity-70" : ""}`}
+                    role="button"
+                    aria-disabled={!canUpdateTicket || isUpdatingTicket}
+                    aria-busy={pendingAction?.kind === "priority"}
+                  >
+                    {pendingAction?.kind === "priority" ? (
+                      <>
+                        <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden />
+                        <span>{pendingAction.label}</span>
+                      </>
+                    ) : (
+                      <>
+                        {ticket.priority}
+                        {canUpdateTicket && <Edit className="ml-1 h-3 w-3" />}
+                      </>
+                    )}
                   </Badge>
                 </PopoverTrigger>
                 {canUpdateTicket && (
@@ -279,14 +376,15 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                       <button
                         type="button"
                         key={p}
+                        disabled={isUpdatingTicket}
                         onClick={() => {
-                          updateTicket.mutate({
-                            ticketId: params.ticketId,
-                            priority: p,
-                          });
-                          setPriorityOpen(false);
+                          const accepted = startTicketUpdate(
+                            { ticketId: params.ticketId, priority: p },
+                            { kind: "priority", label: `Updating priority to ${p}…` },
+                          );
+                          if (accepted) setPriorityOpen(false);
                         }}
-                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${p === ticket.priority ? "font-semibold" : ""}`}
+                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${p === ticket.priority ? "font-semibold" : ""}`}
                       >
                         <span>{p}</span>
                         {p === ticket.priority && (
@@ -299,11 +397,28 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
               </Popover>
 
               {/* Category */}
-              <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
-                <PopoverTrigger asChild disabled={!canUpdateTicket}>
-                  <Badge className={getCategoryColor(ticket.category)} role="button">
-                    {ticket.category}
-                    {canUpdateTicket && <Edit className="ml-1 h-3 w-3" />}
+              <Popover
+                open={categoryOpen}
+                onOpenChange={(open) => !isUpdatingTicket && setCategoryOpen(open)}
+              >
+                <PopoverTrigger asChild disabled={!canUpdateTicket || isUpdatingTicket}>
+                  <Badge
+                    className={`${getCategoryColor(ticket.category)} ${isUpdatingTicket ? "cursor-not-allowed opacity-70" : ""}`}
+                    role="button"
+                    aria-disabled={!canUpdateTicket || isUpdatingTicket}
+                    aria-busy={pendingAction?.kind === "category"}
+                  >
+                    {pendingAction?.kind === "category" ? (
+                      <>
+                        <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden />
+                        <span>{pendingAction.label}</span>
+                      </>
+                    ) : (
+                      <>
+                        {ticket.category}
+                        {canUpdateTicket && <Edit className="ml-1 h-3 w-3" />}
+                      </>
+                    )}
                   </Badge>
                 </PopoverTrigger>
                 {canUpdateTicket && (
@@ -312,14 +427,18 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                       <button
                         type="button"
                         key={c}
+                        disabled={isUpdatingTicket}
                         onClick={() => {
-                          updateTicket.mutate({
-                            ticketId: params.ticketId,
-                            category: c,
-                          });
-                          setCategoryOpen(false);
+                          const accepted = startTicketUpdate(
+                            { ticketId: params.ticketId, category: c },
+                            {
+                              kind: "category",
+                              label: `Updating category to ${c.replace("_", " ")}…`,
+                            },
+                          );
+                          if (accepted) setCategoryOpen(false);
                         }}
-                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${c === ticket.category ? "font-semibold" : ""}`}
+                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${c === ticket.category ? "font-semibold" : ""}`}
                       >
                         <span>{c.replace("_", " ")}</span>
                         {c === ticket.category && (
@@ -332,26 +451,48 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
               </Popover>
 
               {/* Assignment */}
-              <Popover open={assignOpen} onOpenChange={setAssignOpen}>
-                <PopoverTrigger asChild disabled={!isStaff}>
-                  <Badge variant="secondary" role="button">
-                    <Users className="mr-1 h-3 w-3" />
-                    {ticket.assignedTo ? ticket.assignedTo.username : "Unassigned"}
-                    {isStaff && <Edit className="ml-1 h-3 w-3" />}
+              <Popover
+                open={assignOpen}
+                onOpenChange={(open) => !isUpdatingTicket && setAssignOpen(open)}
+              >
+                <PopoverTrigger asChild disabled={!isStaff || isUpdatingTicket}>
+                  <Badge
+                    variant="secondary"
+                    role="button"
+                    aria-disabled={!isStaff || isUpdatingTicket}
+                    aria-busy={pendingAction?.kind === "assignment"}
+                    className={isUpdatingTicket ? "cursor-not-allowed opacity-70" : ""}
+                  >
+                    {pendingAction?.kind === "assignment" ? (
+                      <>
+                        <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden />
+                        <span>{pendingAction.label}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Users className="mr-1 h-3 w-3" />
+                        {ticket.assignedTo ? ticket.assignedTo.username : "Unassigned"}
+                        {isStaff && <Edit className="ml-1 h-3 w-3" />}
+                      </>
+                    )}
                   </Badge>
                 </PopoverTrigger>
                 {isStaff && (
                   <PopoverContent className="w-56 space-y-1 p-2">
                     <button
                       type="button"
+                      disabled={isUpdatingTicket}
                       onClick={() => {
-                        updateTicket.mutate({
-                          ticketId: params.ticketId,
-                          assignedToUserId: undefined,
-                        });
-                        setAssignOpen(false);
+                        const accepted = startTicketUpdate(
+                          {
+                            ticketId: params.ticketId,
+                            assignedToUserId: undefined,
+                          },
+                          { kind: "assignment", label: "Unassigning ticket…" },
+                        );
+                        if (accepted) setAssignOpen(false);
                       }}
-                      className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${!ticket.assignedTo ? "font-semibold" : ""}`}
+                      className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${!ticket.assignedTo ? "font-semibold" : ""}`}
                     >
                       <span>Unassigned</span>
                       {!ticket.assignedTo && <Check className="h-4 w-4 opacity-70" />}
@@ -360,14 +501,21 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                       <button
                         type="button"
                         key={staff.userId}
+                        disabled={isUpdatingTicket}
                         onClick={() => {
-                          updateTicket.mutate({
-                            ticketId: params.ticketId,
-                            assignedToUserId: staff.userId,
-                          });
-                          setAssignOpen(false);
+                          const accepted = startTicketUpdate(
+                            {
+                              ticketId: params.ticketId,
+                              assignedToUserId: staff.userId,
+                            },
+                            {
+                              kind: "assignment",
+                              label: `Assigning to ${staff.username}…`,
+                            },
+                          );
+                          if (accepted) setAssignOpen(false);
                         }}
-                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted ${ticket.assignedToUserId === staff.userId ? "font-semibold" : ""}`}
+                        className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${ticket.assignedToUserId === staff.userId ? "font-semibold" : ""}`}
                       >
                         <span>{staff.username}</span>
                         {ticket.assignedToUserId === staff.userId && (
@@ -383,17 +531,35 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
               <Badge
                 variant="outline"
                 role="button"
-                onClick={() =>
-                  canUpdateTicket &&
-                  updateTicket.mutate({
-                    ticketId: params.ticketId,
-                    isPublic: !ticket.isPublic,
-                  })
-                }
-                className={`${canUpdateTicket ? "cursor-pointer hover:bg-muted" : ""}`}
+                aria-disabled={!canUpdateTicket || isUpdatingTicket}
+                aria-busy={pendingAction?.kind === "visibility"}
+                onClick={() => {
+                  if (canUpdateTicket) {
+                    startTicketUpdate(
+                      {
+                        ticketId: params.ticketId,
+                        isPublic: !ticket.isPublic,
+                      },
+                      {
+                        kind: "visibility",
+                        label: `Making ticket ${ticket.isPublic ? "private" : "public"}…`,
+                      },
+                    );
+                  }
+                }}
+                className={`${canUpdateTicket && !isUpdatingTicket ? "cursor-pointer hover:bg-muted" : "cursor-not-allowed opacity-70"}`}
               >
-                <Users className="mr-1 h-3 w-3" />
-                {ticket.isPublic ? "Public" : "Private"}
+                {pendingAction?.kind === "visibility" ? (
+                  <>
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden />
+                    <span>{pendingAction.label}</span>
+                  </>
+                ) : (
+                  <>
+                    <Users className="mr-1 h-3 w-3" />
+                    {ticket.isPublic ? "Public" : "Private"}
+                  </>
+                )}
               </Badge>
               {/* End Public */}
             </div>
@@ -407,14 +573,23 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                 </Badge>
               ))}
               {canUpdateTicket && (
-                <Popover>
+                <Popover
+                  open={tagOpen}
+                  onOpenChange={(open) => !isUpdatingTicket && setTagOpen(open)}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-5 w-5 text-gray-500 hover:text-orange-500"
+                      disabled={isUpdatingTicket}
+                      aria-label="Add tag"
                     >
-                      <Plus className="h-4 w-4" />
+                      {pendingAction?.kind === "tag" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-60">
@@ -423,24 +598,51 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                         value={newTag}
                         onChange={(e) => setNewTag(e.target.value)}
                         placeholder="New tag"
+                        disabled={isUpdatingTicket}
                       />
                       <Button
+                        disabled={isUpdatingTicket || newTag.trim().length === 0}
+                        aria-busy={pendingAction?.kind === "tag"}
                         onClick={() => {
                           const tagToAdd = newTag.trim();
                           if (tagToAdd.length > 0 && !ticket.tags.includes(tagToAdd)) {
-                            updateTicket.mutate({
-                              ticketId: params.ticketId,
-                              tags: [...ticket.tags, tagToAdd],
-                            });
-                            setNewTag("");
+                            startTicketUpdate(
+                              {
+                                ticketId: params.ticketId,
+                                tags: [...ticket.tags, tagToAdd],
+                              },
+                              { kind: "tag", label: `Adding tag ${tagToAdd}…` },
+                              () => {
+                                setNewTag("");
+                                setTagOpen(false);
+                              },
+                            );
                           }
                         }}
                       >
-                        Add
+                        {pendingAction?.kind === "tag" ? (
+                          <>
+                            <Loader2
+                              className="mr-2 h-4 w-4 animate-spin"
+                              aria-hidden
+                            />
+                            Adding…
+                          </>
+                        ) : (
+                          "Add"
+                        )}
                       </Button>
                     </div>
                   </PopoverContent>
                 </Popover>
+              )}
+            </div>
+            <div className="min-h-5" aria-live="polite" aria-atomic="true">
+              {pendingAction && (
+                <p className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  {pendingAction.label}
+                </p>
               )}
             </div>
           </div>
@@ -455,10 +657,14 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
         subtitle="Talk with staff"
         supportTicketCreatedByUserId={ticket.createdByUserId}
         onCommentPosted={() => {
-          updateTicket.mutate({
-            ticketId: params.ticketId,
-            status: "IN_PROGRESS",
-          });
+          const accepted = startTicketUpdate(
+            { ticketId: params.ticketId, status: "IN_PROGRESS" },
+            {
+              kind: "comment-status",
+              label: "Updating status after your reply…",
+            },
+          );
+          if (!accepted) queuedCommentStatusRef.current = true;
         }}
       />
 

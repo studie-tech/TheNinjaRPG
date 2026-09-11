@@ -1,7 +1,7 @@
 import alea from "alea";
 import type { Grid } from "honeycomb-grid";
 import { useSetAtom } from "jotai";
-import { Check, HelpCircle } from "lucide-react";
+import { Check, HelpCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -94,6 +94,13 @@ const Combat: React.FC<CombatProps> = (props) => {
   const [isInLobby, setIsInLobby] = useState<boolean>(true);
   const [logbookModalOpen, setLogbookModalOpen] = useState<boolean>(false);
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
+  const [readySettledBattleId, setReadySettledBattleId] = useState<string | null>(null);
+  const [pendingLoadoutSelection, setPendingLoadoutSelection] = useState<{
+    battleId: string;
+    kind: "item" | "jutsu";
+    loadoutId: string;
+    displayName: string;
+  } | null>(null);
 
   // Hover tooltip state for effects (can include both user and ground effects)
   const [hoveredEffect, setHoveredEffect] = useState<{
@@ -113,6 +120,14 @@ const Combat: React.FC<CombatProps> = (props) => {
   const [webglError, setWebglError] = useState<boolean>(false);
   const [hasFocus, setHasFocus] = useState<boolean>(true);
   const lastActionsRef = useRef<Date[]>([]);
+  const arenaHealInFlightRef = useRef(false);
+  const arenaStartInFlightRef = useRef(false);
+  const readyInFlightBattleIdRef = useRef<string | null>(null);
+  const loadoutInFlightRef = useRef<{
+    battleId: string;
+    kind: "item" | "jutsu";
+    loadoutId: string;
+  } | null>(null);
   const battleRef = useRef<ReturnedBattle | null | undefined>(battleState.battle);
   const actionRef = useRef<CombatAction | undefined>(props.action);
   const userIdRef = useRef<string>(props.userId);
@@ -212,6 +227,14 @@ const Combat: React.FC<CombatProps> = (props) => {
   const battleSessionUser = battleRef.current?.usersState.find(
     (u) => u.userId === userData?.userId,
   );
+  // Once this participant's readiness has been proven by the mutation response,
+  // do not let an older query snapshot expose the action again. Battle IDs are
+  // immutable, so a genuinely new lobby resets this local settlement naturally.
+  const hasSettledReady =
+    !!battleId &&
+    (battleSessionUser?.iAmHere === true || readySettledBattleId === battleId);
+  const activePendingLoadout =
+    pendingLoadoutSelection?.battleId === battleId ? pendingLoadoutSelection : null;
 
   // Asset IDs to fetch
   const textureAssets = battleRef.current?.extraState.textureAssets || [];
@@ -266,39 +289,108 @@ const Combat: React.FC<CombatProps> = (props) => {
     }
   };
 
-  // Mutation for starting a fight
-  const { mutate: battleArenaHealAndGo } = api.combat.battleArenaHeal.useMutation({
-    onSuccess: (data) => {
-      if (data.success && arenaOpponentId) {
-        startArenaBattle({
-          aiId: arenaOpponentId,
-          stats:
-            battleRef.current?.battleType === "TRAINING" ? statDistribution : undefined,
-          autoCombat,
-        });
-      } else {
-        showMutationToast(data);
-      }
-    },
-  });
+  // A successful arena heal is a paid, one-shot action for the current finished
+  // battle. Keep it settled locally even if the follow-up battle start or an
+  // authoritative refresh fails, so stale UI can never charge the player twice.
+  const arenaHealBattleKey = battleId ?? "finished-arena";
+  const [arenaHealSettledBattleId, setArenaHealSettledBattleId] = useState<
+    string | null
+  >(null);
+  const hasSettledArenaHeal = arenaHealSettledBattleId === arenaHealBattleKey;
+
+  // Mutation for healing before starting another arena fight
+  const { mutate: battleArenaHealAndGo, isPending: isArenaHealPending } =
+    api.combat.battleArenaHeal.useMutation({
+      onSuccess: (data) => {
+        if (data.success) {
+          setArenaHealSettledBattleId(arenaHealBattleKey);
+          if (
+            data.money !== undefined &&
+            data.curHealth !== undefined &&
+            data.curStamina !== undefined &&
+            data.curChakra !== undefined
+          ) {
+            void updateUser({
+              money: data.money,
+              curHealth: data.curHealth,
+              curStamina: data.curStamina,
+              curChakra: data.curChakra,
+            });
+          }
+          if (arenaOpponentId) {
+            handleStartArenaBattle("post-heal");
+          } else {
+            showMutationToast(data);
+          }
+        } else {
+          showMutationToast(data);
+        }
+      },
+      onError: (error) => {
+        showMutationToast({ success: false, message: error.message });
+      },
+      onSettled: () => {
+        arenaHealInFlightRef.current = false;
+      },
+    });
 
   // Mutation for starting a fight
-  const { mutate: startArenaBattle } = api.combat.startArenaBattle.useMutation({
-    onSuccess: async (result) => {
-      if (result.success && result.battleId) {
-        setBattleAtom(undefined);
-        setBattleState({ battle: undefined, result: null, isPending: true });
-        await updateUser({
-          status: "BATTLE",
-          battleId: result.battleId,
-          updatedAt: new Date(),
-        });
-        await utils.combat.getBattle.invalidate();
-      } else {
-        showMutationToast(result);
-      }
-    },
-  });
+  const { mutate: startArenaBattle, isPending: isStartingArenaBattle } =
+    api.combat.startArenaBattle.useMutation({
+      onSuccess: (result) => {
+        if (result.success && result.battleId) {
+          setBattleAtom(undefined);
+          setBattleState({ battle: undefined, result: null, isPending: true });
+          void updateUser({
+            status: "BATTLE",
+            battleId: result.battleId,
+            updatedAt: new Date(),
+          });
+          void utils.combat.getBattle.invalidate();
+        } else {
+          arenaStartInFlightRef.current = false;
+          showMutationToast(result);
+        }
+      },
+      onError: (error) => {
+        arenaStartInFlightRef.current = false;
+        showMutationToast({ success: false, message: error.message });
+      },
+    });
+
+  const handleStartArenaBattle = (source: "repeat" | "post-heal") => {
+    if (
+      arenaStartInFlightRef.current ||
+      isStartingArenaBattle ||
+      (source === "repeat" && isArenaHealPending) ||
+      !arenaOpponentId
+    ) {
+      return;
+    }
+    arenaStartInFlightRef.current = true;
+    startArenaBattle({
+      aiId: arenaOpponentId,
+      stats:
+        battleRef.current?.battleType === "TRAINING" ? statDistribution : undefined,
+      autoCombat,
+    });
+  };
+
+  const handleArenaHealAndGo = () => {
+    if (
+      arenaHealInFlightRef.current ||
+      isArenaHealPending ||
+      isStartingArenaBattle ||
+      hasSettledArenaHeal ||
+      !needsArenaHealing ||
+      !canAffordArenaHealing ||
+      !canHealFromCurrentStatus
+    ) {
+      return;
+    }
+    arenaHealInFlightRef.current = true;
+    battleArenaHealAndGo();
+  };
 
   // User Action
   const { mutate: performAction, isPending } = api.combat.performAction.useMutation({
@@ -417,30 +509,150 @@ const Combat: React.FC<CombatProps> = (props) => {
   });
 
   // I am here call
-  const { mutate: iAmHere } = api.combat.iAmHere.useMutation({
-    onSuccess: (data) => {
-      if ("battle" in data && data.success && data.battle) {
-        battleRef.current = data.battle;
-        setBattleAtom(battleRef.current);
-        setBattleState({ battle: data.battle, result: null, isPending: false });
+  const { mutate: iAmHere, isPending: isMarkingReady } = api.combat.iAmHere.useMutation(
+    {
+      onSuccess: (data, variables) => {
+        const readinessWasProven =
+          "battle" in data &&
+          data.success &&
+          data.battle?.usersState.some((user) => user.userId === suid && user.iAmHere);
+
+        if (readinessWasProven && data.battle) {
+          setReadySettledBattleId(variables.battleId);
+
+          // Do not replace a newer battle with a response from a lobby the user
+          // has already left. The settlement is keyed to the old battle and is
+          // therefore harmless when the new battle renders.
+          if (battleRef.current?.id === variables.battleId) {
+            battleRef.current = data.battle;
+            setBattleAtom(data.battle);
+            setBattleState({ battle: data.battle, result: null, isPending: false });
+            void utils.combat.getBattle.invalidate();
+          }
+        } else {
+          showMutationToast({
+            success: false,
+            message:
+              data.message ||
+              "The combat lobby has expired. Refresh to see the current battle.",
+          });
+        }
+      },
+      onError: (error) => {
+        showMutationToast({ success: false, message: error.message });
+      },
+      onSettled: (_data, _error, variables) => {
+        if (readyInFlightBattleIdRef.current === variables.battleId) {
+          readyInFlightBattleIdRef.current = null;
+        }
+      },
+    },
+  );
+
+  const handleMarkReady = () => {
+    const currentBattleId = battleRef.current?.id;
+    const sessionUser = battleRef.current?.usersState.find(
+      (user) => user.userId === suid,
+    );
+    if (
+      !currentBattleId ||
+      !suid ||
+      isMarkingReady ||
+      loadoutInFlightRef.current?.battleId === currentBattleId ||
+      readyInFlightBattleIdRef.current === currentBattleId ||
+      sessionUser?.iAmHere ||
+      readySettledBattleId === currentBattleId
+    ) {
+      return;
+    }
+
+    readyInFlightBattleIdRef.current = currentBattleId;
+    iAmHere({ battleId: currentBattleId });
+  };
+
+  // Mutation for selecting loadouts
+  const { mutate: selectLoadout } = api.combat.updateCombatLoadout.useMutation({
+    onSuccess: (data, variables) => {
+      if (
+        "battle" in data &&
+        data.success &&
+        data.battle &&
+        data.battle.id === variables.battleId
+      ) {
+        // The response belongs to an immutable lobby ID. Never allow a slow
+        // response from a lobby the player has left to replace the new battle.
+        if (battleRef.current?.id === variables.battleId) {
+          battleRef.current = data.battle;
+          setBattleAtom(data.battle);
+          setBattleState({ battle: data.battle, result: null, isPending: false });
+          void utils.combat.getBattle.invalidate().catch(() => undefined);
+        }
       } else {
-        showMutationToast({ success: false, message: data.message });
+        showMutationToast({
+          success: false,
+          message:
+            data.message ||
+            "The combat lobby changed before this loadout could be saved.",
+        });
+      }
+    },
+    onError: (error) => {
+      showMutationToast({ success: false, message: error.message });
+    },
+    onSettled: (_data, _error, variables) => {
+      const kind = variables.itemLoadoutId ? "item" : "jutsu";
+      const loadoutId = variables.itemLoadoutId ?? variables.jutsuLoadoutId;
+      const currentRequest = loadoutInFlightRef.current;
+      if (
+        loadoutId &&
+        currentRequest?.battleId === variables.battleId &&
+        currentRequest.kind === kind &&
+        currentRequest.loadoutId === loadoutId
+      ) {
+        loadoutInFlightRef.current = null;
+        setPendingLoadoutSelection((pending) =>
+          pending?.battleId === variables.battleId &&
+          pending.kind === kind &&
+          pending.loadoutId === loadoutId
+            ? null
+            : pending,
+        );
       }
     },
   });
 
-  // Mutation for selecting loadouts
-  const { mutate: selectLoadout } = api.combat.updateCombatLoadout.useMutation({
-    onSuccess: (data) => {
-      if ("battle" in data && data.success && data.battle) {
-        battleRef.current = data.battle;
-        setBattleAtom(battleRef.current);
-        setBattleState({ battle: data.battle, result: null, isPending: false });
-      } else {
-        showMutationToast({ success: false, message: data.message });
-      }
-    },
-  });
+  const handleSelectLoadout = (
+    kind: "item" | "jutsu",
+    loadoutId: string,
+    displayName: string,
+  ) => {
+    const currentBattle = battleRef.current;
+    const currentUser = currentBattle?.usersState.find((user) => user.userId === suid);
+    if (
+      !currentBattle ||
+      !currentUser ||
+      currentUser.iAmHere ||
+      readySettledBattleId === currentBattle.id ||
+      readyInFlightBattleIdRef.current === currentBattle.id ||
+      loadoutInFlightRef.current?.battleId === currentBattle.id
+    ) {
+      return;
+    }
+
+    const selectedId =
+      kind === "item" ? currentUser.itemLoadout : currentUser.jutsuLoadout;
+    if (selectedId === loadoutId) return;
+
+    const pending = { battleId: currentBattle.id, kind, loadoutId, displayName };
+    loadoutInFlightRef.current = pending;
+    setPendingLoadoutSelection(pending);
+    selectLoadout({
+      battleId: currentBattle.id,
+      ...(kind === "item"
+        ? { itemLoadoutId: loadoutId }
+        : { jutsuLoadoutId: loadoutId }),
+    });
+  };
 
   // Handle key-presses
   const onDocumentKeyDown = (event: KeyboardEvent) => {
@@ -1136,6 +1348,14 @@ const Combat: React.FC<CombatProps> = (props) => {
     (q) => q.questId === logbookModalQuestId,
   );
   const modalTracker = userData?.questData?.find((q) => q.id === logbookModalQuestId);
+  const needsArenaHealing =
+    !!userData &&
+    !!result &&
+    (result.curHealth < userData.maxHealth ||
+      result.curStamina < userData.maxStamina ||
+      result.curChakra < userData.maxChakra);
+  const canAffordArenaHealing = (userData?.money ?? 0) >= 500;
+  const canHealFromCurrentStatus = userData?.status === "AWAKE";
   const toHospital =
     battleType &&
     result &&
@@ -1208,52 +1428,70 @@ const Combat: React.FC<CombatProps> = (props) => {
                           {Math.floor(u.initiative)}
                         </p>
                         <p>
-                          {u.username} {u.iAmHere ? "(✓)" : ""}
+                          {u.username}{" "}
+                          {u.iAmHere ||
+                          (u.userId === suid && readySettledBattleId === battleId)
+                            ? "(✓)"
+                            : ""}
                         </p>
                       </div>
                     );
                   })}
               </div>
-              <div className="mt-3 flex flex-row items-end gap-3">
+              <fieldset
+                className="mt-3 flex flex-row items-end gap-3"
+                disabled={isMarkingReady || hasSettledReady || !!activePendingLoadout}
+                aria-busy={isMarkingReady || !!activePendingLoadout}
+              >
                 <ItemLoadoutSelector
                   variant="dropdown"
                   label="Item Loadout"
-                  onSelectOverride={(loadoutId) => {
-                    if (battleRef?.current) {
-                      selectLoadout({
-                        battleId: battleRef.current.id,
-                        itemLoadoutId: loadoutId,
-                      });
-                    }
-                  }}
+                  onSelectOverride={(loadoutId, displayName) =>
+                    handleSelectLoadout("item", loadoutId, displayName)
+                  }
                   selectedOverrideId={battleSessionUser?.itemLoadout}
                 />
                 <JutsuLoadoutSelector
                   variant="dropdown"
                   label="Jutsu Loadout"
-                  onSelectOverride={(loadoutId) => {
-                    if (battleRef?.current) {
-                      selectLoadout({
-                        battleId: battleRef.current.id,
-                        jutsuLoadoutId: loadoutId,
-                      });
-                    }
-                  }}
+                  onSelectOverride={(loadoutId, displayName) =>
+                    handleSelectLoadout("jutsu", loadoutId, displayName)
+                  }
                   selectedOverrideId={battleSessionUser?.jutsuLoadout}
                 />
                 <Button
                   variant="secondary"
                   className="shrink-0"
-                  disabled={battleSessionUser?.iAmHere}
-                  onClick={() => {
-                    if (battleRef.current && suid) {
-                      iAmHere({ battleId: battleRef.current.id });
-                    }
-                  }}
+                  disabled={isMarkingReady || hasSettledReady || !!activePendingLoadout}
+                  aria-busy={isMarkingReady || !!activePendingLoadout}
+                  onClick={handleMarkReady}
                 >
-                  {battleSessionUser?.iAmHere ? "Ready" : "I'm Ready"}
+                  {isMarkingReady ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                      Marking you ready…
+                    </>
+                  ) : hasSettledReady ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" aria-hidden />
+                      Ready
+                    </>
+                  ) : (
+                    "I'm Ready"
+                  )}
                 </Button>
-              </div>
+              </fieldset>
+              {activePendingLoadout && (
+                <p
+                  className="mt-2 flex items-center text-sm text-white/80"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  Saving {activePendingLoadout.kind} loadout “
+                  {activePendingLoadout.displayName}”…
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -1418,26 +1656,49 @@ const Combat: React.FC<CombatProps> = (props) => {
                     <Button
                       id="return"
                       className="w-full basis-1/2"
-                      onClick={() =>
-                        startArenaBattle({
-                          aiId: arenaOpponentId,
-                          stats:
-                            battleRef.current?.battleType === "TRAINING"
-                              ? statDistribution
-                              : undefined,
-                          autoCombat,
-                        })
-                      }
+                      disabled={isArenaHealPending || isStartingArenaBattle}
+                      aria-busy={isStartingArenaBattle}
+                      aria-live="polite"
+                      onClick={() => handleStartArenaBattle("repeat")}
                     >
-                      Go Again
+                      {isStartingArenaBattle && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                      )}
+                      {isStartingArenaBattle ? "Starting next fight…" : "Go Again"}
                     </Button>
 
                     <Button
                       id="heal-return"
                       className="mt-1 w-full basis-1/2"
-                      onClick={() => battleArenaHealAndGo()}
+                      disabled={
+                        isArenaHealPending ||
+                        isStartingArenaBattle ||
+                        hasSettledArenaHeal ||
+                        !needsArenaHealing ||
+                        !canAffordArenaHealing ||
+                        !canHealFromCurrentStatus
+                      }
+                      aria-busy={isArenaHealPending || isStartingArenaBattle}
+                      aria-live="polite"
+                      onClick={handleArenaHealAndGo}
                     >
-                      Heal and Go Again (-{BATTLE_ARENA_HEAL_COST} Ryo)
+                      {(isArenaHealPending ||
+                        (hasSettledArenaHeal && isStartingArenaBattle)) && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                      )}
+                      {isArenaHealPending
+                        ? "Healing and preparing next fight…"
+                        : hasSettledArenaHeal && isStartingArenaBattle
+                          ? "Healed — starting next fight…"
+                          : hasSettledArenaHeal
+                            ? "Healed — use Go Again"
+                            : !canHealFromCurrentStatus
+                              ? "Healing unavailable"
+                              : !needsArenaHealing
+                                ? "Already fully healed"
+                                : !canAffordArenaHealing
+                                  ? "Need 500 Ryo to heal"
+                                  : "Heal and Go Again (-500 Ryo)"}
                     </Button>
                   </div>
                 )}

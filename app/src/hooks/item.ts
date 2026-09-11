@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import {
@@ -24,8 +25,10 @@ import { ItemValidator } from "@/validators/combat";
  */
 export const useItemEditForm = (
   data: Item & { craftingRequirements: CraftingRequirement[] },
-  refetch: () => void,
+  refetch: () => Promise<unknown>,
 ) => {
+  const submitInFlight = useRef(false);
+
   // Case type
   const expireFromStoreAt = data.expireFromStoreAt
     ? data.expireFromStoreAt.slice(0, 10)
@@ -51,23 +54,36 @@ export const useItemEditForm = (
   });
 
   // Mutation for updating item
-  const { mutate: updateItem } = api.item.update.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      refetch();
-    },
-  });
+  const { mutateAsync: updateItem, isPending: isUpdating } =
+    api.item.update.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await refetch();
+        }
+      },
+      onSettled: () => {
+        submitInFlight.current = false;
+      },
+    });
 
   // Form submission
   const handleItemSubmit = form.handleSubmit(
-    (data: ZodItemType) => {
+    async (data: ZodItemType) => {
+      if (submitInFlight.current) return;
       const newItem = {
         ...item,
         ...data,
       };
       const diff = calculateContentDiff(item, newItem);
       if (diff.length > 0) {
-        updateItem({ id: item.id, data: newItem });
+        submitInFlight.current = true;
+        try {
+          await updateItem({ id: item.id, data: newItem });
+        } catch {
+          // The shared tRPC error handler reports transport failures. Do not
+          // refetch here: retaining this draft makes the failed save retryable.
+        }
       }
     },
     (errors) => showFormErrorsToast(errors),
@@ -252,5 +268,13 @@ export const useItemEditForm = (
     });
   }
 
-  return { item, effects, form, formData, setEffects, handleItemSubmit };
+  return {
+    item,
+    effects,
+    form,
+    formData,
+    setEffects,
+    handleItemSubmit,
+    isUpdating,
+  };
 };

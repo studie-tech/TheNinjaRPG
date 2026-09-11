@@ -75,12 +75,12 @@ export default function ItemEdit(props: { params: Promise<{ itemid: string }> })
 
 interface SingleEditItemProps {
   item: Item & { craftingRequirements: CraftingRequirement[] };
-  refetch: () => void;
+  refetch: () => Promise<unknown>;
 }
 
 const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
   // Form handling
-  const { item, effects, form, formData, setEffects, handleItemSubmit } =
+  const { item, effects, form, formData, setEffects, handleItemSubmit, isUpdating } =
     useItemEditForm(props.item, props.refetch);
 
   // Filter out any undefined effects from useWatch
@@ -90,8 +90,10 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
   // Icon for adding tag
   const AddTagIcon = (
     <FilePlus
-      className="h-6 w-6 cursor-pointer hover:text-orange-500"
+      className={`h-6 w-6 ${isUpdating ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:text-orange-500"}`}
+      aria-disabled={isUpdating}
       onClick={() => {
+        if (isUpdating) return;
         setEffects([
           ...validEffects,
           DamageTag.parse({
@@ -168,6 +170,8 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
             relationId={item.id}
             allowImageUpload={true}
             onAccept={handleItemSubmit}
+            submitLoading={isUpdating}
+            submitLoadingText="Saving item…"
           />
         )}
         {item && <ItemVariantsEditor itemId={item.id} />}
@@ -193,8 +197,10 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
               <div className="flex flex-row">
                 {AddTagIcon}
                 <FileMinus
-                  className="h-6 w-6 cursor-pointer hover:text-orange-500"
+                  className={`h-6 w-6 ${isUpdating ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:text-orange-500"}`}
+                  aria-disabled={isUpdating}
                   onClick={() => {
+                    if (isUpdating) return;
                     const newEffects = [...validEffects];
                     newEffects.splice(i, 1);
                     setEffects(newEffects);
@@ -210,6 +216,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
               availableTags={tagTypes}
               effects={validEffects}
               setEffects={setEffects}
+              submitLoading={isUpdating}
             />
           </ContentBox>
         );
@@ -239,8 +246,34 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
     null,
   );
   const [showForm, setShowForm] = React.useState(false);
+  const deletingVariantIdsRef = React.useRef<Set<string>>(new Set());
+  const [deletingVariantIds, setDeletingVariantIds] = React.useState<
+    ReadonlySet<string>
+  >(() => new Set());
+
+  const setVariantDeleting = (variantId: string, deleting: boolean) => {
+    const next = new Set(deletingVariantIdsRef.current);
+    if (deleting) {
+      next.add(variantId);
+    } else {
+      next.delete(variantId);
+    }
+    deletingVariantIdsRef.current = next;
+    setDeletingVariantIds(next);
+  };
 
   const { data: variants } = api.item.getItemVariants.useQuery({ itemId });
+
+  useEffect(() => {
+    if (
+      editingVariant?.id &&
+      variants &&
+      !variants.some((variant) => variant.id === editingVariant.id)
+    ) {
+      setEditingVariant(null);
+      setShowForm(false);
+    }
+  }, [editingVariant, variants]);
 
   const upsert = api.item.upsertItemVariant.useMutation({
     onSuccess: async (result) => {
@@ -258,11 +291,25 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
       showMutationToast(result);
       if (result.success) {
         await utils.item.getItemVariants.invalidate({ itemId });
-        setEditingVariant(null);
-        setShowForm(false);
       }
     },
+    onSettled: (_result, _error, variables) => {
+      setVariantDeleting(variables.variantId, false);
+    },
   });
+
+  const deleteVariant = (variantId: string) => {
+    // mutate() updates React state asynchronously, so guard duplicate activations with
+    // a ref before starting the request. Other variant rows remain independently usable.
+    if (deletingVariantIdsRef.current.has(variantId)) return;
+    setVariantDeleting(variantId, true);
+    try {
+      remove.mutate({ variantId });
+    } catch (error) {
+      setVariantDeleting(variantId, false);
+      throw error;
+    }
+  };
 
   const form = useForm<VariantFormInput, unknown, ZodItemVariantType>({
     resolver: zodResolver(ItemVariantValidator) as any,
@@ -319,57 +366,77 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
             </tr>
           </thead>
           <tbody>
-            {variants.map((v) => (
-              <tr key={v.id} className="border-b">
-                <td className="py-1">{v.order}</td>
-                <td className="py-1">{v.name}</td>
-                <td className="py-1">{displayCostType(v.costType)}</td>
-                <td className="py-1">{v.cost}</td>
-                <td className="py-1">
-                  {v.image && (
-                    <Image
-                      src={v.image}
-                      alt={v.name}
-                      width={40}
-                      height={40}
-                      className="rounded"
-                    />
-                  )}
-                </td>
-                <td className="py-1">
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditingVariant({
-                          ...v,
-                          description: v.description ?? undefined,
-                          battleDescription: v.battleDescription ?? undefined,
-                        });
-                        setShowForm(true);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Confirm
-                      title="Delete Variant"
-                      button={
-                        <Button variant="destructive" size="sm">
-                          Delete
-                        </Button>
-                      }
-                      onAccept={() => remove.mutate({ variantId: v.id })}
-                    >
-                      <p>
-                        Delete this variant? Players who have already unlocked it will
-                        lose access.
-                      </p>
-                    </Confirm>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {variants.map((v) => {
+              const isDeleting = deletingVariantIds.has(v.id);
+              return (
+                <tr
+                  key={v.id}
+                  className="border-b"
+                  aria-busy={isDeleting}
+                  data-testid={`item-variant-row-${v.id}`}
+                >
+                  <td className="py-1">{v.order}</td>
+                  <td className="py-1">{v.name}</td>
+                  <td className="py-1">{displayCostType(v.costType)}</td>
+                  <td className="py-1">{v.cost}</td>
+                  <td className="py-1">
+                    {v.image && (
+                      <Image
+                        src={v.image}
+                        alt={v.name}
+                        width={40}
+                        height={40}
+                        className="rounded"
+                      />
+                    )}
+                  </td>
+                  <td className="py-1">
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isDeleting}
+                        onClick={() => {
+                          setEditingVariant({
+                            ...v,
+                            description: v.description ?? undefined,
+                            battleDescription: v.battleDescription ?? undefined,
+                          });
+                          setShowForm(true);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Confirm
+                        title="Delete Variant"
+                        disabled={isDeleting}
+                        button={
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={isDeleting}
+                            loading={isDeleting}
+                          >
+                            {isDeleting ? "Deleting…" : "Delete"}
+                          </Button>
+                        }
+                        onAccept={() => deleteVariant(v.id)}
+                      >
+                        <p>
+                          Delete this variant? Players who have already unlocked it will
+                          lose access.
+                        </p>
+                      </Confirm>
+                      {isDeleting && (
+                        <span role="status" className="sr-only" aria-live="polite">
+                          Deleting {v.name}…
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -387,7 +454,13 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
       )}
 
       {showForm && (
-        <form onSubmit={onSubmit} className="mt-2 space-y-3 rounded border p-4">
+        <form
+          onSubmit={onSubmit}
+          className="mt-2 space-y-3 rounded border p-4"
+          aria-busy={
+            editingVariant?.id ? deletingVariantIds.has(editingVariant.id) : false
+          }
+        >
           <h3 className="font-medium">
             {editingVariant ? "Edit Variant" : "New Variant"}
           </h3>
@@ -510,12 +583,21 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
             />
           </div>
           <div className="flex gap-2">
-            <Button type="submit" disabled={upsert.isPending}>
+            <Button
+              type="submit"
+              disabled={
+                upsert.isPending ||
+                (editingVariant?.id ? deletingVariantIds.has(editingVariant.id) : false)
+              }
+            >
               {upsert.isPending ? "Saving..." : "Save Variant"}
             </Button>
             <Button
               type="button"
               variant="outline"
+              disabled={
+                editingVariant?.id ? deletingVariantIds.has(editingVariant.id) : false
+              }
               onClick={() => {
                 setShowForm(false);
                 setEditingVariant(null);

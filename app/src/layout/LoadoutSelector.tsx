@@ -42,7 +42,7 @@ interface LoadoutSelectorProps<T extends LoadoutData> {
   label?: string;
   /** "icons" shows folder buttons; "dropdown" uses a compact select */
   variant?: "icons" | "dropdown";
-  onSelectOverride?: (loadoutId: string) => void;
+  onSelectOverride?: (loadoutId: string, displayName: string) => void;
   selectedOverrideId?: string | null;
   config: LoadoutSelectorConfig<T>;
 }
@@ -78,7 +78,14 @@ const LoadoutSelector = <T extends LoadoutData>(
   // Handle select
   const handleSelect = (id: string) => {
     if (props.onSelectOverride) {
-      props.onSelectOverride(id);
+      const selectedIndex = data?.findIndex((loadout) => loadout.id === id) ?? -1;
+      const selectedLoadout = selectedIndex >= 0 ? data?.[selectedIndex] : undefined;
+      props.onSelectOverride(
+        id,
+        selectedLoadout
+          ? getDisplayName(selectedLoadout, selectedIndex)
+          : props.label || "Loadout",
+      );
     } else {
       selectLoadout({ id });
     }

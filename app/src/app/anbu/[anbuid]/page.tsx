@@ -13,7 +13,7 @@ import {
   ZapOff,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -212,6 +212,46 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   );
   const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
 
+  // Keep kick progress scoped to the affected member so other rows remain usable.
+  // The ref closes the brief gap before state re-renders and prevents double submits.
+  const kickingMemberIdsRef = useRef<Set<string>>(new Set());
+  const [kickingMemberIds, setKickingMemberIds] = useState<Set<string>>(new Set());
+
+  // Promotion is also target-scoped: one member can show progress without
+  // blocking the rest of the roster. The ref prevents rapid duplicate submits.
+  const promotingMemberIdsRef = useRef<Set<string>>(new Set());
+  const [promotingMemberIds, setPromotingMemberIds] = useState<Set<string>>(new Set());
+
+  // Leaving is independent from member management and only blocks its own control.
+  // The ref closes the gap before the mutation pending state reaches the UI.
+  const leavePendingRef = useRef(false);
+
+  // Disbanding only conflicts with leaving the same squad. Keep a synchronous
+  // guard alongside the rendered pending state to close the pre-render gap.
+  const disbandPendingRef = useRef(false);
+
+  const setMemberKickPending = (memberId: string, pending: boolean) => {
+    const next = new Set(kickingMemberIdsRef.current);
+    if (pending) {
+      next.add(memberId);
+    } else {
+      next.delete(memberId);
+    }
+    kickingMemberIdsRef.current = next;
+    setKickingMemberIds(next);
+  };
+
+  const setMemberPromotionPending = (memberId: string, pending: boolean) => {
+    const next = new Set(promotingMemberIdsRef.current);
+    if (pending) {
+      next.add(memberId);
+    } else {
+      next.delete(memberId);
+    }
+    promotingMemberIdsRef.current = next;
+    setPromotingMemberIds(next);
+  };
+
   // Mutations
   const onSuccess = async (data: BaseServerResponse) => {
     showMutationToast(data);
@@ -224,27 +264,46 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   };
 
   // Request mutations
-  const { mutate: edit } = api.anbu.editSquad.useMutation({ onSuccess });
-  const { mutate: kick } = api.anbu.kickMember.useMutation({ onSuccess });
-  const { mutate: promote } = api.anbu.promoteMember.useMutation({ onSuccess });
+  const { mutate: edit, isPending: isEditing } = api.anbu.editSquad.useMutation({
+    onSuccess,
+  });
+  const { mutate: kick } = api.anbu.kickMember.useMutation({
+    onSuccess,
+    onSettled: (_data, _error, variables) => {
+      setMemberKickPending(variables.memberId, false);
+    },
+  });
+  const { mutate: promote } = api.anbu.promoteMember.useMutation({
+    onSuccess,
+    onSettled: (_data, _error, variables) => {
+      setMemberPromotionPending(variables.memberId, false);
+    },
+  });
   const { mutate: upgradeEspionage, isPending: isUpgradingEspionage } =
     api.anbu.purchaseEspionageUpgrade.useMutation({ onSuccess });
   const { mutate: upgradeStealth, isPending: isUpgradingStealth } =
     api.anbu.purchaseStealthUpgrade.useMutation({ onSuccess });
   const { mutate: performEspionage, isPending: isPerformingEspionage } =
     api.anbu.performEspionage.useMutation({ onSuccess });
-  const { mutate: leave } = api.anbu.leaveSquad.useMutation({
+  const { mutate: leave, isPending: isLeaving } = api.anbu.leaveSquad.useMutation({
     onSuccess: async (data) => {
       await onSuccess(data);
       router.push("/anbu");
     },
-  });
-  const { mutate: disband } = api.anbu.disbandSquad.useMutation({
-    onSuccess: async (data) => {
-      await onSuccess(data);
-      router.push("/anbu");
+    onSettled: () => {
+      leavePendingRef.current = false;
     },
   });
+  const { mutate: disband, isPending: isDisbanding } =
+    api.anbu.disbandSquad.useMutation({
+      onSuccess: async (data) => {
+        await onSuccess(data);
+        router.push("/anbu");
+      },
+      onSettled: () => {
+        disbandPendingRef.current = false;
+      },
+    });
 
   // Rename Form
   const renameForm = useForm<AnbuRenameSchema>({
@@ -254,6 +313,32 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   const onEdit = renameForm.handleSubmit((data) => edit({ ...data, squadId }));
   const currentImage = useWatch({ control: renameForm.control, name: "image" });
 
+  const kickMember = (memberId: string) => {
+    if (kickingMemberIdsRef.current.has(memberId)) return;
+    setMemberKickPending(memberId, true);
+    kick({ squadId, memberId });
+  };
+
+  const promoteMember = (memberId: string) => {
+    if (promotingMemberIdsRef.current.has(memberId)) return;
+    setMemberPromotionPending(memberId, true);
+    promote({ squadId, memberId });
+  };
+
+  const leaveSquad = () => {
+    if (leavePendingRef.current || disbandPendingRef.current) return;
+    leavePendingRef.current = true;
+    leave({ squadId });
+  };
+
+  const disbandSquad = () => {
+    if (disbandPendingRef.current || leavePendingRef.current) return;
+    disbandPendingRef.current = true;
+    disband({ squadId });
+  };
+
+  const isSquadExitPending = isLeaving || isDisbanding;
+
   // Set squad name
   useEffect(() => {
     if (squad) {
@@ -262,44 +347,92 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   }, [renameForm, squad]);
 
   // Adjust members for table
-  const members = squad.members.map((member) => ({
-    ...member,
-    rank: member.userId === squad.leaderId ? "Leader" : member.rank,
-    kickBtn: (
-      <div className="flex flex-row gap-1">
-        {member.userId !== userId && (
-          <Confirm
-            title="Kick Member"
-            proceed_label="Submit"
-            button={
-              <Button id={`kick-${member.userId}`} hoverText="Kick Member">
-                <DoorOpen className="mr-2 h-5 w-5" />
-                Kick
-              </Button>
-            }
-            onAccept={() => kick({ squadId, memberId: member.userId })}
-          >
-            Confirm that you want to kick this member from the squad.
-          </Confirm>
-        )}
-        {(isKage || isElder || canStaffEdit) && (
-          <Confirm
-            title="Promote Member"
-            proceed_label="Submit"
-            button={
-              <Button id={`promote-${member.userId}`} hoverText="Promote Member">
-                <ArrowBigUpDash className="mr-2 h-5 w-5" />
-                Promote
-              </Button>
-            }
-            onAccept={() => promote({ squadId, memberId: member.userId })}
-          >
-            Confirm that you want to promote this member to leader of the squad.
-          </Confirm>
-        )}
-      </div>
-    ),
-  }));
+  const members = squad.members.map((member) => {
+    const isKickingMember = kickingMemberIds.has(member.userId);
+    const isPromotingMember = promotingMemberIds.has(member.userId);
+    const isMemberActionPending = isKickingMember || isPromotingMember;
+
+    return {
+      ...member,
+      rank: member.userId === squad.leaderId ? "Leader" : member.rank,
+      kickBtn: (
+        <div className="flex flex-row gap-1">
+          {member.userId !== userId && (
+            <Confirm
+              title="Kick Member"
+              proceed_label="Submit"
+              disabled={isMemberActionPending}
+              confirmDisabled={isMemberActionPending}
+              button={
+                <Button
+                  id={`kick-${member.userId}`}
+                  hoverText={
+                    isKickingMember
+                      ? "Kicking Member"
+                      : isPromotingMember
+                        ? "Promotion in progress"
+                        : "Kick Member"
+                  }
+                  disabled={isMemberActionPending}
+                  loading={isKickingMember}
+                  aria-busy={isKickingMember}
+                  aria-label={
+                    isKickingMember
+                      ? `Kicking ${member.username}`
+                      : `Kick ${member.username}`
+                  }
+                >
+                  {!isKickingMember && <DoorOpen className="mr-2 h-5 w-5" />}
+                  <span role={isKickingMember ? "status" : undefined}>
+                    {isKickingMember ? "Kicking..." : "Kick"}
+                  </span>
+                </Button>
+              }
+              onAccept={() => kickMember(member.userId)}
+            >
+              Confirm that you want to kick this member from the squad.
+            </Confirm>
+          )}
+          {(isKage || isElder || canStaffEdit) && (
+            <Confirm
+              title="Promote Member"
+              proceed_label="Submit"
+              disabled={isMemberActionPending}
+              confirmDisabled={isMemberActionPending}
+              button={
+                <Button
+                  id={`promote-${member.userId}`}
+                  hoverText={
+                    isPromotingMember
+                      ? "Promoting Member"
+                      : isKickingMember
+                        ? "Kick in progress"
+                        : "Promote Member"
+                  }
+                  disabled={isMemberActionPending}
+                  loading={isPromotingMember}
+                  aria-busy={isPromotingMember}
+                  aria-label={
+                    isPromotingMember
+                      ? `Promoting ${member.username}`
+                      : `Promote ${member.username}`
+                  }
+                >
+                  {!isPromotingMember && <ArrowBigUpDash className="mr-2 h-5 w-5" />}
+                  <span role={isPromotingMember ? "status" : undefined}>
+                    {isPromotingMember ? "Promoting..." : "Promote"}
+                  </span>
+                </Button>
+              }
+              onAccept={() => promoteMember(member.userId)}
+            >
+              Confirm that you want to promote this member to leader of the squad.
+            </Confirm>
+          )}
+        </div>
+      ),
+    };
+  });
 
   // Table
   type Member = ArrayElement<typeof members>;
@@ -352,11 +485,23 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
               title="Rename Squad"
               proceed_label="Submit"
               button={
-                <Button id="rename-anbu-squad" hoverText="Rename Squad">
-                  <FilePenLine className="h-5 w-5" />
+                <Button
+                  id="rename-anbu-squad"
+                  hoverText={isEditing ? "Renaming Squad" : "Rename Squad"}
+                  disabled={isEditing}
+                  loading={isEditing}
+                  aria-busy={isEditing}
+                  aria-label={isEditing ? "Renaming squad" : "Rename squad"}
+                >
+                  {!isEditing && <FilePenLine className="h-5 w-5" />}
+                  <span className="sr-only" aria-live="polite">
+                    {isEditing ? "Renaming squad" : "Rename squad"}
+                  </span>
                 </Button>
               }
               isValid={renameForm.formState.isValid}
+              disabled={isEditing}
+              confirmDisabled={isEditing}
               onAccept={onEdit}
             >
               <Form {...renameForm}>
@@ -615,26 +760,60 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
             </Dialog>
           )}
           {inSquad && (
-            <Button
-              id="send"
-              onClick={() => leave({ squadId })}
-              hoverText="Leave Squad"
+            <Confirm
+              id="leave-anbu-squad"
+              title="Leave Squad"
+              proceed_label="Leave"
+              confirmClassName="bg-red-600 text-white hover:bg-red-700"
+              disabled={isSquadExitPending}
+              confirmDisabled={isSquadExitPending}
+              button={
+                <Button
+                  id="leave-anbu-squad-trigger"
+                  hoverText={isLeaving ? "Leaving Squad" : "Leave Squad"}
+                  variant="destructive"
+                  disabled={isSquadExitPending}
+                  loading={isLeaving}
+                  aria-busy={isLeaving}
+                  aria-label={isLeaving ? "Leaving squad" : "Leave squad"}
+                >
+                  {!isLeaving && <DoorOpen className="h-5 w-5" />}
+                  <span role={isLeaving ? "status" : undefined}>
+                    {isLeaving ? "Leaving..." : "Leave"}
+                  </span>
+                </Button>
+              }
+              onAccept={leaveSquad}
             >
-              <DoorOpen className="h-5 w-5" />
-            </Button>
+              Confirm that you want to leave this squad.
+            </Confirm>
           )}
           {(isKage || isElder) && (
             <Confirm
+              id="disband-anbu-squad"
               title="Disband Squad"
-              proceed_label="Submit"
+              proceed_label={isDisbanding ? "Disbanding..." : "Disband"}
+              confirmClassName="bg-red-600 text-white hover:bg-red-700"
+              disabled={isSquadExitPending}
+              confirmDisabled={isSquadExitPending}
               button={
-                <Button id="rename-anbu-squad">
-                  <Trash2 className="mr-2 h-5 w-5" />
-                  Disband
+                <Button
+                  id="disband-anbu-squad-trigger"
+                  hoverText={isDisbanding ? "Disbanding Squad" : "Disband Squad"}
+                  variant="destructive"
+                  disabled={isSquadExitPending}
+                  loading={isDisbanding}
+                  aria-busy={isDisbanding}
+                  aria-label={isDisbanding ? "Disbanding squad" : "Disband squad"}
+                >
+                  {!isDisbanding && <Trash2 className="mr-2 h-5 w-5" />}
+                  <span role={isDisbanding ? "status" : undefined}>
+                    {isDisbanding ? "Disbanding..." : "Disband"}
+                  </span>
                 </Button>
               }
               isValid={renameForm.formState.isValid}
-              onAccept={() => disband({ squadId })}
+              onAccept={disbandSquad}
             >
               Confirm that you want to disband this entire squad. Everyone will be
               removed from the squad!
@@ -672,18 +851,27 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
   // Destructure
   const { squadId, title, subtitle, type, canPost, order } = props;
 
+  // Keep progress local to this order card: leader and Kage orders can both be
+  // rendered on the page and should not block each other. The ref closes the
+  // brief pre-render gap so a rapid second confirmation cannot submit twice.
+  const updatePendingRef = useRef(false);
+
   // utils
   const utils = api.useUtils();
 
   // Mutations
-  const { mutate: notice } = api.anbu.upsertNotice.useMutation({
-    onSuccess: async (data: BaseServerResponse) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.anbu.get.invalidate();
-      }
-    },
-  });
+  const { mutate: notice, isPending: isUpdatingNotice } =
+    api.anbu.upsertNotice.useMutation({
+      onSuccess: async (data: BaseServerResponse) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.anbu.get.invalidate();
+        }
+      },
+      onSettled: () => {
+        updatePendingRef.current = false;
+      },
+    });
 
   // Content
   const content = order?.content ?? "No current orders";
@@ -697,7 +885,11 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
     defaultValues: { content },
     resolver: zodResolver(mutateContentSchema),
   });
-  const onUpdateOrder = handleSubmit((data) => notice({ ...data, type, squadId }));
+  const onUpdateOrder = handleSubmit((data) => {
+    if (updatePendingRef.current) return;
+    updatePendingRef.current = true;
+    notice({ ...data, type, squadId });
+  });
 
   return (
     <ContentBox
@@ -708,11 +900,28 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
         <div>
           {canPost && (
             <Confirm
+              id={`update-${type.toLowerCase()}-orders`}
               title="Update Orders"
-              proceed_label="Submit"
+              proceed_label={isUpdatingNotice ? "Updating..." : "Submit"}
+              disabled={isUpdatingNotice}
+              confirmDisabled={isUpdatingNotice}
               button={
-                <Button id="create" hoverText="Edit Orders">
-                  <FilePenLine className="h-5 w-5" />
+                <Button
+                  id={`edit-${type.toLowerCase()}-orders`}
+                  hoverText={isUpdatingNotice ? "Updating Orders" : "Edit Orders"}
+                  disabled={isUpdatingNotice}
+                  loading={isUpdatingNotice}
+                  aria-busy={isUpdatingNotice}
+                  aria-label={isUpdatingNotice ? `Updating ${title}` : `Edit ${title}`}
+                >
+                  {!isUpdatingNotice && <FilePenLine className="h-5 w-5" />}
+                  <span
+                    className={isUpdatingNotice ? undefined : "sr-only"}
+                    role={isUpdatingNotice ? "status" : undefined}
+                    aria-live="polite"
+                  >
+                    {isUpdatingNotice ? "Updating orders..." : `Edit ${title}`}
+                  </span>
                 </Button>
               }
               onAccept={onUpdateOrder}

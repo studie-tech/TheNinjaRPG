@@ -201,6 +201,21 @@ import {
 
 const pusher = getServerPusher();
 
+const mutationAffectedRows = (result: unknown) => {
+  if (result && typeof result === "object" && "rowsAffected" in result) {
+    return Number(result.rowsAffected);
+  }
+  if (
+    Array.isArray(result) &&
+    result[0] &&
+    typeof result[0] === "object" &&
+    "affectedRows" in result[0]
+  ) {
+    return Number(result[0].affectedRows);
+  }
+  return 0;
+};
+
 export const profileRouter = createTRPCRouter({
   getSidebarTimers: protectedProcedure.query(async ({ ctx }) => {
     const now = sql`NOW()`;
@@ -354,41 +369,145 @@ export const profileRouter = createTRPCRouter({
   updatePreferences: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Update user game preferences" } })
     .input(updateUserPreferencesSchema)
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        requestId: z.string().uuid().optional(),
+        userId: z.string().optional(),
+        expectedTutorialOn: z.boolean().optional(),
+        committedTutorialOn: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({
-          ...(input.tutorialOn !== undefined ? { tutorialOn: input.tutorialOn } : {}),
-          ...(input.musicOn !== undefined ? { musicOn: input.musicOn } : {}),
-          ...(input.sfxOn !== undefined ? { sfxOn: input.sfxOn } : {}),
-          ...(input.buttonSfxOn !== undefined
-            ? { buttonSfxOn: input.buttonSfxOn }
-            : {}),
-          ...(input.iframesMuted !== undefined
-            ? { iframesMuted: input.iframesMuted }
-            : {}),
-          ...(input.defaultAutoCombat !== undefined
-            ? { defaultAutoCombat: input.defaultAutoCombat }
-            : {}),
-          ...(input.preferredStat !== undefined
-            ? { preferredStat: input.preferredStat }
-            : {}),
-          ...(input.preferredGeneral1 !== undefined
-            ? { preferredGeneral1: input.preferredGeneral1 }
-            : {}),
-          ...(input.preferredGeneral2 !== undefined
-            ? { preferredGeneral2: input.preferredGeneral2 }
-            : {}),
-        })
-        .where(eq(userData.userId, ctx.userId));
-      return {
-        success: result.rowsAffected > 0,
-        message:
-          result.rowsAffected > 0
-            ? "Updated preferences"
-            : "Failed to update preferences",
+      const preferenceUpdate = {
+        ...(input.tutorialOn !== undefined ? { tutorialOn: input.tutorialOn } : {}),
+        ...(input.musicOn !== undefined ? { musicOn: input.musicOn } : {}),
+        ...(input.sfxOn !== undefined ? { sfxOn: input.sfxOn } : {}),
+        ...(input.buttonSfxOn !== undefined ? { buttonSfxOn: input.buttonSfxOn } : {}),
+        ...(input.iframesMuted !== undefined
+          ? { iframesMuted: input.iframesMuted }
+          : {}),
+        ...(input.defaultAutoCombat !== undefined
+          ? { defaultAutoCombat: input.defaultAutoCombat }
+          : {}),
+        ...(input.preferredStat !== undefined
+          ? { preferredStat: input.preferredStat }
+          : {}),
+        ...(input.preferredGeneral1 !== undefined
+          ? { preferredGeneral1: input.preferredGeneral1 }
+          : {}),
+        ...(input.preferredGeneral2 !== undefined
+          ? { preferredGeneral2: input.preferredGeneral2 }
+          : {}),
       };
+
+      // Preserve the established lightweight partial-update behavior for every
+      // existing caller. The tutorial-dismiss action opts into the stronger
+      // contract below by supplying both durable request identity and its exact
+      // expected prior value.
+      if (!input.requestId || input.expectedTutorialOn === undefined) {
+        const result = await ctx.drizzle
+          .update(userData)
+          .set(preferenceUpdate)
+          .where(eq(userData.userId, ctx.userId));
+        return {
+          success: result.rowsAffected > 0,
+          message:
+            result.rowsAffected > 0
+              ? "Updated preferences"
+              : "Failed to update preferences",
+        };
+      }
+
+      const receiptId = `tutorial-preference:${input.requestId}`;
+      const expectedChange = `tutorialOn:${input.expectedTutorialOn}->${input.tutorialOn}`;
+
+      return ctx.drizzle.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} = ${ctx.userId} FOR UPDATE`,
+        );
+
+        const currentUser = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+          columns: { userId: true, tutorialOn: true },
+        });
+        const previousRequest = await tx.query.actionLog.findFirst({
+          where: eq(actionLog.id, receiptId),
+        });
+
+        if (!currentUser) return errorResponse("User not found");
+
+        if (previousRequest) {
+          const changes = previousRequest.changes as string[];
+          const isExactReplay =
+            previousRequest.userId === ctx.userId &&
+            previousRequest.tableName === "UserData" &&
+            previousRequest.relatedId === ctx.userId &&
+            previousRequest.relatedMsg === "Tutorial preference" &&
+            previousRequest.relatedValue === Number(input.tutorialOn) &&
+            changes.length === 1 &&
+            changes[0] === expectedChange;
+          if (!isExactReplay) {
+            return errorResponse("Invalid tutorial preference request ID");
+          }
+          // A receipt proves this request committed in the past, but it does not
+          // prove the preference still has that value. An old disable request
+          // replayed after the user re-enables the tutorial must not tell the
+          // client to hide UI while the database remains enabled.
+          if (currentUser.tutorialOn !== input.tutorialOn) {
+            return errorResponse(
+              "Your tutorial preference changed after this request was saved",
+            );
+          }
+          return {
+            success: true,
+            message: "Tutorial preference was already updated",
+            requestId: input.requestId,
+            userId: ctx.userId,
+            expectedTutorialOn: input.expectedTutorialOn,
+            committedTutorialOn: input.tutorialOn,
+          };
+        }
+
+        if (currentUser.tutorialOn !== input.expectedTutorialOn) {
+          return errorResponse(
+            "Your tutorial preference changed; review it before trying again",
+          );
+        }
+
+        const result = await tx
+          .update(userData)
+          .set(preferenceUpdate)
+          .where(
+            and(
+              eq(userData.userId, ctx.userId),
+              eq(userData.tutorialOn, input.expectedTutorialOn),
+            ),
+          );
+        if (mutationAffectedRows(result) !== 1) {
+          return errorResponse(
+            "Your tutorial preference changed; review it before trying again",
+          );
+        }
+
+        await tx.insert(actionLog).values({
+          id: receiptId,
+          userId: ctx.userId,
+          tableName: "UserData",
+          changes: [expectedChange],
+          relatedId: ctx.userId,
+          relatedMsg: "Tutorial preference",
+          relatedValue: Number(input.tutorialOn),
+        });
+
+        return {
+          success: true,
+          message: "Updated preferences",
+          requestId: input.requestId,
+          userId: ctx.userId,
+          expectedTutorialOn: input.expectedTutorialOn,
+          committedTutorialOn: input.tutorialOn,
+        };
+      });
     }),
   // Get user blacklist
   getBlacklist: protectedProcedure
@@ -1178,61 +1297,80 @@ export const profileRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [user, aiData, jutsuData, itemData, nindoData] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        ctx.drizzle.query.userData.findFirst({
-          where: eq(userData.userId, input.id),
-        }),
-        ctx.drizzle.query.userJutsu.findMany({
-          where: eq(userJutsu.userId, input.id),
-        }),
-        ctx.drizzle.query.userItem.findMany({ where: eq(userItem.userId, input.id) }),
-        ctx.drizzle.query.userNindo.findFirst({
-          where: eq(userNindo.userId, input.id),
-        }),
-      ]);
-      // Guard
-      if (!aiData) return errorResponse("AI not found");
-      if (!aiData.isAi) return errorResponse("Not an AI");
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
 
-      // Create new AI with copied data
-      aiData.userId = nanoid();
-      aiData.username = `${aiData.username} - copy`;
-      aiData.createdAt = new Date();
-      aiData.updatedAt = new Date();
-      // Run all inserts at once
-      await Promise.all([
-        ctx.drizzle.insert(userData).values(aiData),
-        ...(jutsuData.length > 0
-          ? [
-              ctx.drizzle.insert(userJutsu).values(
-                jutsuData.map((jutsu) => ({
-                  id: nanoid(),
-                  userId: aiData.userId,
-                  jutsuId: jutsu.jutsuId,
-                  level: jutsu.level,
-                })),
-              ),
-            ]
-          : []),
-        ...(itemData.length > 0
-          ? [
-              ctx.drizzle.insert(userItem).values(
-                itemData.map((item) => ({
-                  id: nanoid(),
-                  userId: aiData.userId,
-                  itemId: item.itemId,
-                  quantity: item.quantity,
-                })),
-              ),
-            ]
-          : []),
-        ...(nindoData ? [ctx.drizzle.insert(userNindo).values(nindoData)] : []),
-      ]);
+      return await ctx.drizzle.transaction(async (tx) => {
+        // Read the source and its owned content from one repeatable transaction snapshot. This
+        // prevents a concurrent editor save from yielding a mixed-version clone.
+        const aiData = await tx.query.userData.findFirst({
+          where: eq(userData.userId, input.id),
+        });
+        if (!aiData) return errorResponse("AI not found");
+        if (!aiData.isAi) return errorResponse("Not an AI");
 
-      return { success: true, message: aiData.userId };
+        const jutsuData = await tx.query.userJutsu.findMany({
+          where: eq(userJutsu.userId, input.id),
+        });
+        const itemData = await tx.query.userItem.findMany({
+          where: eq(userItem.userId, input.id),
+        });
+        const nindoData = await tx.query.userNindo.findFirst({
+          where: eq(userNindo.userId, input.id),
+        });
+
+        const cloneId = nanoid();
+        const cloneSuffix = ` - copy-${cloneId}`;
+        const cloneUsername = `${aiData.username.slice(0, 191 - cloneSuffix.length)}${cloneSuffix}`;
+        const clonedAt = new Date();
+        await tx.insert(userData).values({
+          ...aiData,
+          userId: cloneId,
+          // Usernames are unique. Include the clone id so intentionally cloning the same source
+          // again remains possible, and truncate only the source portion to fit the column.
+          username: cloneUsername,
+          createdAt: clonedAt,
+          updatedAt: clonedAt,
+        });
+
+        if (jutsuData.length > 0) {
+          await tx.insert(userJutsu).values(
+            jutsuData.map((jutsu) => ({
+              ...jutsu,
+              id: nanoid(),
+              userId: cloneId,
+              createdAt: clonedAt,
+              updatedAt: clonedAt,
+            })),
+          );
+        }
+
+        if (itemData.length > 0) {
+          await tx.insert(userItem).values(
+            itemData.map((item) => ({
+              ...item,
+              id: nanoid(),
+              userId: cloneId,
+              createdAt: clonedAt,
+              updatedAt: clonedAt,
+            })),
+          );
+        }
+
+        if (nindoData) {
+          await tx.insert(userNindo).values({
+            ...nindoData,
+            id: nanoid(),
+            userId: cloneId,
+            createdAt: clonedAt,
+            updatedAt: clonedAt,
+          });
+        }
+
+        return { success: true, message: cloneId };
+      });
     }),
   // Delete a AI
   delete: protectedProcedure
@@ -1965,6 +2103,7 @@ export const profileRouter = createTRPCRouter({
             avatar: true,
             avatarLight: true,
             bloodlineId: true,
+            battleId: true,
             sageModeId: true,
             curChakra: true,
             curHealth: true,
@@ -2000,6 +2139,7 @@ export const profileRouter = createTRPCRouter({
             bloodlineReskinId: true,
             bracketImmunityLiftedUntil: true,
             warParticipantUntil: true,
+            nRecruited: true,
           },
           with: {
             village: true,
@@ -2064,6 +2204,7 @@ export const profileRouter = createTRPCRouter({
         user.earnedExperience = 8008;
         user.isBanned = false;
         user.aiProfileId = null;
+        user.battleId = null;
       }
       if (!isSelf && requester?.role === "USER") {
         user.jutsus = [];
@@ -2352,56 +2493,139 @@ export const profileRouter = createTRPCRouter({
   awardExperience: protectedProcedure
     .input(
       z.object({
-        targetUserId: z.string(),
-        amount: z.number().min(1).max(100000),
+        targetUserId: z.string().min(1),
+        expectedUsername: z.string().min(1).max(191),
+        amount: z.number().int().min(1).max(100000),
+        reason: z.string().trim().min(3).max(ACTION_LOG_RELATED_MSG_MAX_LENGTH),
+        requestId: z.string().uuid(),
       }),
     )
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        requestId: z.string().uuid().optional(),
+        award: z
+          .object({
+            targetUserId: z.string(),
+            username: z.string(),
+            amount: z.number(),
+            reason: z.string(),
+            earnedExperienceBefore: z.number(),
+            earnedExperienceAfter: z.number(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const [awarder, target] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.targetUserId),
-      ]);
+      const receiptId = `experience-award:${input.requestId}`;
+      const expectedAwardChange = `Awarded ${input.amount} experience points to ${input.expectedUsername}`;
 
-      // Guards
-      if (!awarder || !target) {
-        return errorResponse("User not found");
-      }
+      return ctx.drizzle.transaction(async (tx) => {
+        // Lock actor and target in deterministic order. Distinct awards then add in sequence,
+        // while concurrent delivery of one request observes the first request's receipt.
+        const lockedUserIds = [...new Set([ctx.userId, input.targetUserId])].sort();
+        await tx.execute(
+          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${sql.join(
+            lockedUserIds.map((id) => sql`${id}`),
+            sql`, `,
+          )}) ORDER BY ${userData.userId} FOR UPDATE`,
+        );
 
-      if (awarder.isBanned)
-        return errorResponse("You are banned and cannot perform this action");
-      if (!canAwardExperience(awarder)) {
-        return errorResponse("You don't have permission to award experience");
-      }
+        const awarder = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        });
+        const target = await tx.query.userData.findFirst({
+          where: eq(userData.userId, input.targetUserId),
+        });
+        const previousRequest = await tx.query.actionLog.findFirst({
+          where: eq(actionLog.id, receiptId),
+        });
 
-      // Mutation
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({
-          earnedExperience: sql`${userData.earnedExperience} + ${input.amount}`,
-        })
-        .where(eq(userData.userId, input.targetUserId));
+        if (!awarder || !target) return errorResponse("User not found");
+        if (awarder.isBanned) {
+          return errorResponse("You are banned and cannot perform this action");
+        }
+        if (!canAwardExperience(awarder)) {
+          return errorResponse("You don't have permission to award experience");
+        }
 
-      if (result.rowsAffected === 0) {
-        return errorResponse("Failed to award experience");
-      }
+        if (previousRequest) {
+          const changes = previousRequest.changes as string[];
+          const balanceMatch =
+            /^Unallocated experience changed from (-?\d+(?:\.\d+)?) to (-?\d+(?:\.\d+)?)$/.exec(
+              changes[1] ?? "",
+            );
+          const isExactReplay =
+            previousRequest.userId === awarder.userId &&
+            previousRequest.tableName === "user" &&
+            previousRequest.relatedId === input.targetUserId &&
+            previousRequest.relatedValue === input.amount &&
+            previousRequest.relatedMsg === input.reason &&
+            changes[0] === expectedAwardChange &&
+            Boolean(balanceMatch);
+          if (!isExactReplay || !balanceMatch) {
+            return errorResponse("Invalid experience award request ID");
+          }
 
-      // Log the action
-      await ctx.drizzle.insert(actionLog).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        tableName: "user",
-        changes: [`Awarded ${input.amount} experience points`],
-        relatedId: target.userId,
-        relatedMsg: `Experience awarded to ${target.username}`,
-        relatedImage: target.avatarLight,
+          return {
+            success: true,
+            message: `Experience was already awarded to ${input.expectedUsername}`,
+            requestId: input.requestId,
+            award: {
+              targetUserId: input.targetUserId,
+              username: input.expectedUsername,
+              amount: input.amount,
+              reason: input.reason,
+              earnedExperienceBefore: Number(balanceMatch[1]),
+              earnedExperienceAfter: Number(balanceMatch[2]),
+            },
+          };
+        }
+
+        if (target.username !== input.expectedUsername) {
+          return errorResponse("The selected user changed; review the award again");
+        }
+
+        // Only the unallocated pool changes. Level, rank, total experience and allocated stats
+        // intentionally remain untouched until the recipient spends these points themselves.
+        const earnedExperienceBefore = target.earnedExperience;
+        const earnedExperienceAfter = earnedExperienceBefore + input.amount;
+        await tx
+          .update(userData)
+          .set({
+            earnedExperience: earnedExperienceAfter,
+          })
+          .where(eq(userData.userId, input.targetUserId));
+
+        // The request-keyed audit row is also the durable idempotency receipt. Keeping it in this
+        // transaction prevents either the balance or its audit trail from committing alone.
+        await tx.insert(actionLog).values({
+          id: receiptId,
+          userId: awarder.userId,
+          tableName: "user",
+          changes: [
+            expectedAwardChange,
+            `Unallocated experience changed from ${earnedExperienceBefore} to ${earnedExperienceAfter}`,
+          ],
+          relatedId: target.userId,
+          relatedMsg: input.reason,
+          relatedImage: target.avatarLight,
+          relatedValue: input.amount,
+        });
+
+        return {
+          success: true,
+          message: `Awarded ${input.amount} experience points to ${target.username}`,
+          requestId: input.requestId,
+          award: {
+            targetUserId: target.userId,
+            username: target.username,
+            amount: input.amount,
+            reason: input.reason,
+            earnedExperienceBefore,
+            earnedExperienceAfter,
+          },
+        };
       });
-
-      return {
-        success: true,
-        message: `Awarded ${input.amount} experience points to ${target.username}`,
-      };
     }),
   // Award experience to all users (staff only)
   awardExperienceToAll: protectedProcedure

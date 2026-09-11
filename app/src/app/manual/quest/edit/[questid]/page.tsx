@@ -76,7 +76,7 @@ export default function ManualBloodlineEdit(props: {
 
 interface SingleEditQuestProps {
   quest: Quest;
-  refetch: () => void;
+  refetch: () => Promise<unknown>;
 }
 
 const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
@@ -87,12 +87,14 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
     formData,
     setObjectives,
     handleQuestSubmit,
+    isUpdating,
   } = useQuestEditForm(props.quest, props.refetch);
 
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<string | null>(null);
 
   // Handlers for adding/removing objectives
   const addObjective = () => {
+    if (isUpdating) return;
     setObjectives([
       ...objectives,
       SimpleObjective.parse({
@@ -105,6 +107,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
   };
 
   const removeObjective = (idx: number) => {
+    if (isUpdating) return;
     const newObjectives = [...objectives];
     newObjectives.splice(idx, 1);
     setObjectives(newObjectives);
@@ -112,6 +115,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
   };
 
   const copyObjective = (idx: number) => {
+    if (isUpdating) return;
     const objectiveToCopy = objectives[idx];
     if (!objectiveToCopy) return;
 
@@ -128,7 +132,12 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
 
   const AddObjectiveIcon = (
     <FilePlus
-      className="h-6 w-6 cursor-pointer hover:text-orange-500"
+      className={`h-6 w-6 ${
+        isUpdating
+          ? "cursor-not-allowed opacity-50"
+          : "cursor-pointer hover:text-orange-500"
+      }`}
+      aria-disabled={isUpdating}
       onClick={addObjective}
     />
   );
@@ -149,11 +158,21 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         topRightContent={
           <div className="flex flex-row gap-2">
             <Copy
-              className="h-6 w-6 cursor-pointer hover:text-orange-500"
+              className={`h-6 w-6 ${
+                isUpdating
+                  ? "cursor-not-allowed opacity-50"
+                  : "cursor-pointer hover:text-orange-500"
+              }`}
+              aria-disabled={isUpdating}
               onClick={() => copyObjective(i)}
             />
             <FileMinus
-              className="h-6 w-6 cursor-pointer hover:text-orange-500"
+              className={`h-6 w-6 ${
+                isUpdating
+                  ? "cursor-not-allowed opacity-50"
+                  : "cursor-pointer hover:text-orange-500"
+              }`}
+              aria-disabled={isUpdating}
               onClick={() => removeObjective(i)}
             />
           </div>
@@ -166,6 +185,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
           availableTags={[...allObjectiveTasks].sort()}
           objectives={objectives}
           setObjectives={setObjectives}
+          submitLoading={isUpdating}
         />
       </ContentBox>
     );
@@ -180,7 +200,12 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
   }, [objectives, currentValues.consecutiveObjectives]);
 
   return (
-    <>
+    <div aria-busy={isUpdating}>
+      {isUpdating && (
+        <span role="status" aria-live="polite" className="sr-only">
+          Saving quest…
+        </span>
+      )}
       <ContentBox
         title="Content Panel"
         subtitle="Quest Management"
@@ -188,7 +213,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         noRightAlign={true}
         topRightContent={
           <div className="flex flex-row gap-2">
-            {formData.find((e) => e.id === "description") ? (
+            {!isUpdating && formData.find((e) => e.id === "description") ? (
               <ChatInputField
                 inputProps={{
                   id: "chatInput",
@@ -260,6 +285,8 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
             allowImageUpload={true}
             onAccept={handleQuestSubmit}
             submitDisabled={currentValues.consecutiveObjectives && !isFlowValid}
+            submitLoading={isUpdating}
+            submitLoadingText="Saving quest…"
           />
         )}
       </ContentBox>
@@ -271,6 +298,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         setSelectedObjectiveId={setSelectedObjectiveId}
         isFlowValid={isFlowValid}
         flowErrorMsg={flowErrorMsg}
+        isUpdating={isUpdating}
       />
       {objectives?.length === 0 && (
         <ContentBox
@@ -293,7 +321,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
           <RaidThresholdEditor questId={props.quest.id} />
         </ContentBox>
       )}
-    </>
+    </div>
   );
 };
 
@@ -305,6 +333,7 @@ interface ObjectiveFlowGraphProps {
   setSelectedObjectiveId: (id: string | null) => void;
   isFlowValid: boolean;
   flowErrorMsg: string;
+  isUpdating: boolean;
 }
 
 const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
@@ -315,6 +344,7 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
   setSelectedObjectiveId,
   isFlowValid,
   flowErrorMsg,
+  isUpdating,
 }) => {
   // Cytoscape ref and event handling
   const cyRef = useRef<Core | null>(null);
@@ -491,7 +521,13 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
       initialBreak={true}
       topRightContent={<div className="flex flex-row">{addObjectiveIcon}</div>}
     >
-      <div ref={containerRef} className="relative aspect-square w-full">
+      <div
+        ref={containerRef}
+        className={`relative aspect-square w-full ${
+          isUpdating ? "pointer-events-none opacity-60" : ""
+        }`}
+        aria-disabled={isUpdating}
+      >
         <CytoscapeComponent
           cy={(cy) => {
             cyRef.current = cy;

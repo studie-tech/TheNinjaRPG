@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import type React from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { FederalStatus, UserRank, UserRole } from "@/drizzle/constants";
@@ -42,21 +42,16 @@ interface ReportUserProps {
 const ReportUser: React.FC<ReportUserProps> = (props) => {
   const { data: userData } = useUserData();
   const [showModal, setShowModal] = useState<boolean>(false);
+  const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
+  // React mutation state updates on the next render. This ref closes the same-tick
+  // double-click / Enter gap before tRPC can expose `isPending`.
+  const pendingRequestRef = useRef<string | null>(null);
 
   // Get utils
   const utils = api.useUtils();
 
   // Mutations
-  const createReport = api.reports.create.useMutation({
-    onSuccess: async (data) => {
-      await Promise.all([
-        utils.reports.getAll.invalidate(),
-        utils.comments.getConversationComments.invalidate(),
-        utils.comments.getForumComments.invalidate(),
-      ]);
-      showMutationToast(data);
-    },
-  });
+  const createReport = api.reports.create.useMutation();
 
   const {
     handleSubmit,
@@ -74,9 +69,45 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
 
   const onSubmit = handleSubmit(
     (data) => {
-      createReport.mutate(data);
-      reset();
-      setShowModal(false);
+      if (pendingRequestRef.current) return;
+
+      // Capture everything the player confirmed, including the target identity and
+      // reason draft, before beginning the asynchronous request.
+      const requestId = crypto.randomUUID();
+      const request = Object.freeze({ ...data, requestId });
+      pendingRequestRef.current = requestId;
+      setPendingRequestId(requestId);
+
+      createReport.mutate(request, {
+        onSuccess: (response) => {
+          showMutationToast(response);
+          if (
+            !response.success ||
+            response.requestId !== requestId ||
+            response.system !== request.system ||
+            response.systemId !== request.system_id ||
+            response.reportedUserId !== request.reported_userId ||
+            !response.reportId
+          ) {
+            return;
+          }
+
+          // The response proves this exact request committed. Only now is it safe
+          // to clear the draft and close the report dialog.
+          reset();
+          setShowModal(false);
+          void Promise.allSettled([
+            utils.reports.getAll.invalidate(),
+            utils.comments.getConversationComments.invalidate(),
+            utils.comments.getForumComments.invalidate(),
+          ]);
+        },
+        onSettled: () => {
+          if (pendingRequestRef.current !== requestId) return;
+          pendingRequestRef.current = null;
+          setPendingRequestId(null);
+        },
+      });
     },
     (errors) => console.error(errors),
   );
@@ -87,12 +118,16 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
     return (
       <form onSubmit={onSubmit}>
         <Modal
+          id={`report-${props.system}-${props.content.id}`}
           title="Report User"
           isOpen={showModal}
           setIsOpen={setShowModal}
           proceed_label={userData?.isBanned ? "Stop" : "Report User"}
+          proceed_loading_label="Submitting report…"
           onAccept={userData?.isBanned ? undefined : onSubmit}
           isValid={isValid}
+          isLoading={pendingRequestId !== null}
+          keepOpenOnAccept
         >
           {userData?.isBanned ? (
             <div>You are currently banned, and can therefore not report others</div>
@@ -120,6 +155,7 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
                 placeholder="Unless obvious, please state the reason for this report"
                 control={control}
                 error={errors.reason?.message}
+                disabled={pendingRequestId !== null}
               />
             </>
           )}

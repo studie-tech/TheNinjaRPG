@@ -662,22 +662,29 @@ export const bloodlineRouter = createTRPCRouter({
           createdAt: entry.createdAt,
           ...newData,
         });
-        // Update database
-        await ctx.drizzle
-          .update(bloodline)
-          .set(newData)
-          .where(eq(bloodline.id, input.id));
-        await ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "bloodline",
-          changes: diff,
-          relatedId: entry.id,
-          relatedMsg: `Update: ${entry.name}`,
-          relatedImage: entry.image,
+        // Keep the content update and its audit record in one commit. Mass-effect
+        // editing sends the complete bloodline, so an audit failure must not leave
+        // a partial update that appears safe to retry.
+        await ctx.drizzle.transaction(async (tx) => {
+          await tx.update(bloodline).set(newData).where(eq(bloodline.id, input.id));
+          await tx.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "bloodline",
+            changes: diff,
+            relatedId: entry.id,
+            relatedMsg: `Update: ${entry.name}`,
+            relatedImage: entry.image,
+          });
         });
         if (process.env.NODE_ENV !== "development") {
-          await callDiscordContent(user.username, entry.name, diff, entry.image);
+          try {
+            await callDiscordContent(user.username, entry.name, diff, entry.image);
+          } catch (error) {
+            // The transaction is already committed. A notification outage must
+            // not turn a successful update into an apparent retryable failure.
+            console.error("Unable to announce committed bloodline update", error);
+          }
         }
         return { success: true, message: `Data updated: ${diff.join(". ")}` };
       } else {

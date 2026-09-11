@@ -10,6 +10,7 @@ import {
   Droplets,
   Heart,
   History,
+  Loader2,
   Mail,
   Palette,
   PenLine,
@@ -34,7 +35,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
@@ -140,6 +141,7 @@ import {
   AiRule,
   ConditionDistanceHigherThan,
 } from "@/validators/ai";
+import type { StatSchemaType } from "@/validators/combat";
 import {
   type Attribute,
   attributes,
@@ -497,6 +499,11 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
     api.profile.getPublicUser.useQuery({ userId: userId }, { enabled: !!userId });
   const { data: userData, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
+  const [battleDescriptionDraft, setBattleDescriptionDraft] = useState(
+    userData?.showBattleDescription ?? false,
+  );
+  const battleDescriptionRequestRef = useRef(false);
+  const preferencesRequestRef = useRef(false);
 
   // Default auto-combat preference (persisted on the user)
   const [autoCombat, setAutoCombat] = useAutoCombatSetting();
@@ -512,12 +519,39 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   });
 
   // Update battle description setting
-  const { mutate: updateBattleDescription } =
-    api.profile.updateBattleDescription.useMutation({
-      onSuccess: async () => {
-        await utils.profile.getUser.invalidate();
-      },
-    });
+  const {
+    mutateAsync: updateBattleDescription,
+    isPending: isUpdatingBattleDescription,
+  } = api.profile.updateBattleDescription.useMutation({
+    onSuccess: async () => {
+      await utils.profile.getUser.invalidate();
+    },
+  });
+
+  useEffect(() => {
+    if (!battleDescriptionRequestRef.current && userData) {
+      setBattleDescriptionDraft(userData.showBattleDescription);
+    }
+  }, [userData]);
+
+  const handleBattleDescriptionChange = async (checked: boolean) => {
+    if (battleDescriptionRequestRef.current) return;
+
+    const previousValue = battleDescriptionDraft;
+    battleDescriptionRequestRef.current = true;
+    setBattleDescriptionDraft(checked);
+
+    try {
+      const result = await updateBattleDescription({
+        showBattleDescription: checked,
+      });
+      if (!result.success) setBattleDescriptionDraft(previousValue);
+    } catch {
+      setBattleDescriptionDraft(previousValue);
+    } finally {
+      battleDescriptionRequestRef.current = false;
+    }
+  };
 
   const { mutate: updateAiProfile, isPending } = api.ai.updateAiProfile.useMutation({
     onSuccess: async (data) => {
@@ -532,17 +566,8 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   });
 
   // Update highest preferences
-  const { mutate: updatePreferences } = api.profile.updatePreferences.useMutation({
-    onSuccess: async (data) => {
-      const values = form.getValues();
-      showMutationToast(data);
-      await updateUser({
-        preferredStat: values.preferredStat,
-        preferredGeneral1: values.preferredGeneral1,
-        preferredGeneral2: values.preferredGeneral2,
-      });
-    },
-  });
+  const { mutateAsync: updatePreferences, isPending: isUpdatingPreferences } =
+    api.profile.updatePreferences.useMutation();
 
   // Update form when preferences are loaded
   useEffect(() => {
@@ -556,8 +581,25 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   }, [userData, form]);
 
   // Form submission
-  const onSubmit = (values: z.infer<typeof updateUserPreferencesSchema>) => {
-    updatePreferences(values);
+  const onSubmit = async (values: z.infer<typeof updateUserPreferencesSchema>) => {
+    if (preferencesRequestRef.current) return;
+
+    preferencesRequestRef.current = true;
+    try {
+      const result = await updatePreferences(values);
+      showMutationToast(result);
+      if (result.success) {
+        await updateUser({
+          preferredStat: values.preferredStat,
+          preferredGeneral1: values.preferredGeneral1,
+          preferredGeneral2: values.preferredGeneral2,
+        });
+      }
+    } catch {
+      // Mutation errors are surfaced by the shared tRPC error handler. Keep the draft.
+    } finally {
+      preferencesRequestRef.current = false;
+    }
   };
 
   // Loaders
@@ -582,6 +624,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
                 className="grid w-full grid-cols-4 items-end gap-3 p-4"
+                aria-busy={isUpdatingPreferences}
               >
                 <FormField
                   control={form.control}
@@ -590,6 +633,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                     <FormItem>
                       <FormLabel>Offense</FormLabel>
                       <Select
+                        disabled={isUpdatingPreferences}
                         onValueChange={(value) =>
                           field.onChange(value === "__highest__" ? null : value)
                         }
@@ -620,6 +664,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                     <FormItem>
                       <FormLabel>General 1</FormLabel>
                       <Select
+                        disabled={isUpdatingPreferences}
                         onValueChange={(value) =>
                           field.onChange(value === "__highest__" ? null : value)
                         }
@@ -650,6 +695,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                     <FormItem>
                       <FormLabel>General 2</FormLabel>
                       <Select
+                        disabled={isUpdatingPreferences}
                         onValueChange={(value) =>
                           field.onChange(value === "__highest__" ? null : value)
                         }
@@ -672,7 +718,18 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                     </FormItem>
                   )}
                 />
-                <Button type="submit">Save</Button>
+                <Button type="submit" disabled={isUpdatingPreferences}>
+                  {isUpdatingPreferences ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      <span role="status" aria-live="polite">
+                        Saving...
+                      </span>
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
               </form>
               <FormDescription>
                 This will be used as your highest offense type in combat instead of
@@ -681,14 +738,32 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
             </Form>
           </TabsContent>
           <TabsContent value="combat">
-            <Switch
-              id="battle-description"
-              checked={userData?.showBattleDescription}
-              onCheckedChange={(checked) =>
-                updateBattleDescription({ showBattleDescription: checked })
-              }
-            />
-            <Label htmlFor="battle-description">Show battle descriptions</Label>
+            <div
+              className="flex min-h-8 items-center gap-2"
+              aria-busy={isUpdatingBattleDescription}
+            >
+              <Switch
+                id="battle-description"
+                checked={battleDescriptionDraft}
+                disabled={isUpdatingBattleDescription}
+                aria-describedby={
+                  isUpdatingBattleDescription ? "battle-description-pending" : undefined
+                }
+                onCheckedChange={handleBattleDescriptionChange}
+              />
+              <Label htmlFor="battle-description">Show battle descriptions</Label>
+              {isUpdatingBattleDescription && (
+                <span
+                  id="battle-description-pending"
+                  role="status"
+                  aria-live="polite"
+                  className="inline-flex items-center gap-1 text-muted-foreground text-sm"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Saving...
+                </span>
+              )}
+            </div>
             <br />
             <Switch
               id="default-auto-combat"
@@ -750,6 +825,8 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
 const Marriage: React.FC = () => {
   // tRPC utility
   const utils = api.useUtils();
+  const divorceRequestRef = useRef(new Set<string>());
+  const [divorcingUserIds, setDivorcingUserIds] = useState(() => new Set<string>());
 
   const maxUsers = 1;
   const userSearchSchema = getSearchValidator({ max: maxUsers });
@@ -795,7 +872,28 @@ const Marriage: React.FC = () => {
     api.marriage.rejectRequest.useMutation({ onSuccess });
   const { mutate: cancel, isPending: isCancelling } =
     api.marriage.cancelRequest.useMutation({ onSuccess });
-  const { mutate: divorce } = api.marriage.divorce.useMutation({ onSuccess });
+  const { mutateAsync: divorce } = api.marriage.divorce.useMutation({ onSuccess });
+
+  const handleDivorce = async (userId: string) => {
+    if (divorceRequestRef.current.has(userId)) return;
+
+    divorceRequestRef.current.add(userId);
+    setDivorcingUserIds((current) => new Set(current).add(userId));
+
+    try {
+      await divorce({ userId });
+    } catch {
+      // The shared tRPC error handler surfaces transport errors. Keep the
+      // confirmation open so the user can safely retry.
+    } finally {
+      divorceRequestRef.current.delete(userId);
+      setDivorcingUserIds((current) => {
+        const next = new Set(current);
+        next.delete(userId);
+        return next;
+      });
+    }
+  };
 
   if (!requests) return <Loader explanation="Loading requests" />;
 
@@ -808,6 +906,8 @@ const Marriage: React.FC = () => {
       <Label className="pt-2">Users who are married to you</Label>
       <div className="grid grid-cols-6">
         {marriages?.map((user) => {
+          const isDivorcing = divorcingUserIds.has(user.userId);
+
           return (
             <div
               key={user.userId}
@@ -821,10 +921,44 @@ const Marriage: React.FC = () => {
                 size={100}
               />
               {user.username}
-              <Ban
-                className="absolute top-0 right-0 h-8 w-8 rounded-full bg-red-500 p-1 hover:cursor-pointer hover:text-orange-500"
-                onClick={() => divorce({ userId: user.userId })}
-              />
+              <Confirm
+                id={`divorce-${user.userId}`}
+                title={`Divorce ${user.username}?`}
+                proceed_label="Divorce"
+                proceed_loading_label={`Divorcing ${user.username}...`}
+                confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                isLoading={isDivorcing}
+                keepOpenOnAccept
+                disabled={isDivorcing}
+                button={
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-0 right-0 h-8 w-8 rounded-full shadow-sm"
+                    disabled={isDivorcing}
+                    aria-label={
+                      isDivorcing
+                        ? `Divorcing ${user.username}`
+                        : `Divorce ${user.username}`
+                    }
+                    aria-busy={isDivorcing}
+                  >
+                    {isDivorcing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Ban className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                }
+                onAccept={(event) => {
+                  event.preventDefault();
+                  void handleDivorce(user.userId);
+                }}
+              >
+                Divorcing {user.username} will immediately end your marriage. This
+                action cannot be undone.
+              </Confirm>
             </div>
           );
         })}
@@ -1329,16 +1463,34 @@ const ResetStats: React.FC = () => {
   // State
   const { data: userData } = useRequiredUserData();
   const utils = api.useUtils();
+  const submissionInFlight = useRef(false);
 
   // Mutations
-  const { mutate: updateStats, isPending } = api.blackmarket.updateStats.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getUser.invalidate();
-      }
-    },
-  });
+  const { mutateAsync: updateStats, isPending } =
+    api.blackmarket.updateStats.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.profile.getUser.invalidate();
+        }
+      },
+      onError: (error) => {
+        showMutationToast({ success: false, message: error.message });
+      },
+    });
+
+  const submitStatRedistribution = async (data: StatSchemaType) => {
+    if (submissionInFlight.current) return;
+
+    submissionInFlight.current = true;
+    try {
+      await updateStats(data);
+    } catch {
+      // The mutation's onError handler displays the actionable error to the user.
+    } finally {
+      submissionInFlight.current = false;
+    }
+  };
 
   // Only show if we have userData
   if (!userData) return <Loader explanation="Loading user" />;
@@ -1378,14 +1530,12 @@ const ResetStats: React.FC = () => {
         <DistributeStatsForm
           userData={userData}
           availableStats={round(userData.experience + 120)}
-          onAccept={(data) => {
-            if (!isPending) {
-              updateStats(data);
-            }
-          }}
+          onAccept={submitStatRedistribution}
           forceUseAll={true}
           isRedistribution={true}
           showWrapper={false}
+          isPending={isPending}
+          pendingLabel="Redistributing…"
         />
       )}
     </div>
@@ -1460,13 +1610,21 @@ const AttributeChange: React.FC = () => {
   const [hairColor, setHairColor] = useState<Color>("Black");
   const [eyeColor, setEyeColor] = useState<Color>("Black");
   const [skinColor, setSkinColor] = useState<SkinColor>("Light");
+  const [pendingAttributeAdditions, setPendingAttributeAdditions] = useState<
+    Partial<Record<Attribute | "Eyes" | "Skin" | "Hair", string>>
+  >({});
+  const [pendingAttributeRemovals, setPendingAttributeRemovals] = useState(
+    () => new Set<string>(),
+  );
+  const pendingAttributeAdditionRef = useRef(new Set<string>());
+  const pendingAttributeRemovalRef = useRef(new Set<string>());
 
   // Queries
   const { data, refetch } = api.profile.getUserAttributes.useQuery(undefined);
   const selectedAttributes = data ? data.map((a) => a.attribute as Attribute) : [];
 
   // Mutations
-  const { mutate: insertAttr } = api.profile.insertAttribute.useMutation({
+  const { mutateAsync: insertAttr } = api.profile.insertAttribute.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
@@ -1475,7 +1633,34 @@ const AttributeChange: React.FC = () => {
     },
   });
 
-  const { mutate: deleteAttr } = api.profile.deleteAttribute.useMutation({
+  const addAttribute = async (
+    attribute: Attribute | "Eyes" | "Skin" | "Hair",
+    color?: Color | SkinColor,
+  ) => {
+    if (pendingAttributeAdditionRef.current.has(attribute)) return;
+
+    const label = color ? `${color} ${attribute}` : attribute;
+    pendingAttributeAdditionRef.current.add(attribute);
+    setPendingAttributeAdditions((current) => ({
+      ...current,
+      [attribute]: label,
+    }));
+
+    try {
+      await insertAttr({ attribute, color });
+    } catch {
+      // The mutation's existing error handling reports transport failures.
+    } finally {
+      pendingAttributeAdditionRef.current.delete(attribute);
+      setPendingAttributeAdditions((current) => {
+        const next = { ...current };
+        delete next[attribute];
+        return next;
+      });
+    }
+  };
+
+  const { mutateAsync: deleteAttr } = api.profile.deleteAttribute.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
@@ -1483,50 +1668,104 @@ const AttributeChange: React.FC = () => {
       }
     },
   });
+
+  const removeAttribute = async (attribute: string) => {
+    if (pendingAttributeRemovalRef.current.has(attribute)) return;
+
+    pendingAttributeRemovalRef.current.add(attribute);
+    setPendingAttributeRemovals((current) => new Set(current).add(attribute));
+
+    try {
+      await deleteAttr({ attribute });
+    } catch {
+      // The shared tRPC error handler reports transport failures. Because the
+      // row remains rendered until a successful refetch, it is ready to retry.
+    } finally {
+      pendingAttributeRemovalRef.current.delete(attribute);
+      setPendingAttributeRemovals((current) => {
+        const next = new Set(current);
+        next.delete(attribute);
+        return next;
+      });
+    }
+  };
 
   return (
     <div className="grid grid-cols-2 pt-2">
       <div className="m-3 rounded-md bg-popover p-3">
         <p className="font-bold">Current </p>
-        {selectedAttributes.map((attribute) => (
-          <button
-            type="button"
-            key={attribute}
-            className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              deleteAttr({ attribute });
-            }}
-          >
-            <p> - {attribute}</p> <ChevronsRight className="ml-1 h-5 w-5" />
-          </button>
-        ))}
+        {selectedAttributes.map((attribute) => {
+          const isRemoving = pendingAttributeRemovals.has(attribute);
+          return (
+            <button
+              type="button"
+              key={attribute}
+              className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isRemoving}
+              aria-busy={isRemoving}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void removeAttribute(attribute);
+              }}
+            >
+              {isRemoving ? (
+                <>
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
+                  <span aria-live="polite">Removing {attribute}…</span>
+                </>
+              ) : (
+                <>
+                  <span> - {attribute}</span>
+                  <ChevronsRight className="ml-1 h-5 w-5" />
+                </>
+              )}
+            </button>
+          );
+        })}
       </div>
       <div className="m-3 rounded-md bg-popover p-3">
         <p className="font-bold">Available </p>
         {attributes
           .filter((a) => !selectedAttributes.includes(a))
-          .map((attribute) => (
-            <button
-              type="button"
-              key={attribute}
-              className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                insertAttr({ attribute });
-              }}
-            >
-              <ChevronsLeft className="mr-1 h-5 w-5" />
-              <p> {attribute} </p>
-            </button>
-          ))}
-        <div className="relative mt-3">
+          .map((attribute) => {
+            const pendingLabel = pendingAttributeAdditions[attribute];
+            return (
+              <button
+                type="button"
+                key={attribute}
+                className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={Boolean(pendingLabel)}
+                aria-busy={Boolean(pendingLabel)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void addAttribute(attribute);
+                }}
+              >
+                {pendingLabel ? (
+                  <>
+                    <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
+                    <span aria-live="polite">Adding {pendingLabel}…</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronsLeft className="mr-1 h-5 w-5" />
+                    <span> {attribute} </span>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        <div
+          className="relative mt-3"
+          aria-busy={Boolean(pendingAttributeAdditions.Eyes)}
+        >
           <Select
             onValueChange={(e) => setEyeColor(e as Color)}
             defaultValue={eyeColor}
             value={eyeColor}
+            disabled={Boolean(pendingAttributeAdditions.Eyes)}
           >
             <Label htmlFor="eye_color">Eye color</Label>
             <SelectTrigger>
@@ -1541,17 +1780,34 @@ const AttributeChange: React.FC = () => {
             </SelectContent>
           </Select>
           <Button
-            onClick={() => insertAttr({ attribute: "Eyes", color: eyeColor })}
+            onClick={() => void addAttribute("Eyes", eyeColor)}
             className="absolute right-0 bottom-0"
+            disabled={Boolean(pendingAttributeAdditions.Eyes)}
+            aria-label={
+              pendingAttributeAdditions.Eyes
+                ? `Adding ${pendingAttributeAdditions.Eyes}`
+                : `Add ${eyeColor} Eyes`
+            }
           >
-            <ChevronsLeft className="mr-1 h-5 w-5" />
+            {pendingAttributeAdditions.Eyes ? (
+              <>
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
+                <span aria-live="polite">Adding…</span>
+              </>
+            ) : (
+              <ChevronsLeft className="h-5 w-5" />
+            )}
           </Button>
         </div>
-        <div className="relative mt-3">
+        <div
+          className="relative mt-3"
+          aria-busy={Boolean(pendingAttributeAdditions.Skin)}
+        >
           <Select
             onValueChange={(e) => setSkinColor(e as SkinColor)}
             defaultValue={skinColor}
             value={skinColor}
+            disabled={Boolean(pendingAttributeAdditions.Skin)}
           >
             <Label htmlFor="skin_color">Skin color</Label>
             <SelectTrigger>
@@ -1566,17 +1822,34 @@ const AttributeChange: React.FC = () => {
             </SelectContent>
           </Select>
           <Button
-            onClick={() => insertAttr({ attribute: "Skin", color: skinColor })}
+            onClick={() => void addAttribute("Skin", skinColor)}
             className="absolute right-0 bottom-0"
+            disabled={Boolean(pendingAttributeAdditions.Skin)}
+            aria-label={
+              pendingAttributeAdditions.Skin
+                ? `Adding ${pendingAttributeAdditions.Skin}`
+                : `Add ${skinColor} Skin`
+            }
           >
-            <ChevronsLeft className="mr-1 h-5 w-5" />
+            {pendingAttributeAdditions.Skin ? (
+              <>
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
+                <span aria-live="polite">Adding…</span>
+              </>
+            ) : (
+              <ChevronsLeft className="h-5 w-5" />
+            )}
           </Button>
         </div>
-        <div className="relative mt-3">
+        <div
+          className="relative mt-3"
+          aria-busy={Boolean(pendingAttributeAdditions.Hair)}
+        >
           <Select
             onValueChange={(e) => setHairColor(e as Color)}
             defaultValue={hairColor}
             value={hairColor}
+            disabled={Boolean(pendingAttributeAdditions.Hair)}
           >
             <Label htmlFor="hair_color">Hair color</Label>
             <SelectTrigger>
@@ -1591,10 +1864,23 @@ const AttributeChange: React.FC = () => {
             </SelectContent>
           </Select>
           <Button
-            onClick={() => insertAttr({ attribute: "Hair", color: hairColor })}
+            onClick={() => void addAttribute("Hair", hairColor)}
             className="absolute right-0 bottom-0"
+            disabled={Boolean(pendingAttributeAdditions.Hair)}
+            aria-label={
+              pendingAttributeAdditions.Hair
+                ? `Adding ${pendingAttributeAdditions.Hair}`
+                : `Add ${hairColor} Hair`
+            }
           >
-            <ChevronsLeft className="mr-1 h-5 w-5" />
+            {pendingAttributeAdditions.Hair ? (
+              <>
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
+                <span aria-live="polite">Adding…</span>
+              </>
+            ) : (
+              <ChevronsLeft className="h-5 w-5" />
+            )}
           </Button>
         </div>
       </div>
@@ -1725,6 +2011,10 @@ const NameChange: React.FC = () => {
   // State
   const { data: userData } = useRequiredUserData();
   const utils = api.useUtils();
+  const [showNameChangeConfirm, setShowNameChangeConfirm] = useState(false);
+  const [isChangingUsername, setIsChangingUsername] = useState(false);
+  const [usernameDraft, setUsernameDraft] = useState("");
+  const usernameRequestRef = useRef(false);
 
   // Username search
   const { form, searchTerm } = useUserSearch();
@@ -1736,14 +2026,34 @@ const NameChange: React.FC = () => {
   );
 
   // Mutations
-  const { mutate: updateUsername } = api.profile.updateUsername.useMutation({
-    onSuccess: async (data) => {
+  const { mutateAsync: updateUsername } = api.profile.updateUsername.useMutation();
+
+  const handleUsernameChange = async () => {
+    if (usernameRequestRef.current) return;
+
+    const submittedUsername = usernameDraft;
+    usernameRequestRef.current = true;
+    setIsChangingUsername(true);
+    try {
+      const data = await updateUsername({ username: submittedUsername });
       showMutationToast(data);
       if (data.success) {
         await utils.profile.getUser.invalidate();
+        setShowNameChangeConfirm(false);
+      } else {
+        setUsernameDraft(submittedUsername);
+        form.setValue("username", submittedUsername, { shouldValidate: true });
       }
-    },
-  });
+    } catch {
+      // The shared tRPC error handler surfaces transport failures. Leave the
+      // confirmation and draft open so the user can correct or retry it.
+      setUsernameDraft(submittedUsername);
+      form.setValue("username", submittedUsername, { shouldValidate: true });
+    } finally {
+      usernameRequestRef.current = false;
+      setIsChangingUsername(false);
+    }
+  };
 
   // Only show if we have userData
   if (!userData) {
@@ -1760,40 +2070,76 @@ const NameChange: React.FC = () => {
   return (
     <div className="grid grid-cols-1">
       <Form {...form}>
-        <form>
+        <form
+          aria-busy={isChangingUsername}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (
+              !isChangingUsername &&
+              canBuyUsername &&
+              usernameDraft !== "" &&
+              error === undefined
+            ) {
+              setShowNameChangeConfirm(true);
+            }
+          }}
+        >
           <FormField
             control={form.control}
             name="username"
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <Input id="username" placeholder="Search user" {...field} />
+                  <Input
+                    {...field}
+                    id="username"
+                    placeholder="Search user"
+                    value={usernameDraft}
+                    readOnly={isChangingUsername}
+                    aria-disabled={isChangingUsername}
+                    className={
+                      isChangingUsername ? "cursor-not-allowed opacity-50" : undefined
+                    }
+                    onChange={(event) => {
+                      field.onChange(event);
+                      setUsernameDraft(event.target.value);
+                    }}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Confirm
-            title="Confirm New Username"
-            button={
-              <Button
-                id="create"
-                type="submit"
-                className="my-3 w-full"
-                disabled={!canBuyUsername || searchTerm === "" || error !== undefined}
-              >
-                {canBuyUsername ? "Update Username" : "Not enough points"}
-              </Button>
+          <Button
+            id="create"
+            type="submit"
+            className="my-3 w-full"
+            disabled={
+              isChangingUsername ||
+              !canBuyUsername ||
+              usernameDraft === "" ||
+              error !== undefined
             }
+          >
+            {canBuyUsername ? "Update Username" : "Not enough points"}
+          </Button>
+          <Modal
+            title="Confirm New Username"
+            isOpen={showNameChangeConfirm}
+            setIsOpen={setShowNameChangeConfirm}
+            proceed_label="Change username"
+            proceed_loading_label="Changing username…"
+            isLoading={isChangingUsername}
+            keepOpenOnAccept
             onAccept={(e) => {
               e.preventDefault();
-              updateUsername({ username: searchTerm });
+              void handleUsernameChange();
             }}
           >
             Changing your username costs {COST_CHANGE_USERNAME} reputation points, and
             can only be reverted by purchasing another name change. Are you sure you
-            want to change your username to {searchTerm}?
-          </Confirm>
+            want to change your username to {usernameDraft}?
+          </Modal>
         </form>
       </Form>
     </div>
@@ -1805,17 +2151,15 @@ const NameChange: React.FC = () => {
  */
 const CustomTitle: React.FC = () => {
   // State
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData } = useRequiredUserData();
+  const utils = api.useUtils();
+  const [showCustomTitleConfirm, setShowCustomTitleConfirm] = useState(false);
+  const [isUpdatingCustomTitle, setIsUpdatingCustomTitle] = useState(false);
+  const customTitleRequestRef = useRef(false);
 
   // Mutations
-  const { mutate: updateUsername } = api.blackmarket.updateCustomTitle.useMutation({
-    onSuccess: async (data, variables) => {
-      showMutationToast(data);
-      if (data.success) {
-        await updateUser({ username: variables.title });
-      }
-    },
-  });
+  const { mutateAsync: updateCustomTitle } =
+    api.blackmarket.updateCustomTitle.useMutation();
 
   // Title form
   const form = useForm<TitleChangeSchema>({
@@ -1825,52 +2169,103 @@ const CustomTitle: React.FC = () => {
   const curTitle = useWatch({ control: form.control, name: "title" });
 
   // Form handlers
-  const onSubmit = form.handleSubmit((data) => {
-    updateUsername(data);
+  const onSubmit = form.handleSubmit(() => {
+    if (!isUpdatingCustomTitle) setShowCustomTitleConfirm(true);
   });
+
+  const handleCustomTitleChange = async () => {
+    if (customTitleRequestRef.current) return;
+
+    const submittedTitle = form.getValues("title");
+    customTitleRequestRef.current = true;
+    setIsUpdatingCustomTitle(true);
+
+    try {
+      const data = await updateCustomTitle({ title: submittedTitle });
+      showMutationToast(data);
+      if (data.success) {
+        // The purchase already succeeded at this point; a cache refresh failure
+        // must not leave a retryable dialog that could charge the user again.
+        await utils.profile.getUser.invalidate().catch(() => undefined);
+        setShowCustomTitleConfirm(false);
+      } else {
+        form.setValue("title", submittedTitle, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+    } catch {
+      // The shared tRPC error handler surfaces transport failures. Keep the
+      // confirmation and draft open so the user can safely retry.
+      form.setValue("title", submittedTitle, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    } finally {
+      customTitleRequestRef.current = false;
+      setIsUpdatingCustomTitle(false);
+    }
+  };
 
   // Only show if we have userData
   if (!userData) return <Loader explanation="Loading profile page..." />;
 
   // Derived data
-  const canBuyUsername = userData.reputationPoints >= COST_CHANGE_USERNAME;
-  const disabled = curTitle === "" || !canBuyUsername;
+  const canBuyTitle = userData.reputationPoints >= COST_CUSTOM_TITLE;
+  const disabled = isUpdatingCustomTitle || curTitle === "" || !canBuyTitle;
 
   return (
     <div className="grid grid-cols-1">
       <Form {...form}>
-        <form>
+        <form onSubmit={onSubmit} aria-busy={isUpdatingCustomTitle}>
           <FormField
             control={form.control}
             name="title"
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <Input id="username" placeholder="Your title" {...field} />
+                  <Input
+                    id="custom-title"
+                    placeholder="Your title"
+                    readOnly={isUpdatingCustomTitle}
+                    aria-disabled={isUpdatingCustomTitle}
+                    className={
+                      isUpdatingCustomTitle
+                        ? "cursor-not-allowed opacity-50"
+                        : undefined
+                    }
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Confirm
-            title="Confirm Custom Title"
+          <Button
+            id="set-custom-title"
+            type="submit"
+            className="my-3 w-full"
             disabled={disabled}
-            button={
-              <Button
-                id="create"
-                type="submit"
-                className="my-3 w-full"
-                disabled={disabled}
-              >
-                {canBuyUsername ? "Set custom title" : "Not enough points"}
-              </Button>
-            }
-            onAccept={onSubmit}
+          >
+            {canBuyTitle ? "Set custom title" : "Not enough points"}
+          </Button>
+          <Modal
+            title="Confirm Custom Title"
+            isOpen={showCustomTitleConfirm}
+            setIsOpen={setShowCustomTitleConfirm}
+            proceed_label="Set custom title"
+            proceed_loading_label="Setting custom title…"
+            isLoading={isUpdatingCustomTitle}
+            keepOpenOnAccept
+            onAccept={(event) => {
+              event.preventDefault();
+              void handleCustomTitleChange();
+            }}
           >
             Changing your custom title costs {COST_CUSTOM_TITLE} reputation points, and
             can only be changed by requesting another change. Are you sure you want to
             change your title to {curTitle}?
-          </Confirm>
+          </Modal>
         </form>
       </Form>
     </div>
@@ -2042,17 +2437,14 @@ const TavernColors: React.FC = () => {
  */
 const ChangeGender: React.FC = () => {
   // State
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData } = useRequiredUserData();
+  const utils = api.useUtils();
+  const [showGenderConfirmation, setShowGenderConfirmation] = useState(false);
+  const [isChangingGender, setIsChangingGender] = useState(false);
+  const genderChangeRequestRef = useRef(false);
 
   // Mutations
-  const { mutate: updateUsername } = api.blackmarket.changeUserGender.useMutation({
-    onSuccess: async (data, variables) => {
-      showMutationToast(data);
-      if (data.success) {
-        await updateUser({ gender: variables.gender });
-      }
-    },
-  });
+  const { mutateAsync: changeGender } = api.blackmarket.changeUserGender.useMutation();
 
   // Gender form
   const form = useForm<GenderChangeSchema>({
@@ -2069,20 +2461,55 @@ const ChangeGender: React.FC = () => {
   }, [userData]);
 
   // Form handlers
-  const onSubmit = form.handleSubmit((data) => {
-    updateUsername(data);
+  const onSubmit = form.handleSubmit(() => {
+    if (!isChangingGender) setShowGenderConfirmation(true);
   });
+
+  const handleGenderChange = async () => {
+    if (genderChangeRequestRef.current || !userData) return;
+
+    const submittedGender = form.getValues("gender");
+    genderChangeRequestRef.current = true;
+    setIsChangingGender(true);
+
+    try {
+      const data = await changeGender({ gender: submittedGender });
+      showMutationToast(data);
+      if (data.success) {
+        // The purchase already succeeded at this point. Refresh gender and balance
+        // from the server once, then close even if the refresh fails, so stale cached
+        // reputation cannot overwrite a concurrent mutation or enable a repeat charge.
+        await utils.profile.getUser.invalidate().catch(() => undefined);
+        setShowGenderConfirmation(false);
+      } else {
+        form.setValue("gender", submittedGender, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+    } catch {
+      // The shared tRPC error handler surfaces transport failures. Keep the
+      // confirmation and selected gender open so the user can retry.
+      form.setValue("gender", submittedGender, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    } finally {
+      genderChangeRequestRef.current = false;
+      setIsChangingGender(false);
+    }
+  };
 
   // Only show if we have userData
   if (!userData) return <Loader explanation="Loading profile page..." />;
 
   // Derived data
-  const canBuyUsername = userData.reputationPoints >= COST_CHANGE_GENDER;
+  const canBuyGender = userData.reputationPoints >= COST_CHANGE_GENDER;
 
   return (
     <div className="grid grid-cols-1">
       <Form {...form}>
-        <form>
+        <form onSubmit={onSubmit} aria-busy={isChangingGender}>
           <FormField
             control={form.control}
             name="gender"
@@ -2094,6 +2521,7 @@ const ChangeGender: React.FC = () => {
                     onValueChange={field.onChange}
                     defaultValue={field.value}
                     value={field.value}
+                    disabled={isChangingGender}
                   >
                     <FormControl>
                       <SelectTrigger className="h-14 text-3xl">
@@ -2125,25 +2553,31 @@ const ChangeGender: React.FC = () => {
               </div>
             )}
           />
-          <Confirm
+          <Button
+            id="change-gender"
+            type="submit"
+            className="my-3 w-full"
+            disabled={!canBuyGender || isChangingGender}
+          >
+            {canBuyGender ? "Set new gender" : "Not enough points"}
+          </Button>
+          <Modal
             title="Confirm Gender Change"
-            disabled={!canBuyUsername}
-            button={
-              <Button
-                id="create"
-                type="submit"
-                className="my-3 w-full"
-                disabled={!canBuyUsername}
-              >
-                {canBuyUsername ? "Set new gender" : "Not enough points"}
-              </Button>
-            }
-            onAccept={onSubmit}
+            isOpen={showGenderConfirmation}
+            setIsOpen={setShowGenderConfirmation}
+            proceed_label="Set new gender"
+            proceed_loading_label="Changing gender…"
+            isLoading={isChangingGender}
+            keepOpenOnAccept
+            onAccept={(event) => {
+              event.preventDefault();
+              void handleGenderChange();
+            }}
           >
             Changing your gender costs {COST_CHANGE_GENDER} reputation points, and can
             only be changed by requesting another change. Are you sure you want to
             change your gender to {watchGender}?
-          </Confirm>
+          </Modal>
         </form>
       </Form>
     </div>

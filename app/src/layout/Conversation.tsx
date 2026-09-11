@@ -89,6 +89,9 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [editorKey, setEditorKey] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [deletedCommentIds, setDeletedCommentIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [quietTime, setQuietTime] = useState<Date>(() =>
     secondsFromNow(CONVERSATION_QUIET_MINS * 60),
   );
@@ -166,6 +169,24 @@ const Conversation: React.FC<ConversationProps> = (props) => {
         })),
       };
     });
+  };
+
+  // A proven-successful delete remains hidden even if the subsequent
+  // best-effort invalidation fails or briefly returns stale data.
+  const handleConversationCommentDeleted = (commentId: string) => {
+    setDeletedCommentIds((current) => {
+      if (current.has(commentId)) return current;
+      const next = new Set(current);
+      next.add(commentId);
+      return next;
+    });
+    updateCachedComments((data) => data.filter((comment) => comment.id !== commentId));
+    if (quoteIds?.includes(commentId)) {
+      setValue(
+        "quoteIds",
+        quoteIds.filter((id) => id !== commentId),
+      );
+    }
   };
 
   // Search functionality
@@ -637,7 +658,15 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     await utils.comments.getConversationComments.invalidate();
   };
 
-  const unique = new Set();
+  const unique = new Set<string>();
+  const visibleComments = allComments
+    ?.filter((comment) => comment.conversationId === conversation?.id)
+    .filter((comment) => !deletedCommentIds.has(comment.id))
+    .filter((comment) => {
+      const duplicate = unique.has(comment.id);
+      unique.add(comment.id);
+      return !duplicate;
+    });
 
   return (
     <div key={`${props.refreshKey}-${senderUser?.userId}`}>
@@ -760,52 +789,46 @@ const Conversation: React.FC<ConversationProps> = (props) => {
               )}
             </div>
           )}
-          {allComments
-            ?.filter((c) => c.conversationId === conversation?.id)
-            .filter((c) => {
-              const duplicate = unique.has(c.id);
-              unique.add(c.id);
-              return !duplicate;
-            })
-            .map((comment, i) => {
-              return (
-                <div
-                  key={comment.id}
-                  ref={i === allComments.length - 1 ? setLastElement : null}
+          {visibleComments?.map((comment, i) => {
+            return (
+              <div
+                key={comment.id}
+                ref={i === visibleComments.length - 1 ? setLastElement : null}
+              >
+                <CommentOnConversation
+                  user={comment}
+                  hover_effect={false}
+                  comment={comment}
+                  quoteIds={quoteIds}
+                  tavernStyling={props.tavernStyling}
+                  color={
+                    comment.content.includes(`quote author="${userData?.username}`) ||
+                    comment.content.includes(`@${userData?.username}`)
+                      ? "poppopover"
+                      : undefined
+                  }
+                  toggleReaction={(emoji) =>
+                    reactConversationComment({ commentId: comment.id, emoji })
+                  }
+                  setQuoteId={(quoteId) => {
+                    if (quoteIds?.includes(quoteId)) {
+                      setValue(
+                        "quoteIds",
+                        quoteIds.filter((id) => id !== quoteId),
+                      );
+                    } else if (quoteIds && quoteIds.length > 0) {
+                      setValue("quoteIds", [...quoteIds, quoteId]);
+                    } else {
+                      setValue("quoteIds", [quoteId]);
+                    }
+                  }}
+                  onDeleted={handleConversationCommentDeleted}
                 >
-                  <CommentOnConversation
-                    user={comment}
-                    hover_effect={false}
-                    comment={comment}
-                    quoteIds={quoteIds}
-                    tavernStyling={props.tavernStyling}
-                    color={
-                      comment.content.includes(`quote author="${userData?.username}`) ||
-                      comment.content.includes(`@${userData?.username}`)
-                        ? "poppopover"
-                        : undefined
-                    }
-                    toggleReaction={(emoji) =>
-                      reactConversationComment({ commentId: comment.id, emoji })
-                    }
-                    setQuoteId={(quoteId) => {
-                      if (quoteIds?.includes(quoteId)) {
-                        setValue(
-                          "quoteIds",
-                          quoteIds.filter((id) => id !== quoteId),
-                        );
-                      } else if (quoteIds && quoteIds.length > 0) {
-                        setValue("quoteIds", [...quoteIds, quoteId]);
-                      } else {
-                        setValue("quoteIds", [quoteId]);
-                      }
-                    }}
-                  >
-                    {parseHtml(comment.content)}
-                  </CommentOnConversation>
-                </div>
-              );
-            })}
+                  {parseHtml(comment.content)}
+                </CommentOnConversation>
+              </div>
+            );
+          })}
           {silence && (
             <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-start bg-black bg-opacity-80">
               <div className="pt-10 text-center text-white">

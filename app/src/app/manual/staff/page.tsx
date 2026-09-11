@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FileUser, Info, List } from "lucide-react";
 import Link from "next/link";
+import { useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,22 @@ export default function Staff() {
       showMutationToast(res);
       await utils.applications.list.invalidate();
     },
+    onError: (error) => {
+      showMutationToast({ success: false, message: error.message });
+    },
+  });
+  const isSubmittingApplication = useRef(false);
+
+  const submitApplication = form.handleSubmit(async (values) => {
+    if (isSubmittingApplication.current) return;
+    isSubmittingApplication.current = true;
+    try {
+      await createApp.mutateAsync(values);
+    } catch {
+      // The mutation's onError callback provides the user-facing error feedback.
+    } finally {
+      isSubmittingApplication.current = false;
+    }
   });
 
   // Render results
@@ -87,16 +104,24 @@ export default function Staff() {
               <Confirm
                 title="Apply for Staff"
                 proceed_label="Submit Application"
+                proceed_loading_label="Submitting application…"
                 button={
-                  <Button>
+                  <Button disabled={createApp.isPending}>
                     <FileUser className="mr-2 h-5 w-5" />
                     Apply
                   </Button>
                 }
                 isValid={form.formState.isValid}
-                onAccept={form.handleSubmit((values) => createApp.mutate(values))}
+                isLoading={createApp.isPending}
+                keepOpenOnAccept
+                confirmDisabled={createApp.isPending}
+                disabled={createApp.isPending}
+                onAccept={() => void submitApplication()}
               >
-                <div className="w-[80vw] max-w-[520px] space-y-3">
+                <div
+                  className="w-[80vw] max-w-[520px] space-y-3"
+                  aria-busy={createApp.isPending}
+                >
                   <div>
                     <div className="mb-1 font-semibold">Target Role</div>
                     <Select
@@ -105,7 +130,8 @@ export default function Staff() {
                           shouldValidate: true,
                         })
                       }
-                      value={targetRole}
+                      value={form.watch("targetRole")}
+                      disabled={createApp.isPending}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select role" />
@@ -132,6 +158,7 @@ export default function Staff() {
                         })
                       }
                       rows={6}
+                      disabled={createApp.isPending}
                     />
                     <div className="mt-1 flex justify-between text-sm">
                       <span className="text-destructive">

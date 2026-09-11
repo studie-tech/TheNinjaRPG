@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { GameAssetTypes } from "@/drizzle/constants";
@@ -13,7 +14,9 @@ import { gameAssetValidator } from "@/validators/asset";
  * Hook used when creating frontend forms for editing assets
  * @param data
  */
-export const useAssetEditForm = (asset: GameAsset, refetch: () => void) => {
+export const useAssetEditForm = (asset: GameAsset, refetch: () => Promise<unknown>) => {
+  const submitInFlight = useRef(false);
+
   // Form handling
   const form = useForm<ZodGameAssetInput, unknown, ZodGameAssetType>({
     mode: "all",
@@ -24,20 +27,33 @@ export const useAssetEditForm = (asset: GameAsset, refetch: () => void) => {
   });
 
   // Mutation for updating asset
-  const { mutate: updateAsset } = api.gameAsset.update.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      refetch();
-    },
-  });
+  const { mutateAsync: updateAsset, isPending: isUpdating } =
+    api.gameAsset.update.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await refetch();
+        }
+      },
+      onSettled: () => {
+        submitInFlight.current = false;
+      },
+    });
 
   // Form submission
   const handleAssetSubmit = form.handleSubmit(
-    (data: ZodGameAssetType) => {
+    async (data: ZodGameAssetType) => {
+      if (submitInFlight.current) return;
       const newAsset = { ...asset, ...data };
       const diff = calculateContentDiff(asset, newAsset);
       if (diff.length > 0) {
-        updateAsset({ id: asset.id, data: newAsset });
+        submitInFlight.current = true;
+        try {
+          await updateAsset({ id: asset.id, data: newAsset });
+        } catch {
+          // Mutation errors are surfaced by the shared tRPC error handler. Keep the
+          // current form values in place so the editor can retry without retyping.
+        }
       }
     },
     (errors) => showFormErrorsToast(errors),
@@ -121,5 +137,5 @@ export const useAssetEditForm = (asset: GameAsset, refetch: () => void) => {
     formData.push({ id: "onInitialBattleField", type: "boolean" });
   }
 
-  return { asset, form, formData, handleAssetSubmit };
+  return { asset, form, formData, handleAssetSubmit, isUpdating };
 };

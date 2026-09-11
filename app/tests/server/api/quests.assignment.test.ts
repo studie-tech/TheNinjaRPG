@@ -4,6 +4,11 @@ import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { describe, expect, it, vi } from "vitest";
 import {
+  MEDICAL_MISSIONS_PER_DAY,
+  MISSIONS_PER_DAY,
+  PVP_MISSIONS_PER_DAY,
+} from "../../../drizzle/constants";
+import {
   assignQuestToUser,
   upsertQuestEntries,
   upsertQuestEntry,
@@ -191,6 +196,42 @@ describe("assignQuestToUser compatibility", () => {
     expect(insert).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });
+
+  it.each([
+    {
+      questType: "mission",
+      counter: { dailyMissions: MISSIONS_PER_DAY },
+      message: `You have reached your daily mission limit of ${MISSIONS_PER_DAY}`,
+    },
+    {
+      questType: "medical",
+      counter: { dailyMedicalMissions: MEDICAL_MISSIONS_PER_DAY },
+      message: `You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY}`,
+    },
+    {
+      questType: "pvp",
+      counter: { dailyPvpMissions: PVP_MISSIONS_PER_DAY },
+      message: `You have reached your daily PvP mission limit of ${PVP_MISSIONS_PER_DAY}`,
+    },
+  ])(
+    "enforces the $questType daily cap before issuing writes",
+    async ({ questType, counter, message }) => {
+      const { client, update, insert } = makeClient();
+
+      const result = await assignQuestToUser({
+        client,
+        user: { ...user, ...counter, userQuests: [] } as never,
+        quest: { ...quest, questType } as never,
+        source: "ui",
+        sectorVillage: null,
+        prevAttempt: undefined,
+      });
+
+      expect(result).toEqual({ success: false, message });
+      expect(insert).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    },
+  );
 
   it("keeps structure/occupation-gated quest types out of the NPC source", async () => {
     const { client, update, insert } = makeClient();

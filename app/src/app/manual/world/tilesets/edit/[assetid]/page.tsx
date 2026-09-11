@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { use, useEffect } from "react";
+import { use, useEffect, useRef } from "react";
 import { type UseFormReturn, useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { MapAsset } from "@/drizzle/schema";
@@ -59,6 +59,7 @@ interface SingleEditMapAssetProps {
 const SingleEditMapAsset: React.FC<SingleEditMapAssetProps> = (props) => {
   const { asset, refetch } = props;
   const utils = api.useUtils();
+  const submitInFlight = useRef(false);
   const form = useForm<ZodMapAssetTypeInput, unknown, ZodMapAssetType>({
     mode: "all",
     criteriaMode: "all",
@@ -67,22 +68,29 @@ const SingleEditMapAsset: React.FC<SingleEditMapAssetProps> = (props) => {
     resolver: zodResolver(mapAssetValidator),
   });
 
-  const { mutate: updateAsset } = api.mapAsset.update.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      refetch();
-      // The tilesets list and the travel page session-cache the full library
-      // (getAll), so a save here must invalidate it or they keep showing the
-      // old sprite until a manual refresh
-      await utils.mapAsset.getAll.invalidate();
-    },
-  });
+  const { mutate: updateAsset, isPending: isUpdating } =
+    api.mapAsset.update.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (!data.success) return;
+        await refetch();
+        // The tilesets list and the travel page session-cache the full library
+        // (getAll), so a save here must invalidate it or they keep showing the
+        // old sprite until a manual refresh
+        await utils.mapAsset.getAll.invalidate();
+      },
+      onSettled: () => {
+        submitInFlight.current = false;
+      },
+    });
 
   const handleAssetSubmit = form.handleSubmit(
     (data: ZodMapAssetType) => {
+      if (submitInFlight.current) return;
       const newAsset = { ...asset, ...data };
       const diff = calculateContentDiff(asset, newAsset);
       if (diff.length > 0) {
+        submitInFlight.current = true;
         updateAsset({ id: asset.id, data: newAsset });
       }
     },
@@ -130,6 +138,8 @@ const SingleEditMapAsset: React.FC<SingleEditMapAssetProps> = (props) => {
         formData={formData}
         showSubmit={true}
         buttonTxt="Save to Database"
+        submitLoading={isUpdating}
+        submitLoadingText="Saving map asset..."
         type="mapAsset"
         relationId={asset.id}
         allowImageUpload={true}

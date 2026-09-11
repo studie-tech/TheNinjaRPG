@@ -1,8 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2, Plus, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import type React from "react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { FieldValues, Path, PathValue, UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -48,6 +48,7 @@ import {
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
+import { isRetryableTrpcError } from "@/utils/error";
 import { canAwardReputation } from "@/utils/permissions";
 import type { DeepPartial } from "@/utils/typeutils";
 import { objectKeys } from "@/utils/typeutils";
@@ -139,6 +140,8 @@ interface EditContentProps<T, K, S extends FieldValues> {
   ) => Promise<void>;
   onEnter?: () => Promise<void>;
   submitDisabled?: boolean;
+  submitLoading?: boolean;
+  submitLoadingText?: string;
 }
 
 /**
@@ -153,8 +156,16 @@ export const EditContent = <
   props: EditContentProps<T, K, S>,
 ) => {
   // Destructure
-  const { formData, formClassName, form, showSubmit, buttonTxt, submitDisabled } =
-    props;
+  const {
+    formData,
+    formClassName,
+    form,
+    showSubmit,
+    buttonTxt,
+    submitDisabled,
+    submitLoading,
+    submitLoadingText,
+  } = props;
   const currentValues = form.getValues();
 
   // State for managing dynamic options for fields with allowAddNew
@@ -266,6 +277,31 @@ export const EditContent = <
     };
   }, []);
 
+  // Picker controls are rendered in a portal, outside the disabled fieldset below.
+  // Close the picker when a caller opts into an in-flight submit lock so every
+  // control belonging to this atomic form is consistently unavailable.
+  useEffect(() => {
+    if (submitLoading) {
+      setAssetPickerOpen(false);
+    }
+  }, [submitLoading]);
+
+  // Mutations
+  // const { mutate: create3dModel } =
+  //   api.openai.create3dModel.useMutation({
+  //     onSuccess: (data, variables) => {
+  //       showMutationToast({
+  //         success: true,
+  //         message: "3D model generated. Now fetching",
+  //       });
+  //       fetchReplicateResult({
+  //         replicateId: data.replicateId,
+  //         field: variables.field,
+  //         removeBg: false,
+  //       });
+  //     },
+  //   });
+
   // If this is a quest, deduce the quest-type
   const questType =
     props.type === "quest" ? form.getValues("questType" as Path<S>) : undefined;
@@ -323,7 +359,7 @@ export const EditContent = <
         }
       >
         {/* Asset Picker Dialog */}
-        {assetPickerOpen && (
+        {assetPickerOpen && !submitLoading && (
           <Modal
             title={
               assetPickerType === "ANIMATION"
@@ -430,6 +466,8 @@ export const EditContent = <
             </div>
           </Modal>
         )}
+        {/* biome-ignore format: Keep the display-contents fieldset from reformatting the large field renderer. */}
+        <fieldset disabled={submitLoading} aria-busy={submitLoading} className="contents">
         {formData
           .filter((formEntry) => formEntry.type !== "avatar3d")
           .filter((formEntry) => {
@@ -1052,6 +1090,7 @@ export const EditContent = <
                                   }}
                                   size={sizeVal}
                                   maxDim={maxDimVal}
+                                  disabled={submitLoading}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -1157,7 +1196,10 @@ export const EditContent = <
                           text: string;
                           nextObjectiveId: string;
                         }[] = Array.isArray(field.value)
-                          ? (field.value as { text: string; nextObjectiveId: string }[])
+                          ? (field.value as {
+                              text: string;
+                              nextObjectiveId: string;
+                            }[])
                           : [];
                         return (
                           <FormItem className="flex flex-col gap-2">
@@ -1460,6 +1502,9 @@ export const EditContent = <
           })}
         {showSubmit && props.onAccept && (
           <div className="col-span-2 mt-3 items-center">
+            <span className="sr-only" role="status" aria-live="polite">
+              {submitLoading ? (submitLoadingText ?? "Saving...") : ""}
+            </span>
             <Button
               id="create"
               className="w-full"
@@ -1470,12 +1515,17 @@ export const EditContent = <
                   void props.onAccept(e);
                 }
               }}
-              disabled={submitDisabled}
+              disabled={submitDisabled || submitLoading}
+              aria-busy={submitLoading}
             >
-              {buttonTxt ?? "Save"}
+              {submitLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {submitLoading
+                ? (submitLoadingText ?? "Saving...")
+                : (buttonTxt ?? "Save")}
             </Button>
           </div>
         )}
+        </fieldset>
       </form>
     </Form>
   );
@@ -1491,6 +1541,7 @@ interface EffectFormWrapperProps {
   fixedWidths?: "basis-32" | "basis-64" | "basis-96";
   effects: ZodAllTags[];
   setEffects: (effects: ZodAllTags[]) => void;
+  submitLoading?: boolean;
 }
 
 /**
@@ -1948,6 +1999,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
       showSubmit={false}
       buttonTxt="Confirm Changes (No database sync)"
       fixedWidths={props.fixedWidths}
+      submitLoading={props.submitLoading}
     />
   );
 };
@@ -1962,6 +2014,7 @@ interface ObjectiveFormWrapperProps {
   formClassName?: string;
   objectives: AllObjectivesType[];
   setObjectives: (content: AllObjectivesType[]) => void;
+  submitLoading?: boolean;
 }
 
 /**
@@ -2455,6 +2508,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
       formClassName={formClassName}
       showSubmit={false}
       buttonTxt="Confirm Changes (No database sync)"
+      submitLoading={props.submitLoading}
     />
   );
 };
@@ -2706,6 +2760,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     animation?: OptionType[];
     staticAsset?: OptionType[];
   };
+  disabled?: boolean;
 }) => {
   const { effect, field, onChange } = opts;
   const schema = getTagSchema(effect.type);
@@ -2736,6 +2791,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
         value={value}
         onChange={(v) => onChange(v)}
         options={opts.options?.ai || []}
+        disabled={opts.disabled}
       />
     );
   }
@@ -2747,6 +2803,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
         selected={selected}
         onChange={(v) => onChange(v)}
         options={opts.options?.jutsuInjectable || []}
+        disabled={opts.disabled}
       />
     );
   }
@@ -2758,6 +2815,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
         selected={selected}
         onChange={(v) => onChange(v)}
         options={opts.options?.item || []}
+        disabled={opts.disabled}
       />
     );
   }
@@ -2769,6 +2827,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
         selected={selected}
         onChange={(v) => onChange(v)}
         options={opts.options?.jutsu || []}
+        disabled={opts.disabled}
       />
     );
   }
@@ -2780,6 +2839,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
         selected={selected}
         onChange={(v) => onChange(v)}
         options={opts.options?.bloodline || []}
+        disabled={opts.disabled}
       />
     );
   }
@@ -2791,6 +2851,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
         selected={selected}
         onChange={(v) => onChange(v)}
         options={opts.options?.sageMode || []}
+        disabled={opts.disabled}
       />
     );
   }
@@ -2803,6 +2864,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
         onChange={(v) => onChange(v)}
         options={opts.options?.animation || []}
         searchable
+        disabled={opts.disabled}
       />
     );
   }
@@ -2815,6 +2877,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
         onChange={(v) => onChange(v)}
         options={opts.options?.staticAsset || []}
         searchable
+        disabled={opts.disabled}
       />
     );
   }
@@ -2827,6 +2890,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
       <Input
         type="number"
         value={String(numVal)}
+        disabled={opts.disabled}
         onChange={(e) => onChange(Number(e.target.value))}
       />
     );
@@ -2834,7 +2898,13 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
   if (inner instanceof z.ZodBoolean) {
     const value = eff[field];
     const boolVal = typeof value === "boolean" ? value : Boolean(value);
-    return <Switch checked={boolVal} onCheckedChange={(v) => onChange(v)} />;
+    return (
+      <Switch
+        checked={boolVal}
+        onCheckedChange={(v) => onChange(v)}
+        disabled={opts.disabled}
+      />
+    );
   }
   if (inner instanceof z.ZodEnum) {
     const values = inner.options as string[];
@@ -2842,7 +2912,14 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     const raw = eff[field];
     const cur = typeof raw === "string" ? raw : "";
     const handle = (v: string) => onChange(v);
-    return <SingleSelectSimple value={cur} onChange={handle} options={options} />;
+    return (
+      <SingleSelectSimple
+        value={cur}
+        onChange={handle}
+        options={options}
+        disabled={opts.disabled}
+      />
+    );
   }
   if (inner instanceof z.ZodArray) {
     const innerArray: z.ZodType = (inner as z.ZodArray<z.ZodType>).element;
@@ -2864,7 +2941,12 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
       const onChangeMs: React.Dispatch<React.SetStateAction<string[]>> = (v) =>
         onChange(v);
       return (
-        <MultiSelect selected={selected} onChange={onChangeMs} options={options} />
+        <MultiSelect
+          selected={selected}
+          onChange={onChangeMs}
+          options={options}
+          disabled={opts.disabled}
+        />
       );
     }
     if (t instanceof z.ZodString) {
@@ -2879,6 +2961,7 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
           onChange={onChangeMs}
           options={[]}
           allowAddNew
+          disabled={opts.disabled}
         />
       );
     }
@@ -2889,7 +2972,12 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
       ? String(rawFinal)
       : "";
   return (
-    <Input type="text" value={textVal} onChange={(e) => onChange(e.target.value)} />
+    <Input
+      type="text"
+      value={textVal}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={opts.disabled}
+    />
   );
 };
 
@@ -2899,11 +2987,25 @@ const SingleSelectSimple: React.FC<{
   onChange: (v: string) => void;
   options: OptionType[];
   searchable?: boolean;
-}> = ({ value, onChange, options, searchable }) => {
+  disabled?: boolean;
+}> = ({ value, onChange, options, searchable, disabled }) => {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
   return (
-    <Popover>
+    <Popover
+      open={disabled ? false : open}
+      onOpenChange={(nextOpen) => {
+        if (!disabled) setOpen(nextOpen);
+      }}
+    >
       <PopoverTrigger asChild>
-        <Button variant="outline" className="w-full justify-between">
+        <Button
+          variant="outline"
+          className="w-full justify-between"
+          disabled={disabled}
+        >
           {options.find((o) => o.value === value)?.label || "Select"}
           <ChevronsUpDown className="opacity-50" />
         </Button>
@@ -2947,12 +3049,55 @@ export const MassEffectEditor = <
   kind: "item" | "jutsu" | "bloodline";
   entries: T[] | undefined;
   selectedFields: string[];
-  onEntriesUpdated?: () => void;
+  onEntriesUpdated?: () => unknown;
+  onPendingChange?: (pending: boolean) => void;
   filterEffectTypes?: string[];
 }) => {
   const { kind, entries, selectedFields } = props;
 
   const [modified, setModified] = useState<Record<string, ZodAllTags[]>>({});
+  const [committed, setCommitted] = useState<Record<string, ZodAllTags[]>>({});
+  const [pendingItemId, setPendingItemId] = useState<string | null>(null);
+  const [pendingJutsuId, setPendingJutsuId] = useState<string | null>(null);
+  const [pendingBloodlineId, setPendingBloodlineId] = useState<string | null>(null);
+  const itemSaveInFlight = useRef(false);
+  const jutsuSaveInFlight = useRef(false);
+  const bloodlineSaveInFlight = useRef(false);
+  const itemEditorPending = kind === "item" && pendingItemId !== null;
+  const jutsuEditorPending = kind === "jutsu" && pendingJutsuId !== null;
+  const bloodlineEditorPending = kind === "bloodline" && pendingBloodlineId !== null;
+  const editorPending =
+    itemEditorPending || jutsuEditorPending || bloodlineEditorPending;
+
+  useEffect(
+    () => () => {
+      props.onPendingChange?.(false);
+    },
+    [props.onPendingChange],
+  );
+
+  // A successful jutsu or bloodline save becomes the local source of truth
+  // immediately. Only release that snapshot once a later list response confirms
+  // the same effects; a stale or failed refresh must not make a committed change
+  // look retryable.
+  useEffect(() => {
+    if (kind !== "jutsu" && kind !== "bloodline") return;
+    setCommitted((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const entry of entries ?? []) {
+        const savedEffects = next[entry.id];
+        if (
+          savedEffects &&
+          JSON.stringify(entry.effects) === JSON.stringify(savedEffects)
+        ) {
+          delete next[entry.id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [entries, kind]);
 
   // Options
   const { data: aiData } = api.profile.getAllAiNames.useQuery(undefined);
@@ -3014,12 +3159,13 @@ export const MassEffectEditor = <
         selectedFields.forEach((f) => {
           row[f] = (
             <EffectFieldInputGeneric
-              effect={modified[entry.id]?.[idx] ?? effect}
+              effect={modified[entry.id]?.[idx] ?? committed[entry.id]?.[idx] ?? effect}
               field={f}
               onChange={(v) =>
                 setModified((prev) => {
                   const next: Record<string, ZodAllTags[]> = { ...prev };
-                  const baseEffs = next[entry.id] ?? entry.effects;
+                  const baseEffs =
+                    next[entry.id] ?? committed[entry.id] ?? entry.effects;
                   const effsArray = Array.isArray(baseEffs) ? baseEffs : entry.effects;
                   const updated = [...effsArray];
                   const current = updated[idx] ?? effect;
@@ -3029,6 +3175,7 @@ export const MassEffectEditor = <
                 })
               }
               options={options}
+              disabled={editorPending}
             />
           );
         });
@@ -3036,7 +3183,7 @@ export const MassEffectEditor = <
       });
     });
     return out;
-  }, [entries, selectedFields, modified, options]);
+  }, [entries, selectedFields, modified, committed, options, editorPending]);
 
   // Mutations
   const itemUpdate = api.item.update.useMutation();
@@ -3046,29 +3193,124 @@ export const MassEffectEditor = <
   const saveRow = async (row: Row) => {
     const entry = (entries || []).find((e) => e.id === row.entryId);
     if (!entry) return;
-    const effects = modified[row.entryId] ?? entry.effects;
+    const effects = modified[row.entryId] ?? committed[row.entryId] ?? entry.effects;
     if (kind === "item") {
-      const data = { ...(entry as unknown as ZodItemType), effects } as ZodItemType;
-      const res = await itemUpdate.mutateAsync({ id: entry.id, data });
-      showMutationToast(res);
+      if (itemSaveInFlight.current) return;
+      itemSaveInFlight.current = true;
+      setPendingItemId(entry.id);
+      props.onPendingChange?.(true);
+      try {
+        const data = { ...(entry as unknown as ZodItemType), effects } as ZodItemType;
+        const res = await itemUpdate.mutateAsync({ id: entry.id, data });
+        showMutationToast(res);
+        if (!res.success) return;
+        setCommitted((prev) => ({ ...prev, [entry.id]: effects }));
+        setModified((prev) => {
+          const next = { ...prev };
+          delete next[row.entryId];
+          return next;
+        });
+        try {
+          await props.onEntriesUpdated?.();
+        } catch {
+          // The committed local snapshot keeps the successful write truthful if
+          // the authoritative list cannot be refreshed immediately.
+        }
+      } catch (error) {
+        showMutationToast({
+          success: false,
+          message:
+            error instanceof Error ? error.message : "Unable to save item effects",
+        });
+      } finally {
+        itemSaveInFlight.current = false;
+        setPendingItemId(null);
+        props.onPendingChange?.(false);
+      }
+      return;
     } else if (kind === "jutsu") {
-      const data = { ...(entry as unknown as ZodJutsuType), effects } as ZodJutsuType;
-      const res = await jutsuUpdate.mutateAsync({ id: entry.id, data });
-      showMutationToast(res);
+      if (jutsuSaveInFlight.current) return;
+      jutsuSaveInFlight.current = true;
+      setPendingJutsuId(entry.id);
+      props.onPendingChange?.(true);
+      try {
+        const data = {
+          ...(entry as unknown as ZodJutsuType),
+          effects,
+        } as ZodJutsuType;
+        const res = await jutsuUpdate.mutateAsync({ id: entry.id, data });
+        showMutationToast(res);
+        if (!res.success) return;
+        setCommitted((prev) => ({ ...prev, [entry.id]: effects }));
+        setModified((prev) => {
+          const next = { ...prev };
+          delete next[row.entryId];
+          return next;
+        });
+        try {
+          await props.onEntriesUpdated?.();
+        } catch {
+          // Preserve the committed local snapshot if the authoritative list
+          // cannot be refreshed immediately.
+        }
+      } catch (error) {
+        // The global mutation handler intentionally suppresses retryable
+        // transport/CDN failures. Surface those here so the retained draft has
+        // an actionable explanation, while server errors remain globally handled.
+        if (error instanceof Error && isRetryableTrpcError(error)) {
+          showMutationToast({
+            success: false,
+            message: error.message || "Unable to save jutsu effects",
+          });
+        }
+      } finally {
+        jutsuSaveInFlight.current = false;
+        setPendingJutsuId(null);
+        props.onPendingChange?.(false);
+      }
+      return;
     } else {
+      if (bloodlineSaveInFlight.current) return;
+      bloodlineSaveInFlight.current = true;
+      setPendingBloodlineId(entry.id);
+      props.onPendingChange?.(true);
       const data = {
         ...(entry as unknown as ZodBloodlineType),
         effects,
       } as ZodBloodlineType;
-      const res = await bloodlineUpdate.mutateAsync({ id: entry.id, data });
-      showMutationToast(res);
+      try {
+        const res = await bloodlineUpdate.mutateAsync({ id: entry.id, data });
+        showMutationToast(res);
+        if (!res.success) return;
+        setCommitted((prev) => ({ ...prev, [entry.id]: effects }));
+        setModified((prev) => {
+          const next = { ...prev };
+          delete next[row.entryId];
+          return next;
+        });
+        try {
+          await props.onEntriesUpdated?.();
+        } catch {
+          // Preserve the committed local snapshot if the authoritative list
+          // cannot be refreshed immediately.
+        }
+      } catch (error) {
+        // Server/validation errors are already handled by the global mutation
+        // handler. It intentionally suppresses retryable transport/CDN errors,
+        // so surface only those here while retaining the exact draft.
+        if (error instanceof Error && isRetryableTrpcError(error)) {
+          showMutationToast({
+            success: false,
+            message: error.message || "Unable to save bloodline effects",
+          });
+        }
+      } finally {
+        bloodlineSaveInFlight.current = false;
+        setPendingBloodlineId(null);
+        props.onPendingChange?.(false);
+      }
+      return;
     }
-    setModified((prev) => {
-      const next = { ...prev };
-      delete next[row.entryId];
-      return next;
-    });
-    props.onEntriesUpdated?.();
   };
 
   const columns: ColumnDefinitionType<Row, keyof Row>[] = useMemo(() => {
@@ -3083,12 +3325,109 @@ export const MassEffectEditor = <
   }, [selectedFields]);
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2" aria-busy={editorPending}>
       <Table<Row, keyof Row>
         data={rows}
         columns={columns}
-        buttons={[{ label: "Save", onClick: (r: Row) => void saveRow(r) }]}
+        buttons={
+          kind === "item"
+            ? [
+                {
+                  label: (row: Row) =>
+                    pendingItemId === row.entryId ? (
+                      <>
+                        <Loader2
+                          className="mr-2 h-4 w-4 animate-spin"
+                          aria-hidden="true"
+                        />
+                        Saving item effects…
+                      </>
+                    ) : (
+                      "Save"
+                    ),
+                  ariaLabel: (row: Row) =>
+                    pendingItemId === row.entryId
+                      ? `Saving item effects for ${row.name}`
+                      : `Save item effects for ${row.name}`,
+                  disabled: () => itemEditorPending,
+                  onClick: (r: Row) => void saveRow(r),
+                },
+              ]
+            : kind === "jutsu"
+              ? [
+                  {
+                    label: (row: Row) =>
+                      pendingJutsuId === row.entryId ? (
+                        <>
+                          <Loader2
+                            className="mr-2 h-4 w-4 animate-spin"
+                            aria-hidden="true"
+                          />
+                          Saving jutsu effects…
+                        </>
+                      ) : (
+                        "Save"
+                      ),
+                    ariaLabel: (row: Row) =>
+                      pendingJutsuId === row.entryId
+                        ? `Saving jutsu effects for ${row.name}`
+                        : `Save jutsu effects for ${row.name}`,
+                    disabled: () => jutsuEditorPending,
+                    onClick: (r: Row) => void saveRow(r),
+                  },
+                ]
+              : [
+                  {
+                    label: (row: Row) =>
+                      pendingBloodlineId === row.entryId ? (
+                        <>
+                          <Loader2
+                            className="mr-2 h-4 w-4 animate-spin"
+                            aria-hidden="true"
+                          />
+                          Saving bloodline effects…
+                        </>
+                      ) : (
+                        "Save"
+                      ),
+                    ariaLabel: (row: Row) =>
+                      pendingBloodlineId === row.entryId
+                        ? `Saving bloodline effects for ${row.name}`
+                        : `Save bloodline effects for ${row.name}`,
+                    disabled: () => bloodlineEditorPending,
+                    onClick: (r: Row) => void saveRow(r),
+                  },
+                ]
+        }
       />
+      {itemEditorPending && (
+        <p
+          className="px-3 pb-2 text-muted-foreground text-sm"
+          role="status"
+          aria-live="polite"
+        >
+          Saving item effects. Editing is temporarily locked until this item finishes.
+        </p>
+      )}
+      {jutsuEditorPending && (
+        <p
+          className="px-3 pb-2 text-muted-foreground text-sm"
+          role="status"
+          aria-live="polite"
+        >
+          Saving jutsu effects. Editing is temporarily locked until this jutsu finishes.
+        </p>
+      )}
+      {bloodlineEditorPending && (
+        <p
+          className="px-3 pb-2 text-muted-foreground text-sm"
+          role="status"
+          aria-live="polite"
+        >
+          Saving bloodline effects. Editing is temporarily locked until this bloodline
+          finishes.
+        </p>
+      )}
     </div>
   );
 };
@@ -3097,7 +3436,8 @@ export const EffectFieldSelector: React.FC<{
   selected: string[];
   setSelected: React.Dispatch<React.SetStateAction<string[]>>;
   className?: string;
-}> = ({ selected, setSelected, className }) => {
+  disabled?: boolean;
+}> = ({ selected, setSelected, className, disabled }) => {
   // Build field options from all tag schemas
   const fieldOptions = useMemo<OptionType[]>(() => {
     const fields = new Set<string>();
@@ -3121,6 +3461,7 @@ export const EffectFieldSelector: React.FC<{
         options={fieldOptions}
         onChange={setSelected}
         isDirty={false}
+        disabled={disabled}
       />
     </div>
   );

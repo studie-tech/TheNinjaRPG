@@ -50,10 +50,12 @@ interface ConversationCommentProps extends PostProps {
   toggleReaction?: (emoji: string) => void;
   setQuoteId?: (id: string) => void;
   quoteIds?: string[] | null;
+  onDeleted?: (commentId: string) => void;
 }
 export const CommentOnConversation: React.FC<ConversationCommentProps> = (props) => {
   const [editing, setEditing] = useState(false);
   const utils = api.useUtils();
+  const deleteInFlightRef = useRef(false);
 
   const editComment = api.comments.editConversationComment.useMutation({
     onSuccess: async (data) => {
@@ -66,14 +68,30 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
   });
 
   const deleteComment = api.comments.deleteConversationComment.useMutation({
-    onSuccess: async (data) => {
+    onSuccess: (data, variables) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.comments.getConversationComments.invalidate();
+        // Remove the proven-deleted item before refreshing. The parent keeps an
+        // id-level suppression guard so a stale or failed refetch cannot bring
+        // this exact delete action back.
+        props.onDeleted?.(variables.id);
         setEditing(false);
+        void utils.comments.getConversationComments.invalidate().catch(() => undefined);
       }
     },
+    onError: (error) => {
+      showMutationToast({ success: false, message: error.message });
+    },
+    onSettled: () => {
+      deleteInFlightRef.current = false;
+    },
   });
+
+  const handleDelete = (data: DeleteCommentSchema) => {
+    if (deleteInFlightRef.current || deleteComment.isPending) return;
+    deleteInFlightRef.current = true;
+    deleteComment.mutate(data);
+  };
 
   return (
     <BaseComment
@@ -81,7 +99,8 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
       system="conversation_comment"
       editComment={editComment.mutate}
       isEditPending={editComment.isPending}
-      deleteComment={deleteComment.mutate}
+      deleteComment={handleDelete}
+      isDeletePending={deleteComment.isPending}
       editing={editing}
       setEditing={setEditing}
     />
@@ -96,10 +115,12 @@ interface ForumCommentProps extends PostProps {
   toggleReaction?: (emoji: string) => void;
   setQuoteId?: (id: string) => void;
   quoteIds?: string[] | null;
+  onDeleted?: (commentId: string) => void;
 }
 export const CommentOnForum: React.FC<ForumCommentProps> = (props) => {
   const [editing, setEditing] = useState(false);
   const utils = api.useUtils();
+  const deleteInFlightRef = useRef(false);
 
   const editComment = api.comments.editForumComment.useMutation({
     onSuccess: async (data) => {
@@ -112,14 +133,30 @@ export const CommentOnForum: React.FC<ForumCommentProps> = (props) => {
   });
 
   const deleteComment = api.comments.deleteForumComment.useMutation({
-    onSuccess: async (data) => {
+    onSuccess: (data, variables) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.comments.getForumComments.invalidate();
+        // Hide the proven-deleted post synchronously. The thread owns an
+        // id-level suppression guard, so even a stale or failed refresh cannot
+        // resurrect this exact post.
+        props.onDeleted?.(variables.id);
         setEditing(false);
+        void utils.comments.getForumComments.invalidate().catch(() => undefined);
       }
     },
+    onError: (error) => {
+      showMutationToast({ success: false, message: error.message });
+    },
+    onSettled: () => {
+      deleteInFlightRef.current = false;
+    },
   });
+
+  const handleDelete = (data: DeleteCommentSchema) => {
+    if (deleteInFlightRef.current || deleteComment.isPending) return;
+    deleteInFlightRef.current = true;
+    deleteComment.mutate(data);
+  };
 
   return (
     <BaseComment
@@ -127,7 +164,8 @@ export const CommentOnForum: React.FC<ForumCommentProps> = (props) => {
       system="forum_comment"
       editComment={editComment.mutate}
       isEditPending={editComment.isPending}
-      deleteComment={deleteComment.mutate}
+      deleteComment={handleDelete}
+      isDeletePending={deleteComment.isPending}
       editing={editing}
       setEditing={setEditing}
     />
@@ -149,6 +187,7 @@ interface BaseCommentProps extends PostProps {
   editComment?: (data: MutateCommentSchema) => void;
   isEditPending?: boolean;
   deleteComment?: (data: DeleteCommentSchema) => void;
+  isDeletePending?: boolean;
   toggleReaction?: (emoji: string) => void;
   setQuoteId?: (id: string) => void;
 }
@@ -330,16 +369,41 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
               canDeleteComment(userData, props.user.userId) &&
               props.deleteComment && (
                 <Confirm
+                  id={`delete-comment-${props.comment.id}`}
                   title="Confirm Deletion"
-                  button={<Trash2 className="h-6 w-6 hover:text-orange-500" />}
+                  button={
+                    <Trash2
+                      aria-label="Delete comment"
+                      className="h-6 w-6 hover:text-orange-500"
+                    />
+                  }
+                  disabled={props.isDeletePending}
+                  confirmClassName="bg-red-600 text-white hover:bg-red-700"
+                  proceed_label="Delete comment"
+                  proceed_loading_label="Deleting comment…"
+                  isLoading={props.isDeletePending}
+                  keepOpenOnAccept={true}
                   onAccept={(e) => {
                     e.preventDefault();
-                    if (props.deleteComment) {
+                    if (props.deleteComment && !props.isDeletePending) {
                       props.deleteComment({ id: props.comment.id });
                     }
                   }}
                 >
-                  You are about to delete a comment. Are you sure?
+                  <div className="space-y-2">
+                    <p>
+                      Delete this comment by {props.user.username}? This cannot be
+                      undone.
+                    </p>
+                    <blockquote className="line-clamp-3 border-muted-foreground/40 border-l-4 pl-3 text-muted-foreground text-sm italic">
+                      “
+                      {props.comment.content
+                        .replace(/<[^>]*>/g, " ")
+                        .replace(/\s+/g, " ")
+                        .trim()}
+                      ”
+                    </blockquote>
+                  </div>
                 </Confirm>
               )}
           </div>

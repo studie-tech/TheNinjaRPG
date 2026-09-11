@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
@@ -38,7 +38,14 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
   const limit = FORUM_THREAD_POSTS_PER_PAGE;
   const { data: userData } = useUserData();
   const [page, setPage] = useState(0);
+  const [deletedCommentIds, setDeletedCommentIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [pendingDeletionTotals, setPendingDeletionTotals] = useState<
+    Map<string, number>
+  >(() => new Map());
   const thread_id = threadId;
+  const utils = api.useUtils();
 
   const {
     data: comments,
@@ -56,9 +63,88 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
   );
   const thread = comments?.thread;
   const allComments = comments?.data;
-  const totalPages = comments?.totalPages ?? 0;
-  const totalComments = comments?.totalComments ?? 0;
+  const visibleComments = useMemo(
+    () => allComments?.filter((comment) => !deletedCommentIds.has(comment.id)),
+    [allComments, deletedCommentIds],
+  );
+  const rawTotalComments = comments?.totalComments ?? 0;
+  // Keep each successful deletion counted globally while a stale page/query
+  // still reports a total from before that deletion. This is deliberately not
+  // tied to whether the current page contains the tombstoned id: deleting the
+  // sole post on the final page immediately moves the user to the prior page.
+  const pendingDeletionCount = useMemo(
+    () =>
+      [...pendingDeletionTotals.values()].filter(
+        (expectedTotal) => rawTotalComments > expectedTotal,
+      ).length,
+    [pendingDeletionTotals, rawTotalComments],
+  );
+  const totalComments = Math.max(0, rawTotalComments - pendingDeletionCount);
+  const totalPages = Math.ceil(totalComments / limit);
+  const isSoleCommentOnLastPage =
+    allComments?.length === 1 && comments?.nextCursor === null && totalComments > limit;
   const belowForumMinLevel = (userData?.level ?? 0) < FORUM_MIN_LEVEL;
+
+  const handleCommentDeleted = useCallback(
+    (commentId: string) => {
+      const expectedTotal = Math.max(0, totalComments - 1);
+      const expectedPages = Math.ceil(expectedTotal / limit);
+      setDeletedCommentIds((current) => {
+        if (current.has(commentId)) return current;
+        return new Set(current).add(commentId);
+      });
+      setPendingDeletionTotals((current) => {
+        if (current.has(commentId)) return current;
+        const next = new Map(current);
+        next.set(commentId, expectedTotal);
+        return next;
+      });
+      // Decide the destination from the known pre-delete count, rather than a
+      // transient placeholder returned while React Query changes page keys.
+      if (expectedPages > 0 && (page >= expectedPages || isSoleCommentOnLastPage)) {
+        setPage(expectedPages - 1);
+      }
+
+      utils.comments.getForumComments.setData(
+        { thread_id, limit, cursor: page },
+        (current) => {
+          if (!current?.data.some((comment) => comment.id === commentId)) {
+            return current;
+          }
+          return {
+            ...current,
+            data: current.data.filter((comment) => comment.id !== commentId),
+          };
+        },
+      );
+    },
+    [
+      isSoleCommentOnLastPage,
+      limit,
+      page,
+      thread_id,
+      totalComments,
+      utils.comments.getForumComments,
+    ],
+  );
+
+  // A lower authoritative total proves which local adjustments the server has
+  // incorporated. Retire those adjustments so a later unrelated new post can
+  // increase the count normally; the id tombstones remain as resurrection
+  // guards for any older page payload still in cache.
+  useEffect(() => {
+    setPendingDeletionTotals((current) => {
+      let changed = false;
+      const next = new Map(current);
+      for (const [commentId, expectedTotal] of current) {
+        if (rawTotalComments <= expectedTotal) {
+          next.delete(commentId);
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [rawTotalComments]);
 
   const {
     handleSubmit,
@@ -121,7 +207,7 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
           initialBreak={!userData}
           subtitle={thread.title}
         >
-          {allComments?.map((comment, i) => {
+          {visibleComments?.map((comment, i) => {
             return (
               <div key={comment.id}>
                 <CommentOnForum
@@ -129,6 +215,7 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
                   user={comment.user}
                   hover_effect={false}
                   comment={comment}
+                  onDeleted={handleCommentDeleted}
                 >
                   {parseHtml(comment.content)}
                 </CommentOnForum>

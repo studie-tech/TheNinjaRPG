@@ -75,6 +75,7 @@ export default function ConceptArt() {
   // State
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [creationType, setCreationType] = useState<"image" | "video">("image");
+  const [deletedImageIds, setDeletedImageIds] = useState<Set<string>>(() => new Set());
   const { data: userData } = useUserData();
 
   // Routing
@@ -198,6 +199,7 @@ export default function ConceptArt() {
       }
       return 1;
     });
+  const visibleImages = allImage?.filter((image) => !deletedImageIds.has(image.id));
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Handle image creation
@@ -361,15 +363,24 @@ export default function ConceptArt() {
       }
     >
       <div className="relative grid w-full grow grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
-        {allImage?.map((image, i) => {
+        {visibleImages?.map((image, i) => {
           return (
             <div
               key={image.id}
-              ref={i === allImage.length - 1 ? setLastElement : null}
+              ref={i === visibleImages.length - 1 ? setLastElement : null}
               className="p-2 text-white"
             >
               <Link href={`/conceptart/${image.id}`} aria-label={`Image ${image.id}`}>
-                <ConceptImage image={image} />
+                <ConceptImage
+                  image={image}
+                  onDeleted={(imageId) =>
+                    setDeletedImageIds((current) => {
+                      const next = new Set(current);
+                      next.add(imageId);
+                      return next;
+                    })
+                  }
+                />
               </Link>
             </div>
           );

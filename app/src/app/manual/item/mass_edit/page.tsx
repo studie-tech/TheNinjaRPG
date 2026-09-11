@@ -32,6 +32,7 @@ export default function ItemMassEditPage() {
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   const [fields, setFields] = useState<string[]>([]);
+  const [isSavingItemEffects, setIsSavingItemEffects] = useState(false);
   const canEdit = Boolean(userData && canChangeContent(userData.role));
 
   return (
@@ -49,8 +50,12 @@ export default function ItemMassEditPage() {
         initialBreak
         topRightContent={
           <div className="flex items-center gap-2">
-            <ItemFiltering state={state} />
-            <EffectFieldSelector selected={fields} setSelected={setFields} />
+            <ItemFiltering state={state} disabled={isSavingItemEffects} />
+            <EffectFieldSelector
+              selected={fields}
+              setSelected={setFields}
+              disabled={isSavingItemEffects}
+            />
           </div>
         }
         padding={false}
@@ -63,7 +68,8 @@ export default function ItemMassEditPage() {
               kind="item"
               entries={allItems}
               selectedFields={fields}
-              onEntriesUpdated={() => void refetch()}
+              onEntriesUpdated={() => refetch()}
+              onPendingChange={setIsSavingItemEffects}
             />
           </div>
         )}

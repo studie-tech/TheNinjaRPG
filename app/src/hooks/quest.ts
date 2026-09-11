@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import {
@@ -35,7 +36,9 @@ export type ZodCombinedQuest = ZodQuestFormType;
  * Hook used when creating frontend forms for editing items
  * @param data
  */
-export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
+export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) => {
+  const submitInFlight = useRef(false);
+
   // Get user data for permission checks
   const { data: userData } = useUserData();
   const userRole = userData?.role ?? "USER";
@@ -88,19 +91,32 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
 
   // Mutation for updating item
   const utils = api.useUtils();
-  const { mutate: updateQuest } = api.quests.update.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      refetch();
-      // Players hold the achievement definitions for the whole session, so an edit to one has
-      // to drop that cache or it keeps rendering the version staff just replaced.
-      void utils.quests.getAchievementCatalogue.invalidate();
-    },
-  });
+  const { mutateAsync: updateQuest, isPending: isUpdating } =
+    api.quests.update.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (!data.success) return;
+
+        // Keep the editor locked until both authoritative views have settled. Cache refreshes
+        // happen after the server has committed, so their failure must never make the save look
+        // retryable (and risk submitting the same update again).
+        await Promise.allSettled([
+          refetch(),
+          utils.quests.getAchievementCatalogue.invalidate(),
+        ]);
+      },
+      onSettled: () => {
+        submitInFlight.current = false;
+      },
+    });
 
   // Form submission
   const handleQuestSubmit = form.handleSubmit(
-    (data: ZodCombinedQuest) => {
+    async (data: ZodCombinedQuest) => {
+      // React Query's pending state is asynchronous. Claim this submission synchronously so a
+      // double-click can never enqueue a second update with the same objective graph.
+      if (submitInFlight.current) return;
+
       const newObjectives = data.content.objectives.map((objective) => {
         if (objective.task === "move_to_location" && data.image) {
           objective.image = data.image;
@@ -173,7 +189,13 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
       };
       const diff = calculateContentDiff(quest, newQuest);
       if (diff.length > 0) {
-        updateQuest({ id: quest.id, data: newQuest });
+        submitInFlight.current = true;
+        try {
+          await updateQuest({ id: quest.id, data: newQuest });
+        } catch {
+          // The shared tRPC error handler reports transport failures. Avoid resetting/refetching:
+          // all quest and objective drafts remain intact for a deliberate retry.
+        }
       }
     },
     (errors) => showFormErrorsToast(errors),
@@ -442,5 +464,6 @@ export const useQuestEditForm = (quest: Quest, refetch: () => void) => {
     loading,
     setObjectives,
     handleQuestSubmit,
+    isUpdating,
   };
 };

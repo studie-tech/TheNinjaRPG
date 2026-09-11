@@ -10,6 +10,7 @@ import {
   Info,
   Landmark,
   List,
+  Loader2,
   Plus,
   Search,
   Timer,
@@ -737,6 +738,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   const [showBuyoutConfirmation, setShowBuyoutConfirmation] = useState(false);
   const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
   const [pendingBidAmount, setPendingBidAmount] = useState<number | null>(null);
+  const placeBidInFlightRef = useRef(false);
   const avatarWidth = useAvatarRenditionWidth(24);
 
   // Utils
@@ -749,7 +751,11 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   );
 
   // Mutations
-  const { mutate: placeBid } = api.auction.placeBid.useMutation({
+  const {
+    mutate: placeBid,
+    isPending: isPlacingBid,
+    variables: placeBidVariables,
+  } = api.auction.placeBid.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
@@ -773,6 +779,9 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
         setShowBidConfirmation(false);
         setShowBuyoutConfirmation(false);
       }
+    },
+    onSettled: () => {
+      placeBidInFlightRef.current = false;
     },
   });
 
@@ -844,9 +853,16 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
     Number.isInteger(parsedBidAmount) &&
     parsedBidAmount > listing.currentPrice &&
     parsedBidAmount <= availableFunds;
+  const isSubmittingThisAuction =
+    isPlacingBid && placeBidVariables?.auctionId === auctionId;
+  const submittedBidAmount = isSubmittingThisAuction
+    ? placeBidVariables.amount
+    : pendingBidAmount;
 
   // Handlers
   const handlePlaceBid = (auctionId: string, amount: number) => {
+    if (placeBidInFlightRef.current || isPlacingBid) return;
+    placeBidInFlightRef.current = true;
     placeBid({ auctionId, amount });
   };
 
@@ -1101,20 +1117,33 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                     min={minIntegerBid}
                     step={1}
                     className="h-9 flex-1"
+                    disabled={isSubmittingThisAuction}
+                    aria-busy={isSubmittingThisAuction}
                   />
                   <Button
                     onClick={handleBid}
-                    disabled={!isBidInputValid}
+                    disabled={!isBidInputValid || isSubmittingThisAuction}
+                    aria-busy={isSubmittingThisAuction}
                     className="h-9 shrink-0"
                     size="sm"
                   >
-                    <Hammer className="mr-1.5 h-3.5 w-3.5" />
-                    {userBid ? "Raise to" : "Place bid"}
+                    {isSubmittingThisAuction ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Hammer className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    {isSubmittingThisAuction
+                      ? "Submitting bid…"
+                      : userBid
+                        ? "Raise to"
+                        : "Place bid"}
                   </Button>
                 </div>
                 {listing.buyoutPrice && availableFunds >= listing.buyoutPrice && (
                   <Button
                     onClick={handleBuyoutClick}
+                    disabled={isSubmittingThisAuction}
+                    aria-busy={isSubmittingThisAuction}
                     variant="default"
                     size="sm"
                     className="h-9 w-full"
@@ -1197,23 +1226,28 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
       </div>
 
       {/* Bid Confirmation Dialog */}
-      <AlertDialog open={showBidConfirmation} onOpenChange={setShowBidConfirmation}>
-        <AlertDialogContent>
+      <AlertDialog
+        open={showBidConfirmation}
+        onOpenChange={(open) => {
+          if (!isSubmittingThisAuction) setShowBidConfirmation(open);
+        }}
+      >
+        <AlertDialogContent aria-busy={isSubmittingThisAuction}>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Bid</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to place a bid of{" "}
               <span className="font-semibold">
-                {pendingBidAmount?.toLocaleString()}{" "}
+                {submittedBidAmount?.toLocaleString()}{" "}
                 {listing?.currencyType === "MONEY" ? "ryo" : "reputation"}
               </span>{" "}
               on this auction?
               {showPerUnitPricing &&
-              pendingBidAmount != null &&
+              submittedBidAmount != null &&
               listing?.currencyType != null ? (
                 <span className="mt-2 block text-muted-foreground text-sm">
                   {formatAuctionPerUnitLine(
-                    pendingBidAmount,
+                    submittedBidAmount,
                     stackQuantity,
                     listing.currencyType,
                   )}
@@ -1225,11 +1259,39 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                   replaced.
                 </span>
               )}
+              {isSubmittingThisAuction ? (
+                <span
+                  className="mt-3 flex items-center gap-2 font-medium text-foreground"
+                  role="status"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Submitting bid of {submittedBidAmount?.toLocaleString()}{" "}
+                  {spendCurrencyUnit}…
+                </span>
+              ) : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmBid}>Confirm Bid</AlertDialogAction>
+            <AlertDialogCancel disabled={isSubmittingThisAuction}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isSubmittingThisAuction}
+              aria-busy={isSubmittingThisAuction}
+              onClick={(event) => {
+                event.preventDefault();
+                confirmBid();
+              }}
+            >
+              {isSubmittingThisAuction ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting {submittedBidAmount?.toLocaleString()} {spendCurrencyUnit}…
+                </>
+              ) : (
+                "Confirm Bid"
+              )}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1268,9 +1330,11 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
       {/* Buyout Confirmation Dialog */}
       <AlertDialog
         open={showBuyoutConfirmation}
-        onOpenChange={setShowBuyoutConfirmation}
+        onOpenChange={(open) => {
+          if (!isSubmittingThisAuction) setShowBuyoutConfirmation(open);
+        }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent aria-busy={isSubmittingThisAuction}>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Buyout</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1291,12 +1355,38 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                   )}
                 </span>
               ) : null}
+              {isSubmittingThisAuction ? (
+                <span
+                  className="mt-3 flex items-center gap-2 font-medium text-foreground"
+                  role="status"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Completing buyout for {submittedBidAmount?.toLocaleString()}{" "}
+                  {spendCurrencyUnit}…
+                </span>
+              ) : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmBuyout}>
-              Confirm Buyout
+            <AlertDialogCancel disabled={isSubmittingThisAuction}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isSubmittingThisAuction}
+              aria-busy={isSubmittingThisAuction}
+              onClick={(event) => {
+                event.preventDefault();
+                confirmBuyout();
+              }}
+            >
+              {isSubmittingThisAuction ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Buying for {submittedBidAmount?.toLocaleString()} {spendCurrencyUnit}…
+                </>
+              ) : (
+                "Confirm Buyout"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

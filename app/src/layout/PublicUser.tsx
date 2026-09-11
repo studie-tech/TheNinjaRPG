@@ -25,12 +25,13 @@ import {
   Waypoints,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { NewConversationPrompt } from "@/app/inbox/page";
 import { TransactionHistory } from "@/app/points/page";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,7 @@ import {
   RANKS_RESTRICTED_FROM_PVP,
   SEICHI_SILVER_ADJUST_LIMIT,
   TrainingSpeeds,
+  type UserStatus,
   XP_BRACKETS,
 } from "@/drizzle/constants";
 import type { Badge, Jutsu, UserBadge, UserRank } from "@/drizzle/schema";
@@ -107,6 +109,7 @@ import UserSearchSelect from "@/layout/UserSearchSelect";
 import { canAttackBracket, getExpBracket, showUserRank } from "@/libs/profile";
 import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
+import { isRetryableTrpcError } from "@/utils/error";
 import { groupBy } from "@/utils/grouping";
 import { useActiveLayout } from "@/utils/LayoutContext";
 import { parseHtml } from "@/utils/parse";
@@ -186,6 +189,148 @@ interface PublicUserComponentProps {
   showBloodlineHistory?: boolean;
 }
 
+type ReputationAwardTarget = {
+  requestId: string;
+  users: Array<{ userId: string; username: string }>;
+  reputationAmount: number;
+  moneyAmount: number;
+  reason: string;
+  profileReputationBefore: number | null;
+};
+
+type ExperienceAwardTarget = {
+  requestId: string;
+  userId: string;
+  username: string;
+  earnedExperienceBefore: number;
+  amount: number;
+  reason: string;
+};
+
+type CommittedExperienceAward = ExperienceAwardTarget & {
+  earnedExperienceAfter: number;
+};
+
+type DebugCloneSource = {
+  userId: string;
+  username: string;
+};
+
+/**
+ * Keep the confirmation and in-flight request bound to the exact profile that opened it. A
+ * profile-route refresh can reuse PublicUser's surrounding layout, but it must never retarget an
+ * already-open destructive confirmation to the newly rendered profile.
+ */
+const DebugUserCloneControl: React.FC<{
+  source: DebugCloneSource;
+  cloneUserId: string;
+}> = ({ source, cloneUserId }) => {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const [confirmedSource, setConfirmedSource] = useState<DebugCloneSource | null>(null);
+  const sourceInFlight = useRef<string | null>(null);
+  const { mutateAsync: cloneUser, isPending } =
+    api.staff.cloneUserForDebug.useMutation();
+
+  const cloneConfirmedSource = async (target: DebugCloneSource) => {
+    // Mutation state reaches React on the next render. Claim this source synchronously so a
+    // click/Enter race cannot submit the same destructive replacement twice.
+    if (sourceInFlight.current !== null) return;
+    sourceInFlight.current = target.userId;
+
+    try {
+      const result = await cloneUser({
+        userId: target.userId,
+        expectedUsername: target.username,
+      });
+      if (
+        result.success &&
+        result.userId === cloneUserId &&
+        result.sourceUserId === target.userId
+      ) {
+        showMutationToast(result);
+
+        // The copy is committed. Close the stale destructive action before best-effort cache
+        // refresh/navigation so another copy always requires a new explicit confirmation.
+        setConfirmedSource(null);
+        void Promise.allSettled([
+          utils.profile.getUser.invalidate(),
+          utils.profile.getPublicUser.invalidate({ userId: cloneUserId }),
+        ]);
+        router.push("/profile");
+      } else if (result.success) {
+        showMutationToast({
+          success: false,
+          message:
+            "The clone response did not match the selected user. Please try again.",
+        });
+      } else {
+        showMutationToast(result);
+      }
+    } catch {
+      // The shared tRPC handler owns transport-error reporting. Keep the exact source snapshot
+      // open so the staff member can deliberately retry without silently changing targets.
+    } finally {
+      if (sourceInFlight.current === target.userId) sourceInFlight.current = null;
+    }
+  };
+
+  return (
+    <>
+      <TooltipProvider delayDuration={50}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label={`Clone ${source.username} into your debug account`}
+              className="inline-flex items-center disabled:cursor-wait disabled:opacity-50"
+              disabled={isPending}
+              onClick={() => setConfirmedSource({ ...source })}
+            >
+              <CopyCheck className="h-6 w-6 hover:text-orange-500" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Clone User</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      {confirmedSource && (
+        <Modal
+          id={`clone-user-${confirmedSource.userId}`}
+          title={`Clone user: ${confirmedSource.username}`}
+          isOpen
+          setIsOpen={(isOpen) => {
+            if (!isOpen) setConfirmedSource(null);
+          }}
+          proceed_label="Clone user"
+          proceed_loading_label="Cloning user…"
+          isLoading={isPending}
+          keepOpenOnAccept
+          onAccept={(event) => {
+            event.preventDefault();
+            void cloneConfirmedSource(confirmedSource);
+          }}
+        >
+          <p>
+            This copies <b>{confirmedSource.username}</b>&apos;s current gameplay state
+            into your separate staff/debug account. The source user will not be changed.
+          </p>
+          <p>
+            Your debug account&apos;s stats, location, inventory, jutsu, quest history,
+            attributes, ranked rewards, clan, and ANBU membership will be replaced. Your
+            identity, username, staff role, moderation state, purchases, messages, and
+            other private account data stay unchanged.
+          </p>
+          <p>
+            Source ID: <code>{confirmedSource.userId}</code>. After cloning, you will be
+            taken to your updated profile.
+          </p>
+        </Modal>
+      )}
+    </>
+  );
+};
+
 const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const {
     userId,
@@ -209,9 +354,71 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   } = props;
   // Get state
   const [showEditModal, setShowEditModal] = useState(false);
+  const [isUserQuestDeletionPending, setIsUserQuestDeletionPending] = useState(false);
   const [showActive, setShowActive] = useState("nindo");
   const [showForceAwakeModal, setShowForceAwakeModal] = useState(false);
   const [forceAwakeReason, setForceAwakeReason] = useState("");
+  const [forceAwakeTarget, setForceAwakeTarget] = useState<{
+    userId: string;
+    username: string;
+    expectedStatus: UserStatus;
+    expectedBattleId: string | null;
+    requestId: string;
+  } | null>(null);
+  const [forceAwakePending, setForceAwakePending] = useState(false);
+  const [committedForceAwake, setCommittedForceAwake] = useState<{
+    userId: string;
+    requestId: string;
+  } | null>(null);
+  const forceAwakeRequestRef = useRef<typeof forceAwakeTarget>(null);
+  const [avatarUpdateTarget, setAvatarUpdateTarget] = useState<{
+    userId: string;
+    username: string;
+    expectedAvatar: string | null;
+  } | null>(null);
+  const [avatarUpdatePending, setAvatarUpdatePending] = useState(false);
+  const [committedAvatarUpdate, setCommittedAvatarUpdate] = useState<{
+    userId: string;
+    sourceAvatar: string | null;
+    avatar: string;
+  } | null>(null);
+  const avatarUpdateRequestRef = useRef<typeof avatarUpdateTarget>(null);
+  const [clearNindoTarget, setClearNindoTarget] = useState<{
+    userId: string;
+    username: string;
+    nindoId: string;
+    expectedContent: string;
+  } | null>(null);
+  const [clearNindoPending, setClearNindoPending] = useState(false);
+  const [committedNindoClear, setCommittedNindoClear] = useState<{
+    userId: string;
+    nindoId: string;
+    expectedContent: string;
+  } | null>(null);
+  const clearNindoRequestRef = useRef<typeof clearNindoTarget>(null);
+  const [awardTarget, setAwardTarget] = useState<ReputationAwardTarget | null>(null);
+  const [awardPending, setAwardPending] = useState(false);
+  const [awardNeedsRetry, setAwardNeedsRetry] = useState(false);
+  const [completedAward, setCompletedAward] = useState<ReputationAwardTarget | null>(
+    null,
+  );
+  const [committedAward, setCommittedAward] = useState<ReputationAwardTarget | null>(
+    null,
+  );
+  const awardRequestRef = useRef<ReputationAwardTarget | null>(null);
+  const [showExperienceAwardModal, setShowExperienceAwardModal] = useState(false);
+  const [experienceAwardSource, setExperienceAwardSource] = useState<{
+    userId: string;
+    username: string;
+    earnedExperience: number;
+  } | null>(null);
+  const [experienceAwardTarget, setExperienceAwardTarget] =
+    useState<ExperienceAwardTarget | null>(null);
+  const [experienceAwardPending, setExperienceAwardPending] = useState(false);
+  const [experienceAwardNeedsRetry, setExperienceAwardNeedsRetry] = useState(false);
+  const [committedExperienceAward, setCommittedExperienceAward] =
+    useState<CommittedExperienceAward | null>(null);
+  const experienceAwardRequestRef = useRef<ExperienceAwardTarget | null>(null);
   const { data: userData, isSignedIn } = useUserData();
   const isGuest = !isSignedIn;
 
@@ -260,15 +467,30 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     name: "users",
     defaultValue: [],
   });
+  const watchedReputationAmount = useWatch({
+    control: form.control,
+    name: "reputationAmount",
+    defaultValue: 0,
+  });
+  const watchedMoneyAmount = useWatch({
+    control: form.control,
+    name: "moneyAmount",
+    defaultValue: 0,
+  });
+  const watchedAwardReason = useWatch({
+    control: form.control,
+    name: "reason",
+    defaultValue: "",
+  });
 
   // Experience award form
   const experienceForm = useForm<ExperienceAwardSchema>({
     resolver: zodResolver(experienceAwardSchema),
-    defaultValues: { amount: 100 },
+    defaultValues: { amount: 100, reason: "" },
   });
 
   useEffect(() => {
-    if (profile) {
+    if (profile && !awardTarget) {
       userSearchMethods.setValue("users", [
         {
           userId: profile.userId,
@@ -280,7 +502,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         },
       ]);
     }
-  }, [profile, userSearchMethods]);
+  }, [awardTarget, profile, userSearchMethods]);
 
   useEffect(() => {
     if (watchedUsers && watchedUsers.length > 0) {
@@ -295,81 +517,404 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const utils = api.useUtils();
 
   // Mutations
-  const updateAvatar = api.reports.updateUserAvatar.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
-      }
-    },
-  });
+  const updateAvatar = api.reports.updateUserAvatar.useMutation();
 
-  const clearNindo = api.reports.clearNindo.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
-      }
-    },
-  });
+  const handleAvatarUpdate = async () => {
+    const target = avatarUpdateTarget;
+    if (!target || avatarUpdateRequestRef.current) return;
 
-  const cloneUser = api.staff.cloneUserForDebug.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getUser.invalidate();
-      }
-    },
-  });
+    // This ref closes the same-tick gap before React can render the pending state.
+    avatarUpdateRequestRef.current = target;
+    setAvatarUpdatePending(true);
+    try {
+      const data = await updateAvatar.mutateAsync({
+        userId: target.userId,
+        expectedAvatar: target.expectedAvatar,
+      });
+      if (avatarUpdateRequestRef.current !== target) return;
 
-  const updateUserId = api.staff.updateUserId.useMutation({
-    onSuccess: async (data) => {
       showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
-      }
-    },
-  });
+      if (!data.success || !data.avatar || data.userId !== target.userId) return;
 
-  const unstuckUser = api.staff.forceAwake.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getUser.invalidate();
-        setShowForceAwakeModal(false);
-        setForceAwakeReason("");
+      // Hide the action and render the committed image before cache work, so a stale
+      // profile response cannot expose a second moderation request for the old avatar.
+      setCommittedAvatarUpdate({
+        userId: target.userId,
+        sourceAvatar: target.expectedAvatar,
+        avatar: data.avatar,
+      });
+      setAvatarUpdateTarget(null);
+      void utils.profile.getPublicUser.invalidate();
+    } catch (error) {
+      // Non-transient tRPC errors are already shown by the global mutation handler.
+      if (
+        avatarUpdateRequestRef.current === target &&
+        error instanceof Error &&
+        isRetryableTrpcError(error)
+      ) {
+        showMutationToast({
+          success: false,
+          message: "Could not update this avatar. Check your connection and try again.",
+        });
       }
-    },
-  });
+    } finally {
+      if (avatarUpdateRequestRef.current === target) {
+        avatarUpdateRequestRef.current = null;
+        setAvatarUpdatePending(false);
+      }
+    }
+  };
+
+  const clearNindo = api.reports.clearNindo.useMutation();
+
+  const handleClearNindo = async () => {
+    const target = clearNindoTarget;
+    if (!target || clearNindoRequestRef.current) return;
+
+    // React has not rendered the pending state yet during a same-tick second click.
+    clearNindoRequestRef.current = target;
+    setClearNindoPending(true);
+    try {
+      const data = await clearNindo.mutateAsync({
+        userId: target.userId,
+        nindoId: target.nindoId,
+        expectedContent: target.expectedContent,
+      });
+      if (clearNindoRequestRef.current !== target) return;
+
+      showMutationToast(data);
+      if (
+        !data.success ||
+        data.userId !== target.userId ||
+        data.nindoId !== target.nindoId
+      ) {
+        return;
+      }
+
+      // Immediately suppress the exact committed nindo. A stale profile response
+      // must not briefly expose a second clear action for content that is gone.
+      setCommittedNindoClear({
+        userId: target.userId,
+        nindoId: target.nindoId,
+        expectedContent: target.expectedContent,
+      });
+      setClearNindoTarget(null);
+      void utils.profile.getPublicUser.invalidate();
+    } catch (error) {
+      // Other tRPC errors are already displayed once by the global mutation handler.
+      if (
+        clearNindoRequestRef.current === target &&
+        error instanceof Error &&
+        isRetryableTrpcError(error)
+      ) {
+        showMutationToast({
+          success: false,
+          message: "Could not clear this nindo. Check your connection and try again.",
+        });
+      }
+    } finally {
+      if (clearNindoRequestRef.current === target) {
+        clearNindoRequestRef.current = null;
+        setClearNindoPending(false);
+      }
+    }
+  };
+
+  const updateUserId = api.staff.updateUserId.useMutation();
+
+  const unstuckUser = api.staff.forceAwake.useMutation();
+
+  const handleForceAwake = async () => {
+    const target = forceAwakeTarget;
+    const reason = forceAwakeReason.trim();
+    if (!target || forceAwakeRequestRef.current || reason.length < 10) return;
+
+    // Close the same-tick gap before React can commit the mutation's pending state.
+    forceAwakeRequestRef.current = target;
+    setForceAwakePending(true);
+    try {
+      const data = await unstuckUser.mutateAsync({
+        userId: target.userId,
+        expectedUsername: target.username,
+        expectedStatus: target.expectedStatus,
+        expectedBattleId: target.expectedBattleId,
+        requestId: target.requestId,
+        reason,
+      });
+      if (forceAwakeRequestRef.current !== target) return;
+
+      showMutationToast(data);
+      if (!data.success || data.userId !== target.userId) return;
+
+      // Suppress a second intervention before any cache refresh can return stale profile data.
+      setCommittedForceAwake({ userId: target.userId, requestId: target.requestId });
+      setShowForceAwakeModal(false);
+      setForceAwakeTarget(null);
+      setForceAwakeReason("");
+      void Promise.allSettled([
+        utils.profile.getPublicUser.invalidate({ userId: target.userId }),
+        utils.profile.getUser.invalidate(),
+      ]);
+    } catch (error) {
+      // Non-network tRPC failures are already rendered exactly once by the global handler.
+      if (
+        forceAwakeRequestRef.current === target &&
+        error instanceof Error &&
+        isRetryableTrpcError(error)
+      ) {
+        showMutationToast({
+          success: false,
+          message:
+            "Could not force this user awake. Check your connection and try again.",
+        });
+      }
+    } finally {
+      if (forceAwakeRequestRef.current === target) {
+        forceAwakeRequestRef.current = null;
+        setForceAwakePending(false);
+      }
+    }
+  };
 
   // mutations related to badges and activity events were relocated to their tab components.
-  const awardMutation = api.misc.awardReputation.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
+  const awardMutation = api.misc.awardReputation.useMutation();
+
+  const awardExperience = api.profile.awardExperience.useMutation();
+
+  const handleExperienceAwardSubmit = experienceForm.handleSubmit(async (data) => {
+    if (
+      !experienceAwardSource ||
+      experienceAwardRequestRef.current ||
+      experienceAwardPending
+    ) {
+      return;
+    }
+
+    // A transport retry must reuse this exact target, value, reason, and key. If the server
+    // committed but the response was lost, minting another key here could award twice.
+    const target =
+      experienceAwardTarget ??
+      ({
+        requestId: crypto.randomUUID(),
+        userId: experienceAwardSource.userId,
+        username: experienceAwardSource.username,
+        earnedExperienceBefore: experienceAwardSource.earnedExperience,
+        amount: data.amount,
+        reason: data.reason.trim(),
+      } satisfies ExperienceAwardTarget);
+
+    experienceAwardRequestRef.current = target;
+    setExperienceAwardTarget(target);
+    setExperienceAwardPending(true);
+    if (!experienceAwardTarget) setExperienceAwardNeedsRetry(false);
+
+    try {
+      const result = await awardExperience.mutateAsync({
+        targetUserId: target.userId,
+        expectedUsername: target.username,
+        amount: target.amount,
+        reason: target.reason,
+        requestId: target.requestId,
+      });
+      if (experienceAwardRequestRef.current !== target) return;
+
+      if (!result.success) {
+        showMutationToast(result);
+        // Structured failures are known not to have committed, so the draft can be corrected.
+        setExperienceAwardTarget(null);
+        setExperienceAwardNeedsRetry(false);
+        return;
       }
-      form.reset();
-    },
+
+      const committed = result.award;
+      if (
+        result.requestId !== target.requestId ||
+        !committed ||
+        committed.targetUserId !== target.userId ||
+        committed.username !== target.username ||
+        committed.amount !== target.amount ||
+        committed.reason !== target.reason
+      ) {
+        showMutationToast({
+          success: false,
+          message:
+            "The response did not match this award. Retry the exact request before creating another award.",
+        });
+        setExperienceAwardNeedsRetry(true);
+        return;
+      }
+
+      showMutationToast(result);
+      setCommittedExperienceAward({
+        ...target,
+        earnedExperienceBefore: committed.earnedExperienceBefore,
+        earnedExperienceAfter: committed.earnedExperienceAfter,
+      });
+      setExperienceAwardTarget(null);
+      setExperienceAwardNeedsRetry(false);
+      setShowExperienceAwardModal(false);
+      setExperienceAwardSource(null);
+      experienceForm.reset({ amount: 100, reason: "" });
+      void Promise.allSettled([
+        utils.profile.getPublicUser.invalidate({ userId: target.userId }),
+        utils.profile.getUser.invalidate(),
+      ]);
+    } catch {
+      // The global mutation handler emits the transport toast once. Preserve the immutable
+      // request so Retry remains idempotent even when the first response was lost after commit.
+      if (experienceAwardRequestRef.current === target) {
+        setExperienceAwardNeedsRetry(true);
+      }
+    } finally {
+      if (experienceAwardRequestRef.current === target) {
+        experienceAwardRequestRef.current = null;
+        setExperienceAwardPending(false);
+      }
+    }
   });
 
-  const awardExperience = api.profile.awardExperience.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
+  const openExperienceAward = () => {
+    if (!profile || experienceAwardPending) return;
+    if (!experienceAwardTarget) {
+      setExperienceAwardSource({
+        userId: profile.userId,
+        username: profile.username,
+        earnedExperience: profile.earnedExperience,
+      });
+    }
+    setShowExperienceAwardModal(true);
+  };
+
+  const handleAwardSubmit = form.handleSubmit(async (data) => {
+    if (awardRequestRef.current || completedAward) return;
+
+    // A transport failure retries this exact immutable request. Changing its recipients or value
+    // and minting another key could double an award whose successful response was lost.
+    const target =
+      awardTarget ??
+      ({
+        requestId: crypto.randomUUID(),
+        users: watchedUsers.map((user) => ({
+          userId: user.userId,
+          username: user.username,
+        })),
+        reputationAmount: data.reputationAmount ?? 0,
+        moneyAmount: data.moneyAmount ?? 0,
+        reason: data.reason,
+        profileReputationBefore:
+          watchedUsers.some((user) => user.userId === profile?.userId) && profile
+            ? profile.reputationPoints
+            : null,
+      } satisfies ReputationAwardTarget);
+
+    if (!awardTarget) setAwardNeedsRetry(false);
+
+    if (
+      target.users.length === 0 ||
+      target.users.some((user) => !data.userIds.includes(user.userId))
+    ) {
+      showMutationToast({
+        success: false,
+        message: "The selected recipients changed. Review the award and try again.",
+      });
+      return;
+    }
+
+    awardRequestRef.current = target;
+    setAwardTarget(target);
+    setAwardPending(true);
+    try {
+      const result = await awardMutation.mutateAsync({
+        userIds: target.users.map((user) => user.userId),
+        expectedUsers: target.users,
+        reputationAmount: target.reputationAmount,
+        moneyAmount: target.moneyAmount,
+        reason: target.reason,
+        requestId: target.requestId,
+      });
+      if (awardRequestRef.current !== target) return;
+
+      if (!result.success) {
+        showMutationToast(result);
+        // A structured rejection did not commit, so the staff member may correct the draft.
+        setAwardTarget(null);
+        setAwardNeedsRetry(false);
+        return;
       }
-    },
+
+      const expectedAwards = target.users.every((user) =>
+        result.awards?.some(
+          (award) =>
+            award.userId === user.userId &&
+            award.username === user.username &&
+            award.reputationAmount === target.reputationAmount &&
+            award.moneyAmount === target.moneyAmount,
+        ),
+      );
+      if (
+        result.requestId !== target.requestId ||
+        result.awards?.length !== target.users.length ||
+        !expectedAwards
+      ) {
+        showMutationToast({
+          success: false,
+          message:
+            "The award response did not match this confirmation. Retry the same request before taking another action.",
+        });
+        setAwardNeedsRetry(true);
+        return;
+      }
+
+      showMutationToast(result);
+      setCommittedAward(target);
+      setCompletedAward(target);
+      setAwardTarget(null);
+      setAwardNeedsRetry(false);
+      void Promise.allSettled([
+        utils.profile.getPublicUser.invalidate(),
+        utils.profile.getUser.invalidate(),
+        utils.misc.getAllAwards.invalidate(),
+      ]);
+    } catch {
+      // The shared tRPC handler owns the single error toast. Regardless of the exact transport
+      // shape, preserve this key and snapshot: the response may have been lost after commit.
+      if (awardRequestRef.current === target) setAwardNeedsRetry(true);
+    } finally {
+      if (awardRequestRef.current === target) {
+        awardRequestRef.current = null;
+        setAwardPending(false);
+      }
+    }
   });
 
-  const handleAwardSubmit = form.handleSubmit((data) => {
-    awardMutation.mutate({
-      userIds: data.userIds,
-      reputationAmount: data.reputationAmount,
-      moneyAmount: data.moneyAmount,
-      reason: data.reason,
-    });
-  });
+  const closeAward = () => {
+    if (awardPending) return;
+    if (completedAward) {
+      form.reset({
+        reputationAmount: 0,
+        moneyAmount: 0,
+        reason: "",
+        userIds: [userId],
+      });
+      userSearchMethods.reset({
+        username: "",
+        users: profile
+          ? [
+              {
+                userId: profile.userId,
+                username: profile.username,
+                rank: profile.rank,
+                level: profile.level,
+                avatar: profile.avatar,
+                federalStatus: profile.federalStatus,
+              },
+            ]
+          : [],
+      });
+      setCompletedAward(null);
+      setAwardNeedsRetry(false);
+    }
+  };
 
   const accountStatus = profile
     ? profile.isBanned
@@ -379,8 +924,101 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         : "GOOD STANDING"
     : "Loading...";
 
+  const visibleReputationPoints =
+    committedAward &&
+    profile &&
+    committedAward.profileReputationBefore === profile.reputationPoints &&
+    committedAward.users.some((user) => user.userId === profile.userId)
+      ? profile.reputationPoints + committedAward.reputationAmount
+      : profile?.reputationPoints;
+
+  const visibleEarnedExperience =
+    committedExperienceAward &&
+    profile &&
+    committedExperienceAward.userId === profile.userId &&
+    profile.earnedExperience === committedExperienceAward.earnedExperienceBefore
+      ? committedExperienceAward.earnedExperienceAfter
+      : profile?.earnedExperience;
+
   // Derived
   const canChange = userData && canClearUserNindo(userData);
+
+  let visibleAvatar = profile?.avatar;
+  let suppressStaleAvatarAction = false;
+  if (
+    committedAvatarUpdate &&
+    profile &&
+    committedAvatarUpdate.userId === profile.userId &&
+    committedAvatarUpdate.sourceAvatar === profile.avatar
+  ) {
+    visibleAvatar = committedAvatarUpdate.avatar;
+    suppressStaleAvatarAction = true;
+  }
+
+  const suppressStaleClearedNindo = Boolean(
+    committedNindoClear &&
+      profile?.nindo &&
+      committedNindoClear.userId === profile.userId &&
+      committedNindoClear.nindoId === profile.nindo.id &&
+      committedNindoClear.expectedContent === profile.nindo.content,
+  );
+
+  useEffect(() => {
+    if (
+      committedAvatarUpdate &&
+      profile &&
+      committedAvatarUpdate.userId === profile.userId &&
+      profile.avatar === committedAvatarUpdate.avatar
+    ) {
+      setCommittedAvatarUpdate(null);
+    }
+  }, [committedAvatarUpdate, profile?.avatar, profile?.userId]);
+
+  useEffect(() => {
+    if (
+      committedExperienceAward &&
+      profile &&
+      (committedExperienceAward.userId !== profile.userId ||
+        profile.earnedExperience !== committedExperienceAward.earnedExperienceBefore)
+    ) {
+      // A refreshed (or otherwise newer) profile has superseded the local committed overlay.
+      setCommittedExperienceAward(null);
+    }
+  }, [committedExperienceAward, profile]);
+
+  useEffect(() => {
+    if (
+      avatarUpdateTarget &&
+      !avatarUpdatePending &&
+      avatarUpdateTarget.userId !== profile?.userId
+    ) {
+      setAvatarUpdateTarget(null);
+    }
+  }, [avatarUpdatePending, avatarUpdateTarget, profile?.userId]);
+
+  useEffect(() => {
+    if (!committedNindoClear || !profile) return;
+    const currentNindo = profile.nindo;
+    if (
+      committedNindoClear.userId !== profile.userId ||
+      !currentNindo ||
+      currentNindo.id !== committedNindoClear.nindoId ||
+      currentNindo.content !== committedNindoClear.expectedContent
+    ) {
+      setCommittedNindoClear(null);
+    }
+  }, [committedNindoClear, profile]);
+
+  useEffect(() => {
+    if (!clearNindoTarget || clearNindoPending || !profile) return;
+    if (
+      clearNindoTarget.userId !== profile.userId ||
+      clearNindoTarget.nindoId !== profile.nindo?.id ||
+      clearNindoTarget.expectedContent !== profile.nindo?.content
+    ) {
+      setClearNindoTarget(null);
+    }
+  }, [clearNindoPending, clearNindoTarget, profile]);
 
   // Loaders
   if (isPendingProfile) {
@@ -435,22 +1073,17 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           <div className="flex flex-row items-center gap-1 [&_svg]:block">
             {userData && canCloneUser(userData.role) && (
               <>
-                <TooltipProvider delayDuration={50}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <CopyCheck
-                        className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                        onClick={() => cloneUser.mutate({ userId: profile.userId })}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>Clone User</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <DebugUserCloneControl
+                  key={profile.userId}
+                  source={{ userId: profile.userId, username: profile.username }}
+                  cloneUserId={userData.userId}
+                />
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="inline-flex">
                         <UpdateUserIdButton
+                          key={profile.userId}
                           userId={profile.userId}
                           username={profile.username}
                           updateUserIdMutation={updateUserId}
@@ -503,10 +1136,14 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   isOpen={showEditModal}
                   setIsOpen={setShowEditModal}
                   proceed_label="Done"
+                  proceed_loading_label="Deleting quest…"
+                  isLoading={isUserQuestDeletionPending}
                 >
                   {showEditModal && (
                     <EditUserComponent
                       userId={profile.userId}
+                      targetIsAi={profile.isAi}
+                      onUserQuestDeletionPendingChange={setIsUserQuestDeletionPending}
                       profile={{
                         ...profile,
                         reason: "",
@@ -520,81 +1157,141 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             )}
             {userData && canAwardReputation(userData.role) && (
               <Confirm
+                id="award-reputation"
                 title="Award Reputation Points"
-                proceed_label="Award Points"
+                proceed_label={awardNeedsRetry ? "Retry exact award" : "Award points"}
+                proceed_loading_label="Awarding reputation…"
                 button={
                   <TooltipProvider delayDuration={50}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Medal className="h-6 w-6 cursor-pointer hover:text-orange-500" />
+                        <span
+                          role="img"
+                          aria-label={`Award reputation to ${profile.username}`}
+                          className="inline-flex"
+                        >
+                          <Medal className="h-6 w-6 hover:text-orange-500" />
+                        </span>
                       </TooltipTrigger>
                       <TooltipContent>Award Reputation</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 }
-                isValid={form.formState.isValid}
+                isValid={form.formState.isValid && !completedAward}
+                isLoading={awardPending}
+                keepOpenOnAccept
+                disabled={awardPending}
+                confirmDisabled={Boolean(completedAward)}
                 onAccept={handleAwardSubmit}
+                onClose={closeAward}
               >
-                <b>DO NOT</b> abuse this feature! All assignments are logged and visible
-                to ALL users. Feature abuse for personal gain will result in severe
-                consequences.
+                {completedAward ? (
+                  <div className="space-y-2" role="status" aria-live="polite">
+                    <p className="font-semibold text-green-400">Award completed.</p>
+                    <p>
+                      Applied {completedAward.reputationAmount} reputation and{" "}
+                      {completedAward.moneyAmount.toLocaleString()} money to{" "}
+                      {completedAward.users.map((user) => user.username).join(", ")}.
+                    </p>
+                    <p className="text-muted-foreground text-sm">
+                      Reason: {completedAward.reason}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p>
+                      You are about to add{" "}
+                      <b>{Number(watchedReputationAmount ?? 0)} reputation</b> and{" "}
+                      <b>{Number(watchedMoneyAmount ?? 0).toLocaleString()} money</b> to{" "}
+                      <b>
+                        {watchedUsers.map((user) => user.username).join(", ") ||
+                          "no selected users"}
+                      </b>
+                      .
+                    </p>
+                    <p className="text-sm">
+                      Reason: {watchedAwardReason?.trim() || "No reason entered"}
+                    </p>
+                    {awardNeedsRetry && (
+                      <p className="rounded-md border border-amber-500/60 bg-amber-950/30 p-2 text-amber-100 text-sm">
+                        The previous response was not confirmed. This retries the exact
+                        same recipients and amounts with replay protection.
+                      </p>
+                    )}
+                    <p>
+                      <b>DO NOT</b> abuse this feature! All assignments are logged and
+                      visible to ALL users. Feature abuse for personal gain will result
+                      in severe consequences.
+                    </p>
+                  </>
+                )}
                 <Form {...form}>
-                  <form className="space-y-4">
-                    <UserSearchSelect
-                      useFormMethods={userSearchMethods}
-                      label="Users to award"
-                      showAi={false}
-                      showYourself={false}
-                      maxUsers={10}
-                    />
+                  <form
+                    className={`space-y-4 ${awardTarget || completedAward ? "pointer-events-none opacity-60" : ""}`}
+                    aria-busy={awardPending}
+                  >
+                    <fieldset
+                      disabled={awardPending || Boolean(awardTarget || completedAward)}
+                    >
+                      <UserSearchSelect
+                        useFormMethods={userSearchMethods}
+                        label="Users to award"
+                        showAi={false}
+                        showYourself={false}
+                        maxUsers={10}
+                      />
 
-                    <FormField
-                      control={form.control}
-                      name="reputationAmount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Reputation Amount</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              step="any"
-                              placeholder="Enter reputation amount"
-                              {...field}
-                              value={field.value as number}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                      <FormField
+                        control={form.control}
+                        name="reputationAmount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Reputation Amount</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="any"
+                                placeholder="Enter reputation amount"
+                                disabled={awardPending || Boolean(awardTarget)}
+                                {...field}
+                                value={field.value as number}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <FormField
-                      control={form.control}
-                      name="moneyAmount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Money Amount</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              step="1"
-                              placeholder="Enter money amount"
-                              {...field}
-                              value={field.value as number}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                      <FormField
+                        control={form.control}
+                        name="moneyAmount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Money Amount</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="1"
+                                placeholder="Enter money amount"
+                                disabled={awardPending || Boolean(awardTarget)}
+                                {...field}
+                                value={field.value as number}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <RichInput
-                      id="reason"
-                      height="100px"
-                      placeholder="Enter reason for awarding"
-                      control={form.control}
-                      error={form.formState.errors.reason?.message}
-                    />
+                      <RichInput
+                        id="reason"
+                        height="100px"
+                        placeholder="Enter reason for awarding"
+                        control={form.control}
+                        error={form.formState.errors.reason?.message}
+                        disabled={awardPending || Boolean(awardTarget)}
+                      />
+                    </fieldset>
                   </form>
                 </Form>
               </Confirm>
@@ -613,62 +1310,128 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             )}
 
             {userData && canAwardExperience(userData) && (
-              <Confirm
-                title="Award Experience Points"
-                proceed_label="Award Experience"
-                button={
-                  <TooltipProvider delayDuration={50}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Award className="h-6 w-6 cursor-pointer hover:text-orange-500" />
-                      </TooltipTrigger>
-                      <TooltipContent>Award Experience</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                }
-                isValid={experienceForm.formState.isValid}
-                onAccept={experienceForm.handleSubmit((data) => {
-                  awardExperience.mutate({
-                    targetUserId: profile.userId,
-                    amount: data.amount,
-                  });
-                })}
-              >
-                Award unallocated experience points to {profile.username}. This will add
-                to their earned experience pool that they can then distribute to their
-                stats.
-                <br />
-                <br />
-                <b>DO NOT</b> abuse this feature! All assignments are logged and visible
-                to ALL users. Feature abuse for personal gain will result in severe
-                consequences.
-                <Form {...experienceForm}>
-                  <form className="mt-4 space-y-4">
-                    <FormField
-                      control={experienceForm.control}
-                      name="amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Experience Amount</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="Enter experience amount"
-                              {...field}
-                              onChange={(e) =>
-                                field.onChange(parseInt(e.target.value, 10) || 0)
-                              }
-                              min="1"
-                              max="100000"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </form>
-                </Form>
-              </Confirm>
+              <>
+                <TooltipProvider delayDuration={50}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50"
+                        aria-label={
+                          experienceAwardTarget
+                            ? `Retry the experience award for ${experienceAwardTarget.username}`
+                            : `Award experience to ${profile.username}`
+                        }
+                        disabled={experienceAwardPending}
+                        onClick={openExperienceAward}
+                      >
+                        <Award className="h-6 w-6" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {experienceAwardTarget
+                        ? `Retry award for ${experienceAwardTarget.username}`
+                        : "Award Experience"}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                {experienceAwardSource && (
+                  <Modal
+                    id={`award-experience-${experienceAwardSource.userId}`}
+                    title={`Award experience: ${experienceAwardSource.username}`}
+                    isOpen={showExperienceAwardModal}
+                    setIsOpen={(isOpen) => {
+                      setShowExperienceAwardModal(isOpen);
+                      if (!isOpen && !experienceAwardTarget) {
+                        setExperienceAwardSource(null);
+                      }
+                    }}
+                    proceed_label={
+                      experienceAwardTarget ? "Retry exact award" : "Award experience"
+                    }
+                    proceed_loading_label="Awarding experience…"
+                    isLoading={experienceAwardPending}
+                    keepOpenOnAccept
+                    proceedDisabled={!experienceForm.formState.isValid}
+                    onAccept={() => void handleExperienceAwardSubmit()}
+                  >
+                    <p>
+                      Add unallocated experience to{" "}
+                      <b>{experienceAwardSource.username}</b>. They can distribute it to
+                      their stats later; this does not directly change their level,
+                      rank, or allocated stats.
+                    </p>
+                    <p className="break-all text-muted-foreground text-sm">
+                      Target ID: <code>{experienceAwardSource.userId}</code>
+                    </p>
+                    {experienceAwardNeedsRetry && experienceAwardTarget && (
+                      <p className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+                        The result could not be confirmed. Retry preserves the exact{" "}
+                        <b>{experienceAwardTarget.amount} XP</b> award and its request
+                        ID, so an already-committed award will not be applied twice.
+                      </p>
+                    )}
+                    <p>
+                      <b>DO NOT</b> abuse this feature. The amount, recipient, staff
+                      member, and reason are recorded in the public action log.
+                    </p>
+                    <Form {...experienceForm}>
+                      <form className="mt-4 space-y-4">
+                        <fieldset
+                          className="space-y-4 disabled:cursor-wait disabled:opacity-70"
+                          disabled={
+                            experienceAwardPending || Boolean(experienceAwardTarget)
+                          }
+                        >
+                          <FormField
+                            control={experienceForm.control}
+                            name="amount"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Experience Amount</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    step="1"
+                                    placeholder="Enter experience amount"
+                                    {...field}
+                                    onChange={(event) =>
+                                      field.onChange(
+                                        Number.parseInt(event.target.value, 10) || 0,
+                                      )
+                                    }
+                                    min="1"
+                                    max="100000"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={experienceForm.control}
+                            name="reason"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Reason</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder="Why is this experience being awarded?"
+                                    maxLength={191}
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </fieldset>
+                      </form>
+                    </Form>
+                  </Modal>
+                )}
+              </>
             )}
 
             {userData && (userData.userId === profile.userId || canSeeSecrets) && (
@@ -707,17 +1470,34 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             )}
             {userData && canUnstuckVillage(userData.role) ? (
               <>
-                <TooltipProvider delayDuration={50}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <PersonStanding
-                        className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                        onClick={() => setShowForceAwakeModal(true)}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>Force Awake</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                {committedForceAwake?.userId !== profile.userId && (
+                  <TooltipProvider delayDuration={50}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50"
+                          aria-label={`Force ${profile.username} awake`}
+                          disabled={forceAwakePending}
+                          onClick={() => {
+                            setForceAwakeTarget({
+                              userId: profile.userId,
+                              username: profile.username,
+                              expectedStatus: profile.status,
+                              expectedBattleId: profile.battleId,
+                              requestId: crypto.randomUUID(),
+                            });
+                            setForceAwakeReason("");
+                            setShowForceAwakeModal(true);
+                          }}
+                        >
+                          <PersonStanding className="h-6 w-6" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Force Awake</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -809,7 +1589,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               PvP Bracket: {getExpBracket(profile.experience, profile.rank)}/
               {XP_BRACKETS.length}
             </p>
-            {canSeeSecrets && <p>Unclaimed Exp: {profile.earnedExperience}</p>}
+            {canSeeSecrets && <p>Unclaimed Exp: {visibleEarnedExperience}</p>}
             <p>Experience for lvl: ---</p>
             <p>
               PVE Fights: {`${profile.pveFights} (+${profile.battleHistory.length})`}
@@ -828,7 +1608,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             )}
             <br />
             <b>Special</b>
-            <p>Reputation points: {profile.reputationPoints}</p>
+            <p>Reputation points: {visibleReputationPoints}</p>
             <p>Federal Support: {profile.federalStatus.toLowerCase()}</p>
             {userData && canSeeSecretData(userData.role) && (
               <div>
@@ -859,7 +1639,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   className="rounded-2xl"
                 >
                   <AvatarImage
-                    href={profile.avatar}
+                    href={visibleAvatar}
                     alt={profile.username}
                     userId={profile.userId}
                     hover_effect={false}
@@ -868,22 +1648,28 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     size={100}
                   />
                 </GlowingBorder>
-                {canChange && !profile.isAi && (
-                  <Confirm
-                    title="Confirm Deletion"
-                    button={
-                      <RefreshCcwDot className="absolute top-[3%] right-[13%] z-10 h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
-                    }
-                    onAccept={(e) => {
-                      e.preventDefault();
-                      updateAvatar.mutate({ userId: profile.userId });
-                    }}
-                  >
-                    You are about to delete an avatar and create a new one. Note that
-                    abuse of this feature is forbidden, it is solely intended for
-                    removing potentially inappropriate avatars. The action will be
-                    logged. Are you sure?
-                  </Confirm>
+                {canChange && !profile.isAi && !suppressStaleAvatarAction && (
+                  <TooltipProvider delayDuration={50}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`Replace ${profile.username}'s avatar`}
+                          className="absolute top-[3%] right-[13%] z-10 rounded-full bg-slate-300 p-1 hover:text-orange-500"
+                          onClick={() =>
+                            setAvatarUpdateTarget({
+                              userId: profile.userId,
+                              username: profile.username,
+                              expectedAvatar: profile.avatar,
+                            })
+                          }
+                        >
+                          <RefreshCcwDot className="h-7 w-7" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Replace Avatar</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
               <div className="mt-2">
@@ -919,6 +1705,51 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           </div>
         </div>
       </ContentBox>
+      <Modal
+        id="moderate-user-avatar"
+        title="Replace User Avatar"
+        isOpen={avatarUpdateTarget !== null}
+        setIsOpen={(open) => {
+          if (!open && !avatarUpdatePending) setAvatarUpdateTarget(null);
+        }}
+        proceed_label="Replace avatar"
+        proceed_loading_label="Updating avatar…"
+        confirmClassName="bg-red-600 text-white hover:bg-red-700"
+        isLoading={avatarUpdatePending}
+        keepOpenOnAccept={true}
+        onAccept={() => void handleAvatarUpdate()}
+      >
+        <p>
+          This permanently replaces the current avatar for{" "}
+          {avatarUpdateTarget?.username ?? "this user"} with a newly generated one. Use
+          this only to remove inappropriate content.
+        </p>
+        <p className="font-semibold">The moderation action will be logged.</p>
+      </Modal>
+      <Modal
+        id="clear-user-nindo"
+        title="Clear User Nindo"
+        isOpen={clearNindoTarget !== null}
+        setIsOpen={(open) => {
+          if (!open && !clearNindoPending) setClearNindoTarget(null);
+        }}
+        proceed_label="Clear nindo"
+        proceed_loading_label="Clearing nindo…"
+        confirmClassName="bg-red-600 text-white hover:bg-red-700"
+        isLoading={clearNindoPending}
+        keepOpenOnAccept={true}
+        onAccept={() => void handleClearNindo()}
+      >
+        <p>
+          This permanently removes{" "}
+          <span className="font-semibold">
+            {clearNindoTarget?.username ?? "this user"}&apos;s
+          </span>{" "}
+          current Ninja Way from their public profile. The cleared text cannot be
+          recovered here.
+        </p>
+        <p className="font-semibold">This moderation action will be logged.</p>
+      </Modal>
       {canSeeSecrets && (
         <div className="text-center text-sm italic">Unique ID: {profile.userId}</div>
       )}
@@ -995,25 +1826,43 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 initialBreak={true}
                 topRightContent={
                   <div className="flex flex-row gap-1">
-                    {canChange && (
-                      <Confirm
-                        title="Clear User Nindo"
-                        proceed_label="Done"
-                        button={
-                          <Trash2 className="h-6 w-6 cursor-pointer hover:text-orange-500" />
-                        }
-                        onAccept={() => clearNindo.mutate({ userId: profile.userId })}
-                      >
-                        Confirm that you wish to clear this nindo. The action will be
-                        logged.
-                      </Confirm>
+                    {canChange && !suppressStaleClearedNindo && (
+                      <TooltipProvider delayDuration={50}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label={`Clear ${profile.username}'s nindo`}
+                              disabled={clearNindoPending}
+                              className="rounded-sm disabled:cursor-not-allowed disabled:opacity-50"
+                              onClick={() =>
+                                setClearNindoTarget({
+                                  userId: profile.userId,
+                                  username: profile.username,
+                                  nindoId: profile.nindo.id,
+                                  expectedContent: profile.nindo.content,
+                                })
+                              }
+                            >
+                              <Trash2 className="h-6 w-6 cursor-pointer hover:text-orange-500" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>Clear Nindo</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     )}
                   </div>
                 }
               >
-                <div className="relative overflow-x-scroll">
-                  {parseHtml(profile.nindo.content)}
-                </div>
+                {suppressStaleClearedNindo ? (
+                  <p role="status" aria-live="polite" className="text-center italic">
+                    Nindo cleared.
+                  </p>
+                ) : (
+                  <div className="relative overflow-x-scroll">
+                    {parseHtml(profile.nindo.content)}
+                  </div>
+                )}
               </ContentBox>
             </TabsContent>
           )}
@@ -1094,7 +1943,9 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             <TabsContent value="recruits">
               <RecruitedUsersTab
                 recruits={profile.recruitedUsers}
+                parentUserId={profile.userId}
                 parentUsername={profile.username}
+                parentRecruitedCount={profile.nRecruited}
               />
             </TabsContent>
           )}
@@ -1158,41 +2009,50 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       )}
 
       {/* Force Awake Modal */}
-      {showForceAwakeModal && (
+      {showForceAwakeModal && forceAwakeTarget && (
         <Modal
+          id="force-awake"
           title="Force User Awake"
           isOpen={showForceAwakeModal}
-          setIsOpen={setShowForceAwakeModal}
-          proceed_label="Force Awake"
-          confirmClassName="bg-orange-600 hover:bg-orange-700"
-          onAccept={() => {
-            if (forceAwakeReason.trim().length >= 10) {
-              unstuckUser.mutate({
-                userId: profile.userId,
-                reason: forceAwakeReason.trim(),
-              });
-            } else {
-              showMutationToast({
-                success: false,
-                message: "Reason must be at least 10 characters long",
-              });
+          setIsOpen={(open) => {
+            if (forceAwakePending) return;
+            setShowForceAwakeModal(open);
+            if (!open) {
+              setForceAwakeTarget(null);
+              setForceAwakeReason("");
             }
           }}
+          proceed_label="Force Awake"
+          proceed_loading_label="Forcing user awake…"
+          confirmClassName="bg-orange-600 hover:bg-orange-700"
+          onAccept={() => void handleForceAwake()}
           isValid={forceAwakeReason.trim().length >= 10}
+          isLoading={forceAwakePending}
+          keepOpenOnAccept
         >
           <div className="space-y-4">
             <p className="text-muted-foreground text-sm">
-              You are about to force <strong>{profile.username}</strong> to awake
-              status. This action will be logged and should only be used to fix users
-              stuck in a particular state.
+              You are about to force <strong>{forceAwakeTarget.username}</strong> to
+              awake from <strong>{forceAwakeTarget.expectedStatus}</strong>. This clears
+              their travel timer and battle link, removes them from multiplayer and
+              ranked queues, and cancels a pending Kage challenge they sent. Other
+              battle participants are not changed.
             </p>
 
+            <div className="rounded-md border border-orange-500/40 bg-orange-500/10 p-3 text-sm">
+              <p>
+                Target ID: <code>{forceAwakeTarget.userId}</code>
+              </p>
+              <p>Battle: {forceAwakeTarget.expectedBattleId ?? "none"}</p>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="reason">Reason *</Label>
+              <Label htmlFor="force-awake-reason">Reason *</Label>
               <Input
-                id="reason"
+                id="force-awake-reason"
                 value={forceAwakeReason}
                 onChange={(e) => setForceAwakeReason(e.target.value)}
+                disabled={forceAwakePending}
                 placeholder="Enter reason for forcing awake status (minimum 10 characters)..."
               />
               <p className="text-muted-foreground text-xs">
@@ -1330,10 +2190,265 @@ const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
 
 interface EditUserComponentProps {
   userId: string;
+  targetIsAi: boolean;
   profile: UpdateUserSchema;
+  onUserQuestDeletionPendingChange?: (isPending: boolean) => void;
 }
 
-const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }) => {
+type EditableUserQuest = RouterOutputs["quests"]["getUserQuests"][number];
+
+type JutsuAdjustmentSnapshot = {
+  userId: string;
+  username: string;
+  isAi: boolean;
+  userJutsuId: string;
+  jutsuId: string;
+  jutsuName: string;
+  previousLevel: number;
+  newLevel: number;
+  previousReskinId: string | null;
+  previousReskinName: string | null;
+  newReskinId: string | null;
+  newReskinName: string | null;
+  equipped: boolean;
+  finishTraining: Date | null;
+  requestId: string;
+};
+
+type CommittedJutsuAdjustment = {
+  level: number;
+  reskinId: string | null;
+  reskinName: string | null;
+};
+
+type EditableUserItem = RouterOutputs["item"]["getPublicUserItems"][number];
+
+type ItemAdjustmentSnapshot = {
+  userId: string;
+  username: string;
+  isAi: boolean;
+  userItemId: string;
+  itemId: string;
+  itemName: string;
+  previousLevel: number;
+  newLevel: number;
+  quantity: number;
+  experience: number;
+  equipped: EditableUserItem["equipped"];
+  durability: number;
+  dropChancePerc: number;
+  storedAtHome: boolean;
+  isInAuction: boolean;
+  activeVariantId: string | null;
+  craftingFinishedAt: Date | null;
+  imbuements: Array<{
+    id: string;
+    itemId: string;
+    itemName: string;
+    craftingFinishedAt: Date;
+  }>;
+  requestId: string;
+};
+
+type UserQuestDeletionSnapshot = {
+  userId: string;
+  username: string;
+  userQuestId: string;
+  questId: string;
+  questName: string;
+  questType: EditableUserQuest["quest"]["questType"];
+  startedAt: Date;
+  endAt: Date | null;
+  completed: number;
+  requestId: string;
+};
+
+const questRecordStatus = (quest: Pick<EditableUserQuest, "completed" | "endAt">) => {
+  if (!quest.endAt && quest.completed === 0) return "Active";
+  if (quest.completed > 0) return "Completed";
+  return "Ended without completion";
+};
+
+const DeleteUserQuestControl: React.FC<{
+  userId: string;
+  username: string;
+  userQuest: EditableUserQuest;
+  onDeleted: (userQuestId: string) => void;
+  onPendingChange?: (isPending: boolean) => void;
+}> = ({ userId, username, userQuest, onDeleted, onPendingChange }) => {
+  const utils = api.useUtils();
+  const [confirmedQuest, setConfirmedQuest] =
+    useState<UserQuestDeletionSnapshot | null>(null);
+  const [isPending, setIsPending] = useState(false);
+  const requestRef = useRef<UserQuestDeletionSnapshot | null>(null);
+  const deleteUserQuest = api.quests.deleteUserQuest.useMutation();
+
+  const openConfirmation = () => {
+    if (isPending || requestRef.current) return;
+    setConfirmedQuest({
+      userId,
+      username,
+      userQuestId: userQuest.id,
+      questId: userQuest.quest.id,
+      questName: userQuest.quest.name,
+      questType: userQuest.quest.questType,
+      startedAt: new Date(userQuest.startedAt),
+      endAt: userQuest.endAt ? new Date(userQuest.endAt) : null,
+      completed: userQuest.completed,
+      requestId: crypto.randomUUID(),
+    });
+  };
+
+  const confirmDeletion = async (snapshot: UserQuestDeletionSnapshot) => {
+    // React exposes mutation state on the next render. Claim this exact history record
+    // synchronously so click/Enter cannot dispatch a second destructive request.
+    if (requestRef.current) return;
+    requestRef.current = snapshot;
+    setIsPending(true);
+    onPendingChange?.(true);
+
+    try {
+      const result = await deleteUserQuest.mutateAsync({
+        userId: snapshot.userId,
+        expectedUsername: snapshot.username,
+        userQuestId: snapshot.userQuestId,
+        questId: snapshot.questId,
+        expectedQuestName: snapshot.questName,
+        expectedQuestType: snapshot.questType,
+        expectedStartedAt: snapshot.startedAt,
+        expectedEndAt: snapshot.endAt,
+        expectedCompleted: snapshot.completed,
+        requestId: snapshot.requestId,
+      });
+      if (requestRef.current !== snapshot) return;
+
+      const deletion = result.deletion;
+      const responseMatches =
+        result.success &&
+        result.requestId === snapshot.requestId &&
+        deletion?.userId === snapshot.userId &&
+        deletion.userQuestId === snapshot.userQuestId &&
+        deletion.questId === snapshot.questId &&
+        deletion.questName === snapshot.questName &&
+        deletion.questType === snapshot.questType &&
+        deletion.startedAt.getTime() === snapshot.startedAt.getTime() &&
+        (deletion.endAt?.getTime() ?? null) === (snapshot.endAt?.getTime() ?? null) &&
+        deletion.completed === snapshot.completed;
+
+      if (!responseMatches) {
+        showMutationToast(
+          result.success
+            ? {
+                success: false,
+                message:
+                  "The deletion response did not match the confirmed quest record. Please refresh before trying again.",
+              }
+            : result,
+        );
+        return;
+      }
+
+      showMutationToast(result);
+      // Suppress the committed record before cache work. A stale refetch cannot resurrect its
+      // delete action while the authoritative query is catching up.
+      onDeleted(snapshot.userQuestId);
+      setConfirmedQuest(null);
+      void utils.quests.getUserQuests.invalidate({ userId: snapshot.userId });
+    } catch (error) {
+      // The global handler owns ordinary tRPC errors. A transient failure remains locally
+      // actionable and retains the exact request ID so a committed-but-lost response is replayed.
+      if (error instanceof Error && isRetryableTrpcError(error)) {
+        showMutationToast({
+          success: false,
+          message:
+            "Could not confirm the quest deletion. Check your connection and retry.",
+        });
+      }
+    } finally {
+      if (requestRef.current === snapshot) {
+        requestRef.current = null;
+        setIsPending(false);
+        onPendingChange?.(false);
+      }
+    }
+  };
+
+  const status = confirmedQuest ? questRecordStatus(confirmedQuest) : null;
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="destructive"
+        size="sm"
+        aria-label={`Delete ${userQuest.quest.name} quest record from ${username}`}
+        disabled={isPending}
+        onClick={openConfirmation}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+
+      {confirmedQuest && (
+        <Modal
+          id={`delete-user-quest-${confirmedQuest.userQuestId}`}
+          title="Permanently delete quest record?"
+          isOpen
+          setIsOpen={(open) => {
+            if (!open) setConfirmedQuest(null);
+          }}
+          proceed_label="Delete quest record"
+          proceed_loading_label="Deleting quest…"
+          confirmClassName="bg-red-600 text-white hover:bg-red-700"
+          isLoading={isPending}
+          keepOpenOnAccept
+          onAccept={(event) => {
+            event.preventDefault();
+            void confirmDeletion(confirmedQuest);
+          }}
+        >
+          <div className="space-y-3" aria-busy={isPending}>
+            <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3">
+              <p className="font-semibold text-red-700 dark:text-red-300">
+                This permanently removes {confirmedQuest.questName} from
+                {` ${confirmedQuest.username}`}&apos;s quest history.
+              </p>
+              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                <dt className="font-medium">Type</dt>
+                <dd>{confirmedQuest.questType}</dd>
+                <dt className="font-medium">Status</dt>
+                <dd>{status}</dd>
+                <dt className="font-medium">Started</dt>
+                <dd>{confirmedQuest.startedAt.toLocaleString()}</dd>
+                <dt className="font-medium">History ID</dt>
+                <dd>
+                  <code className="break-all">{confirmedQuest.userQuestId}</code>
+                </dd>
+              </dl>
+            </div>
+            <p className="text-sm">
+              The stored attempt/completion history and retry-period state for this
+              quest will be reset. Any active tracker is removed, and this quest&apos;s
+              active NPC slot is released. The quest may become available to start
+              again.
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Rewards already granted, aggregate mission counters, and the user&apos;s
+              global quest-finish time are not rolled back. Other quest records are
+              unaffected.
+            </p>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+};
+
+const EditUserComponent: React.FC<EditUserComponentProps> = ({
+  userId,
+  targetIsAi,
+  profile,
+  onUserQuestDeletionPendingChange,
+}) => {
   // State
   const [jutsu, setJutsu] = useState<Jutsu | undefined>(undefined);
   const [selectedUserItemId, setSelectedUserItemId] = useState<string | undefined>(
@@ -1341,6 +2456,37 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
   );
   const [showActive, setShowActive] = useState<string>("userData");
   const [selectedQuestType, setSelectedQuestType] = useState<string>("all");
+  const [deletedUserQuestIds, setDeletedUserQuestIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [confirmedJutsuAdjustment, setConfirmedJutsuAdjustment] =
+    useState<JutsuAdjustmentSnapshot | null>(null);
+  const [isJutsuAdjustmentPending, setIsJutsuAdjustmentPending] = useState(false);
+  const [committedJutsuAdjustments, setCommittedJutsuAdjustments] = useState<
+    Map<string, CommittedJutsuAdjustment>
+  >(() => new Map());
+  const [confirmedItemAdjustment, setConfirmedItemAdjustment] =
+    useState<ItemAdjustmentSnapshot | null>(null);
+  const [isItemAdjustmentPending, setIsItemAdjustmentPending] = useState(false);
+  const [committedItemLevels, setCommittedItemLevels] = useState<Map<string, number>>(
+    () => new Map(),
+  );
+  const jutsuAdjustmentRequestRef = useRef<JutsuAdjustmentSnapshot | null>(null);
+  const itemAdjustmentRequestRef = useRef<ItemAdjustmentSnapshot | null>(null);
+  const currentTargetRef = useRef({
+    userId,
+    username: profile.username,
+    isAi: targetIsAi,
+  });
+  const jutsuEditorTargetIdentityRef = useRef(`${userId}\u0000${profile.username}`);
+  const itemEditorTargetIdentityRef = useRef(
+    `${userId}\u0000${profile.username}\u0000${targetIsAi}`,
+  );
+  currentTargetRef.current = {
+    userId,
+    username: profile.username,
+    isAi: targetIsAi,
+  };
   const now = new Date();
 
   // Logged-in user – determines editing permissions
@@ -1382,19 +2528,11 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
   // Filter quests by type
   const filteredQuests = userQuests?.filter(
     (quest) =>
-      selectedQuestType === "all" || quest.quest.questType === selectedQuestType,
+      !deletedUserQuestIds.has(quest.id) &&
+      (selectedQuestType === "all" || quest.quest.questType === selectedQuestType),
   );
 
   // Mutations
-  const deleteUserQuest = api.quests.deleteUserQuest.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.quests.getUserQuests.invalidate();
-      }
-    },
-  });
-
   // Form handling – pass permissions so queries are conditionally executed inside hook
   const { form, formData, userJutsus, handleUserSubmit } = useUserEditForm(
     userId,
@@ -1423,17 +2561,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
   });
 
   // Mutation for adjusting jutsu level
-  const adjustJutsuLevel = api.jutsu.adjustUserJutsu.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await Promise.all([
-          utils.profile.getPublicUser.invalidate(),
-          utils.jutsu.getPublicUserJutsus.invalidate(),
-        ]);
-      }
-    },
-  });
+  const adjustJutsuLevel = api.jutsu.adjustUserJutsu.useMutation();
 
   // Staff item level editing
   const { data: userItems } = api.item.getPublicUserItems.useQuery(
@@ -1443,14 +2571,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
   const itemLevelForm = useForm<{ level: number }>({
     defaultValues: { level: 1 },
   });
-  const adjustItemLevel = api.item.adjustUserItem.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.item.getPublicUserItems.invalidate();
-      }
-    },
-  });
+  const adjustItemLevel = api.item.adjustUserItem.useMutation();
 
   // Query all reskins for selected jutsu
   const { data: jutsuReskins } = api.jutsu.getReskinsForJutsu.useQuery(
@@ -1462,20 +2583,42 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
 
   // Derived – only relevant if jutsu editing is permitted
   const userJutsu = userJutsus?.find((uj) => uj.jutsuId === jutsu?.id);
+  const committedJutsuAdjustment = userJutsu
+    ? committedJutsuAdjustments.get(userJutsu.id)
+    : undefined;
+  const displayedJutsuLevel = committedJutsuAdjustment?.level ?? userJutsu?.level ?? 0;
+  const displayedJutsuReskinId = committedJutsuAdjustment
+    ? committedJutsuAdjustment.reskinId
+    : (userJutsu?.activeReskin?.id ?? null);
+  const displayedJutsuReskinName = committedJutsuAdjustment
+    ? committedJutsuAdjustment.reskinName
+    : (userJutsu?.activeReskin?.name ?? null);
   const allJutsus = userJutsus?.map((uj) => uj.jutsu);
   const userJutsuCounts = userJutsus?.map((userJutsu) => {
+    const displayedLevel =
+      committedJutsuAdjustments.get(userJutsu.id)?.level ?? userJutsu.level;
     return {
       id: userJutsu.jutsuId,
       quantity:
         userJutsu.finishTraining && userJutsu.finishTraining > now
-          ? userJutsu.level - 1
-          : userJutsu.level,
+          ? displayedLevel - 1
+          : displayedLevel,
     };
   });
   const hasJutsus = perms.canEditJutsus && userJutsus && userJutsus.length > 0;
 
-  const selectedUserItem = userItems?.find((ui) => ui.id === selectedUserItemId);
-  const allOwnedItems = userItems?.map((ui) => ({
+  const displayedUserItems = useMemo(
+    () =>
+      userItems?.map((ui) => ({
+        ...ui,
+        level: committedItemLevels.get(ui.id) ?? ui.level,
+      })),
+    [userItems, committedItemLevels],
+  );
+  const selectedUserItem = displayedUserItems?.find(
+    (ui) => ui.id === selectedUserItemId,
+  );
+  const allOwnedItems = displayedUserItems?.map((ui) => ({
     ...ui.item,
     id: ui.id,
     name:
@@ -1485,7 +2628,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
           ? `${ui.item.name} [${ui.equipped}]`
           : ui.item.name,
   }));
-  const userItemLevels = userItems?.map((ui) => ({
+  const userItemLevels = displayedUserItems?.map((ui) => ({
     id: ui.id,
     level: ui.level,
   }));
@@ -1495,11 +2638,357 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
   useEffect(() => {
     if (userJutsu) {
       jutsuLevelForm.reset({
-        level: userJutsu.level,
-        reskinId: userJutsu.activeReskin?.id || "none",
+        level: displayedJutsuLevel,
+        reskinId: displayedJutsuReskinId || "none",
       });
     }
-  }, [userJutsu, jutsuLevelForm]);
+  }, [userJutsu, displayedJutsuLevel, displayedJutsuReskinId, jutsuLevelForm]);
+
+  useEffect(() => {
+    if (!userJutsus || committedJutsuAdjustments.size === 0) return;
+    setCommittedJutsuAdjustments((current) => {
+      let next: Map<string, CommittedJutsuAdjustment> | undefined;
+      for (const [rowId, committed] of current) {
+        const refreshed = userJutsus.find((row) => row.id === rowId);
+        if (
+          refreshed?.level === committed.level &&
+          (refreshed.activeReskin?.id ?? null) === committed.reskinId
+        ) {
+          next ??= new Map(current);
+          next.delete(rowId);
+        }
+      }
+      return next ?? current;
+    });
+  }, [userJutsus, committedJutsuAdjustments.size]);
+
+  useEffect(() => {
+    const targetIdentity = `${userId}\u0000${profile.username}`;
+    if (jutsuEditorTargetIdentityRef.current === targetIdentity) return;
+    if (isJutsuAdjustmentPending) return;
+    jutsuEditorTargetIdentityRef.current = targetIdentity;
+    setConfirmedJutsuAdjustment(null);
+    setJutsu(undefined);
+    setCommittedJutsuAdjustments(new Map());
+  }, [userId, profile.username, isJutsuAdjustmentPending]);
+
+  useEffect(() => {
+    if (!userItems || committedItemLevels.size === 0) return;
+    setCommittedItemLevels((current) => {
+      let next: Map<string, number> | undefined;
+      for (const [rowId, committedLevel] of current) {
+        if (userItems.find((row) => row.id === rowId)?.level === committedLevel) {
+          next ??= new Map(current);
+          next.delete(rowId);
+        }
+      }
+      return next ?? current;
+    });
+  }, [userItems, committedItemLevels.size]);
+
+  useEffect(() => {
+    const targetIdentity = `${userId}\u0000${profile.username}\u0000${targetIsAi}`;
+    if (itemEditorTargetIdentityRef.current === targetIdentity) return;
+    if (isItemAdjustmentPending) return;
+    itemEditorTargetIdentityRef.current = targetIdentity;
+    setConfirmedItemAdjustment(null);
+    setSelectedUserItemId(undefined);
+    setCommittedItemLevels(new Map());
+  }, [userId, profile.username, targetIsAi, isItemAdjustmentPending]);
+
+  const reviewJutsuAdjustment = jutsuLevelForm.handleSubmit((data) => {
+    if (!userJutsu || !jutsu || isJutsuAdjustmentPending) return;
+    const newReskinId = data.reskinId === "none" ? null : data.reskinId;
+    const newReskinName = newReskinId
+      ? (jutsuReskins?.find((reskin) => reskin.id === newReskinId)?.name ?? null)
+      : null;
+    if (newReskinId && !newReskinName) {
+      jutsuLevelForm.setError("reskinId", {
+        message: "The selected reskin is no longer available",
+      });
+      return;
+    }
+    if (data.level === displayedJutsuLevel && newReskinId === displayedJutsuReskinId) {
+      jutsuLevelForm.setError("level", {
+        message: "Change the level or reskin before reviewing",
+      });
+      return;
+    }
+
+    setConfirmedJutsuAdjustment({
+      userId,
+      username: profile.username,
+      isAi: targetIsAi,
+      userJutsuId: userJutsu.id,
+      jutsuId: jutsu.id,
+      jutsuName: jutsu.name,
+      previousLevel: displayedJutsuLevel,
+      newLevel: data.level,
+      previousReskinId: displayedJutsuReskinId,
+      previousReskinName: displayedJutsuReskinName,
+      newReskinId,
+      newReskinName,
+      equipped: userJutsu.equipped,
+      finishTraining: userJutsu.finishTraining
+        ? new Date(userJutsu.finishTraining)
+        : null,
+      requestId: crypto.randomUUID(),
+    });
+  });
+
+  const confirmJutsuAdjustment = async (snapshot: JutsuAdjustmentSnapshot) => {
+    if (jutsuAdjustmentRequestRef.current) return;
+    // Claim this exact target, owned row and requested state before React exposes pending state.
+    jutsuAdjustmentRequestRef.current = snapshot;
+    setIsJutsuAdjustmentPending(true);
+    try {
+      const result = await adjustJutsuLevel.mutateAsync({
+        userId: snapshot.userId,
+        expectedUsername: snapshot.username,
+        userJutsuId: snapshot.userJutsuId,
+        jutsuId: snapshot.jutsuId,
+        expectedJutsuName: snapshot.jutsuName,
+        expectedLevel: snapshot.previousLevel,
+        level: snapshot.newLevel,
+        expectedReskinId: snapshot.previousReskinId,
+        expectedReskinName: snapshot.previousReskinName,
+        reskinId: snapshot.newReskinId,
+        reskinName: snapshot.newReskinName,
+        requestId: snapshot.requestId,
+      });
+      if (
+        jutsuAdjustmentRequestRef.current !== snapshot ||
+        currentTargetRef.current.userId !== snapshot.userId ||
+        currentTargetRef.current.username !== snapshot.username
+      ) {
+        return;
+      }
+
+      const adjustment = result.adjustment;
+      const responseMatches =
+        result.success &&
+        result.requestId === snapshot.requestId &&
+        adjustment?.userId === snapshot.userId &&
+        adjustment.username === snapshot.username &&
+        adjustment.userJutsuId === snapshot.userJutsuId &&
+        adjustment.jutsuId === snapshot.jutsuId &&
+        adjustment.jutsuName === snapshot.jutsuName &&
+        adjustment.previousLevel === snapshot.previousLevel &&
+        adjustment.newLevel === snapshot.newLevel &&
+        adjustment.previousReskinId === snapshot.previousReskinId &&
+        adjustment.previousReskinName === snapshot.previousReskinName &&
+        adjustment.newReskinId === snapshot.newReskinId &&
+        adjustment.newReskinName === snapshot.newReskinName;
+
+      if (!responseMatches) {
+        showMutationToast(
+          result.success
+            ? {
+                success: false,
+                message:
+                  "The response did not match the confirmed jutsu adjustment. Refresh before trying again.",
+              }
+            : result,
+        );
+        return;
+      }
+
+      showMutationToast(result);
+      // Overlay the exact committed row before refreshing. A stale query cannot put the old
+      // level/reskin back into the form or count badge while the authoritative cache catches up.
+      setCommittedJutsuAdjustments((current) => {
+        const next = new Map(current);
+        next.set(snapshot.userJutsuId, {
+          level: snapshot.newLevel,
+          reskinId: snapshot.newReskinId,
+          reskinName: snapshot.newReskinName,
+        });
+        return next;
+      });
+      setConfirmedJutsuAdjustment(null);
+      void Promise.allSettled([
+        utils.profile.getPublicUser.invalidate({ userId: snapshot.userId }),
+        utils.jutsu.getPublicUserJutsus.invalidate({ userId: snapshot.userId }),
+      ]);
+    } catch (error) {
+      // Ordinary tRPC errors are shown by the global handler. Only suppressed transient errors
+      // need a local retry message; the open snapshot keeps its request ID for safe replay.
+      if (error instanceof Error && isRetryableTrpcError(error)) {
+        showMutationToast({
+          success: false,
+          message:
+            "Could not confirm the jutsu adjustment. Check your connection and retry the exact change.",
+        });
+      }
+    } finally {
+      if (jutsuAdjustmentRequestRef.current === snapshot) {
+        jutsuAdjustmentRequestRef.current = null;
+        setIsJutsuAdjustmentPending(false);
+      }
+    }
+  };
+
+  const reviewItemAdjustment = itemLevelForm.handleSubmit((data) => {
+    if (
+      !selectedUserItem ||
+      isItemAdjustmentPending ||
+      itemAdjustmentRequestRef.current
+    ) {
+      return;
+    }
+    if (data.level === selectedUserItem.level) {
+      itemLevelForm.setError("level", {
+        message: "Change the level before reviewing",
+      });
+      return;
+    }
+
+    setConfirmedItemAdjustment({
+      userId,
+      username: profile.username,
+      isAi: targetIsAi,
+      userItemId: selectedUserItem.id,
+      itemId: selectedUserItem.itemId,
+      itemName: selectedUserItem.item.name,
+      previousLevel: selectedUserItem.level,
+      newLevel: data.level,
+      quantity: selectedUserItem.quantity,
+      experience: selectedUserItem.experience,
+      equipped: selectedUserItem.equipped,
+      durability: selectedUserItem.durability,
+      dropChancePerc: selectedUserItem.dropChancePerc,
+      storedAtHome: selectedUserItem.storedAtHome,
+      isInAuction: selectedUserItem.isInAuction,
+      activeVariantId: selectedUserItem.activeVariantId,
+      craftingFinishedAt: selectedUserItem.craftingFinishedAt
+        ? new Date(selectedUserItem.craftingFinishedAt)
+        : null,
+      imbuements: selectedUserItem.imbuements
+        .map((imbuement) => ({
+          id: imbuement.id,
+          itemId: imbuement.imbuementItemId,
+          itemName: imbuement.item.name,
+          craftingFinishedAt: new Date(imbuement.craftingFinishedAt),
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+      requestId: crypto.randomUUID(),
+    });
+  });
+
+  const confirmItemAdjustment = async (snapshot: ItemAdjustmentSnapshot) => {
+    // Claim the exact target, row and absolute value synchronously. React's mutation state is
+    // not visible until the next render, so this closes the double-click/Enter race.
+    if (itemAdjustmentRequestRef.current) return;
+    itemAdjustmentRequestRef.current = snapshot;
+    setIsItemAdjustmentPending(true);
+    try {
+      const result = await adjustItemLevel.mutateAsync({
+        userId: snapshot.userId,
+        expectedUsername: snapshot.username,
+        expectedIsAi: snapshot.isAi,
+        userItemId: snapshot.userItemId,
+        itemId: snapshot.itemId,
+        expectedItemName: snapshot.itemName,
+        expectedLevel: snapshot.previousLevel,
+        level: snapshot.newLevel,
+        expectedQuantity: snapshot.quantity,
+        expectedExperience: snapshot.experience,
+        expectedEquipped: snapshot.equipped,
+        expectedDurability: snapshot.durability,
+        expectedDropChancePerc: snapshot.dropChancePerc,
+        expectedStoredAtHome: snapshot.storedAtHome,
+        expectedIsInAuction: snapshot.isInAuction,
+        expectedActiveVariantId: snapshot.activeVariantId,
+        expectedCraftingFinishedAt: snapshot.craftingFinishedAt,
+        expectedImbuements: snapshot.imbuements.map((row) => ({
+          id: row.id,
+          itemId: row.itemId,
+          craftingFinishedAt: row.craftingFinishedAt,
+        })),
+        requestId: snapshot.requestId,
+      });
+      if (
+        itemAdjustmentRequestRef.current !== snapshot ||
+        currentTargetRef.current.userId !== snapshot.userId ||
+        currentTargetRef.current.username !== snapshot.username ||
+        currentTargetRef.current.isAi !== snapshot.isAi
+      ) {
+        return;
+      }
+
+      const adjustment = result.adjustment;
+      const responseMatches =
+        result.success &&
+        result.requestId === snapshot.requestId &&
+        adjustment?.userId === snapshot.userId &&
+        adjustment.username === snapshot.username &&
+        adjustment.isAi === snapshot.isAi &&
+        adjustment.userItemId === snapshot.userItemId &&
+        adjustment.itemId === snapshot.itemId &&
+        adjustment.itemName === snapshot.itemName &&
+        adjustment.previousLevel === snapshot.previousLevel &&
+        adjustment.newLevel === snapshot.newLevel &&
+        adjustment.quantity === snapshot.quantity &&
+        adjustment.experience === snapshot.experience &&
+        adjustment.equipped === snapshot.equipped &&
+        adjustment.durability === snapshot.durability &&
+        adjustment.dropChancePerc === snapshot.dropChancePerc &&
+        adjustment.storedAtHome === snapshot.storedAtHome &&
+        adjustment.isInAuction === snapshot.isInAuction &&
+        adjustment.activeVariantId === snapshot.activeVariantId &&
+        (adjustment.craftingFinishedAt?.getTime() ?? null) ===
+          (snapshot.craftingFinishedAt?.getTime() ?? null) &&
+        adjustment.imbuements.length === snapshot.imbuements.length &&
+        adjustment.imbuements.every((row, index) => {
+          const expected = snapshot.imbuements[index];
+          if (!expected) return false;
+          return (
+            row.id === expected.id &&
+            row.itemId === expected.itemId &&
+            row.craftingFinishedAt.getTime() === expected.craftingFinishedAt.getTime()
+          );
+        });
+
+      if (!responseMatches) {
+        showMutationToast(
+          result.success
+            ? {
+                success: false,
+                message:
+                  "The response did not match the confirmed item adjustment. Refresh before trying again.",
+              }
+            : result,
+        );
+        return;
+      }
+
+      showMutationToast(result);
+      // Publish the authoritative level immediately. A stale refetch cannot put the old level
+      // back on the tile/form while the item query catches up.
+      setCommittedItemLevels((current) => {
+        const next = new Map(current);
+        next.set(snapshot.userItemId, snapshot.newLevel);
+        return next;
+      });
+      setConfirmedItemAdjustment(null);
+      void utils.item.getPublicUserItems.invalidate({ userId: snapshot.userId });
+    } catch (error) {
+      // Ordinary tRPC errors are shown globally. Suppressed transient failures get one local,
+      // actionable message and retain this request ID for an idempotent replay.
+      if (error instanceof Error && isRetryableTrpcError(error)) {
+        showMutationToast({
+          success: false,
+          message:
+            "Could not confirm the item adjustment. Check your connection and retry the exact change.",
+        });
+      }
+    } finally {
+      if (itemAdjustmentRequestRef.current === snapshot) {
+        itemAdjustmentRequestRef.current = null;
+        setIsItemAdjustmentPending(false);
+      }
+    }
+  };
 
   useEffect(() => {
     if (selectedUserItem) {
@@ -1538,163 +3027,401 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
       </TabsContent>
       {hasJutsus && (
         <TabsContent value="jutsus">
-          <div className="mt-5">
-            <ActionSelector
-              items={allJutsus}
-              counts={userJutsuCounts}
-              selectedId={jutsu?.id}
-              labelSingles={true}
-              emptyText="No jutsus assigned to this user"
-              gridClassNameOverwrite="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12"
-              onClick={(id) => {
-                if (id === jutsu?.id) {
-                  setJutsu(undefined);
-                } else {
-                  setJutsu(allJutsus?.find((jutsu) => jutsu.id === id));
-                }
-              }}
-              showBgColor={false}
-              showLabels={true}
-            />
-          </div>
-          {jutsu && (
-            <div className="mt-4 flex items-center justify-center gap-4">
-              <div className="flex items-center gap-2">
-                <Form {...jutsuLevelForm}>
-                  <form
-                    onSubmit={jutsuLevelForm.handleSubmit((data) => {
-                      if (jutsu) {
-                        adjustJutsuLevel.mutate({
-                          userId: userId,
-                          jutsuId: jutsu.id,
-                          level: data.level,
-                          reskinId: data.reskinId === "none" ? null : data.reskinId,
-                        });
-                      }
-                    })}
-                    className="flex w-full items-center justify-between gap-2"
-                  >
-                    <div className="flex items-end gap-2">
-                      <FormField
-                        control={jutsuLevelForm.control}
-                        name="level"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Level</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                className="w-20"
-                                min={0}
-                                max={25}
-                                {...field}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  field.onChange(value ? parseInt(value, 10) : 0);
-                                }}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      {perms.canEditJutsus && (
+          <div
+            className={isJutsuAdjustmentPending ? "pointer-events-none opacity-60" : ""}
+            aria-busy={isJutsuAdjustmentPending}
+          >
+            <div className="mt-5">
+              <ActionSelector
+                items={allJutsus}
+                counts={userJutsuCounts}
+                selectedId={jutsu?.id}
+                labelSingles={true}
+                emptyText="No jutsus assigned to this user"
+                gridClassNameOverwrite="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12"
+                onClick={(id) => {
+                  if (isJutsuAdjustmentPending || jutsuAdjustmentRequestRef.current)
+                    return;
+                  if (id === jutsu?.id) {
+                    setJutsu(undefined);
+                  } else {
+                    setJutsu(allJutsus?.find((jutsu) => jutsu.id === id));
+                  }
+                }}
+                showBgColor={false}
+                showLabels={true}
+              />
+            </div>
+            {jutsu && (
+              <div className="mt-4 flex items-center justify-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Form {...jutsuLevelForm}>
+                    <form
+                      onSubmit={reviewJutsuAdjustment}
+                      className="flex w-full items-center justify-between gap-2"
+                    >
+                      <fieldset
+                        disabled={isJutsuAdjustmentPending}
+                        className="flex items-end gap-2"
+                      >
                         <FormField
                           control={jutsuLevelForm.control}
-                          name="reskinId"
+                          name="level"
+                          rules={{
+                            required: "A jutsu level is required",
+                            min: { value: 0, message: "Level cannot be below 0" },
+                            max: { value: 25, message: "Level cannot exceed 25" },
+                            validate: (value) =>
+                              Number.isInteger(value) || "Level must be a whole number",
+                          }}
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Reskin</FormLabel>
-                              <Select
-                                value={field.value}
-                                onValueChange={field.onChange}
-                              >
-                                <SelectTrigger className="w-56">
-                                  <SelectValue placeholder="None" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">None</SelectItem>
-                                  {jutsuReskins?.map((r) => (
-                                    <SelectItem key={r.id} value={r.id}>
-                                      {r.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <FormLabel>Level</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  className="w-20"
+                                  min={0}
+                                  max={25}
+                                  step={1}
+                                  disabled={isJutsuAdjustmentPending}
+                                  {...field}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    field.onChange(value ? Number(value) : 0);
+                                  }}
+                                />
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                      )}
-                      <Button type="submit">Update</Button>
-                    </div>
-                  </form>
-                </Form>
+                        {perms.canEditJutsus && (
+                          <FormField
+                            control={jutsuLevelForm.control}
+                            name="reskinId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Reskin</FormLabel>
+                                <Select
+                                  value={field.value}
+                                  onValueChange={field.onChange}
+                                  disabled={isJutsuAdjustmentPending}
+                                >
+                                  <SelectTrigger className="w-56">
+                                    <SelectValue placeholder="None" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">None</SelectItem>
+                                    {jutsuReskins?.map((r) => (
+                                      <SelectItem key={r.id} value={r.id}>
+                                        {r.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+                        <Button type="submit" disabled={isJutsuAdjustmentPending}>
+                          Review adjustment
+                        </Button>
+                      </fieldset>
+                    </form>
+                  </Form>
+                </div>
               </div>
-            </div>
+            )}
+          </div>
+
+          {confirmedJutsuAdjustment && (
+            <Modal
+              id={`adjust-user-jutsu-${confirmedJutsuAdjustment.userJutsuId}`}
+              title="Review jutsu adjustment"
+              isOpen
+              setIsOpen={(open) => {
+                if (!open && !isJutsuAdjustmentPending) {
+                  setConfirmedJutsuAdjustment(null);
+                }
+              }}
+              proceed_label="Adjust jutsu"
+              proceed_loading_label="Adjusting jutsu…"
+              isLoading={isJutsuAdjustmentPending}
+              keepOpenOnAccept
+              onAccept={(event) => {
+                event.preventDefault();
+                void confirmJutsuAdjustment(confirmedJutsuAdjustment);
+              }}
+            >
+              <div className="space-y-3" aria-busy={isJutsuAdjustmentPending}>
+                <div className="rounded-md border border-blue-500/40 bg-blue-500/10 p-3">
+                  <p className="font-semibold">
+                    {confirmedJutsuAdjustment.jutsuName} for{" "}
+                    {confirmedJutsuAdjustment.username}
+                    {confirmedJutsuAdjustment.isAi ? " (AI)" : ""}
+                  </p>
+                  <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                    <dt className="font-medium">Target user ID</dt>
+                    <dd>
+                      <code className="break-all">
+                        {confirmedJutsuAdjustment.userId}
+                      </code>
+                    </dd>
+                    <dt className="font-medium">Owned row ID</dt>
+                    <dd>
+                      <code className="break-all">
+                        {confirmedJutsuAdjustment.userJutsuId}
+                      </code>
+                    </dd>
+                    <dt className="font-medium">Jutsu ID</dt>
+                    <dd>
+                      <code className="break-all">
+                        {confirmedJutsuAdjustment.jutsuId}
+                      </code>
+                    </dd>
+                    <dt className="font-medium">Level</dt>
+                    <dd>
+                      {confirmedJutsuAdjustment.previousLevel} →{" "}
+                      {confirmedJutsuAdjustment.newLevel}
+                    </dd>
+                    <dt className="font-medium">Reskin</dt>
+                    <dd>
+                      {confirmedJutsuAdjustment.previousReskinName ?? "None"} →{" "}
+                      {confirmedJutsuAdjustment.newReskinName ?? "None"}
+                    </dd>
+                  </dl>
+                </div>
+                <p className="text-sm">
+                  This sets the stored level and reskin to the values above. It does not
+                  add a relative level increment.
+                </p>
+                <p className="text-muted-foreground text-sm">
+                  Equipped/loadout assignments, experience, and training progress are
+                  not changed.
+                </p>
+                {confirmedJutsuAdjustment.finishTraining &&
+                  confirmedJutsuAdjustment.finishTraining > now && (
+                    <p className="rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm">
+                      This jutsu is training until{" "}
+                      {confirmedJutsuAdjustment.finishTraining.toLocaleString()}. The
+                      adjustment will not finish or cancel that training.
+                    </p>
+                  )}
+                {confirmedJutsuAdjustment.equipped && (
+                  <p className="text-muted-foreground text-sm">
+                    This jutsu is currently equipped; its equipped state remains
+                    unchanged.
+                  </p>
+                )}
+              </div>
+            </Modal>
           )}
         </TabsContent>
       )}
       {hasItems && (
         <TabsContent value="items">
-          <div className="mt-5">
-            <ActionSelector
-              items={allOwnedItems}
-              levels={userItemLevels}
-              selectedId={selectedUserItemId}
-              emptyText="No items assigned to this user"
-              gridClassNameOverwrite="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12"
-              onClick={(id) => {
-                setSelectedUserItemId(id === selectedUserItemId ? undefined : id);
-              }}
-              showBgColor={false}
-              showLabels={true}
-            />
-          </div>
-          {selectedUserItem && (
-            <div className="mt-4 flex items-center justify-center gap-4">
-              <div className="flex items-center gap-2">
-                <Form {...itemLevelForm}>
-                  <form
-                    onSubmit={itemLevelForm.handleSubmit((data) => {
-                      adjustItemLevel.mutate({
-                        userId,
-                        userItemId: selectedUserItem.id,
-                        level: data.level,
-                      });
-                    })}
-                    className="flex w-full items-center justify-between gap-2"
-                  >
-                    <div className="flex items-end gap-2">
-                      <FormField
-                        control={itemLevelForm.control}
-                        name="level"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Level</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                className="w-20"
-                                min={1}
-                                max={ITEM_LEVEL_CAP}
-                                {...field}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  field.onChange(value ? parseInt(value, 10) : 1);
-                                }}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <Button type="submit">Update</Button>
-                    </div>
-                  </form>
-                </Form>
-              </div>
+          <div
+            className={isItemAdjustmentPending ? "pointer-events-none opacity-60" : ""}
+            aria-busy={isItemAdjustmentPending}
+          >
+            <div className="mt-5">
+              <ActionSelector
+                items={allOwnedItems}
+                levels={userItemLevels}
+                selectedId={selectedUserItemId}
+                emptyText="No items assigned to this user"
+                gridClassNameOverwrite="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-12"
+                onClick={(id) => {
+                  if (isItemAdjustmentPending || itemAdjustmentRequestRef.current)
+                    return;
+                  setSelectedUserItemId(id === selectedUserItemId ? undefined : id);
+                }}
+                showBgColor={false}
+                showLabels={true}
+              />
             </div>
+            {selectedUserItem && (
+              <div className="mt-4 flex items-center justify-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Form {...itemLevelForm}>
+                    <form
+                      onSubmit={reviewItemAdjustment}
+                      className="flex w-full items-center justify-between gap-2"
+                    >
+                      <fieldset
+                        disabled={isItemAdjustmentPending}
+                        className="flex items-end gap-2"
+                      >
+                        <FormField
+                          control={itemLevelForm.control}
+                          name="level"
+                          rules={{
+                            required: "An item level is required",
+                            min: { value: 1, message: "Level cannot be below 1" },
+                            max: {
+                              value: ITEM_LEVEL_CAP,
+                              message: `Level cannot exceed ${ITEM_LEVEL_CAP}`,
+                            },
+                            validate: (value) =>
+                              Number.isInteger(value) || "Level must be a whole number",
+                          }}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Level</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  className="w-20"
+                                  min={1}
+                                  max={ITEM_LEVEL_CAP}
+                                  step={1}
+                                  disabled={isItemAdjustmentPending}
+                                  {...field}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    field.onChange(value ? Number(value) : 1);
+                                  }}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button type="submit" disabled={isItemAdjustmentPending}>
+                          Review adjustment
+                        </Button>
+                      </fieldset>
+                    </form>
+                  </Form>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {confirmedItemAdjustment && (
+            <Modal
+              id={`adjust-user-item-${confirmedItemAdjustment.userItemId}`}
+              title="Review item adjustment"
+              isOpen
+              setIsOpen={(open) => {
+                if (!open && !isItemAdjustmentPending) {
+                  setConfirmedItemAdjustment(null);
+                }
+              }}
+              proceed_label="Adjust item"
+              proceed_loading_label="Adjusting item…"
+              isLoading={isItemAdjustmentPending}
+              keepOpenOnAccept
+              onAccept={(event) => {
+                event.preventDefault();
+                void confirmItemAdjustment(confirmedItemAdjustment);
+              }}
+            >
+              <div className="space-y-3" aria-busy={isItemAdjustmentPending}>
+                <p className="sr-only" aria-live="polite">
+                  {isItemAdjustmentPending ? "Adjusting item…" : ""}
+                </p>
+                <div className="rounded-md border border-blue-500/40 bg-blue-500/10 p-3">
+                  <p className="font-semibold">
+                    {confirmedItemAdjustment.itemName} for{" "}
+                    {confirmedItemAdjustment.username}
+                    {confirmedItemAdjustment.isAi ? " (AI)" : ""}
+                  </p>
+                  <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                    <dt className="font-medium">Target user ID</dt>
+                    <dd>
+                      <code className="break-all">
+                        {confirmedItemAdjustment.userId}
+                      </code>
+                    </dd>
+                    <dt className="font-medium">Owned row ID</dt>
+                    <dd>
+                      <code className="break-all">
+                        {confirmedItemAdjustment.userItemId}
+                      </code>
+                    </dd>
+                    <dt className="font-medium">Base item ID</dt>
+                    <dd>
+                      <code className="break-all">
+                        {confirmedItemAdjustment.itemId}
+                      </code>
+                    </dd>
+                    <dt className="font-medium">Level</dt>
+                    <dd>
+                      {confirmedItemAdjustment.previousLevel} →{" "}
+                      {confirmedItemAdjustment.newLevel}
+                    </dd>
+                    <dt className="font-medium">Quantity</dt>
+                    <dd>{confirmedItemAdjustment.quantity}</dd>
+                    <dt className="font-medium">Experience</dt>
+                    <dd>{confirmedItemAdjustment.experience}</dd>
+                    <dt className="font-medium">Equipped</dt>
+                    <dd>{confirmedItemAdjustment.equipped}</dd>
+                    <dt className="font-medium">Durability</dt>
+                    <dd>{confirmedItemAdjustment.durability}</dd>
+                    <dt className="font-medium">Drop chance</dt>
+                    <dd>{confirmedItemAdjustment.dropChancePerc}%</dd>
+                    <dt className="font-medium">Variant</dt>
+                    <dd>{confirmedItemAdjustment.activeVariantId ?? "None"}</dd>
+                    <dt className="font-medium">Storage</dt>
+                    <dd>
+                      {confirmedItemAdjustment.storedAtHome ? "At home" : "Carried"}
+                    </dd>
+                  </dl>
+                </div>
+                <p className="text-sm">
+                  This sets the level on this exact owned row to the value above. It is
+                  an absolute value, not a relative increment.
+                </p>
+                <p className="text-muted-foreground text-sm">
+                  Quantity, experience, equipment/loadout assignment, durability, drop
+                  chance, storage, variant, crafting state, auction state, and
+                  imbuements are preserved.
+                </p>
+                {confirmedItemAdjustment.quantity > 1 && (
+                  <p className="rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm">
+                    This row is a stack of {confirmedItemAdjustment.quantity}. The level
+                    applies to the entire owned stack row.
+                  </p>
+                )}
+                {confirmedItemAdjustment.equipped !== "NONE" && (
+                  <p className="rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm">
+                    This item is currently equipped in{" "}
+                    {confirmedItemAdjustment.equipped}; its assignment is unchanged.
+                  </p>
+                )}
+                {confirmedItemAdjustment.isInAuction && (
+                  <p className="rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm">
+                    This exact row is currently listed for sale. The listing remains
+                    active and will reflect the adjusted level.
+                  </p>
+                )}
+                {confirmedItemAdjustment.craftingFinishedAt && (
+                  <p className="rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm">
+                    This item has crafting state ending{" "}
+                    {confirmedItemAdjustment.craftingFinishedAt.toLocaleString()}; the
+                    timer is unchanged.
+                  </p>
+                )}
+                {confirmedItemAdjustment.imbuements.length > 0 && (
+                  <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-sm">
+                    <p>
+                      Imbuements remain unchanged (
+                      {confirmedItemAdjustment.imbuements.length}):
+                    </p>
+                    <ul className="list-disc pl-5">
+                      {confirmedItemAdjustment.imbuements.map((imbuement) => (
+                        <li key={imbuement.id}>
+                          {imbuement.itemName} ({imbuement.id})
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </Modal>
           )}
         </TabsContent>
       )}
@@ -1740,22 +3467,19 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({ userId, profile }
                         </p>
                       )}
                     </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => {
-                        if (
-                          confirm("Are you sure you want to delete this quest record?")
-                        ) {
-                          deleteUserQuest.mutate({
-                            userId: userId,
-                            questId: userQuest.quest.id,
-                          });
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <DeleteUserQuestControl
+                      userId={userId}
+                      username={profile.username}
+                      userQuest={userQuest}
+                      onPendingChange={onUserQuestDeletionPendingChange}
+                      onDeleted={(userQuestId) =>
+                        setDeletedUserQuestIds((current) => {
+                          const next = new Set(current);
+                          next.add(userQuestId);
+                          return next;
+                        })
+                      }
+                    />
                   </div>
                 ))}
               </div>
@@ -1782,48 +3506,149 @@ const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
   username,
   updateUserIdMutation,
 }) => {
-  // Create form with zod schema
+  const router = useRouter();
+  const utils = api.useUtils();
+  const requestRef = useRef<{
+    userId: string;
+    username: string;
+    newUserId: string;
+  } | null>(null);
+  const [isPending, setIsPending] = useState(false);
+  const [modalVersion, setModalVersion] = useState(0);
+  const [committedSourceId, setCommittedSourceId] = useState<string | null>(null);
+
   const userIdForm = useForm<{ newUserId: string }>({
+    mode: "onChange",
     defaultValues: {
       newUserId: userId,
     },
   });
+  const requestedId = userIdForm.watch("newUserId").trim();
 
-  // Handle form submission
-  const handleUpdateUserId = userIdForm.handleSubmit((data) => {
-    updateUserIdMutation.mutate({
-      userId: userId,
-      newUserId: data.newUserId,
-    });
+  const handleUpdateUserId = userIdForm.handleSubmit(async (data) => {
+    if (requestRef.current || committedSourceId === userId) return;
+    const request = {
+      userId,
+      username,
+      newUserId: data.newUserId.trim(),
+    };
+
+    // Mutation state reaches React after this event. Claim the exact old/new pair synchronously
+    // so click + Enter cannot launch two identity migrations in the same tick.
+    requestRef.current = request;
+    setIsPending(true);
+    try {
+      const result = await updateUserIdMutation.mutateAsync({
+        userId: request.userId,
+        expectedUsername: request.username,
+        newUserId: request.newUserId,
+      });
+      if (requestRef.current !== request) return;
+
+      showMutationToast(result);
+      if (
+        !result.success ||
+        result.oldUserId !== request.userId ||
+        result.newUserId !== request.newUserId ||
+        result.username !== request.username
+      ) {
+        return;
+      }
+
+      // The old identity no longer exists. Suppress this stale action and close the confirmation
+      // before cache/network work; every later move requires a fresh profile and confirmation.
+      setCommittedSourceId(request.userId);
+      setModalVersion((version) => version + 1);
+      void Promise.allSettled([
+        utils.profile.getPublicUser.invalidate({ userId: request.userId }),
+        utils.profile.getPublicUser.invalidate({ userId: request.newUserId }),
+        utils.profile.getPublicUsers.invalidate(),
+        utils.profile.getUser.invalidate(),
+      ]);
+      router.replace(`/userid/${encodeURIComponent(request.newUserId)}`);
+    } catch (error) {
+      // Non-transient tRPC errors are reported by the global mutation handler. Transient errors
+      // are locally actionable and retain the exact old/new pair in the open form for retry.
+      if (error instanceof Error && isRetryableTrpcError(error)) {
+        showMutationToast({
+          success: false,
+          message: "Could not update the user ID. Check your connection and try again.",
+        });
+      }
+    } finally {
+      if (requestRef.current === request) {
+        requestRef.current = null;
+        setIsPending(false);
+      }
+    }
   });
+
+  if (committedSourceId === userId) return null;
 
   return (
     <Confirm
+      key={modalVersion}
+      id="update-user-id"
       title="Update User ID"
-      proceed_label="Update"
+      proceed_label="Update user ID"
+      proceed_loading_label="Updating user ID…"
       button={<IdCard className="h-6 w-6 cursor-pointer hover:text-orange-500" />}
       onAccept={handleUpdateUserId}
-      isValid={userIdForm.formState.isValid}
+      isValid={
+        userIdForm.formState.isValid && requestedId.length > 0 && requestedId !== userId
+      }
+      isLoading={isPending}
+      keepOpenOnAccept
+      disabled={isPending}
+      confirmClassName="bg-red-600 text-white hover:bg-red-700"
     >
       <Form {...userIdForm}>
-        <form className="space-y-4">
-          <p>
-            This will update the user ID for {username}. This action cannot be undone
-            and may affect database relationships.
-          </p>
+        <form className="space-y-4" aria-busy={isPending}>
+          <div className="space-y-2 rounded-md border border-red-500/40 bg-red-500/10 p-3">
+            <p className="font-semibold text-red-700 dark:text-red-300">
+              This changes the application identity for {username}.
+            </p>
+            <p className="text-sm">
+              Current user ID: <code className="break-all">{userId}</code>
+            </p>
+            <p className="text-muted-foreground text-sm">
+              All application records will move to the new ID. The old Clerk account
+              will stop opening this character, and the server cannot verify that the
+              new Clerk account exists or belongs to the intended person. This action
+              cannot be undone from this screen.
+            </p>
+          </div>
           <FormField
             control={userIdForm.control}
             name="newUserId"
+            rules={{
+              required: "A new user ID is required",
+              maxLength: { value: 191, message: "User ID is too long" },
+              pattern: {
+                value: /^[A-Za-z0-9_-]+$/,
+                message: "Use only letters, numbers, underscores, and hyphens",
+              },
+              validate: (value) =>
+                value.trim() !== userId || "The new user ID must be different",
+            }}
             render={({ field }) => (
               <FormItem>
-                <FormLabel>New User ID</FormLabel>
+                <FormLabel>New Clerk user ID</FormLabel>
                 <FormControl>
-                  <Input {...field} />
+                  <Input
+                    {...field}
+                    autoComplete="off"
+                    disabled={isPending}
+                    aria-describedby="update-user-id-consequence"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
+          <p id="update-user-id-consequence" className="text-muted-foreground text-xs">
+            Confirm that the destination ID was copied from the intended Clerk account.
+          </p>
         </form>
       </Form>
     </Confirm>
@@ -2282,101 +4107,532 @@ interface BadgesTabProps {
   currentBadges: (UserBadge & { badge: Badge })[];
 }
 
+type BadgeAssignmentSnapshot = {
+  requestId: string;
+  userId: string;
+  username: string;
+  badgeId: string;
+  badgeName: string;
+  badgeImage: string;
+};
+
+type BadgeRemovalSnapshot = {
+  requestId: string;
+  userId: string;
+  username: string;
+  badgeId: string;
+  badgeName: string;
+  badgeImage: string;
+  assignmentCreatedAt: Date;
+  assignmentKey: string;
+};
+
+const badgeAssignmentKey = (badgeId: string, createdAt: Date) =>
+  `${badgeId}:${createdAt.toISOString()}`;
+
 const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }) => {
   const { data: currentUser } = useUserData();
   const canModify = currentUser && canModifyUserBadges(currentUser.role);
+  const canAssign =
+    canModify && (!canOnlyEditSelf(currentUser.role) || currentUser.userId === userId);
 
   // Only fetch the list of all badges when the add-badge popover is opened
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [assignment, setAssignment] = useState<BadgeAssignmentSnapshot | null>(null);
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
+  const [assignmentPending, setAssignmentPending] = useState(false);
+  const [assignmentNeedsRetry, setAssignmentNeedsRetry] = useState(false);
+  const [removal, setRemoval] = useState<BadgeRemovalSnapshot | null>(null);
+  const [removalOpen, setRemovalOpen] = useState(false);
+  const [removalPending, setRemovalPending] = useState(false);
+  const [removalNeedsRetry, setRemovalNeedsRetry] = useState(false);
+  const [removedAssignments, setRemovedAssignments] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [optimisticBadges, setOptimisticBadges] = useState<
+    Map<string, Pick<Badge, "id" | "name" | "image">>
+  >(() => new Map());
+  const assignmentRef = useRef<BadgeAssignmentSnapshot | null>(null);
+  const removalRef = useRef<BadgeRemovalSnapshot | null>(null);
+  const profileIdentityRef = useRef({ userId, username });
+  profileIdentityRef.current = { userId, username };
+
   const { data: allBadges } = api.badge.getAllNames.useQuery(undefined, {
     enabled: popoverOpen,
   });
 
   const utils = api.useUtils();
+  const insertUserBadge = api.staff.insertUserBadge.useMutation();
 
-  const insertUserBadge = api.staff.insertUserBadge.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await Promise.all([
-          utils.profile.getPublicUser.invalidate(),
-          utils.logs.getContentChanges.invalidate(),
-        ]);
-      }
-    },
-  });
+  const removeUserBadge = api.staff.removeUserBadge.useMutation();
 
-  const removeUserBadge = api.staff.removeUserBadge.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await Promise.all([
-          utils.profile.getPublicUser.invalidate(),
-          utils.logs.getContentChanges.invalidate(),
-        ]);
+  // Once an authoritative profile response contains an optimistic assignment, it no longer
+  // needs a client overlay. Other optimistic badges remain independent.
+  useEffect(() => {
+    const currentIds = new Set(currentBadges.map((entry) => entry.badgeId));
+    setOptimisticBadges((previous) => {
+      const next = new Map(previous);
+      for (const badgeId of currentIds) next.delete(badgeId);
+      return next.size === previous.size ? previous : next;
+    });
+  }, [currentBadges]);
+
+  // Keep a successful removal hidden while an invalidation can still return the old profile.
+  // The tombstone is assignment-specific, so a newly re-awarded copy remains visible.
+  useEffect(() => {
+    const currentKeys = new Set(
+      currentBadges.map((entry) => badgeAssignmentKey(entry.badgeId, entry.createdAt)),
+    );
+    setRemovedAssignments((previous) => {
+      const next = new Set([...previous].filter((key) => currentKeys.has(key)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [currentBadges]);
+
+  useEffect(() => {
+    // A tab instance can be reused while navigating between profiles. Never let an unsubmitted
+    // choice from the old profile become an assignment to the new one.
+    if (!assignmentRef.current) {
+      setAssignment(null);
+      setAssignmentOpen(false);
+      setAssignmentNeedsRetry(false);
+    }
+    setPopoverOpen(false);
+    setOptimisticBadges(new Map());
+    if (!removalRef.current) {
+      setRemoval(null);
+      setRemovalOpen(false);
+      setRemovalNeedsRetry(false);
+    }
+    setRemovedAssignments(new Set());
+  }, [userId, username]);
+
+  const openBadgeAssignment = (badgeId: string) => {
+    if (
+      assignmentPending ||
+      assignmentRef.current ||
+      removalPending ||
+      removalRef.current
+    )
+      return;
+    const selectedBadge = allBadges?.find((entry) => entry.id === badgeId);
+    if (!selectedBadge) return;
+
+    setAssignment({
+      requestId: crypto.randomUUID(),
+      userId,
+      username,
+      badgeId: selectedBadge.id,
+      badgeName: selectedBadge.name,
+      badgeImage: selectedBadge.image,
+    });
+    setAssignmentNeedsRetry(false);
+    setPopoverOpen(false);
+    setAssignmentOpen(true);
+  };
+
+  const closeBadgeAssignment = () => {
+    if (assignmentPending || assignmentRef.current) return;
+    setAssignmentOpen(false);
+    setAssignment(null);
+    setAssignmentNeedsRetry(false);
+  };
+
+  const confirmBadgeAssignment = async () => {
+    const target = assignment;
+    // Mutation state updates on the next render; this ref closes the click/Enter same-tick gap.
+    if (!target || assignmentRef.current || assignmentPending) return;
+
+    assignmentRef.current = target;
+    setAssignmentPending(true);
+    try {
+      const result = await insertUserBadge.mutateAsync({
+        requestId: target.requestId,
+        userId: target.userId,
+        expectedUsername: target.username,
+        badgeId: target.badgeId,
+        expectedBadgeName: target.badgeName,
+      });
+      if (assignmentRef.current !== target) return;
+
+      const responseMatches =
+        result.success &&
+        result.requestId === target.requestId &&
+        result.userId === target.userId &&
+        result.badgeId === target.badgeId;
+      if (!responseMatches) {
+        if (result.success) {
+          showMutationToast({
+            success: false,
+            message:
+              "The server returned an unexpected badge assignment. Refresh and check the profile.",
+          });
+        } else {
+          showMutationToast(result);
+        }
+        return;
       }
-    },
-  });
+
+      showMutationToast(result);
+      if (
+        profileIdentityRef.current.userId === target.userId &&
+        profileIdentityRef.current.username === target.username
+      ) {
+        setOptimisticBadges((previous) => {
+          const next = new Map(previous);
+          next.set(target.badgeId, {
+            id: target.badgeId,
+            name: target.badgeName,
+            image: target.badgeImage,
+          });
+          return next;
+        });
+      }
+      setAssignmentOpen(false);
+      setAssignment(null);
+      setAssignmentNeedsRetry(false);
+      void Promise.allSettled([
+        utils.profile.getPublicUser.invalidate({ userId: target.userId }),
+        utils.logs.getContentChanges.invalidate(),
+      ]);
+    } catch (error) {
+      // Every thrown response keeps the immutable request ID: even an internal error can arrive
+      // after a commit. Retryable failures are suppressed globally, so show their one actionable
+      // message here; non-retryable errors keep the retry control but use the global toast.
+      if (assignmentRef.current === target) {
+        setAssignmentNeedsRetry(true);
+        if (error instanceof Error && isRetryableTrpcError(error)) {
+          showMutationToast({
+            success: false,
+            message:
+              "Could not confirm this badge assignment. Check your connection and retry the exact assignment.",
+          });
+        }
+      }
+    } finally {
+      if (assignmentRef.current === target) {
+        assignmentRef.current = null;
+        setAssignmentPending(false);
+      }
+    }
+  };
+
+  const openBadgeRemoval = (entry: UserBadge & { badge: Badge }) => {
+    if (
+      removalPending ||
+      removalRef.current ||
+      assignmentPending ||
+      assignmentRef.current
+    )
+      return;
+
+    setRemoval({
+      requestId: crypto.randomUUID(),
+      userId,
+      username,
+      badgeId: entry.badgeId,
+      badgeName: entry.badge.name,
+      badgeImage: entry.badge.image,
+      assignmentCreatedAt: entry.createdAt,
+      assignmentKey: badgeAssignmentKey(entry.badgeId, entry.createdAt),
+    });
+    setRemovalNeedsRetry(false);
+    setPopoverOpen(false);
+    setRemovalOpen(true);
+  };
+
+  const closeBadgeRemoval = () => {
+    if (removalPending || removalRef.current) return;
+    setRemovalOpen(false);
+    setRemoval(null);
+    setRemovalNeedsRetry(false);
+  };
+
+  const confirmBadgeRemoval = async () => {
+    const target = removal;
+    // React mutation state is not synchronous. The ref prevents a click and Enter in the same
+    // event turn from issuing the same destructive request twice.
+    if (!target || removalRef.current || removalPending) return;
+
+    removalRef.current = target;
+    setRemovalPending(true);
+    try {
+      const result = await removeUserBadge.mutateAsync({
+        requestId: target.requestId,
+        userId: target.userId,
+        expectedUsername: target.username,
+        badgeId: target.badgeId,
+        expectedBadgeName: target.badgeName,
+        expectedAssignmentCreatedAt: target.assignmentCreatedAt,
+      });
+      if (removalRef.current !== target) return;
+
+      const responseMatches =
+        result.success &&
+        result.requestId === target.requestId &&
+        result.userId === target.userId &&
+        result.badgeId === target.badgeId;
+      if (!responseMatches) {
+        setRemovalNeedsRetry(true);
+        if (result.success) {
+          showMutationToast({
+            success: false,
+            message:
+              "The server returned an unexpected badge removal. Refresh and check the profile.",
+          });
+        } else {
+          showMutationToast(result);
+        }
+        return;
+      }
+
+      showMutationToast(result);
+      if (
+        profileIdentityRef.current.userId === target.userId &&
+        profileIdentityRef.current.username === target.username
+      ) {
+        setRemovedAssignments((previous) => {
+          const next = new Set(previous);
+          next.add(target.assignmentKey);
+          return next;
+        });
+      }
+      setRemovalOpen(false);
+      setRemoval(null);
+      setRemovalNeedsRetry(false);
+      void Promise.allSettled([
+        utils.profile.getPublicUser.invalidate({ userId: target.userId }),
+        utils.logs.getContentChanges.invalidate(),
+      ]);
+    } catch (error) {
+      if (removalRef.current === target) {
+        setRemovalNeedsRetry(true);
+        if (error instanceof Error && isRetryableTrpcError(error)) {
+          showMutationToast({
+            success: false,
+            message:
+              "Could not confirm this badge removal. Check your connection and retry the exact removal.",
+          });
+        }
+      }
+    } finally {
+      if (removalRef.current === target) {
+        removalRef.current = null;
+        setRemovalPending(false);
+      }
+    }
+  };
+
+  const currentBadgeIds = new Set(currentBadges.map((entry) => entry.badgeId));
+  const displayedBadges = [
+    ...currentBadges
+      .filter(
+        (entry) =>
+          !removedAssignments.has(badgeAssignmentKey(entry.badgeId, entry.createdAt)),
+      )
+      .map((entry) => ({ badge: entry.badge, userBadge: entry })),
+    ...[...optimisticBadges.values()]
+      .filter((entry) => !currentBadgeIds.has(entry.id))
+      .map((entry) => ({ badge: entry, userBadge: null })),
+  ];
+  const unavailableBadgeIds = new Set([...currentBadgeIds, ...optimisticBadges.keys()]);
 
   return (
-    <ContentBox
-      title="Achieved Badges"
-      subtitle={`Badges earned by ${username}`}
-      initialBreak={true}
-      topRightContent={
-        canModify && (
-          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button className="w-full">
-                <Plus className="mr-2 h-6 w-6" /> New
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-96">
-              <ActionSelector
-                items={
-                  allBadges
-                    ? allBadges.filter(
-                        (b) => !currentBadges.some((ub) => ub.badgeId === b.id),
-                      )
-                    : []
-                }
-                labelSingles={true}
-                onClick={(id) => insertUserBadge.mutate({ userId, badgeId: id })}
-                showBgColor={false}
-                roundFull={true}
-                hideBorder={true}
-                gridClassNameOverwrite="grid grid-cols-5 md:grid-cols-6"
-                showLabels={true}
-                emptyText="No badges exist yet."
+    <>
+      <ContentBox
+        title="Achieved Badges"
+        subtitle={`Badges earned by ${username}`}
+        initialBreak={true}
+        topRightContent={
+          canAssign && (
+            <Popover
+              open={popoverOpen}
+              onOpenChange={(open) => {
+                if (
+                  !assignmentPending &&
+                  !assignmentRef.current &&
+                  !removalPending &&
+                  !removalRef.current
+                )
+                  setPopoverOpen(open);
+              }}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  className="w-full"
+                  disabled={assignmentPending || removalPending}
+                >
+                  <Plus className="mr-2 h-6 w-6" /> New
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="max-h-[min(70vh,32rem)] w-96 overflow-y-auto">
+                <div
+                  aria-busy={assignmentPending}
+                  className={
+                    assignmentPending ? "pointer-events-none opacity-60" : undefined
+                  }
+                >
+                  <ActionSelector
+                    items={
+                      allBadges
+                        ? allBadges.filter(
+                            (entry) => !unavailableBadgeIds.has(entry.id),
+                          )
+                        : []
+                    }
+                    labelSingles={true}
+                    onClick={openBadgeAssignment}
+                    showBgColor={false}
+                    roundFull={true}
+                    hideBorder={true}
+                    gridClassNameOverwrite="grid grid-cols-5 md:grid-cols-6"
+                    showLabels={true}
+                    emptyText="No badges are available to add."
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
+          )
+        }
+      >
+        {displayedBadges.length === 0 && <p>No badges found</p>}
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
+          {displayedBadges.map(({ badge: displayedBadge, userBadge }) => (
+            <div key={displayedBadge.id} className="relative text-center">
+              <Image
+                src={displayedBadge.image}
+                alt={displayedBadge.name}
+                width={128}
+                height={128}
               />
-            </PopoverContent>
-          </Popover>
-        )
-      }
-    >
-      {currentBadges.length === 0 && <p>No badges found</p>}
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-        {currentBadges.map((userbadge) => (
-          <div key={userbadge.badge.id} className="relative text-center">
-            <Image
-              src={userbadge.badge.image}
-              alt={userbadge.badge.name}
-              width={128}
-              height={128}
-            />
-            <div>
-              <div className="font-bold">{userbadge.badge.name}</div>
+              <div>
+                <div className="font-bold">{displayedBadge.name}</div>
+              </div>
+              {canAssign && userBadge && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Remove ${displayedBadge.name} from ${username}`}
+                  disabled={
+                    removalPending &&
+                    removal?.assignmentKey ===
+                      badgeAssignmentKey(userBadge.badgeId, userBadge.createdAt)
+                  }
+                  className="absolute top-0 right-[8%] h-9 w-9 rounded-full border-2 border-black bg-amber-100 p-0 hover:bg-amber-100"
+                  onClick={() => openBadgeRemoval(userBadge)}
+                >
+                  <Trash2 className="h-7 w-7 fill-slate-500 p-1 hover:fill-orange-500" />
+                </Button>
+              )}
             </div>
-            {canModify && (
-              <Trash2
-                className="absolute top-0 right-[8%] h-9 w-9 cursor-pointer rounded-full border-2 border-black bg-amber-100 fill-slate-500 p-1 hover:fill-orange-500"
-                onClick={() => removeUserBadge.mutate(userbadge)}
+          ))}
+        </div>
+      </ContentBox>
+
+      <Modal
+        id="insert-user-badge"
+        title="Add badge"
+        isOpen={assignmentOpen}
+        setIsOpen={(open) => {
+          if (open) setAssignmentOpen(true);
+          else closeBadgeAssignment();
+        }}
+        proceed_label={assignmentNeedsRetry ? "Retry exact assignment" : "Add badge"}
+        proceed_loading_label="Adding badge…"
+        isLoading={assignmentPending}
+        proceedDisabled={!assignment}
+        keepOpenOnAccept
+        onAccept={() => void confirmBadgeAssignment()}
+        onClose={closeBadgeAssignment}
+      >
+        {assignment && (
+          <div className="space-y-4" aria-busy={assignmentPending}>
+            <div className="flex items-center gap-3 rounded-md border bg-muted/40 p-3">
+              <Image
+                src={assignment.badgeImage}
+                alt={assignment.badgeName}
+                width={64}
+                height={64}
               />
+              <div>
+                <p className="font-semibold">{assignment.badgeName}</p>
+                <p className="text-muted-foreground text-sm">
+                  Badge ID: <code className="break-all">{assignment.badgeId}</code>
+                </p>
+              </div>
+            </div>
+            <p>
+              Add <strong>{assignment.badgeName}</strong> to{" "}
+              <strong>{assignment.username}</strong>?
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Target user ID: <code className="break-all">{assignment.userId}</code>
+            </p>
+            {assignmentNeedsRetry && (
+              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                The previous response was not confirmed. Retry keeps the same request ID
+                so a completed assignment cannot be applied or audited twice.
+              </p>
             )}
           </div>
-        ))}
-      </div>
-    </ContentBox>
+        )}
+      </Modal>
+
+      <Modal
+        id="remove-user-badge"
+        title="Remove badge"
+        isOpen={removalOpen}
+        setIsOpen={(open) => {
+          if (open) setRemovalOpen(true);
+          else closeBadgeRemoval();
+        }}
+        proceed_label={removalNeedsRetry ? "Retry exact removal" : "Remove badge"}
+        proceed_loading_label="Removing badge…"
+        confirmClassName="bg-red-600 text-white hover:bg-red-700"
+        isLoading={removalPending}
+        proceedDisabled={!removal}
+        keepOpenOnAccept
+        onAccept={() => void confirmBadgeRemoval()}
+        onClose={closeBadgeRemoval}
+      >
+        {removal && (
+          <div className="space-y-4" aria-busy={removalPending}>
+            <div className="flex items-center gap-3 rounded-md border bg-muted/40 p-3">
+              <Image
+                src={removal.badgeImage}
+                alt={removal.badgeName}
+                width={64}
+                height={64}
+              />
+              <div>
+                <p className="font-semibold">{removal.badgeName}</p>
+                <p className="text-muted-foreground text-sm">
+                  Badge ID: <code className="break-all">{removal.badgeId}</code>
+                </p>
+              </div>
+            </div>
+            <p>
+              Permanently remove <strong>{removal.badgeName}</strong> from{" "}
+              <strong>{removal.username}</strong>?
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Target user ID: <code className="break-all">{removal.userId}</code>
+            </p>
+            <p className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm">
+              This removes the selected badge assignment immediately. It can only be
+              restored by assigning the badge again.
+            </p>
+            {removalNeedsRetry && (
+              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                The previous response was not confirmed. Retry keeps the same request
+                ID, so a completed removal cannot be applied or audited twice.
+              </p>
+            )}
+          </div>
+        )}
+      </Modal>
+    </>
   );
 };
 
@@ -2391,26 +4647,29 @@ interface RecruitedUsersTabProps {
     level: number;
     avatar: string | null;
   }>;
+  parentUserId: string;
   parentUsername: string;
+  parentRecruitedCount: number;
 }
 
 const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
   recruits,
+  parentUserId,
   parentUsername,
+  parentRecruitedCount,
 }) => {
   const { data: currentUser } = useUserData();
   const canDelete = currentUser && canDeleteReferral(currentUser.role);
-
-  const utils = api.useUtils();
-
-  const deleteReferral = api.staff.deleteReferral.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getPublicUser.invalidate();
-      }
-    },
-  });
+  const [removedRecruitIds, setRemovedRecruitIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const visibleRecruits = recruits.filter(
+    (recruit) => !removedRecruitIds.has(recruit.userId),
+  );
+  const displayedRecruiterCount = Math.max(
+    parentRecruitedCount - removedRecruitIds.size,
+    0,
+  );
 
   return (
     <ContentBox
@@ -2418,10 +4677,10 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
       subtitle={`${parentUsername} referred these users`}
       initialBreak={true}
     >
-      {(!recruits || recruits.length === 0) && <p>No recruits found</p>}
-      {recruits && recruits.length > 0 && (
+      {visibleRecruits.length === 0 && <p>No recruits found</p>}
+      {visibleRecruits.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-          {recruits.map((user) => (
+          {visibleRecruits.map((user) => (
             <div key={user.userId} className="relative text-center">
               <Link href={`/username/${user.username}`} className="block">
                 <AvatarImage
@@ -2440,24 +4699,167 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
                 </div>
               </Link>
               {canDelete && (
-                <Confirm
-                  title="Delete Referral"
-                  proceed_label="Delete"
-                  button={
-                    <Trash2 className="absolute top-0 right-[8%] h-9 w-9 cursor-pointer rounded-full border-2 border-black bg-red-100 fill-slate-500 p-1 hover:fill-red-500" />
+                <RemoveReferralButton
+                  recruit={user}
+                  recruiterId={parentUserId}
+                  recruiterUsername={parentUsername}
+                  recruiterCount={displayedRecruiterCount}
+                  onRemoved={(userId) =>
+                    setRemovedRecruitIds((current) => {
+                      if (current.has(userId)) return current;
+                      return new Set(current).add(userId);
+                    })
                   }
-                  onAccept={() => deleteReferral.mutate({ userId: user.userId })}
-                >
-                  Are you sure you want to delete the referral relationship between{" "}
-                  <strong>{parentUsername}</strong> and <strong>{user.username}</strong>
-                  ? This action will remove the referral and cannot be undone.
-                </Confirm>
+                />
               )}
             </div>
           ))}
         </div>
       )}
     </ContentBox>
+  );
+};
+
+interface RemoveReferralButtonProps {
+  recruit: RecruitedUsersTabProps["recruits"][number];
+  recruiterId: string;
+  recruiterUsername: string;
+  recruiterCount: number;
+  onRemoved: (userId: string) => void;
+}
+
+interface ReferralRemovalRequest {
+  userId: string;
+  expectedUsername: string;
+  expectedRecruiterId: string;
+  expectedRecruiterUsername: string;
+  expectedRecruiterCount: number;
+  requestId: string;
+}
+
+const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
+  recruit,
+  recruiterId,
+  recruiterUsername,
+  recruiterCount,
+  onRemoved,
+}) => {
+  const utils = api.useUtils();
+  const inFlightRef = useRef<ReferralRemovalRequest | null>(null);
+  const [retryRequest, setRetryRequest] = useState<ReferralRemovalRequest | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [modalVersion, setModalVersion] = useState(0);
+  const deleteReferral = api.staff.deleteReferral.useMutation();
+
+  const handleRemove = async () => {
+    if (inFlightRef.current) return;
+    const request =
+      retryRequest ??
+      ({
+        userId: recruit.userId,
+        expectedUsername: recruit.username,
+        expectedRecruiterId: recruiterId,
+        expectedRecruiterUsername: recruiterUsername,
+        expectedRecruiterCount: recruiterCount,
+        requestId: crypto.randomUUID(),
+      } satisfies ReferralRemovalRequest);
+
+    // Mutation state updates after this event. Claim the exact relationship synchronously so a
+    // double click cannot submit two destructive requests in the same tick.
+    inFlightRef.current = request;
+    setIsRemoving(true);
+    try {
+      const result = await deleteReferral.mutateAsync(request);
+      if (inFlightRef.current !== request) return;
+      if (!result.success) {
+        showMutationToast(result);
+        setRetryRequest(request);
+        return;
+      }
+      if (
+        result.userId !== request.userId ||
+        result.recruiterId !== request.expectedRecruiterId ||
+        result.requestId !== request.requestId
+      ) {
+        setRetryRequest(request);
+        showMutationToast({
+          success: false,
+          message: "The server confirmed a different referral. Refresh and try again.",
+        });
+        return;
+      }
+
+      // The commit is authoritative. Remove only this captured row before cache/network work so
+      // a slow or stale refresh cannot expose the destructive action for a second click.
+      showMutationToast(result);
+      setRetryRequest(null);
+      onRemoved(request.userId);
+      setModalVersion((version) => version + 1);
+      void Promise.allSettled([
+        utils.profile.getPublicUser.invalidate({
+          userId: request.expectedRecruiterId,
+        }),
+        utils.profile.getPublicUsers.invalidate(),
+      ]);
+    } catch (error) {
+      setRetryRequest(request);
+      if (error instanceof Error && isRetryableTrpcError(error)) {
+        showMutationToast({
+          success: false,
+          message:
+            "The referral response was not confirmed. Retry to safely check the same removal.",
+        });
+      }
+    } finally {
+      if (inFlightRef.current === request) {
+        inFlightRef.current = null;
+        setIsRemoving(false);
+      }
+    }
+  };
+
+  return (
+    <Confirm
+      key={modalVersion}
+      id={`remove-referral-${recruit.userId}`}
+      title="Remove referral relationship?"
+      proceed_label="Remove referral"
+      proceed_loading_label="Removing referral…"
+      button={
+        <Trash2
+          aria-label={`Remove ${recruit.username} as a referral`}
+          className="absolute top-0 right-[8%] h-9 w-9 rounded-full border-2 border-black bg-red-100 fill-slate-500 p-1 hover:fill-red-500"
+        />
+      }
+      onAccept={() => void handleRemove()}
+      isLoading={isRemoving}
+      keepOpenOnAccept
+      disabled={isRemoving}
+      confirmClassName="bg-red-600 text-white hover:bg-red-700"
+    >
+      <div className="space-y-3" aria-busy={isRemoving}>
+        <p>
+          Remove the referral relationship between <strong>{recruiterUsername}</strong>
+          {" and "}
+          <strong>{recruit.username}</strong>?
+        </p>
+        <p className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm">
+          This permanently unlinks {recruit.username} from {recruiterUsername} and
+          reduces {recruiterUsername}&apos;s recruited-user count from {recruiterCount}
+          {" to "}
+          {Math.max(recruiterCount - 1, 0)}. It does not delete either user.
+        </p>
+        {retryRequest && (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+            The previous response was not confirmed. Retry uses the same request ID, so
+            a completed unlink and count change cannot be applied or audited twice.
+          </p>
+        )}
+        <span className="sr-only" aria-live="polite">
+          {isRemoving ? "Removing referral…" : ""}
+        </span>
+      </div>
+    </Confirm>
   );
 };
 

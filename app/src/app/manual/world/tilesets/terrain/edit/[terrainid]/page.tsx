@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { use, useEffect } from "react";
+import { use, useEffect, useRef } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,7 @@ interface SingleEditMapTerrainProps {
 const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
   const { terrain, refetch } = props;
   const utils = api.useUtils();
+  const submitInFlight = useRef(false);
   const form = useForm<ZodMapTerrainType>({
     mode: "all",
     criteriaMode: "all",
@@ -71,22 +72,29 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
     resolver: zodResolver(mapTerrainValidator),
   });
 
-  const { mutate: updateTerrain } = api.mapTerrain.update.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      refetch();
-      // The tilesets list and the travel page session-cache the full library
-      // (getAll), so a save here must invalidate it or they keep showing the
-      // old terrain until a manual refresh
-      await utils.mapTerrain.getAll.invalidate();
-    },
-  });
+  const { mutate: updateTerrain, isPending: isUpdating } =
+    api.mapTerrain.update.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (!data.success) return;
+        await refetch();
+        // The tilesets list and the travel page session-cache the full library
+        // (getAll), so a save here must invalidate it or they keep showing the
+        // old terrain until a manual refresh
+        await utils.mapTerrain.getAll.invalidate();
+      },
+      onSettled: () => {
+        submitInFlight.current = false;
+      },
+    });
 
   const handleTerrainSubmit = form.handleSubmit(
     (data: ZodMapTerrainType) => {
+      if (submitInFlight.current) return;
       const newTerrain = { ...terrain, ...data };
       const diff = calculateContentDiff(terrain, newTerrain);
       if (diff.length > 0) {
+        submitInFlight.current = true;
         updateTerrain({ id: terrain.id, data: newTerrain });
       }
     },
@@ -112,7 +120,11 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
         {terrain.protected &&
           " This is a built-in terrain: its key is locked and it cannot be deleted, but its look and behaviour are editable."}
       </p>
-      <div className="grid gap-4 md:grid-cols-2">
+      <fieldset
+        className="grid gap-4 md:grid-cols-2"
+        disabled={isUpdating}
+        aria-busy={isUpdating}
+      >
         <div className="space-y-3">
           <div className="space-y-1">
             <Label htmlFor="terrain-name">Display Name</Label>
@@ -272,9 +284,15 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
             <Input id="terrain-license" {...form.register("licenseDetails")} />
           </div>
         </div>
-      </div>
-      <Button className="mt-4 w-full" onClick={handleTerrainSubmit}>
-        Save to Database
+      </fieldset>
+      <Button
+        className="mt-4 w-full"
+        onClick={handleTerrainSubmit}
+        disabled={isUpdating}
+        aria-busy={isUpdating}
+        loading={isUpdating}
+      >
+        {isUpdating ? "Saving map terrain..." : "Save to Database"}
       </Button>
     </ContentBox>
   );

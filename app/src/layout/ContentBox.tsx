@@ -20,6 +20,7 @@ export interface ContentBoxProps {
   alreadyHasH1?: boolean;
   id?: string;
   onBack?: () => void;
+  backDisabled?: boolean;
 }
 
 const ContentBox: React.FC<ContentBoxProps> = (props) => {
@@ -47,7 +48,9 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
   const title = props.defaultBackHref ? (
     <button
       type="button"
-      className="ml-1 flex cursor-pointer flex-row items-center hover:text-orange-700"
+      className="ml-1 flex cursor-pointer flex-row items-center hover:text-orange-700 disabled:cursor-wait disabled:opacity-60"
+      disabled={props.backDisabled}
+      aria-busy={props.backDisabled}
       onClick={() => {
         handleBack();
         if (props.onBack) props.onBack();

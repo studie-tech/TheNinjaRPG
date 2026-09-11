@@ -6,6 +6,7 @@ import { z } from "zod";
 import { DMG_SETTING_NAMES, Sentiment } from "@/drizzle/constants";
 import {
   abEvent,
+  actionLog,
   captcha,
   conversation,
   emailReminder,
@@ -40,8 +41,7 @@ import {
 import { DAY_S, secondsFromNow } from "@/utils/time";
 import { confSchema } from "@/validators/combat";
 import { changeSettingSchema } from "@/validators/misc";
-import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
-
+import { awardRequestSchema, awardsFilteringSchema } from "@/validators/reputation";
 export const miscRouter = createTRPCRouter({
   trackVisitor: publicProcedure
     .meta({ mcp: { enabled: true, description: "Track visitor for analytics" } })
@@ -268,57 +268,178 @@ export const miscRouter = createTRPCRouter({
       return { success: true, message: "Damage config updated" };
     }),
   awardReputation: protectedProcedure
-    .input(awardSchema)
-    .output(baseServerResponse)
+    .input(awardRequestSchema)
+    .output(
+      baseServerResponse.extend({
+        requestId: z.string().uuid().optional(),
+        awards: z
+          .array(
+            z.object({
+              userId: z.string(),
+              username: z.string(),
+              reputationAmount: z.number(),
+              moneyAmount: z.number(),
+            }),
+          )
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      // Fetch admin user
-      const admin = await fetchUser(ctx.drizzle, ctx.userId);
+      const reputationAmount = input.reputationAmount ?? 0;
+      const moneyAmount = input.moneyAmount ?? 0;
+      const uniqueUserIds = [...new Set(input.userIds)];
+      const expectedById = new Map(
+        input.expectedUsers.map((user) => [user.userId, user.username]),
+      );
 
-      // Guard checks section
-      if (!canAwardReputation(admin.role)) {
-        return errorResponse("Not authorized to award points");
+      if (
+        uniqueUserIds.length !== input.userIds.length ||
+        expectedById.size !== input.expectedUsers.length ||
+        expectedById.size !== uniqueUserIds.length ||
+        uniqueUserIds.some((userId) => !expectedById.has(userId))
+      ) {
+        return errorResponse(
+          "Award recipients must be unique and match the confirmation",
+        );
       }
 
-      // Fetch all target users in a single query
-      const users = await ctx.drizzle.query.userData.findMany({
-        where: inArray(userData.userId, input.userIds),
-      });
+      const rewardIds = uniqueUserIds.map(
+        (userId) => `award:${input.requestId}:${userId}`,
+      );
+      const requestActionId = `award:${input.requestId}`;
 
-      // Check if any users are missing
-      if (users.length !== input.userIds.length) {
-        return errorResponse("One or more users not found");
-      }
+      return ctx.drizzle.transaction(async (tx) => {
+        // Serialize awards touching the same actor/recipients. This makes replay checks and the
+        // additive writes one atomic unit while still allowing distinct awards to apply in turn.
+        const lockedUserIds = [...new Set([ctx.userId, ...uniqueUserIds])].sort();
+        await tx.execute(
+          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${sql.join(
+            lockedUserIds.map((id) => sql`${id}`),
+            sql`, `,
+          )}) ORDER BY ${userData.userId} FOR UPDATE`,
+        );
 
-      // Create rewards records for all users
-      const rewardsToInsert = users.map((user) => ({
-        id: nanoid(),
-        awardedById: admin.userId,
-        receiverId: user.userId,
-        reputationAmount: input.reputationAmount || 0,
-        moneyAmount: input.moneyAmount || 0,
-        reason: input.reason,
-      }));
+        const admin = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        });
+        const users = await tx.query.userData.findMany({
+          where: inArray(userData.userId, uniqueUserIds),
+        });
+        const previousRequest = await tx.query.actionLog.findFirst({
+          where: eq(actionLog.id, requestActionId),
+        });
+        const previousRewards = await tx.query.userRewards.findMany({
+          where: inArray(userRewards.id, rewardIds),
+        });
 
-      // Execute both operations in parallel
-      await Promise.all([
-        // Batch insert all rewards
-        ctx.drizzle.insert(userRewards).values(rewardsToInsert),
+        if (!admin) return errorResponse("Awarding user not found");
+        if (admin.isBanned) {
+          return errorResponse("You are banned and cannot award points");
+        }
+        if (!canAwardReputation(admin.role)) {
+          return errorResponse("Not authorized to award points");
+        }
+        if (users.length !== uniqueUserIds.length) {
+          return errorResponse("One or more users not found");
+        }
+        if (users.some((user) => user.isAi)) {
+          return errorResponse("Reputation awards cannot target AI users");
+        }
+        if (users.some((user) => user.userId === admin.userId)) {
+          return errorResponse("You cannot award points to yourself");
+        }
+        if (users.some((user) => expectedById.get(user.userId) !== user.username)) {
+          return errorResponse(
+            "One or more recipients changed; review the award again",
+          );
+        }
 
-        // Update all users in a single query
-        ctx.drizzle
+        const awards = users.map((user) => ({
+          userId: user.userId,
+          username: user.username,
+          reputationAmount,
+          moneyAmount,
+        }));
+
+        if (previousRequest || previousRewards.length > 0) {
+          const previousChanges = previousRequest?.changes as
+            | {
+                userIds?: string[];
+                reputationAmount?: number;
+                moneyAmount?: number;
+                reason?: string;
+              }
+            | undefined;
+          const isExactReplay =
+            previousRequest?.userId === admin.userId &&
+            previousRequest.tableName === "UserRewards" &&
+            previousChanges?.reputationAmount === reputationAmount &&
+            previousChanges.moneyAmount === moneyAmount &&
+            previousChanges.reason === input.reason &&
+            previousChanges.userIds?.length === uniqueUserIds.length &&
+            uniqueUserIds.every((userId) =>
+              previousChanges.userIds?.includes(userId),
+            ) &&
+            previousRewards.length === users.length &&
+            previousRewards.every(
+              (reward) =>
+                reward.awardedById === admin.userId &&
+                expectedById.has(reward.receiverId) &&
+                reward.reputationAmount === reputationAmount &&
+                reward.moneyAmount === moneyAmount &&
+                reward.reason === input.reason,
+            );
+          if (!isExactReplay) return errorResponse("Invalid award request ID");
+
+          return {
+            success: true,
+            message: `Rewards already awarded to ${users.length} user(s)`,
+            requestId: input.requestId,
+            awards,
+          };
+        }
+
+        await tx.insert(actionLog).values({
+          id: requestActionId,
+          userId: admin.userId,
+          tableName: "UserRewards",
+          changes: {
+            userIds: uniqueUserIds,
+            reputationAmount,
+            moneyAmount,
+            reason: input.reason,
+          },
+          relatedId: uniqueUserIds.length === 1 ? uniqueUserIds[0] : null,
+          relatedMsg: `Awarded rewards to ${uniqueUserIds.length} user(s)`,
+        });
+
+        await tx.insert(userRewards).values(
+          users.map((user) => ({
+            id: `award:${input.requestId}:${user.userId}`,
+            awardedById: admin.userId,
+            receiverId: user.userId,
+            reputationAmount,
+            moneyAmount,
+            reason: input.reason,
+          })),
+        );
+
+        await tx
           .update(userData)
           .set({
-            reputationPoints: sql`reputationPoints + ${input.reputationAmount || 0}`,
-            reputationPointsTotal: sql`reputationPointsTotal + ${input.reputationAmount || 0}`,
-            money: sql`money + ${input.moneyAmount || 0}`,
+            reputationPoints: sql`${userData.reputationPoints} + ${reputationAmount}`,
+            reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${reputationAmount}`,
+            money: sql`${userData.money} + ${moneyAmount}`,
           })
-          .where(inArray(userData.userId, input.userIds)),
-      ]);
+          .where(inArray(userData.userId, uniqueUserIds));
 
-      return {
-        success: true,
-        message: `Rewards awarded successfully to ${users.length} user(s)`,
-      };
+        return {
+          success: true,
+          message: `Rewards awarded successfully to ${users.length} user(s)`,
+          requestId: input.requestId,
+          awards,
+        };
+      });
     }),
 
   getAllAwards: publicProcedure

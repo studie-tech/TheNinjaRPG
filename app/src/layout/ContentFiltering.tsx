@@ -476,13 +476,22 @@ const FilterSelect: React.FC<{
   options: Option[];
   includeNone?: boolean;
   noneOption?: Option;
-}> = ({ label, value, onValueChange, options, includeNone = true, noneOption }) => {
+  disabled?: boolean;
+}> = ({
+  label,
+  value,
+  onValueChange,
+  options,
+  includeNone = true,
+  noneOption,
+  disabled,
+}) => {
   const resolvedNone = noneOption ?? { value: "None", label: "None" };
   return (
     <div>
       <Label>{label}</Label>
-      <Select onValueChange={onValueChange} value={value}>
-        <SelectTrigger>
+      <Select onValueChange={onValueChange} value={value} disabled={disabled}>
+        <SelectTrigger disabled={disabled}>
           <SelectValue>
             {options.find((opt) => opt.value === value)?.label ||
               (includeNone ? resolvedNone.label : "")}
@@ -509,7 +518,8 @@ const ExcludedItemsList: React.FC<{
   title: string;
   items: string[];
   onRemove: (item: string) => void;
-}> = ({ title, items, onRemove }) => {
+  disabled?: boolean;
+}> = ({ title, items, onRemove, disabled }) => {
   if (items.length === 0) return null;
   return (
     <p className="mt-2 text-sm">
@@ -520,6 +530,7 @@ const ExcludedItemsList: React.FC<{
           <Button
             variant="destructive"
             size="sm"
+            disabled={disabled}
             className="ml-1 px-2"
             onClick={() => onRemove(item)}
           >
@@ -546,19 +557,26 @@ export const ContentFiltering = <
   context,
   triggerButtonId = "filter-generic",
   popoverClassName,
+  disabled = false,
 }: {
   schema: FilteringSchema<F, E>;
   state: ContentFilteringState<F, E>;
   context?: unknown;
   triggerButtonId?: string;
   popoverClassName?: string;
+  disabled?: boolean;
 }) => {
   // Local UI state
+  const [filterOpen, setFilterOpen] = useState(false);
   const [showExclusionPopover, , setShowExclusionPopover] = useDelayState(false);
   const [exclusionCategoryKey, , setExclusionCategoryKey] = useDelayState<string>(
     schema.exclusions?.[0]?.key ?? "",
   );
   const [tempExclusions, , setTempExclusions] = useDelayState<string[]>([]);
+
+  useEffect(() => {
+    if (disabled) setFilterOpen(false);
+  }, [disabled]);
 
   // Apply visibleIf guards at render-time
   const fieldsToRender = schema.fields.filter((f) =>
@@ -682,9 +700,20 @@ export const ContentFiltering = <
     schema.exclusions?.find((e) => e.key === key);
 
   return (
-    <Popover modal>
+    <Popover
+      modal
+      open={disabled ? false : filterOpen}
+      onOpenChange={(nextOpen) => {
+        if (!disabled) setFilterOpen(nextOpen);
+      }}
+    >
       <PopoverTrigger asChild>
-        <Button id={triggerButtonId} count={totalFilters} hoverText="Filter">
+        <Button
+          id={triggerButtonId}
+          count={totalFilters}
+          hoverText="Filter"
+          disabled={disabled}
+        >
           <Filter className="h-6 w-6 hover:text-orange-500" />
         </Button>
       </PopoverTrigger>
@@ -704,6 +733,7 @@ export const ContentFiltering = <
                     <Label>{field.label}</Label>
                     <Input
                       value={(value as string) ?? ""}
+                      disabled={disabled}
                       placeholder={field.label}
                       onChange={(e) => setter(e.target.value)}
                     />
@@ -715,6 +745,7 @@ export const ContentFiltering = <
                     <Label>{field.label}</Label>
                     <Input
                       type="date"
+                      disabled={disabled}
                       value={(value as string) ?? ""}
                       onChange={(e) => setter(e.target.value)}
                     />
@@ -726,6 +757,7 @@ export const ContentFiltering = <
                     <Label>{field.label}</Label>
                     <Input
                       type="number"
+                      disabled={disabled}
                       value={(value as number | undefined) ?? ""}
                       placeholder={field.label}
                       onChange={(e) =>
@@ -751,6 +783,7 @@ export const ContentFiltering = <
                       options={options}
                       includeNone={"includeNone" in field ? field.includeNone : true}
                       noneOption={"noneOption" in field ? field.noneOption : undefined}
+                      disabled={disabled}
                     />
                   </div>
                 );
@@ -764,6 +797,7 @@ export const ContentFiltering = <
                       onChange={
                         setter as React.Dispatch<React.SetStateAction<string[]>>
                       }
+                      disabled={disabled}
                     />
                   </div>
                 );
@@ -779,6 +813,7 @@ export const ContentFiltering = <
                       id={`toggle-${field.id}`}
                       value={value as boolean | undefined}
                       setShowActive={(v) => setter(v)}
+                      disabled={disabled}
                       labelActive={
                         ("triStateLabels" in field &&
                           field.triStateLabels?.labelActive) ||
@@ -810,6 +845,7 @@ export const ContentFiltering = <
                 variant="outline"
                 size="sm"
                 onClick={() => setShowExclusionPopover(true)}
+                disabled={disabled}
               >
                 + Add Exclusion
               </Button>
@@ -832,6 +868,7 @@ export const ContentFiltering = <
                       (prev ?? []).filter((x) => x !== item),
                     );
                 }}
+                disabled={disabled}
               />
             ))}
 
@@ -839,13 +876,14 @@ export const ContentFiltering = <
               <div className="mt-2 rounded border p-2">
                 <Label>Pick Category</Label>
                 <Select
+                  disabled={disabled}
                   onValueChange={(val) => {
                     setExclusionCategoryKey(val);
                     setTempExclusions([]);
                   }}
                   defaultValue={exclusionCategoryKey}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger disabled={disabled}>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -867,6 +905,7 @@ export const ContentFiltering = <
                     label: val,
                   }))}
                   onChange={setTempExclusions}
+                  disabled={disabled}
                 />
 
                 <div className="mt-3 flex gap-2">
@@ -885,11 +924,13 @@ export const ContentFiltering = <
                       setTempExclusions([]);
                       setShowExclusionPopover(false);
                     }}
+                    disabled={disabled}
                   >
                     Confirm
                   </Button>
                   <Button
                     variant="ghost"
+                    disabled={disabled}
                     onClick={() => setShowExclusionPopover(false)}
                   >
                     Cancel

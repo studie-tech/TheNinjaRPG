@@ -35,6 +35,7 @@ interface ContentImageSelectorProps {
   onUploadComplete: (url: string) => void;
   size: IMG_ORIENTATION;
   maxDim: number;
+  disabled?: boolean;
 }
 
 const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
@@ -54,6 +55,10 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
   useEffect(() => {
     setLocalImageUrl(null);
   }, [imageUrl]);
+
+  useEffect(() => {
+    if (props.disabled) setIsModalOpen(false);
+  }, [props.disabled]);
 
   // The displayed URL: prefer the locally-tracked upload, then the prop from the parent.
   const displayUrl = localImageUrl ?? imageUrl;
@@ -128,31 +133,26 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
       <Dialog
         open={isModalOpen}
         onOpenChange={(open) => {
+          if (props.disabled) return;
           if (!open) setLocalImageUrl(null);
           setIsModalOpen(open);
         }}
       >
         <DialogTrigger asChild>
-          <div className="group relative cursor-pointer">
-            {size === "landscape" ? (
-              <Image
-                className="relative m-auto aspect-[2/1] w-full rounded-2xl border-2 border-black object-cover hover:border-amber-500 hover:opacity-80"
-                src={displayUrl ?? IMG_AVATAR_DEFAULT}
-                alt={`${id}-avatar`}
-                width={768}
-                height={384}
-                priority
-              />
-            ) : (
-              <AvatarImage
-                href={displayUrl ?? IMG_AVATAR_DEFAULT}
-                alt={`${id}-avatar`}
-                size={100}
-                hover_effect={true}
-                className={size === "square" ? "aspect-square" : "aspect-auto"}
-                priority
-              />
-            )}
+          <button
+            type="button"
+            disabled={props.disabled}
+            aria-label={`Edit ${label}`}
+            className="group relative cursor-pointer disabled:cursor-wait disabled:opacity-60"
+          >
+            <AvatarImage
+              href={displayUrl ?? IMG_AVATAR_DEFAULT}
+              alt={`${id}-avatar`}
+              size={100}
+              hover_effect={true}
+              className={size === "square" ? "aspect-square" : "aspect-auto"}
+              priority
+            />
             {allowImageUpload && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-opacity-0 transition-all duration-200 group-hover:bg-opacity-50">
                 <Edit
@@ -161,7 +161,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                 />
               </div>
             )}
-          </div>
+          </button>
         </DialogTrigger>
 
         {allowImageUpload && (

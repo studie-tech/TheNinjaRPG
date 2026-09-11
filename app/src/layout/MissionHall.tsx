@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import {
   AlertDialog,
@@ -38,6 +38,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { availableQuestLetterRanks } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
+import { isRetryableTrpcError } from "@/utils/error";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 
 interface MissionHallProps {
@@ -46,6 +47,20 @@ interface MissionHallProps {
 
 export default function MissionHall({ userData }: MissionHallProps) {
   const util = api.useUtils();
+  const activeContext = `${userData.userId}:${userData.sector}`;
+  const activeContextRef = useRef(activeContext);
+  activeContextRef.current = activeContext;
+  const startRequestRef = useRef<{
+    context: string;
+    questId: string;
+    userSector: number;
+  } | null>(null);
+  const randomStartRequestRef = useRef(false);
+  const [pendingQuestId, setPendingQuestId] = useState<string | null>(null);
+  const [committedStart, setCommittedStart] = useState<{
+    context: string;
+    questId: string;
+  } | null>(null);
 
   const currentQuest = userData?.userQuests?.find(
     (q) =>
@@ -73,15 +88,71 @@ export default function MissionHall({ userData }: MissionHallProps) {
     },
   });
 
-  const { mutate: startQuest } = api.quests.startQuest.useMutation({
-    onSuccess: async (data) => {
+  const { mutateAsync: startQuest } = api.quests.startQuest.useMutation();
+
+  const startSpecificQuest = async (quest: { id: string }) => {
+    // Mutation pending state is only visible on the next render. Capture the quest, sector, and
+    // user context synchronously so a rapid click/Enter cannot submit twice or act on new props.
+    if (startRequestRef.current || randomStartRequestRef.current || isPending) {
+      return false;
+    }
+    const request = {
+      context: activeContext,
+      questId: quest.id,
+      userSector: userData.sector,
+    };
+    startRequestRef.current = request;
+    setPendingQuestId(request.questId);
+
+    try {
+      const data = await startQuest({
+        questId: request.questId,
+        userSector: request.userSector,
+      });
+      if (
+        startRequestRef.current !== request ||
+        activeContextRef.current !== request.context
+      ) {
+        return false;
+      }
+
       showMutationToast(data);
-      await Promise.all([
+      if (!data.success) return false;
+
+      // The server has committed a mutually-exclusive mission. Suppress every stale start action
+      // before cache work; failed invalidation must not expose another start on old hall data.
+      setCommittedStart({ context: request.context, questId: request.questId });
+      setPendingQuestId(null);
+      void Promise.allSettled([
         util.profile.getUser.invalidate(),
         util.quests.missionHall.invalidate(),
       ]);
-    },
-  });
+      return true;
+    } catch (error) {
+      // Normal tRPC failures are reported globally. Transient errors are intentionally suppressed
+      // there, so provide only that missing retry feedback and keep the confirmation usable.
+      if (
+        startRequestRef.current === request &&
+        activeContextRef.current === request.context &&
+        error instanceof Error &&
+        isRetryableTrpcError(error)
+      ) {
+        showMutationToast({
+          success: false,
+          message: "Could not start this quest. Check your connection and try again.",
+        });
+      }
+      return false;
+    } finally {
+      if (startRequestRef.current === request) {
+        startRequestRef.current = null;
+        // This state belongs to the exact request guarded above. Clear it even if navigation or
+        // fresh profile props changed context while the request was in flight; otherwise the new
+        // hall context would remain disabled forever after correctly ignoring a stale response.
+        setPendingQuestId(null);
+      }
+    }
+  };
 
   // Derived
   const availableUserRanks = availableQuestLetterRanks(userData.rank);
@@ -100,6 +171,30 @@ export default function MissionHall({ userData }: MissionHallProps) {
   const availableWarMissions = warMissions.filter((q) =>
     availableUserRanks.includes(q.questRank),
   );
+  const committedStartIsReflected =
+    !!committedStart &&
+    userData.userQuests?.some(
+      (entry) =>
+        entry.questId === committedStart.questId &&
+        !entry.endAt &&
+        committedStart.context === activeContext,
+    );
+  useEffect(() => {
+    if (
+      committedStart &&
+      (committedStart.context !== activeContext || committedStartIsReflected)
+    ) {
+      setCommittedStart((current) => (current === committedStart ? null : current));
+    }
+  }, [activeContext, committedStart, committedStartIsReflected]);
+  const hasUnrefreshedCommittedStart =
+    !!committedStart &&
+    committedStart.context === activeContext &&
+    !committedStartIsReflected;
+  // Mission/crime/medical/PvP/war starts are mutually exclusive on the server. Lock every start
+  // entry point while one is pending or committed; leaving siblings active would invite a race.
+  const isSpecificStartBlocked =
+    isPending || pendingQuestId !== null || hasUnrefreshedCommittedStart;
 
   return (
     <>
@@ -129,6 +224,11 @@ export default function MissionHall({ userData }: MissionHallProps) {
       )}
 
       {isPending && <Loader explanation="Accepting..." />}
+      {hasUnrefreshedCommittedStart && (
+        <div role="status" aria-live="polite">
+          <Loader explanation="Quest started. Updating missions…" />
+        </div>
+      )}
       {currentQuest && currentTracker && (
         <div className="p-3">
           <LogbookEntry userQuest={currentQuest} tracker={currentTracker} showScene />
@@ -244,12 +344,9 @@ export default function MissionHall({ userData }: MissionHallProps) {
                   missions={missions}
                   count={count}
                   disabled={grayScale}
-                  onMissionSelect={(mission) =>
-                    startQuest({
-                      questId: mission.id,
-                      userSector: userData.sector,
-                    })
-                  }
+                  interactionDisabled={isSpecificStartBlocked}
+                  pendingMissionId={pendingQuestId}
+                  onMissionSelect={startSpecificQuest}
                   dialogTitle={limitConfig.dialogTitle}
                   dialogDescription={(mission) =>
                     isDailyLimitReached ? (
@@ -307,9 +404,12 @@ export default function MissionHall({ userData }: MissionHallProps) {
                 <Fragment key={setting.name}>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <div
+                      <button
+                        type="button"
+                        disabled={grayScale || isSpecificStartBlocked}
                         className={cn(
-                          grayScale
+                          "disabled:cursor-not-allowed disabled:opacity-60",
+                          grayScale || isSpecificStartBlocked
                             ? "grayscale filter"
                             : "hover:cursor-pointer hover:opacity-30",
                         )}
@@ -348,7 +448,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                         {isPvp && dailyPvpMissions >= PVP_MISSIONS_PER_DAY && (
                           <p className="text-red-500 text-sm">Daily Limit Reached</p>
                         )}
-                      </div>
+                      </button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
@@ -408,17 +508,32 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           </AlertDialogAction>
                         ) : (
                           <AlertDialogAction
+                            disabled={isSpecificStartBlocked}
                             onClick={(e) => {
                               e.preventDefault();
-                              startRandom({
-                                type: setting.type,
-                                rank: setting.rank,
-                                userLevel: userData.level,
-                                userSector: userData.sector,
-                                userVillageId: userData.isOutlaw
-                                  ? VILLAGE_SYNDICATE_ID
-                                  : userData.villageId,
-                              });
+                              if (
+                                startRequestRef.current ||
+                                randomStartRequestRef.current
+                              ) {
+                                return;
+                              }
+                              randomStartRequestRef.current = true;
+                              startRandom(
+                                {
+                                  type: setting.type,
+                                  rank: setting.rank,
+                                  userLevel: userData.level,
+                                  userSector: userData.sector,
+                                  userVillageId: userData.isOutlaw
+                                    ? VILLAGE_SYNDICATE_ID
+                                    : userData.villageId,
+                                },
+                                {
+                                  onSettled: () => {
+                                    randomStartRequestRef.current = false;
+                                  },
+                                },
+                              );
                             }}
                           >
                             Accept Mission
@@ -444,17 +559,15 @@ export default function MissionHall({ userData }: MissionHallProps) {
             }))}
             count={availableWarMissions.length}
             disabled={
+              isSpecificStartBlocked ||
               !isInActiveWar ||
               !!currentWarQuest ||
               warMissionsLeft <= 0 ||
               availableWarMissions.length === 0
             }
-            onMissionSelect={(mission) =>
-              startQuest({
-                questId: mission.id,
-                userSector: userData.sector,
-              })
-            }
+            interactionDisabled={isSpecificStartBlocked}
+            pendingMissionId={pendingQuestId}
+            onMissionSelect={startSpecificQuest}
             dialogTitle="Accept War Mission"
             dialogDescription={(mission) =>
               !isInActiveWar ? (
@@ -481,7 +594,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                     : "Accept Mission"
             }
             emptyContent={
-              <p className="p-2 text-center text-sm text-muted-foreground">
+              <p className="p-2 text-center text-muted-foreground text-sm">
                 {!isInActiveWar
                   ? "Your village is not currently at war."
                   : currentWarQuest
@@ -494,7 +607,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
             additionalContent={() => (
               <>
                 {currentWarQuest && (
-                  <p className="text-yellow-500 text-sm">Active Mission</p>
+                  <p className="text-sm text-yellow-500">Active Mission</p>
                 )}
                 {!currentWarQuest && warMissionsLeft <= 0 && (
                   <p className="text-red-500 text-sm">Daily Limit Reached</p>

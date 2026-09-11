@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type React from "react";
+import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import type {
   Bloodline,
@@ -20,6 +21,7 @@ import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
 import Loader from "@/layout/Loader";
+import Modal from "@/layout/Modal";
 import { getPreventTypeName } from "@/libs/combat/util";
 import { getFarmPlantExperience } from "@/libs/farming";
 import { getRewardArray } from "@/libs/objectives";
@@ -107,6 +109,274 @@ const Model3d = dynamic(() => import("@/layout/Model3d"), {
   loading: () => <Loader explanation="Loading 3D model" />,
 });
 
+type QuestCloneSource = {
+  id: string;
+  name: string;
+};
+
+type AiCloneSource = {
+  id: string;
+  name: string;
+};
+
+type ItemCloneSource = {
+  id: string;
+  name: string;
+};
+
+/**
+ * Keep clone confirmation state inside an id-keyed component. If a parent reuses an
+ * ItemWithEffects instance for another quest, React unmounts this control and discards the old
+ * source snapshot instead of allowing a stale dialog to act on new props.
+ */
+const QuestCloneControl: React.FC<{ source: QuestCloneSource }> = ({ source }) => {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const [confirmedSource, setConfirmedSource] = useState<QuestCloneSource | null>(null);
+  const sourceInFlight = useRef<string | null>(null);
+  const { mutateAsync: cloneQuest, isPending } = api.quests.clone.useMutation();
+
+  const cloneConfirmedSource = async (sourceQuestId: string) => {
+    // React Query exposes pending state on the next render. Claim this source synchronously so
+    // an Enter/click race cannot create two independent copies of the same quest.
+    if (sourceInFlight.current !== null) return;
+    sourceInFlight.current = sourceQuestId;
+
+    try {
+      const result = await cloneQuest({ id: sourceQuestId });
+      showMutationToast(result);
+      if (!result.success) return;
+
+      // A committed clone must never remain actionable in a stale confirmation dialog. Closing
+      // first means even a failed cache refresh/navigation requires a fresh explicit confirmation
+      // before another (intentional) copy can be created.
+      setConfirmedSource(null);
+      const cloneId = result.message;
+      void Promise.allSettled([
+        utils.quests.getAll.invalidate(),
+        utils.quests.getAllNames.invalidate(),
+        utils.quests.get.invalidate({ id: cloneId }),
+      ]);
+      router.push(`/manual/quest/edit/${cloneId}`);
+    } catch {
+      // The shared tRPC error handler reports transport failures. Keep this confirmation open so
+      // the editor can deliberately retry without losing which quest they intended to copy.
+    } finally {
+      if (sourceInFlight.current === sourceQuestId) sourceInFlight.current = null;
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={`Clone ${source.name}`}
+        className="mr-1 inline-flex items-center disabled:cursor-wait disabled:opacity-50"
+        disabled={isPending}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setConfirmedSource({ ...source });
+        }}
+      >
+        <Copy className="h-6 w-6 hover:text-popover-foreground/50" />
+      </button>
+      {confirmedSource && (
+        <Modal
+          id={`clone-quest-${confirmedSource.id}`}
+          title={`Clone quest: ${confirmedSource.name}`}
+          isOpen
+          setIsOpen={(isOpen) => {
+            if (!isOpen) setConfirmedSource(null);
+          }}
+          proceed_label="Clone quest"
+          proceed_loading_label="Cloning quest…"
+          isLoading={isPending}
+          keepOpenOnAccept
+          onAccept={(event) => {
+            event.preventDefault();
+            void cloneConfirmedSource(confirmedSource.id);
+          }}
+        >
+          <p>
+            This creates a separate copy of <b>{confirmedSource.name}</b>, including its
+            objectives and rewards. The original quest will not be changed.
+          </p>
+          <p>You will be taken to the new copy to review and edit it.</p>
+        </Modal>
+      )}
+    </>
+  );
+};
+
+/**
+ * Keep AI clone confirmation state tied to the source id. A list refresh may reuse the surrounding
+ * card while a dialog is open, but a confirmation must only ever submit the AI the editor saw.
+ */
+const AiCloneControl: React.FC<{ source: AiCloneSource }> = ({ source }) => {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const [confirmedSource, setConfirmedSource] = useState<AiCloneSource | null>(null);
+  const sourceInFlight = useRef<string | null>(null);
+  const { mutateAsync: cloneAi, isPending } = api.profile.cloneAi.useMutation();
+
+  const cloneConfirmedSource = async (sourceAiId: string) => {
+    // Mutation state reaches React on the next render, so claim this source synchronously to close
+    // the click/Enter window in which two clones could otherwise be submitted.
+    if (sourceInFlight.current !== null) return;
+    sourceInFlight.current = sourceAiId;
+
+    try {
+      const result = await cloneAi({ id: sourceAiId });
+      showMutationToast(result);
+      if (!result.success) return;
+
+      // Once the clone is committed, close the stale action before any best-effort refresh or
+      // navigation. A later clone remains possible, but requires a new explicit confirmation.
+      setConfirmedSource(null);
+      const cloneId = result.message;
+      void Promise.allSettled([
+        utils.profile.getPublicUsers.invalidate(),
+        utils.profile.getAllAiNames.invalidate(),
+        utils.profile.getAi.invalidate({ userId: cloneId }),
+      ]);
+      router.push(`/manual/ai/edit/${cloneId}`);
+    } catch {
+      // The shared tRPC handler owns transport-error reporting. Retain the source snapshot and
+      // dialog so the editor can safely retry without generating a second request automatically.
+    } finally {
+      if (sourceInFlight.current === sourceAiId) sourceInFlight.current = null;
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={`Clone ${source.name}`}
+        className="mr-1 inline-flex items-center disabled:cursor-wait disabled:opacity-50"
+        disabled={isPending}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setConfirmedSource({ ...source });
+        }}
+      >
+        <Copy className="h-6 w-6 hover:text-popover-foreground/50" />
+      </button>
+      {confirmedSource && (
+        <Modal
+          id={`clone-ai-${confirmedSource.id}`}
+          title={`Clone AI: ${confirmedSource.name}`}
+          isOpen
+          setIsOpen={(isOpen) => {
+            if (!isOpen) setConfirmedSource(null);
+          }}
+          proceed_label="Clone AI"
+          proceed_loading_label="Cloning AI…"
+          isLoading={isPending}
+          keepOpenOnAccept
+          onAccept={(event) => {
+            event.preventDefault();
+            void cloneConfirmedSource(confirmedSource.id);
+          }}
+        >
+          <p>
+            This creates a separate copy of <b>{confirmedSource.name}</b>, including its
+            jutsu, items, and nindo. The original AI will not be changed.
+          </p>
+          <p>You will be taken to the new copy to review and edit it.</p>
+        </Modal>
+      )}
+    </>
+  );
+};
+
+/**
+ * Keep the item identity shown in the confirmation immutable through the request. Item names and
+ * list results can refresh while the dialog is open, but the action must continue to describe and
+ * clone exactly the item the editor confirmed.
+ */
+const ItemCloneControl: React.FC<{ source: ItemCloneSource }> = ({ source }) => {
+  const router = useRouter();
+  const utils = api.useUtils();
+  const [confirmedSource, setConfirmedSource] = useState<ItemCloneSource | null>(null);
+  const sourceInFlight = useRef<string | null>(null);
+  const { mutateAsync: cloneItem, isPending } = api.item.clone.useMutation();
+
+  const cloneConfirmedSource = async (sourceItemId: string) => {
+    // Claim the request synchronously: React Query's pending render happens after this event, and
+    // cannot by itself close the window for a rapid click/Enter double submission.
+    if (sourceInFlight.current !== null) return;
+    sourceInFlight.current = sourceItemId;
+
+    try {
+      const result = await cloneItem({ id: sourceItemId });
+      showMutationToast(result);
+      if (!result.success) return;
+
+      // Remove the committed action before best-effort cache work and navigation. If either fails,
+      // another clone still requires a fresh, intentional confirmation rather than a stale retry.
+      setConfirmedSource(null);
+      const cloneId = result.message;
+      void Promise.allSettled([
+        utils.item.getAll.invalidate(),
+        utils.item.getAllNames.invalidate(),
+        utils.item.get.invalidate({ id: cloneId }),
+        utils.item.getItemWithCraftingRequirements.invalidate({ id: cloneId }),
+      ]);
+      router.push(`/manual/item/edit/${cloneId}`);
+    } catch {
+      // Transport errors are reported by the shared tRPC handler. Keep the immutable source and
+      // confirmation available for an explicit retry; never retry a clone automatically.
+    } finally {
+      if (sourceInFlight.current === sourceItemId) sourceInFlight.current = null;
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={`Clone ${source.name}`}
+        className="mr-1 inline-flex items-center disabled:cursor-wait disabled:opacity-50"
+        disabled={isPending}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setConfirmedSource({ ...source });
+        }}
+      >
+        <Copy className="h-6 w-6 hover:text-popover-foreground/50" />
+      </button>
+      {confirmedSource && (
+        <Modal
+          id={`clone-item-${confirmedSource.id}`}
+          title={`Clone item: ${confirmedSource.name}`}
+          isOpen
+          setIsOpen={(isOpen) => {
+            if (!isOpen) setConfirmedSource(null);
+          }}
+          proceed_label="Clone item"
+          proceed_loading_label="Cloning item…"
+          isLoading={isPending}
+          keepOpenOnAccept
+          onAccept={(event) => {
+            event.preventDefault();
+            void cloneConfirmedSource(confirmedSource.id);
+          }}
+        >
+          <p>
+            This creates a separate copy of <b>{confirmedSource.name}</b>, including its
+            crafting recipe. The original item will not be changed.
+          </p>
+          <p>You will be taken to the new copy to review and edit it.</p>
+        </Modal>
+      )}
+    </>
+  );
+};
+
 const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   const {
     item,
@@ -126,7 +396,6 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
     folderName,
   } = props;
   const { data: userData } = useUserData();
-  const router = useRouter();
 
   // Get bloodline / sage-mode names for requirement labels
   const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
@@ -159,34 +428,6 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
     { enabled: isGameItem && !hideData && !!showEvolutions, staleTime: 5 * 60 * 1000 },
   );
   const evolutionsData = isJutsuItem ? jutsuEvolutions : itemEvolutions;
-
-  // Setup clone mutations
-  const { mutate: cloneQuest } = api.quests.clone.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        router.push(`/manual/quest/edit/${data.message}`);
-      }
-    },
-  });
-
-  const { mutate: cloneAi } = api.profile.cloneAi.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        router.push(`/manual/ai/edit/${data.message}`);
-      }
-    },
-  });
-
-  const { mutate: cloneItem } = api.item.clone.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        router.push(`/manual/item/edit/${data.message}`);
-      }
-    },
-  });
 
   // Extract effects if they exist
   const effects = [
@@ -327,49 +568,22 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {showEdit && userData && canChangeContent(userData.role) && (
                 <>
                   {showCopy === "quest" && (
-                    <Confirm
-                      title="Clone Quest"
-                      button={
-                        <Copy className="h-6 w-6 hover:text-popover-foreground/50" />
-                      }
-                      onAccept={(e) => {
-                        e.preventDefault();
-                        cloneQuest({ id: item.id });
-                      }}
-                    >
-                      This will create a copy of this quest. You will be redirected to
-                      edit the new quest.
-                    </Confirm>
+                    <QuestCloneControl
+                      key={item.id}
+                      source={{ id: item.id, name: item.name }}
+                    />
                   )}
                   {showCopy === "ai" && (
-                    <Confirm
-                      title="Clone AI"
-                      button={
-                        <Copy className="h-6 w-6 hover:text-popover-foreground/50" />
-                      }
-                      onAccept={(e) => {
-                        e.preventDefault();
-                        cloneAi({ id: item.id });
-                      }}
-                    >
-                      This will create a copy of this AI. You will be redirected to edit
-                      the new AI.
-                    </Confirm>
+                    <AiCloneControl
+                      key={item.id}
+                      source={{ id: item.id, name: item.name }}
+                    />
                   )}
                   {showCopy === "item" && (
-                    <Confirm
-                      title="Clone Item"
-                      button={
-                        <Copy className="h-6 w-6 hover:text-popover-foreground/50" />
-                      }
-                      onAccept={(e) => {
-                        e.preventDefault();
-                        cloneItem({ id: item.id });
-                      }}
-                    >
-                      This will create a copy of this item. You will be redirected to
-                      edit the new item.
-                    </Confirm>
+                    <ItemCloneControl
+                      key={item.id}
+                      source={{ id: item.id, name: item.name }}
+                    />
                   )}
                   {show3d && "avatar" in item && "avatar3d" in item && item.avatar3d ? (
                     <Confirm

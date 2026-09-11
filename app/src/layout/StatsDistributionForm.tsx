@@ -2,8 +2,9 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { noCase } from "change-case";
+import { Loader2 } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,8 @@ interface StatDistributionProps {
   title?: string;
   subtitle?: string;
   defaultBackHref?: string;
+  isPending?: boolean;
+  pendingLabel?: string;
 }
 
 const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
@@ -64,6 +67,8 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
     title = "Distribute Stats",
     subtitle,
     defaultBackHref,
+    isPending = false,
+    pendingLabel = "Assigning…",
   } = props;
 
   // Tab state - force Advanced mode for redistribution
@@ -97,12 +102,19 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
 
   // NavTabs component - hide for redistribution
   const navTabs = !isRedistribution ? (
-    <NavTabs
-      id="stats-distribution-tab"
-      current={tab}
-      options={["Simple", "Advanced"] as const}
-      onChange={(value) => setTab(value as "Simple" | "Advanced")}
-    />
+    <div
+      aria-disabled={isPending}
+      className={isPending ? "pointer-events-none opacity-50" : undefined}
+    >
+      <NavTabs
+        id="stats-distribution-tab"
+        current={tab}
+        options={["Simple", "Advanced"] as const}
+        onChange={(value) => {
+          if (!isPending) setTab(value as "Simple" | "Advanced");
+        }}
+      />
+    </div>
   ) : null;
 
   // Content to render
@@ -117,6 +129,8 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
           availableStats={availableStats}
           onAccept={handleAcceptWithTutorial}
           isRedistribution={isRedistribution}
+          isPending={isPending}
+          pendingLabel={pendingLabel}
         />
       ) : (
         <AdvancedDistribution
@@ -125,6 +139,8 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
           onAccept={handleAcceptWithTutorial}
           forceUseAll={forceUseAll}
           isRedistribution={isRedistribution}
+          isPending={isPending}
+          pendingLabel={pendingLabel}
         />
       )}
     </>
@@ -156,10 +172,26 @@ interface SimpleDistributionProps {
   availableStats: number;
   onAccept: (data: StatSchemaType) => void;
   isRedistribution?: boolean;
+  isPending?: boolean;
+  pendingLabel?: string;
 }
 
 const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
-  const { userData, availableStats, onAccept, isRedistribution } = props;
+  const {
+    userData,
+    availableStats,
+    onAccept,
+    isRedistribution,
+    isPending = false,
+    pendingLabel = "Assigning…",
+  } = props;
+  const [pendingSpecialization, setPendingSpecialization] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!isPending) setPendingSpecialization(null);
+  }, [isPending]);
 
   // Create stat schema to get caps
   const { schema: statSchema, maxValues } = createStatSchema(
@@ -226,6 +258,8 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   const handleSpecializationSelect = (
     option: (typeof specializationOptions)[number],
   ) => {
+    setPendingSpecialization(option.id);
+
     // Build the stat distribution object
     const distribution: Partial<StatSchemaType> = { ...defaultValues };
 
@@ -245,9 +279,10 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   };
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4">
+    <div className="grid grid-cols-2 sm:grid-cols-4" aria-busy={isPending}>
       {specializationOptions.map((option) => {
         const isDisabled = isSpecializationDisabled(option);
+        const isAssigning = pendingSpecialization === option.id;
         const cappedStats = getCappedStats(option);
 
         return (
@@ -255,7 +290,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
             id="tutorial-specialization-confirm"
             key={option.id}
             title={`Confirm ${option.name} Specialization`}
-            disabled={isDisabled}
+            disabled={isDisabled || isPending || pendingSpecialization !== null}
             button={
               <div
                 className={`flex flex-col items-center ${isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:opacity-70"}`}
@@ -269,9 +304,23 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
                   priority={true}
                 />
                 <p className="mt-2 text-center font-bold text-sm">{option.name}</p>
-                <p className="mt-1 text-center text-muted-foreground text-xs">
-                  {option.description}
-                </p>
+                {isAssigning ? (
+                  <p
+                    className="mt-1 inline-flex items-center text-center font-semibold text-xs"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <Loader2
+                      className="mr-1 h-3.5 w-3.5 animate-spin"
+                      aria-hidden="true"
+                    />
+                    {pendingLabel}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-center text-muted-foreground text-xs">
+                    {option.description}
+                  </p>
+                )}
                 {isDisabled && (
                   <p className="mt-1 text-center font-semibold text-red-500 text-xs">
                     Stats maxed
@@ -320,10 +369,20 @@ interface AdvancedDistributionProps {
   onAccept: (data: StatSchemaType) => void;
   forceUseAll?: boolean;
   isRedistribution?: boolean;
+  isPending?: boolean;
+  pendingLabel?: string;
 }
 
 const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
-  const { forceUseAll, isRedistribution, userData, availableStats, onAccept } = props;
+  const {
+    forceUseAll,
+    isRedistribution,
+    userData,
+    availableStats,
+    onAccept,
+    isPending = false,
+    pendingLabel = "Assigning…",
+  } = props;
 
   // State - synchronize with localStorage using useLocalStorage hook
   const [useInputBoxes, setUseInputBoxes] = useLocalStorage<boolean>(
@@ -391,9 +450,14 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
           id="input-toggle"
           checked={useInputBoxes}
           onCheckedChange={setUseInputBoxes}
+          disabled={isPending}
         />
       </div>
-      <form className="grid grid-cols-2 gap-2" onSubmit={onSubmit}>
+      <form
+        className="grid grid-cols-2 gap-2"
+        onSubmit={onSubmit}
+        aria-busy={isPending}
+      >
         {statNames.map((stat, i) => {
           const maxValue = maxValues[stat];
           const minValue = 0;
@@ -439,6 +503,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                           onBlur={field.onBlur}
                           name={field.name}
                           className="w-full"
+                          disabled={isPending}
                         />
                       </FormControl>
                     ) : (
@@ -455,6 +520,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                         register={form.register}
                         error={fieldState.error?.message}
                         preventDebounce={true}
+                        disabled={isPending}
                       />
                     )}
                     <FormMessage />
@@ -480,9 +546,19 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
           id="create"
           className="col-span-2 my-1 w-full"
           type="submit"
-          disabled={isDisabled}
+          disabled={isDisabled || isPending}
+          aria-busy={isPending}
         >
-          {buttonText}
+          {isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              <span role="status" aria-live="polite">
+                {pendingLabel}
+              </span>
+            </>
+          ) : (
+            buttonText
+          )}
         </Button>
       </form>
     </Form>

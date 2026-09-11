@@ -1,4 +1,5 @@
 "use client";
+import { Loader2 } from "lucide-react";
 /**
  * This is a modal that is used to display a modal.
  */
@@ -32,6 +33,8 @@ interface ModalProps {
   confirmClassName?: string;
   isValid?: boolean;
   isLoading?: boolean;
+  /** Keep the dialog open after Proceed so the caller can close it on success. */
+  keepOpenOnAccept?: boolean;
   proceedDisabled?: boolean;
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -60,14 +63,21 @@ export const Modal: React.FC<ModalProps> = (props) => {
         | React.MouseEvent<HTMLButtonElement, MouseEvent>
         | React.KeyboardEvent<KeyboardEvent>,
     ) => {
+      if (props.isLoading) return;
       // The close side-effect is independent of onAccept: dialogs that render a
       // Proceed button without an accept handler still use it to dismiss.
       props.onAccept?.(e);
-      if (props.isValid === undefined || props.isValid) {
+      if (!props.keepOpenOnAccept && (props.isValid === undefined || props.isValid)) {
         props.setIsOpen(false);
       }
     },
-    [props.onAccept, props.isValid, props.setIsOpen],
+    [
+      props.isLoading,
+      props.keepOpenOnAccept,
+      props.onAccept,
+      props.isValid,
+      props.setIsOpen,
+    ],
   );
 
   // Handle key-presses for Enter key only when this modal is open
@@ -104,23 +114,45 @@ export const Modal: React.FC<ModalProps> = (props) => {
   ]);
 
   const handleDialogClose = () => {
+    if (props.isLoading) return;
     if (props.onClose) props.onClose();
     props.setIsOpen(false);
   };
 
   return (
-    <Dialog open={props.isOpen} onOpenChange={props.setIsOpen}>
+    <Dialog
+      open={props.isOpen}
+      onOpenChange={(open) => {
+        if (!open && props.isLoading) return;
+        props.setIsOpen(open);
+      }}
+    >
       <DialogContent
         id={props.id ? `${props.id}-content` : undefined}
+        closeDisabled={props.isLoading}
         className={cn(
           props.className || "",
           modalViewportClassName,
           "!top-4 !translate-y-0 sm:!top-[50%] sm:!-translate-y-1/2",
           "data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-top-0",
           "sm:data-[state=open]:slide-in-from-top-[48%] sm:data-[state=closed]:slide-out-to-top-[48%]",
+          props.isLoading && "[&>button]:pointer-events-none [&>button]:opacity-40",
         )}
-        onEscapeKeyDown={handleDialogClose}
-        onInteractOutside={handleDialogClose}
+        aria-busy={props.isLoading}
+        onEscapeKeyDown={(event) => {
+          if (props.isLoading) {
+            event.preventDefault();
+            return;
+          }
+          handleDialogClose();
+        }}
+        onInteractOutside={(event) => {
+          if (props.isLoading) {
+            event.preventDefault();
+            return;
+          }
+          handleDialogClose();
+        }}
       >
         <DialogHeader
           className={props.centerText ? "items-center text-center" : undefined}
@@ -153,8 +185,9 @@ export const Modal: React.FC<ModalProps> = (props) => {
                 }}
                 className={`z-30 rounded-lg ${confirmBtnClassName}`}
               >
-                {props.isLoading && props.proceed_loading_label
-                  ? props.proceed_loading_label
+                {props.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {props.isLoading
+                  ? (props.proceed_loading_label ?? props.proceed_label)
                   : props.proceed_label}
               </Button>
               <div className="grow"></div>
@@ -163,6 +196,7 @@ export const Modal: React.FC<ModalProps> = (props) => {
           {props.footerExtra}
           <Button
             id={props.id ? `${props.id}-close` : undefined}
+            disabled={props.isLoading}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -172,6 +206,11 @@ export const Modal: React.FC<ModalProps> = (props) => {
           >
             Close
           </Button>
+          {props.isLoading && props.proceed_loading_label && (
+            <span className="sr-only" role="status" aria-live="polite">
+              {props.proceed_loading_label}
+            </span>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,10 +1,10 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import type { GameAsset } from "@/drizzle/schema";
-import { ActionSelector } from "@/layout/CombatActions";
+import { ActionOption, ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
@@ -21,6 +21,8 @@ export default function ManualAssetsFolderPage() {
   const { data: userData } = useUserData();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [asset, setAsset] = useState<GameAsset | undefined>(undefined);
+  const [deletingAssetIds, setDeletingAssetIds] = useState<string[]>([]);
+  const deletingAssetIdsRef = useRef(new Set<string>());
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   const {
@@ -44,7 +46,29 @@ export default function ManualAssetsFolderPage() {
       showMutationToast(data);
       await refetch();
     },
+    onSettled: (_data, _error, variables) => {
+      deletingAssetIdsRef.current.delete(variables.id);
+      setDeletingAssetIds((current) =>
+        current.filter((assetId) => assetId !== variables.id),
+      );
+    },
   });
+
+  const handleAssetClick = (id: string) => {
+    if (deletingAssetIdsRef.current.has(id)) return;
+    setAsset(allAssets?.find((currentAsset) => currentAsset.id === id));
+    setIsOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    // State updates are asynchronous, so keep a synchronous per-asset guard as
+    // well. Different assets remain usable while this request is in flight.
+    if (deletingAssetIdsRef.current.has(id)) return;
+    deletingAssetIdsRef.current.add(id);
+    setDeletingAssetIds((current) => [...current, id]);
+    setIsOpen(false);
+    remove({ id });
+  };
 
   const isPending = isFetching;
 
@@ -62,10 +86,7 @@ export default function ManualAssetsFolderPage() {
           url: a.url,
         }))}
         labelSingles={true}
-        onClick={(id) => {
-          setAsset(allAssets?.find((asset) => asset.id === id));
-          setIsOpen(true);
-        }}
+        onClick={handleAssetClick}
         showBgColor={false}
         roundFull={true}
         hideBorder={true}
@@ -74,6 +95,42 @@ export default function ManualAssetsFolderPage() {
         setLastElement={setLastElement}
         gridClassNameOverwrite="grid grid-cols-3 md:grid-cols-4"
         emptyText="No assets exist in this folder."
+        renderItem={(item) => {
+          const isDeleting = deletingAssetIds.includes(item.id);
+          return (
+            <div
+              className="relative h-full w-full"
+              aria-busy={isDeleting}
+              aria-disabled={isDeleting}
+              data-asset-id={item.id}
+            >
+              <div className={isDeleting ? "pointer-events-none opacity-40" : ""}>
+                <ActionOption
+                  item={item}
+                  settings={{
+                    labelSingles: true,
+                    onClick: handleAssetClick,
+                    roundFull: true,
+                    hideBorder: true,
+                    showBgColor: false,
+                    showLabels: true,
+                  }}
+                  isGreyed={false}
+                />
+              </div>
+              {isDeleting && (
+                <div
+                  id={`asset-${item.id}-delete-status`}
+                  className="absolute inset-0 z-10 flex cursor-wait items-center justify-center rounded-xl bg-slate-950/75 font-semibold text-white backdrop-blur-[1px]"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader explanation="Deleting…" noPadding size={24} />
+                </div>
+              )}
+            </div>
+          );
+        }}
       />
       {isPending && <Loader explanation="Loading data" />}
       {isOpen && userData && asset && (
@@ -91,10 +148,7 @@ export default function ManualAssetsFolderPage() {
                 item={asset}
                 key={asset.id}
                 onDelete={(id: string) => {
-                  if (userData && canChangeContent(userData.role)) {
-                    remove({ id });
-                    setIsOpen(false);
-                  }
+                  if (userData && canChangeContent(userData.role)) handleDelete(id);
                 }}
                 showEdit="asset"
               />

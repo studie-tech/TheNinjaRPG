@@ -1,7 +1,8 @@
 "use client";
 
-import { Copy, Edit2, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Copy, Edit2, Loader2, Plus, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { CannedResponse } from "@/drizzle/schema";
+import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
@@ -30,6 +32,12 @@ export default function CannedResponsesManagement({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingResponse, setEditingResponse] = useState<CannedResponse | null>(null);
   const [formData, setFormData] = useState({ title: "", description: "" });
+  const [deletingResponseIds, setDeletingResponseIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const deletingResponseIdsRef = useRef(new Set<string>());
+  const deletedResponseIdsRef = useRef(new Set<string>());
+  const utils = api.useUtils();
 
   const {
     data: cannedResponses,
@@ -59,13 +67,7 @@ export default function CannedResponsesManagement({
     },
   });
 
-  const deleteMutation = api.support.deleteCannedResponse.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      void refetch();
-      onResponsesChange?.();
-    },
-  });
+  const deleteMutation = api.support.deleteCannedResponse.useMutation();
 
   if (!userData || !canEditCannedResponses(userData.role)) {
     return null;
@@ -92,9 +94,33 @@ export default function CannedResponsesManagement({
     setFormData({ title: response.title, description: response.description });
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this canned response?")) {
-      deleteMutation.mutate({ id });
+  const handleDelete = async (id: string) => {
+    if (
+      deletingResponseIdsRef.current.has(id) ||
+      deletedResponseIdsRef.current.has(id)
+    ) {
+      return;
+    }
+
+    deletingResponseIdsRef.current.add(id);
+    setDeletingResponseIds(new Set(deletingResponseIdsRef.current));
+
+    try {
+      const result = await deleteMutation.mutateAsync({ id });
+      showMutationToast(result);
+      if (!result.success) return;
+
+      deletedResponseIdsRef.current.add(id);
+      utils.support.getCannedResponses.setData(undefined, (responses) =>
+        responses?.filter((response) => response.id !== id),
+      );
+      onResponsesChange?.();
+      void refetch().catch(() => undefined);
+    } catch {
+      toast.error("Failed to delete canned response");
+    } finally {
+      deletingResponseIdsRef.current.delete(id);
+      setDeletingResponseIds(new Set(deletingResponseIdsRef.current));
     }
   };
 
@@ -136,53 +162,89 @@ export default function CannedResponsesManagement({
             <Loader explanation="Loading canned responses..." />
           ) : (
             <div className="max-h-96 space-y-4 overflow-y-auto">
-              {cannedResponses?.map((response) => (
-                <Card key={response.id} className="relative">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">{response.title}</CardTitle>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCopy(response.description)}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(response)}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(response.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
+              {cannedResponses?.map((response) => {
+                const isDeleting = deletingResponseIds.has(response.id);
+                return (
+                  <Card key={response.id} className="relative" aria-busy={isDeleting}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg">{response.title}</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCopy(response.description)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(response)}
+                            disabled={isDeleting}
+                            aria-label={`Edit ${response.title}`}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Confirm
+                            title={`Delete “${response.title}”?`}
+                            button={
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isDeleting}
+                                aria-busy={isDeleting}
+                                aria-label={
+                                  isDeleting
+                                    ? `Deleting ${response.title}`
+                                    : `Delete ${response.title}`
+                                }
+                              >
+                                {isDeleting ? (
+                                  <>
+                                    <Loader2
+                                      className="mr-2 h-4 w-4 animate-spin"
+                                      aria-hidden
+                                    />
+                                    Deleting…
+                                  </>
+                                ) : (
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                )}
+                              </Button>
+                            }
+                            proceed_label="Delete"
+                            proceed_loading_label="Deleting…"
+                            confirmClassName="bg-red-600 text-white hover:bg-red-700"
+                            isLoading={isDeleting}
+                            keepOpenOnAccept
+                            disabled={isDeleting}
+                            onAccept={() => void handleDelete(response.id)}
+                          >
+                            This permanently deletes the canned response. This action
+                            cannot be undone.
+                          </Confirm>
+                        </div>
                       </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="whitespace-pre-wrap text-gray-600 text-sm">
-                      {response.description}
-                    </p>
-                    <div className="mt-3 flex items-center gap-2 text-gray-500 text-xs">
-                      <Badge variant="outline">
-                        Created: {new Date(response.createdAt).toLocaleDateString()}
-                      </Badge>
-                      {response.updatedAt !== response.createdAt && (
+                    </CardHeader>
+                    <CardContent>
+                      <p className="whitespace-pre-wrap text-gray-600 text-sm">
+                        {response.description}
+                      </p>
+                      <div className="mt-3 flex items-center gap-2 text-gray-500 text-xs">
                         <Badge variant="outline">
-                          Updated: {new Date(response.updatedAt).toLocaleDateString()}
+                          Created: {new Date(response.createdAt).toLocaleDateString()}
                         </Badge>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                        {response.updatedAt !== response.createdAt && (
+                          <Badge variant="outline">
+                            Updated: {new Date(response.updatedAt).toLocaleDateString()}
+                          </Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
               {cannedResponses?.length === 0 && (
                 <div className="py-8 text-center text-gray-500">
                   No canned responses yet. Create your first one!

@@ -5,13 +5,14 @@ import {
   ArrowRightLeft,
   ChevronsDown,
   CircleFadingArrowUp,
+  Loader2,
   OctagonX,
   Palette,
   SquareChevronLeft,
   SquareChevronRight,
   Trash2,
 } from "lucide-react";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -90,6 +91,11 @@ export default function MyJutsu() {
   const [transferValue, setTransferValue] = useState<number>(1);
   const [modalType, setModalType] = useState<string | null>(null);
   const [reskinData, setReskinData] = useState<JutsuReskinCreateSchema | null>(null);
+  const [pendingOrder, setPendingOrder] = useState<{
+    jutsuId: string;
+    moveForward: boolean;
+  } | null>(null);
+  const orderRequestInFlightRef = useRef(false);
 
   // Accordion state for jutsu category sections (multiple can be open simultaneously)
   const [openSections, setOpenSections] = useState<Set<string>>(
@@ -229,14 +235,31 @@ export default function MyJutsu() {
     onSettled,
   });
 
-  const { mutate: updateOrder } = api.jutsu.updateUserJutsuOrder.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getUser.invalidate();
-      }
-    },
-  });
+  const { mutate: updateOrder, isPending: isReordering } =
+    api.jutsu.updateUserJutsuOrder.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.profile.getUser.invalidate();
+        }
+      },
+      onSettled: () => {
+        orderRequestInFlightRef.current = false;
+        setPendingOrder(null);
+      },
+    });
+
+  const reorderJutsu = (jutsuId: string, moveForward: boolean) => {
+    if (orderRequestInFlightRef.current) return;
+
+    orderRequestInFlightRef.current = true;
+    setPendingOrder({ jutsuId, moveForward });
+    updateOrder({
+      jutsuId,
+      loadoutId: userData?.jutsuLoadout ?? "",
+      moveForward,
+    });
+  };
 
   const { mutate: buyJutsuSlot, isPending: isUpgrading } =
     api.blackmarket.buyJutsuSlot.useMutation({
@@ -616,27 +639,48 @@ export default function MyJutsu() {
                 <div className="flex flex-row items-center gap-3">
                   {userData.loadout?.jutsuIds.includes(userjutsu.jutsuId) && (
                     <>
-                      <SquareChevronLeft
-                        className="h-8 w-8 hover:cursor-pointer hover:text-orange-300"
-                        onClick={() =>
-                          updateOrder({
-                            jutsuId: userjutsu.jutsuId,
-                            loadoutId: userData?.jutsuLoadout ?? "",
-                            moveForward: false,
-                          })
+                      <button
+                        type="button"
+                        className="rounded-sm hover:text-orange-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={isReordering}
+                        aria-label={`Move ${userjutsu.jutsu.name} earlier in loadout`}
+                        aria-busy={
+                          pendingOrder?.jutsuId === userjutsu.jutsuId &&
+                          !pendingOrder.moveForward
                         }
-                      />
+                        onClick={() => reorderJutsu(userjutsu.jutsuId, false)}
+                      >
+                        {pendingOrder?.jutsuId === userjutsu.jutsuId &&
+                        !pendingOrder.moveForward ? (
+                          <Loader2 className="h-8 w-8 animate-spin" />
+                        ) : (
+                          <SquareChevronLeft className="h-8 w-8" />
+                        )}
+                      </button>
                       <p>Order</p>
-                      <SquareChevronRight
-                        className="h-8 w-8 hover:cursor-pointer hover:text-orange-300"
-                        onClick={() =>
-                          updateOrder({
-                            jutsuId: userjutsu.jutsuId,
-                            loadoutId: userData?.jutsuLoadout ?? "",
-                            moveForward: true,
-                          })
+                      <button
+                        type="button"
+                        className="rounded-sm hover:text-orange-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={isReordering}
+                        aria-label={`Move ${userjutsu.jutsu.name} later in loadout`}
+                        aria-busy={
+                          pendingOrder?.jutsuId === userjutsu.jutsuId &&
+                          pendingOrder.moveForward
                         }
-                      />
+                        onClick={() => reorderJutsu(userjutsu.jutsuId, true)}
+                      >
+                        {pendingOrder?.jutsuId === userjutsu.jutsuId &&
+                        pendingOrder.moveForward ? (
+                          <Loader2 className="h-8 w-8 animate-spin" />
+                        ) : (
+                          <SquareChevronRight className="h-8 w-8" />
+                        )}
+                      </button>
+                      <span className="sr-only" aria-live="polite" aria-atomic="true">
+                        {pendingOrder?.jutsuId === userjutsu.jutsuId
+                          ? `Updating ${userjutsu.jutsu.name} loadout order`
+                          : ""}
+                      </span>
                     </>
                   )}
 

@@ -11,6 +11,7 @@ import {
   Trash2,
   Video,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -29,6 +30,7 @@ import {
   IMG_ICON_TWITTER,
 } from "@/drizzle/constants";
 import Image from "@/layout/Image";
+import Modal from "@/layout/Modal";
 import ReportUser from "@/layout/Report";
 import { showMutationToast } from "@/libs/toast";
 import type { ImageWithRelations } from "@/routers/conceptart";
@@ -41,15 +43,34 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   showDetails?: boolean;
   width?: number;
   height?: number;
+  onDeleted?: (imageId: string) => void;
 }
+
+type ConceptEmotion = "like" | "love" | "laugh";
 
 const ConceptImage: React.FC<InputProps> = (props) => {
   // Destructure props & state
   const { image, showDetails } = props;
   const { data: user } = useUserData();
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const hasInvalidatedRef = useRef(false);
+  const emotionRequestIdRef = useRef(0);
+  const emotionInFlightRef = useRef<{ imageId: string; requestId: number } | null>(
+    null,
+  );
+  const previousImageIdRef = useRef(image?.id);
+  const [pendingEmotion, setPendingEmotion] = useState<{
+    imageId: string;
+    type: ConceptEmotion;
+  } | null>(null);
+  const deleteInFlightRef = useRef<string | null>(null);
+  const currentImageIdRef = useRef(image?.id);
+  currentImageIdRef.current = image?.id;
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [deletedImageId, setDeletedImageId] = useState<string | null>(null);
 
   // tRPC Utility
   const utils = api.useUtils();
@@ -121,29 +142,105 @@ const ConceptImage: React.FC<InputProps> = (props) => {
     }
   }, [videoStatus, image?.id, utils, finalizeUpload, isFinalizingUpload]);
 
-  // Convenience function for refetching data
-  const refetch = () => {
-    if (image) {
-      void utils.conceptart.get.invalidate({ id: image.id });
+  // Toggle an emotion on an image. Only one toggle may be in flight per card: the
+  // endpoint returns a success envelope rather than authoritative counters, so the
+  // UI remains response-driven and reconciles both query surfaces after success.
+  const emotion = api.conceptart.toggleEmotion.useMutation();
+
+  useEffect(() => {
+    if (previousImageIdRef.current === image?.id) return;
+
+    previousImageIdRef.current = image?.id;
+    currentImageIdRef.current = image?.id;
+    emotionInFlightRef.current = null;
+    deleteInFlightRef.current = null;
+    setPendingEmotion(null);
+    setDeleteTargetId(null);
+    setShowDeleteConfirmation(false);
+    setDeletedImageId(null);
+  }, [image?.id]);
+
+  const toggleEmotion = async (type: ConceptEmotion) => {
+    if (
+      !user ||
+      !image ||
+      emotionInFlightRef.current?.imageId === image.id ||
+      deleteInFlightRef.current === image.id
+    )
+      return;
+
+    const imageId = image.id;
+    const requestId = ++emotionRequestIdRef.current;
+    emotionInFlightRef.current = { imageId, requestId };
+    setPendingEmotion({ imageId, type });
+
+    try {
+      const result = await emotion.mutateAsync({ imageId, type });
+      showMutationToast(result);
+
+      if (result.success) {
+        await Promise.allSettled([
+          utils.conceptart.get.invalidate({ id: imageId }),
+          utils.conceptart.getAll.invalidate(),
+        ]);
+      }
+    } catch (error) {
+      showMutationToast({
+        success: false,
+        message: error instanceof Error ? error.message : "Could not update reaction",
+      });
+    } finally {
+      const activeRequest = emotionInFlightRef.current;
+      if (activeRequest?.imageId === imageId && activeRequest.requestId === requestId) {
+        emotionInFlightRef.current = null;
+        setPendingEmotion(null);
+      }
     }
-    void utils.conceptart.getAll.invalidate();
   };
 
-  // Toggle emotion a new image
-  const { mutate: emotion } = api.conceptart.toggleEmotion.useMutation({
-    onSuccess: (result) => {
-      showMutationToast(result);
-      refetch();
-    },
-  });
+  // Delete one exact piece of concept art. The ref is the synchronous guard: the
+  // mutation's pending render cannot happen quickly enough to stop a double click.
+  const remove = api.conceptart.delete.useMutation();
 
-  // Delete image
-  const { mutate: remove } = api.conceptart.delete.useMutation({
-    onSuccess: (result) => {
+  const deleteImage = async () => {
+    if (!image || deleteInFlightRef.current === image.id || isEmotionPending) return;
+
+    const imageId = image.id;
+    deleteInFlightRef.current = imageId;
+    setDeleteTargetId(imageId);
+
+    try {
+      const result = await remove.mutateAsync({ id: imageId });
       showMutationToast(result);
-      refetch();
-    },
-  });
+
+      if (!result.success) return;
+
+      // Tombstone the exact art before any refresh. This keeps stale/failed query
+      // reconciliation from flashing a deleted card back into the gallery.
+      setDeletedImageId(imageId);
+      setShowDeleteConfirmation(false);
+      props.onDeleted?.(imageId);
+      if (showDetails && currentImageIdRef.current === imageId) {
+        router.replace("/conceptart");
+      }
+
+      void Promise.allSettled([
+        utils.conceptart.get.invalidate({ id: imageId }),
+        utils.conceptart.getAll.invalidate(),
+      ]);
+    } catch (error) {
+      showMutationToast({
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Could not delete concept art",
+      });
+    } finally {
+      if (deleteInFlightRef.current === imageId) {
+        deleteInFlightRef.current = null;
+        setDeleteTargetId(null);
+      }
+    }
+  };
 
   // Return loading state for processing videos
   if (isProcessing) {
@@ -194,6 +291,17 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   const hasLaugh = image?.likes?.find(
     (like) => like.userId === user?.userId && like.type === "laugh",
   );
+  const isEmotionPending = pendingEmotion?.imageId === image.id;
+  const isDeleting = deleteTargetId === image.id;
+
+  if (deletedImageId === image.id) {
+    return showDetails ? (
+      <div className="flex min-h-48 items-center justify-center gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+        <span role="status">Concept art deleted. Returning to the gallery…</span>
+      </div>
+    ) : null;
+  }
 
   // Social sharing
   const shareLink = `https://www.theninja-rpg.com/conceptart/${image.id}`;
@@ -244,14 +352,37 @@ const ConceptImage: React.FC<InputProps> = (props) => {
         <div className="absolute top-2 right-2">
           {(image.userId === user?.userId ||
             (user && canDeleteConceptArt(user.role))) && (
-            <Trash2
-              className={`cursor-pointer text-white hover:fill-red-500 ${showDetails ? "h-7 w-7" : "h-5 w-5"}`}
+            /* biome-ignore lint/a11y/useSemanticElements: gallery cards wrap this control in a link, where a nested button would be invalid interactive markup */
+            <span
+              role="button"
+              tabIndex={isDeleting || isEmotionPending ? -1 : 0}
+              aria-disabled={isDeleting || isEmotionPending}
+              aria-label={`Delete concept art${image.prompt ? `: ${image.prompt}` : ""}`}
+              className={`inline-flex rounded-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 ${
+                isDeleting || isEmotionPending
+                  ? "cursor-not-allowed opacity-50"
+                  : "cursor-pointer hover:text-red-400"
+              }`}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                remove({ id: image.id });
+                if (isDeleting || isEmotionPending) return;
+                setShowDeleteConfirmation(true);
               }}
-            />
+              onKeyDown={(e) => {
+                if (isDeleting || isEmotionPending) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowDeleteConfirmation(true);
+                }
+              }}
+            >
+              <Trash2
+                className={showDetails ? "h-7 w-7" : "h-5 w-5"}
+                aria-hidden="true"
+              />
+            </span>
           )}
           {showDetails && (
             <ReportUser
@@ -278,37 +409,75 @@ const ConceptImage: React.FC<InputProps> = (props) => {
         >
           <button
             type="button"
-            className={`ml-1 flex cursor-pointer flex-row px-1 ${hasLike ? "bg-slate-700" : ""}`}
+            className={`ml-1 flex cursor-pointer flex-row items-center gap-1 px-1 disabled:cursor-not-allowed disabled:opacity-70 ${hasLike ? "bg-slate-700" : ""}`}
+            disabled={isEmotionPending || isDeleting}
+            aria-busy={pendingEmotion?.type === "like"}
+            aria-pressed={!!hasLike}
+            aria-label={
+              pendingEmotion?.type === "like"
+                ? "Updating reaction…"
+                : `${hasLike ? "Remove" : "Add"} heart reaction`
+            }
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              if (user) emotion({ imageId: image.id, type: "like" });
+              void toggleEmotion("like");
             }}
           >
+            {pendingEmotion?.type === "like" && (
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+            )}
             ❤️ {image.n_likes}
           </button>
           <button
             type="button"
-            className={`flex cursor-pointer flex-row px-1 ${hasLove ? "bg-slate-700" : ""}`}
+            className={`flex cursor-pointer flex-row items-center gap-1 px-1 disabled:cursor-not-allowed disabled:opacity-70 ${hasLove ? "bg-slate-700" : ""}`}
+            disabled={isEmotionPending || isDeleting}
+            aria-busy={pendingEmotion?.type === "love"}
+            aria-pressed={!!hasLove}
+            aria-label={
+              pendingEmotion?.type === "love"
+                ? "Updating reaction…"
+                : `${hasLove ? "Remove" : "Add"} thumbs-up reaction`
+            }
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              if (user) emotion({ imageId: image.id, type: "love" });
+              void toggleEmotion("love");
             }}
           >
+            {pendingEmotion?.type === "love" && (
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+            )}
             👍 {image.n_loves}
           </button>
           <button
             type="button"
-            className={`flex cursor-pointer flex-row px-1 ${hasLaugh ? "bg-slate-700" : ""}`}
+            className={`flex cursor-pointer flex-row items-center gap-1 px-1 disabled:cursor-not-allowed disabled:opacity-70 ${hasLaugh ? "bg-slate-700" : ""}`}
+            disabled={isEmotionPending || isDeleting}
+            aria-busy={pendingEmotion?.type === "laugh"}
+            aria-pressed={!!hasLaugh}
+            aria-label={
+              pendingEmotion?.type === "laugh"
+                ? "Updating reaction…"
+                : `${hasLaugh ? "Remove" : "Add"} laugh reaction`
+            }
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              if (user) emotion({ imageId: image.id, type: "laugh" });
+              void toggleEmotion("laugh");
             }}
           >
+            {pendingEmotion?.type === "laugh" && (
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+            )}
             🤣 {image.n_laugh}
           </button>
+          {isEmotionPending && (
+            <span className="sr-only" role="status" aria-live="polite">
+              Updating reaction…
+            </span>
+          )}
           <div className="grow"></div>
           {showDetails && (
             <>
@@ -472,6 +641,34 @@ const ConceptImage: React.FC<InputProps> = (props) => {
           )}
         </div>
       </div>
+      <Modal
+        id={`delete-concept-art-${image.id}`}
+        title="Delete concept art?"
+        isOpen={showDeleteConfirmation}
+        setIsOpen={setShowDeleteConfirmation}
+        proceed_label="Delete"
+        proceed_loading_label="Deleting concept art…"
+        confirmClassName="bg-red-600 text-white hover:bg-red-700"
+        isLoading={isDeleting}
+        keepOpenOnAccept
+        onAccept={() => void deleteImage()}
+      >
+        <div className="space-y-3">
+          <p>
+            You are about to permanently delete concept art by{" "}
+            <strong>{image.user?.username || "an unknown creator"}</strong>.
+          </p>
+          {image.prompt && (
+            <p className="rounded-md border border-slate-600 bg-slate-800/60 p-3 text-sm">
+              <span className="font-semibold">Prompt:</span> {image.prompt}
+            </p>
+          )}
+          <p className="text-red-300 text-sm">
+            This cannot be undone. The art will disappear from the gallery and its
+            detail page.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 };
