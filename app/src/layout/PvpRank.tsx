@@ -1,6 +1,6 @@
 "use client";
 
-import { OctagonX, Star } from "lucide-react";
+import { Loader2, OctagonX, Star } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,32 @@ import {
 } from "@/libs/jutsu";
 import { validateItemLoadout, validateJutsuLoadout } from "@/libs/ranked_pvp";
 import { showMutationToast } from "@/libs/toast";
+import { isRetryableTrpcError } from "@/utils/error";
 import { useRequireInVillage } from "@/utils/UserContext";
+import type { RankedLoadoutSchema } from "@/validators/pvpRank";
+
+type RankedLoadoutSaveKind =
+  | "unequip-all"
+  | "favorite-jutsu"
+  | "favorite-weapon"
+  | "favorite-consumable"
+  | "equip-jutsu"
+  | "equip-weapon"
+  | "equip-consumable";
+
+interface RankedLoadoutSaveSnapshot {
+  requestId: number;
+  userId: string;
+  seasonId: string | null;
+  loadoutId: string;
+  expectedUpdatedAt: Date;
+  kind: RankedLoadoutSaveKind;
+  targetId: string | null;
+  loadout: RankedLoadoutSchema;
+}
+
+const loadoutsMatch = (left: RankedLoadoutSchema, right: RankedLoadoutSchema) =>
+  JSON.stringify(left) === JSON.stringify(right);
 
 /**
  * Main ranked arena component for entering/leaving the arena
@@ -269,9 +294,12 @@ export const RankedLoadoutSelector: React.FC = () => {
   const state = useFiltering();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [selectedJutsu, setSelectedJutsu] = useState<Jutsu | undefined>(undefined);
+  const [selectedItem, setSelectedItem] = useState<Item | undefined>(undefined);
+  const [isItemModalOpen, setIsItemModalOpen] = useState<boolean>(false);
 
   // Ensure user is in village
   const { userData, access } = useRequireInVillage("/battlearena");
+  const { data: currentSeason } = api.pvpRank.getCurrentSeason.useQuery();
 
   // Track which tab is active
   const [activeTab, setActiveTab] = useState<"weapons" | "consumables" | "jutsu">(
@@ -323,14 +351,121 @@ export const RankedLoadoutSelector: React.FC = () => {
 
   const { data: rankedLoadout } = api.pvpRank.getRankedLoadout.useQuery();
 
-  // Loadout updating
-  const updateLoadout = api.pvpRank.updateRankedLoadout.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      setSelectedItem(undefined);
-      void utils.pvpRank.getRankedLoadout.invalidate();
-    },
-  });
+  // All seven controls replace the same JSON document, so they share one editor-scoped lock.
+  const updateLoadout = api.pvpRank.updateRankedLoadout.useMutation();
+  const saveSequenceRef = useRef(0);
+  const saveRef = useRef<RankedLoadoutSaveSnapshot | null>(null);
+  const [pendingSave, setPendingSave] = useState<RankedLoadoutSaveSnapshot | null>(
+    null,
+  );
+  const isSaving = pendingSave !== null;
+
+  const saveLoadout = async (
+    loadout: RankedLoadoutSchema,
+    kind: RankedLoadoutSaveKind,
+    targetId: string | null,
+  ) => {
+    if (!rankedLoadout || !userData || saveRef.current) return false;
+
+    const snapshot: RankedLoadoutSaveSnapshot = {
+      requestId: ++saveSequenceRef.current,
+      userId: userData.userId,
+      seasonId: currentSeason?.id ?? null,
+      loadoutId: rankedLoadout.id,
+      expectedUpdatedAt: rankedLoadout.updatedAt,
+      kind,
+      targetId,
+      loadout,
+    };
+    // The ref closes the same-tick gap before React can paint the disabled state.
+    saveRef.current = snapshot;
+    setPendingSave(snapshot);
+
+    try {
+      const result = await updateLoadout.mutateAsync({
+        ...snapshot.loadout,
+        expectedLoadoutId: snapshot.loadoutId,
+        expectedUpdatedAt: snapshot.expectedUpdatedAt,
+      });
+      if (saveRef.current !== snapshot) return false;
+
+      if (!result.success) {
+        showMutationToast(result);
+        return false;
+      }
+      const committed = result.committed;
+      const responseMatches =
+        committed?.userId === snapshot.userId &&
+        committed.loadoutId === snapshot.loadoutId &&
+        committed.previousUpdatedAt.getTime() ===
+          snapshot.expectedUpdatedAt.getTime() &&
+        loadoutsMatch(committed.loadout, snapshot.loadout);
+      if (!committed || !responseMatches) {
+        showMutationToast({
+          success: false,
+          message:
+            "The save response did not match this loadout. Refresh before trying again.",
+        });
+        return false;
+      }
+
+      showMutationToast(result);
+      // Install the committed server snapshot before refetching. A response from an older save
+      // must never replace a cache entry that already carries a newer server revision.
+      utils.pvpRank.getRankedLoadout.setData(undefined, (current) => {
+        const base = current?.id === snapshot.loadoutId ? current : rankedLoadout;
+        if (
+          base.id !== snapshot.loadoutId ||
+          base.userId !== snapshot.userId ||
+          base.updatedAt.getTime() > committed.updatedAt.getTime()
+        ) {
+          return current;
+        }
+        return {
+          ...base,
+          loadout: committed.loadout,
+          updatedAt: committed.updatedAt,
+        };
+      });
+
+      if (kind === "equip-weapon" || kind === "equip-consumable") {
+        setIsItemModalOpen(false);
+        setSelectedItem((current) => (current?.id === targetId ? undefined : current));
+      } else if (kind === "equip-jutsu") {
+        setIsOpen(false);
+        setSelectedJutsu((current) => (current?.id === targetId ? undefined : current));
+      }
+      void utils.pvpRank.getRankedLoadout.invalidate().catch(() => undefined);
+      return true;
+    } catch (error) {
+      // Ordinary tRPC errors are already owned by the global mutation handler.
+      if (error instanceof Error && isRetryableTrpcError(error)) {
+        showMutationToast({
+          success: false,
+          message:
+            "Could not save the ranked loadout. Check your connection and retry.",
+        });
+      }
+      return false;
+    } finally {
+      if (saveRef.current === snapshot) {
+        saveRef.current = null;
+        setPendingSave(null);
+      }
+    }
+  };
+
+  // Ignore a late response if the authenticated user or selected loadout changes underneath it.
+  useEffect(() => {
+    const pending = saveRef.current;
+    if (
+      pending &&
+      (pending.userId !== userData?.userId || pending.loadoutId !== rankedLoadout?.id)
+    ) {
+      saveRef.current = null;
+      setPendingSave(null);
+    }
+  }, [rankedLoadout?.id, userData?.userId]);
 
   // Get all jutsu and user jutsu data
 
@@ -352,13 +487,17 @@ export const RankedLoadoutSelector: React.FC = () => {
   const favoriteConsumables = rankedLoadout?.loadout.favoriteConsumableIds ?? [];
 
   const handleUnequipAll = () => {
-    if (!rankedLoadout) return;
-    updateLoadout.mutate({
-      ...rankedLoadout.loadout,
-      jutsuIds: [],
-      weaponIds: [],
-      consumableIds: [],
-    });
+    if (!rankedLoadout || saveRef.current) return;
+    void saveLoadout(
+      {
+        ...rankedLoadout.loadout,
+        jutsuIds: [],
+        weaponIds: [],
+        consumableIds: [],
+      },
+      "unequip-all",
+      null,
+    );
   };
 
   // Process data with favorite sorting
@@ -442,47 +581,59 @@ export const RankedLoadoutSelector: React.FC = () => {
 
   // Handle favorite toggling
   const handleToggleFavoriteJutsu = (jutsu: Jutsu) => {
-    if (!rankedLoadout) return;
+    if (!rankedLoadout || saveRef.current) return;
     const isFavorite = favoriteJutsus.includes(jutsu.id);
     const newFavoriteJutsus = isFavorite
       ? favoriteJutsus.filter((id) => id !== jutsu.id)
       : [...favoriteJutsus, jutsu.id];
 
-    updateLoadout.mutate({
-      ...rankedLoadout.loadout,
-      favoriteJutsuIds: newFavoriteJutsus,
-    });
+    void saveLoadout(
+      {
+        ...rankedLoadout.loadout,
+        favoriteJutsuIds: newFavoriteJutsus,
+      },
+      "favorite-jutsu",
+      jutsu.id,
+    );
   };
 
   const handleToggleFavoriteWeapon = (weapon: Item) => {
-    if (!rankedLoadout) return;
+    if (!rankedLoadout || saveRef.current) return;
     const isFavorite = favoriteWeapons.includes(weapon.id);
     const newFavoriteWeapons = isFavorite
       ? favoriteWeapons.filter((id) => id !== weapon.id)
       : [...favoriteWeapons, weapon.id];
 
-    updateLoadout.mutate({
-      ...rankedLoadout.loadout,
-      favoriteWeaponIds: newFavoriteWeapons,
-    });
+    void saveLoadout(
+      {
+        ...rankedLoadout.loadout,
+        favoriteWeaponIds: newFavoriteWeapons,
+      },
+      "favorite-weapon",
+      weapon.id,
+    );
   };
 
   const handleToggleFavoriteConsumable = (consumable: Item) => {
-    if (!rankedLoadout) return;
+    if (!rankedLoadout || saveRef.current) return;
     const isFavorite = favoriteConsumables.includes(consumable.id);
     const newFavoriteConsumables = isFavorite
       ? favoriteConsumables.filter((id) => id !== consumable.id)
       : [...favoriteConsumables, consumable.id];
 
-    updateLoadout.mutate({
-      ...rankedLoadout.loadout,
-      favoriteConsumableIds: newFavoriteConsumables,
-    });
+    void saveLoadout(
+      {
+        ...rankedLoadout.loadout,
+        favoriteConsumableIds: newFavoriteConsumables,
+      },
+      "favorite-consumable",
+      consumable.id,
+    );
   };
 
   // Handle jutsu equipping
   const handleToggleJutsu = (jutsu: Jutsu) => {
-    if (!rankedLoadout) return;
+    if (!rankedLoadout || saveRef.current) return;
     const alreadyEquipped = loadoutJutsus.includes(jutsu.id);
 
     // If equipping (not unequipping), check limits
@@ -500,12 +651,16 @@ export const RankedLoadoutSelector: React.FC = () => {
       }
     }
 
-    updateLoadout.mutate({
-      ...rankedLoadout.loadout,
-      jutsuIds: !alreadyEquipped
-        ? [...loadoutJutsus, jutsu.id]
-        : loadoutJutsus.filter((id) => id !== jutsu.id),
-    });
+    void saveLoadout(
+      {
+        ...rankedLoadout.loadout,
+        jutsuIds: !alreadyEquipped
+          ? [...loadoutJutsus, jutsu.id]
+          : loadoutJutsus.filter((id) => id !== jutsu.id),
+      },
+      "equip-jutsu",
+      jutsu.id,
+    );
   };
 
   /** Validate new item in terms of loadout constraints */
@@ -525,7 +680,7 @@ export const RankedLoadoutSelector: React.FC = () => {
   };
 
   const handleToggleWeapon = (weapon: Item) => {
-    if (!rankedLoadout) return;
+    if (!rankedLoadout || saveRef.current) return;
     const alreadyEquipped = loadoutWeapons.includes(weapon.id);
 
     // If equipping (not unequipping), check limits
@@ -534,16 +689,20 @@ export const RankedLoadoutSelector: React.FC = () => {
       if (!check) return;
     }
 
-    updateLoadout.mutate({
-      ...rankedLoadout.loadout,
-      weaponIds: !alreadyEquipped
-        ? [...loadoutWeapons, weapon.id]
-        : loadoutWeapons.filter((id) => id !== weapon.id),
-    });
+    void saveLoadout(
+      {
+        ...rankedLoadout.loadout,
+        weaponIds: !alreadyEquipped
+          ? [...loadoutWeapons, weapon.id]
+          : loadoutWeapons.filter((id) => id !== weapon.id),
+      },
+      "equip-weapon",
+      weapon.id,
+    );
   };
 
   const handleToggleConsumable = (consumable: Item) => {
-    if (!rankedLoadout) return;
+    if (!rankedLoadout || saveRef.current) return;
     const alreadyEquipped = loadoutConsumables.includes(consumable.id);
 
     // If equipping (not unequipping), check limits
@@ -552,17 +711,17 @@ export const RankedLoadoutSelector: React.FC = () => {
       if (!check) return;
     }
 
-    updateLoadout.mutate({
-      ...rankedLoadout.loadout,
-      consumableIds: !alreadyEquipped
-        ? [...loadoutConsumables, consumable.id]
-        : loadoutConsumables.filter((id) => id !== consumable.id),
-    });
+    void saveLoadout(
+      {
+        ...rankedLoadout.loadout,
+        consumableIds: !alreadyEquipped
+          ? [...loadoutConsumables, consumable.id]
+          : loadoutConsumables.filter((id) => id !== consumable.id),
+      },
+      "equip-consumable",
+      consumable.id,
+    );
   };
-
-  // State for item selection
-  const [selectedItem, setSelectedItem] = useState<Item | undefined>(undefined);
-  const [isItemModalOpen, setIsItemModalOpen] = useState<boolean>(false);
 
   // Guards
   if (!access) return <Loader explanation="Accessing Ranked PvP" />;
@@ -571,99 +730,130 @@ export const RankedLoadoutSelector: React.FC = () => {
 
   return (
     <>
-      <ContentBox
-        title="Ranked Loadout"
-        subtitle={`Select up to ${RANKED_LOADOUT_MAX_WEAPONS} weapons, ${RANKED_LOADOUT_MAX_CONSUMABLES} consumables and ${RANKED_LOADOUT_MAX_JUTSUS} jutsu`}
-        initialBreak={true}
-        topRightContent={
-          activeTab === "jutsu" && !isOpen ? (
-            <div className="flex flex-row items-center gap-2">
-              <JutsuFiltering state={state} />
-            </div>
-          ) : undefined
-        }
-        bottomRightContent={
-          activeTab === "jutsu" ? (
-            <Button onClick={() => handleUnequipAll()}>
-              <OctagonX className="mr-2 h-6 w-6" />
-              Unequip All
-            </Button>
-          ) : undefined
-        }
-      >
-        <Tabs
-          value={activeTab}
-          onValueChange={(val) =>
-            setActiveTab(val as "weapons" | "consumables" | "jutsu")
-          }
-          className="w-full"
-        >
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="weapons">Weapons</TabsTrigger>
-            <TabsTrigger value="consumables">Consumables</TabsTrigger>
-            <TabsTrigger value="jutsu">Jutsu</TabsTrigger>
-          </TabsList>
+      <div aria-busy={isSaving}>
+        {pendingSave && (
+          <div
+            className="mb-3 flex items-center justify-center gap-2 rounded-lg border border-blue-400/50 bg-blue-950/40 px-3 py-2 text-blue-100 text-sm"
+            role="status"
+            aria-live="polite"
+          >
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Saving loadout…
+          </div>
+        )}
+        <div className={isSaving ? "pointer-events-none opacity-60" : undefined}>
+          <ContentBox
+            title="Ranked Loadout"
+            subtitle={`Select up to ${RANKED_LOADOUT_MAX_WEAPONS} weapons, ${RANKED_LOADOUT_MAX_CONSUMABLES} consumables and ${RANKED_LOADOUT_MAX_JUTSUS} jutsu`}
+            initialBreak={true}
+            topRightContent={
+              activeTab === "jutsu" && !isOpen ? (
+                <div className="flex flex-row items-center gap-2">
+                  <JutsuFiltering state={state} />
+                </div>
+              ) : undefined
+            }
+            bottomRightContent={
+              activeTab === "jutsu" ? (
+                <Button onClick={() => handleUnequipAll()} disabled={isSaving}>
+                  {pendingSave?.kind === "unequip-all" ? (
+                    <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                  ) : (
+                    <OctagonX className="mr-2 h-6 w-6" />
+                  )}
+                  {pendingSave?.kind === "unequip-all"
+                    ? "Saving loadout…"
+                    : "Unequip All"}
+                </Button>
+              ) : undefined
+            }
+          >
+            <Tabs
+              value={activeTab}
+              onValueChange={(val) =>
+                setActiveTab(val as "weapons" | "consumables" | "jutsu")
+              }
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="weapons" disabled={isSaving}>
+                  Weapons
+                </TabsTrigger>
+                <TabsTrigger value="consumables" disabled={isSaving}>
+                  Consumables
+                </TabsTrigger>
+                <TabsTrigger value="jutsu" disabled={isSaving}>
+                  Jutsu
+                </TabsTrigger>
+              </TabsList>
 
-          {/* Weapons */}
-          <TabsContent value="weapons">
-            {isLoadingWeapons && <Loader explanation="Loading Weapons" />}
-            <ActionSelector
-              items={sortedWeapons?.map((weapon) => ({
-                ...weapon,
-                highlight: rankedLoadout?.loadout.weaponIds.includes(weapon.id),
-                isFavorite: favoriteWeapons.includes(weapon.id),
-              }))}
-              selectedId={selectedItem?.id}
-              showBgColor={false}
-              showLabels={false}
-              onClick={(id) => {
-                const item = sortedWeapons?.find((w) => w.id === id);
-                if (item) {
-                  setSelectedItem(item);
-                  setIsItemModalOpen(true);
-                }
-              }}
-            />
-          </TabsContent>
+              {/* Weapons */}
+              <TabsContent value="weapons">
+                {isLoadingWeapons && <Loader explanation="Loading Weapons" />}
+                <ActionSelector
+                  items={sortedWeapons?.map((weapon) => ({
+                    ...weapon,
+                    highlight: rankedLoadout?.loadout.weaponIds.includes(weapon.id),
+                    isFavorite: favoriteWeapons.includes(weapon.id),
+                  }))}
+                  selectedId={selectedItem?.id}
+                  showBgColor={false}
+                  showLabels={false}
+                  onClick={(id) => {
+                    if (saveRef.current) return;
+                    const item = sortedWeapons?.find((w) => w.id === id);
+                    if (item) {
+                      setSelectedItem(item);
+                      setIsItemModalOpen(true);
+                    }
+                  }}
+                />
+              </TabsContent>
 
-          {/* Consumables */}
-          <TabsContent value="consumables">
-            {isLoadingConsumables && <Loader explanation="Loading Consumables" />}
-            <ActionSelector
-              items={sortedConsumables?.map((consumable) => ({
-                ...consumable,
-                highlight: rankedLoadout?.loadout.consumableIds.includes(consumable.id),
-                isFavorite: favoriteConsumables.includes(consumable.id),
-              }))}
-              selectedId={selectedItem?.id}
-              showBgColor={false}
-              showLabels={false}
-              onClick={(id) => {
-                const item = sortedConsumables?.find((c) => c.id === id);
-                if (item) {
-                  setSelectedItem(item);
-                  setIsItemModalOpen(true);
-                }
-              }}
-            />
-          </TabsContent>
+              {/* Consumables */}
+              <TabsContent value="consumables">
+                {isLoadingConsumables && <Loader explanation="Loading Consumables" />}
+                <ActionSelector
+                  items={sortedConsumables?.map((consumable) => ({
+                    ...consumable,
+                    highlight: rankedLoadout?.loadout.consumableIds.includes(
+                      consumable.id,
+                    ),
+                    isFavorite: favoriteConsumables.includes(consumable.id),
+                  }))}
+                  selectedId={selectedItem?.id}
+                  showBgColor={false}
+                  showLabels={false}
+                  onClick={(id) => {
+                    if (saveRef.current) return;
+                    const item = sortedConsumables?.find((c) => c.id === id);
+                    if (item) {
+                      setSelectedItem(item);
+                      setIsItemModalOpen(true);
+                    }
+                  }}
+                />
+              </TabsContent>
 
-          {/* Jutsu */}
-          <TabsContent value="jutsu">
-            {isLoadingJutsu && <Loader explanation="Loading Jutsu" />}
-            <ActionSelector
-              items={processedJutsu}
-              showBgColor={false}
-              showLabels={true}
-              onClick={(id) => {
-                setSelectedJutsu(processedJutsu?.find((jutsu) => jutsu.id === id));
-                setIsOpen(true);
-              }}
-              emptyText="No jutsu available. Go to the training grounds in your village to learn some."
-            />
-          </TabsContent>
-        </Tabs>
-      </ContentBox>
+              {/* Jutsu */}
+              <TabsContent value="jutsu">
+                {isLoadingJutsu && <Loader explanation="Loading Jutsu" />}
+                <ActionSelector
+                  items={processedJutsu}
+                  showBgColor={false}
+                  showLabels={true}
+                  onClick={(id) => {
+                    if (saveRef.current) return;
+                    setSelectedJutsu(processedJutsu?.find((jutsu) => jutsu.id === id));
+                    setIsOpen(true);
+                  }}
+                  emptyText="No jutsu available. Go to the training grounds in your village to learn some."
+                />
+              </TabsContent>
+            </Tabs>
+          </ContentBox>
+        </div>
+      </div>
 
       {/* Item Modal */}
       {isItemModalOpen && selectedItem && (
@@ -672,15 +862,16 @@ export const RankedLoadoutSelector: React.FC = () => {
           isOpen={isItemModalOpen}
           setIsOpen={setIsItemModalOpen}
           isValid={false}
+          isLoading={isSaving}
+          keepOpenOnAccept={true}
           proceed_label={equippedItems.includes(selectedItem.id) ? "Unequip" : "Equip"}
+          proceed_loading_label="Saving loadout…"
           onAccept={() => {
             if (selectedItem.itemType === "WEAPON") {
               handleToggleWeapon(selectedItem);
             } else {
               handleToggleConsumable(selectedItem);
             }
-            setIsItemModalOpen(false);
-            setSelectedItem(undefined);
           }}
         >
           <div className="flex flex-col gap-4">
@@ -688,6 +879,7 @@ export const RankedLoadoutSelector: React.FC = () => {
             <div className="flex gap-2">
               <Button
                 variant="outline"
+                disabled={isSaving}
                 onClick={() => {
                   if (selectedItem.itemType === "WEAPON") {
                     handleToggleFavoriteWeapon(selectedItem);
@@ -697,16 +889,27 @@ export const RankedLoadoutSelector: React.FC = () => {
                 }}
                 className="flex items-center gap-2"
               >
-                <Star
-                  className={`h-4 w-4 ${(selectedItem.itemType === "WEAPON" ? favoriteWeapons.includes(selectedItem.id) : favoriteConsumables.includes(selectedItem.id)) ? "fill-yellow-400 text-yellow-400" : "text-gray-400"}`}
-                />
-                {(
-                  selectedItem.itemType === "WEAPON"
-                    ? favoriteWeapons.includes(selectedItem.id)
-                    : favoriteConsumables.includes(selectedItem.id)
-                )
-                  ? "Unfavorite"
-                  : "Favorite"}
+                {pendingSave?.targetId === selectedItem.id &&
+                (pendingSave.kind === "favorite-weapon" ||
+                  pendingSave.kind === "favorite-consumable") ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving favorite…
+                  </>
+                ) : (
+                  <>
+                    <Star
+                      className={`h-4 w-4 ${(selectedItem.itemType === "WEAPON" ? favoriteWeapons.includes(selectedItem.id) : favoriteConsumables.includes(selectedItem.id)) ? "fill-yellow-400 text-yellow-400" : "text-gray-400"}`}
+                    />
+                    {(
+                      selectedItem.itemType === "WEAPON"
+                        ? favoriteWeapons.includes(selectedItem.id)
+                        : favoriteConsumables.includes(selectedItem.id)
+                    )
+                      ? "Unfavorite"
+                      : "Favorite"}
+                  </>
+                )}
               </Button>
             </div>
             {!equippedItems.includes(selectedItem.id) &&
@@ -739,11 +942,12 @@ export const RankedLoadoutSelector: React.FC = () => {
           isOpen={isOpen}
           setIsOpen={setIsOpen}
           isValid={false}
+          isLoading={isSaving}
+          keepOpenOnAccept={true}
           proceed_label={loadoutJutsus.includes(selectedJutsu.id) ? "Unequip" : "Equip"}
+          proceed_loading_label="Saving loadout…"
           onAccept={() => {
             handleToggleJutsu(selectedJutsu);
-            setIsOpen(false);
-            setSelectedJutsu(undefined);
           }}
         >
           <div className="flex flex-col gap-4">
@@ -751,13 +955,26 @@ export const RankedLoadoutSelector: React.FC = () => {
             <div className="flex gap-2">
               <Button
                 variant="outline"
+                disabled={isSaving}
                 onClick={() => handleToggleFavoriteJutsu(selectedJutsu)}
                 className="flex items-center gap-2"
               >
-                <Star
-                  className={`h-4 w-4 ${favoriteJutsus.includes(selectedJutsu.id) ? "fill-yellow-400 text-yellow-400" : "text-gray-400"}`}
-                />
-                {favoriteJutsus.includes(selectedJutsu.id) ? "Unfavorite" : "Favorite"}
+                {pendingSave?.kind === "favorite-jutsu" &&
+                pendingSave.targetId === selectedJutsu.id ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving favorite…
+                  </>
+                ) : (
+                  <>
+                    <Star
+                      className={`h-4 w-4 ${favoriteJutsus.includes(selectedJutsu.id) ? "fill-yellow-400 text-yellow-400" : "text-gray-400"}`}
+                    />
+                    {favoriteJutsus.includes(selectedJutsu.id)
+                      ? "Unfavorite"
+                      : "Favorite"}
+                  </>
+                )}
               </Button>
             </div>
             {!loadoutJutsus.includes(selectedJutsu.id) &&

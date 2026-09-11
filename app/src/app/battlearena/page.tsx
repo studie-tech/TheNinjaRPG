@@ -2,10 +2,10 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { sendGTMEvent } from "@next/third-parties/google";
-import { Bot, Info, Sun, Swords } from "lucide-react";
+import { Bot, Info, Loader2, Sun, Swords } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
@@ -207,6 +207,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
 
   // Auto combat preference
   const [autoCombat, setAutoCombat] = useAutoCombatSetting();
+  const attackInFlightRef = useRef(false);
 
   // Queries
   const { data: aiData } = api.profile.getAllAiNames.useQuery(undefined);
@@ -240,9 +241,9 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
   // Mutation for starting a fight
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startArenaBattle.useMutation({
-      onSuccess: async (result) => {
+      onSuccess: (result) => {
         if (result.success && result.battleId) {
-          await updateUser({
+          void updateUser({
             status: "BATTLE",
             battleId: result.battleId,
             updatedAt: new Date(),
@@ -253,10 +254,21 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
             handleNextStep();
           }
         } else {
+          attackInFlightRef.current = false;
           showMutationToast(result);
         }
       },
+      onError: (error) => {
+        attackInFlightRef.current = false;
+        showMutationToast({ success: false, message: error.message });
+      },
     });
+
+  const handleAttack = () => {
+    if (attackInFlightRef.current || isAttacking || !aiId) return;
+    attackInFlightRef.current = true;
+    attack({ aiId, autoCombat });
+  };
 
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -283,7 +295,11 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
           tall as the taller one, so the button stays in view, which the
           tutorial step highlighting it depends on. */}
       {canDoArena && (
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
+        <fieldset
+          disabled={isAttacking}
+          aria-busy={isAttacking}
+          className="flex flex-col gap-4 xl:flex-row xl:items-stretch"
+        >
           {/* OPPONENT PICKER — same card shell and heading treatment as the
               setup panel beside it, so the two line up top and bottom instead
               of one starting lower and ending shorter than the other. */}
@@ -395,7 +411,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
                 )}
               </div>
             )}
-            {!isAttacking && !isAsleep && (
+            {!isAsleep && (
               <div className="flex flex-col items-center gap-2 border-t pt-3">
                 <Button
                   id="tutorial-battlearena-challenge-ai-enter"
@@ -403,10 +419,16 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
                   decoration="gold"
                   animation="pulse"
                   className="w-full text-2xl italic"
-                  onClick={() => aiId && attack({ aiId, autoCombat })}
+                  disabled={isAttacking || !aiId}
+                  aria-live="polite"
+                  onClick={handleAttack}
                 >
-                  <Swords className="mr-4 h-10 w-10" />
-                  Enter arena
+                  {isAttacking ? (
+                    <Loader2 className="mr-4 h-10 w-10 animate-spin" aria-hidden />
+                  ) : (
+                    <Swords className="mr-4 h-10 w-10" />
+                  )}
+                  {isAttacking ? "Starting arena battle…" : "Enter arena"}
                 </Button>
                 {autoCombat && (
                   <p className="text-center text-muted-foreground text-xs">
@@ -417,7 +439,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
               </div>
             )}
           </div>
-        </div>
+        </fieldset>
       )}
 
       {/* DAILY LIMIT REACHED */}
@@ -427,17 +449,6 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
           <p className="text-muted-foreground text-sm">
             You have used all of your daily arena fights
           </p>
-        </div>
-      )}
-
-      {isAttacking && (
-        <div className="min-h-64">
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">
-            <div className="m-auto text-white">
-              <p className="text-5xl">Entering the Arena</p>
-              <Loader />
-            </div>
-          </div>
         </div>
       )}
 
@@ -724,13 +735,14 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
 
   // Auto combat preference
   const [autoCombat, setAutoCombat] = useAutoCombatSetting();
+  const attackInFlightRef = useRef(false);
 
   // Mutation for starting a fight
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startArenaBattle.useMutation({
-      onSuccess: async (data) => {
+      onSuccess: (data) => {
         if (data.success && data.battleId) {
-          await updateUser({
+          void updateUser({
             status: "BATTLE",
             battleId: data.battleId,
             updatedAt: new Date(),
@@ -738,8 +750,13 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
           pushToCombat(router, data.battleId);
           showMutationToast({ ...data, message: "Entering the Training" });
         } else {
+          attackInFlightRef.current = false;
           showMutationToast(data);
         }
+      },
+      onError: (error) => {
+        attackInFlightRef.current = false;
+        showMutationToast({ success: false, message: error.message });
       },
     });
 
@@ -757,6 +774,8 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
 
   // Submit handler
   const onSubmit = form.handleSubmit((data) => {
+    if (attackInFlightRef.current || isAttacking) return;
+    attackInFlightRef.current = true;
     setStatDistribution(data);
     attack({ aiId: aiId, stats: data, autoCombat });
   });
@@ -771,104 +790,107 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
   return (
     <ContentBox title="Assign Dummy stats" subtitle="" initialBreak={true}>
       <Form {...form}>
-        <form className="grid grid-cols-2 gap-2" onSubmit={onSubmit}>
-          {statNames
-            .filter((x) => !x.includes("Offence"))
-            .map((stat, i) => {
-              const maxValue = maxValues[stat];
-              if (maxValue && maxValue > 0) {
-                return (
-                  <FormField
-                    key={`${stat}-${i}`}
-                    control={form.control}
-                    name={stat}
-                    render={({ field }) => (
-                      <FormItem className="pt-1">
-                        <FormLabel>{stat}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder={stat}
-                            {...field}
-                            value={field.value as number}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                );
-              } else {
-                return (
-                  <FormItem className="pt-1" key={`${stat}-${i}`}>
-                    <FormLabel>{stat}</FormLabel>
-                    <FormControl>
-                      <div>- Max</div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                );
-              }
-            })}
-          <div className="col-span-2 flex flex-row gap-3">
-            <JutsuLoadoutSelector variant="dropdown" label="Jutsu loadout" />
-            <ItemLoadoutSelector variant="dropdown" label="Item loadout" />
-          </div>
-          <div className="col-span-2 flex items-center justify-between gap-3 rounded-lg border p-3">
-            <div className="flex flex-col">
-              <p className="flex items-center gap-2 font-semibold text-sm">
-                <Bot className="h-4 w-4" /> Auto combat
-              </p>
-              <p className="text-muted-foreground text-xs">
-                Your AI profile fights for you while you watch the battle live
-              </p>
+        <form
+          className="grid grid-cols-2 gap-2"
+          aria-busy={isAttacking}
+          onSubmit={onSubmit}
+        >
+          <fieldset disabled={isAttacking} className="contents">
+            {statNames
+              .filter((x) => !x.includes("Offence"))
+              .map((stat, i) => {
+                const maxValue = maxValues[stat];
+                if (maxValue && maxValue > 0) {
+                  return (
+                    <FormField
+                      key={`${stat}-${i}`}
+                      control={form.control}
+                      name={stat}
+                      render={({ field }) => (
+                        <FormItem className="pt-1">
+                          <FormLabel>{stat}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder={stat}
+                              {...field}
+                              value={field.value as number}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  );
+                } else {
+                  return (
+                    <FormItem className="pt-1" key={`${stat}-${i}`}>
+                      <FormLabel>{stat}</FormLabel>
+                      <FormControl>
+                        <div>- Max</div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }
+              })}
+            <div className="col-span-2 flex flex-row gap-3">
+              <JutsuLoadoutSelector variant="dropdown" label="Jutsu loadout" />
+              <ItemLoadoutSelector variant="dropdown" label="Item loadout" />
             </div>
-            <Switch
-              checked={autoCombat}
-              onCheckedChange={setAutoCombat}
-              aria-label="Toggle auto combat"
-            />
-          </div>
-          {isAsleep ? (
-            <div className="col-span-2 flex flex-row justify-center">
-              {isTogglingSleep ? (
-                <Loader explanation="Waking up..." />
-              ) : (
+            <div className="col-span-2 flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div className="flex flex-col">
+                <p className="flex items-center gap-2 font-semibold text-sm">
+                  <Bot className="h-4 w-4" /> Auto combat
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  Your AI profile fights for you while you watch the battle live
+                </p>
+              </div>
+              <Switch
+                checked={autoCombat}
+                onCheckedChange={setAutoCombat}
+                aria-label="Toggle auto combat"
+              />
+            </div>
+            {isAsleep ? (
+              <div className="col-span-2 flex flex-row justify-center">
+                {isTogglingSleep ? (
+                  <Loader explanation="Waking up..." />
+                ) : (
+                  <Button
+                    type="button"
+                    size="xl"
+                    decoration="gold"
+                    animation="pulse"
+                    className="w-full text-2xl italic"
+                    onClick={() => toggleSleep()}
+                  >
+                    <Sun className="mr-4 h-10 w-10" />
+                    Wake up!
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="col-span-2 flex flex-row justify-center">
                 <Button
-                  type="button"
                   size="xl"
                   decoration="gold"
                   animation="pulse"
                   className="w-full text-2xl italic"
-                  onClick={() => toggleSleep()}
+                  disabled={isAttacking}
+                  aria-live="polite"
                 >
-                  <Sun className="mr-4 h-10 w-10" />
-                  Wake up!
+                  {isAttacking ? (
+                    <Loader2 className="mr-4 h-10 w-10 animate-spin" aria-hidden />
+                  ) : (
+                    <Swords className="mr-4 h-10 w-10" />
+                  )}
+                  {isAttacking ? "Starting arena battle…" : "Enter arena"}
                 </Button>
-              )}
-            </div>
-          ) : !isAttacking ? (
-            <div className="col-span-2 flex flex-row justify-center">
-              <Button
-                size="xl"
-                decoration="gold"
-                animation="pulse"
-                className="w-full text-2xl italic"
-              >
-                <Swords className="mr-4 h-10 w-10" />
-                Enter arena
-              </Button>
-            </div>
-          ) : (
-            <div className="min-h-64">
-              <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-95">
-                <div className="m-auto text-white">
-                  <p className="text-5xl">Entering the Training</p>
-                  <Loader />
-                </div>
               </div>
-            </div>
-          )}
+            )}
+          </fieldset>
         </form>
       </Form>
     </ContentBox>

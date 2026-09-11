@@ -225,37 +225,67 @@ export const clanRouter = createTRPCRouter({
           return errorResponse(`Missing ${missing} reps for upgrading to town.`);
         }
       }
-      // Mutate - first pay up
-      const result = await ctx.drizzle
-        .update(clan)
-        .set({
-          ...(clanHideout.wasDowngraded
-            ? { bank: sql`${clan.bank} - ${TOWN_REESTABLISH_COST}` }
-            : {
-                repTreasury: sql`${clan.repTreasury} - ${HIDEOUT_TOWN_UPGRADE}`,
-                points: sql`${clan.points} - ${FACTION_MIN_POINTS_FOR_TOWN}`,
-              }),
-        })
-        .where(
-          and(
-            eq(clan.id, input.clanId),
-            ...(clanHideout.wasDowngraded
-              ? [gte(clan.bank, TOWN_REESTABLISH_COST)]
-              : [gte(clan.repTreasury, HIDEOUT_TOWN_UPGRADE)]),
-          ),
-        );
-      if (result.rowsAffected === 0) {
-        const action = clanHideout.wasDowngraded ? "re-establish" : "upgrade";
-        return errorResponse(`Failed to ${action} hideout as town`);
+      // Claim the fetched clan snapshot and update the village atomically. The
+      // updatedAt CAS makes a second request that also read HIDEOUT lose even when
+      // the treasury held enough to pay twice; the transaction prevents charging
+      // without changing the village status (or vice versa).
+      const townUpgradeConflict = Symbol("townUpgradeConflict");
+      try {
+        const committed = await ctx.drizzle.transaction(async (tx) => {
+          const paymentResult = await tx
+            .update(clan)
+            .set({
+              updatedAt: new Date(),
+              ...(clanHideout.wasDowngraded
+                ? { bank: sql`${clan.bank} - ${TOWN_REESTABLISH_COST}` }
+                : {
+                    repTreasury: sql`${clan.repTreasury} - ${HIDEOUT_TOWN_UPGRADE}`,
+                    points: sql`${clan.points} - ${FACTION_MIN_POINTS_FOR_TOWN}`,
+                  }),
+            })
+            .where(
+              and(
+                eq(clan.id, input.clanId),
+                eq(clan.updatedAt, fetchedClan.updatedAt),
+                gte(clan.points, FACTION_MIN_POINTS_FOR_TOWN),
+                ...(clanHideout.wasDowngraded
+                  ? [gte(clan.bank, TOWN_REESTABLISH_COST)]
+                  : [gte(clan.repTreasury, HIDEOUT_TOWN_UPGRADE)]),
+              ),
+            );
+          if (paymentResult.rowsAffected !== 1) return false;
+
+          const villageResult = await tx
+            .update(village)
+            .set({
+              type: "TOWN",
+              lastMaintenancePaidAt: new Date(),
+            })
+            .where(
+              and(
+                eq(village.id, clanHideout.id),
+                eq(village.type, "HIDEOUT"),
+                eq(village.wasDowngraded, clanHideout.wasDowngraded),
+              ),
+            );
+          if (villageResult.rowsAffected !== 1) throw townUpgradeConflict;
+          return true;
+        });
+
+        if (!committed) {
+          const action = clanHideout.wasDowngraded ? "re-establish" : "upgrade";
+          return errorResponse(
+            `Could not ${action} hideout as town because the faction changed. Please refresh and try again.`,
+          );
+        }
+      } catch (error) {
+        if (error === townUpgradeConflict) {
+          return errorResponse(
+            "Could not upgrade hideout because its status changed. Please refresh and try again.",
+          );
+        }
+        throw error;
       }
-      // Mutate 2 - second update the actual status
-      await ctx.drizzle
-        .update(village)
-        .set({
-          type: "TOWN",
-          lastMaintenancePaidAt: new Date(),
-        })
-        .where(eq(village.id, clanHideout.id));
 
       return { success: true, message: "Hideout upgraded to town successfully" };
     }),

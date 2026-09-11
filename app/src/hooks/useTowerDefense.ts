@@ -140,9 +140,9 @@ const getHudStore = (): HudStore => {
 
 const hudStore = getHudStore();
 
+export type { HudValues };
 // Export for use in page.tsx
 export { hudStore };
-export type { HudValues };
 
 /**
  * Custom hook that subscribes to the HUD store using useSyncExternalStore.
@@ -313,6 +313,9 @@ export const useTowerDefense = (userId?: string) => {
   // State - only contains UI-relevant data (mode, score, wave, health)
   // Entities (enemies, projectiles) are in refs to avoid re-renders
   const [gameState, setGameState] = useState<TowerDefenseGameState>(initialGameState);
+  const [isReturningToLobby, setIsReturningToLobby] = useState(false);
+  // React state alone cannot prevent two clicks in the same render frame.
+  const returnToLobbyInFlightRef = useRef(false);
 
   // PERFORMANCE: Entity store lives outside React state
   // Animation loop reads directly from this - no re-renders on entity updates
@@ -1312,11 +1315,7 @@ export const useTowerDefense = (userId?: string) => {
   }, [startWave]);
 
   // Mutation for claiming completed runs
-  const claimRunMutation = api.towerDefense.claimCompletedRun.useMutation({
-    onSuccess: () => {
-      void utils.towerDefense.getUserUpgrades.invalidate();
-    },
-  });
+  const claimRunMutation = api.towerDefense.claimCompletedRun.useMutation();
 
   /**
    * Return to lobby
@@ -1328,23 +1327,31 @@ export const useTowerDefense = (userId?: string) => {
    * NOTE: Guest sessions cannot claim points - they are skipped.
    */
   const returnToLobby = useCallback(async () => {
-    // If we have a completed run with points, claim it first (only for logged-in users)
+    if (returnToLobbyInFlightRef.current) return;
+    returnToLobbyInFlightRef.current = true;
+    setIsReturningToLobby(true);
+
+    // Authenticated completed runs are recorded before leaving the result screen.
     const completedRun = completedRunRef.current;
     const session = staticSessionRef.current;
     const isGuest = isGuestRef.current;
-    if (
+    const runId = gameState.runId;
+    const shouldClaimRun =
       gameState.mode === "game-over" &&
-      gameState.runId &&
+      runId &&
       completedRun &&
       session &&
       !isGuest &&
-      userId
-    ) {
+      userId;
+
+    setGameState((prev) => ({ ...prev, error: null }));
+
+    if (shouldClaimRun) {
       try {
         // COST OPTIMIZATION: CompletedRun now stores definitions_hash instead of full JSON
         // We pass the original definitions from the session for signature verification
-        await claimRunMutation.mutateAsync({
-          spacetimeSessionId: gameState.runId,
+        const claimResult = await claimRunMutation.mutateAsync({
+          spacetimeSessionId: runId,
           sessionSignature: completedRun.sessionSignature,
           nonce: completedRun.nonce,
           // Get definitions from original session (not from completedRun which has hash)
@@ -1379,13 +1386,30 @@ export const useTowerDefense = (userId?: string) => {
           pointsEarned: completedRun.pointsEarned,
         });
 
-        // Step 2: Delete from SpacetimeDB to save storage costs
-        if (sessionIdRef.current) {
-          await connectionRef.current.deleteCompletedRun(sessionIdRef.current);
+        if (!claimResult.success) {
+          throw new Error(claimResult.message);
         }
       } catch (error) {
         console.error("[useTowerDefense] Failed to claim run:", error);
-        // Continue to lobby even if claim fails
+        setGameState((prev) => ({
+          ...prev,
+          error: `Unable to claim this run: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }. Your result is safe—please try again.`,
+        }));
+        returnToLobbyInFlightRef.current = false;
+        setIsReturningToLobby(false);
+        return;
+      }
+
+      // The server has authoritatively recorded the claim. SpacetimeDB cleanup is
+      // best-effort from here: failing it must never invite a duplicate claim.
+      if (sessionIdRef.current) {
+        try {
+          await connectionRef.current.deleteCompletedRun(sessionIdRef.current);
+        } catch (error) {
+          console.error("[useTowerDefense] Failed to delete completed run:", error);
+        }
       }
     }
 
@@ -1402,8 +1426,12 @@ export const useTowerDefense = (userId?: string) => {
     }
 
     // PERFORMANCE: Unsubscribe from session data before disconnecting
-    connectionRef.current.unsubscribeFromSession();
-    connectionRef.current.disconnect();
+    try {
+      connectionRef.current.unsubscribeFromSession();
+      connectionRef.current.disconnect();
+    } catch (error) {
+      console.error("[useTowerDefense] Failed to disconnect cleanly:", error);
+    }
 
     // Reset all game data
     resetGameRefs();
@@ -1411,8 +1439,12 @@ export const useTowerDefense = (userId?: string) => {
     setGameState(initialGameState);
 
     if (userId) {
-      void utils.towerDefense.getUserUpgrades.invalidate();
+      void utils.towerDefense.getUserUpgrades.invalidate().catch((error) => {
+        console.error("[useTowerDefense] Failed to refresh upgrades:", error);
+      });
     }
+    returnToLobbyInFlightRef.current = false;
+    setIsReturningToLobby(false);
   }, [gameState.mode, gameState.runId, claimRunMutation, utils, resetGameRefs, userId]);
 
   /**
@@ -1499,6 +1531,11 @@ export const useTowerDefense = (userId?: string) => {
     isStarting: gameState.mode === "connecting",
     isSubmitting: gameState.isSubmitting,
     isAbandoning: false,
+    isReturningToLobby,
+    isClaimingRewards:
+      isReturningToLobby &&
+      !isGuestRef.current &&
+      (completedRunRef.current?.pointsEarned ?? 0) > 0,
 
     // Guest mode flag
     isGuest: !userId,

@@ -802,10 +802,12 @@ export const jutsuRouter = createTRPCRouter({
         createdAt: entry.createdAt,
         ...input.data,
       });
-      // Update
-      await Promise.all([
-        ctx.drizzle.update(jutsu).set(input.data).where(eq(jutsu.id, input.id)),
-        ctx.drizzle.insert(actionLog).values({
+      // Keep the jutsu row, any equipped-state cleanup, and its audit record in
+      // one commit. Otherwise a later write failure can leave a partial update
+      // that the client reasonably believes is safe to retry.
+      await ctx.drizzle.transaction(async (tx) => {
+        await tx.update(jutsu).set(input.data).where(eq(jutsu.id, input.id));
+        await tx.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
           tableName: "jutsu",
@@ -813,18 +815,22 @@ export const jutsuRouter = createTRPCRouter({
           relatedId: entry.id,
           relatedMsg: `Update: ${entry.name}`,
           relatedImage: entry.image,
-        }),
-        ...(input.data.hidden
-          ? [
-              ctx.drizzle
-                .update(userJutsu)
-                .set({ equipped: false })
-                .where(eq(userJutsu.jutsuId, entry.id)),
-            ]
-          : []),
-      ]);
+        });
+        if (input.data.hidden) {
+          await tx
+            .update(userJutsu)
+            .set({ equipped: false })
+            .where(eq(userJutsu.jutsuId, entry.id));
+        }
+      });
       if (process.env.NODE_ENV !== "development") {
-        await callDiscordContent(user.username, entry.name, diff, entry.image);
+        try {
+          await callDiscordContent(user.username, entry.name, diff, entry.image);
+        } catch (error) {
+          // The database transaction is already committed. A notification outage
+          // must not turn a successful update into an apparent retryable failure.
+          console.error("Unable to announce committed jutsu update", error);
+        }
       }
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
@@ -884,83 +890,212 @@ export const jutsuRouter = createTRPCRouter({
     .input(
       z.object({
         userId: z.string(),
+        expectedUsername: z.string(),
+        userJutsuId: z.string(),
         jutsuId: z.string(),
-        level: z.number(),
-        reskinId: z.string().nullable().optional(),
+        expectedJutsuName: z.string(),
+        expectedLevel: z.number().int().min(0).max(25),
+        level: z.number().int().min(0).max(25),
+        expectedReskinId: z.string().nullable(),
+        expectedReskinName: z.string().nullable(),
+        reskinId: z.string().nullable(),
+        reskinName: z.string().nullable(),
+        requestId: z.string().uuid(),
       }),
     )
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        requestId: z.string().uuid().optional(),
+        adjustment: z
+          .object({
+            userId: z.string(),
+            username: z.string(),
+            userJutsuId: z.string(),
+            jutsuId: z.string(),
+            jutsuName: z.string(),
+            previousLevel: z.number().int(),
+            newLevel: z.number().int(),
+            previousReskinId: z.string().nullable(),
+            previousReskinName: z.string().nullable(),
+            newReskinId: z.string().nullable(),
+            newReskinName: z.string().nullable(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [user, userjutsus, reskin] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserJutsus(ctx.drizzle, input.userId),
-        ...(input.reskinId
+      const receiptId = `adjust-jutsu:${input.requestId}`;
+      const adjustment = {
+        userId: input.userId,
+        username: input.expectedUsername,
+        userJutsuId: input.userJutsuId,
+        jutsuId: input.jutsuId,
+        jutsuName: input.expectedJutsuName,
+        previousLevel: input.expectedLevel,
+        newLevel: input.level,
+        previousReskinId: input.expectedReskinId,
+        previousReskinName: input.expectedReskinName,
+        newReskinId: input.reskinId,
+        newReskinName: input.reskinName,
+      };
+      const changes = [
+        `Jutsu ${input.expectedJutsuName} lvl ${input.expectedLevel} -> ${input.level}`,
+        ...(input.expectedReskinId !== input.reskinId
           ? [
-              ctx.drizzle.query.jutsuReskin.findFirst({
-                where: and(
-                  eq(jutsuReskin.id, input.reskinId),
-                  eq(jutsuReskin.jutsuId, input.jutsuId),
-                ),
-              }),
+              `Jutsu ${input.expectedJutsuName} reskin ${input.expectedReskinName ?? "None"} -> ${input.reskinName ?? "None"}`,
             ]
           : []),
-      ]);
-      // Guard)
-      if (!canEditJutsus(user.role)) {
-        return errorResponse("Not allowed to edit public user");
-      }
-      // Roles that can only edit themselves
-      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
-        return errorResponse("You can only edit your own jutsus");
-      }
-      const userjutsu = userjutsus.find((j) => j.jutsuId === input.jutsuId);
-      if (!userjutsu) {
-        return errorResponse("Jutsu not found for user");
-      }
-      if (input.reskinId && !reskin) {
-        return errorResponse("Reskin not found for this jutsu");
-      }
-      // Action loggin
-      const prevReskinName = userjutsu.activeReskin?.name ?? null;
-      const newReskinName = reskin?.name ?? null;
-      const updateFields = {
-        level: input.level,
-        updatedAt: new Date(),
-        reskinId: input.reskinId,
-      };
-
-      const changes: string[] = [
-        `Jutsu ${userjutsu.jutsu.name} lvl ${userjutsu.level} -> ${input.level}`,
+        `Verified owned row ${input.userJutsuId}; jutsu ${input.jutsuId}; reskin ${input.expectedReskinId ?? "none"} -> ${input.reskinId ?? "none"}`,
       ];
-      if (input.reskinId !== undefined && prevReskinName !== newReskinName) {
-        changes.push(
-          `Jutsu ${userjutsu.jutsu.name} reskin ${prevReskinName ?? "None"} -> ${newReskinName ?? "None"}`,
-        );
-      }
 
-      // Mutate
-      await Promise.all([
-        ctx.drizzle
+      return ctx.drizzle.transaction(async (tx) => {
+        // Lock both identities in a stable order, then the exact owned-jutsu row. Distinct
+        // adjustments serialize and must confirm the latest state instead of silently winning a
+        // stale last-write race.
+        const lockedUserIds = [...new Set([ctx.userId, input.userId])].sort();
+        await tx.execute(
+          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${sql.join(
+            lockedUserIds.map((id) => sql`${id}`),
+            sql`, `,
+          )}) ORDER BY ${userData.userId} FOR UPDATE`,
+        );
+        await tx.execute(
+          sql`SELECT ${userJutsu.id} FROM ${userJutsu} WHERE ${userJutsu.id} = ${input.userJutsuId} FOR UPDATE`,
+        );
+
+        // PlanetScale transaction handles are single-flight: keep these reads sequential within
+        // this transaction (parallel queries can abort it as "transaction in use").
+        const user = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        });
+        const target = await tx.query.userData.findFirst({
+          where: eq(userData.userId, input.userId),
+        });
+        const ownedJutsu = await tx.query.userJutsu.findFirst({
+          where: and(
+            eq(userJutsu.id, input.userJutsuId),
+            eq(userJutsu.userId, input.userId),
+            eq(userJutsu.jutsuId, input.jutsuId),
+          ),
+          with: { jutsu: true, activeReskin: true },
+        });
+        const requestedReskin = input.reskinId
+          ? await tx.query.jutsuReskin.findFirst({
+              where: and(
+                eq(jutsuReskin.id, input.reskinId),
+                eq(jutsuReskin.jutsuId, input.jutsuId),
+              ),
+            })
+          : undefined;
+        const previousRequest = await tx.query.actionLog.findFirst({
+          where: eq(actionLog.id, receiptId),
+        });
+
+        if (!user) return errorResponse("Editing user not found");
+        if (user.isBanned) {
+          return errorResponse("You are banned and cannot adjust jutsus");
+        }
+        if (!canEditJutsus(user.role)) {
+          return errorResponse("Not allowed to edit public user");
+        }
+        if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+          return errorResponse("You can only edit your own jutsus");
+        }
+        if (!target) return errorResponse("Target user not found");
+        if (target.username !== input.expectedUsername) {
+          return errorResponse(
+            "The selected user changed; review the adjustment again",
+          );
+        }
+
+        // This audit row is also the durable replay receipt. Check it before current-row state:
+        // a later intentional adjustment must not make a lost-response retry look unsuccessful.
+        if (previousRequest) {
+          const previousChanges = previousRequest.changes as string[];
+          const isExactReplay =
+            previousRequest.userId === user.userId &&
+            previousRequest.tableName === "user" &&
+            previousRequest.relatedId === input.userId &&
+            previousRequest.relatedMsg === `Update: ${input.expectedJutsuName}` &&
+            previousRequest.relatedValue === input.level &&
+            previousChanges.length === changes.length &&
+            changes.every((change, index) => previousChanges[index] === change);
+          if (!isExactReplay) {
+            return errorResponse("Invalid jutsu adjustment request ID");
+          }
+          return {
+            success: true,
+            message: `${input.expectedJutsuName} was already adjusted for ${input.expectedUsername}`,
+            requestId: input.requestId,
+            adjustment,
+          };
+        }
+
+        if (!ownedJutsu || ownedJutsu.jutsu.jutsuType === "AI") {
+          return errorResponse("Jutsu not found for user");
+        }
+        const displayedJutsuName =
+          ownedJutsu.activeReskin?.name ?? ownedJutsu.jutsu.name;
+        if (displayedJutsuName !== input.expectedJutsuName) {
+          return errorResponse(
+            "The selected jutsu changed; review the adjustment again",
+          );
+        }
+        if (
+          ownedJutsu.level !== input.expectedLevel ||
+          ownedJutsu.reskinId !== input.expectedReskinId ||
+          (ownedJutsu.activeReskin?.name ?? null) !== input.expectedReskinName
+        ) {
+          return errorResponse(
+            "This owned jutsu changed; refresh and review the adjustment again",
+          );
+        }
+        if (
+          (input.reskinId === null && input.reskinName !== null) ||
+          (input.reskinId !== null &&
+            (!requestedReskin || requestedReskin.name !== input.reskinName))
+        ) {
+          return errorResponse("Reskin not found for this jutsu");
+        }
+        if (
+          input.level === input.expectedLevel &&
+          input.reskinId === input.expectedReskinId
+        ) {
+          return errorResponse("No jutsu changes to apply");
+        }
+
+        await tx
           .update(userJutsu)
-          .set(updateFields)
+          .set({
+            level: input.level,
+            updatedAt: new Date(),
+            reskinId: input.reskinId,
+          })
           .where(
             and(
+              eq(userJutsu.id, input.userJutsuId),
               eq(userJutsu.userId, input.userId),
               eq(userJutsu.jutsuId, input.jutsuId),
             ),
-          ),
-        ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
+          );
+        await tx.insert(actionLog).values({
+          id: receiptId,
+          userId: user.userId,
           tableName: "user",
           changes,
           relatedId: input.userId,
-          relatedMsg: `Update: ${userjutsu.jutsu.name}`,
-          relatedImage: userjutsu.jutsu.image,
-        }),
-      ]);
-      return { success: true, message: `Jutsu updated` };
+          relatedMsg: `Update: ${input.expectedJutsuName}`,
+          relatedImage: ownedJutsu.jutsu.image,
+          relatedValue: input.level,
+        });
+
+        return {
+          success: true,
+          message: `${input.expectedJutsuName} adjusted for ${input.expectedUsername}`,
+          requestId: input.requestId,
+          adjustment,
+        };
+      });
     }),
   // Start training a given jutsu
   startTraining: protectedProcedure

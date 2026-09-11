@@ -32,6 +32,7 @@ export default function JutsuMassEditPage() {
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   const [fields, setFields] = useState<string[]>([]);
+  const [isSavingJutsuEffects, setIsSavingJutsuEffects] = useState(false);
   const canEdit = Boolean(userData && canChangeContent(userData.role));
 
   return (
@@ -49,8 +50,12 @@ export default function JutsuMassEditPage() {
         initialBreak
         topRightContent={
           <div className="flex items-center gap-2">
-            <JutsuFiltering state={state} />
-            <EffectFieldSelector selected={fields} setSelected={setFields} />
+            <JutsuFiltering state={state} disabled={isSavingJutsuEffects} />
+            <EffectFieldSelector
+              selected={fields}
+              setSelected={setFields}
+              disabled={isSavingJutsuEffects}
+            />
           </div>
         }
         padding={false}
@@ -63,7 +68,8 @@ export default function JutsuMassEditPage() {
               kind="jutsu"
               entries={allJutsus}
               selectedFields={fields}
-              onEntriesUpdated={() => void refetch()}
+              onEntriesUpdated={() => refetch()}
+              onPendingChange={setIsSavingJutsuEffects}
               filterEffectTypes={state.effect}
             />
           </div>

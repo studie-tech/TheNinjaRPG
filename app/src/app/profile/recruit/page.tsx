@@ -8,7 +8,7 @@ import {
   Loader2,
   Trophy,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -17,15 +17,16 @@ import {
   FormControl,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { ACTIVE_VOTING_SITES } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
-import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
@@ -36,6 +37,8 @@ import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
   type LinkPromotionInput,
+  type LinkPromotionReviewInput,
+  linkPromotionReviewSchema,
   linkPromotionSchema,
 } from "@/validators/linkPromotion";
 
@@ -300,12 +303,6 @@ const RecruitGuideTab: React.FC = () => {
       }
     },
   });
-  const reviewPromotion = api.linkPromotion.reviewLinkPromotion.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-    },
-  });
-
   // Queries
   const {
     data: promotions,
@@ -344,36 +341,10 @@ const RecruitGuideTab: React.FC = () => {
       ) : null,
     actions:
       !promotion.reviewed && userData && canReviewLinkPromotions(userData.role) ? (
-        <Confirm
-          title="Review Link Promotion"
-          button={<Button>Review</Button>}
-          proceed_label="Award Points"
-          onAccept={() => {
-            const values = linkForm.getValues();
-            reviewPromotion.mutate({
-              id: promotion.id,
-              points: Number(values.url) || 0,
-            });
-          }}
-        >
-          <Form {...linkForm}>
-            <form className="space-y-4">
-              <p className="mb-4 text-muted-foreground text-sm">URL: {promotion.url}</p>
-              <FormField
-                control={linkForm.control}
-                name="url"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Input placeholder="Update URL" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </form>
-          </Form>
-        </Confirm>
+        <ReviewPromotionAction
+          promotionId={promotion.id}
+          promotionUrl={promotion.url}
+        />
       ) : null,
   }));
 
@@ -471,6 +442,131 @@ const RecruitGuideTab: React.FC = () => {
         )}
       </div>
     </div>
+  );
+};
+
+interface ReviewPromotionActionProps {
+  promotionId: string;
+  promotionUrl: string;
+}
+
+const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
+  promotionId,
+  promotionUrl,
+}) => {
+  const utils = api.useUtils();
+  const submissionInFlight = useRef(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [reviewComplete, setReviewComplete] = useState(false);
+  const reviewForm = useForm<LinkPromotionReviewInput>({
+    resolver: zodResolver(linkPromotionReviewSchema),
+    defaultValues: { id: promotionId, points: 0 },
+    mode: "onChange",
+  });
+  const reviewPromotion = api.linkPromotion.reviewLinkPromotion.useMutation({
+    onSuccess: (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        // The server has already committed the award. Settle this control before
+        // refreshing so a failed refetch can never offer the mutation again.
+        setReviewComplete(true);
+        setDialogOpen(false);
+        void utils.linkPromotion.getLinkPromotions.invalidate().catch(() => undefined);
+      }
+    },
+    onError: (error) => {
+      showMutationToast({ success: false, message: error.message });
+    },
+  });
+
+  const review = () => {
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
+    void reviewForm.handleSubmit(
+      async (values) => {
+        try {
+          await reviewPromotion.mutateAsync(values);
+        } catch {
+          // The mutation callback presents the error and the form stays open for retry.
+        } finally {
+          submissionInFlight.current = false;
+        }
+      },
+      () => {
+        submissionInFlight.current = false;
+      },
+    )();
+  };
+
+  return (
+    <>
+      <Button
+        type="button"
+        disabled={reviewPromotion.isPending || reviewComplete}
+        onClick={() => setDialogOpen(true)}
+      >
+        {reviewPromotion.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        {reviewComplete
+          ? "Reviewed"
+          : reviewPromotion.isPending
+            ? "Reviewing..."
+            : "Review"}
+      </Button>
+      <Modal
+        id={`review-promotion-${promotionId}`}
+        title="Review Link Promotion"
+        isOpen={dialogOpen}
+        setIsOpen={setDialogOpen}
+        proceed_label="Award Points"
+        proceed_loading_label="Awarding points..."
+        isLoading={reviewPromotion.isPending}
+        keepOpenOnAccept
+        onAccept={review}
+      >
+        <Form {...reviewForm}>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              review();
+            }}
+          >
+            <p className="text-muted-foreground text-sm">URL: {promotionUrl}</p>
+            <FormField
+              control={reviewForm.control}
+              name="points"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Points to award</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={500}
+                      step={1}
+                      inputMode="numeric"
+                      disabled={reviewPromotion.isPending}
+                      value={Number.isNaN(field.value) ? "" : field.value}
+                      onBlur={field.onBlur}
+                      onChange={(event) => {
+                        field.onChange(
+                          event.target.value === ""
+                            ? Number.NaN
+                            : event.target.valueAsNumber,
+                        );
+                      }}
+                      name={field.name}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </form>
+        </Form>
+      </Modal>
+    </>
   );
 };
 

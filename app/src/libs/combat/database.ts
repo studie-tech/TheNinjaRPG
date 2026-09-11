@@ -74,6 +74,36 @@ type DataBattleAction = {
   relatedBloodlineId?: string;
 };
 
+type ActiveWarKillInsert = {
+  id: string;
+  warId: string;
+  killerId: string;
+  victimId: string;
+  killerVillageId: string;
+  victimVillageId: string;
+  sector: number;
+  shrineHpChange: number;
+  townhallHpChange: number;
+};
+
+/** Insert a combat kill only if the target War is active in the same locking SQL statement. */
+export const insertActiveWarKill = (
+  client: DrizzleClient,
+  entry: ActiveWarKillInsert,
+) =>
+  client.execute(sql`
+    INSERT INTO ${warKill} (
+      id, warId, killerId, victimId, killerVillageId, victimVillageId,
+      sector, shrineHpChange, townhallHpChange, killedAt
+    )
+    SELECT
+      ${entry.id}, ${entry.warId}, ${entry.killerId}, ${entry.victimId},
+      ${entry.killerVillageId}, ${entry.victimVillageId}, ${entry.sector},
+      ${entry.shrineHpChange}, ${entry.townhallHpChange}, NOW(3)
+    FROM ${war}
+    WHERE id = ${entry.warId} AND status = 'ACTIVE' AND endedAt IS NULL
+  `);
+
 /**
  * A raid is "boss defeated" when the boss AI exists in the battle and no
  * remaining boss AI is still in fighting condition. Summons don't count as
@@ -626,7 +656,10 @@ export const updateWars = async (
       }
       if (result.didWin) {
         otherPromises.push(
-          client.insert(warKill).values({
+          // INSERT ... SELECT makes the kill log conditional on the War still being active in
+          // the same SQL statement. If admin cleanup already owns/deleted the War row, this
+          // inserts nothing; if combat wins first, cleanup subsequently sees and removes it.
+          insertActiveWarKill(client, {
             id: nanoid(),
             warId: w.id,
             killerId: user.userId,
@@ -636,7 +669,6 @@ export const updateWars = async (
             sector: user.sector,
             shrineHpChange: logShrineHpChange,
             townhallHpChange: result.warHealthChange,
-            killedAt: new Date(),
           }),
         );
       }

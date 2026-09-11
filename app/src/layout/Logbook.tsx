@@ -15,10 +15,10 @@ import type { UserQuest } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
 import Accordion from "@/layout/Accordion";
-import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
+import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { EventTimer, Objective, Reward } from "@/layout/Objective";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
@@ -31,6 +31,7 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { isReducedMissionReward } from "@/libs/quest";
 import { cn } from "@/libs/shadui";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
+import { isRetryableTrpcError } from "@/utils/error";
 import { parseHtml } from "@/utils/parse";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -43,6 +44,13 @@ type tabType = (typeof tabs)[number];
 
 /** Matches the interval `profile.getUser` refreshes its own achievement progress on. */
 const CATALOGUE_REFRESH_MS = 5 * 60 * 1000;
+
+/**
+ * Session-scoped exact-attempt tombstones survive a cache-driven unmount/remount. Replication
+ * lag can briefly return a just-abandoned history row again; its startedAt-bound identity keeps
+ * that stale row non-actionable without hiding a later intentional restart of the same quest.
+ */
+const abandonedQuestAttemptTombstones = new Set<string>();
 
 const Logbook: React.FC = () => {
   // State
@@ -440,6 +448,29 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
       : 1;
   const allDone = isQuestComplete(quest, tracker);
   const utils = api.useUtils();
+  const questStartedAt = userQuest.startedAt;
+  const abandonIdentity = `${userQuest.id}:${quest.id}:${questStartedAt?.toISOString() ?? "missing-start"}`;
+  const activeAbandonIdentityRef = useRef(abandonIdentity);
+  const abandonRequestRef = useRef<{ identity: string } | null>(null);
+  const [abandonDialogIdentity, setAbandonDialogIdentity] = useState<string | null>(
+    null,
+  );
+  const [abandonPendingIdentity, setAbandonPendingIdentity] = useState<string | null>(
+    null,
+  );
+  const [abandonedIdentity, setAbandonedIdentity] = useState<string | null>(null);
+
+  useEffect(() => {
+    activeAbandonIdentityRef.current = abandonIdentity;
+    setAbandonDialogIdentity(null);
+    setAbandonPendingIdentity(null);
+    setAbandonedIdentity(null);
+    // A response for the previous attempt remains harmless because both the client response
+    // handler and server CAS are bound to that attempt. Let the new attempt have its own action.
+    if (abandonRequestRef.current?.identity !== abandonIdentity) {
+      abandonRequestRef.current = null;
+    }
+  }, [abandonIdentity]);
 
   // A/B test for starter quest assistant image
   const { variant } = useAbVariant("ab_lemu_replacement_2");
@@ -540,15 +571,72 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     userQuest.previousCompletes,
   ]);
 
-  const { mutate: abandon } = api.quests.abandon.useMutation({
-    onSuccess: async (data) => {
+  const { mutateAsync: abandon } = api.quests.abandon.useMutation();
+  const isAbandoning = abandonPendingIdentity === abandonIdentity;
+  const isAbandoned =
+    abandonedIdentity === abandonIdentity ||
+    abandonedQuestAttemptTombstones.has(abandonIdentity);
+  const isAbandonDialogOpen = abandonDialogIdentity === abandonIdentity;
+
+  const abandonCurrentQuest = async () => {
+    // React state is asynchronous, so the ref is the same-tick duplicate-submit lock.
+    if (abandonRequestRef.current || !questStartedAt) return;
+
+    const request = { identity: abandonIdentity };
+    abandonRequestRef.current = request;
+    setAbandonPendingIdentity(abandonIdentity);
+
+    try {
+      const data = await abandon({
+        id: quest.id,
+        userQuestId: userQuest.id,
+        startedAt: questStartedAt,
+      });
+
+      // A parent may reuse this component for another attempt while the request is in flight.
+      // The server committed only the captured attempt; never hide or toast for its successor.
+      if (
+        abandonRequestRef.current !== request ||
+        activeAbandonIdentityRef.current !== request.identity
+      ) {
+        return;
+      }
+
       showMutationToast(data);
-      await Promise.all([
+      if (!data.success) return;
+
+      // Suppress and close before cache work. A failed/stale refresh must not immediately expose
+      // a second destructive action for an attempt the server has already closed.
+      abandonedQuestAttemptTombstones.add(request.identity);
+      setAbandonedIdentity(request.identity);
+      setAbandonDialogIdentity(null);
+      await Promise.allSettled([
         utils.quests.allianceBuilding.invalidate(),
         utils.profile.getUser.invalidate(),
       ]);
-    },
-  });
+    } catch (error) {
+      // The global mutation handler intentionally suppresses transient transport failures, so
+      // supply the one missing retry message without duplicating normal server error toasts.
+      if (
+        abandonRequestRef.current === request &&
+        activeAbandonIdentityRef.current === request.identity &&
+        error instanceof Error &&
+        isRetryableTrpcError(error)
+      ) {
+        showMutationToast({
+          success: false,
+          message: "Could not abandon this quest. Check your connection and try again.",
+        });
+      }
+    } finally {
+      if (abandonRequestRef.current === request) {
+        abandonRequestRef.current = null;
+        if (activeAbandonIdentityRef.current === request.identity) {
+          setAbandonPendingIdentity(null);
+        }
+      }
+    }
+  };
 
   return (
     <Post
@@ -556,7 +644,9 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
       options={
         <div className="ml-3">
           <div className="mt-2 flex flex-row items-center">
-            {quest.questType !== "starter" &&
+            {!isAbandoned &&
+              !!questStartedAt &&
+              quest.questType !== "starter" &&
               [
                 "mission",
                 "crime",
@@ -572,21 +662,50 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                 "anbu",
                 "overworld",
               ].includes(quest.questType) && (
-                <Confirm
-                  title="Confirm deleting quest"
-                  button={
-                    <X className="ml-2 h-8 w-8 cursor-pointer rounded-full border-2 bg-popover p-1 hover:text-orange-500" />
-                  }
-                  onAccept={(e) => {
-                    e.preventDefault();
-                    void abandon({ id: quest.id });
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  disabled={isAbandoning}
+                  aria-label={`Abandon ${quest.name}`}
+                  aria-busy={isAbandoning}
+                  hoverText={`Abandon ${quest.name}`}
+                  className="ml-2 h-8 w-8 rounded-full border-2 bg-popover p-1 hover:text-orange-500"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setAbandonDialogIdentity(abandonIdentity);
                   }}
                 >
-                  Are you sure you want to abandon this quest? Note that even though you
-                  abandon this quest, you have still used one of your daily attempts.
-                </Confirm>
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </Button>
               )}
           </div>
+          <Modal
+            id={`abandon-quest-${quest.id}`}
+            title={`Abandon ${quest.name}?`}
+            isOpen={isAbandonDialogOpen}
+            setIsOpen={(open) =>
+              setAbandonDialogIdentity(open ? abandonIdentity : null)
+            }
+            proceed_label="Abandon quest"
+            proceed_loading_label="Abandoning quest…"
+            confirmClassName="bg-red-600 text-white hover:bg-red-700"
+            isLoading={isAbandoning}
+            keepOpenOnAccept
+            onAccept={(event) => {
+              event.preventDefault();
+              void abandonCurrentQuest();
+            }}
+          >
+            <p>
+              This permanently ends your current attempt and removes all progress for
+              this quest.
+            </p>
+            <p className="font-semibold text-orange-500">
+              This attempt still counts toward your daily limit.
+            </p>
+          </Modal>
         </div>
       }
     >

@@ -11,7 +11,7 @@ interface ItemLoadoutSelectorProps {
   size?: "small" | "large";
   label?: string;
   variant?: "icons" | "dropdown";
-  onSelectOverride?: (loadoutId: string) => void;
+  onSelectOverride?: (loadoutId: string, displayName: string) => void;
   selectedOverrideId?: string | null;
 }
 

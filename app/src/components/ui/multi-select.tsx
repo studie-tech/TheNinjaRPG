@@ -27,6 +27,7 @@ interface MultiSelectProps {
   allowAddNew?: boolean;
   onAddNewOption?: (newOption: OptionType) => void;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 function MultiSelect({
@@ -38,10 +39,15 @@ function MultiSelect({
   allowAddNew,
   onAddNewOption,
   placeholder,
+  disabled = false,
   ...props
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
   const [newItemInput, setNewItemInput] = React.useState("");
+
+  React.useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   const handleUnselect = (item: string) => {
     onChange(selected.filter((i) => i !== item));
@@ -66,18 +72,29 @@ function MultiSelect({
   });
 
   return (
-    <Popover open={open} onOpenChange={setOpen} {...props}>
+    <Popover
+      open={disabled ? false : open}
+      onOpenChange={(nextOpen) => {
+        if (!disabled) setOpen(nextOpen);
+      }}
+      {...props}
+    >
       <PopoverTrigger asChild>
         <div
           role="combobox"
-          aria-expanded={open}
-          tabIndex={0}
+          aria-expanded={disabled ? false : open}
+          aria-disabled={disabled}
+          tabIndex={disabled ? -1 : 0}
           className={cn(
             "flex h-max w-full cursor-pointer items-center justify-between rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             isDirty ? "border-orange-300" : "border-input",
+            disabled && "cursor-not-allowed opacity-50",
           )}
-          onClick={() => setOpen(!open)}
+          onClick={() => {
+            if (!disabled) setOpen(!open);
+          }}
           onKeyDown={(e) => {
+            if (disabled) return;
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               setOpen(!open);
@@ -93,11 +110,14 @@ function MultiSelect({
                     variant="secondary"
                     key={`${item}-${i}`}
                     className="mr-1 mb-1"
-                    onClick={() => handleUnselect(item)}
+                    onClick={() => {
+                      if (!disabled) handleUnselect(item);
+                    }}
                   >
                     {option?.label ?? item}
                     <button
                       type="button"
+                      disabled={disabled}
                       className="ml-1 rounded-full outline-hidden ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
                       onMouseDown={(e) => {
                         e.preventDefault();
@@ -155,6 +175,7 @@ function MultiSelect({
                 <Input
                   placeholder="Add new option..."
                   value={newItemInput}
+                  disabled={disabled}
                   onChange={(e) => setNewItemInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -167,7 +188,7 @@ function MultiSelect({
                 <Button
                   size="sm"
                   onClick={addNewItem}
-                  disabled={!newItemInput.trim()}
+                  disabled={disabled || !newItemInput.trim()}
                   className="h-8 w-8 p-0"
                 >
                   <Plus className="h-4 w-4" />

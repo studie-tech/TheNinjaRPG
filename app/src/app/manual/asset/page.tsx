@@ -2,11 +2,11 @@
 
 import { FilePlus, Folder as FolderIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import type { GameAsset } from "@/drizzle/schema";
-import { ActionSelector } from "@/layout/CombatActions";
+import { ActionOption, ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
 import GameAssetFiltering, {
   getFilter,
@@ -27,14 +27,25 @@ export default function ManualAssets() {
   const router = useRouter();
   const state = useFiltering();
   const [activeTab, setActiveTab] = useState<"assets" | "animation" | "SFX">("assets");
+  const createInFlightRef = useRef(false);
 
   // Create mutation (for New button)
-  const { mutate: create } = api.gameAsset.create.useMutation({
+  const { mutate: create, isPending: isCreating } = api.gameAsset.create.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
       router.push(`/manual/asset/edit/${data.message}`);
     },
+    onSettled: () => {
+      createInFlightRef.current = false;
+    },
   });
+
+  const handleCreate = () => {
+    // isPending updates after React renders; the ref closes the same-tick double-click gap.
+    if (createInFlightRef.current) return;
+    createInFlightRef.current = true;
+    create();
+  };
 
   // Return JSX
   return (
@@ -52,8 +63,16 @@ export default function ManualAssets() {
             onChange={(v) => setActiveTab(v as "assets" | "animation" | "SFX")}
           />
           {userData && canChangeContent(userData.role) && (
-            <Button id="create-bloodline" onClick={() => create()}>
-              <FilePlus className="h-5 w-5" />
+            <Button
+              id="create-bloodline"
+              onClick={handleCreate}
+              disabled={isCreating}
+              loading={isCreating}
+              aria-busy={isCreating}
+              aria-label={isCreating ? "Creating asset" : "Create asset"}
+            >
+              {!isCreating && <FilePlus className="h-5 w-5" />}
+              {isCreating && <span aria-live="polite">Creating…</span>}
             </Button>
           )}
           <GameAssetFiltering state={state} />
@@ -76,6 +95,8 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
   const router = useRouter();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [asset, setAsset] = useState<GameAsset | undefined>(undefined);
+  const [deletingAssetIds, setDeletingAssetIds] = useState<string[]>([]);
+  const deletingAssetIdsRef = useRef(new Set<string>());
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   const {
@@ -83,6 +104,7 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
     isFetching,
     fetchNextPage,
     hasNextPage,
+    refetch,
   } = api.gameAsset.getAll.useInfiniteQuery(
     { limit: 60, ...getFilter(props.state) },
     {
@@ -108,8 +130,31 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
   const { mutate: remove } = api.gameAsset.delete.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
+      await refetch();
+    },
+    onSettled: (_data, _error, variables) => {
+      deletingAssetIdsRef.current.delete(variables.id);
+      setDeletingAssetIds((current) =>
+        current.filter((assetId) => assetId !== variables.id),
+      );
     },
   });
+
+  const handleAssetClick = (id: string) => {
+    if (deletingAssetIdsRef.current.has(id)) return;
+    setAsset(assetsWithoutFolder?.find((currentAsset) => currentAsset.id === id));
+    setIsOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    // State updates are asynchronous, so keep a synchronous per-asset guard as
+    // well. Different assets remain usable while this request is in flight.
+    if (deletingAssetIdsRef.current.has(id)) return;
+    deletingAssetIdsRef.current.add(id);
+    setDeletingAssetIds((current) => [...current, id]);
+    setIsOpen(false);
+    remove({ id });
+  };
 
   const isPending = isFetching;
 
@@ -164,10 +209,7 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
           url: a.url,
         }))}
         labelSingles={true}
-        onClick={(id) => {
-          setAsset(assetsWithoutFolder?.find((a) => a.id === id));
-          setIsOpen(true);
-        }}
+        onClick={handleAssetClick}
         showBgColor={false}
         roundFull={true}
         hideBorder={true}
@@ -183,6 +225,42 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
               ? "aspect-2/3"
               : ""
         }
+        renderItem={(item) => {
+          const isDeleting = deletingAssetIds.includes(item.id);
+          return (
+            <div
+              className="relative h-full w-full"
+              aria-busy={isDeleting}
+              aria-disabled={isDeleting}
+              data-asset-id={item.id}
+            >
+              <div className={isDeleting ? "pointer-events-none opacity-40" : ""}>
+                <ActionOption
+                  item={item}
+                  settings={{
+                    labelSingles: true,
+                    onClick: handleAssetClick,
+                    roundFull: true,
+                    hideBorder: true,
+                    showBgColor: false,
+                    showLabels: true,
+                  }}
+                  isGreyed={false}
+                />
+              </div>
+              {isDeleting && (
+                <div
+                  id={`asset-${item.id}-delete-status`}
+                  className="absolute inset-0 z-10 flex cursor-wait items-center justify-center rounded-xl bg-slate-950/75 font-semibold text-white backdrop-blur-[1px]"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader explanation="Deleting…" noPadding size={24} />
+                </div>
+              )}
+            </div>
+          );
+        }}
       />
       {isPending && <Loader explanation="Loading data" />}
       {isOpen && userData && asset && (
@@ -200,8 +278,7 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
                 item={asset}
                 key={asset.id}
                 onDelete={(id: string) => {
-                  remove({ id });
-                  setIsOpen(false);
+                  handleDelete(id);
                 }}
                 showEdit="asset"
               />

@@ -43,12 +43,12 @@ export default function AssetEdit(props: { params: Promise<{ assetid: string }> 
 
 interface SingleEditAssetProps {
   asset: GameAsset;
-  refetch: () => void;
+  refetch: () => Promise<unknown>;
 }
 
 const SingleEditAsset: React.FC<SingleEditAssetProps> = (props) => {
   // Form handling
-  const { asset, form, formData, handleAssetSubmit } = useAssetEditForm(
+  const { asset, form, formData, handleAssetSubmit, isUpdating } = useAssetEditForm(
     props.asset,
     props.refetch,
   );
@@ -69,6 +69,8 @@ const SingleEditAsset: React.FC<SingleEditAssetProps> = (props) => {
           formData={formData}
           showSubmit={true}
           buttonTxt="Save to Database"
+          submitLoading={isUpdating}
+          submitLoadingText="Saving asset..."
           type="asset"
           relationId={asset.id}
           allowImageUpload={true}

@@ -13,9 +13,11 @@ export const systems = [
 
 export const userReportSchema = z.object({
   system: z.enum(systems),
-  system_id: z.string(),
-  reported_userId: z.string(),
+  system_id: z.string().min(1).max(191),
+  reported_userId: z.string().min(1).max(191),
   reason: z.string().min(1).max(10000),
+  /** Durable client request identity; optional only for backwards-compatible API callers. */
+  requestId: z.string().uuid().optional(),
 });
 
 export type UserReportSchema = z.infer<typeof userReportSchema>;

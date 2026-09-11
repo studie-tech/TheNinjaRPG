@@ -184,6 +184,7 @@ export type JutsuFilteringState = ReturnType<typeof useFiltering>;
 interface JutsuFilteringProps {
   state: JutsuFilteringState;
   fixedBloodline?: string | null;
+  disabled?: boolean;
 }
 
 export const useFiltering = () => {
@@ -219,6 +220,7 @@ const JutsuFiltering: React.FC<JutsuFilteringProps> = (props) => {
       schema={makeJutsuFilteringSchema()}
       state={props.state.cf}
       context={context}
+      disabled={props.disabled}
     />
   );
 };

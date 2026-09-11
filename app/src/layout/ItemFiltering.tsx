@@ -192,6 +192,7 @@ const itemFilteringSchema = defineFilteringSchema({
 
 interface ItemFilteringProps {
   state: ItemFilteringState;
+  disabled?: boolean;
 }
 
 const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
@@ -204,6 +205,7 @@ const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
       state={props.state.cf}
       context={context}
       triggerButtonId="filter-item"
+      disabled={props.disabled}
     />
   );
 };

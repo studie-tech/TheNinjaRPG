@@ -8,6 +8,7 @@ import {
   Heart,
   Home,
   Info,
+  LoaderCircle,
   LogIn,
   Play,
   RefreshCw,
@@ -84,6 +85,8 @@ const TowerDefensePage: React.FC = () => {
     checkForExistingSession,
     isStarting,
     isSubmitting,
+    isReturningToLobby,
+    isClaimingRewards,
     isGuest,
     // NOTE: hudStore is now imported at module level from "@/hooks/useTowerDefense"
     // PERFORMANCE: Direct refs to avoid React re-renders
@@ -513,10 +516,50 @@ const TowerDefensePage: React.FC = () => {
                   </div>
                 )}
               </div>
-              <Button onClick={returnToLobby} className="mt-6" size="lg">
-                <Home className="mr-2 h-4 w-4" />
-                Return to Lobby
+              {gameState.error && (
+                <div
+                  className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-left text-destructive text-sm"
+                  role="alert"
+                >
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Your rewards were not claimed.</p>
+                      <p>{gameState.error}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <Button
+                onClick={returnToLobby}
+                className="mt-6 min-w-48"
+                size="lg"
+                disabled={isReturningToLobby}
+                aria-busy={isReturningToLobby}
+              >
+                {isReturningToLobby ? (
+                  <LoaderCircle
+                    className="mr-2 h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Home className="mr-2 h-4 w-4" aria-hidden="true" />
+                )}
+                {isReturningToLobby
+                  ? isClaimingRewards
+                    ? "Claiming rewards…"
+                    : "Returning…"
+                  : gameState.error && (gameState.finalPointsEarned ?? 0) > 0
+                    ? "Try claiming again"
+                    : "Return to Lobby"}
               </Button>
+              {isReturningToLobby && (
+                <p className="mt-2 text-muted-foreground text-sm" role="status">
+                  {isClaimingRewards
+                    ? "Claiming rewards and saving your result…"
+                    : "Returning to the lobby…"}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -538,7 +581,7 @@ const TowerDefensePage: React.FC = () => {
         )}
 
       {/* Error Display */}
-      {gameState.error && (
+      {gameState.error && gameState.mode !== "game-over" && (
         <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
           <AlertCircle className="h-4 w-4" />
           <span>{gameState.error}</span>

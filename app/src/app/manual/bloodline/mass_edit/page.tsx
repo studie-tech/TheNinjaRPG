@@ -13,6 +13,7 @@ import { useUserData } from "@/utils/UserContext";
 export default function BloodlineMassEditPage() {
   const { data: userData } = useUserData();
   const state = useFiltering();
+  const [isSavingBloodlineEffects, setIsSavingBloodlineEffects] = useState(false);
 
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const {
@@ -53,8 +54,12 @@ export default function BloodlineMassEditPage() {
         initialBreak
         topRightContent={
           <div className="flex items-center gap-2">
-            <BloodFiltering state={state} />
-            <EffectFieldSelector selected={fields} setSelected={setFields} />
+            <BloodFiltering state={state} disabled={isSavingBloodlineEffects} />
+            <EffectFieldSelector
+              selected={fields}
+              setSelected={setFields}
+              disabled={isSavingBloodlineEffects}
+            />
           </div>
         }
         padding={false}
@@ -67,7 +72,8 @@ export default function BloodlineMassEditPage() {
               kind="bloodline"
               entries={allBloodlines}
               selectedFields={fields}
-              onEntriesUpdated={() => void refetch()}
+              onEntriesUpdated={() => refetch()}
+              onPendingChange={setIsSavingBloodlineEffects}
             />
           </div>
         )}

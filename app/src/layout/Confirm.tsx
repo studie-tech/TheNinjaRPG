@@ -14,7 +14,10 @@ interface ConfirmProps {
   children: string | React.ReactNode;
   confirmClassName?: string;
   proceed_label?: string | null;
+  proceed_loading_label?: string | null;
   isValid?: boolean;
+  isLoading?: boolean;
+  keepOpenOnAccept?: boolean;
   confirmDisabled?: boolean;
   disabled?: boolean;
   /** Extra footer controls before Close. Pass a function to receive `close`. */
@@ -66,10 +69,13 @@ export const Confirm: React.FC<ConfirmProps> = (props) => {
         proceed_label={
           props.proceed_label !== undefined ? props.proceed_label : "Proceed"
         }
+        proceed_loading_label={props.proceed_loading_label}
         confirmClassName={props.confirmClassName}
         onAccept={props.onAccept}
         className={props.className}
         isValid={props.isValid}
+        isLoading={props.isLoading}
+        keepOpenOnAccept={props.keepOpenOnAccept}
         proceedDisabled={props.confirmDisabled}
         onClose={props.onClose}
         footerExtra={footerExtra}

@@ -90,6 +90,7 @@ const makeBloodlineFilteringSchema = (
 interface BloodFilteringProps {
   state: BloodFilteringState;
   limitRanks?: LetterRank[];
+  disabled?: boolean;
 }
 
 const BloodFiltering: React.FC<BloodFilteringProps> = (props) => {
@@ -104,6 +105,7 @@ const BloodFiltering: React.FC<BloodFilteringProps> = (props) => {
       state={props.state.cf}
       context={context}
       triggerButtonId="filter-bloodline"
+      disabled={props.disabled}
     />
   );
 };

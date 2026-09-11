@@ -144,6 +144,8 @@ const AssistantDialog: React.FC<{
   showOrderingButton?: boolean;
   /** Anchor to the top instead, to uncover a highlight it would otherwise sit on. */
   dodgeHighlight?: boolean;
+  isBusy?: boolean;
+  errorMessage?: string;
 }> = ({
   title,
   children,
@@ -152,6 +154,8 @@ const AssistantDialog: React.FC<{
   onOpenOrderingDialog,
   showOrderingButton,
   dodgeHighlight,
+  isBusy = false,
+  errorMessage,
 }) => (
   <div
     id={TUTORIAL_ASSISTANT_PANEL_ID}
@@ -172,7 +176,10 @@ const AssistantDialog: React.FC<{
           {title}
         </div>
         {/* Speech panel */}
-        <div className="w-[80vw] rounded-xl border-2 border-primary bg-card p-4 text-foreground shadow-2xl md:w-[560px] md:p-5">
+        <div
+          className="w-[80vw] rounded-xl border-2 border-primary bg-card p-4 text-foreground shadow-2xl md:w-[560px] md:p-5"
+          aria-busy={isBusy}
+        >
           {onOpenDisableModal && (
             <Button
               variant="ghost"
@@ -182,31 +189,54 @@ const AssistantDialog: React.FC<{
                 e.stopPropagation();
                 onOpenDisableModal();
               }}
+              disabled={isBusy}
               className="absolute top-2 right-2 h-6 w-6 p-0 opacity-50 hover:opacity-100"
-              title="Disable tutorial"
+              title={isBusy ? "Turning off tutorial" : "Disable tutorial"}
+              aria-label={isBusy ? "Turning off tutorial" : "Disable tutorial"}
             >
-              <X className="h-4 w-4" />
+              {isBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <X className="h-4 w-4" aria-hidden="true" />
+              )}
             </Button>
           )}
-          {children}
-          {showOrderingButton && onOpenOrderingDialog && (
-            <div className="mt-3 flex justify-end">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onOpenOrderingDialog();
-                }}
-                className="opacity-50 hover:opacity-100"
-                title="Sort quest priorities"
-              >
-                <Settings2 className="mr-1 h-4 w-4" />
-                <span className="text-xs">Priority</span>
-              </Button>
+          {isBusy && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mb-3 flex items-center gap-2 font-medium text-muted-foreground text-sm"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Turning off tutorial…
             </div>
           )}
+          {errorMessage && !isBusy && (
+            <p role="alert" className="mb-3 text-destructive text-sm">
+              {errorMessage}
+            </p>
+          )}
+          <fieldset disabled={isBusy} className="contents">
+            {children}
+            {showOrderingButton && onOpenOrderingDialog && (
+              <div className="mt-3 flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpenOrderingDialog();
+                  }}
+                  className="opacity-50 hover:opacity-100"
+                  title="Sort quest priorities"
+                >
+                  <Settings2 className="mr-1 h-4 w-4" />
+                  <span className="text-xs">Priority</span>
+                </Button>
+              </div>
+            )}
+          </fieldset>
         </div>
       </div>
     </div>
@@ -221,14 +251,31 @@ const CancelTutorialConfirmDialog: React.FC<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
-}> = ({ open, onOpenChange, onConfirm }) => {
+  isPending: boolean;
+  errorMessage?: string;
+}> = ({ open, onOpenChange, onConfirm, isPending, errorMessage }) => {
   const { variant } = useAbVariant("ab_lemu_replacement_2");
   const assistantImage =
     variant === "treatment" ? IMG_URL_ASSISTANT_2 : IMG_URL_ASSISTANT;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="z-[70] overflow-hidden pb-0 sm:max-w-md">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!isPending) onOpenChange(nextOpen);
+      }}
+    >
+      <DialogContent
+        className="z-[70] overflow-hidden pb-0 sm:max-w-md"
+        closeDisabled={isPending}
+        aria-busy={isPending}
+        onEscapeKeyDown={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+      >
         <div className="flex gap-4">
           <div className="flex-1">
             <DialogHeader>
@@ -242,12 +289,30 @@ const CancelTutorialConfirmDialog: React.FC<{
                 re-enable the tutorial.
               </DialogDescription>
             </DialogHeader>
+            {errorMessage && !isPending && (
+              <p role="alert" className="mt-3 text-destructive text-sm">
+                {errorMessage}
+              </p>
+            )}
             <div className="mt-4 flex justify-start gap-2 pb-4">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button
+                variant="outline"
+                disabled={isPending}
+                onClick={() => onOpenChange(false)}
+              >
                 Keep Tutorial
               </Button>
-              <Button variant="destructive" onClick={onConfirm}>
-                Skip Tutorial
+              <Button variant="destructive" disabled={isPending} onClick={onConfirm}>
+                {isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    <span role="status" aria-live="polite">
+                      Turning off tutorial…
+                    </span>
+                  </>
+                ) : (
+                  "Skip Tutorial"
+                )}
               </Button>
             </div>
           </div>
@@ -301,14 +366,102 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   const utils = api.useUtils();
 
   // Mutation to disable tutorial
-  const { mutate: disableTutorial } = api.profile.updatePreferences.useMutation({
-    onSuccess: async () => {
-      await utils.profile.getUser.invalidate();
-    },
+  const { mutateAsync: disableTutorial } = api.profile.updatePreferences.useMutation();
+  const disableTutorialLockRef = React.useRef(false);
+  const disableTutorialRequestRef = React.useRef<
+    | {
+        requestId: string;
+        userId: string;
+        tutorialStep: number;
+        expectedTutorialOn: true;
+      }
+    | undefined
+  >(undefined);
+  const tutorialIdentityRef = React.useRef({
+    userId: userData?.userId,
+    tutorialStep: userData?.tutorialStep,
   });
+  tutorialIdentityRef.current = {
+    userId: userData?.userId,
+    tutorialStep: userData?.tutorialStep,
+  };
+  const [isDisablingTutorial, setIsDisablingTutorial] = useState(false);
+  const [disableTutorialError, setDisableTutorialError] = useState<string>();
+  const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
 
-  const handleDisableTutorial = () => {
-    disableTutorial({ tutorialOn: false });
+  const handleDisableTutorial = async () => {
+    if (disableTutorialLockRef.current) return;
+    if (!userData?.userId || userData.tutorialOn !== true) return;
+
+    const existingRequest = disableTutorialRequestRef.current;
+    const request =
+      existingRequest?.userId === userData.userId &&
+      existingRequest.tutorialStep === userData.tutorialStep
+        ? existingRequest
+        : {
+            requestId: crypto.randomUUID(),
+            userId: userData.userId,
+            tutorialStep: userData.tutorialStep,
+            expectedTutorialOn: true as const,
+          };
+    disableTutorialRequestRef.current = request;
+    disableTutorialLockRef.current = true;
+    setDisableTutorialError(undefined);
+    setIsDisablingTutorial(true);
+
+    try {
+      const result = await disableTutorial({
+        tutorialOn: false,
+        expectedTutorialOn: request.expectedTutorialOn,
+        requestId: request.requestId,
+      });
+      const identity = tutorialIdentityRef.current;
+      const isCurrentTutorial =
+        identity.userId === request.userId &&
+        identity.tutorialStep === request.tutorialStep;
+      const isVerifiedCommit =
+        result.success &&
+        result.requestId === request.requestId &&
+        result.userId === request.userId &&
+        result.expectedTutorialOn === request.expectedTutorialOn &&
+        result.committedTutorialOn === false;
+
+      if (!isCurrentTutorial) return;
+      if (!isVerifiedCommit) {
+        setDisableTutorialError(
+          result.success
+            ? "The server response could not be verified. Please try again."
+            : result.message,
+        );
+        return;
+      }
+
+      utils.profile.getUser.setData(undefined, (current) => {
+        if (!current?.userData || current.userData.userId !== request.userId) {
+          return current;
+        }
+        return {
+          ...current,
+          userData: { ...current.userData, tutorialOn: false },
+        };
+      });
+      disableTutorialRequestRef.current = undefined;
+      setShowCancelConfirmDialog(false);
+      await utils.profile.getUser.invalidate();
+    } catch {
+      const identity = tutorialIdentityRef.current;
+      if (
+        identity.userId === request.userId &&
+        identity.tutorialStep === request.tutorialStep
+      ) {
+        setDisableTutorialError(
+          "We couldn't turn off the tutorial. Your progress is unchanged; please try again.",
+        );
+      }
+    } finally {
+      disableTutorialLockRef.current = false;
+      setIsDisablingTutorial(false);
+    }
   };
 
   const [highlight, setHighlight] = useState<{
@@ -749,10 +902,14 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     if (!isAssistantVisible && !showGameMenuTutorial) return;
 
     const handleKeyPress = (event: KeyboardEvent) => {
+      // Let the confirmation dialog own its keyboard interactions. In particular,
+      // Enter on its focused action must not also advance the obscured tutorial.
+      if (showCancelConfirmDialog) return;
       // Check for Enter key or ArrowLeft key
       if (event.key === "Enter" || event.key === "ArrowRight") {
         event.preventDefault();
         event.stopPropagation();
+        if (isDisablingTutorial) return;
 
         if (showGameMenuTutorial) {
           // If showing game menu tutorial, open the sidebar
@@ -783,6 +940,8 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     router,
     currentStep?.showNextButton,
     currentStep?.proceedOnHighlightClick,
+    isDisablingTutorial,
+    showCancelConfirmDialog,
   ]);
 
   // Post tutorial state - quest data from userData
@@ -802,9 +961,6 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
 
   // Dialog state for quest type ordering
   const [showOrderingDialog, setShowOrderingDialog] = useState(false);
-
-  // Dialog state for confirming tutorial cancellation
-  const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
 
   // Post-tutorial quest guidance: Find quest based on priority ordering
   useEffect(() => {
@@ -1012,10 +1168,12 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
               {/* Allow clicking to open the menu */}
               <button
                 type="button"
-                className="pointer-events-auto absolute inset-0 z-[2] cursor-pointer"
+                className="pointer-events-auto absolute inset-0 z-[2] cursor-pointer disabled:cursor-wait"
+                disabled={isDisablingTutorial}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  if (isDisablingTutorial) return;
                   setRightSideBarOpen(true);
                 }}
                 aria-label="Open game menu"
@@ -1042,6 +1200,8 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
           {/* Assistant panel bottom-right - large, game-like dialog */}
           <AssistantDialog
             title="Game Menu"
+            isBusy={isDisablingTutorial}
+            errorMessage={disableTutorialError}
             onOpenDisableModal={() => {
               if (currentStepNumber >= TUTORIAL_STEPS_COUNT) {
                 handleDisableTutorial();
@@ -1098,13 +1258,26 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
 
   // Derived
   const pointerEvents =
-    currentTutorialStep?.proceedOnHighlightClick && highlight?.isPrimaryElement
+    !isDisablingTutorial &&
+    currentTutorialStep?.proceedOnHighlightClick &&
+    highlight?.isPrimaryElement
       ? "pointer-events-auto"
       : "pointer-events-none";
 
   // If showing the special Game Menu tutorial
   if (showGameMenuTutorial) {
-    return renderGameMenuTutorial();
+    return (
+      <>
+        {!showCancelConfirmDialog && renderGameMenuTutorial()}
+        <CancelTutorialConfirmDialog
+          open={showCancelConfirmDialog}
+          onOpenChange={setShowCancelConfirmDialog}
+          onConfirm={() => void handleDisableTutorial()}
+          isPending={isDisablingTutorial}
+          errorMessage={disableTutorialError}
+        />
+      </>
+    );
   }
 
   // If the regular tutorial is not visible and there's no post-tutorial quest to show, don't render anything
@@ -1137,8 +1310,12 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                 type="button"
                 className={cn("absolute inset-0 z-[2] cursor-pointer", pointerEvents)}
                 aria-label="Continue tutorial"
+                disabled={isDisablingTutorial}
                 onPointerDown={(e) => {
-                  if (currentTutorialStep.proceedOnHighlightClick) {
+                  if (
+                    !isDisablingTutorial &&
+                    currentTutorialStep.proceedOnHighlightClick
+                  ) {
                     e.preventDefault();
                     e.stopPropagation();
                     handleNextStep();
@@ -1151,7 +1328,10 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
                   }
                 }}
                 onTouchStart={(e) => {
-                  if (currentTutorialStep.proceedOnHighlightClick) {
+                  if (
+                    !isDisablingTutorial &&
+                    currentTutorialStep.proceedOnHighlightClick
+                  ) {
                     e.preventDefault();
                     e.stopPropagation();
                     handleNextStep();
@@ -1189,6 +1369,8 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
         !showCancelConfirmDialog && (
           <AssistantDialog
             title={currentTutorialStep.title}
+            isBusy={isDisablingTutorial}
+            errorMessage={disableTutorialError}
             onOpenDisableModal={() => {
               if (currentStepNumber >= TUTORIAL_STEPS_COUNT) {
                 handleDisableTutorial();
@@ -1387,10 +1569,9 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       <CancelTutorialConfirmDialog
         open={showCancelConfirmDialog}
         onOpenChange={setShowCancelConfirmDialog}
-        onConfirm={() => {
-          setShowCancelConfirmDialog(false);
-          handleDisableTutorial();
-        }}
+        onConfirm={() => void handleDisableTutorial()}
+        isPending={isDisablingTutorial}
+        errorMessage={disableTutorialError}
       />
     </>
   );

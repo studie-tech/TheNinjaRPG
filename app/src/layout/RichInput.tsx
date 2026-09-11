@@ -77,7 +77,7 @@ const RichInput: React.FC<RichInputProps> = (props) => {
 
   // Handle clipboard paste
   const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    if (!props.allowClipboardPaste) return;
+    if (props.disabled || !props.allowClipboardPaste) return;
 
     const items = e.clipboardData.items;
     const imageItem = Array.from(items).find((item) => item.type.startsWith("image"));
@@ -163,7 +163,7 @@ const RichInput: React.FC<RichInputProps> = (props) => {
         document.removeEventListener("keydown", onDocumentKeyDown);
       };
     }
-  }, [showMentions]);
+  }, [showMentions, props.control, props.disabled, props.id, props.onSubmit]);
 
   // Handler for clicks outside emoji selector
   const handleOutsideClick = (e: MouseEvent) => {
@@ -179,6 +179,13 @@ const RichInput: React.FC<RichInputProps> = (props) => {
       document.removeEventListener("mousedown", handleOutsideClick);
     };
   });
+
+  useEffect(() => {
+    if (props.disabled) {
+      setEmojiOpen(false);
+      setShowMentions(false);
+    }
+  }, [props.disabled]);
 
   // Function to check for mentions
   const checkForMention = (text: string) => {
@@ -208,6 +215,7 @@ const RichInput: React.FC<RichInputProps> = (props) => {
 
   // Handle text changes
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (props.disabled) return;
     field.onChange(e);
     checkForMention(e.target.value);
   };
@@ -248,7 +256,10 @@ const RichInput: React.FC<RichInputProps> = (props) => {
   }, [selectedUsers]);
 
   return (
-    <div className={`${props.disabled ? "opacity-50" : ""}`}>
+    <div
+      className={`${props.disabled ? "opacity-50" : ""}`}
+      aria-disabled={props.disabled}
+    >
       <label htmlFor={props.id} className="mb-2 block font-medium text-sm">
         {props.label}
       </label>
@@ -272,6 +283,7 @@ const RichInput: React.FC<RichInputProps> = (props) => {
                 className="w-full"
                 onChange={handleTextChange}
                 onPaste={handlePaste}
+                disabled={props.disabled}
               />
             );
           }}
@@ -281,7 +293,7 @@ const RichInput: React.FC<RichInputProps> = (props) => {
           className="absolute top-0 left-[50%] z-50 translate-x-[-50%]"
           ref={emojiRef}
         >
-          {emojiOpen && (
+          {emojiOpen && !props.disabled && (
             <EmojiPicker
               onSelect={(native) => {
                 const current = (field.value as string) || "";
@@ -295,14 +307,16 @@ const RichInput: React.FC<RichInputProps> = (props) => {
 
         <div className="absolute top-[50%] right-5 flex translate-y-[-50%] flex-row items-center">
           <PartyPopper
-            className="h-8 w-8 text-gray-400 opacity-50 hover:cursor-pointer hover:text-gray-600"
-            onClick={() => setEmojiOpen(!emojiOpen)}
+            className={`h-8 w-8 text-gray-400 opacity-50 ${props.disabled ? "pointer-events-none" : "hover:cursor-pointer hover:text-gray-600"}`}
+            onClick={() => {
+              if (!props.disabled) setEmojiOpen(!emojiOpen);
+            }}
           />
           {props.onSubmit && (
             <SendHorizontal
-              className="h-8 w-8 text-gray-400 opacity-50 hover:cursor-pointer hover:text-gray-600"
+              className={`h-8 w-8 text-gray-400 opacity-50 ${props.disabled ? "pointer-events-none" : "hover:cursor-pointer hover:text-gray-600"}`}
               onClick={(e) => {
-                if (props.onSubmit) {
+                if (props.onSubmit && !props.disabled) {
                   props.onSubmit(e);
                 }
               }}
@@ -310,7 +324,7 @@ const RichInput: React.FC<RichInputProps> = (props) => {
           )}
         </div>
 
-        {showMentions && props.enableMentions && (
+        {showMentions && props.enableMentions && !props.disabled && (
           <div className="absolute right-0 left-0 z-50 mt-1">
             <UserSearchSelect
               useFormMethods={mentionForm}

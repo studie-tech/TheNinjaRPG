@@ -170,6 +170,51 @@ export const updateUserPreferencesSchema = z
     iframesMuted: z.boolean().optional(),
     tutorialOn: z.boolean().optional(),
     defaultAutoCombat: z.boolean().optional(),
+    // Optional durable contract used by actions that must distinguish a committed
+    // preference change from a stale/lost response. Existing preference callers
+    // intentionally remain valid without these fields.
+    requestId: z.string().uuid().optional(),
+    expectedTutorialOn: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasDurableRequest = data.requestId !== undefined;
+    const hasExpectation = data.expectedTutorialOn !== undefined;
+
+    if (hasDurableRequest !== hasExpectation) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "A request ID and expected tutorial preference must be supplied together",
+        path: hasDurableRequest ? ["expectedTutorialOn"] : ["requestId"],
+      });
+    }
+    if ((hasDurableRequest || hasExpectation) && data.tutorialOn === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A durable preference request must include the tutorial preference",
+        path: ["tutorialOn"],
+      });
+    }
+    if (hasDurableRequest || hasExpectation) {
+      const unrelatedPreference = [
+        "preferredStat",
+        "preferredGeneral1",
+        "preferredGeneral2",
+        "musicOn",
+        "sfxOn",
+        "buttonSfxOn",
+        "iframesMuted",
+        "defaultAutoCombat",
+      ].find((key) => data[key as keyof typeof data] !== undefined);
+      if (unrelatedPreference) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "A durable tutorial request cannot update other preferences at the same time",
+          path: [unrelatedPreference],
+        });
+      }
+    }
   })
   .refine(
     (data) => {

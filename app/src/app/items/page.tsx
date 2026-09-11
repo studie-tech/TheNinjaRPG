@@ -13,7 +13,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -79,6 +79,8 @@ export default function MyItems() {
   const availableTabs = ["normal", "event", "materials", "cooking"];
   const { data: userData } = useRequiredUserData();
   const [activeTab, setActiveTab] = useState<(typeof availableTabs)[number]>("normal");
+  const [isBuyItemSlotOpen, setIsBuyItemSlotOpen] = useState(false);
+  const buyItemSlotInFlight = useRef(false);
 
   // tRPC utils
   const utils = api.useUtils();
@@ -93,14 +95,26 @@ export default function MyItems() {
   });
 
   // Mutations
-  const { mutate: buyItemSlot, isPending } = api.blackmarket.buyItemSlot.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getUser.invalidate();
-      }
-    },
-  });
+  const { mutate: buyItemSlot, isPending: isBuyingItemSlot } =
+    api.blackmarket.buyItemSlot.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          await utils.profile.getUser.invalidate();
+          setIsBuyItemSlotOpen(false);
+        }
+      },
+      onError: (error) => {
+        showMutationToast({
+          success: false,
+          message: error.message,
+          variant: "destructive",
+        });
+      },
+      onSettled: () => {
+        buyItemSlotInFlight.current = false;
+      },
+    });
 
   const { mutate: autoEquipOptimal, isPending: isAutoEquipping } =
     api.item.autoEquipOptimal.useMutation({
@@ -207,8 +221,7 @@ export default function MyItems() {
   if (isLoadingItems) return <Loader explanation="Loading items" />;
 
   // Can afford removing
-  const canAfford =
-    userData.reputationPoints && userData.reputationPoints >= COST_EXTRA_ITEM_SLOT;
+  const canAfford = userData.reputationPoints >= COST_EXTRA_ITEM_SLOT;
 
   // Calculate items needing repair and which kits will be used
   const itemsNeedingRepair = (userItems || []).filter(needsInventoryRepair);
@@ -253,30 +266,78 @@ export default function MyItems() {
               options={availableTabs}
               setValue={setActiveTab}
             />
-            <Confirm
-              title="Extra Item Slot"
-              proceed_label={
-                canAfford
-                  ? `Purchase for ${COST_EXTRA_ITEM_SLOT} reps`
-                  : `Need ${userData.reputationPoints - COST_EXTRA_ITEM_SLOT} more reps`
-              }
-              isValid={!isPending}
-              button={
-                <Button animation="pulse">
-                  <CircleFadingArrowUp className="h-6 w-6" />
-                </Button>
-              }
-              onAccept={(e) => {
-                e.preventDefault();
-                if (canAfford) buyItemSlot();
+            <Button
+              animation="pulse"
+              aria-label="Purchase an extra item slot"
+              aria-busy={isBuyingItemSlot}
+              disabled={isBuyingItemSlot}
+              loading={isBuyingItemSlot}
+              onClick={() => setIsBuyItemSlotOpen(true)}
+            >
+              <CircleFadingArrowUp className="h-6 w-6" />
+            </Button>
+            <Dialog
+              open={isBuyItemSlotOpen}
+              onOpenChange={(open) => {
+                if (!isBuyingItemSlot) setIsBuyItemSlotOpen(open);
               }}
             >
-              <p>
-                You are about to purchase an extra item slot for {COST_EXTRA_ITEM_SLOT}{" "}
-                reputation points. You currently have {userData.reputationPoints}{" "}
-                points. Are you sure?
-              </p>
-            </Confirm>
+              <DialogContent
+                aria-busy={isBuyingItemSlot}
+                onEscapeKeyDown={(event) => {
+                  if (isBuyingItemSlot) event.preventDefault();
+                }}
+                onInteractOutside={(event) => {
+                  if (isBuyingItemSlot) event.preventDefault();
+                }}
+              >
+                <DialogHeader>
+                  <DialogTitle>Extra Item Slot</DialogTitle>
+                  <DialogDescription>
+                    Purchase an extra item slot for {COST_EXTRA_ITEM_SLOT} reputation
+                    points. You currently have {userData.reputationPoints} reputation{" "}
+                    {userData.reputationPoints === 1 ? "point" : "points"}.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="min-h-8" aria-live="polite" aria-atomic="true">
+                  {isBuyingItemSlot ? (
+                    <Loader explanation="Purchasing item slot…" noPadding />
+                  ) : canAfford ? (
+                    <p>Are you sure you want to complete this purchase?</p>
+                  ) : (
+                    <p>
+                      You need {COST_EXTRA_ITEM_SLOT - userData.reputationPoints} more
+                      reputation points.
+                    </p>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button
+                    disabled={!canAfford || isBuyingItemSlot}
+                    aria-busy={isBuyingItemSlot}
+                    loading={isBuyingItemSlot}
+                    onClick={() => {
+                      if (!canAfford || buyItemSlotInFlight.current) return;
+                      buyItemSlotInFlight.current = true;
+                      buyItemSlot();
+                    }}
+                  >
+                    {isBuyingItemSlot
+                      ? "Purchasing item slot…"
+                      : canAfford
+                        ? `Purchase for ${COST_EXTRA_ITEM_SLOT} reps`
+                        : `Need ${COST_EXTRA_ITEM_SLOT - userData.reputationPoints} more reps`}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={isBuyingItemSlot}
+                    onClick={() => setIsBuyItemSlotOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         }
       >
@@ -446,7 +507,7 @@ export default function MyItems() {
           )}
           <Confirm
             title="Auto Equip"
-            isValid={!isPending}
+            isValid={!isAutoEquipping}
             button={
               <Button disabled={isAutoEquipping} variant="default">
                 <Zap className="mr-2 h-4 w-4" />

@@ -4,6 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { beforeEach, expect, it } from "vitest";
 import {
+  actionLog,
+  bankTransfers,
   bloodline,
   notification,
   paypalSubscription,
@@ -12,6 +14,8 @@ import {
   storePurchase,
   storePurchaseTransfer,
   storeUserIdAlias,
+  userAssociation,
+  userAttribute,
   userData,
   userDevice,
   userLiveActivity,
@@ -31,7 +35,7 @@ import {
   transferStorePurchases,
 } from "@/server/utils/purchases/grant";
 import { insertUsers } from "../setup/factories";
-import { beforeStatements, failStatements } from "../setup/statements";
+import { beforeStatements } from "../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -47,6 +51,8 @@ describeWithDatabase("staff user-id rename", () => {
   beforeEach(async () => {
     await resetTables(
       bloodline,
+      actionLog,
+      bankTransfers,
       notification,
       userLiveActivity,
       userPushPreference,
@@ -57,6 +63,8 @@ describeWithDatabase("staff user-id rename", () => {
       storeUserIdAlias,
       storePurchase,
       paypalSubscription,
+      userAssociation,
+      userAttribute,
       userData,
       village,
     );
@@ -66,12 +74,114 @@ describeWithDatabase("staff user-id rename", () => {
     ]);
   });
 
+  it("atomically moves representative identity, social, economy, push, and audit references", async () => {
+    const database = await getTestDatabase();
+    const relatedUserId = "rename-related-user";
+    await insertUsers([{ userId: relatedUserId, username: "rename-related" }]);
+    await database
+      .update(userData)
+      .set({ recruiterId: OLD_USER_ID })
+      .where(eq(userData.userId, relatedUserId));
+    await database.insert(notification).values({
+      userId: OLD_USER_ID,
+      content: "representative notification",
+    });
+    await database.insert(userAttribute).values({
+      id: nanoid(),
+      userId: OLD_USER_ID,
+      attribute: "representative",
+    });
+    await database.insert(userAssociation).values({
+      id: nanoid(),
+      userOne: OLD_USER_ID,
+      userTwo: relatedUserId,
+      associationType: "MARRIAGE",
+    });
+    await database.insert(bankTransfers).values({
+      senderId: OLD_USER_ID,
+      receiverId: relatedUserId,
+      amount: 83,
+    });
+    await database.insert(userDevice).values({
+      id: nanoid(),
+      userId: OLD_USER_ID,
+      token: `gap83-${nanoid()}`,
+      platform: "ios",
+    });
+    await database.insert(actionLog).values({
+      id: nanoid(),
+      userId: OLD_USER_ID,
+      tableName: "representative",
+      changes: ["before rename"],
+    });
+
+    const caller = await callerFor(staffRouter, STAFF);
+    await expect(
+      caller.updateUserId({
+        userId: OLD_USER_ID,
+        expectedUsername: "rename-target",
+        newUserId: NEW_USER_ID,
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      oldUserId: OLD_USER_ID,
+      newUserId: NEW_USER_ID,
+      username: "rename-target",
+    });
+
+    const [renamed, recruiter, notificationRow, attribute, association, device] =
+      await Promise.all([
+        database.query.userData.findFirst({
+          where: eq(userData.userId, NEW_USER_ID),
+        }),
+        database.query.userData.findFirst({
+          where: eq(userData.userId, relatedUserId),
+        }),
+        database.query.notification.findFirst({
+          where: eq(notification.content, "representative notification"),
+        }),
+        database.query.userAttribute.findFirst({
+          where: eq(userAttribute.attribute, "representative"),
+        }),
+        database.query.userAssociation.findFirst({
+          where: eq(userAssociation.userTwo, relatedUserId),
+        }),
+        database.query.userDevice.findFirst({
+          where: eq(userDevice.userId, NEW_USER_ID),
+        }),
+      ]);
+    const transfers = await database
+      .select()
+      .from(bankTransfers)
+      .where(eq(bankTransfers.amount, 83));
+    const logs = await database
+      .select()
+      .from(actionLog)
+      .where(eq(actionLog.relatedId, NEW_USER_ID));
+
+    expect(renamed?.userId).toBe(NEW_USER_ID);
+    expect(recruiter?.recruiterId).toBe(NEW_USER_ID);
+    expect(notificationRow?.userId).toBe(NEW_USER_ID);
+    expect(attribute?.userId).toBe(NEW_USER_ID);
+    expect(association?.userOne).toBe(NEW_USER_ID);
+    expect(device?.userId).toBe(NEW_USER_ID);
+    expect(transfers).toMatchObject([{ senderId: NEW_USER_ID }]);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.changes).toEqual([
+      `Moved user ID from ${OLD_USER_ID} to ${NEW_USER_ID}`,
+    ]);
+  });
+
   it("reserves every retired alias against later reuse", async () => {
     const database = await getTestDatabase();
     await insertUsers([{ userId: "rename-other-user", username: "rename-other" }]);
     const caller = await callerFor(staffRouter, STAFF);
     await expect(
-      caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
+      caller.updateUserId({
+        userId: OLD_USER_ID,
+        expectedUsername: "rename-target",
+        newUserId: NEW_USER_ID,
+      }),
     ).resolves.toMatchObject({ success: true });
     await database.insert(notification).values({
       userId: "rename-other-user",
@@ -80,6 +190,7 @@ describeWithDatabase("staff user-id rename", () => {
     await expect(
       caller.updateUserId({
         userId: "rename-other-user",
+        expectedUsername: "rename-other",
         newUserId: OLD_USER_ID,
       }),
     ).resolves.toEqual({
@@ -96,6 +207,87 @@ describeWithDatabase("staff user-id rename", () => {
     ]);
     expect(unchangedUser).toBeDefined();
     expect(unchangedNotification?.userId).toBe("rename-other-user");
+  });
+
+  it("rejects an unauthorized caller without changing the target", async () => {
+    const database = await getTestDatabase();
+    const caller = await callerFor(staffRouter, OLD_USER_ID);
+    await expect(
+      caller.updateUserId({
+        userId: OLD_USER_ID,
+        expectedUsername: "rename-target",
+        newUserId: NEW_USER_ID,
+      }),
+    ).resolves.toEqual({
+      success: false,
+      message: "Only Terriator can update a user ID",
+    });
+    expect(
+      await database.query.userData.findFirst({
+        where: eq(userData.userId, OLD_USER_ID),
+      }),
+    ).toBeDefined();
+  });
+
+  it("rejects a banned caller", async () => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ isBanned: true }).where(eq(userData.userId, STAFF));
+    const caller = await callerFor(staffRouter, STAFF);
+    await expect(
+      caller.updateUserId({
+        userId: OLD_USER_ID,
+        expectedUsername: "rename-target",
+        newUserId: NEW_USER_ID,
+      }),
+    ).resolves.toEqual({
+      success: false,
+      message: "Banned users cannot update a user ID",
+    });
+  });
+
+  it("rejects stale target details and occupied destinations", async () => {
+    const caller = await callerFor(staffRouter, STAFF);
+    await expect(
+      caller.updateUserId({
+        userId: OLD_USER_ID,
+        expectedUsername: "stale-target-name",
+        newUserId: NEW_USER_ID,
+      }),
+    ).resolves.toEqual({
+      success: false,
+      message: "The selected user changed. Refresh and try again",
+    });
+
+    await insertUsers([{ userId: NEW_USER_ID, username: "occupied-destination" }]);
+    await expect(
+      caller.updateUserId({
+        userId: OLD_USER_ID,
+        expectedUsername: "rename-target",
+        newUserId: NEW_USER_ID,
+      }),
+    ).resolves.toEqual({
+      success: false,
+      message: "The new user ID is already in use",
+    });
+  });
+
+  it("rejects a target in an active battle", async () => {
+    const database = await getTestDatabase();
+    await database
+      .update(userData)
+      .set({ status: "BATTLE", battleId: "gap83-active-battle" })
+      .where(eq(userData.userId, OLD_USER_ID));
+    const caller = await callerFor(staffRouter, STAFF);
+    await expect(
+      caller.updateUserId({
+        userId: OLD_USER_ID,
+        expectedUsername: "rename-target",
+        newUserId: NEW_USER_ID,
+      }),
+    ).resolves.toEqual({
+      success: false,
+      message: "The user must leave their current battle before changing ID",
+    });
   });
 
   it("deletes push bearer state and tombstones the retained store ledger", async () => {
@@ -774,6 +966,7 @@ describeWithDatabase("staff user-id rename", () => {
         await expect(
           callerForDatabase(staffRouter, STAFF, database).updateUserId({
             userId: OLD_USER_ID,
+            expectedUsername: "rename-target",
             newUserId: NEW_USER_ID,
           }),
         ).resolves.toEqual({
@@ -799,32 +992,40 @@ describeWithDatabase("staff user-id rename", () => {
     expect(marker?.newUserId).toMatch(/^__tnr_deleted_store_user__:/);
   });
 
-  it("refuses to move an identity that a deletion claimed between its check and its write", async () => {
+  it("serializes two competing destination IDs and moves the source exactly once", async () => {
     const database = await getTestDatabase();
-    // The rename has passed its check; the deletion lands whole before its alias write
-    // and keeps the row.
-    const renaming = beforeStatements(database, storeUserIdAlias, [
-      () => deleteUser(database, OLD_USER_ID),
-    ]);
-    await expect(
-      callerForDatabase(staffRouter, STAFF, renaming).updateUserId({
+    const caller = await callerFor(staffRouter, STAFF);
+    const otherDestination = "rename-other-destination";
+
+    const results = await Promise.all([
+      caller.updateUserId({
         userId: OLD_USER_ID,
+        expectedUsername: "rename-target",
         newUserId: NEW_USER_ID,
       }),
-    ).resolves.toEqual({
-      success: false,
-      message: "UserId is being deleted and cannot be renamed",
-    });
-    const [alias, moved] = await Promise.all([
-      database.query.storeUserIdAlias.findFirst({
-        where: eq(storeUserIdAlias.oldUserId, OLD_USER_ID),
+      caller.updateUserId({
+        userId: OLD_USER_ID,
+        expectedUsername: "rename-target",
+        newUserId: otherDestination,
+      }),
+    ]);
+
+    expect(results.filter((result) => result.success)).toHaveLength(1);
+    const winner = results.find((result) => result.success)?.newUserId;
+    expect([NEW_USER_ID, otherDestination]).toContain(winner);
+    const [oldUser, firstDestination, secondDestination] = await Promise.all([
+      database.query.userData.findFirst({
+        where: eq(userData.userId, OLD_USER_ID),
       }),
       database.query.userData.findFirst({
         where: eq(userData.userId, NEW_USER_ID),
       }),
+      database.query.userData.findFirst({
+        where: eq(userData.userId, otherDestination),
+      }),
     ]);
-    expect(alias?.newUserId).toMatch(/^__tnr_deleted_store_user__:/);
-    expect(moved).toBeUndefined();
+    expect(oldUser).toBeUndefined();
+    expect([firstDestination, secondDestination].filter(Boolean)).toHaveLength(1);
   });
 
   it("refuses to delete an identity that a rename has already claimed", async () => {
@@ -852,77 +1053,70 @@ describeWithDatabase("staff user-id rename", () => {
     expect(user?.userId).toBe(OLD_USER_ID);
   });
 
-  it("leaves its intent behind when a write fails, and finishes when run again", async () => {
+  it("rolls back the alias and every earlier reference when a later write fails", async () => {
     const database = await getTestDatabase();
+    const counterpart = "rename-association-peer";
+    await insertUsers([{ userId: counterpart, username: "rename-peer" }]);
     await Promise.all([
-      database.insert(storeEntitlementState).values({
-        id: nanoid(),
+      database.insert(notification).values({
         userId: OLD_USER_ID,
-        store: "APPLE",
-        revokedThrough: new Date(),
+        content: "must remain on old identity",
       }),
-      database.insert(storePurchaseTransfer).values({
+      database.insert(userAssociation).values({
         id: nanoid(),
-        eventId: nanoid(),
-        sourceUserId: OLD_USER_ID,
-        destinationUserId: "some-owner",
-        store: "APPLE",
-        transferredAt: new Date(),
+        userOne: OLD_USER_ID,
+        userTwo: counterpart,
+        associationType: "MARRIAGE",
       }),
-      database.insert(notification).values({ userId: OLD_USER_ID, content: "rename" }),
+      // This orphan destination reference is intentional: updating the old row to NEW_USER_ID
+      // collides with the composite unique key after several earlier migration statements.
+      database.insert(userAssociation).values({
+        id: nanoid(),
+        userOne: NEW_USER_ID,
+        userTwo: counterpart,
+        associationType: "MARRIAGE",
+      }),
     ]);
+
     const caller = await callerFor(staffRouter, STAFF);
     await expect(
-      callerForDatabase(
-        staffRouter,
-        STAFF,
-        failStatements(database, notification),
-      ).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
+      caller.updateUserId({
+        userId: OLD_USER_ID,
+        expectedUsername: "rename-target",
+        newUserId: NEW_USER_ID,
+      }),
     ).rejects.toThrow();
-    // The alias is the durable intent; whatever else moved or did not, the second run
-    // picks the rename up from there.
-    const intent = await database.query.storeUserIdAlias.findFirst({
-      where: eq(storeUserIdAlias.oldUserId, OLD_USER_ID),
-    });
-    expect(intent?.newUserId).toBe(NEW_USER_ID);
-    await expect(
-      caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
-    ).resolves.toEqual({ success: true, message: "UserId updated" });
-    const [oldUser, newUser, entitlement, transfer, message] = await Promise.all([
+
+    const [oldUser, newUser, oldNotification, alias] = await Promise.all([
       database.query.userData.findFirst({
-        columns: { userId: true },
         where: eq(userData.userId, OLD_USER_ID),
       }),
       database.query.userData.findFirst({
-        columns: { userId: true },
         where: eq(userData.userId, NEW_USER_ID),
       }),
-      database.query.storeEntitlementState.findFirst({
-        columns: { userId: true },
-        where: eq(storeEntitlementState.store, "APPLE"),
-      }),
-      database.query.storePurchaseTransfer.findFirst({
-        columns: { sourceUserId: true },
-        where: eq(storePurchaseTransfer.destinationUserId, "some-owner"),
-      }),
       database.query.notification.findFirst({
-        columns: { userId: true },
-        where: eq(notification.content, "rename"),
+        where: eq(notification.content, "must remain on old identity"),
+      }),
+      database.query.storeUserIdAlias.findFirst({
+        where: eq(storeUserIdAlias.oldUserId, OLD_USER_ID),
       }),
     ]);
-    expect(oldUser).toBeUndefined();
-    expect(newUser?.userId).toBe(NEW_USER_ID);
-    expect(entitlement?.userId).toBe(NEW_USER_ID);
-    expect(transfer?.sourceUserId).toBe(NEW_USER_ID);
-    expect(message?.userId).toBe(NEW_USER_ID);
+    expect(oldUser?.userId).toBe(OLD_USER_ID);
+    expect(newUser).toBeUndefined();
+    expect(oldNotification?.userId).toBe(OLD_USER_ID);
+    expect(alias).toBeUndefined();
   });
 
   it("routes a delayed webhook carrying the retired id to the renamed user", async () => {
     const database = await getTestDatabase();
     const caller = await callerFor(staffRouter, STAFF);
     await expect(
-      caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
-    ).resolves.toEqual({ success: true, message: "UserId updated" });
+      caller.updateUserId({
+        userId: OLD_USER_ID,
+        expectedUsername: "rename-target",
+        newUserId: NEW_USER_ID,
+      }),
+    ).resolves.toMatchObject({ success: true, message: "UserId updated" });
 
     await expect(
       grantStorePurchase(database, {
@@ -955,7 +1149,11 @@ describeWithDatabase("staff user-id rename", () => {
   it("repairs and grants a duplicate pending receipt left on the retired id", async () => {
     const database = await getTestDatabase();
     const caller = await callerFor(staffRouter, STAFF);
-    await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID });
+    await caller.updateUserId({
+      userId: OLD_USER_ID,
+      expectedUsername: "rename-target",
+      newUserId: NEW_USER_ID,
+    });
     const renamedBefore = await database.query.userData.findFirst({
       columns: { reputationPoints: true },
       where: eq(userData.userId, NEW_USER_ID),

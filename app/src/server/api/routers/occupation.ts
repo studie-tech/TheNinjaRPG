@@ -34,11 +34,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
-import {
-  claimUserSnapshot,
-  getNextUserSnapshotAt,
-  updateUserItemQuantityAtomically,
-} from "@/server/utils/concurrency";
+import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import { canChangeContent } from "@/utils/permissions";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { getShrineBoost } from "@/utils/village";
@@ -385,6 +381,7 @@ export const occupationRouter = createTRPCRouter({
       // Guards
       const user = updatedUserResult.user;
       if (!user) return errorResponse("User not found");
+      if (user.isBanned) return errorResponse("You are banned");
       if (user.status !== "AWAKE") {
         return errorResponse("User is not awake");
       }
@@ -425,6 +422,9 @@ export const occupationRouter = createTRPCRouter({
       }
       if (!crystalItem) {
         return errorResponse("Crystal item data not found");
+      }
+      if (targetUserItem.id === crystalUserItem.id) {
+        return errorResponse("A crystal cannot be used to imbue itself");
       }
       if (crystalUserItem.quantity <= 0) {
         return errorResponse("You don't have this crystal");
@@ -477,60 +477,6 @@ export const occupationRouter = createTRPCRouter({
         );
       }
 
-      // CAS + atomic crystal consume serialize parallel imbues on the same account.
-      const imbueClaimResult = await claimUserSnapshot({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        updatedAt: user.updatedAt,
-        where: [
-          eq(userData.status, "AWAKE"),
-          or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
-        ],
-      });
-      if (!imbueClaimResult.success) {
-        return errorResponse(
-          "Could not start imbuing — state changed, please try again",
-        );
-      }
-
-      // Write-time guard: only proceed if item is still not in auction (atomic). The quantity
-      // guard also refuses rows held by a stack-merge claim or left as a merge tombstone, so an
-      // imbuement is never attached to a row the merge protocol is about to fold away or delete.
-      const notInAuctionGuard = await ctx.drizzle
-        .update(userItem)
-        .set({ updatedAt: new Date() })
-        .where(
-          and(
-            eq(userItem.id, input.userItemId),
-            eq(userItem.userId, ctx.userId),
-            gt(userItem.quantity, 0),
-            eq(userItem.isInAuction, false),
-          ),
-        );
-      if (notInAuctionGuard.rowsAffected === 0) {
-        return errorResponse(
-          "You cannot imbue an item that is listed for auction or direct sale",
-        );
-      }
-
-      const consumeCrystal = await updateUserItemQuantityAtomically({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        userItemId: crystalUserItem.id,
-        expectedQuantity: crystalUserItem.quantity,
-        nextQuantity: crystalUserItem.quantity - 1,
-      });
-      if (!consumeCrystal) {
-        return errorResponse("Crystal no longer available");
-      }
-
-      const createImbuement = ctx.drizzle.insert(userItemImbuement).values({
-        id: nanoid(),
-        userItemId: input.userItemId,
-        imbuementItemId: crystalItem.id,
-        craftingFinishedAt: finishTime,
-      });
-
       // Award small amount of crafting experience (half of crystal's crafting experience, or 0 if not set)
       // Apply clan crafting experience boost (only for real clans, not outlaw factions/towns)
       const clanCraftingExpBoost = user.isOutlaw
@@ -543,25 +489,85 @@ export const occupationRouter = createTRPCRouter({
         { task: "crafting_experience_gained", increment: expGain },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
-      const expUpdate = ctx.drizzle
-        .update(userData)
-        .set({
-          craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
-          questData: questDataForDb,
-        })
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            eq(userData.status, "AWAKE"),
-            or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
-          ),
-        );
+      const targetConflict = Symbol("targetConflict");
+      const crystalConflict = Symbol("crystalConflict");
+      try {
+        const imbueCommitted = await ctx.drizzle.transaction(async (tx) => {
+          // This whole-user CAS serializes parallel imbuements on the account and commits the
+          // experience/tracker update in the same transaction as inventory consumption.
+          const claimResult = await tx
+            .update(userData)
+            .set({
+              updatedAt: getNextUserSnapshotAt(user.updatedAt),
+              craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
+              questData: questDataForDb,
+            })
+            .where(
+              and(
+                eq(userData.userId, ctx.userId),
+                eq(userData.updatedAt, user.updatedAt),
+                eq(userData.status, "AWAKE"),
+                or(
+                  isNull(userData.sector),
+                  ne(userData.sector, MAP_WAKE_ISLAND_SECTOR),
+                ),
+              ),
+            );
+          if (claimResult.rowsAffected !== 1) return false;
 
-      const [, expResult] = await Promise.all([createImbuement, expUpdate]);
-      if (expResult?.rowsAffected !== 1) {
-        return errorResponse(
-          "Could not start imbuing — you must be awake and not on Wake Island",
-        );
+          // Recheck ownership, carried quantity, equipment and sale status at write time. This
+          // also refuses stack-merge claims/tombstones before an imbuement can attach to the row.
+          const targetResult = await tx
+            .update(userItem)
+            .set({ updatedAt: new Date() })
+            .where(
+              and(
+                eq(userItem.id, input.userItemId),
+                eq(userItem.userId, ctx.userId),
+                gt(userItem.quantity, 0),
+                eq(userItem.equipped, "NONE"),
+                eq(userItem.isInAuction, false),
+              ),
+            );
+          if (targetResult.rowsAffected !== 1) throw targetConflict;
+
+          const crystalWhere = and(
+            eq(userItem.id, crystalUserItem.id),
+            eq(userItem.userId, ctx.userId),
+            eq(userItem.quantity, crystalUserItem.quantity),
+          );
+          const crystalResult =
+            crystalUserItem.quantity > 1
+              ? await tx
+                  .update(userItem)
+                  .set({ quantity: crystalUserItem.quantity - 1 })
+                  .where(crystalWhere)
+              : await tx.delete(userItem).where(crystalWhere);
+          if (crystalResult.rowsAffected !== 1) throw crystalConflict;
+
+          await tx.insert(userItemImbuement).values({
+            id: nanoid(),
+            userItemId: input.userItemId,
+            imbuementItemId: crystalItem.id,
+            craftingFinishedAt: finishTime,
+          });
+          return true;
+        });
+        if (!imbueCommitted) {
+          return errorResponse(
+            "Could not start imbuing — state changed, please try again",
+          );
+        }
+      } catch (error) {
+        if (error === targetConflict) {
+          return errorResponse(
+            "Target item changed, is equipped, or is listed for sale. Please try again.",
+          );
+        }
+        if (error === crystalConflict) {
+          return errorResponse("Crystal no longer available");
+        }
+        throw error;
       }
 
       return {
@@ -655,74 +661,104 @@ export const occupationRouter = createTRPCRouter({
     .input(z.object({ userItemImbuementId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Queries
-      const [userItems, imbuement] = await Promise.all([
-        fetchUserItems(ctx.drizzle, ctx.userId),
-        ctx.drizzle.query.userItemImbuement.findFirst({
-          where: eq(userItemImbuement.id, input.userItemImbuementId),
-          with: {
-            userItem: {
-              with: { item: true },
-            },
-            item: true,
-          },
-        }),
-      ]);
+      // Resolve only the parent identity before the transaction. All mutable authorization and
+      // imbuement state is re-read under row locks below.
+      const initialImbuement = await ctx.drizzle.query.userItemImbuement.findFirst({
+        where: eq(userItemImbuement.id, input.userItemImbuementId),
+        columns: { userItemId: true },
+      });
+      if (!initialImbuement) return errorResponse("Imbuement not found");
 
-      // Guards
-      if (!imbuement) {
-        return errorResponse("Imbuement not found");
-      }
+      return ctx.drizzle.transaction(async (tx) => {
+        // Lock in user -> inventory row -> imbuement order, matching the account/inventory order
+        // used by crafting writes. This serializes duplicate removals and prevents an equip or
+        // auction transition from changing the parent between validation and deletion.
+        await tx.execute(
+          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} = ${ctx.userId} FOR UPDATE`,
+        );
+        const user = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+          columns: { isBanned: true, occupation: true, status: true },
+        });
+        if (!user) return errorResponse("User not found");
+        if (user.isBanned) return errorResponse("You are banned");
+        if (user.status !== "AWAKE") {
+          return errorResponse("User is not awake");
+        }
+        if (user.occupation !== "CRAFTING") {
+          return errorResponse(
+            "You must have the Crafting occupation to remove imbuements",
+          );
+        }
 
-      // Check if the user owns this item
-      const ownedUserItem = userItems.find((ui) => ui.id === imbuement.userItemId);
-      if (!ownedUserItem) {
-        return errorResponse("You don't own this item");
-      }
+        await tx.execute(
+          sql`SELECT ${userItem.id} FROM ${userItem} WHERE ${userItem.id} = ${initialImbuement.userItemId} AND ${userItem.userId} = ${ctx.userId} FOR UPDATE`,
+        );
+        const ownedUserItem = await tx.query.userItem.findFirst({
+          where: and(
+            eq(userItem.id, initialImbuement.userItemId),
+            eq(userItem.userId, ctx.userId),
+          ),
+          with: { item: true },
+        });
+        if (!ownedUserItem) return errorResponse("You don't own this item");
+        if (ownedUserItem.equipped !== "NONE") {
+          return errorResponse("Cannot remove imbuement from equipped item");
+        }
+        if (ownedUserItem.isInAuction) {
+          return errorResponse("Cannot remove imbuement from an item in an auction");
+        }
 
-      // Check if item is equipped
-      if (ownedUserItem.equipped !== "NONE") {
-        return errorResponse("Cannot remove imbuement from equipped item");
-      }
-
-      // Check if imbuement is still being crafted
-      if (imbuement.craftingFinishedAt && imbuement.craftingFinishedAt > new Date()) {
-        return errorResponse("Cannot remove imbuement that is still being crafted");
-      }
-
-      // When imbuing is disabled on the item, refund the crystal to inventory
-      const returnsCrystal = !ownedUserItem.item.canBeImbued;
-
-      const deleteResult = await ctx.drizzle
-        .delete(userItemImbuement)
-        .where(
-          and(
+        await tx.execute(
+          sql`SELECT ${userItemImbuement.id} FROM ${userItemImbuement} WHERE ${userItemImbuement.id} = ${input.userItemImbuementId} AND ${userItemImbuement.userItemId} = ${ownedUserItem.id} FOR UPDATE`,
+        );
+        const imbuement = await tx.query.userItemImbuement.findFirst({
+          where: and(
             eq(userItemImbuement.id, input.userItemImbuementId),
             eq(userItemImbuement.userItemId, ownedUserItem.id),
           ),
-        );
-      if (deleteResult.rowsAffected === 0) {
-        return errorResponse("Imbuement already removed");
-      }
-
-      if (returnsCrystal) {
-        await ctx.drizzle.insert(userItem).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          itemId: imbuement.imbuementItemId,
-          quantity: 1,
-          equipped: "NONE",
-          storedAtHome: false,
-          isInAuction: false,
-          craftingFinishedAt: null,
+          with: { item: true },
         });
-      }
+        if (!imbuement) return errorResponse("Imbuement already removed");
+        if (imbuement.craftingFinishedAt > new Date()) {
+          return errorResponse("Cannot remove imbuement that is still being crafted");
+        }
 
-      return {
-        success: true,
-        message: returnsCrystal
-          ? `Removed ${imbuement.item.name} from ${ownedUserItem.item.name} and returned the crystal to your inventory`
-          : `Removed ${imbuement.item.name} from ${ownedUserItem.item.name}`,
-      };
+        // Legacy/content changes can make an item non-imbuable after a crystal was attached. In
+        // that case removal refunds exactly one fresh carried crystal. Delete and refund are one
+        // transaction so neither a failure nor a concurrent retry can lose or duplicate it.
+        const returnsCrystal = !ownedUserItem.item.canBeImbued;
+        const deleteResult = await tx
+          .delete(userItemImbuement)
+          .where(
+            and(
+              eq(userItemImbuement.id, input.userItemImbuementId),
+              eq(userItemImbuement.userItemId, ownedUserItem.id),
+            ),
+          );
+        if (deleteResult.rowsAffected !== 1) {
+          return errorResponse("Imbuement already removed");
+        }
+
+        if (returnsCrystal) {
+          await tx.insert(userItem).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            itemId: imbuement.imbuementItemId,
+            quantity: 1,
+            equipped: "NONE",
+            storedAtHome: false,
+            isInAuction: false,
+            craftingFinishedAt: null,
+          });
+        }
+
+        return {
+          success: true,
+          message: returnsCrystal
+            ? `Removed ${imbuement.item.name} from ${ownedUserItem.item.name} and returned the crystal to your inventory`
+            : `Removed ${imbuement.item.name} from ${ownedUserItem.item.name}`,
+        };
+      });
     }),
 });

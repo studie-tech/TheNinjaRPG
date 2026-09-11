@@ -31,8 +31,10 @@ type TableProps<T, K extends keyof T> = {
   linkColumn?: K;
   linkPrefix?: string;
   buttons?: {
-    label: string | React.ReactNode;
+    label: string | React.ReactNode | ((row: T) => React.ReactNode);
     onClick: (row: T) => void;
+    disabled?: (row: T) => boolean;
+    ariaLabel?: (row: T) => string;
   }[];
   onRowClick?: (row: T) => void;
   setLastElement?: (element: HTMLDivElement | null) => void;
@@ -148,15 +150,21 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                 <td className={compact ? "px-2 py-1" : "px-6 py-4"}>
                   {props.buttons.map((button) => (
                     <Button
-                      id={`button-${button.label}`}
-                      key={`button-${button.label}`}
+                      id={`button-${typeof button.label === "string" ? button.label : "action"}`}
+                      key={
+                        typeof button.label === "string" ? button.label : "row-action"
+                      }
+                      disabled={button.disabled?.(row)}
+                      aria-label={button.ariaLabel?.(row)}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         button.onClick(row);
                       }}
                     >
-                      {button.label}
+                      {typeof button.label === "function"
+                        ? button.label(row)
+                        : button.label}
                     </Button>
                   ))}
                 </td>

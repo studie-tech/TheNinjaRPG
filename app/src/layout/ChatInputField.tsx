@@ -1,7 +1,7 @@
 "use client";
 
 import { Bot } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import ChatBox from "@/layout/ChatBox";
 import { cn } from "@/libs/shadui";
@@ -19,11 +19,20 @@ interface ChatInputFieldProps {
     systemMessage?: string;
   };
   onToolCall: (toolCall: ToolCall<string, unknown>) => void;
+  disabled?: boolean;
 }
 
-const ChatInputField: React.FC<ChatInputFieldProps> = ({ aiProps, onToolCall }) => {
+const ChatInputField: React.FC<ChatInputFieldProps> = ({
+  aiProps,
+  onToolCall,
+  disabled,
+}) => {
   // State
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (disabled) setIsOpen(false);
+  }, [disabled]);
 
   // Render
   return (
@@ -32,6 +41,8 @@ const ChatInputField: React.FC<ChatInputFieldProps> = ({ aiProps, onToolCall }) 
         <Button
           className={!isOpen ? "bg-green-600" : ""}
           type="submit"
+          disabled={disabled}
+          aria-busy={disabled}
           onClick={() => setIsOpen((prev) => !prev)}
         >
           <Bot className={cn("text-white", isOpen ? "animate-spin" : "")} size={22} />

@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ChefHat, FlaskConical, Package, Shield, Sword } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -95,21 +95,55 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [rarityFilter, setRarityFilter] = useState<string>("ALL");
   const [craftQuantity, setCraftQuantity] = useState(1);
+  const [pendingCraftName, setPendingCraftName] = useState<string | null>(null);
+  const [locallyStartedCraft, setLocallyStartedCraft] = useState(false);
+  const [authoritativeCraftObserved, setAuthoritativeCraftObserved] = useState(false);
+  const craftRequestInFlight = useRef(false);
 
   // Craft mutation
   const craftItemMutation = api.occupation.craftItem.useMutation({
-    onSuccess: async (data) => {
+    onSuccess: (data) => {
       showMutationToast(data);
       if (data.success) {
+        // Keep the single-craft queue locally occupied until the refreshed inventory
+        // has first observed this craft and later proves it has finished. This closes
+        // the stale-cache window in which a second recipe could consume materials.
+        setLocallyStartedCraft(true);
+        setAuthoritativeCraftObserved(false);
         setSelectedItem(null);
         setCraftQuantity(1);
-        await Promise.all([
+        void Promise.allSettled([
           utils.item.getUserItems.invalidate(),
           utils.profile.getSidebarTimers.invalidate(),
+          utils.profile.getUser.invalidate(),
         ]);
       }
     },
+    onError: (error) => {
+      showMutationToast({ success: false, message: error.message });
+    },
+    onSettled: () => {
+      craftRequestInFlight.current = false;
+      setPendingCraftName(null);
+    },
   });
+
+  const isCraftPending = pendingCraftName !== null || craftItemMutation.isPending;
+
+  // Do not release the local success guard on the first stale `false`. Once an
+  // authoritative refresh has shown the active queue entry, a subsequent `false`
+  // proves capacity is available for another legitimate craft.
+  useEffect(() => {
+    if (!locallyStartedCraft) return;
+    if (isCurrentlyCrafting) {
+      setAuthoritativeCraftObserved(true);
+    } else if (authoritativeCraftObserved) {
+      setLocallyStartedCraft(false);
+      setAuthoritativeCraftObserved(false);
+    }
+  }, [authoritativeCraftObserved, isCurrentlyCrafting, locallyStartedCraft]);
+
+  const effectiveCurrentlyCrafting = isCurrentlyCrafting || locallyStartedCraft;
 
   // Filter items by category
   const categoryItems = useMemo(() => {
@@ -186,18 +220,21 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
 
   // Check if user can craft the selected item
   const canCraft = useMemo(() => {
-    if (!selectedItem || !userItems || isCurrentlyCrafting) return false;
+    if (!selectedItem || !userItems || effectiveCurrentlyCrafting) return false;
     return selectedItem.craftingRequirements.every((req) => {
       const totalQuantity = getTotalItemQuantity(userItems, req.requirementItemId);
       return totalQuantity >= req.quantity * craftQuantity;
     });
-  }, [selectedItem, userItems, craftQuantity, isCurrentlyCrafting]);
+  }, [selectedItem, userItems, craftQuantity, effectiveCurrentlyCrafting]);
 
   // Handle craft
   const handleCraft = () => {
-    if (selectedItem && canCraft) {
-      craftItemMutation.mutate({ itemId: selectedItem.id, quantity: craftQuantity });
-    }
+    if (!selectedItem || !canCraft || craftRequestInFlight.current) return;
+
+    // React's mutation pending state is asynchronous, so guard synchronously too.
+    craftRequestInFlight.current = true;
+    setPendingCraftName(selectedItem.name);
+    craftItemMutation.mutate({ itemId: selectedItem.id, quantity: craftQuantity });
   };
 
   // Category counts
@@ -323,23 +360,25 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
         title="Recipe Details"
         isOpen={selectedItem !== null}
         setIsOpen={(open) => {
-          if (!open) {
+          if (!open && !isCraftPending) {
             setSelectedItem(null);
             setCraftQuantity(1);
           }
         }}
         proceed_label={
-          craftItemMutation.isPending
-            ? undefined
-            : isCurrentlyCrafting
-              ? "Currently Crafting"
-              : canCraft
-                ? "Start Crafting"
-                : "Missing Materials"
+          effectiveCurrentlyCrafting
+            ? "Currently Crafting"
+            : canCraft
+              ? "Start Crafting"
+              : "Missing Materials"
         }
+        proceed_loading_label={`Crafting ${pendingCraftName ?? selectedItem?.name ?? "item"}…`}
+        isLoading={isCraftPending}
+        keepOpenOnAccept
+        proceedDisabled={!canCraft}
         onAccept={handleCraft}
         confirmClassName={
-          canCraft && !isCurrentlyCrafting
+          canCraft && !effectiveCurrentlyCrafting
             ? "bg-blue-600 text-white hover:bg-blue-700"
             : "bg-red-600 text-white hover:bg-red-700"
         }
@@ -350,6 +389,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
             <Button
               variant="ghost"
               size="sm"
+              disabled={isCraftPending}
               onClick={() => {
                 setSelectedItem(null);
                 setCraftQuantity(1);
@@ -386,7 +426,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                     setCraftQuantity(val);
                   }
                 }}
-                disabled={maxCraftable === 0}
+                disabled={maxCraftable === 0 || isCraftPending}
                 className="w-full"
               />
             </div>
@@ -451,7 +491,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
             )}
 
             {/* Currently crafting warning */}
-            {isCurrentlyCrafting && (
+            {effectiveCurrentlyCrafting && (
               <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
                   You are currently crafting another item. Please wait for it to finish

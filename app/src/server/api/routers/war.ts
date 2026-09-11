@@ -27,6 +27,7 @@ import {
   quest,
   sector,
   userData,
+  userRequest,
   village,
   villageElderVote,
   war,
@@ -57,10 +58,21 @@ import {
   fetchVillages,
 } from "@/routers/village";
 import {
+  type AdminEndWarSnapshot,
+  adminEndWarInputSchema,
+  adminEndWarSnapshotSchema,
+  getAdminEndWarRevision,
+  type SurrenderParticipationRole,
+  surrenderActorSnapshotSchema,
+  surrenderWarAllySnapshotSchema,
+  surrenderWarInputSchema,
+} from "@/validators/war";
+import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { findRelationship } from "@/utils/alliance";
@@ -90,38 +102,307 @@ export const warRouter = createTRPCRouter({
     }),
 
   adminEndWar: protectedProcedure
-    .input(z.object({ warId: z.string() }))
-    .output(baseServerResponse)
+    .input(adminEndWarInputSchema)
+    .output(
+      baseServerResponse.extend({
+        requestId: z.string().uuid().optional(),
+        warId: z.string().optional(),
+        warType: z.enum(["VILLAGE_WAR", "SECTOR_WAR", "WAR_RAID"]).optional(),
+        expectedRevision: z.string().optional(),
+        previousStatus: z.literal("ACTIVE").optional(),
+        outcome: z.literal("ADMIN_ENDED").optional(),
+        removedWarKillCount: z.number().int().nonnegative().optional(),
+        removedWarAllyCount: z.number().int().nonnegative().optional(),
+        removedAllyOfferCount: z.number().int().nonnegative().optional(),
+        clearedParticipantCount: z.number().int().nonnegative().optional(),
+        auditLogId: z.string().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [user, activeWar] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchActiveWar(ctx.drizzle, input.warId),
-      ]);
-      // Guard
-      if (!user) return errorResponse("User not found");
-      if (!activeWar) return errorResponse("War not found");
-      if (!canAdministrateWars(user.role)) {
-        return errorResponse("You are not authorized to end wars");
-      }
-      // End war
-      await Promise.all([
-        ctx.drizzle.delete(war).where(eq(war.id, input.warId)),
-        ctx.drizzle.delete(warKill).where(eq(warKill.warId, input.warId)),
-        ctx.drizzle.delete(warAlly).where(eq(warAlly.warId, input.warId)),
-        ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "war",
-          changes: [
-            `Ended war between ${activeWar.attackerVillage?.name ?? "Unknown"} and ${activeWar.defenderVillage?.name ?? "Unknown"}`,
-          ],
+      const requestId = input.requestId ?? crypto.randomUUID();
+      const auditLogId = `admin-end-war:${requestId}`;
+
+      const snapshotWar = (currentWar: War): AdminEndWarSnapshot => ({
+        id: currentWar.id,
+        attackerVillageId: currentWar.attackerVillageId,
+        defenderVillageId: currentWar.defenderVillageId,
+        startedAt: currentWar.startedAt.toISOString(),
+        endedAt: currentWar.endedAt?.toISOString() ?? null,
+        status: currentWar.status,
+        type: currentWar.type,
+        sector: currentWar.sector,
+        attackerShrineHp: currentWar.attackerShrineHp,
+        attackerShrineMaxHp: currentWar.attackerShrineMaxHp,
+        attackerShrineStatus: currentWar.attackerShrineStatus,
+        defenderShrineHp: currentWar.defenderShrineHp,
+        defenderShrineMaxHp: currentWar.defenderShrineMaxHp,
+        defenderShrineStatus: currentWar.defenderShrineStatus,
+        lastTokenReductionAt: currentWar.lastTokenReductionAt.toISOString(),
+        targetStructureRoute: currentWar.targetStructureRoute,
+        attackerWarHealth: currentWar.attackerWarHealth,
+        defenderWarHealth: currentWar.defenderWarHealth,
+        attackerWarHealthMax: currentWar.attackerWarHealthMax,
+        defenderWarHealthMax: currentWar.defenderWarHealthMax,
+      });
+
+      const exactSnapshot = (left: AdminEndWarSnapshot, right: AdminEndWarSnapshot) =>
+        JSON.stringify(left) === JSON.stringify(right);
+      const rowsAffected = (result: unknown) => {
+        if (Array.isArray(result)) return rowsAffected(result[0]);
+        if (!result || typeof result !== "object") return 0;
+        if ("rowsAffected" in result && typeof result.rowsAffected === "number") {
+          return result.rowsAffected;
+        }
+        if ("affectedRows" in result && typeof result.affectedRows === "number") {
+          return result.affectedRows;
+        }
+        return 0;
+      };
+
+      type AdminEndWarReceipt = {
+        version: 1;
+        requestId: string;
+        actorUserId: string;
+        expectedRevision: string;
+        expectedWar: AdminEndWarSnapshot;
+        outcome: "ADMIN_ENDED";
+        removedWarKillCount: number;
+        removedWarAllyCount: number;
+        removedAllyOfferCount: number;
+        clearedParticipantCount: number;
+      };
+
+      const responseFromReceipt = (receipt: AdminEndWarReceipt) => ({
+        success: true as const,
+        message: "War ended successfully",
+        requestId: receipt.requestId,
+        warId: receipt.expectedWar.id,
+        warType: receipt.expectedWar.type,
+        expectedRevision: receipt.expectedRevision,
+        previousStatus: "ACTIVE" as const,
+        outcome: receipt.outcome,
+        removedWarKillCount: receipt.removedWarKillCount,
+        removedWarAllyCount: receipt.removedWarAllyCount,
+        removedAllyOfferCount: receipt.removedAllyOfferCount,
+        clearedParticipantCount: receipt.clearedParticipantCount,
+        auditLogId,
+      });
+
+      return ctx.drizzle.transaction(async (tx) => {
+        // War-first is the global lock order shared with normal resolution. This prevents an
+        // admin participant from holding their UserData row while waiting on a resolver which
+        // already owns the War row and will later update participant state.
+        await tx.execute(
+          sql`SELECT ${war.id} FROM ${war} WHERE ${war.id} = ${input.warId} FOR UPDATE`,
+        );
+        await tx.execute(
+          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} = ${ctx.userId} FOR UPDATE`,
+        );
+        const actor = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        });
+        if (!actor) return errorResponse("User not found");
+        if (actor.isBanned) {
+          return errorResponse("You are banned and cannot administratively end wars");
+        }
+        if (!canAdministrateWars(actor.role)) {
+          return errorResponse("You are not authorized to end wars");
+        }
+
+        // Lock the request receipt after War and actor so concurrent retries cannot both delete.
+        await tx.execute(
+          sql`SELECT ${actionLog.id} FROM ${actionLog} WHERE ${actionLog.id} = ${auditLogId} FOR UPDATE`,
+        );
+
+        const previousRequest = await tx.query.actionLog.findFirst({
+          where: eq(actionLog.id, auditLogId),
+        });
+        if (previousRequest) {
+          const parsedReceipt = z
+            .object({
+              version: z.literal(1),
+              requestId: z.string().uuid(),
+              actorUserId: z.string(),
+              expectedRevision: z.string(),
+              expectedWar: adminEndWarSnapshotSchema,
+              outcome: z.literal("ADMIN_ENDED"),
+              removedWarKillCount: z.number().int().nonnegative(),
+              removedWarAllyCount: z.number().int().nonnegative(),
+              removedAllyOfferCount: z.number().int().nonnegative(),
+              clearedParticipantCount: z.number().int().nonnegative(),
+            })
+            .safeParse(previousRequest.changes);
+          const receipt = parsedReceipt.success ? parsedReceipt.data : undefined;
+          const exactReplay =
+            receipt &&
+            previousRequest.userId === actor.userId &&
+            previousRequest.tableName === "War" &&
+            previousRequest.relatedId === input.warId &&
+            receipt.actorUserId === actor.userId &&
+            receipt.requestId === requestId &&
+            (!input.expectedWar ||
+              exactSnapshot(receipt.expectedWar, input.expectedWar)) &&
+            (!input.expectedRevision ||
+              receipt.expectedRevision === input.expectedRevision);
+          if (!exactReplay) {
+            return errorResponse("Invalid administrative war-end request ID");
+          }
+          // A receipt proves the earlier transaction committed, but replay is only successful
+          // while its terminal state is still true. Never let an old receipt hide a recreated war
+          // or orphaned child/offer state for the same target.
+          await tx.execute(
+            sql`SELECT ${warKill.id} FROM ${warKill} WHERE ${warKill.warId} = ${input.warId} ORDER BY ${warKill.id} FOR UPDATE`,
+          );
+          await tx.execute(
+            sql`SELECT ${warAlly.id} FROM ${warAlly} WHERE ${warAlly.warId} = ${input.warId} ORDER BY ${warAlly.id} FOR UPDATE`,
+          );
+          await tx.execute(
+            sql`SELECT ${userRequest.id} FROM ${userRequest} WHERE ${userRequest.relatedId} = ${input.warId} AND ${userRequest.type} = 'WAR_ALLY' ORDER BY ${userRequest.id} FOR UPDATE`,
+          );
+          const replayWar = await tx.query.war.findFirst({
+            where: eq(war.id, input.warId),
+            columns: { id: true },
+          });
+          const replayKill = await tx.query.warKill.findFirst({
+            where: eq(warKill.warId, input.warId),
+            columns: { id: true },
+          });
+          const replayAlly = await tx.query.warAlly.findFirst({
+            where: eq(warAlly.warId, input.warId),
+            columns: { id: true },
+          });
+          const replayOffer = await tx.query.userRequest.findFirst({
+            where: and(
+              eq(userRequest.relatedId, input.warId),
+              eq(userRequest.type, "WAR_ALLY"),
+            ),
+            columns: { id: true },
+          });
+          if (replayWar || replayKill || replayAlly || replayOffer) {
+            return errorResponse(
+              "Administrative war-end receipt no longer matches current state",
+            );
+          }
+          return responseFromReceipt(receipt);
+        }
+
+        const currentWar = await tx.query.war.findFirst({
+          where: eq(war.id, input.warId),
+        });
+        if (!currentWar) return errorResponse("War not found");
+        if (currentWar.status !== "ACTIVE" || currentWar.endedAt !== null) {
+          return errorResponse("War is no longer active. Refresh and try again");
+        }
+
+        const currentSnapshot = snapshotWar(currentWar);
+        const expectedWar = input.expectedWar ?? currentSnapshot;
+        const expectedRevision =
+          input.expectedRevision ?? getAdminEndWarRevision(expectedWar);
+        if (
+          getAdminEndWarRevision(expectedWar) !== expectedRevision ||
+          !exactSnapshot(currentSnapshot, expectedWar)
+        ) {
+          return errorResponse("War state changed. Refresh before ending it");
+        }
+
+        // Lock child ranges before counting/deleting them. This includes empty indexed ranges so
+        // already-started ally/kill inserts cannot slip between the snapshot and cleanup.
+        await tx.execute(
+          sql`SELECT ${warKill.id} FROM ${warKill} WHERE ${warKill.warId} = ${input.warId} ORDER BY ${warKill.id} FOR UPDATE`,
+        );
+        await tx.execute(
+          sql`SELECT ${warAlly.id} FROM ${warAlly} WHERE ${warAlly.warId} = ${input.warId} ORDER BY ${warAlly.id} FOR UPDATE`,
+        );
+        await tx.execute(
+          sql`SELECT ${userRequest.id} FROM ${userRequest} WHERE ${userRequest.relatedId} = ${input.warId} AND ${userRequest.type} = 'WAR_ALLY' ORDER BY ${userRequest.id} FOR UPDATE`,
+        );
+
+        const warKills = await tx.query.warKill.findMany({
+          where: eq(warKill.warId, input.warId),
+          columns: { id: true },
+        });
+        const warAllies = await tx.query.warAlly.findMany({
+          where: eq(warAlly.warId, input.warId),
+          columns: { id: true, villageId: true },
+        });
+        const allyOffers = await tx.query.userRequest.findMany({
+          where: and(
+            eq(userRequest.relatedId, input.warId),
+            eq(userRequest.type, "WAR_ALLY"),
+          ),
+          columns: { id: true },
+        });
+
+        await tx.delete(warKill).where(eq(warKill.warId, input.warId));
+        await tx.delete(warAlly).where(eq(warAlly.warId, input.warId));
+        await tx
+          .delete(userRequest)
+          .where(
+            and(
+              eq(userRequest.relatedId, input.warId),
+              eq(userRequest.type, "WAR_ALLY"),
+            ),
+          );
+        const deletedWar = await tx
+          .delete(war)
+          .where(and(eq(war.id, input.warId), eq(war.status, "ACTIVE")));
+        if (rowsAffected(deletedWar) !== 1) {
+          throw serverError(
+            "CONFLICT",
+            "War state changed while it was being ended. Refresh and try again",
+          );
+        }
+
+        // Clear participation only when a village has no other active war. No village tokens,
+        // sector ownership, structures, rewards, or win/loss status are changed by an admin end.
+        const participantVillageIds = [
+          currentWar.attackerVillageId,
+          currentWar.defenderVillageId,
+          ...warAllies.map((ally) => ally.villageId),
+        ];
+        const clearedParticipants = await tx
+          .update(userData)
+          .set({ warParticipantUntil: new Date(0) })
+          .where(
+            and(
+              inArray(userData.villageId, participantVillageIds),
+              sql`NOT EXISTS (
+                SELECT 1 FROM War w
+                WHERE w.endedAt IS NULL
+                  AND (w.attackerVillageId = ${userData.villageId} OR w.defenderVillageId = ${userData.villageId})
+              )`,
+              sql`NOT EXISTS (
+                SELECT 1 FROM WarAlly wa
+                INNER JOIN War w ON wa.warId = w.id
+                WHERE w.endedAt IS NULL AND wa.villageId = ${userData.villageId}
+              )`,
+            ),
+          );
+
+        const receipt: AdminEndWarReceipt = {
+          version: 1,
+          requestId,
+          actorUserId: actor.userId,
+          expectedRevision,
+          expectedWar,
+          outcome: "ADMIN_ENDED",
+          removedWarKillCount: warKills.length,
+          removedWarAllyCount: warAllies.length,
+          removedAllyOfferCount: allyOffers.length,
+          clearedParticipantCount: rowsAffected(clearedParticipants),
+        };
+        await tx.insert(actionLog).values({
+          id: auditLogId,
+          userId: actor.userId,
+          tableName: "War",
+          changes: receipt,
           relatedId: input.warId,
-          relatedMsg: `Ended war`,
+          relatedMsg: `Administratively ended ${currentWar.type}`,
           relatedImage: IMG_AVATAR_DEFAULT,
-        }),
-      ]);
-      return { success: true, message: "War ended successfully" };
+        });
+
+        return responseFromReceipt(receipt);
+      });
     }),
 
   buildShrine: protectedProcedure
@@ -191,23 +472,21 @@ export const warRouter = createTRPCRouter({
         return errorResponse("Only the attacking village can build shrines");
       }
 
-      // First deduct the price
-      const result = await ctx.drizzle
-        .update(village)
-        .set({ tokens: user.village.tokens - WAR_PURCHASE_SHRINE_TOKEN_COST })
-        .where(
-          and(
-            eq(village.id, user.villageId),
-            gte(village.tokens, WAR_PURCHASE_SHRINE_TOKEN_COST),
-          ),
+      // The purchase and forced sector-war outcome share the War-row lock and transaction. An
+      // admin cleanup or another resolver can therefore win, but cannot interleave side effects.
+      const endedWar = await handleWarEnd(activeWar, {
+        client: ctx.drizzle,
+        forcedLoserVillageId: activeWar.defenderVillageId,
+        villageTokenSpend: {
+          villageId: user.villageId,
+          amount: WAR_PURCHASE_SHRINE_TOKEN_COST,
+        },
+      });
+      if (!endedWar) {
+        return errorResponse(
+          "War state or village tokens changed. Refresh before building the shrine",
         );
-      if (result.rowsAffected === 0) {
-        return errorResponse("Not enough tokens to build a shrine");
       }
-
-      // Handle war end
-      activeWar.defenderVillage.tokens = 0;
-      await handleWarEnd(activeWar);
       return { success: true, message: "Shrine built successfully" };
     }),
 
@@ -762,6 +1041,7 @@ export const warRouter = createTRPCRouter({
       if (!user?.village || !user?.villageId) {
         return errorResponse("You must be in a village to create faction offers");
       }
+      const offeringVillageId = user.villageId;
       if (user.userId !== user.village.kageId) {
         return errorResponse("Only the Kage can create faction offers");
       }
@@ -841,15 +1121,45 @@ export const warRouter = createTRPCRouter({
       if (!check) {
         return errorResponse(message);
       }
-      // Insert request
-      await insertRequest(
-        ctx.drizzle,
-        user.userId,
-        targetVillage.kageId,
-        "WAR_ALLY",
-        input.tokenOffer,
-        activeWar.id,
-      );
+      // Keep offer creation in the same War-first serialization order as surrender, ally joins,
+      // and both resolution paths. An offer can no longer appear after terminal cleanup.
+      const offered = await ctx.drizzle.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT ${war.id} FROM ${war} WHERE ${war.id} = ${activeWar.id} FOR UPDATE`,
+        );
+        const currentWar = await tx.query.war.findFirst({
+          where: and(eq(war.id, activeWar.id), eq(war.status, "ACTIVE")),
+          columns: {
+            id: true,
+            endedAt: true,
+            type: true,
+            attackerVillageId: true,
+            defenderVillageId: true,
+          },
+        });
+        if (
+          !currentWar ||
+          currentWar.endedAt ||
+          !["VILLAGE_WAR", "WAR_RAID"].includes(currentWar.type) ||
+          ![currentWar.attackerVillageId, currentWar.defenderVillageId].includes(
+            offeringVillageId,
+          )
+        ) {
+          return false;
+        }
+        await insertRequest(
+          tx as unknown as DrizzleClient,
+          user.userId,
+          targetVillage.kageId,
+          "WAR_ALLY",
+          input.tokenOffer,
+          activeWar.id,
+        );
+        return true;
+      });
+      if (!offered) {
+        return errorResponse("War state changed. Refresh before sending an ally offer");
+      }
 
       // Return
       return { success: true, message: "Ally offer sent" };
@@ -949,7 +1259,7 @@ export const warRouter = createTRPCRouter({
         fetchAlliances(ctx.drizzle),
       ]);
       // Derived
-      const warId = request.relatedId;
+      const warId = request?.relatedId;
       const activeWar = activeWars.find(
         (w) =>
           (w.attackerVillage?.kageId === request.senderId ||
@@ -1004,25 +1314,79 @@ export const warRouter = createTRPCRouter({
         senderVillage,
       );
       if (!check) return errorResponse(message);
-      // Create ally and delete offer
-      await Promise.all([
-        ctx.drizzle.insert(warAlly).values({
+      const acceptingVillageId = user.villageId;
+      // Claim the still-pending offer only while its War row is locked and active. Admin cleanup
+      // uses the same War -> offer/ally lock order, so a late accept cannot recreate child state
+      // or transfer tokens after the war was removed.
+      const joined = await ctx.drizzle.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT ${war.id} FROM ${war} WHERE ${war.id} = ${activeWar.id} FOR UPDATE`,
+        );
+        const currentWar = await tx.query.war.findFirst({
+          where: and(eq(war.id, activeWar.id), eq(war.status, "ACTIVE")),
+          columns: { id: true, endedAt: true, type: true },
+        });
+        if (
+          !currentWar ||
+          currentWar.endedAt ||
+          !["VILLAGE_WAR", "WAR_RAID"].includes(currentWar.type)
+        ) {
+          return false;
+        }
+        await tx.execute(
+          sql`SELECT ${userRequest.id} FROM ${userRequest} WHERE ${userRequest.id} = ${request.id} FOR UPDATE`,
+        );
+        const freshRequest = await tx.query.userRequest.findFirst({
+          where: and(
+            eq(userRequest.id, request.id),
+            eq(userRequest.type, "WAR_ALLY"),
+            eq(userRequest.status, "PENDING"),
+            eq(userRequest.relatedId, activeWar.id),
+            eq(userRequest.senderId, request.senderId),
+            eq(userRequest.receiverId, ctx.userId),
+          ),
+        });
+        if (!freshRequest) return false;
+        const existingAlly = await tx.query.warAlly.findFirst({
+          where: and(
+            eq(warAlly.warId, activeWar.id),
+            eq(warAlly.villageId, acceptingVillageId),
+          ),
+          columns: { id: true },
+        });
+        if (existingAlly) return false;
+        const claimedOffer = await tx
+          .update(userRequest)
+          .set({ status: "ACCEPTED" })
+          .where(
+            and(
+              eq(userRequest.id, freshRequest.id),
+              eq(userRequest.type, "WAR_ALLY"),
+              eq(userRequest.status, "PENDING"),
+              eq(userRequest.relatedId, activeWar.id),
+            ),
+          );
+        if (claimedOffer.rowsAffected !== 1) return false;
+        await tx.insert(warAlly).values({
           id: nanoid(),
           warId: activeWar.id,
-          villageId: user.villageId,
+          villageId: acceptingVillageId,
           supportVillageId: senderVillage.id,
-          tokensPaid: request.value || 0,
-        }),
-        ctx.drizzle
+          tokensPaid: freshRequest.value || 0,
+        });
+        await tx
           .update(village)
-          .set({ tokens: sql`tokens + ${request.value}` })
-          .where(eq(village.id, user.villageId)),
-        ctx.drizzle
+          .set({ tokens: sql`tokens + ${freshRequest.value}` })
+          .where(eq(village.id, acceptingVillageId));
+        await tx
           .update(village)
-          .set({ tokens: sql`tokens - ${request.value}` })
-          .where(eq(village.kageId, request.senderId)),
-        updateRequestState(ctx.drizzle, input.offerId, "ACCEPTED", "WAR_ALLY"),
-      ]);
+          .set({ tokens: sql`tokens - ${freshRequest.value}` })
+          .where(eq(village.kageId, freshRequest.senderId));
+        return true;
+      });
+      if (!joined) {
+        return errorResponse("War or ally offer changed. Refresh before accepting");
+      }
 
       return { success: true, message: "Offer accepted and alliance formed" };
     }),
@@ -1030,76 +1394,411 @@ export const warRouter = createTRPCRouter({
   // Surrender war
   surrender: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Surrender a war" } })
-    .input(z.object({ warId: z.string() }))
-    .output(baseServerResponse)
+    .input(surrenderWarInputSchema)
+    .output(
+      baseServerResponse.extend({
+        requestId: z.string().uuid().optional(),
+        warId: z.string().optional(),
+        warType: z.enum(["VILLAGE_WAR", "WAR_RAID"]).optional(),
+        expectedRevision: z.string().optional(),
+        actorUserId: z.string().optional(),
+        villageId: z.string().optional(),
+        kageId: z.string().optional(),
+        participationRole: z
+          .enum(["MAIN_ATTACKER", "MAIN_DEFENDER", "ALLY_ATTACKER", "ALLY_DEFENDER"])
+          .optional(),
+        outcome: z.enum(["MAIN_WAR_ENDED", "ALLY_WITHDRAWN"]).optional(),
+        resultStatus: z
+          .enum(["ATTACKER_VICTORY", "DEFENDER_VICTORY", "ACTIVE"])
+          .optional(),
+        loserVillageId: z.string().optional(),
+        winnerVillageId: z.string().nullable().optional(),
+        allyId: z.string().nullable().optional(),
+        endedAt: z.string().datetime().nullable().optional(),
+        auditLogId: z.string().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      // Query
-      const [{ user }, activeWars] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        fetchActiveWars(ctx.drizzle),
-      ]);
-      // Derived
-      const activeWar = activeWars.find((w) => w.id === input.warId);
-      const isMainCompetitor = [
-        activeWar?.attackerVillageId,
-        activeWar?.defenderVillageId,
-      ].includes(user?.villageId || "unknown");
-      const warAllyData = activeWar?.warAllies.find(
-        (f) => f.villageId === user?.villageId,
-      );
-      // Guard
-      if (!user?.village) {
-        return errorResponse("You must be in a village to surrender");
-      }
-      if (!user?.villageId) {
-        return errorResponse("You must be in a village to surrender");
-      }
-      if (user.userId !== user.village.kageId) {
-        return errorResponse("Only the Kage can surrender");
-      }
-      if (!activeWar) {
-        return errorResponse("Active war was not found");
-      }
-      if (activeWar.status !== "ACTIVE") {
-        return errorResponse("War is not active");
-      }
-      if (!["WAR_RAID", "VILLAGE_WAR"].includes(activeWar.type)) {
-        return errorResponse("Cannot surrender this type of war");
-      }
-      // Mutate
-      if (isMainCompetitor) {
-        // Main participant surrendering
-        if (user.villageId === activeWar.attackerVillageId) {
-          activeWar.attackerVillage.tokens = 0;
-        } else {
-          activeWar.defenderVillage.tokens = 0;
+      const auditLogId = `war-surrender:${input.requestId}`;
+      const snapshotWar = (currentWar: War): AdminEndWarSnapshot => ({
+        id: currentWar.id,
+        attackerVillageId: currentWar.attackerVillageId,
+        defenderVillageId: currentWar.defenderVillageId,
+        startedAt: currentWar.startedAt.toISOString(),
+        endedAt: currentWar.endedAt?.toISOString() ?? null,
+        status: currentWar.status,
+        type: currentWar.type,
+        sector: currentWar.sector,
+        attackerShrineHp: currentWar.attackerShrineHp,
+        attackerShrineMaxHp: currentWar.attackerShrineMaxHp,
+        attackerShrineStatus: currentWar.attackerShrineStatus,
+        defenderShrineHp: currentWar.defenderShrineHp,
+        defenderShrineMaxHp: currentWar.defenderShrineMaxHp,
+        defenderShrineStatus: currentWar.defenderShrineStatus,
+        lastTokenReductionAt: currentWar.lastTokenReductionAt.toISOString(),
+        targetStructureRoute: currentWar.targetStructureRoute,
+        attackerWarHealth: currentWar.attackerWarHealth,
+        defenderWarHealth: currentWar.defenderWarHealth,
+        attackerWarHealthMax: currentWar.attackerWarHealthMax,
+        defenderWarHealthMax: currentWar.defenderWarHealthMax,
+      });
+      const exactJson = (left: unknown, right: unknown) =>
+        JSON.stringify(left) === JSON.stringify(right);
+      const affectedRowCount = (result: unknown): number => {
+        if (Array.isArray(result)) return affectedRowCount(result[0]);
+        if (!result || typeof result !== "object") return 0;
+        if ("rowsAffected" in result && typeof result.rowsAffected === "number") {
+          return result.rowsAffected;
         }
-        await handleWarEnd(activeWar);
-      } else if (warAllyData) {
-        // Ally surrendering
-        const endedAt = new Date();
-        const warExhaustionEnd = secondsFromDate(
-          WAR_LOSING_COOLDOWN_DAYS * DAY_S,
-          endedAt,
+        if ("affectedRows" in result && typeof result.affectedRows === "number") {
+          return result.affectedRows;
+        }
+        return 0;
+      };
+      const firstExecuteRow = <T extends Record<string, unknown>>(result: unknown) => {
+        if (Array.isArray(result)) {
+          const rows = Array.isArray(result[0]) ? result[0] : result;
+          return rows[0] as T | undefined;
+        }
+        if (result && typeof result === "object" && "rows" in result) {
+          const rows = (result as { rows?: unknown[] }).rows;
+          return rows?.[0] as T | undefined;
+        }
+        return undefined;
+      };
+
+      type SurrenderReceipt = {
+        version: 1;
+        requestId: string;
+        expectedRevision: string;
+        expectedWar: AdminEndWarSnapshot;
+        expectedActor: z.infer<typeof surrenderActorSnapshotSchema>;
+        participationRole: SurrenderParticipationRole;
+        expectedWarAlly: z.infer<typeof surrenderWarAllySnapshotSchema> | null;
+        outcome: "MAIN_WAR_ENDED" | "ALLY_WITHDRAWN";
+        resultStatus: "ATTACKER_VICTORY" | "DEFENDER_VICTORY" | "ACTIVE";
+        loserVillageId: string;
+        winnerVillageId: string | null;
+        allyId: string | null;
+        endedAt: string | null;
+      };
+      const receiptSchema = z.object({
+        version: z.literal(1),
+        requestId: z.string().uuid(),
+        expectedRevision: z.string(),
+        expectedWar: adminEndWarSnapshotSchema,
+        expectedActor: surrenderActorSnapshotSchema,
+        participationRole: z.enum([
+          "MAIN_ATTACKER",
+          "MAIN_DEFENDER",
+          "ALLY_ATTACKER",
+          "ALLY_DEFENDER",
+        ]),
+        expectedWarAlly: surrenderWarAllySnapshotSchema.nullable(),
+        outcome: z.enum(["MAIN_WAR_ENDED", "ALLY_WITHDRAWN"]),
+        resultStatus: z.enum(["ATTACKER_VICTORY", "DEFENDER_VICTORY", "ACTIVE"]),
+        loserVillageId: z.string(),
+        winnerVillageId: z.string().nullable(),
+        allyId: z.string().nullable(),
+        endedAt: z.string().datetime().nullable(),
+      });
+      const responseFromReceipt = (receipt: SurrenderReceipt) => ({
+        success: true as const,
+        message:
+          receipt.outcome === "MAIN_WAR_ENDED"
+            ? "Your village surrendered and the war has ended"
+            : "Your village withdrew from the war",
+        requestId: receipt.requestId,
+        warId: receipt.expectedWar.id,
+        warType: receipt.expectedWar.type as "VILLAGE_WAR" | "WAR_RAID",
+        expectedRevision: receipt.expectedRevision,
+        actorUserId: receipt.expectedActor.userId,
+        villageId: receipt.expectedActor.villageId,
+        kageId: receipt.expectedActor.kageId,
+        participationRole: receipt.participationRole,
+        outcome: receipt.outcome,
+        resultStatus: receipt.resultStatus,
+        loserVillageId: receipt.loserVillageId,
+        winnerVillageId: receipt.winnerVillageId,
+        allyId: receipt.allyId,
+        endedAt: receipt.endedAt,
+        auditLogId,
+      });
+
+      return ctx.drizzle.transaction(async (rawTx) => {
+        const tx = rawTx as unknown as DrizzleClient;
+        // All war mutations claim the War row first. Combat's guarded UPDATE and normal/admin
+        // resolution therefore either happen wholly before this request or do nothing afterward.
+        await tx.execute(
+          sql`SELECT ${war.id} FROM ${war} WHERE ${war.id} = ${input.warId} FOR UPDATE`,
         );
-        await Promise.all([
-          ctx.drizzle.delete(warAlly).where(eq(warAlly.id, warAllyData.id)),
-          ctx.drizzle
+        await tx.execute(
+          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} = ${ctx.userId} FOR UPDATE`,
+        );
+        const actor = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+          with: { village: true },
+        });
+        if (!actor) return errorResponse("User not found");
+        if (actor.isBanned) return errorResponse("Banned users cannot surrender wars");
+        if (!actor.villageId || !actor.village) {
+          return errorResponse("You must be in a village to surrender");
+        }
+        // Secure the village leadership row after discovering it, then refresh the actor. A
+        // Kage handover which commits at the validation boundary must be observed before any
+        // surrender effect can run.
+        const lockedVillageResult = await tx.execute(
+          sql`SELECT ${village.id} AS villageId, ${village.kageId} AS kageId FROM ${village} WHERE ${village.id} = ${actor.villageId} FOR UPDATE`,
+        );
+        const lockedVillage = firstExecuteRow<{ villageId: string; kageId: string }>(
+          lockedVillageResult,
+        );
+        if (!lockedVillage || lockedVillage.villageId !== actor.villageId) {
+          return errorResponse("You must be in a village to surrender");
+        }
+        if (actor.userId !== lockedVillage.kageId) {
+          return errorResponse("Only the current Kage can surrender");
+        }
+        if (
+          !exactJson(input.expectedActor, {
+            userId: actor.userId,
+            villageId: actor.villageId,
+            kageId: lockedVillage.kageId,
+          })
+        ) {
+          return errorResponse(
+            "Kage or village identity changed. Reopen the confirmation",
+          );
+        }
+
+        await tx.execute(
+          sql`SELECT ${actionLog.id} FROM ${actionLog} WHERE ${actionLog.id} = ${auditLogId} FOR UPDATE`,
+        );
+        const previousLog = await tx.query.actionLog.findFirst({
+          where: eq(actionLog.id, auditLogId),
+        });
+        const currentWar = await tx.query.war.findFirst({
+          where: eq(war.id, input.warId),
+          with: {
+            attackerVillage: { with: { structures: true } },
+            defenderVillage: { with: { structures: true } },
+            warAllies: { with: { village: true } },
+          },
+        });
+
+        if (previousLog) {
+          const parsed = receiptSchema.safeParse(previousLog.changes);
+          const receipt = parsed.success ? parsed.data : undefined;
+          const exactReplay =
+            receipt &&
+            previousLog.userId === actor.userId &&
+            previousLog.tableName === "War" &&
+            previousLog.relatedId === input.warId &&
+            receipt.requestId === input.requestId &&
+            receipt.expectedRevision === input.expectedRevision &&
+            exactJson(receipt.expectedWar, input.expectedWar) &&
+            exactJson(receipt.expectedActor, input.expectedActor) &&
+            receipt.participationRole === input.expectedParticipationRole &&
+            exactJson(receipt.expectedWarAlly, input.expectedWarAlly);
+          if (!exactReplay) return errorResponse("Invalid surrender request ID");
+          if (!currentWar) {
+            return errorResponse("Surrender receipt no longer matches the current war");
+          }
+          const sameWarIdentity =
+            currentWar.id === receipt.expectedWar.id &&
+            currentWar.startedAt.toISOString() === receipt.expectedWar.startedAt &&
+            currentWar.attackerVillageId === receipt.expectedWar.attackerVillageId &&
+            currentWar.defenderVillageId === receipt.expectedWar.defenderVillageId &&
+            currentWar.type === receipt.expectedWar.type;
+          if (receipt.outcome === "MAIN_WAR_ENDED") {
+            if (
+              !sameWarIdentity ||
+              currentWar.status !== receipt.resultStatus ||
+              currentWar.endedAt?.toISOString() !== receipt.endedAt
+            ) {
+              return errorResponse(
+                "Surrender receipt no longer matches the war outcome",
+              );
+            }
+          } else {
+            const recreatedAlly = await tx.query.warAlly.findFirst({
+              where: and(
+                eq(warAlly.warId, input.warId),
+                eq(warAlly.villageId, actor.villageId),
+              ),
+              columns: { id: true },
+            });
+            if (
+              !sameWarIdentity ||
+              currentWar.status !== "ACTIVE" ||
+              currentWar.endedAt !== null ||
+              recreatedAlly
+            ) {
+              return errorResponse(
+                "Surrender receipt no longer matches ally withdrawal",
+              );
+            }
+          }
+          return responseFromReceipt(receipt as SurrenderReceipt);
+        }
+
+        if (!currentWar?.attackerVillage || !currentWar.defenderVillage) {
+          return errorResponse("Active war was not found");
+        }
+        if (
+          currentWar.status !== "ACTIVE" ||
+          currentWar.endedAt !== null ||
+          !["VILLAGE_WAR", "WAR_RAID"].includes(currentWar.type)
+        ) {
+          return errorResponse("War is no longer surrenderable. Refresh and try again");
+        }
+        if (!exactJson(snapshotWar(currentWar), input.expectedWar)) {
+          return errorResponse(
+            "War state changed. Reopen the confirmation before surrendering",
+          );
+        }
+
+        let participationRole: SurrenderParticipationRole | undefined;
+        if (actor.villageId === currentWar.attackerVillageId) {
+          participationRole = "MAIN_ATTACKER";
+        } else if (actor.villageId === currentWar.defenderVillageId) {
+          participationRole = "MAIN_DEFENDER";
+        }
+        const currentAlly = currentWar.warAllies.find(
+          (entry) => entry.villageId === actor.villageId,
+        );
+        if (!participationRole && currentAlly) {
+          if (currentAlly.supportVillageId === currentWar.attackerVillageId) {
+            participationRole = "ALLY_ATTACKER";
+          } else if (currentAlly.supportVillageId === currentWar.defenderVillageId) {
+            participationRole = "ALLY_DEFENDER";
+          }
+        }
+        if (!participationRole) return errorResponse("You are not part of this war");
+        if (participationRole !== input.expectedParticipationRole) {
+          return errorResponse(
+            "Your role in this war changed. Reopen the confirmation",
+          );
+        }
+        const currentAllySnapshot = currentAlly
+          ? {
+              id: currentAlly.id,
+              warId: currentAlly.warId,
+              villageId: currentAlly.villageId,
+              supportVillageId: currentAlly.supportVillageId,
+              tokensPaid: currentAlly.tokensPaid,
+              joinedAt: currentAlly.joinedAt.toISOString(),
+            }
+          : null;
+        if (!exactJson(currentAllySnapshot, input.expectedWarAlly)) {
+          return errorResponse("War ally assignment changed. Reopen the confirmation");
+        }
+
+        let receipt: SurrenderReceipt;
+        if (participationRole.startsWith("MAIN_")) {
+          const endedWar = await handleWarEnd(currentWar, {
+            transaction: tx,
+            expectedWarState: currentWar,
+            forcedLoserVillageId: actor.villageId,
+          });
+          if (
+            !endedWar ||
+            !["ATTACKER_VICTORY", "DEFENDER_VICTORY"].includes(endedWar.status)
+          ) {
+            return errorResponse("War state changed. Refresh before surrendering");
+          }
+          const winnerVillageId =
+            endedWar.status === "ATTACKER_VICTORY"
+              ? endedWar.attackerVillageId
+              : endedWar.defenderVillageId;
+          receipt = {
+            version: 1,
+            requestId: input.requestId,
+            expectedRevision: input.expectedRevision,
+            expectedWar: input.expectedWar,
+            expectedActor: input.expectedActor,
+            participationRole,
+            expectedWarAlly: null,
+            outcome: "MAIN_WAR_ENDED",
+            resultStatus: endedWar.status as "ATTACKER_VICTORY" | "DEFENDER_VICTORY",
+            loserVillageId: actor.villageId,
+            winnerVillageId,
+            allyId: null,
+            endedAt: endedWar.endedAt?.toISOString() ?? null,
+          };
+        } else {
+          if (!currentAlly || !input.expectedWarAlly) {
+            return errorResponse(
+              "War ally assignment changed. Reopen the confirmation",
+            );
+          }
+          await tx.execute(
+            sql`SELECT ${warAlly.id} FROM ${warAlly} WHERE ${warAlly.id} = ${currentAlly.id} FOR UPDATE`,
+          );
+          await tx.execute(
+            sql`SELECT ${village.id} FROM ${village} WHERE ${village.id} = ${actor.villageId} FOR UPDATE`,
+          );
+          const removedAlly = await tx
+            .delete(warAlly)
+            .where(
+              and(
+                eq(warAlly.id, input.expectedWarAlly.id),
+                eq(warAlly.warId, input.warId),
+                eq(warAlly.villageId, actor.villageId),
+                eq(warAlly.supportVillageId, input.expectedWarAlly.supportVillageId),
+                eq(warAlly.tokensPaid, input.expectedWarAlly.tokensPaid),
+              ),
+            );
+          if (affectedRowCount(removedAlly) !== 1) {
+            throw serverError(
+              "PRECONDITION_FAILED",
+              "War ally assignment changed. Refresh before surrendering",
+            );
+          }
+          const surrenderedAt = new Date();
+          const exhaustion = await tx
             .update(village)
             .set({
-              warExhaustionEndedAt: warExhaustionEnd,
-              lastWarEndedAt: endedAt,
+              warExhaustionEndedAt: secondsFromDate(
+                WAR_LOSING_COOLDOWN_DAYS * DAY_S,
+                surrenderedAt,
+              ),
+              lastWarEndedAt: surrenderedAt,
             })
-            .where(eq(village.id, user.villageId)),
-        ]);
-      } else {
-        // Not part of the war
-        return errorResponse("You are not part of this war");
-      }
-      return { success: true, message: "War surrendered and therefore lost" };
+            .where(eq(village.id, actor.villageId));
+          if (affectedRowCount(exhaustion) !== 1) {
+            throw serverError(
+              "INTERNAL_SERVER_ERROR",
+              "Failed to apply war exhaustion",
+            );
+          }
+          receipt = {
+            version: 1,
+            requestId: input.requestId,
+            expectedRevision: input.expectedRevision,
+            expectedWar: input.expectedWar,
+            expectedActor: input.expectedActor,
+            participationRole,
+            expectedWarAlly: input.expectedWarAlly,
+            outcome: "ALLY_WITHDRAWN",
+            resultStatus: "ACTIVE",
+            loserVillageId: actor.villageId,
+            winnerVillageId: null,
+            allyId: currentAlly.id,
+            endedAt: null,
+          };
+        }
+
+        await tx.insert(actionLog).values({
+          id: auditLogId,
+          userId: actor.userId,
+          tableName: "War",
+          relatedId: input.warId,
+          relatedMsg: receipt.outcome,
+          changes: receipt,
+        });
+        return responseFromReceipt(receipt);
+      });
     }),
 
   getWarKills: protectedProcedure
@@ -1555,27 +2254,22 @@ export const fetchActiveWars = async (client: DrizzleClient, villageId?: string)
     },
   });
   // Process the wars and end the ones that need to be ended
-  activeWars = await Promise.all(
-    activeWars
-      .filter((war) => war.attackerVillage && war.defenderVillage)
-      .map((war) => {
-        // For village wars and raids, check war health instead of townhall
-        if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
-          // Set tokens to 0 when war health reaches 0 to trigger war end
-          if (war.attackerWarHealth <= 0) {
-            war.attackerVillage.tokens = 0;
-          }
-          if (war.defenderWarHealth <= 0) {
-            war.defenderVillage.tokens = 0;
-          }
-        }
-        // Update war
-        if (war.attackerVillage.tokens <= 0 || war.defenderVillage.tokens <= 0) {
-          return handleWarEnd(war);
-        }
-        return war;
-      }),
-  );
+  const processedWars: typeof activeWars = [];
+  for (const activeWar of activeWars) {
+    if (!activeWar.attackerVillage || !activeWar.defenderVillage) continue;
+    const shouldEnd =
+      activeWar.attackerVillage.tokens <= 0 ||
+      activeWar.defenderVillage.tokens <= 0 ||
+      (["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type) &&
+        (activeWar.attackerWarHealth <= 0 || activeWar.defenderWarHealth <= 0));
+    if (shouldEnd) {
+      const endedWar = await handleWarEnd(activeWar, { client });
+      if (endedWar) processedWars.push(endedWar);
+    } else {
+      processedWars.push(activeWar);
+    }
+  }
+  activeWars = processedWars;
   // Final active wars
   activeWars = activeWars.filter((war) => {
     if (villageId) {

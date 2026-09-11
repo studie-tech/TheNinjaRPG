@@ -8,6 +8,7 @@ import {
   Ghost,
   GitMerge,
   HousePlus,
+  Loader2,
   Locate,
   MapPinned,
   Radar,
@@ -79,7 +80,7 @@ import MapError from "@/layout/MapError";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { nonCombatConsume } from "@/libs/item";
-import { getStealthStatus } from "@/libs/stealth";
+import { getRemainingSensoryCooldown, getStealthStatus } from "@/libs/stealth";
 import type { GlobalTile, SectorPoint } from "@/libs/threejs/types";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
@@ -1254,9 +1255,25 @@ const StealthControls: React.FC<{
   const { data: userData, timeDiff, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const currentSector = userData?.sector;
+  const activationInFlightRef = useRef(false);
+  const deactivationInFlightRef = useRef(false);
+  const sensoryInFlightRef = useRef(false);
+  const lastSuccessfulSensoryAtRef = useRef<Date | null>(null);
+  const [lastSuccessfulSensoryAt, setLastSuccessfulSensoryAt] = useState<Date | null>(
+    null,
+  );
+
+  const effectiveLastSensoryAt =
+    lastSuccessfulSensoryAt &&
+    (!userData?.lastSensoryAt ||
+      lastSuccessfulSensoryAt.getTime() > userData.lastSensoryAt.getTime())
+      ? lastSuccessfulSensoryAt
+      : userData?.lastSensoryAt;
 
   const stealthStatus = getStealthStatus(
-    userData,
+    userData
+      ? { ...userData, lastSensoryAt: effectiveLastSensoryAt ?? null }
+      : userData,
     STEALTH_SENSORY_CAP,
     STEALTH_TRAIN_GAIN_PER_MINUTE,
     timeDiff,
@@ -1276,6 +1293,9 @@ const StealthControls: React.FC<{
           });
         }
       },
+      onSettled: () => {
+        activationInFlightRef.current = false;
+      },
     });
 
   const { mutate: deactivateStealth, isPending: isDeactivatingStealth } =
@@ -1286,19 +1306,32 @@ const StealthControls: React.FC<{
           await updateUser({ stealthActive: false, stealthActivatedAt: null });
         }
       },
+      onSettled: () => {
+        deactivationInFlightRef.current = false;
+      },
     });
 
   const { mutate: scanSensory, isPending: isScanningSensory } =
     api.stealth.useSensory.useMutation({
-      onSuccess: async (data) => {
+      onSuccess: (data) => {
         showMutationToast(data);
         if (data.success && data.data) {
-          await updateUser({ lastSensoryAt: data.data.lastSensoryAt });
-          await utils.travel.getSectorData.invalidate();
+          lastSuccessfulSensoryAtRef.current = data.data.lastSensoryAt;
+          setLastSuccessfulSensoryAt(data.data.lastSensoryAt);
           if (data.data.detectedUsers.length > 0) {
             onRevealed(data.data.detectedUsers);
           }
+
+          // The server has already consumed the scan. Keep cache maintenance best-effort so a
+          // client refresh failure cannot hide results or make the Radar appear retryable.
+          void Promise.allSettled([
+            updateUser({ lastSensoryAt: data.data.lastSensoryAt }),
+            utils.travel.getSectorData.invalidate(),
+          ]);
         }
+      },
+      onSettled: () => {
+        sensoryInFlightRef.current = false;
       },
     });
 
@@ -1308,51 +1341,137 @@ const StealthControls: React.FC<{
       <TooltipProvider delayDuration={50}>
         <Tooltip>
           <TooltipTrigger
+            type="button"
+            disabled={isActivatingStealth || isDeactivatingStealth}
+            aria-busy={isActivatingStealth || isDeactivatingStealth}
+            aria-disabled={isActivatingStealth || isDeactivatingStealth}
+            aria-label={
+              isActivatingStealth
+                ? "Activating stealth…"
+                : isDeactivatingStealth
+                  ? "Deactivating stealth…"
+                  : stealthStatus?.isCurrentlyStealthed
+                    ? "Deactivate stealth"
+                    : "Activate stealth"
+            }
+            className={
+              isActivatingStealth || isDeactivatingStealth ? "cursor-wait" : undefined
+            }
             onClick={() => {
-              if (isActivatingStealth || isDeactivatingStealth) return;
+              if (
+                activationInFlightRef.current ||
+                deactivationInFlightRef.current ||
+                isActivatingStealth ||
+                isDeactivatingStealth
+              ) {
+                return;
+              }
               if (stealthStatus?.isCurrentlyStealthed) {
+                deactivationInFlightRef.current = true;
                 deactivateStealth();
               } else if (stealthCooldown <= 0) {
+                activationInFlightRef.current = true;
                 activateStealth();
               }
             }}
           >
-            <Ghost
-              className={`mr-2 h-7 w-7 ${stealthStatus?.isCurrentlyStealthed ? "text-purple-500" : stealthCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-purple-500"}`}
-            />
+            {isActivatingStealth || isDeactivatingStealth ? (
+              <Loader2
+                className="mr-2 h-7 w-7 animate-spin text-purple-500"
+                aria-hidden="true"
+              />
+            ) : (
+              <Ghost
+                className={`mr-2 h-7 w-7 ${stealthStatus?.isCurrentlyStealthed ? "text-purple-500" : stealthCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-purple-500"}`}
+              />
+            )}
           </TooltipTrigger>
-          <TooltipContent>
-            {stealthStatus?.isCurrentlyStealthed
-              ? `Stealth Active (${Math.ceil(stealthDuration)}s remaining)`
-              : stealthCooldown > 0
-                ? `Stealth Cooldown (${Math.ceil(stealthCooldown)}s)`
-                : "Activate Stealth"}
+          <TooltipContent aria-live="polite">
+            {isActivatingStealth
+              ? "Activating stealth…"
+              : isDeactivatingStealth
+                ? "Deactivating stealth…"
+                : stealthStatus?.isCurrentlyStealthed
+                  ? `Stealth Active (${Math.ceil(stealthDuration)}s remaining)`
+                  : stealthCooldown > 0
+                    ? `Stealth Cooldown (${Math.ceil(stealthCooldown)}s)`
+                    : "Activate Stealth"}
           </TooltipContent>
         </Tooltip>
+        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {isActivatingStealth
+            ? "Activating stealth…"
+            : isDeactivatingStealth
+              ? "Deactivating stealth…"
+              : ""}
+        </span>
       </TooltipProvider>
       {/* Sensory Scan */}
       <TooltipProvider delayDuration={50}>
         <Tooltip>
-          <TooltipTrigger
-            onClick={() => {
-              if (isScanningSensory) return;
-              if (sensoryCooldown <= 0) {
-                if (currentSector !== undefined) {
-                  scanSensory({ sector: currentSector });
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <button
+                type="button"
+                disabled={
+                  isScanningSensory ||
+                  sensoryCooldown > 0 ||
+                  currentSector === undefined
                 }
-              }
-            }}
-          >
-            <Radar
-              className={`mr-2 h-7 w-7 ${sensoryCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-blue-500"}`}
-            />
+                aria-busy={isScanningSensory}
+                aria-disabled={
+                  isScanningSensory ||
+                  sensoryCooldown > 0 ||
+                  currentSector === undefined
+                }
+                aria-label={isScanningSensory ? "Scanning sector…" : "Scan sector"}
+                className={isScanningSensory ? "cursor-wait" : undefined}
+                onClick={() => {
+                  const successfulScanCooldown = getRemainingSensoryCooldown(
+                    lastSuccessfulSensoryAtRef.current,
+                    userData?.sensory ?? 0,
+                    timeDiff,
+                  );
+                  if (
+                    sensoryInFlightRef.current ||
+                    isScanningSensory ||
+                    successfulScanCooldown > 0
+                  ) {
+                    return;
+                  }
+                  if (sensoryCooldown <= 0) {
+                    if (currentSector !== undefined) {
+                      sensoryInFlightRef.current = true;
+                      scanSensory({ sector: currentSector });
+                    }
+                  }
+                }}
+              >
+                {isScanningSensory ? (
+                  <Loader2
+                    className="mr-2 h-7 w-7 animate-spin text-blue-500"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Radar
+                    className={`mr-2 h-7 w-7 ${sensoryCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-blue-500"}`}
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+            </span>
           </TooltipTrigger>
-          <TooltipContent>
-            {sensoryCooldown > 0
-              ? `Sensory Cooldown (${Math.ceil(sensoryCooldown)}s)`
-              : `Scan for Hidden Enemies (${(stealthStatus?.sensoryDetectChance ?? 5).toFixed(0)}% chance)`}
+          <TooltipContent aria-live="polite">
+            {isScanningSensory
+              ? "Scanning sector…"
+              : sensoryCooldown > 0
+                ? `Sensory Cooldown (${Math.ceil(sensoryCooldown)}s)`
+                : `Scan for Hidden Enemies (${(stealthStatus?.sensoryDetectChance ?? 5).toFixed(0)}% chance)`}
           </TooltipContent>
         </Tooltip>
+        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {isScanningSensory ? "Scanning sector…" : ""}
+        </span>
       </TooltipProvider>
     </>
   );

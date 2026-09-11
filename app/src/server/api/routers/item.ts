@@ -264,57 +264,64 @@ export const itemRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [user, itemData] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
-      ]);
+      // Fetch the caller before opening a write transaction. The source itself is read in the
+      // transaction below so its base fields and recipe come from one consistent snapshot.
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
-      if (!itemData) return errorResponse("Item not found");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
 
-      // Create new item with copied data
-      const newItemId = nanoid();
-      // Server-side enforcement: zero out reward_reputation when cloning if user lacks permission
-      let clonedEffects = itemData.effects;
-      if (!canAwardReputation(user.role)) {
-        clonedEffects = itemData.effects.map((effect) => {
-          if (effect.type === "noncombatconsumereward") {
-            return { ...effect, reward_reputation: 0 };
-          }
-          return effect;
-        }) as ZodAllTags[];
-      }
-      const clonedItem = {
-        ...itemData,
-        id: newItemId,
-        name: `${itemData.name} - copy`,
-        hidden: true,
-        effects: clonedEffects,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      return await ctx.drizzle.transaction(async (tx) => {
+        const itemData = await fetchItemWithCraftingRequirements(tx, input.id);
+        if (!itemData) return errorResponse("Item not found");
 
-      // Run all inserts at once
-      await Promise.all([
-        ctx.drizzle.insert(item).values(clonedItem),
-        ...(itemData.craftingRequirements && itemData.craftingRequirements.length > 0
-          ? [
-              ctx.drizzle.insert(craftingRequirement).values(
-                itemData.craftingRequirements.map((req) => ({
-                  id: nanoid(),
-                  craftItemId: newItemId,
-                  requirementItemId: req.requirementItemId,
-                  quantity: req.quantity,
-                })),
-              ),
-            ]
-          : []),
-      ]);
+        const newItemId = nanoid();
+        const cloneSuffix = ` - copy-${newItemId}`;
+        const cloneName = `${itemData.name.slice(0, 191 - cloneSuffix.length)}${cloneSuffix}`;
+        const clonedAt = new Date();
 
-      return { success: true, message: newItemId };
+        // Server-side enforcement: zero out reward_reputation when cloning if the editor lacks
+        // that narrower permission. All other base-item references remain bound to the same
+        // bloodline/evolution/farming targets as the source.
+        let clonedEffects = itemData.effects;
+        if (!canAwardReputation(user.role)) {
+          clonedEffects = itemData.effects.map((effect) => {
+            if (effect.type === "noncombatconsumereward") {
+              return { ...effect, reward_reputation: 0 };
+            }
+            return effect;
+          }) as ZodAllTags[];
+        }
+
+        const { craftingRequirements, requiredBloodline: _, ...baseItem } = itemData;
+        await tx.insert(item).values({
+          ...baseItem,
+          id: newItemId,
+          // Item names are unique. Include the generated id so repeated intentional clones of the
+          // same source remain possible, truncating only the human-readable source portion.
+          name: cloneName,
+          hidden: true,
+          effects: clonedEffects,
+          createdAt: clonedAt,
+          updatedAt: clonedAt,
+        });
+
+        if (craftingRequirements.length > 0) {
+          await tx.insert(craftingRequirement).values(
+            craftingRequirements.map((requirement) => ({
+              id: nanoid(),
+              craftItemId: newItemId,
+              requirementItemId: requirement.requirementItemId,
+              quantity: requirement.quantity,
+              createdAt: clonedAt,
+              updatedAt: clonedAt,
+            })),
+          );
+        }
+
+        return { success: true, message: newItemId };
+      });
     }),
   // Delete a item
   delete: protectedProcedure
@@ -553,38 +560,33 @@ export const itemRouter = createTRPCRouter({
 
       // Setting updatedAt explicitly makes rowsAffected reliable: MySQL reports
       // changed rows, so a no-change re-save would otherwise read as a failed guard.
-      const updateResult = await ctx.drizzle
-        .update(item)
-        .set({ ...input.data, updatedAt: new Date() })
-        .where(and(eq(item.id, input.id), ...evolutionUpdateGuards));
-      if (updateResult.rowsAffected === 0) {
-        return errorResponse(
-          "Update failed — parent may have been deleted or evolution limits changed. Refresh and try again.",
-        );
-      }
-
-      // Replace crafting requirements only after the guarded update succeeds, so a
-      // failed guard can never wipe the recipe without re-inserting it.
       const newRequirements = input.data.craftingRequirements;
-      await Promise.all([
-        (async () => {
-          await ctx.drizzle
-            .delete(craftingRequirement)
-            .where(eq(craftingRequirement.craftItemId, input.id));
-          if (newRequirements && newRequirements.length > 0) {
-            await ctx.drizzle.insert(craftingRequirement).values(
-              newRequirements.flatMap((req) =>
-                req.ids?.map((id) => ({
-                  id: nanoid(),
-                  craftItemId: input.id,
-                  requirementItemId: id,
-                  quantity: req.number,
-                })),
-              ),
-            );
-          }
-        })(),
-        ctx.drizzle.insert(actionLog).values({
+      const updateCommitted = await ctx.drizzle.transaction(async (tx) => {
+        const updateResult = await tx
+          .update(item)
+          .set({ ...input.data, updatedAt: new Date() })
+          .where(and(eq(item.id, input.id), ...evolutionUpdateGuards));
+        if (updateResult.rowsAffected === 0) return false;
+
+        // Keep the item row, its crafting recipe, equipped-state cleanup, and
+        // audit record in one commit. Mass-effect edits submit the complete item,
+        // so a later recipe/audit failure must not leave only the effects changed.
+        await tx
+          .delete(craftingRequirement)
+          .where(eq(craftingRequirement.craftItemId, input.id));
+        if (newRequirements && newRequirements.length > 0) {
+          await tx.insert(craftingRequirement).values(
+            newRequirements.flatMap((req) =>
+              req.ids?.map((id) => ({
+                id: nanoid(),
+                craftItemId: input.id,
+                requirementItemId: id,
+                quantity: req.number,
+              })),
+            ),
+          );
+        }
+        await tx.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
           tableName: "item",
@@ -592,18 +594,28 @@ export const itemRouter = createTRPCRouter({
           relatedId: entry.id,
           relatedMsg: `Update: ${entry.name}`,
           relatedImage: entry.image,
-        }),
-        ...(input.data.hidden
-          ? [
-              ctx.drizzle
-                .update(userItem)
-                .set({ equipped: "NONE" })
-                .where(eq(userItem.itemId, entry.id)),
-            ]
-          : []),
-      ]);
+        });
+        if (input.data.hidden) {
+          await tx
+            .update(userItem)
+            .set({ equipped: "NONE" })
+            .where(eq(userItem.itemId, entry.id));
+        }
+        return true;
+      });
+      if (!updateCommitted) {
+        return errorResponse(
+          "Update failed — parent may have been deleted or evolution limits changed. Refresh and try again.",
+        );
+      }
       if (process.env.NODE_ENV !== "development") {
-        await callDiscordContent(user.username, entry.name, diff, entry.image);
+        try {
+          await callDiscordContent(user.username, entry.name, diff, entry.image);
+        } catch (error) {
+          // The database transaction is already committed. A notification outage
+          // must not turn a successful update into an apparent retryable failure.
+          console.error("Unable to announce committed item update", error);
+        }
       }
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
@@ -925,58 +937,221 @@ export const itemRouter = createTRPCRouter({
   // Adjust item level of public user
   adjustUserItem: protectedProcedure
     .input(adjustUserItemSchema)
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        requestId: z.string().uuid().optional(),
+        adjustment: z
+          .object({
+            userId: z.string(),
+            username: z.string(),
+            isAi: z.boolean(),
+            userItemId: z.string(),
+            itemId: z.string(),
+            itemName: z.string(),
+            previousLevel: z.number().int(),
+            newLevel: z.number().int(),
+            quantity: z.number().int(),
+            experience: z.number().int(),
+            equipped: z.enum(ItemSlots),
+            durability: z.number().int(),
+            dropChancePerc: z.number().int(),
+            storedAtHome: z.boolean(),
+            isInAuction: z.boolean(),
+            activeVariantId: z.string().nullable(),
+            craftingFinishedAt: z.date().nullable(),
+            imbuements: z.array(
+              z.object({
+                id: z.string(),
+                itemId: z.string(),
+                craftingFinishedAt: z.date(),
+              }),
+            ),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      const [user, owned] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        ctx.drizzle.query.userItem.findFirst({
+      const receiptId = `adjust-item:${input.requestId}`;
+      const expectedImbuements = [...input.expectedImbuements].sort((a, b) =>
+        a.id.localeCompare(b.id),
+      );
+      const adjustment = {
+        userId: input.userId,
+        username: input.expectedUsername,
+        isAi: input.expectedIsAi,
+        userItemId: input.userItemId,
+        itemId: input.itemId,
+        itemName: input.expectedItemName,
+        previousLevel: input.expectedLevel,
+        newLevel: input.level,
+        quantity: input.expectedQuantity,
+        experience: input.expectedExperience,
+        equipped: input.expectedEquipped,
+        durability: input.expectedDurability,
+        dropChancePerc: input.expectedDropChancePerc,
+        storedAtHome: input.expectedStoredAtHome,
+        isInAuction: input.expectedIsInAuction,
+        activeVariantId: input.expectedActiveVariantId,
+        craftingFinishedAt: input.expectedCraftingFinishedAt,
+        imbuements: expectedImbuements,
+      };
+      const changes = [
+        `Item ${input.expectedItemName} lvl ${input.expectedLevel} -> ${input.level}`,
+        `Verified target ${input.expectedUsername} (${input.userId}); AI ${input.expectedIsAi}`,
+        `Verified owned row ${input.userItemId}; item ${input.itemId}; quantity ${input.expectedQuantity}; experience ${input.expectedExperience}`,
+        `Preserved equipped ${input.expectedEquipped}; durability ${input.expectedDurability}; drop chance ${input.expectedDropChancePerc}; stored at home ${input.expectedStoredAtHome}; auction ${input.expectedIsInAuction}`,
+        `Preserved variant ${input.expectedActiveVariantId ?? "none"}; crafting ${input.expectedCraftingFinishedAt?.toISOString() ?? "none"}; imbuements ${expectedImbuements.map((row) => `${row.id}:${row.itemId}:${row.craftingFinishedAt.toISOString()}`).join(",") || "none"}`,
+      ];
+
+      return ctx.drizzle.transaction(async (tx) => {
+        // Serialize all staff changes for this target and lock the exact inventory row. This
+        // prevents two distinct absolute level edits from silently becoming last-write-wins,
+        // while the request-keyed audit record makes a lost-response replay idempotent.
+        const lockedUserIds = [...new Set([ctx.userId, input.userId])].sort();
+        await tx.execute(
+          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${sql.join(
+            lockedUserIds.map((id) => sql`${id}`),
+            sql`, `,
+          )}) ORDER BY ${userData.userId} FOR UPDATE`,
+        );
+        await tx.execute(
+          sql`SELECT ${userItem.id} FROM ${userItem} WHERE ${userItem.id} = ${input.userItemId} FOR UPDATE`,
+        );
+
+        // Transaction handles are single-flight, so keep relation reads sequential.
+        const user = await tx.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        });
+        const target = await tx.query.userData.findFirst({
+          where: eq(userData.userId, input.userId),
+        });
+        const owned = await tx.query.userItem.findFirst({
           where: and(
             eq(userItem.id, input.userItemId),
             eq(userItem.userId, input.userId),
-            gt(userItem.quantity, 0),
+            eq(userItem.itemId, input.itemId),
           ),
-          with: { item: true },
-        }),
-      ]);
-      if (!canEditItems(user.role)) {
-        return errorResponse("Not allowed to edit public user");
-      }
-      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
-        return errorResponse("You can only edit your own items");
-      }
-      if (!owned?.item) {
-        return errorResponse("Item not found for user");
-      }
+          with: { item: true, imbuements: true },
+        });
+        const previousRequest = await tx.query.actionLog.findFirst({
+          where: eq(actionLog.id, receiptId),
+        });
 
-      const updateResult = await ctx.drizzle
-        .update(userItem)
-        .set({
-          level: input.level,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(userItem.id, input.userItemId),
-            eq(userItem.userId, input.userId),
-            eq(userItem.level, owned.level),
-            eq(userItem.experience, owned.experience),
-            gt(userItem.quantity, 0),
-          ),
-        );
-      if (updateResult.rowsAffected === 0) {
-        return errorResponse("Item changed concurrently — refresh and try again");
-      }
+        if (!user) return errorResponse("Editing user not found");
+        if (user.isBanned) {
+          return errorResponse("You are banned and cannot adjust items");
+        }
+        if (!canEditItems(user.role)) {
+          return errorResponse("Not allowed to edit public user");
+        }
+        if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+          return errorResponse("You can only edit your own items");
+        }
+        if (!target) return errorResponse("Target user not found");
+        if (
+          target.username !== input.expectedUsername ||
+          target.isAi !== input.expectedIsAi
+        ) {
+          return errorResponse(
+            "The selected user changed; review the adjustment again",
+          );
+        }
 
-      await ctx.drizzle.insert(actionLog).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        tableName: "user",
-        changes: [`Item ${owned.item.name} lvl ${owned.level} -> ${input.level}`],
-        relatedId: input.userId,
-        relatedMsg: `Update: ${owned.item.name}`,
-        relatedImage: owned.item.image,
+        // Check the durable receipt before live row state. A later intentional adjustment must
+        // not make a retry of an already committed request appear to have failed.
+        if (previousRequest) {
+          const previousChanges = previousRequest.changes as string[];
+          const isExactReplay =
+            previousRequest.userId === user.userId &&
+            previousRequest.tableName === "user" &&
+            previousRequest.relatedId === input.userId &&
+            previousRequest.relatedMsg === `Update: ${input.expectedItemName}` &&
+            previousRequest.relatedValue === input.level &&
+            previousChanges.length === changes.length &&
+            changes.every((change, index) => previousChanges[index] === change);
+          if (!isExactReplay) {
+            return errorResponse("Invalid item adjustment request ID");
+          }
+          return {
+            success: true,
+            message: `${input.expectedItemName} was already adjusted for ${input.expectedUsername}`,
+            requestId: input.requestId,
+            adjustment,
+          };
+        }
+
+        if (!owned?.item || owned.quantity <= 0) {
+          return errorResponse("Item not found for user");
+        }
+        const actualImbuements = owned.imbuements
+          .map((row) => ({
+            id: row.id,
+            itemId: row.imbuementItemId,
+            craftingFinishedAt: row.craftingFinishedAt,
+          }))
+          .sort((a, b) => a.id.localeCompare(b.id));
+        const rowMatchesSnapshot =
+          owned.item.name === input.expectedItemName &&
+          owned.level === input.expectedLevel &&
+          owned.quantity === input.expectedQuantity &&
+          owned.experience === input.expectedExperience &&
+          owned.equipped === input.expectedEquipped &&
+          owned.durability === input.expectedDurability &&
+          owned.dropChancePerc === input.expectedDropChancePerc &&
+          owned.storedAtHome === input.expectedStoredAtHome &&
+          owned.isInAuction === input.expectedIsInAuction &&
+          owned.activeVariantId === input.expectedActiveVariantId &&
+          (owned.craftingFinishedAt?.getTime() ?? null) ===
+            (input.expectedCraftingFinishedAt?.getTime() ?? null) &&
+          actualImbuements.length === expectedImbuements.length &&
+          actualImbuements.every((row, index) => {
+            const expected = expectedImbuements[index];
+            if (!expected) return false;
+            return (
+              row.id === expected.id &&
+              row.itemId === expected.itemId &&
+              row.craftingFinishedAt.getTime() === expected.craftingFinishedAt.getTime()
+            );
+          });
+        if (!rowMatchesSnapshot) {
+          return errorResponse(
+            "This owned item changed; refresh and review the adjustment again",
+          );
+        }
+        if (input.level === input.expectedLevel) {
+          return errorResponse("No item level change to apply");
+        }
+
+        await tx
+          .update(userItem)
+          .set({ level: input.level, updatedAt: new Date() })
+          .where(
+            and(
+              eq(userItem.id, input.userItemId),
+              eq(userItem.userId, input.userId),
+              eq(userItem.itemId, input.itemId),
+            ),
+          );
+        // The audit row and level change commit together. Its request-derived primary key is the
+        // durable receipt used for safe retries after a lost response.
+        await tx.insert(actionLog).values({
+          id: receiptId,
+          userId: user.userId,
+          tableName: "user",
+          changes,
+          relatedId: input.userId,
+          relatedMsg: `Update: ${input.expectedItemName}`,
+          relatedImage: owned.item.image,
+          relatedValue: input.level,
+        });
+
+        return {
+          success: true,
+          message: `${input.expectedItemName} adjusted for ${input.expectedUsername}`,
+          requestId: input.requestId,
+          adjustment,
+        };
       });
-      return { success: true, message: "Item updated" };
     }),
   // Get all variants for an item
   getItemVariants: protectedProcedure

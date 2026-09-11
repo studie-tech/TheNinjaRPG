@@ -48,7 +48,7 @@ interface SingleEditBadgeProps {
 
 const SingleEditBadge: React.FC<SingleEditBadgeProps> = (props) => {
   // Form handling
-  const { badge, form, formData, handleBadgeSubmit } = useBadgeEditForm(
+  const { badge, form, formData, handleBadgeSubmit, isUpdating } = useBadgeEditForm(
     props.badge,
     props.refetch,
   );
@@ -59,6 +59,7 @@ const SingleEditBadge: React.FC<SingleEditBadgeProps> = (props) => {
       title="Content Panel"
       subtitle="Badge Management"
       defaultBackHref="/manual/badge"
+      backDisabled={isUpdating}
       noRightAlign={true}
       topRightContent={
         formData.find((e) => e.id === "description") ? (
@@ -73,7 +74,9 @@ const SingleEditBadge: React.FC<SingleEditBadgeProps> = (props) => {
                 Current badge data: ${JSON.stringify(form.getValues())}. 
               `,
             }}
+            disabled={isUpdating}
             onToolCall={(toolCall) => {
+              if (isUpdating) return;
               const data = toolCall.args as ZodBadgeType;
               let key: keyof typeof data;
               for (key in data) {
@@ -97,6 +100,8 @@ const SingleEditBadge: React.FC<SingleEditBadgeProps> = (props) => {
           relationId={badge.id}
           allowImageUpload={true}
           onAccept={handleBadgeSubmit}
+          submitLoading={isUpdating}
+          submitLoadingText="Saving badge…"
         />
       )}
     </ContentBox>

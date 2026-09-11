@@ -10,7 +10,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
@@ -34,7 +34,6 @@ import {
 import type { FederalStatus, UserRank } from "@/drizzle/constants";
 import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
-import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Conversation from "@/layout/Conversation";
 import Loader from "@/layout/Loader";
@@ -323,6 +322,8 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   const { data: userData } = useRequiredUserData();
   const utils = api.useUtils();
   const maxUsers = 5;
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const createSubmissionRef = useRef(false);
 
   const create = useForm<CreateConversationSchema>({
     resolver: zodResolver(createConversationSchema),
@@ -376,14 +377,21 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
       showMutationToast(data);
       if (data.success) {
         create.reset();
-        void utils.comments.getUserConversations.invalidate();
+        setIsCreateDialogOpen(false);
         if (data.conversationId) props.setSelectedConvo?.(data.conversationId);
       }
+    },
+    onSettled: () => {
+      createSubmissionRef.current = false;
     },
   });
 
   const onSubmit = create.handleSubmit(
     (data) => {
+      // React Query's pending state arrives on the next render. Guard synchronously
+      // as well so a rapid click/Enter sequence cannot create two conversations.
+      if (createSubmissionRef.current) return;
+      createSubmissionRef.current = true;
       createConversation.mutate({
         ...data,
         ...(senderUser?.userId ? { senderId: senderUser.userId } : {}),
@@ -396,6 +404,20 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
       }
     },
   );
+
+  const setCreateDialogOpen: React.Dispatch<React.SetStateAction<boolean>> = (
+    value,
+  ) => {
+    setIsCreateDialogOpen((current) => {
+      const next = typeof value === "function" ? value(current) : value;
+      return !next && createSubmissionRef.current ? current : next;
+    });
+  };
+
+  const openCreateDialog = () => {
+    if (createSubmissionRef.current) return;
+    setIsCreateDialogOpen(true);
+  };
 
   return (
     <div className="flex flex-row items-center">
@@ -426,61 +448,109 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
         </TooltipProvider>
       )}
       {userData && !composeRestriction && (
-        <Confirm
-          title="Create a new conversation"
-          proceed_label="Submit"
-          isValid={create.formState.isValid}
-          button={props.newButton}
-          onAccept={onSubmit}
-        >
-          <Form {...create}>
-            {canPostAsAI && (
-              <div className="mb-3">
-                <FormLabel>Sender</FormLabel>
-                <UserSearchSelect
-                  useFormMethods={senderSearchMethods}
-                  label="Post as (leave empty to post as yourself)"
-                  selectedUsers={[]}
-                  showYourself={true}
-                  showAi={true}
-                  inline={true}
-                  maxUsers={maxSenderUsers}
+        <>
+          {/* biome-ignore lint/a11y/useSemanticElements: supports both button and icon trigger content */}
+          <div
+            role="button"
+            tabIndex={createConversation.isPending ? -1 : 0}
+            aria-haspopup="dialog"
+            aria-expanded={isCreateDialogOpen}
+            aria-disabled={createConversation.isPending}
+            aria-busy={createConversation.isPending}
+            className={`inline-flex items-center ${
+              createConversation.isPending
+                ? "cursor-not-allowed opacity-50"
+                : "cursor-pointer"
+            }`}
+            onClick={(event) => {
+              if (createSubmissionRef.current) return;
+              event.preventDefault();
+              event.stopPropagation();
+              openCreateDialog();
+            }}
+            onKeyDown={(event) => {
+              if (createSubmissionRef.current) return;
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                openCreateDialog();
+              }
+            }}
+          >
+            {props.newButton}
+          </div>
+          <Modal
+            title="Create a new conversation"
+            proceed_label="Submit"
+            proceed_loading_label="Creating..."
+            isOpen={isCreateDialogOpen}
+            setIsOpen={setCreateDialogOpen}
+            isValid={false}
+            isLoading={createConversation.isPending}
+            proceedDisabled={!create.formState.isValid || createConversation.isPending}
+            onAccept={onSubmit}
+          >
+            <div aria-busy={createConversation.isPending}>
+              <Form {...create}>
+                {canPostAsAI && (
+                  <div className="mb-3">
+                    <FormLabel>Sender</FormLabel>
+                    <UserSearchSelect
+                      useFormMethods={senderSearchMethods}
+                      label="Post as (leave empty to post as yourself)"
+                      selectedUsers={[]}
+                      showYourself={true}
+                      showAi={true}
+                      inline={true}
+                      maxUsers={maxSenderUsers}
+                    />
+                  </div>
+                )}
+                <div>
+                  <FormLabel>Receivers</FormLabel>
+                  <UserSearchSelect
+                    useFormMethods={userSearchMethods}
+                    label="Users to send to"
+                    showAi={false}
+                    showYourself={false}
+                    maxUsers={maxUsers}
+                  />
+                </div>
+                <FormField
+                  control={create.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem className="mb-2">
+                      <FormLabel>Conversation name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-            )}
-            <div>
-              <FormLabel>Receivers</FormLabel>
-              <UserSearchSelect
-                useFormMethods={userSearchMethods}
-                label="Users to send to"
-                showAi={false}
-                showYourself={false}
-                maxUsers={maxUsers}
-              />
-            </div>
-            <FormField
-              control={create.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem className="mb-2">
-                  <FormLabel>Conversation name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+                <RichInput
+                  id="comment"
+                  label="Initial conversation message"
+                  height="300"
+                  placeholder=""
+                  control={create.control}
+                  error={create.formState.errors.comment?.message}
+                />
+              </Form>
+              {createConversation.isPending && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="mt-3 rounded-md border border-border bg-muted/50 p-2 text-center text-muted-foreground text-sm"
+                >
+                  Creating conversation...
+                </div>
               )}
-            />
-            <RichInput
-              id="comment"
-              label="Initial conversation message"
-              height="300"
-              placeholder=""
-              control={create.control}
-              error={create.formState.errors.comment?.message}
-            />
-          </Form>
-        </Confirm>
+            </div>
+          </Modal>
+        </>
       )}
     </div>
   );
