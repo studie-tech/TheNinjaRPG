@@ -29,6 +29,7 @@ import {
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { BARRIER_DAMAGE_TAG_TYPES, COMBAT_SECONDS } from "@/libs/combat/constants";
+import { resolvePotencyTags } from "@/libs/combat/potency";
 import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
 import { getPower, realizeTag, updateStatUsage } from "@/libs/combat/tags";
 import type {
@@ -52,6 +53,7 @@ import {
   getAffectedTiles,
   getBarriersBetween,
   getEffectiveCurPool,
+  getEffectStackKey,
   getItem,
   getJutsu,
   getJutsuReskin,
@@ -941,6 +943,7 @@ export const insertAction = (info: {
     // Skip per-tile A* pathfinding when no barriers exist on the field
     const hasBarriers = groundEffects.some((g) => g.type === "barrier");
     const EMPTY_BARRIER_RESULT = { barriers: [] as BattleEffect[], totalAbsorb: 0 };
+    const castTags = resolvePotencyTags(action, usersEffects, actorId);
     // For each affected tile, apply the effects
     affectedTiles.forEach((tile) => {
       // Calculate how many barriers are between origin & target
@@ -952,7 +955,7 @@ export const insertAction = (info: {
       if (action.target === "GROUND" || action.target === "EMPTY_GROUND") {
         // ADD GROUND EFFECTS
         const target = getTargetUser(alive, "CHARACTER", tile, user.userId);
-        action.effects.forEach((tag) => {
+        castTags.forEach((tag) => {
           // If it is a move effect, use the target tile instead of AOE tile
           const effectTile = tag.type === "move" ? targetTile : tile;
           // Target conditions
@@ -966,10 +969,11 @@ export const insertAction = (info: {
               round: battle.round,
               barrierAbsorb: totalAbsorb,
             });
-            if (effect && checkFriendlyFire(effect, user, alive)) {
-              const idx = `${effect.type}-${effect.creatorId}-${effect.targetId}-${effect.fromType}`;
+            effect.fromType = action.type;
+            effect.targetId = user.userId;
+            if (checkFriendlyFire(effect, user, alive)) {
+              const idx = getEffectStackKey(effect);
               if (!appliedEffects.has(idx)) {
-                effect.targetId = user.userId;
                 usersEffects.push(effect);
                 appliedEffects.add(idx);
               }
@@ -983,6 +987,7 @@ export const insertAction = (info: {
               round: battle.round,
               barrierAbsorb: totalAbsorb,
             });
+            effect.fromType = action.type;
             effect.longitude = effectTile.col;
             effect.latitude = effectTile.row;
             groundEffects.push({ ...effect });
@@ -999,7 +1004,7 @@ export const insertAction = (info: {
       } else {
         // ADD USER EFFECTS
         const target = getTargetUser(alive, action.target, tile, user.userId);
-        action.effects.forEach((tag, tagIndex) => {
+        castTags.forEach((tag, tagIndex) => {
           const effect = realizeTag({
             tag: tag as UserEffect,
             user: user,
@@ -1030,9 +1035,9 @@ export const insertAction = (info: {
                 }
               }
             } else if (tag.target === "SELF") {
-              const idx = `${effect.type}-${effect.creatorId}-${effect.targetId}-${effect.fromType}`;
+              effect.targetId = user.userId;
+              const idx = getEffectStackKey(effect);
               if (!appliedEffects.has(idx) && checkFriendlyFire(effect, user, alive)) {
-                effect.targetId = user.userId;
                 usersEffects.push(effect);
                 appliedEffects.add(idx);
               }
