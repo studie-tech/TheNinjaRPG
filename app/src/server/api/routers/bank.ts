@@ -158,7 +158,7 @@ export const bankRouter = createTRPCRouter({
         .prefault({}),
     )
     .query(async ({ ctx, input }) => {
-      const { minAmount = 100, dayLimit = 30 } = input;
+      const { minAmount = 100, dayLimit = 30 } = input ?? {};
       const cutoffDate = new Date(Date.now() - dayLimit * 24 * 60 * 60 * 1000);
 
       const sender = alias(userData, "sender");
