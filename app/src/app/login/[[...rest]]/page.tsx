@@ -39,10 +39,13 @@ export default function LoginUser() {
             elements: {
               rootBox: "!w-full [color-scheme:light]",
               cardBox: "!w-full",
-              // Clerk's social buttons open in the WebView, which Google rejects and
-              // Apple will not accept. NativeSignIn replaces them in the shell.
+              // Use Clerk style overrides: its generated display rules can override
+              // Tailwind utilities and expose duplicate WebView OAuth buttons.
               ...(isNativeShell
-                ? { socialButtons: "hidden", dividerRow: "hidden" }
+                ? {
+                    socialButtons: { display: "none" },
+                    dividerRow: { display: "none" },
+                  }
                 : {}),
             },
           }}
