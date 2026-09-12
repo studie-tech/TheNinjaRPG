@@ -55,8 +55,17 @@ interface RankedLoadoutSaveSnapshot {
   loadout: RankedLoadoutSchema;
 }
 
+const stableStringify = (value: unknown): string =>
+  JSON.stringify(value, (_key, item) =>
+    item && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(
+          Object.entries(item).sort(([left], [right]) => left.localeCompare(right)),
+        )
+      : item,
+  ) ?? "undefined";
+
 const loadoutsMatch = (left: RankedLoadoutSchema, right: RankedLoadoutSchema) =>
-  JSON.stringify(left) === JSON.stringify(right);
+  stableStringify(left) === stableStringify(right);
 
 /**
  * Main ranked arena component for entering/leaving the arena

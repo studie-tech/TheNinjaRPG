@@ -2063,7 +2063,9 @@ const NameChange: React.FC = () => {
       const data = await updateUsername({ username: submittedUsername });
       showMutationToast(data);
       if (data.success) {
-        await utils.profile.getUser.invalidate();
+        // The paid mutation has already committed. A failed cache refresh must
+        // not leave the confirmation retryable and charge the user twice.
+        await utils.profile.getUser.invalidate().catch(() => undefined);
         setShowNameChangeConfirm(false);
       } else {
         setUsernameDraft(submittedUsername);

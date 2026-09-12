@@ -75,6 +75,7 @@ it("keeps the user-id migration inventory in sync with every schema identity col
   candidates.delete("StoreEntitlementRevocation.userId"); // Collision-aware store merge.
   candidates.delete("StorePurchaseTransfer.sourceUserId"); // Collision-aware store merge.
   candidates.delete("StorePurchaseTransfer.destinationUserId"); // Store graph rewrite.
+  candidates.delete("UserBadge.userId"); // Collision-aware badge membership merge.
 
   const inventory = new Set(
     USER_ID_REFERENCE_COLUMNS.map(([table, column]) => `${table}.${column}`),

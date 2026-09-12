@@ -9,7 +9,6 @@ import { Clock, Group, OrthographicCamera, Vector2 } from "three";
 import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
-  BATTLE_ARENA_HEAL_COST,
   HEX_ASPECT_RATIO,
   HEX_STACKING_DISPLACEMENT,
   IMG_INITIATIVE_D20,
@@ -355,6 +354,9 @@ const Combat: React.FC<CombatProps> = (props) => {
       onError: (error) => {
         arenaStartInFlightRef.current = false;
         showMutationToast({ success: false, message: error.message });
+      },
+      onSettled: () => {
+        arenaStartInFlightRef.current = false;
       },
     });
 
