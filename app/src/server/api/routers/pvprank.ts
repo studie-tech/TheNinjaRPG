@@ -337,6 +337,9 @@ const affectedRows = (result: unknown) => {
   if (result && typeof result === "object" && "rowsAffected" in result) {
     return Number(result.rowsAffected);
   }
+  if (result && typeof result === "object" && "affectedRows" in result) {
+    return Number(result.affectedRows);
+  }
   if (
     Array.isArray(result) &&
     result[0] &&
@@ -1229,7 +1232,7 @@ export const pvpRankRouter = createTRPCRouter({
             eq(rankedLoadout.updatedAt, expectedUpdatedAt),
           ),
         );
-      if (updateResult.rowsAffected !== 1) {
+      if (affectedRows(updateResult) !== 1) {
         const latest = await ctx.drizzle.query.rankedLoadout.findFirst({
           where: and(
             eq(rankedLoadout.id, currentLoadout.id),

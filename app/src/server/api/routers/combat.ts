@@ -901,7 +901,7 @@ export const combatRouter = createTRPCRouter({
       const result = await ctx.drizzle
         .update(userData)
         .set({
-          money: sql`${userData.money} - 500`,
+          money: sql`${userData.money} - ${BATTLE_ARENA_HEAL_COST}`,
           curHealth: sql`${userData.maxHealth}`,
           curStamina: sql`${userData.maxStamina}`,
           curChakra: sql`${userData.maxChakra}`,
@@ -910,7 +910,7 @@ export const combatRouter = createTRPCRouter({
           and(
             eq(userData.userId, ctx.userId),
             eq(userData.status, "AWAKE"),
-            gte(userData.money, 500),
+            gte(userData.money, BATTLE_ARENA_HEAL_COST),
             or(
               lt(userData.curHealth, userData.maxHealth),
               lt(userData.curStamina, userData.maxStamina),

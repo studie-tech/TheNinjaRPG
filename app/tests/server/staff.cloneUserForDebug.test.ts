@@ -233,17 +233,17 @@ describeWithDatabase("staff.cloneUserForDebug", () => {
       imbuementItemId: "imbuement-item",
     });
     expect(oldImbuement).toBeUndefined();
-    await expect(
-      database.query.anbuSquad.findFirst({
+    expect(
+      await database.query.anbuSquad.findFirst({
         columns: { memberCount: true },
         where: eq(anbuSquad.id, "clone-debug-anbu"),
       }),
-    ).resolves.toMatchObject({ memberCount: 2 });
-    await expect(
-      database.query.actionLog.findFirst({
+    ).toMatchObject({ memberCount: 2 });
+    expect(
+      await database.query.actionLog.findFirst({
         where: eq(actionLog.userId, STAFF),
       }),
-    ).resolves.toMatchObject({
+    ).toMatchObject({
       relatedId: SOURCE,
       relatedMsg: "Clone user for debugging",
     });

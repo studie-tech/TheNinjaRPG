@@ -1,4 +1,5 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { userBadge } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import {
   migrateStoreEntitlementRevocations,
@@ -13,8 +14,8 @@ import {
  * both ids remain bound parameters. When a new user-id reference is added to the schema it must be
  * added here as well; the coverage test compares this inventory to the schema.
  *
- * Store entitlement/transfer tables are excluded because their composite unique keys require
- * semantic merges. StoreUserIdAlias.oldUserId is intentionally retained as the durable redirect.
+ * Tables with composite unique keys are excluded because they require semantic merges.
+ * StoreUserIdAlias.oldUserId is intentionally retained as the durable redirect.
  */
 export const USER_ID_REFERENCE_COLUMNS = [
   ["GameAsset", "createdByUserId"],
@@ -122,7 +123,6 @@ export const USER_ID_REFERENCE_COLUMNS = [
   ["BankTransfers", "senderId"],
   ["BankTransfers", "receiverId"],
   ["DailyBankInterest", "userId"],
-  ["UserBadge", "userId"],
   ["UserRequest", "senderId"],
   ["UserRequest", "receiverId"],
   ["UserRewards", "awardedById"],
@@ -168,6 +168,48 @@ export const USER_ID_REFERENCE_COLUMNS = [
 ] as const;
 
 const identifier = (value: string) => sql.raw(`\`${value}\``);
+
+/** Merge badge memberships without losing an earlier award timestamp. */
+export const migrateUserBadges = async (
+  client: DrizzleClient,
+  oldUserId: string,
+  newUserId: string,
+) => {
+  const oldBadges = await client.query.userBadge.findMany({
+    where: eq(userBadge.userId, oldUserId),
+  });
+  for (const oldBadge of oldBadges) {
+    const destinationBadge = await client.query.userBadge.findFirst({
+      where: and(
+        eq(userBadge.userId, newUserId),
+        eq(userBadge.badgeId, oldBadge.badgeId),
+      ),
+    });
+    if (!destinationBadge) {
+      await client
+        .update(userBadge)
+        .set({ userId: newUserId })
+        .where(
+          and(eq(userBadge.userId, oldUserId), eq(userBadge.badgeId, oldBadge.badgeId)),
+        );
+      continue;
+    }
+
+    if (oldBadge.createdAt < destinationBadge.createdAt) {
+      await client
+        .update(userBadge)
+        .set({ createdAt: oldBadge.createdAt })
+        .where(
+          and(eq(userBadge.userId, newUserId), eq(userBadge.badgeId, oldBadge.badgeId)),
+        );
+    }
+    await client
+      .delete(userBadge)
+      .where(
+        and(eq(userBadge.userId, oldUserId), eq(userBadge.badgeId, oldBadge.badgeId)),
+      );
+  }
+};
 
 const referencesByTable = new Map<string, string[]>();
 for (const [tableName, columnName] of USER_ID_REFERENCE_COLUMNS) {
@@ -235,6 +277,7 @@ export const migrateUserIdReferences = async (
   }
 
   // These tables have composite identity keys and require lossless collision merges.
+  await migrateUserBadges(client, oldUserId, newUserId);
   await migrateStoreEntitlementStates(client, oldUserId, newUserId);
   await migrateStoreEntitlementRevocations(client, oldUserId, newUserId);
   await migrateStorePurchaseTransfers(client, oldUserId, newUserId);

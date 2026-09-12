@@ -112,6 +112,14 @@ import {
 import { idSchema } from "@/validators/misc";
 import { fetchSector } from "./village";
 
+const mutationAffectedRows = (result: unknown): number => {
+  if (Array.isArray(result)) return mutationAffectedRows(result[0]);
+  if (!result || typeof result !== "object") return 0;
+  if ("rowsAffected" in result) return Number(result.rowsAffected);
+  if ("affectedRows" in result) return Number(result.affectedRows);
+  return 0;
+};
+
 export const staffRouter = createTRPCRouter({
   // Content Backups
   getBackups: protectedProcedure.query(async ({ ctx }) => {
@@ -1522,7 +1530,7 @@ export const staffRouter = createTRPCRouter({
               eq(userData.recruiterId, input.expectedRecruiterId),
             ),
           );
-        if (unlink.rowsAffected !== 1) {
+        if (mutationAffectedRows(unlink) !== 1) {
           return errorResponse(
             "The referral relationship changed. Refresh and review it before retrying",
           );
