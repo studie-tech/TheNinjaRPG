@@ -4096,10 +4096,6 @@ export const userBadge = mysqlTable(
   },
   (table) => {
     return {
-      userIdBadgeIdKey: uniqueIndex("UserBadge_userId_badgeId_key").on(
-        table.userId,
-        table.badgeId,
-      ),
       userIdIdx: index("UserBadge_userId_idx").on(table.userId),
       badgeIdIdx: index("UserBadge_badgeId_idx").on(table.badgeId),
     };

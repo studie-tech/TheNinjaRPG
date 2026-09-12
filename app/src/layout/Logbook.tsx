@@ -589,8 +589,6 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     try {
       const data = await abandon({
         id: quest.id,
-        userQuestId: userQuest.id,
-        startedAt: questStartedAt,
       });
 
       // A parent may reuse this component for another attempt while the request is in flight.

@@ -303,19 +303,6 @@ const Combat: React.FC<CombatProps> = (props) => {
       onSuccess: (data) => {
         if (data.success) {
           setArenaHealSettledBattleId(arenaHealBattleKey);
-          if (
-            data.money !== undefined &&
-            data.curHealth !== undefined &&
-            data.curStamina !== undefined &&
-            data.curChakra !== undefined
-          ) {
-            void updateUser({
-              money: data.money,
-              curHealth: data.curHealth,
-              curStamina: data.curStamina,
-              curChakra: data.curChakra,
-            });
-          }
           if (arenaOpponentId) {
             handleStartArenaBattle("post-heal");
           } else {

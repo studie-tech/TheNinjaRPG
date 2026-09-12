@@ -2,18 +2,17 @@ import { Client as PlanetScaleClient } from "@planetscale/database";
 import * as Sentry from "@sentry/nextjs";
 import type { inferRouterOutputs } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, gt, inArray, isNull, ne, notExists, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { after } from "next/server";
 import { z } from "zod";
 import type { UserStatus } from "@/drizzle/constants";
-import { IMG_AVATAR_DEFAULT, UserStatuses } from "@/drizzle/constants";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import {
   actionLog,
   aiProfile,
   anbuSquad,
   automatedModeration,
-  badge,
   bankTransfers,
   bloodlineRolls,
   captcha,
@@ -38,6 +37,8 @@ import {
   notification,
   overworldAiPlacement,
   overworldAiPlacementQuest,
+  paypalSubscription,
+  paypalTransaction,
   poll,
   pollOption,
   questHistory,
@@ -45,8 +46,10 @@ import {
   rankedPvpQueue,
   rankedUserRewards,
   reportLog,
+  ryoTrade,
   sector,
   staffApplication,
+  storePurchase,
   storeUserIdAlias,
   supportReview,
   trainingLog,
@@ -58,7 +61,6 @@ import {
   userData,
   userDevice,
   userItem,
-  userItemImbuement,
   userJutsu,
   userLikes,
   userLiveActivity,
@@ -75,10 +77,12 @@ import {
   userSkill,
   userUpload,
   userVote,
+  village,
   warKill,
 } from "@/drizzle/schema";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
-import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import { fetchBadge } from "@/routers/badge";
+import { fetchAttributes, fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { fetchVillages } from "@/routers/village";
 import {
   baseServerResponse,
@@ -87,22 +91,20 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import {
-  isMysqlDeadlockError,
-  isMysqlDuplicateKeyError,
-} from "@/server/utils/mysqlErrors";
+import { isMysqlDeadlockError } from "@/server/utils/mysqlErrors";
 import {
   isDeletedStoreUserId,
+  migrateStoreEntitlementRevocations,
+  migrateStoreEntitlementStates,
+  migrateStorePurchaseTransfers,
   retireStoreUserId,
 } from "@/server/utils/purchases/grant";
-import { migrateUserIdReferences } from "@/server/utils/userIdMigration";
 import {
   canClearSectors,
   canCloneUser,
   canControlBackups,
   canDeleteReferral,
   canModifyUserBadges,
-  canOnlyEditSelf,
   canSeeActivityEvents,
   canSeeIps,
   canUnequipAllUsers,
@@ -111,14 +113,6 @@ import {
 } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
 import { fetchSector } from "./village";
-
-const mutationAffectedRows = (result: unknown): number => {
-  if (Array.isArray(result)) return mutationAffectedRows(result[0]);
-  if (!result || typeof result !== "object") return 0;
-  if ("rowsAffected" in result) return Number(result.rowsAffected);
-  if ("affectedRows" in result) return Number(result.affectedRows);
-  return 0;
-};
 
 export const staffRouter = createTRPCRouter({
   // Content Backups
@@ -375,670 +369,239 @@ export const staffRouter = createTRPCRouter({
       };
     }),
   forceAwake: protectedProcedure
-    .output(
-      baseServerResponse.extend({
-        userId: z.string().optional(),
-        requestId: z.string().uuid().optional(),
-      }),
-    )
+    .output(baseServerResponse)
     .input(
       z.object({
         userId: z.string(),
-        expectedUsername: z.string().min(1).max(191),
-        expectedStatus: z.enum(UserStatuses),
-        expectedBattleId: z.string().nullable(),
-        requestId: z.string().uuid(),
-        reason: z.string().trim().min(10, "Reason must be at least 10 characters"),
+        reason: z
+          .string()
+          .min(10, "Reason must be at least 10 characters")
+          .transform((val) => val.trim()),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const actionId = `force-awake:${input.requestId}`;
-      const result = await ctx.drizzle.transaction(async (tx) => {
-        // All force-awake calls and status transitions that update either user serialize here.
-        await tx.execute(
-          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${ctx.userId}, ${input.userId}) ORDER BY ${userData.userId} FOR UPDATE`,
-        );
-
-        const user = await tx.query.userData.findFirst({
-          where: eq(userData.userId, ctx.userId),
-        });
-        const targetUser = await tx.query.userData.findFirst({
-          where: eq(userData.userId, input.userId),
-        });
-        if (!user || !targetUser) return { response: errorResponse("User not found") };
-        if (user.isBanned) {
-          return {
-            response: errorResponse("You are banned and cannot perform this action"),
-          };
-        }
-        if (!canUnstuckVillage(user.role)) {
-          return { response: errorResponse("Not allowed for you") };
-        }
-
-        // A retry after a lost success response reuses the same request id and must not
-        // perform or audit the intervention twice.
-        const previousRequest = await tx.query.actionLog.findFirst({
-          where: eq(actionLog.id, actionId),
-          columns: { userId: true, relatedId: true },
-        });
-        if (previousRequest) {
-          if (
-            previousRequest.userId !== ctx.userId ||
-            previousRequest.relatedId !== input.userId
-          ) {
-            return { response: errorResponse("Invalid force-awake request ID") };
-          }
-          return {
-            response: {
-              success: true,
-              message: `${targetUser.username} is awake`,
-              userId: targetUser.userId,
-              requestId: input.requestId,
-            },
-            targetUser,
-          };
-        }
-
-        if (targetUser.username !== input.expectedUsername) {
-          return {
-            response: errorResponse("The target user changed. Refresh and try again"),
-          };
-        }
-        if (
-          targetUser.status !== input.expectedStatus ||
-          targetUser.battleId !== input.expectedBattleId
-        ) {
-          return {
-            response: errorResponse(
-              "The user's status or battle changed. Review their profile and try again",
-            ),
-          };
-        }
-
-        const queueEntries = await tx.query.mpvpBattleUser.findMany({
+      // Query - fetch users and queue entry in parallel
+      const [user, targetUser, queueEntry] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, input.userId),
+        ctx.drizzle.query.mpvpBattleUser.findFirst({
           where: eq(mpvpBattleUser.userId, input.userId),
-        });
-        const queueIds = [...new Set(queueEntries.map((entry) => entry.clanBattleId))];
-
-        await tx
-          .update(userData)
-          .set({ status: "AWAKE", travelFinishAt: null, battleId: null })
-          .where(eq(userData.userId, input.userId));
-        const mpvpResult = await tx
-          .delete(mpvpBattleUser)
-          .where(eq(mpvpBattleUser.userId, input.userId));
-        const rankedResult = await tx
-          .delete(rankedPvpQueue)
-          .where(eq(rankedPvpQueue.userId, input.userId));
-        const kageResult = await tx
-          .update(userRequest)
-          .set({ status: "CANCELLED" })
-          .where(
-            and(
-              eq(userRequest.senderId, input.userId),
-              eq(userRequest.type, "KAGE"),
-              eq(userRequest.status, "PENDING"),
-            ),
-          );
-
-        // Delete only genuinely empty, unclaimed lobbies. Never reset a live claiming token:
-        // its owner will re-read membership and either continue without this user or roll back.
-        for (const queueId of queueIds) {
-          await tx
-            .delete(mpvpBattleQueue)
-            .where(
-              and(
-                eq(mpvpBattleQueue.id, queueId),
-                isNull(mpvpBattleQueue.battleId),
-                notExists(
-                  tx
-                    .select({ id: mpvpBattleUser.id })
-                    .from(mpvpBattleUser)
-                    .where(eq(mpvpBattleUser.clanBattleId, queueId)),
-                ),
-              ),
-            );
-        }
-
-        await tx.insert(actionLog).values({
-          id: actionId,
+        }),
+      ]);
+      // Guard
+      if (!user) return errorResponse("User not found");
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
+      if (!canUnstuckVillage(user.role)) return errorResponse("Not allowed for you");
+      // Mutate - update status and clean up all queue entries
+      await Promise.all([
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
           userId: ctx.userId,
           tableName: "user",
           relatedId: input.userId,
-          relatedMsg: `Forced ${targetUser.username} awake from ${targetUser.status}`,
+          relatedMsg: `Force updated status to awake from status: ${targetUser.status}`,
           changes: [
-            `Previous BattleId: ${targetUser.battleId ?? "none"}`,
+            `Previous BattleId: ${targetUser.battleId}`,
             `Reason: ${input.reason}`,
-            `Cleared MPvP memberships: ${mpvpResult.rowsAffected}`,
-            `Cleared ranked queue rows: ${rankedResult.rowsAffected}`,
-            `Cancelled pending Kage challenges: ${kageResult.rowsAffected}`,
+            `Cleared queue entries: mpvpBattleUser=${queueEntry ? "yes" : "no"}`,
           ],
+        }),
+        ctx.drizzle
+          .update(userData)
+          .set({ status: "AWAKE", travelFinishAt: null, battleId: null })
+          .where(eq(userData.userId, targetUser.userId)),
+        // Clean up raid/clan/shrine battle queue
+        ctx.drizzle
+          .delete(mpvpBattleUser)
+          .where(eq(mpvpBattleUser.userId, input.userId)),
+        // Clean up ranked PVP queue
+        ctx.drizzle
+          .delete(rankedPvpQueue)
+          .where(eq(rankedPvpQueue.userId, input.userId)),
+      ]);
+      // Clean up empty teams or stuck claiming states if user was in a team
+      if (queueEntry) {
+        const remainingMembers = await ctx.drizzle.query.mpvpBattleUser.findMany({
+          where: eq(mpvpBattleUser.clanBattleId, queueEntry.clanBattleId),
         });
-
-        return {
-          response: {
-            success: true,
-            message: `${targetUser.username} is awake`,
-            userId: targetUser.userId,
-            requestId: input.requestId,
-          },
-          targetUser,
-        };
-      });
-
-      if (result.response.success && result.targetUser) {
-        const targetUser = result.targetUser;
-        const output = {
-          longitude: targetUser.longitude,
-          latitude: targetUser.latitude,
-          sector: targetUser.sector,
-          avatar: targetUser.avatar,
-          avatarLight: targetUser.avatarLight,
-          level: targetUser.level,
-          experience: targetUser.experience,
-          rank: targetUser.rank,
-          villageId: targetUser.villageId,
-          battleId: null as string | null,
-          username: targetUser.username,
-          status: "AWAKE" as UserStatus,
-          location: "",
-          userId: input.userId,
-        };
-        // The database commit is authoritative. A realtime delivery failure must not turn a
-        // completed intervention into a retryable response that can be submitted again.
-        void updateUserOnMap(getServerPusher(), targetUser.sector, output).catch(
-          (error: unknown) => Sentry.captureException(error),
-        );
+        if (remainingMembers.length === 0) {
+          // Delete the queue entry - team is now empty
+          await ctx.drizzle
+            .delete(mpvpBattleQueue)
+            .where(eq(mpvpBattleQueue.id, queueEntry.clanBattleId));
+        } else {
+          // If there are remaining members but battleId is a claiming ID, reset it
+          const team = await ctx.drizzle.query.mpvpBattleQueue.findFirst({
+            where: eq(mpvpBattleQueue.id, queueEntry.clanBattleId),
+          });
+          if (team?.battleId?.startsWith("claiming-")) {
+            await ctx.drizzle
+              .update(mpvpBattleQueue)
+              .set({ battleId: null })
+              .where(eq(mpvpBattleQueue.id, queueEntry.clanBattleId));
+          }
+        }
       }
-
-      return result.response;
+      // Push status update to sector using target user's data (not staff member's)
+      const output = {
+        longitude: targetUser.longitude,
+        latitude: targetUser.latitude,
+        sector: targetUser.sector,
+        avatar: targetUser.avatar,
+        avatarLight: targetUser.avatarLight,
+        level: targetUser.level,
+        experience: targetUser.experience,
+        rank: targetUser.rank,
+        villageId: targetUser.villageId,
+        battleId: null as string | null, // We're forcing awake, so battleId should be null
+        username: targetUser.username,
+        status: "AWAKE" as UserStatus,
+        location: "",
+        userId: input.userId,
+      };
+      const pusher = getServerPusher();
+      void updateUserOnMap(pusher, targetUser.sector, output);
+      // Done
+      return {
+        success: true,
+        message: "You have changed user's state to awake",
+      };
     }),
   insertUserBadge: protectedProcedure
-    .input(
-      z.object({
-        userId: z.string().min(1).max(191),
-        expectedUsername: z.string().min(1).max(191),
-        badgeId: z.string().min(1).max(191),
-        expectedBadgeName: z.string().min(1).max(191),
-        requestId: z.string().uuid(),
-      }),
-    )
-    .output(
-      baseServerResponse.extend({
-        userId: z.string().optional(),
-        badgeId: z.string().optional(),
-        requestId: z.string().uuid().optional(),
-      }),
-    )
+    .input(z.object({ userId: z.string(), badgeId: z.string() }))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const actionId = `insert-user-badge:${input.requestId}`;
-      const relatedMsg = `Insert badge: ${input.expectedBadgeName}`;
-      const receiptChanges = [
-        relatedMsg,
-        `Badge ID: ${input.badgeId}`,
-        `Target username: ${input.expectedUsername}`,
-      ];
-      const isMatchingReceipt = (
-        receipt:
-          | {
-              userId: string | null;
-              tableName: string | null;
-              relatedId: string | null;
-              relatedMsg: string | null;
-              changes: unknown;
-            }
-          | undefined,
-      ) =>
-        receipt?.userId === ctx.userId &&
-        receipt.tableName === "user" &&
-        receipt.relatedId === input.userId &&
-        receipt.relatedMsg === relatedMsg &&
-        Array.isArray(receipt.changes) &&
-        receipt.changes.length === receiptChanges.length &&
-        receipt.changes.every((change, index) => change === receiptChanges[index]);
-
-      try {
-        return await ctx.drizzle.transaction(async (tx) => {
-          // Serialise assignment against target/profile changes and against another request for
-          // this badge. The schema's compound UNIQUE remains the final guard for other writers.
-          await tx.execute(
-            sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${ctx.userId}, ${input.userId}) ORDER BY ${userData.userId} FOR UPDATE`,
-          );
-          await tx.execute(
-            sql`SELECT ${badge.id} FROM ${badge} WHERE ${badge.id} = ${input.badgeId} FOR UPDATE`,
-          );
-
-          const actor = await tx.query.userData.findFirst({
-            where: eq(userData.userId, ctx.userId),
-          });
-          if (!actor) return errorResponse("User not found");
-          if (actor.isBanned) {
-            return errorResponse("You are banned and cannot perform this action");
-          }
-          if (!canModifyUserBadges(actor.role)) {
-            return errorResponse("Not allowed for you");
-          }
-          if (canOnlyEditSelf(actor.role) && actor.userId !== input.userId) {
-            return errorResponse("Your role can only assign badges to your own user");
-          }
-
-          // A retry after a lost response reuses this receipt and performs no second insert or
-          // audit. Reusing its request id for a different assignment is rejected explicitly.
-          const previousRequest = await tx.query.actionLog.findFirst({
-            where: eq(actionLog.id, actionId),
-            columns: {
-              userId: true,
-              tableName: true,
-              relatedId: true,
-              relatedMsg: true,
-              changes: true,
-            },
-          });
-          if (previousRequest) {
-            if (!isMatchingReceipt(previousRequest)) {
-              return errorResponse("Invalid badge assignment request ID");
-            }
-            return {
-              success: true,
-              message: "Badge added",
-              userId: input.userId,
-              badgeId: input.badgeId,
-              requestId: input.requestId,
-            };
-          }
-
-          // PlanetScale transaction handles are single-flight: overlapping statements on this
-          // handle can fail with "transaction in use", even though these reads are logically
-          // independent. Keep all transaction statements sequential.
-          const targetUser = await tx.query.userData.findFirst({
-            where: eq(userData.userId, input.userId),
-          });
-          const selectedBadge = await tx.query.badge.findFirst({
-            where: eq(badge.id, input.badgeId),
-          });
-          if (!targetUser) return errorResponse("Target user not found");
-          if (!selectedBadge) return errorResponse("Badge not found");
-          if (targetUser.username !== input.expectedUsername) {
-            return errorResponse("The target user changed. Refresh and try again");
-          }
-          if (selectedBadge.name !== input.expectedBadgeName) {
-            return errorResponse("The selected badge changed. Refresh and try again");
-          }
-
-          const existingBadge = await tx.query.userBadge.findFirst({
-            where: and(
-              eq(userBadge.userId, input.userId),
-              eq(userBadge.badgeId, input.badgeId),
-            ),
-          });
-          if (existingBadge) {
-            return errorResponse(
-              `${selectedBadge.name} is already assigned to this user`,
-            );
-          }
-
-          await tx.insert(userBadge).values({
-            userId: input.userId,
-            badgeId: input.badgeId,
-          });
-          await tx.insert(actionLog).values({
-            id: actionId,
-            userId: ctx.userId,
-            tableName: "user",
-            changes: receiptChanges,
-            relatedId: input.userId,
-            relatedMsg,
-            relatedImage: targetUser.avatarLight,
-          });
-
-          return {
-            success: true,
-            message: "Badge added",
-            userId: input.userId,
-            badgeId: input.badgeId,
-            requestId: input.requestId,
-          };
-        });
-      } catch (error) {
-        if (!isMysqlDuplicateKeyError(error)) throw error;
-
-        // A UNIQUE race can only be a same-request replay or an independently completed badge
-        // assignment. Keep those semantics distinct so a pre-existing badge is never presented
-        // as this request's success.
-        const previousRequest = await ctx.drizzle.query.actionLog.findFirst({
-          where: eq(actionLog.id, actionId),
-          columns: {
-            userId: true,
-            tableName: true,
-            relatedId: true,
-            relatedMsg: true,
-            changes: true,
-          },
-        });
-        if (isMatchingReceipt(previousRequest)) {
-          return {
-            success: true,
-            message: "Badge added",
-            userId: input.userId,
-            badgeId: input.badgeId,
-            requestId: input.requestId,
-          };
-        }
-        const existingBadge = await ctx.drizzle.query.userBadge.findFirst({
+      // Query
+      const [user, badge] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchBadge(ctx.drizzle, input.badgeId),
+      ]);
+      // Guard
+      if (!user) return errorResponse("User not found");
+      if (!badge) return errorResponse("Badge not found");
+      if (!canModifyUserBadges(user.role)) return errorResponse("Not allowed for you");
+      // Mutate
+      await Promise.all([
+        ctx.drizzle
+          .insert(userBadge)
+          .values([{ userId: input.userId, badgeId: input.badgeId }]),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "user",
+          changes: [`Insert badge: ${badge.name}`],
+          relatedId: input.userId,
+          relatedMsg: `Insert badge: ${badge.name}`,
+          relatedImage: user.avatarLight,
+        }),
+      ]);
+      return { success: true, message: "Badge added" };
+    }),
+  removeUserBadge: protectedProcedure
+    .input(z.object({ userId: z.string(), badgeId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, badge, userbadge] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchBadge(ctx.drizzle, input.badgeId),
+        ctx.drizzle.query.userBadge.findFirst({
           where: and(
             eq(userBadge.userId, input.userId),
             eq(userBadge.badgeId, input.badgeId),
           ),
-        });
-        if (existingBadge) {
-          return errorResponse(
-            `${input.expectedBadgeName} is already assigned to this user`,
-          );
-        }
-        throw error;
-      }
-    }),
-  removeUserBadge: protectedProcedure
-    .input(
-      z.object({
-        userId: z.string().min(1).max(191),
-        expectedUsername: z.string().min(1).max(191),
-        badgeId: z.string().min(1).max(191),
-        expectedBadgeName: z.string().min(1).max(191),
-        expectedAssignmentCreatedAt: z.coerce.date(),
-        requestId: z.string().uuid(),
-      }),
-    )
-    .output(
-      baseServerResponse.extend({
-        userId: z.string().optional(),
-        badgeId: z.string().optional(),
-        requestId: z.string().uuid().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const actionId = `remove-user-badge:${input.requestId}`;
-      const relatedMsg = `Remove badge: ${input.expectedBadgeName}`;
-      const receiptChanges = [
-        relatedMsg,
-        `Badge ID: ${input.badgeId}`,
-        `Target username: ${input.expectedUsername}`,
-        `Assignment created: ${input.expectedAssignmentCreatedAt.toISOString()}`,
-      ];
-      const isMatchingReceipt = (
-        receipt:
-          | {
-              userId: string | null;
-              tableName: string | null;
-              relatedId: string | null;
-              relatedMsg: string | null;
-              changes: unknown;
-            }
-          | undefined,
-      ) =>
-        receipt?.userId === ctx.userId &&
-        receipt.tableName === "user" &&
-        receipt.relatedId === input.userId &&
-        receipt.relatedMsg === relatedMsg &&
-        Array.isArray(receipt.changes) &&
-        receipt.changes.length === receiptChanges.length &&
-        receipt.changes.every((change, index) => change === receiptChanges[index]);
-      const successResponse = () => ({
-        success: true as const,
-        message: "Badge removed",
-        userId: input.userId,
-        badgeId: input.badgeId,
-        requestId: input.requestId,
-      });
-
-      try {
-        return await ctx.drizzle.transaction(async (tx) => {
-          // Serialize all badge changes for the target and protect the actor's current role.
-          // PlanetScale transaction handles are single-flight, so statements stay sequential.
-          await tx.execute(
-            sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${ctx.userId}, ${input.userId}) ORDER BY ${userData.userId} FOR UPDATE`,
-          );
-          await tx.execute(
-            sql`SELECT ${badge.id} FROM ${badge} WHERE ${badge.id} = ${input.badgeId} FOR UPDATE`,
-          );
-          await tx.execute(
-            sql`SELECT ${userBadge.userId} FROM ${userBadge} WHERE ${userBadge.userId} = ${input.userId} AND ${userBadge.badgeId} = ${input.badgeId} FOR UPDATE`,
-          );
-
-          const actor = await tx.query.userData.findFirst({
-            where: eq(userData.userId, ctx.userId),
-          });
-          if (!actor) return errorResponse("User not found");
-          if (actor.isBanned) {
-            return errorResponse("You are banned and cannot perform this action");
-          }
-          if (!canModifyUserBadges(actor.role)) {
-            return errorResponse("Not allowed for you");
-          }
-          if (canOnlyEditSelf(actor.role) && actor.userId !== input.userId) {
-            return errorResponse("Your role can only remove badges from your own user");
-          }
-
-          // This receipt is the only condition under which an already-absent assignment is a
-          // success: it proves this exact request committed before its response was lost.
-          const previousRequest = await tx.query.actionLog.findFirst({
-            where: eq(actionLog.id, actionId),
-            columns: {
-              userId: true,
-              tableName: true,
-              relatedId: true,
-              relatedMsg: true,
-              changes: true,
-            },
-          });
-          if (previousRequest) {
-            if (!isMatchingReceipt(previousRequest)) {
-              return errorResponse("Invalid badge removal request ID");
-            }
-            return successResponse();
-          }
-
-          const targetUser = await tx.query.userData.findFirst({
-            where: eq(userData.userId, input.userId),
-          });
-          const selectedBadge = await tx.query.badge.findFirst({
-            where: eq(badge.id, input.badgeId),
-          });
-          const existingAssignment = await tx.query.userBadge.findFirst({
-            where: and(
+        }),
+      ]);
+      // Guard
+      if (!user) return errorResponse("User not found");
+      if (!badge) return errorResponse("Badge not found");
+      if (!userbadge) return errorResponse("Badge not found");
+      if (!canModifyUserBadges(user.role)) return errorResponse("Not allowed for you");
+      // Mutate
+      await Promise.all([
+        ctx.drizzle
+          .delete(userBadge)
+          .where(
+            and(
               eq(userBadge.userId, input.userId),
               eq(userBadge.badgeId, input.badgeId),
             ),
-          });
-          if (!targetUser) return errorResponse("Target user not found");
-          if (!selectedBadge) return errorResponse("Badge not found");
-          if (targetUser.username !== input.expectedUsername) {
-            return errorResponse("The target user changed. Refresh and try again");
-          }
-          if (selectedBadge.name !== input.expectedBadgeName) {
-            return errorResponse("The selected badge changed. Refresh and try again");
-          }
-          if (!existingAssignment) {
-            return errorResponse(
-              `${selectedBadge.name} is no longer assigned to this user`,
-            );
-          }
-          if (
-            existingAssignment.createdAt.getTime() !==
-            input.expectedAssignmentCreatedAt.getTime()
-          ) {
-            return errorResponse(
-              "This badge assignment changed. Refresh and review the current badge",
-            );
-          }
+          ),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "user",
+          changes: [`Remove badge: ${badge.name}`],
+          relatedId: input.userId,
+          relatedMsg: `Remove badge: ${badge.name}`,
+          relatedImage: user.avatarLight,
+        }),
+      ]);
 
-          const deletion = await tx
-            .delete(userBadge)
-            .where(
-              and(
-                eq(userBadge.userId, input.userId),
-                eq(userBadge.badgeId, input.badgeId),
-                eq(userBadge.createdAt, input.expectedAssignmentCreatedAt),
-              ),
-            );
-          // Production's PlanetScale driver reports `rowsAffected`; the mysql2-backed test
-          // transaction exposes its native ResultSetHeader tuple.
-          const deletedCount = Array.isArray(deletion)
-            ? (deletion[0] as { affectedRows?: number }).affectedRows
-            : deletion.rowsAffected;
-          if (deletedCount !== 1) {
-            return errorResponse(
-              "This badge assignment changed. Refresh and review the current badge",
-            );
-          }
-
-          await tx.insert(actionLog).values({
-            id: actionId,
-            userId: ctx.userId,
-            tableName: "user",
-            changes: receiptChanges,
-            relatedId: input.userId,
-            relatedMsg,
-            relatedImage: targetUser.avatarLight,
-          });
-
-          return successResponse();
-        });
-      } catch (error) {
-        if (!isMysqlDuplicateKeyError(error)) throw error;
-
-        // A concurrent same-request replay can race on the receipt's primary key. Confirm the
-        // exact receipt after rollback; a different request payload must remain an error.
-        const previousRequest = await ctx.drizzle.query.actionLog.findFirst({
-          where: eq(actionLog.id, actionId),
-          columns: {
-            userId: true,
-            tableName: true,
-            relatedId: true,
-            relatedMsg: true,
-            changes: true,
-          },
-        });
-        return isMatchingReceipt(previousRequest)
-          ? successResponse()
-          : errorResponse("Invalid badge removal request ID");
-      }
+      return { success: true, message: "Badge removed" };
     }),
-  // Copy a user's gameplay state into the calling staff member's separate debug account.
+  // Copy user setting to Terriator - exclusive to Terriator user for debugging
   cloneUserForDebug: protectedProcedure
-    .input(z.object({ userId: z.string(), expectedUsername: z.string() }))
-    .output(
-      baseServerResponse.extend({
-        userId: z.string().optional(),
-        sourceUserId: z.string().optional(),
-      }),
-    )
+    .input(z.object({ userId: z.string() }))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      return ctx.drizzle.transaction(async (tx) => {
-        // Serialize every replacement of this debug account. This also makes intentional
-        // concurrent clones resolve as complete snapshots instead of interleaving delete/insert
-        // phases and leaving a mixture of two source users.
-        await tx.execute(
-          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${ctx.userId}, ${input.userId}) ORDER BY ${userData.userId} FOR UPDATE`,
-        );
-
-        // A transaction owns one connection, so keep its statements sequential. Parallel queries
-        // on that connection can race the driver's response parser and fail nondeterministically.
-        const user = await tx.query.userData.findFirst({
-          where: eq(userData.userId, ctx.userId),
-        });
-        const target = await tx.query.userData.findFirst({
-          where: eq(userData.userId, input.userId),
-        });
-        if (!user || !target) return errorResponse("User not found");
-        if (user.isBanned) return errorResponse("Banned users cannot clone users");
-        if (!canCloneUser(user.role)) {
-          return errorResponse("You are not allowed to clone users");
-        }
-        if (canCloneUser(target.role)) {
-          return errorResponse("Cannot copy people able to clone");
-        }
-        if (target.username !== input.expectedUsername) {
-          return errorResponse(
-            "The selected user's name changed. Refresh and try again",
-          );
-        }
-
-        const targetJutsus = await tx.query.userJutsu.findMany({
-          where: eq(userJutsu.userId, input.userId),
-        });
-        const targetItems = await tx.query.userItem.findMany({
-          where: eq(userItem.userId, input.userId),
-        });
-        const targetQuestHistory = await tx.query.questHistory.findMany({
-          where: eq(questHistory.userId, input.userId),
-        });
-        const targetRankedUserRewards = await tx.query.rankedUserRewards.findMany({
-          where: eq(rankedUserRewards.userId, input.userId),
-        });
-        const targetAttributes = await tx.query.userAttribute.findMany({
-          where: eq(userAttribute.userId, input.userId),
-        });
-        const existingItems = await tx.query.userItem.findMany({
-          columns: { id: true },
-          where: eq(userItem.userId, ctx.userId),
-        });
-        const targetItemIds = targetItems.map((item) => item.id);
-        const targetItemImbuements =
-          targetItemIds.length > 0
-            ? await tx.query.userItemImbuement.findMany({
-                where: inArray(userItemImbuement.userItemId, targetItemIds),
-              })
-            : [];
-
-        // Generate the parent ids once so item imbuements remain owned by the cloned inventory,
-        // rather than continuing to point at the source user's item rows.
-        const clonedItemIdBySourceId = new Map<string, string>();
-        const clonedItems = targetItems.map((item) => {
-          const clonedId = nanoid();
-          clonedItemIdBySourceId.set(item.id, clonedId);
-          return { ...item, id: clonedId, userId: ctx.userId };
-        });
-        const clonedItemImbuements = targetItemImbuements.map((entry) => {
-          const clonedParentId = clonedItemIdBySourceId.get(entry.userItemId);
-          if (!clonedParentId) {
-            throw new Error("Could not map cloned item imbuement to its parent");
-          }
-          return {
-            ...entry,
-            id: nanoid(),
-            userItemId: clonedParentId,
-          };
-        });
-
-        const existingItemIds = existingItems.map((item) => item.id);
-        if (existingItemIds.length > 0) {
-          await tx
-            .delete(userItemImbuement)
-            .where(inArray(userItemImbuement.userItemId, existingItemIds));
-        }
-        await tx.delete(userJutsu).where(eq(userJutsu.userId, ctx.userId));
-        await tx.delete(userItem).where(eq(userItem.userId, ctx.userId));
-        await tx.delete(questHistory).where(eq(questHistory.userId, ctx.userId));
-        await tx.delete(userAttribute).where(eq(userAttribute.userId, ctx.userId));
-        await tx
+      const [user, target, targetAttributes] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, input.userId),
+        fetchAttributes(ctx.drizzle, input.userId),
+      ]);
+      if (!user || !target) {
+        return { success: false, message: "User not found" };
+      }
+      if (!canCloneUser(user.role)) {
+        return { success: false, message: "You are not allowed to clone users" };
+      }
+      if (canCloneUser(target.role)) {
+        return { success: false, message: "Cannot copy people able to clone" };
+      }
+      const [targetJutsus, targetItems, targetQuestHistory, targetRankedUserRewards] =
+        await Promise.all([
+          ctx.drizzle.query.userJutsu.findMany({
+            where: eq(userJutsu.userId, input.userId),
+          }),
+          ctx.drizzle.query.userItem.findMany({
+            where: eq(userItem.userId, input.userId),
+          }),
+          ctx.drizzle.query.questHistory.findMany({
+            where: eq(questHistory.userId, input.userId),
+          }),
+          ctx.drizzle.query.rankedUserRewards.findMany({
+            where: eq(rankedUserRewards.userId, input.userId),
+          }),
+        ]);
+      await Promise.all([
+        ctx.drizzle.delete(userJutsu).where(eq(userJutsu.userId, user.userId)),
+        ctx.drizzle.delete(userItem).where(eq(userItem.userId, user.userId)),
+        ctx.drizzle.delete(questHistory).where(eq(questHistory.userId, user.userId)),
+        ctx.drizzle.delete(userAttribute).where(eq(userAttribute.userId, user.userId)),
+        ctx.drizzle
           .delete(rankedUserRewards)
-          .where(eq(rankedUserRewards.userId, ctx.userId));
-
-        if (user.anbuId !== target.anbuId && user.anbuId) {
-          await tx
-            .update(anbuSquad)
-            .set({ memberCount: sql`GREATEST(${anbuSquad.memberCount} - 1, 0)` })
-            .where(eq(anbuSquad.id, user.anbuId));
-        }
-        if (user.anbuId !== target.anbuId && target.anbuId) {
-          await tx
-            .update(anbuSquad)
-            .set({ memberCount: sql`${anbuSquad.memberCount} + 1` })
-            .where(eq(anbuSquad.id, target.anbuId));
-        }
-
-        await tx
+          .where(eq(rankedUserRewards.userId, user.userId)),
+        ...(user.anbuId !== target.anbuId && user.anbuId
+          ? [
+              ctx.drizzle
+                .update(anbuSquad)
+                .set({
+                  memberCount: sql`GREATEST(${anbuSquad.memberCount} - 1, 0)`,
+                })
+                .where(eq(anbuSquad.id, user.anbuId)),
+            ]
+          : []),
+        ...(user.anbuId !== target.anbuId && target.anbuId
+          ? [
+              ctx.drizzle
+                .update(anbuSquad)
+                .set({ memberCount: sql`${anbuSquad.memberCount} + 1` })
+                .where(eq(anbuSquad.id, target.anbuId)),
+            ]
+          : []),
+        ctx.drizzle
           .update(userData)
           .set({
             curHealth: target.curHealth,
@@ -1080,69 +643,68 @@ export const staffRouter = createTRPCRouter({
             battleId: target.battleId,
             clanId: target.clanId,
             anbuId: target.anbuId,
-            updatedAt: new Date(),
           })
-          .where(eq(userData.userId, ctx.userId));
-
-        if (targetJutsus.length > 0) {
-          await tx.insert(userJutsu).values(
-            targetJutsus.map((entry) => ({
-              ...entry,
-              userId: ctx.userId,
-              id: nanoid(),
-            })),
-          );
-        }
-        if (clonedItems.length > 0) await tx.insert(userItem).values(clonedItems);
-        if (clonedItemImbuements.length > 0) {
-          await tx.insert(userItemImbuement).values(clonedItemImbuements);
-        }
-        if (targetQuestHistory.length > 0) {
-          await tx.insert(questHistory).values(
-            targetQuestHistory.map((entry) => ({
-              ...entry,
-              userId: ctx.userId,
-              id: nanoid(),
-            })),
-          );
-        }
-        if (targetRankedUserRewards.length > 0) {
-          await tx.insert(rankedUserRewards).values(
-            targetRankedUserRewards.map((entry) => ({
-              ...entry,
-              userId: ctx.userId,
-              id: nanoid(),
-            })),
-          );
-        }
-        if (targetAttributes.length > 0) {
-          await tx.insert(userAttribute).values(
-            targetAttributes.map((entry) => ({
-              ...entry,
-              userId: ctx.userId,
-              id: nanoid(),
-            })),
-          );
-        }
-        await tx.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "user",
-          changes: [
-            `Copied debug gameplay state from ${target.username} (${target.userId})`,
-          ],
-          relatedId: target.userId,
-          relatedMsg: "Clone user for debugging",
-          relatedImage: target.avatarLight,
-        });
-
-        return {
-          success: true,
-          message: `Copied ${target.username} into your debug account`,
-          userId: ctx.userId,
-          sourceUserId: target.userId,
-        };
-      });
+          .where(eq(userData.userId, ctx.userId)),
+      ]);
+      // Insert data
+      await Promise.all([
+        ...(targetJutsus.length > 0
+          ? [
+              ctx.drizzle.insert(userJutsu).values(
+                targetJutsus.map((userjutsu) => ({
+                  ...userjutsu,
+                  userId: ctx.userId,
+                  id: nanoid(),
+                })),
+              ),
+            ]
+          : []),
+        ...(targetItems.length > 0
+          ? [
+              ctx.drizzle.insert(userItem).values(
+                targetItems.map((useritem) => ({
+                  ...useritem,
+                  userId: ctx.userId,
+                  id: nanoid(),
+                })),
+              ),
+            ]
+          : []),
+        ...(targetQuestHistory.length > 0
+          ? [
+              ctx.drizzle.insert(questHistory).values(
+                targetQuestHistory.map((questhistory) => ({
+                  ...questhistory,
+                  userId: ctx.userId,
+                  id: nanoid(),
+                })),
+              ),
+            ]
+          : []),
+        ...(targetRankedUserRewards.length > 0
+          ? [
+              ctx.drizzle.insert(rankedUserRewards).values(
+                targetRankedUserRewards.map((rankedUserReward) => ({
+                  ...rankedUserReward,
+                  userId: ctx.userId,
+                  id: nanoid(),
+                })),
+              ),
+            ]
+          : []),
+        ...(targetAttributes.length > 0
+          ? [
+              ctx.drizzle.insert(userAttribute).values(
+                targetAttributes.map((attribute) => ({
+                  ...attribute,
+                  userId: ctx.userId,
+                  id: nanoid(),
+                })),
+              ),
+            ]
+          : []),
+      ]);
+      return { success: true, message: "User copied" };
     }),
   getUserHistoricalIps: protectedProcedure
     .input(z.object({ userId: z.string() }))
@@ -1220,348 +782,412 @@ export const staffRouter = createTRPCRouter({
       });
       return activityEvents;
     }),
-  // Move one application identity to a new Clerk user id. This is intentionally owner-only:
-  // the destination Clerk account cannot be verified from the application database.
+  // Update all occurrences of a user ID in the database to another userId.
+  // VERY dangerous - used to e.g. link up unlinked accounts with new userIds from clerk
   updateUserId: protectedProcedure
-    .input(
-      z.object({
-        userId: z.string().min(1).max(191),
-        expectedUsername: z.string().min(1).max(191),
-        newUserId: z
-          .string()
-          .trim()
-          .min(1, "A new user ID is required")
-          .max(191)
-          .regex(
-            /^[A-Za-z0-9_-]+$/,
-            "User IDs may only contain letters, numbers, underscores, and hyphens",
-          ),
-      }),
-    )
-    .output(
-      baseServerResponse.extend({
-        oldUserId: z.string().optional(),
-        newUserId: z.string().optional(),
-        username: z.string().optional(),
-      }),
-    )
+    .input(z.object({ userId: z.string(), newUserId: z.string() }))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      if (input.userId === input.newUserId) {
-        return errorResponse("The new user ID must be different");
+      // Query
+      const [user, fromUser, toUser, sourceAlias, destinationAlias] = await Promise.all(
+        [
+          fetchUser(ctx.drizzle, ctx.userId),
+          ctx.drizzle.query.userData.findFirst({
+            where: eq(userData.userId, input.userId),
+          }),
+          ctx.drizzle.query.userData.findFirst({
+            where: eq(userData.userId, input.newUserId),
+          }),
+          ctx.drizzle.query.storeUserIdAlias.findFirst({
+            columns: { newUserId: true },
+            where: eq(storeUserIdAlias.oldUserId, input.userId),
+          }),
+          ctx.drizzle.query.storeUserIdAlias.findFirst({
+            columns: { newUserId: true },
+            where: eq(storeUserIdAlias.oldUserId, input.newUserId),
+          }),
+        ],
+      );
+      // Guard
+      if (user.username !== "Terriator") {
+        return { success: false, message: "You are not Terriator" };
       }
       if (isDeletedStoreUserId(input.userId) || isDeletedStoreUserId(input.newUserId)) {
-        return errorResponse("User ID is reserved");
+        return { success: false, message: "UserId is reserved" };
       }
-
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          return await ctx.drizzle.transaction(async (tx) => {
-            // Serialize both identities. Competing owner requests can never move one source to
-            // different destinations, and a destination cannot appear before commit.
-            await tx.execute(
-              sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${input.userId}, ${input.newUserId}) ORDER BY ${userData.userId} FOR UPDATE`,
-            );
-            await tx.execute(
-              sql`SELECT ${storeUserIdAlias.oldUserId} FROM ${storeUserIdAlias} WHERE ${storeUserIdAlias.oldUserId} IN (${input.userId}, ${input.newUserId}) ORDER BY ${storeUserIdAlias.oldUserId} FOR UPDATE`,
-            );
-
-            const user = await tx.query.userData.findFirst({
-              where: eq(userData.userId, ctx.userId),
-            });
-            if (user?.username !== "Terriator") {
-              return errorResponse("Only Terriator can update a user ID");
-            }
-            if (user.isBanned) {
-              return errorResponse("Banned users cannot update a user ID");
-            }
-
-            const fromUser = await tx.query.userData.findFirst({
-              where: eq(userData.userId, input.userId),
-            });
-            const toUser = await tx.query.userData.findFirst({
-              where: eq(userData.userId, input.newUserId),
-            });
-            const sourceAlias = await tx.query.storeUserIdAlias.findFirst({
-              columns: { newUserId: true },
-              where: eq(storeUserIdAlias.oldUserId, input.userId),
-            });
-            const destinationAlias = await tx.query.storeUserIdAlias.findFirst({
-              columns: { newUserId: true },
-              where: eq(storeUserIdAlias.oldUserId, input.newUserId),
-            });
-
-            // A lost HTTP response can be retried after commit. Return the exact committed
-            // identity instead of attempting another migration.
-            if (
-              !fromUser &&
-              toUser?.username === input.expectedUsername &&
-              sourceAlias?.newUserId === input.newUserId
-            ) {
-              return {
-                success: true,
-                message: "User ID was already updated",
-                oldUserId: input.userId,
-                newUserId: input.newUserId,
-                username: toUser.username,
-              };
-            }
-
-            if (!fromUser) return errorResponse("User not found");
-            if (fromUser.username !== input.expectedUsername) {
-              return errorResponse("The selected user changed. Refresh and try again");
-            }
-            if (fromUser.role !== "USER") {
-              return errorResponse("Staff accounts cannot be moved to another user ID");
-            }
-            if (fromUser.isAi || fromUser.isSummon || fromUser.isEvent) {
-              return errorResponse("AI and event identities cannot be moved");
-            }
-            if (fromUser.status === "BATTLE" || fromUser.battleId) {
-              return errorResponse(
-                "The user must leave their current battle before changing ID",
-              );
-            }
-            if (toUser) return errorResponse("The new user ID is already in use");
-            if (destinationAlias) {
-              return errorResponse("UserId was previously used and is reserved");
-            }
-            if (sourceAlias && isDeletedStoreUserId(sourceAlias.newUserId)) {
-              return errorResponse("UserId is being deleted and cannot be renamed");
-            }
-            if (sourceAlias && sourceAlias.newUserId !== input.newUserId) {
-              return errorResponse(
-                "This user ID was already moved to another identity",
-              );
-            }
-
-            // Alias, references, account row and audit share one transaction. Any constraint or
-            // audit failure rolls the complete identity move back.
-            await tx
-              .insert(storeUserIdAlias)
-              .values({
-                oldUserId: input.userId,
-                newUserId: input.newUserId,
-                updatedAt: new Date(),
-              })
-              .onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
-
-            const claim = await tx.query.storeUserIdAlias.findFirst({
-              columns: { newUserId: true },
-              where: eq(storeUserIdAlias.oldUserId, input.userId),
-            });
-            if (claim?.newUserId !== input.newUserId) {
-              return errorResponse("This user ID was claimed by another identity move");
-            }
-
-            await migrateUserIdReferences(tx, input.userId, input.newUserId);
-            await tx
-              .update(userData)
-              .set({ userId: input.newUserId, updatedAt: new Date() })
-              .where(
-                and(
-                  eq(userData.userId, input.userId),
-                  eq(userData.username, input.expectedUsername),
-                ),
-              );
-            const movedUser = await tx.query.userData.findFirst({
-              columns: { username: true },
-              where: eq(userData.userId, input.newUserId),
-            });
-            const oldUser = await tx.query.userData.findFirst({
-              columns: { userId: true },
-              where: eq(userData.userId, input.userId),
-            });
-            if (movedUser?.username !== input.expectedUsername || oldUser) {
-              throw new TRPCError({
-                code: "CONFLICT",
-                message: "The selected user changed while the ID was being updated",
-              });
-            }
-
-            await tx.insert(actionLog).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              tableName: "user",
-              changes: [`Moved user ID from ${input.userId} to ${input.newUserId}`],
-              relatedId: input.newUserId,
-              relatedMsg: `Updated user ID for ${fromUser.username}`,
-              relatedImage: fromUser.avatarLight,
-            });
-
-            return {
-              success: true,
-              message: "UserId updated",
-              oldUserId: input.userId,
-              newUserId: input.newUserId,
-              username: fromUser.username,
-            };
-          });
-        } catch (error) {
-          if (!isMysqlDeadlockError(error) || attempt === 3) throw error;
-          await delay(25 * attempt);
-        }
+      if (destinationAlias) {
+        return {
+          success: false,
+          message: "UserId was previously used and is reserved",
+        };
       }
-      throw new Error("User ID update retry loop exhausted");
+      if (sourceAlias && isDeletedStoreUserId(sourceAlias.newUserId)) {
+        return {
+          success: false,
+          message: "UserId is being deleted and cannot be renamed",
+        };
+      }
+      // A rename that failed part-way left its alias behind, and may already have moved the
+      // account row. Running it again with the same ids finishes it.
+      const resuming = sourceAlias?.newUserId === input.newUserId;
+      const movedAlready = resuming && !fromUser;
+      if (sourceAlias && !resuming) {
+        return { success: false, message: "UserId was already renamed to another id" };
+      }
+      if (!fromUser && !resuming) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+      if (toUser && !movedAlready) {
+        return { success: false, message: "UserId already exists" };
+      }
+      if (fromUser && fromUser.role !== "USER") {
+        return { success: false, message: "Cannot change staff member's userId " };
+      }
+      // Mutate. The alias goes first, as durable intent: from here a store event naming the
+      // old id resolves to the new one, and a rename that fails part-way is finished by
+      // running it again. Whoever writes that row first owns the identity, and it is read
+      // back rather than assumed: a deletion that got in between the check above and this
+      // write keeps its tombstone, and the rename stops here before moving anything.
+      // Everything else then moves in parallel, as it always has. A receipt that lands
+      // under the old id in between is re-homed by the ledger's own owner reconciliation,
+      // so nothing here holds a lock.
+      await ctx.drizzle
+        .insert(storeUserIdAlias)
+        .values({
+          oldUserId: input.userId,
+          newUserId: input.newUserId,
+          updatedAt: new Date(),
+        })
+        .onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+      const claim = await ctx.drizzle.query.storeUserIdAlias.findFirst({
+        columns: { newUserId: true },
+        where: eq(storeUserIdAlias.oldUserId, input.userId),
+      });
+      if (claim && isDeletedStoreUserId(claim.newUserId)) {
+        return {
+          success: false,
+          message: "UserId is being deleted and cannot be renamed",
+        };
+      }
+      if (claim?.newUserId !== input.newUserId) {
+        return { success: false, message: "UserId was already renamed to another id" };
+      }
+      await Promise.all([
+        ctx.drizzle
+          .update(aiProfile)
+          .set({ userId: input.newUserId })
+          .where(eq(aiProfile.userId, input.userId)),
+        ctx.drizzle
+          .update(userBlackList)
+          .set({ creatorUserId: input.newUserId })
+          .where(eq(userBlackList.creatorUserId, input.userId)),
+        ctx.drizzle
+          .update(userBlackList)
+          .set({ targetUserId: input.newUserId })
+          .where(eq(userBlackList.targetUserId, input.userId)),
+        ctx.drizzle
+          .update(bloodlineRolls)
+          .set({ userId: input.newUserId })
+          .where(eq(bloodlineRolls.userId, input.userId)),
+        ctx.drizzle
+          .update(captcha)
+          .set({ userId: input.newUserId })
+          .where(eq(captcha.userId, input.userId)),
+        ctx.drizzle
+          .update(mpvpBattleUser)
+          .set({ userId: input.newUserId })
+          .where(eq(mpvpBattleUser.userId, input.userId)),
+        ctx.drizzle
+          .update(conversation)
+          .set({ createdById: input.newUserId })
+          .where(eq(conversation.createdById, input.userId)),
+        ctx.drizzle
+          .update(user2conversation)
+          .set({ userId: input.newUserId })
+          .where(eq(user2conversation.userId, input.userId)),
+        ctx.drizzle
+          .update(conversationComment)
+          .set({ userId: input.newUserId })
+          .where(eq(conversationComment.userId, input.userId)),
+        ctx.drizzle
+          .update(damageSimulation)
+          .set({ userId: input.newUserId })
+          .where(eq(damageSimulation.userId, input.userId)),
+        ctx.drizzle
+          .update(forumPost)
+          .set({ userId: input.newUserId })
+          .where(eq(forumPost.userId, input.userId)),
+        ctx.drizzle
+          .update(forumThread)
+          .set({ userId: input.newUserId })
+          .where(eq(forumThread.userId, input.userId)),
+        ctx.drizzle
+          .update(historicalAvatar)
+          .set({ userId: input.newUserId })
+          .where(eq(historicalAvatar.userId, input.userId)),
+        ctx.drizzle
+          .update(historicalIp)
+          .set({ userId: input.newUserId })
+          .where(eq(historicalIp.userId, input.userId)),
+        ctx.drizzle
+          .update(userActivityEvent)
+          .set({ userId: input.newUserId })
+          .where(eq(userActivityEvent.userId, input.userId)),
+        ctx.drizzle
+          .update(jutsuLoadout)
+          .set({ userId: input.newUserId })
+          .where(eq(jutsuLoadout.userId, input.userId)),
+        ctx.drizzle
+          .update(notification)
+          .set({ userId: input.newUserId })
+          .where(eq(notification.userId, input.userId)),
+        ctx.drizzle
+          .update(paypalSubscription)
+          .set({ createdById: input.newUserId })
+          .where(eq(paypalSubscription.createdById, input.userId)),
+        ctx.drizzle
+          .update(paypalSubscription)
+          .set({ affectedUserId: input.newUserId })
+          .where(eq(paypalSubscription.affectedUserId, input.userId)),
+        ctx.drizzle
+          .update(paypalTransaction)
+          .set({ affectedUserId: input.newUserId })
+          .where(eq(paypalTransaction.affectedUserId, input.userId)),
+        ctx.drizzle
+          .update(paypalTransaction)
+          .set({ createdById: input.newUserId })
+          .where(eq(paypalTransaction.createdById, input.userId)),
+        ctx.drizzle
+          .update(ryoTrade)
+          .set({ creatorUserId: input.newUserId })
+          .where(eq(ryoTrade.creatorUserId, input.userId)),
+        ctx.drizzle
+          .update(ryoTrade)
+          .set({ purchaserUserId: input.newUserId })
+          .where(eq(ryoTrade.purchaserUserId, input.userId)),
+        ctx.drizzle
+          .update(ryoTrade)
+          .set({ allowedPurchaserId: input.newUserId })
+          .where(eq(ryoTrade.allowedPurchaserId, input.userId)),
+        ctx.drizzle
+          .update(reportLog)
+          .set({ targetUserId: input.newUserId })
+          .where(eq(reportLog.targetUserId, input.userId)),
+        ctx.drizzle
+          .update(reportLog)
+          .set({ staffUserId: input.newUserId })
+          .where(eq(reportLog.staffUserId, input.userId)),
+        ctx.drizzle
+          .update(actionLog)
+          .set({ userId: input.newUserId })
+          .where(eq(actionLog.userId, input.userId)),
+        ctx.drizzle
+          .update(trainingLog)
+          .set({ userId: input.newUserId })
+          .where(eq(trainingLog.userId, input.userId)),
+        ctx.drizzle
+          .update(userAttribute)
+          .set({ userId: input.newUserId })
+          .where(eq(userAttribute.userId, input.userId)),
+        ctx.drizzle
+          .update(userReview)
+          .set({ authorUserId: input.newUserId })
+          .where(eq(userReview.authorUserId, input.userId)),
+        ctx.drizzle
+          .update(userRewards)
+          .set({ awardedById: input.newUserId })
+          .where(eq(userRewards.awardedById, input.userId)),
+        ctx.drizzle
+          .update(userRewards)
+          .set({ receiverId: input.newUserId })
+          .where(eq(userRewards.receiverId, input.userId)),
+        ctx.drizzle
+          .update(userReview)
+          .set({ targetUserId: input.newUserId })
+          .where(eq(userReview.targetUserId, input.userId)),
+        ctx.drizzle
+          .update(userNindo)
+          .set({ userId: input.newUserId })
+          .where(eq(userNindo.userId, input.userId)),
+        ctx.drizzle
+          .update(userItem)
+          .set({ userId: input.newUserId })
+          .where(eq(userItem.userId, input.userId)),
+        ctx.drizzle
+          .update(userJutsu)
+          .set({ userId: input.newUserId })
+          .where(eq(userJutsu.userId, input.userId)),
+        ctx.drizzle
+          .update(userReport)
+          .set({ reporterUserId: input.newUserId })
+          .where(eq(userReport.reporterUserId, input.userId)),
+        ctx.drizzle
+          .update(userReport)
+          .set({ reportedUserId: input.newUserId })
+          .where(eq(userReport.reportedUserId, input.userId)),
+        ctx.drizzle
+          .update(userReportComment)
+          .set({ userId: input.newUserId })
+          .where(eq(userReportComment.userId, input.userId)),
+        ctx.drizzle
+          .update(bankTransfers)
+          .set({ senderId: input.newUserId })
+          .where(eq(bankTransfers.senderId, input.userId)),
+        ctx.drizzle
+          .update(bankTransfers)
+          .set({ receiverId: input.newUserId })
+          .where(eq(bankTransfers.receiverId, input.userId)),
+        ctx.drizzle
+          .update(automatedModeration)
+          .set({ userId: input.newUserId })
+          .where(eq(automatedModeration.userId, input.userId)),
+        ctx.drizzle
+          .update(supportReview)
+          .set({ userId: input.newUserId })
+          .where(eq(supportReview.userId, input.userId)),
+        ctx.drizzle
+          .update(kageDefendedChallenges)
+          .set({ userId: input.newUserId })
+          .where(eq(kageDefendedChallenges.userId, input.userId)),
+        ctx.drizzle
+          .update(kageDefendedChallenges)
+          .set({ kageId: input.newUserId })
+          .where(eq(kageDefendedChallenges.kageId, input.userId)),
+        ctx.drizzle
+          .update(questHistory)
+          .set({ userId: input.newUserId })
+          .where(eq(questHistory.userId, input.userId)),
+        ctx.drizzle
+          .update(userLikes)
+          .set({ userId: input.newUserId })
+          .where(eq(userLikes.userId, input.userId)),
+        ctx.drizzle
+          .update(conceptImage)
+          .set({ userId: input.newUserId })
+          .where(eq(conceptImage.userId, input.userId)),
+        ctx.drizzle
+          .update(userBadge)
+          .set({ userId: input.newUserId })
+          .where(eq(userBadge.userId, input.userId)),
+        ctx.drizzle
+          .update(userRequest)
+          .set({ senderId: input.newUserId })
+          .where(eq(userRequest.senderId, input.userId)),
+        ctx.drizzle
+          .update(userRequest)
+          .set({ receiverId: input.newUserId })
+          .where(eq(userRequest.receiverId, input.userId)),
+        ctx.drizzle
+          .update(linkPromotion)
+          .set({ userId: input.newUserId })
+          .where(eq(linkPromotion.userId, input.userId)),
+        ctx.drizzle
+          .update(linkPromotion)
+          .set({ reviewedBy: input.newUserId })
+          .where(eq(linkPromotion.reviewedBy, input.userId)),
+        ctx.drizzle
+          .update(userVote)
+          .set({ userId: input.newUserId })
+          .where(eq(userVote.userId, input.userId)),
+        ctx.drizzle
+          .update(poll)
+          .set({ createdByUserId: input.newUserId })
+          .where(eq(poll.createdByUserId, input.userId)),
+        ctx.drizzle
+          .update(pollOption)
+          .set({ targetUserId: input.newUserId })
+          .where(eq(pollOption.targetUserId, input.userId)),
+        ctx.drizzle
+          .update(pollOption)
+          .set({ createdByUserId: input.newUserId })
+          .where(eq(pollOption.createdByUserId, input.userId)),
+        ctx.drizzle
+          .update(village)
+          .set({ kageId: input.newUserId })
+          .where(eq(village.kageId, input.userId)),
+        ctx.drizzle
+          .update(userPollVote)
+          .set({ userId: input.newUserId })
+          .where(eq(userPollVote.userId, input.userId)),
+        ctx.drizzle
+          .update(userUpload)
+          .set({ userId: input.newUserId })
+          .where(eq(userUpload.userId, input.userId)),
+        ctx.drizzle
+          .update(userDevice)
+          .set({ userId: input.newUserId })
+          .where(eq(userDevice.userId, input.userId)),
+        ctx.drizzle
+          .update(userPushPreference)
+          .set({ userId: input.newUserId })
+          .where(eq(userPushPreference.userId, input.userId)),
+        ctx.drizzle
+          .update(userLiveActivity)
+          .set({ userId: input.newUserId })
+          .where(eq(userLiveActivity.userId, input.userId)),
+        ctx.drizzle
+          .update(storeUserIdAlias)
+          .set({ newUserId: input.newUserId, updatedAt: new Date() })
+          .where(eq(storeUserIdAlias.newUserId, input.userId)),
+        migrateStoreEntitlementStates(ctx.drizzle, input.userId, input.newUserId),
+        migrateStoreEntitlementRevocations(ctx.drizzle, input.userId, input.newUserId),
+        migrateStorePurchaseTransfers(ctx.drizzle, input.userId, input.newUserId),
+        ctx.drizzle
+          .update(storePurchase)
+          .set({ userId: input.newUserId })
+          .where(eq(storePurchase.userId, input.userId)),
+        ctx.drizzle
+          .update(storePurchase)
+          .set({ originalUserId: input.newUserId })
+          .where(eq(storePurchase.originalUserId, input.userId)),
+        ctx.drizzle
+          .update(userData)
+          .set({ userId: input.newUserId })
+          .where(eq(userData.userId, input.userId)),
+      ]);
+      return { success: true, message: "UserId updated" };
     }),
   // Delete referral from user
   deleteReferral: protectedProcedure
-    .input(
-      z.object({
-        userId: z.string().min(1).max(191),
-        expectedUsername: z.string().min(1).max(191),
-        expectedRecruiterId: z.string().min(1).max(191),
-        expectedRecruiterUsername: z.string().min(1).max(191),
-        expectedRecruiterCount: z.number().int().nonnegative(),
-        requestId: z.string().uuid(),
-      }),
-    )
-    .output(
-      baseServerResponse.extend({
-        userId: z.string().optional(),
-        recruiterId: z.string().optional(),
-        recruiterCount: z.number().int().nonnegative().optional(),
-        requestId: z.string().uuid().optional(),
-      }),
-    )
+    .input(z.object({ userId: z.string() }))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const actionId = `delete-referral:${input.requestId}`;
-      const relatedMsg = "Referral has been removed";
-      const receiptChanges = [
-        `Removed referral: ${input.expectedUsername}`,
-        `Recruiter: ${input.expectedRecruiterUsername} (${input.expectedRecruiterId})`,
-        `Displayed recruiter count: ${input.expectedRecruiterCount}`,
-      ];
-      const isMatchingReceipt = (
-        receipt:
-          | {
-              userId: string | null;
-              tableName: string | null;
-              relatedId: string | null;
-              relatedMsg: string | null;
-              changes: unknown;
-            }
-          | undefined,
-      ) =>
-        receipt?.userId === ctx.userId &&
-        receipt.tableName === "user" &&
-        receipt.relatedId === input.userId &&
-        receipt.relatedMsg === relatedMsg &&
-        Array.isArray(receipt.changes) &&
-        receipt.changes.length === receiptChanges.length &&
-        receipt.changes.every((change, index) => change === receiptChanges[index]);
-
-      const result = await ctx.drizzle.transaction(async (tx) => {
-        // Protect the actor's current permissions, the exact relationship, and the counter.
-        // All transaction statements remain sequential for PlanetScale transaction handles.
-        await tx.execute(
-          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${ctx.userId}, ${input.userId}, ${input.expectedRecruiterId}) ORDER BY ${userData.userId} FOR UPDATE`,
-        );
-
-        const actor = await tx.query.userData.findFirst({
-          where: eq(userData.userId, ctx.userId),
-        });
-        if (!actor) return errorResponse("User not found");
-        if (actor.isBanned) {
-          return errorResponse("You are banned and cannot perform this action");
-        }
-        if (!canDeleteReferral(actor.role)) {
-          return errorResponse("You don't have permission to delete referrals");
-        }
-        if (canOnlyEditSelf(actor.role) && actor.userId !== input.userId) {
-          return errorResponse("Your role can only remove its own referral");
-        }
-
-        // Only this exact receipt turns an already-unlinked target into success. This makes a
-        // retry after a lost response idempotent without treating another admin's removal as ours.
-        const previousRequest = await tx.query.actionLog.findFirst({
-          where: eq(actionLog.id, actionId),
-          columns: {
-            userId: true,
-            tableName: true,
-            relatedId: true,
-            relatedMsg: true,
-            changes: true,
-          },
-        });
-        if (previousRequest) {
-          if (!isMatchingReceipt(previousRequest)) {
-            return errorResponse("Invalid referral removal request ID");
-          }
-          const recruiter = await tx.query.userData.findFirst({
-            where: eq(userData.userId, input.expectedRecruiterId),
-            columns: { nRecruited: true },
-          });
-          return {
-            success: true,
-            message: `Referral removed from ${input.expectedUsername}`,
-            userId: input.userId,
-            recruiterId: input.expectedRecruiterId,
-            recruiterCount: recruiter?.nRecruited ?? 0,
-            requestId: input.requestId,
-          };
-        }
-
-        const target = await tx.query.userData.findFirst({
-          where: eq(userData.userId, input.userId),
-        });
-        if (!target) return errorResponse("Target user not found");
-        const recruiter = await tx.query.userData.findFirst({
-          where: eq(userData.userId, input.expectedRecruiterId),
-        });
-        if (!recruiter) return errorResponse("Recruiter not found");
-        if (target.username !== input.expectedUsername) {
-          return errorResponse("The recruited user changed. Refresh and try again");
-        }
-        if (recruiter.username !== input.expectedRecruiterUsername) {
-          return errorResponse("The recruiter changed. Refresh and try again");
-        }
-        if (target.recruiterId !== input.expectedRecruiterId) {
-          return errorResponse(
-            "The referral relationship changed. Refresh and review it before retrying",
-          );
-        }
-
-        const unlink = await tx
+      // Query
+      const [user, target] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, input.userId),
+      ]);
+      // Guard
+      if (!canDeleteReferral(user.role)) {
+        return errorResponse("You don't have permission to delete referrals");
+      }
+      if (!target) {
+        return errorResponse("Target user not found");
+      }
+      if (!target.recruiterId) {
+        return errorResponse("User has no recruiter to delete");
+      }
+      // Mutate
+      await Promise.all([
+        ctx.drizzle
           .update(userData)
           .set({ recruiterId: null })
-          .where(
-            and(
-              eq(userData.userId, input.userId),
-              eq(userData.recruiterId, input.expectedRecruiterId),
-            ),
-          );
-        if (mutationAffectedRows(unlink) !== 1) {
-          return errorResponse(
-            "The referral relationship changed. Refresh and review it before retrying",
-          );
-        }
-
-        const recruiterCount = Math.max(recruiter.nRecruited - 1, 0);
-        await tx
+          .where(eq(userData.userId, input.userId)),
+        ctx.drizzle
           .update(userData)
-          .set({ nRecruited: recruiterCount })
-          .where(eq(userData.userId, input.expectedRecruiterId));
-        await tx.insert(actionLog).values({
-          id: actionId,
+          .set({ nRecruited: sql`${userData.nRecruited} - 1` })
+          .where(eq(userData.userId, target.recruiterId)),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
           userId: ctx.userId,
           tableName: "user",
-          changes: receiptChanges,
+          changes: [`Removed referral: ${target.username}`],
           relatedId: input.userId,
-          relatedMsg,
+          relatedMsg: `Referral has been removed`,
           relatedImage: target.avatarLight,
-        });
-
-        return {
-          success: true,
-          message: `Referral removed from ${target.username}`,
-          userId: input.userId,
-          recruiterId: input.expectedRecruiterId,
-          recruiterCount,
-          requestId: input.requestId,
-        };
-      });
-
-      return result;
+        }),
+      ]);
+      return { success: true, message: `Referral removed from ${target.username}` };
     }),
 });
 

@@ -5,7 +5,6 @@ import {
   getTableColumns,
   gte,
   inArray,
-  isNull,
   like,
   lte,
   ne,
@@ -17,12 +16,8 @@ import { z } from "zod";
 import type { AutomoderationCategory, BanState } from "@/drizzle/constants";
 import { TERR_BOT_ID } from "@/drizzle/constants";
 import {
-  actionLog,
   automatedModeration,
   battleAction,
-  battleHistory,
-  conceptImage,
-  conversation,
   conversationComment,
   forumPost,
   historicalAvatar,
@@ -47,7 +42,6 @@ import {
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
-import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import {
   canBanUsers,
   canClearReport,
@@ -65,16 +59,11 @@ import {
 import sanitize from "@/utils/sanitize";
 import { getMillisecondsFromTimeUnit, secondsFromNow } from "@/utils/time";
 import { idSchema } from "@/validators/misc";
-import type {
-  AdditionalContext,
-  ReportCommentSchema,
-  UserReportSchema,
-} from "@/validators/reports";
+import type { AdditionalContext, ReportCommentSchema } from "@/validators/reports";
 import {
   reportCommentSchema,
   reportFilteringSchema,
   reportTimeoutSchema,
-  systems,
   userReportSchema,
   userReviewSchema,
 } from "@/validators/reports";
@@ -83,22 +72,6 @@ import { fetchImage } from "./conceptart";
 import { fetchUser } from "./profile";
 
 const pusher = getServerPusher();
-
-/** PlanetScale and the mysql2-backed real-database tests expose different write envelopes. */
-const mutationRowsAffected = (result: unknown) => {
-  if (result && typeof result === "object" && "rowsAffected" in result) {
-    return Number(result.rowsAffected);
-  }
-  if (
-    Array.isArray(result) &&
-    result[0] &&
-    typeof result[0] === "object" &&
-    "affectedRows" in result[0]
-  ) {
-    return Number(result[0].affectedRows);
-  }
-  return 0;
-};
 
 export const reportsRouter = createTRPCRouter({
   getReportSystemNames: protectedProcedure.query(async ({ ctx }) => {
@@ -450,18 +423,104 @@ export const reportsRouter = createTRPCRouter({
   // Create a new user report
   create: protectedProcedure
     .input(userReportSchema)
-    .output(
-      baseServerResponse.extend({
-        requestId: z.string().optional(),
-        reportId: z.string().optional(),
-        system: z.enum(systems).optional(),
-        systemId: z.string().optional(),
-        reportedUserId: z.string().optional(),
-        reportSubjectUserId: z.string().optional(),
-      }),
-    )
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      return await createUserReport(ctx.drizzle, ctx.userId, input);
+      // Fetch
+      const getInfraction = async (system: typeof input.system) => {
+        switch (system) {
+          case "forum_comment": {
+            const forumPostData = await ctx.drizzle.query.forumPost.findFirst({
+              where: eq(forumPost.id, input.system_id),
+            });
+            const threadContext = await getAdditionalContext(
+              ctx.drizzle,
+              system,
+              forumPostData?.createdAt,
+              forumPostData?.threadId,
+            );
+            await ctx.drizzle
+              .update(forumPost)
+              .set({ isReported: true })
+              .where(eq(forumPost.id, input.system_id));
+            return { infraction: forumPostData, context: threadContext };
+          }
+          case "conversation_comment": {
+            const commentData = await ctx.drizzle.query.conversationComment.findFirst({
+              where: eq(conversationComment.id, input.system_id),
+            });
+            const convoContext = await getAdditionalContext(
+              ctx.drizzle,
+              system,
+              commentData?.createdAt,
+              commentData?.conversationId,
+            );
+            await ctx.drizzle
+              .update(conversationComment)
+              .set({ isReported: true })
+              .where(eq(conversationComment.id, input.system_id));
+            return { infraction: commentData, context: convoContext };
+          }
+          case "user_profile":
+            return {
+              infraction: await fetchUser(ctx.drizzle, input.system_id),
+              context: [],
+            };
+          case "concept_art":
+            return {
+              infraction: await fetchImage(ctx.drizzle, input.system_id, ""),
+              context: [],
+            };
+          case "battle_log": {
+            await ctx.drizzle
+              .update(battleAction)
+              .set({ updatedAt: secondsFromNow(72 * 3600) })
+              .where(eq(battleAction.id, input.system_id));
+            return {
+              infraction: {
+                content: `<br /><a href="/battlelog/${input.system_id}"><b>Link to Battle Log (available for 72h)<b></a>`,
+              },
+              context: [],
+            };
+          }
+          default:
+            throw serverError("INTERNAL_SERVER_ERROR", "Invalid report system");
+        }
+      };
+      // Create interpretation
+      const { infraction, context } = await getInfraction(input.system);
+      const { decision, aiInterpretation } = await generateModerationDecision(
+        ctx.drizzle,
+        JSON.stringify(input),
+        context,
+      );
+      // Guard
+      if (!infraction) return errorResponse("Infraction not found");
+      if ("isReported" in infraction && infraction.isReported) {
+        return errorResponse("This infraction has already been reported");
+      }
+      // Figure out who was reported. If there is an authorId, use that first, otherwise infraction userId, otherwise input
+      const reportedUserId =
+        "authorId" in infraction
+          ? infraction.authorId
+          : "userId" in infraction
+            ? infraction.userId
+            : input.reported_userId;
+      // Mutate
+      await insertUserReport(ctx.drizzle, {
+        userId: ctx.userId,
+        reportedUserId: reportedUserId,
+        system: input.system,
+        infraction: infraction,
+        reason: input.reason,
+        aiInterpretation: aiInterpretation,
+        predictedStatus: decision.createReport,
+        additionalContext: context,
+      });
+      // Return
+      return {
+        success: true,
+        message: "Your report has been submitted. A moderator will review it asap.",
+      };
     }),
   // Ban a user. If no escalation: moderator-only. If escalated: admin-only
   ban: protectedProcedure
@@ -772,109 +831,8 @@ export const reportsRouter = createTRPCRouter({
       return { success: true, message: "Report cleared" };
     }),
   updateUserAvatar: protectedProcedure
-    .input(
-      z.object({
-        userId: z.string(),
-        expectedAvatar: z.string().nullable(),
-      }),
-    )
-    .output(
-      baseServerResponse.extend({
-        userId: z.string().optional(),
-        avatar: z.string().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      // Query
-      const [user, target] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
-      ]);
-      // Guard
-      if (user.isBanned)
-        return errorResponse("You are banned and cannot perform moderation actions");
-      if (!canClearUserNindo(user)) {
-        return errorResponse("You cannot replace user avatars");
-      }
-      if (target.isAi) return errorResponse("AI avatars cannot be replaced here");
-      if (target.avatar !== input.expectedAvatar) {
-        return errorResponse(
-          "This user's avatar has changed. Refresh the profile before replacing it.",
-        );
-      }
-      // Mutate
-      const { avatarUrl, thumbnailUrl } = await createUserAvatar(
-        ctx.drizzle,
-        target,
-        false,
-      );
-      if (!avatarUrl) return errorResponse("Failed to create avatar");
-      // Generation can take long enough for the moderator's access to change. Do not
-      // let a request authorized minutes ago commit after a ban or role removal.
-      const currentUser = await fetchUser(ctx.drizzle, ctx.userId);
-      if (currentUser.isBanned) {
-        return errorResponse("You are banned and cannot perform moderation actions");
-      }
-      if (!canClearUserNindo(currentUser)) {
-        return errorResponse("You cannot replace user avatars");
-      }
-      // Commit the avatar, audit, and history atomically. The expected-avatar guard
-      // makes concurrent moderation requests deterministic: only the first may win.
-      const committed = await ctx.drizzle.transaction(async (tx) => {
-        const updateResult = await tx
-          .update(userData)
-          .set({ avatar: avatarUrl, avatarLight: thumbnailUrl ?? null })
-          .where(
-            and(
-              eq(userData.userId, input.userId),
-              input.expectedAvatar === null
-                ? isNull(userData.avatar)
-                : eq(userData.avatar, input.expectedAvatar),
-            ),
-          );
-        if (mutationRowsAffected(updateResult) !== 1) return false;
-
-        await tx.insert(reportLog).values({
-          id: nanoid(),
-          staffUserId: ctx.userId,
-          action: "AVATAR_CHANGE",
-          targetUserId: input.userId,
-        });
-        await tx.insert(historicalAvatar).values({
-          userId: input.userId,
-          avatar: avatarUrl,
-          avatarLight: thumbnailUrl ?? null,
-          status: "success",
-          done: true,
-        });
-        return true;
-      });
-      if (!committed) {
-        return errorResponse(
-          "This user's avatar changed while the replacement was generated. Refresh and try again.",
-        );
-      }
-      return {
-        success: true,
-        message: "Avatar replaced",
-        userId: input.userId,
-        avatar: avatarUrl,
-      };
-    }),
-  clearNindo: protectedProcedure
-    .input(
-      z.object({
-        userId: z.string(),
-        nindoId: z.string(),
-        expectedContent: z.string(),
-      }),
-    )
-    .output(
-      baseServerResponse.extend({
-        userId: z.string().optional(),
-        nindoId: z.string().optional(),
-      }),
-    )
+    .input(z.object({ userId: z.string() }))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, target] = await Promise.all([
@@ -885,41 +843,59 @@ export const reportsRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform moderation actions");
       if (!canClearUserNindo(user)) return errorResponse("You cannot clear nindos");
-
-      // The displayed nindo and its audit entry are one atomic moderation action.
-      // Including the source id and content in the delete predicate prevents a stale
-      // confirmation from clearing text the target edited after the modal opened.
-      const committed = await ctx.drizzle.transaction(async (tx) => {
-        const deleted = await tx
-          .delete(userNindo)
-          .where(
-            and(
-              eq(userNindo.id, input.nindoId),
-              eq(userNindo.userId, target.userId),
-              sql`BINARY ${userNindo.content} = BINARY ${input.expectedContent}`,
-            ),
-          );
-        if (mutationRowsAffected(deleted) !== 1) return false;
-
-        await tx.insert(reportLog).values({
+      // Mutate
+      const { avatarUrl, thumbnailUrl } = await createUserAvatar(
+        ctx.drizzle,
+        target,
+        false,
+      );
+      if (!avatarUrl) return errorResponse("Failed to create avatar");
+      // Mutate
+      await Promise.all([
+        ctx.drizzle.insert(reportLog).values({
+          id: nanoid(),
+          staffUserId: ctx.userId,
+          action: "AVATAR_CHANGE",
+          targetUserId: input.userId,
+        }),
+        ctx.drizzle
+          .update(userData)
+          .set({ avatar: avatarUrl, avatarLight: thumbnailUrl ?? null })
+          .where(eq(userData.userId, input.userId)),
+        ctx.drizzle.insert(historicalAvatar).values({
+          userId: input.userId,
+          avatar: avatarUrl,
+          avatarLight: thumbnailUrl ?? null,
+          status: "success",
+          done: true,
+        }),
+      ]);
+      return { success: true, message: "Avatar update request sent" };
+    }),
+  clearNindo: protectedProcedure
+    .input(z.object({ userId: z.string() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [user, target] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, input.userId),
+      ]);
+      // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform moderation actions");
+      if (!canClearUserNindo(user)) return errorResponse("You cannot clear nindos");
+      // Mutate
+      await Promise.all([
+        ctx.drizzle.insert(reportLog).values({
           id: nanoid(),
           staffUserId: ctx.userId,
           action: "NINDO_CLEARED",
           targetUserId: input.userId,
-        });
-        return true;
-      });
-      if (!committed) {
-        return errorResponse(
-          "This nindo changed or was already cleared. Refresh the profile and try again.",
-        );
-      }
-      return {
-        success: true,
-        message: "Nindo cleared",
-        userId: input.userId,
-        nindoId: input.nindoId,
-      };
+        }),
+        ctx.drizzle.delete(userNindo).where(eq(userNindo.userId, target.userId)),
+      ]);
+      return { success: true, message: "Nindo cleared" };
     }),
   getUserStaffReviews: protectedProcedure.query(async ({ ctx }) => {
     return await ctx.drizzle.query.userReview.findMany({
@@ -1145,409 +1121,9 @@ export const getBanEndDate = (input: ReportCommentSchema) => {
     : null;
 };
 
-type ReportSubject = {
-  infraction: Record<string, unknown>;
-  context: AdditionalContext[];
-  reportedUserId: string;
-};
-
-type CreateReportReceipt = {
-  request: {
-    system: UserReportSchema["system"];
-    systemId: string;
-    reportedUserId: string;
-    reason: string;
-  };
-  response: {
-    reportId: string;
-    system: UserReportSchema["system"];
-    systemId: string;
-    reportedUserId: string;
-    reportSubjectUserId: string;
-  };
-};
-
-const reportCreatedMessage =
-  "Your report has been submitted. A moderator will review it asap.";
-
-const getCreateReportReceipt = async (client: DrizzleClient, actionId: string) => {
-  return await client.query.actionLog.findFirst({
-    where: eq(actionLog.id, actionId),
-    columns: {
-      userId: true,
-      tableName: true,
-      relatedId: true,
-      relatedMsg: true,
-      changes: true,
-    },
-  });
-};
-
-const replayCreateReport = (
-  receipt: Awaited<ReturnType<typeof getCreateReportReceipt>>,
-  actorUserId: string,
-  requestId: string,
-  expectedRequest: CreateReportReceipt["request"],
-) => {
-  if (!receipt) return null;
-  const changes = receipt.changes as Partial<CreateReportReceipt> | null;
-  const storedRequest = changes?.request;
-  const response = changes?.response;
-  const valid =
-    receipt.userId === actorUserId &&
-    receipt.tableName === "UserReport" &&
-    receipt.relatedMsg === requestId &&
-    storedRequest?.system === expectedRequest.system &&
-    storedRequest.systemId === expectedRequest.systemId &&
-    storedRequest.reportedUserId === expectedRequest.reportedUserId &&
-    storedRequest.reason === expectedRequest.reason &&
-    typeof response?.reportId === "string" &&
-    response.reportId.length > 0 &&
-    response.reportId === receipt.relatedId &&
-    response.system === expectedRequest.system &&
-    response.systemId === expectedRequest.systemId &&
-    response.reportedUserId === expectedRequest.reportedUserId &&
-    typeof response.reportSubjectUserId === "string" &&
-    response.reportSubjectUserId.length > 0;
-  if (!valid) return errorResponse("Invalid report request ID");
-  if (!response) return errorResponse("Invalid report request ID");
-  return {
-    success: true as const,
-    message: reportCreatedMessage,
-    requestId,
-    reportId: response.reportId,
-    system: response.system,
-    systemId: expectedRequest.systemId,
-    reportedUserId: response.reportedUserId,
-    reportSubjectUserId: response.reportSubjectUserId,
-  };
-};
-
-const loadReportSubject = async (
-  client: DrizzleClient,
-  actor: typeof userData.$inferSelect,
-  input: UserReportSchema,
-): Promise<ReportSubject | { error: string }> => {
-  switch (input.system) {
-    case "forum_comment": {
-      const entry = await client.query.forumPost.findFirst({
-        where: eq(forumPost.id, input.system_id),
-      });
-      if (!entry) return { error: "Infraction not found" };
-      if (entry.isReported)
-        return { error: "This infraction has already been reported" };
-      if (input.reported_userId !== entry.userId) {
-        return { error: "The reported user changed. Refresh and try again" };
-      }
-      return {
-        infraction: entry,
-        context: await getAdditionalContext(
-          client,
-          input.system,
-          entry.createdAt,
-          entry.threadId,
-        ),
-        // authorId is the authenticated account behind AI/persona-authored content.
-        reportedUserId: entry.authorId,
-      };
-    }
-    case "conversation_comment":
-    case "tavern_comment": {
-      const entry = await client.query.conversationComment.findFirst({
-        where: eq(conversationComment.id, input.system_id),
-      });
-      if (!entry) return { error: "Infraction not found" };
-      if (entry.isReported)
-        return { error: "This infraction has already been reported" };
-      if (input.reported_userId !== entry.userId) {
-        return { error: "The reported user changed. Refresh and try again" };
-      }
-      if (entry.conversationId) {
-        const parent = await client.query.conversation.findFirst({
-          where: eq(conversation.id, entry.conversationId),
-          with: { users: true },
-        });
-        if (!parent) return { error: "Conversation not found" };
-        const canView =
-          parent.isPublic ||
-          parent.users.some((member) => member.userId === actor.userId) ||
-          (parent.isStaffAvailable && actor.role !== "USER");
-        if (!canView) return { error: "You cannot report content you cannot view" };
-      }
-      return {
-        infraction: entry,
-        context: await getAdditionalContext(
-          client,
-          "conversation_comment",
-          entry.createdAt,
-          entry.conversationId,
-        ),
-        reportedUserId: entry.authorId,
-      };
-    }
-    case "user_profile": {
-      const target = await client.query.userData.findFirst({
-        where: eq(userData.userId, input.system_id),
-      });
-      if (!target) return { error: "User not found" };
-      if (input.reported_userId !== target.userId) {
-        return { error: "The reported user changed. Refresh and try again" };
-      }
-      return { infraction: target, context: [], reportedUserId: target.userId };
-    }
-    case "concept_art": {
-      const image = await fetchImage(client, input.system_id, actor.userId);
-      if (!image) return { error: "Infraction not found" };
-      if (input.reported_userId !== image.userId) {
-        return { error: "The reported user changed. Refresh and try again" };
-      }
-      return { infraction: image, context: [], reportedUserId: image.userId };
-    }
-    case "battle_log": {
-      const history = await client.query.battleHistory.findFirst({
-        where: eq(battleHistory.battleId, input.system_id),
-      });
-      if (!history) return { error: "Battle log not found" };
-      if (
-        input.reported_userId !== history.attackedId &&
-        input.reported_userId !== history.defenderId
-      ) {
-        return {
-          error: "The reported battle participant changed. Refresh and try again",
-        };
-      }
-      return {
-        infraction: {
-          id: input.system_id,
-          content: `<br /><a href="/battlelog/${input.system_id}"><b>Link to Battle Log (available for 72h)<b></a>`,
-        },
-        context: [],
-        reportedUserId: input.reported_userId,
-      };
-    }
-  }
-};
-
-/**
- * Create one user report with a durable request receipt. Moderation is completed before the
- * transaction, while the reported flag, report, retention update and receipt commit together.
- * The optional moderation dependency keeps the database contract executable in focused tests.
- */
-export const createUserReport = async (
-  client: DrizzleClient,
-  actorUserId: string,
-  input: UserReportSchema,
-  moderate: typeof generateModerationDecision = generateModerationDecision,
-) => {
-  const requestId = input.requestId ?? crypto.randomUUID();
-  const actionId = `create-report:${actorUserId}:${requestId}`;
-  const expectedRequest: CreateReportReceipt["request"] = {
-    system: input.system,
-    systemId: input.system_id,
-    reportedUserId: input.reported_userId,
-    reason: sanitize(input.reason),
-  };
-
-  // A lost response should not invoke the moderation service again.
-  const previousReceipt = await getCreateReportReceipt(client, actionId);
-  if (previousReceipt) {
-    return (
-      replayCreateReport(previousReceipt, actorUserId, requestId, expectedRequest) ??
-      errorResponse("Invalid report request ID")
-    );
-  }
-
-  const actor = await client.query.userData.findFirst({
-    where: eq(userData.userId, actorUserId),
-  });
-  if (!actor) return errorResponse("User not found");
-  if (actor.isBanned) return errorResponse("You are banned and cannot submit reports");
-
-  const subject = await loadReportSubject(client, actor, input);
-  if ("error" in subject) return errorResponse(subject.error);
-  if (subject.reportedUserId === actorUserId) {
-    return errorResponse("You cannot report yourself");
-  }
-  const target = await client.query.userData.findFirst({
-    where: eq(userData.userId, subject.reportedUserId),
-    columns: { userId: true },
-  });
-  if (!target) return errorResponse("Reported user not found");
-
-  const moderation = await moderate(
-    client,
-    JSON.stringify({ ...expectedRequest, requestId: undefined }),
-    subject.context,
-  );
-  const reportId = nanoid();
-  const retentionUntil = secondsFromNow(72 * 3600);
-
-  try {
-    const committed = await client.transaction(async (tx) => {
-      // Actor/target locks keep authorization and identity stable through the commit. Statements
-      // are intentionally sequential: PlanetScale transaction handles are single-connection.
-      await tx.execute(
-        sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${actorUserId}, ${subject.reportedUserId}) ORDER BY ${userData.userId} FOR UPDATE`,
-      );
-
-      const currentActor = await tx.query.userData.findFirst({
-        where: eq(userData.userId, actorUserId),
-      });
-      if (!currentActor) return errorResponse("User not found");
-      if (currentActor.isBanned) {
-        return errorResponse("You are banned and cannot submit reports");
-      }
-      if (subject.reportedUserId === actorUserId) {
-        return errorResponse("You cannot report yourself");
-      }
-      const currentTarget = await tx.query.userData.findFirst({
-        where: eq(userData.userId, subject.reportedUserId),
-        columns: { userId: true },
-      });
-      if (!currentTarget) return errorResponse("Reported user not found");
-
-      const racedReceipt = await getCreateReportReceipt(tx, actionId);
-      if (racedReceipt) {
-        return (
-          replayCreateReport(racedReceipt, actorUserId, requestId, expectedRequest) ??
-          errorResponse("Invalid report request ID")
-        );
-      }
-
-      if (input.system === "forum_comment") {
-        const entry = subject.infraction as typeof forumPost.$inferSelect;
-        const claimed = await tx
-          .update(forumPost)
-          .set({ isReported: true })
-          .where(
-            and(
-              eq(forumPost.id, input.system_id),
-              eq(forumPost.authorId, entry.authorId),
-              eq(forumPost.userId, entry.userId),
-              sql`BINARY ${forumPost.content} = BINARY ${entry.content}`,
-              eq(forumPost.isReported, false),
-            ),
-          );
-        if (mutationRowsAffected(claimed) !== 1) {
-          return errorResponse("This infraction changed or has already been reported");
-        }
-      } else if (
-        input.system === "conversation_comment" ||
-        input.system === "tavern_comment"
-      ) {
-        const entry = subject.infraction as typeof conversationComment.$inferSelect;
-        if (entry.conversationId) {
-          const parent = await tx.query.conversation.findFirst({
-            where: eq(conversation.id, entry.conversationId),
-            with: { users: true },
-          });
-          const canStillView =
-            parent &&
-            (parent.isPublic ||
-              parent.users.some((member) => member.userId === actorUserId) ||
-              (parent.isStaffAvailable && currentActor.role !== "USER"));
-          if (!canStillView) {
-            return errorResponse("You can no longer view this conversation");
-          }
-        }
-        const claimed = await tx
-          .update(conversationComment)
-          .set({ isReported: true })
-          .where(
-            and(
-              eq(conversationComment.id, input.system_id),
-              eq(conversationComment.authorId, entry.authorId),
-              eq(conversationComment.userId, entry.userId),
-              sql`BINARY ${conversationComment.content} = BINARY ${entry.content}`,
-              eq(conversationComment.isReported, false),
-            ),
-          );
-        if (mutationRowsAffected(claimed) !== 1) {
-          return errorResponse("This infraction changed or has already been reported");
-        }
-      } else if (input.system === "battle_log") {
-        const history = await tx.query.battleHistory.findFirst({
-          where: and(
-            eq(battleHistory.battleId, input.system_id),
-            sql`${input.reported_userId} IN (${battleHistory.attackedId}, ${battleHistory.defenderId})`,
-          ),
-        });
-        if (!history) {
-          return errorResponse("The battle log changed. Refresh and try again");
-        }
-        await tx
-          .update(battleAction)
-          .set({ updatedAt: retentionUntil })
-          .where(eq(battleAction.battleId, input.system_id));
-      } else if (input.system === "concept_art") {
-        const currentImage = await tx.query.conceptImage.findFirst({
-          where: and(
-            eq(conceptImage.id, input.system_id),
-            eq(conceptImage.userId, subject.reportedUserId),
-          ),
-          columns: { id: true },
-        });
-        if (!currentImage)
-          return errorResponse("The concept art changed. Refresh and try again");
-      }
-
-      await insertUserReport(tx, {
-        id: reportId,
-        userId: actorUserId,
-        reportedUserId: subject.reportedUserId,
-        system: input.system,
-        infraction: subject.infraction,
-        reason: expectedRequest.reason,
-        aiInterpretation: moderation.aiInterpretation,
-        predictedStatus: moderation.decision.createReport,
-        additionalContext: subject.context,
-      });
-      const receipt: CreateReportReceipt = {
-        request: expectedRequest,
-        response: {
-          reportId,
-          system: input.system,
-          systemId: input.system_id,
-          reportedUserId: input.reported_userId,
-          reportSubjectUserId: subject.reportedUserId,
-        },
-      };
-      await tx.insert(actionLog).values({
-        id: actionId,
-        userId: actorUserId,
-        tableName: "UserReport",
-        changes: receipt,
-        relatedId: reportId,
-        relatedMsg: requestId,
-      });
-      return {
-        success: true as const,
-        message: reportCreatedMessage,
-        requestId,
-        reportId,
-        system: input.system,
-        systemId: input.system_id,
-        reportedUserId: input.reported_userId,
-        reportSubjectUserId: subject.reportedUserId,
-      };
-    });
-    return committed;
-  } catch (error) {
-    if (!isMysqlDuplicateKeyError(error)) throw error;
-    // A same-request concurrent transaction can lose the receipt PK race. The winner's commit
-    // is the only state that converts that duplicate into success.
-    const receipt = await getCreateReportReceipt(client, actionId);
-    return (
-      replayCreateReport(receipt, actorUserId, requestId, expectedRequest) ??
-      errorResponse("This report was submitted concurrently. Refresh and try again")
-    );
-  }
-};
-
 export const insertUserReport = async (
   client: DrizzleClient,
   info: {
-    id?: string;
     userId: string;
     reportedUserId: string;
     system: string;
@@ -1559,7 +1135,7 @@ export const insertUserReport = async (
   },
 ) => {
   await client.insert(userReport).values({
-    id: info.id ?? nanoid(),
+    id: nanoid(),
     reporterUserId: info.userId,
     reportedUserId: info.reportedUserId,
     system: info.system,

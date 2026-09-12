@@ -3,7 +3,7 @@
 import { format } from "date-fns";
 import { Loader2, Pencil, Plus, StopCircle, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,55 +36,9 @@ import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import type { DeleteRankedSeasonSnapshot } from "@/validators/pvpRank";
 import SeasonForm from "./SeasonForm";
 
-type DeleteSeasonSubmission = {
-  requestId: string;
-  target: DeleteRankedSeasonSnapshot;
-};
-
-type EndSeasonSubmission = DeleteSeasonSubmission;
-
-const copyDeleteSeasonTarget = (
-  season: DeleteRankedSeasonSnapshot,
-): DeleteRankedSeasonSnapshot =>
-  Object.freeze({
-    ...season,
-    startDate: new Date(season.startDate),
-    endDate: new Date(season.endDate),
-    createdAt: new Date(season.createdAt),
-    updatedAt: new Date(season.updatedAt),
-    rewards: structuredClone(season.rewards),
-  });
-
-const canonicalDeleteValue = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(canonicalDeleteValue);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, entry]) => [key, canonicalDeleteValue(entry)]),
-    );
-  }
-  return value;
-};
-
-const deleteSeasonTargetsMatch = (
-  left: DeleteRankedSeasonSnapshot,
-  right: DeleteRankedSeasonSnapshot,
-) =>
-  left.id === right.id &&
-  left.name === right.name &&
-  left.description === right.description &&
-  left.startDate.getTime() === right.startDate.getTime() &&
-  left.endDate.getTime() === right.endDate.getTime() &&
-  left.ended === right.ended &&
-  left.paused === right.paused &&
-  left.createdAt.getTime() === right.createdAt.getTime() &&
-  left.updatedAt.getTime() === right.updatedAt.getTime() &&
-  JSON.stringify(canonicalDeleteValue(left.rewards)) ===
-    JSON.stringify(canonicalDeleteValue(right.rewards));
+type RankedSeasonRecord = RouterOutputs["pvpRank"]["getSeasons"][number];
 
 export function SeasonManager() {
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
@@ -96,14 +50,10 @@ export function SeasonManager() {
   const [isDeletePending, setIsDeletePending] = useState(false);
   const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
   const [isEndPending, setIsEndPending] = useState(false);
-  const [endTarget, setEndTarget] = useState<DeleteRankedSeasonSnapshot | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<DeleteRankedSeasonSnapshot | null>(
-    null,
-  );
-  const endInFlightRef = useRef<EndSeasonSubmission | null>(null);
-  const endRetryRef = useRef<EndSeasonSubmission | null>(null);
-  const deleteInFlightRef = useRef<DeleteSeasonSubmission | null>(null);
-  const deleteRetryRef = useRef<DeleteSeasonSubmission | null>(null);
+  const [endTarget, setEndTarget] = useState<RankedSeasonRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RankedSeasonRecord | null>(null);
+  const endInFlightRef = useRef(false);
+  const deleteInFlightRef = useRef(false);
   const { data: userData } = useUserData();
   const canEditContent = canChangeContent(userData?.role ?? "USER");
   const canEndSeason = canChangeContent(userData?.role ?? "USER");
@@ -134,167 +84,62 @@ export function SeasonManager() {
     isCreatePending || isEditPending || isDeletePending || isEndPending;
 
   const handleEndSeason = async () => {
-    if (!endTarget || endInFlightRef.current) return;
+    const target = endTarget;
+    if (!target || endInFlightRef.current) return;
 
-    const previousRetry = endRetryRef.current;
-    const submission =
-      previousRetry && deleteSeasonTargetsMatch(previousRetry.target, endTarget)
-        ? previousRetry
-        : {
-            requestId: crypto.randomUUID(),
-            target: copyDeleteSeasonTarget(endTarget),
-          };
-    endInFlightRef.current = submission;
-    endRetryRef.current = submission;
+    endInFlightRef.current = true;
     setIsEndPending(true);
 
     try {
       const result = await endSeason.mutateAsync({
-        id: submission.target.id,
-        expectedUpdatedAt: submission.target.updatedAt,
-        expectedSeason: submission.target,
-        requestId: submission.requestId,
+        id: target.id,
       });
-      if (endInFlightRef.current !== submission) return;
       if (!result.success) {
         showMutationToast(result);
         return;
       }
 
-      const rewards = result.rewards ?? [];
-      const resetUserIds = result.resetUserIds ?? [];
-      const insertedRewardIds = result.insertedRewardIds ?? [];
-      const clearedQueueUserIds = result.clearedQueueUserIds ?? [];
-      const committed = result.committedSeason;
-      const verified =
-        result.ended === true &&
-        result.requestId === submission.requestId &&
-        result.seasonId === submission.target.id &&
-        result.expectedUpdatedAt?.getTime() === submission.target.updatedAt.getTime() &&
-        result.expectedSeason !== undefined &&
-        deleteSeasonTargetsMatch(result.expectedSeason, submission.target) &&
-        result.previousSeason !== undefined &&
-        deleteSeasonTargetsMatch(result.previousSeason, submission.target) &&
-        committed !== undefined &&
-        committed.id === submission.target.id &&
-        committed.name === submission.target.name &&
-        committed.description === submission.target.description &&
-        committed.startDate.getTime() === submission.target.startDate.getTime() &&
-        committed.createdAt.getTime() === submission.target.createdAt.getTime() &&
-        committed.paused === submission.target.paused &&
-        committed.ended === true &&
-        committed.updatedAt.getTime() > submission.target.updatedAt.getTime() &&
-        committed.endDate.getTime() <= committed.updatedAt.getTime() &&
-        JSON.stringify(canonicalDeleteValue(committed.rewards)) ===
-          JSON.stringify(canonicalDeleteValue(submission.target.rewards)) &&
-        result.rewardCount === rewards.length &&
-        new Set(rewards.map((reward) => reward.id)).size === rewards.length &&
-        new Set(rewards.map((reward) => reward.userId)).size === rewards.length &&
-        result.resetUserCount === resetUserIds.length &&
-        new Set(resetUserIds).size === resetUserIds.length &&
-        new Set(insertedRewardIds).size === insertedRewardIds.length &&
-        insertedRewardIds.every((id) => rewards.some((reward) => reward.id === id)) &&
-        result.clearedQueueCount === clearedQueueUserIds.length &&
-        new Set(clearedQueueUserIds).size === clearedQueueUserIds.length;
-      if (!verified) {
-        showMutationToast({
-          success: false,
-          message:
-            "The server response could not be matched to this season. The confirmation is still open; please retry.",
-        });
-        return;
-      }
-
-      utils.pvpRank.getSeasons.setData(undefined, (cachedSeasons) =>
-        cachedSeasons?.map((season) =>
-          season.id === submission.target.id ? committed : season,
-        ),
-      );
-      endRetryRef.current = null;
       setIsEndDialogOpen(false);
       setEndTarget(null);
       showMutationToast(result);
       await utils.pvpRank.getSeasons.invalidate();
     } catch {
-      // The shared tRPC handler reports transport failures. Keep the exact immutable target and
-      // request UUID so retry safely recovers a response lost after the season ended.
+      // The shared tRPC handler presents the mutation error.
     } finally {
-      if (endInFlightRef.current === submission) {
-        endInFlightRef.current = null;
-        setIsEndPending(false);
-      }
+      endInFlightRef.current = false;
+      setIsEndPending(false);
     }
   };
 
   const handleDeleteSeason = async () => {
-    if (!deleteTarget || deleteInFlightRef.current) return;
+    const target = deleteTarget;
+    if (!target || deleteInFlightRef.current) return;
 
-    const previousRetry = deleteRetryRef.current;
-    const submission =
-      previousRetry && deleteSeasonTargetsMatch(previousRetry.target, deleteTarget)
-        ? previousRetry
-        : {
-            requestId: crypto.randomUUID(),
-            target: copyDeleteSeasonTarget(deleteTarget),
-          };
-    deleteInFlightRef.current = submission;
-    deleteRetryRef.current = submission;
+    deleteInFlightRef.current = true;
     setIsDeletePending(true);
 
     try {
       const result = await deleteSeason.mutateAsync({
-        id: submission.target.id,
-        expectedUpdatedAt: submission.target.updatedAt,
-        expectedSeason: submission.target,
-        requestId: submission.requestId,
+        id: target.id,
       });
-      if (deleteInFlightRef.current !== submission) return;
       if (!result.success) {
         showMutationToast(result);
         return;
       }
 
-      const verified =
-        result.deleted === true &&
-        result.requestId === submission.requestId &&
-        result.seasonId === submission.target.id &&
-        result.expectedUpdatedAt?.getTime() === submission.target.updatedAt.getTime() &&
-        result.expectedSeason !== undefined &&
-        deleteSeasonTargetsMatch(result.expectedSeason, submission.target) &&
-        result.deletedSeason !== undefined &&
-        deleteSeasonTargetsMatch(result.deletedSeason, submission.target) &&
-        result.deletedUnclaimedRewardIds !== undefined &&
-        new Set(result.deletedUnclaimedRewardIds).size ===
-          result.deletedUnclaimedRewardIds.length &&
-        result.deletedUnclaimedRewardCount === result.deletedUnclaimedRewardIds.length;
-      if (!verified) {
-        showMutationToast({
-          success: false,
-          message:
-            "The server response could not be matched to this season. The confirmation is still open; please retry.",
-        });
-        return;
-      }
-
       utils.pvpRank.getSeasons.setData(undefined, (cachedSeasons) =>
-        cachedSeasons?.filter((season) => season.id !== submission.target.id),
+        cachedSeasons?.filter((season) => season.id !== target.id),
       );
-      setSelectedSeasonId((current) =>
-        current === submission.target.id ? null : current,
-      );
-      deleteRetryRef.current = null;
+      setSelectedSeasonId((current) => (current === target.id ? null : current));
       setIsDeleteDialogOpen(false);
       setDeleteTarget(null);
       showMutationToast(result);
       await utils.pvpRank.getSeasons.invalidate();
     } catch {
-      // The shared tRPC handler reports transport failures. Keep the exact immutable target and
-      // request UUID so retry safely recovers a response lost after the delete committed.
+      // The shared tRPC handler presents the mutation error.
     } finally {
-      if (deleteInFlightRef.current === submission) {
-        deleteInFlightRef.current = null;
-        setIsDeletePending(false);
-      }
+      deleteInFlightRef.current = false;
+      setIsDeletePending(false);
     }
   };
 
@@ -414,7 +259,7 @@ export function SeasonManager() {
                         return;
                       }
                       if (isManagerPending) return;
-                      setEndTarget(copyDeleteSeasonTarget(selectedSeason));
+                      setEndTarget(selectedSeason);
                       setIsEndDialogOpen(true);
                     }}
                   >
@@ -481,7 +326,7 @@ export function SeasonManager() {
                       return;
                     }
                     if (isManagerPending) return;
-                    setDeleteTarget(copyDeleteSeasonTarget(selectedSeason));
+                    setDeleteTarget(selectedSeason);
                     setIsDeleteDialogOpen(true);
                   }}
                 >

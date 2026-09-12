@@ -5,7 +5,6 @@ import {
   BattleUsageTypes,
   ITEM_LEVEL_CAP,
   ItemRarities,
-  ItemSlots,
   ItemSlotTypes,
   ItemTypes,
   MAX_ITEM_SHOP_PURCHASE_QUANTITY,
@@ -35,32 +34,8 @@ export const getPublicUserItemsSchema = z.object({
 
 export const adjustUserItemSchema = z.object({
   userId: z.string(),
-  expectedUsername: z.string().min(1).max(191),
-  expectedIsAi: z.boolean(),
   userItemId: z.string(),
-  itemId: z.string(),
-  expectedItemName: z.string().min(1).max(191),
-  expectedLevel: z.number().int().min(1).max(ITEM_LEVEL_CAP),
   level: z.number().int().min(1).max(ITEM_LEVEL_CAP),
-  expectedQuantity: z.number().int().positive(),
-  expectedExperience: z.number().int().min(0),
-  expectedEquipped: z.enum(ItemSlots),
-  expectedDurability: z.number().int().min(0),
-  expectedDropChancePerc: z.number().int().min(0).max(100),
-  expectedStoredAtHome: z.boolean(),
-  expectedIsInAuction: z.boolean(),
-  expectedActiveVariantId: z.string().nullable(),
-  expectedCraftingFinishedAt: z.date().nullable(),
-  expectedImbuements: z
-    .array(
-      z.object({
-        id: z.string(),
-        itemId: z.string(),
-        craftingFinishedAt: z.date(),
-      }),
-    )
-    .max(100),
-  requestId: z.string().uuid(),
 });
 
 export const itemFilteringSchema = z.object({

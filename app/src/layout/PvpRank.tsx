@@ -55,18 +55,6 @@ interface RankedLoadoutSaveSnapshot {
   loadout: RankedLoadoutSchema;
 }
 
-const stableStringify = (value: unknown): string =>
-  JSON.stringify(value, (_key, item) =>
-    item && typeof item === "object" && !Array.isArray(item)
-      ? Object.fromEntries(
-          Object.entries(item).sort(([left], [right]) => left.localeCompare(right)),
-        )
-      : item,
-  ) ?? "undefined";
-
-const loadoutsMatch = (left: RankedLoadoutSchema, right: RankedLoadoutSchema) =>
-  stableStringify(left) === stableStringify(right);
-
 /**
  * Main ranked arena component for entering/leaving the arena
  * @returns The main ranked arena component
@@ -393,8 +381,6 @@ export const RankedLoadoutSelector: React.FC = () => {
     try {
       const result = await updateLoadout.mutateAsync({
         ...snapshot.loadout,
-        expectedLoadoutId: snapshot.loadoutId,
-        expectedUpdatedAt: snapshot.expectedUpdatedAt,
       });
       if (saveRef.current !== snapshot) return false;
 
@@ -402,40 +388,7 @@ export const RankedLoadoutSelector: React.FC = () => {
         showMutationToast(result);
         return false;
       }
-      const committed = result.committed;
-      const responseMatches =
-        committed?.userId === snapshot.userId &&
-        committed.loadoutId === snapshot.loadoutId &&
-        committed.previousUpdatedAt.getTime() ===
-          snapshot.expectedUpdatedAt.getTime() &&
-        loadoutsMatch(committed.loadout, snapshot.loadout);
-      if (!committed || !responseMatches) {
-        showMutationToast({
-          success: false,
-          message:
-            "The save response did not match this loadout. Refresh before trying again.",
-        });
-        return false;
-      }
-
       showMutationToast(result);
-      // Install the committed server snapshot before refetching. A response from an older save
-      // must never replace a cache entry that already carries a newer server revision.
-      utils.pvpRank.getRankedLoadout.setData(undefined, (current) => {
-        const base = current?.id === snapshot.loadoutId ? current : rankedLoadout;
-        if (
-          base.id !== snapshot.loadoutId ||
-          base.userId !== snapshot.userId ||
-          base.updatedAt.getTime() > committed.updatedAt.getTime()
-        ) {
-          return current;
-        }
-        return {
-          ...base,
-          loadout: committed.loadout,
-          updatedAt: committed.updatedAt,
-        };
-      });
 
       if (kind === "equip-weapon" || kind === "equip-consumable") {
         setIsItemModalOpen(false);

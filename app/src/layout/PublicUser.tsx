@@ -204,7 +204,6 @@ type ExperienceAwardTarget = {
   username: string;
   earnedExperienceBefore: number;
   amount: number;
-  reason: string;
 };
 
 type CommittedExperienceAward = ExperienceAwardTarget & {
@@ -241,13 +240,8 @@ const DebugUserCloneControl: React.FC<{
     try {
       const result = await cloneUser({
         userId: target.userId,
-        expectedUsername: target.username,
       });
-      if (
-        result.success &&
-        result.userId === cloneUserId &&
-        result.sourceUserId === target.userId
-      ) {
+      if (result.success) {
         showMutationToast(result);
 
         // The copy is committed. Close the stale destructive action before best-effort cache
@@ -258,12 +252,6 @@ const DebugUserCloneControl: React.FC<{
           utils.profile.getPublicUser.invalidate({ userId: cloneUserId }),
         ]);
         router.push("/profile");
-      } else if (result.success) {
-        showMutationToast({
-          success: false,
-          message:
-            "The clone response did not match the selected user. Please try again.",
-        });
       } else {
         showMutationToast(result);
       }
@@ -486,7 +474,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   // Experience award form
   const experienceForm = useForm<ExperienceAwardSchema>({
     resolver: zodResolver(experienceAwardSchema),
-    defaultValues: { amount: 100, reason: "" },
+    defaultValues: { amount: 100 },
   });
 
   useEffect(() => {
@@ -529,20 +517,14 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     try {
       const data = await updateAvatar.mutateAsync({
         userId: target.userId,
-        expectedAvatar: target.expectedAvatar,
       });
       if (avatarUpdateRequestRef.current !== target) return;
 
       showMutationToast(data);
-      if (!data.success || !data.avatar || data.userId !== target.userId) return;
+      if (!data.success) return;
 
       // Hide the action and render the committed image before cache work, so a stale
       // profile response cannot expose a second moderation request for the old avatar.
-      setCommittedAvatarUpdate({
-        userId: target.userId,
-        sourceAvatar: target.expectedAvatar,
-        avatar: data.avatar,
-      });
       setAvatarUpdateTarget(null);
       void utils.profile.getPublicUser.invalidate();
     } catch (error) {
@@ -577,19 +559,11 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     try {
       const data = await clearNindo.mutateAsync({
         userId: target.userId,
-        nindoId: target.nindoId,
-        expectedContent: target.expectedContent,
       });
       if (clearNindoRequestRef.current !== target) return;
 
       showMutationToast(data);
-      if (
-        !data.success ||
-        data.userId !== target.userId ||
-        data.nindoId !== target.nindoId
-      ) {
-        return;
-      }
+      if (!data.success) return;
 
       // Immediately suppress the exact committed nindo. A stale profile response
       // must not briefly expose a second clear action for content that is gone.
@@ -635,16 +609,12 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     try {
       const data = await unstuckUser.mutateAsync({
         userId: target.userId,
-        expectedUsername: target.username,
-        expectedStatus: target.expectedStatus,
-        expectedBattleId: target.expectedBattleId,
-        requestId: target.requestId,
         reason,
       });
       if (forceAwakeRequestRef.current !== target) return;
 
       showMutationToast(data);
-      if (!data.success || data.userId !== target.userId) return;
+      if (!data.success) return;
 
       // Suppress a second intervention before any cache refresh can return stale profile data.
       setCommittedForceAwake({ userId: target.userId, requestId: target.requestId });
@@ -690,8 +660,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       return;
     }
 
-    // A transport retry must reuse this exact target, value, reason, and key. If the server
-    // committed but the response was lost, minting another key here could award twice.
+    // Capture the exact target and amount, and block another award if the outcome is unknown.
     const target =
       experienceAwardTarget ??
       ({
@@ -700,7 +669,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         username: experienceAwardSource.username,
         earnedExperienceBefore: experienceAwardSource.earnedExperience,
         amount: data.amount,
-        reason: data.reason.trim(),
       } satisfies ExperienceAwardTarget);
 
     experienceAwardRequestRef.current = target;
@@ -711,10 +679,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     try {
       const result = await awardExperience.mutateAsync({
         targetUserId: target.userId,
-        expectedUsername: target.username,
         amount: target.amount,
-        reason: target.reason,
-        requestId: target.requestId,
       });
       if (experienceAwardRequestRef.current !== target) return;
 
@@ -726,42 +691,23 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         return;
       }
 
-      const committed = result.award;
-      if (
-        result.requestId !== target.requestId ||
-        !committed ||
-        committed.targetUserId !== target.userId ||
-        committed.username !== target.username ||
-        committed.amount !== target.amount ||
-        committed.reason !== target.reason
-      ) {
-        showMutationToast({
-          success: false,
-          message:
-            "The response did not match this award. Retry the exact request before creating another award.",
-        });
-        setExperienceAwardNeedsRetry(true);
-        return;
-      }
-
       showMutationToast(result);
       setCommittedExperienceAward({
         ...target,
-        earnedExperienceBefore: committed.earnedExperienceBefore,
-        earnedExperienceAfter: committed.earnedExperienceAfter,
+        earnedExperienceAfter: target.earnedExperienceBefore + target.amount,
       });
       setExperienceAwardTarget(null);
       setExperienceAwardNeedsRetry(false);
       setShowExperienceAwardModal(false);
       setExperienceAwardSource(null);
-      experienceForm.reset({ amount: 100, reason: "" });
+      experienceForm.reset({ amount: 100 });
       void Promise.allSettled([
         utils.profile.getPublicUser.invalidate({ userId: target.userId }),
         utils.profile.getUser.invalidate(),
       ]);
     } catch {
       // The global mutation handler emits the transport toast once. Preserve the immutable
-      // request so Retry remains idempotent even when the first response was lost after commit.
+      // request so the UI can block another award until the outcome is verified.
       if (experienceAwardRequestRef.current === target) {
         setExperienceAwardNeedsRetry(true);
       }
@@ -826,11 +772,9 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     try {
       const result = await awardMutation.mutateAsync({
         userIds: target.users.map((user) => user.userId),
-        expectedUsers: target.users,
         reputationAmount: target.reputationAmount,
         moneyAmount: target.moneyAmount,
         reason: target.reason,
-        requestId: target.requestId,
       });
       if (awardRequestRef.current !== target) return;
 
@@ -839,29 +783,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         // A structured rejection did not commit, so the staff member may correct the draft.
         setAwardTarget(null);
         setAwardNeedsRetry(false);
-        return;
-      }
-
-      const expectedAwards = target.users.every((user) =>
-        result.awards?.some(
-          (award) =>
-            award.userId === user.userId &&
-            award.username === user.username &&
-            award.reputationAmount === target.reputationAmount &&
-            award.moneyAmount === target.moneyAmount,
-        ),
-      );
-      if (
-        result.requestId !== target.requestId ||
-        result.awards?.length !== target.users.length ||
-        !expectedAwards
-      ) {
-        showMutationToast({
-          success: false,
-          message:
-            "The award response did not match this confirmation. Retry the same request before taking another action.",
-        });
-        setAwardNeedsRetry(true);
         return;
       }
 
@@ -1159,7 +1080,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               <Confirm
                 id="award-reputation"
                 title="Award Reputation Points"
-                proceed_label={awardNeedsRetry ? "Retry exact award" : "Award points"}
+                proceed_label="Award points"
                 proceed_loading_label="Awarding"
                 button={
                   <TooltipProvider delayDuration={50}>
@@ -1181,7 +1102,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 isLoading={awardPending}
                 keepOpenOnAccept
                 disabled={awardPending}
-                confirmDisabled={Boolean(completedAward)}
+                confirmDisabled={Boolean(completedAward) || awardNeedsRetry}
                 onAccept={handleAwardSubmit}
                 onClose={closeAward}
               >
@@ -1214,8 +1135,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     </p>
                     {awardNeedsRetry && (
                       <p className="rounded-md border border-amber-500/60 bg-amber-950/30 p-2 text-amber-100 text-sm">
-                        The previous response was not confirmed. This retries the exact
-                        same recipients and amounts with replay protection.
+                        The previous response was not confirmed. Refresh the profile and
+                        verify the action log before attempting another award.
                       </p>
                     )}
                     <p>
@@ -1317,22 +1238,14 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                       <button
                         type="button"
                         className="rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50"
-                        aria-label={
-                          experienceAwardTarget
-                            ? `Retry the experience award for ${experienceAwardTarget.username}`
-                            : `Award experience to ${profile.username}`
-                        }
+                        aria-label={`Award experience to ${profile.username}`}
                         disabled={experienceAwardPending}
                         onClick={openExperienceAward}
                       >
                         <Award className="h-6 w-6" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent>
-                      {experienceAwardTarget
-                        ? `Retry award for ${experienceAwardTarget.username}`
-                        : "Award Experience"}
-                    </TooltipContent>
+                    <TooltipContent>Award Experience</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
 
@@ -1347,13 +1260,13 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                         setExperienceAwardSource(null);
                       }
                     }}
-                    proceed_label={
-                      experienceAwardTarget ? "Retry exact award" : "Award experience"
-                    }
+                    proceed_label="Award experience"
                     proceed_loading_label="Awarding"
                     isLoading={experienceAwardPending}
                     keepOpenOnAccept
-                    proceedDisabled={!experienceForm.formState.isValid}
+                    proceedDisabled={
+                      !experienceForm.formState.isValid || experienceAwardNeedsRetry
+                    }
                     onAccept={() => void handleExperienceAwardSubmit()}
                   >
                     <p>
@@ -1367,14 +1280,14 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     </p>
                     {experienceAwardNeedsRetry && experienceAwardTarget && (
                       <p className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
-                        The result could not be confirmed. Retry preserves the exact{" "}
-                        <b>{experienceAwardTarget.amount} XP</b> award and its request
-                        ID, so an already-committed award will not be applied twice.
+                        The result of the {experienceAwardTarget.amount} XP award could
+                        not be confirmed. Refresh the profile and verify the action log
+                        before attempting another award.
                       </p>
                     )}
                     <p>
-                      <b>DO NOT</b> abuse this feature. The amount, recipient, staff
-                      member, and reason are recorded in the public action log.
+                      <b>DO NOT</b> abuse this feature. The amount, recipient, and staff
+                      member are recorded in the public action log.
                     </p>
                     <Form {...experienceForm}>
                       <form className="mt-4 space-y-4">
@@ -1403,23 +1316,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                                     }
                                     min="1"
                                     max="100000"
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={experienceForm.control}
-                            name="reason"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Reason</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="Why is this experience being awarded?"
-                                    maxLength={191}
-                                    {...field}
                                   />
                                 </FormControl>
                                 <FormMessage />
@@ -1484,7 +1380,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                               userId: profile.userId,
                               username: profile.username,
                               expectedStatus: profile.status,
-                              expectedBattleId: profile.battleId,
+                              expectedBattleId: null,
                               requestId: crypto.randomUUID(),
                             });
                             setForceAwakeReason("");
@@ -1945,7 +1841,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 recruits={profile.recruitedUsers}
                 parentUserId={profile.userId}
                 parentUsername={profile.username}
-                parentRecruitedCount={profile.nRecruited}
+                parentRecruitedCount={profile.recruitedUsers.length}
               />
             </TabsContent>
           )}
@@ -2310,43 +2206,10 @@ const DeleteUserQuestControl: React.FC<{
     try {
       const result = await deleteUserQuest.mutateAsync({
         userId: snapshot.userId,
-        expectedUsername: snapshot.username,
-        userQuestId: snapshot.userQuestId,
         questId: snapshot.questId,
-        expectedQuestName: snapshot.questName,
-        expectedQuestType: snapshot.questType,
-        expectedStartedAt: snapshot.startedAt,
-        expectedEndAt: snapshot.endAt,
-        expectedCompleted: snapshot.completed,
-        requestId: snapshot.requestId,
       });
       if (requestRef.current !== snapshot) return;
-
-      const deletion = result.deletion;
-      const responseMatches =
-        result.success &&
-        result.requestId === snapshot.requestId &&
-        deletion?.userId === snapshot.userId &&
-        deletion.userQuestId === snapshot.userQuestId &&
-        deletion.questId === snapshot.questId &&
-        deletion.questName === snapshot.questName &&
-        deletion.questType === snapshot.questType &&
-        deletion.startedAt.getTime() === snapshot.startedAt.getTime() &&
-        (deletion.endAt?.getTime() ?? null) === (snapshot.endAt?.getTime() ?? null) &&
-        deletion.completed === snapshot.completed;
-
-      if (!responseMatches) {
-        showMutationToast(
-          result.success
-            ? {
-                success: false,
-                message:
-                  "The deletion response did not match the confirmed quest record. Please refresh before trying again.",
-              }
-            : result,
-        );
-        return;
-      }
+      if (!result.success) return showMutationToast(result);
 
       showMutationToast(result);
       // Suppress the committed record before cache work. A stale refetch cannot resurrect its
@@ -2356,14 +2219,15 @@ const DeleteUserQuestControl: React.FC<{
       void utils.quests.getUserQuests.invalidate({ userId: snapshot.userId });
     } catch (error) {
       // The global handler owns ordinary tRPC errors. A transient failure remains locally
-      // actionable and retains the exact request ID so a committed-but-lost response is replayed.
+      // actionable. Close and refresh because this endpoint has no replay key.
       if (error instanceof Error && isRetryableTrpcError(error)) {
         showMutationToast({
           success: false,
-          message:
-            "Could not confirm the quest deletion. Check your connection and retry.",
+          message: "The deletion outcome is unknown. Refresh before trying again.",
         });
       }
+      setConfirmedQuest(null);
+      void utils.quests.getUserQuests.invalidate({ userId: snapshot.userId });
     } finally {
       if (requestRef.current === snapshot) {
         requestRef.current = null;
@@ -2744,17 +2608,9 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({
     try {
       const result = await adjustJutsuLevel.mutateAsync({
         userId: snapshot.userId,
-        expectedUsername: snapshot.username,
-        userJutsuId: snapshot.userJutsuId,
         jutsuId: snapshot.jutsuId,
-        expectedJutsuName: snapshot.jutsuName,
-        expectedLevel: snapshot.previousLevel,
         level: snapshot.newLevel,
-        expectedReskinId: snapshot.previousReskinId,
-        expectedReskinName: snapshot.previousReskinName,
         reskinId: snapshot.newReskinId,
-        reskinName: snapshot.newReskinName,
-        requestId: snapshot.requestId,
       });
       if (
         jutsuAdjustmentRequestRef.current !== snapshot ||
@@ -2764,34 +2620,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({
         return;
       }
 
-      const adjustment = result.adjustment;
-      const responseMatches =
-        result.success &&
-        result.requestId === snapshot.requestId &&
-        adjustment?.userId === snapshot.userId &&
-        adjustment.username === snapshot.username &&
-        adjustment.userJutsuId === snapshot.userJutsuId &&
-        adjustment.jutsuId === snapshot.jutsuId &&
-        adjustment.jutsuName === snapshot.jutsuName &&
-        adjustment.previousLevel === snapshot.previousLevel &&
-        adjustment.newLevel === snapshot.newLevel &&
-        adjustment.previousReskinId === snapshot.previousReskinId &&
-        adjustment.previousReskinName === snapshot.previousReskinName &&
-        adjustment.newReskinId === snapshot.newReskinId &&
-        adjustment.newReskinName === snapshot.newReskinName;
-
-      if (!responseMatches) {
-        showMutationToast(
-          result.success
-            ? {
-                success: false,
-                message:
-                  "The response did not match the confirmed jutsu adjustment. Refresh before trying again.",
-              }
-            : result,
-        );
-        return;
-      }
+      if (!result.success) return showMutationToast(result);
 
       showMutationToast(result);
       // Overlay the exact committed row before refreshing. A stale query cannot put the old
@@ -2812,14 +2641,15 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({
       ]);
     } catch (error) {
       // Ordinary tRPC errors are shown by the global handler. Only suppressed transient errors
-      // need a local retry message; the open snapshot keeps its request ID for safe replay.
+      // need a local message. Close and refresh because this endpoint has no replay key.
       if (error instanceof Error && isRetryableTrpcError(error)) {
         showMutationToast({
           success: false,
-          message:
-            "Could not confirm the jutsu adjustment. Check your connection and retry the exact change.",
+          message: "The adjustment outcome is unknown. Refresh before trying again.",
         });
       }
+      setConfirmedJutsuAdjustment(null);
+      void utils.jutsu.getPublicUserJutsus.invalidate({ userId: snapshot.userId });
     } finally {
       if (jutsuAdjustmentRequestRef.current === snapshot) {
         jutsuAdjustmentRequestRef.current = null;
@@ -2884,28 +2714,8 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({
     try {
       const result = await adjustItemLevel.mutateAsync({
         userId: snapshot.userId,
-        expectedUsername: snapshot.username,
-        expectedIsAi: snapshot.isAi,
         userItemId: snapshot.userItemId,
-        itemId: snapshot.itemId,
-        expectedItemName: snapshot.itemName,
-        expectedLevel: snapshot.previousLevel,
         level: snapshot.newLevel,
-        expectedQuantity: snapshot.quantity,
-        expectedExperience: snapshot.experience,
-        expectedEquipped: snapshot.equipped,
-        expectedDurability: snapshot.durability,
-        expectedDropChancePerc: snapshot.dropChancePerc,
-        expectedStoredAtHome: snapshot.storedAtHome,
-        expectedIsInAuction: snapshot.isInAuction,
-        expectedActiveVariantId: snapshot.activeVariantId,
-        expectedCraftingFinishedAt: snapshot.craftingFinishedAt,
-        expectedImbuements: snapshot.imbuements.map((row) => ({
-          id: row.id,
-          itemId: row.itemId,
-          craftingFinishedAt: row.craftingFinishedAt,
-        })),
-        requestId: snapshot.requestId,
       });
       if (
         itemAdjustmentRequestRef.current !== snapshot ||
@@ -2916,51 +2726,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({
         return;
       }
 
-      const adjustment = result.adjustment;
-      const responseMatches =
-        result.success &&
-        result.requestId === snapshot.requestId &&
-        adjustment?.userId === snapshot.userId &&
-        adjustment.username === snapshot.username &&
-        adjustment.isAi === snapshot.isAi &&
-        adjustment.userItemId === snapshot.userItemId &&
-        adjustment.itemId === snapshot.itemId &&
-        adjustment.itemName === snapshot.itemName &&
-        adjustment.previousLevel === snapshot.previousLevel &&
-        adjustment.newLevel === snapshot.newLevel &&
-        adjustment.quantity === snapshot.quantity &&
-        adjustment.experience === snapshot.experience &&
-        adjustment.equipped === snapshot.equipped &&
-        adjustment.durability === snapshot.durability &&
-        adjustment.dropChancePerc === snapshot.dropChancePerc &&
-        adjustment.storedAtHome === snapshot.storedAtHome &&
-        adjustment.isInAuction === snapshot.isInAuction &&
-        adjustment.activeVariantId === snapshot.activeVariantId &&
-        (adjustment.craftingFinishedAt?.getTime() ?? null) ===
-          (snapshot.craftingFinishedAt?.getTime() ?? null) &&
-        adjustment.imbuements.length === snapshot.imbuements.length &&
-        adjustment.imbuements.every((row, index) => {
-          const expected = snapshot.imbuements[index];
-          if (!expected) return false;
-          return (
-            row.id === expected.id &&
-            row.itemId === expected.itemId &&
-            row.craftingFinishedAt.getTime() === expected.craftingFinishedAt.getTime()
-          );
-        });
-
-      if (!responseMatches) {
-        showMutationToast(
-          result.success
-            ? {
-                success: false,
-                message:
-                  "The response did not match the confirmed item adjustment. Refresh before trying again.",
-              }
-            : result,
-        );
-        return;
-      }
+      if (!result.success) return showMutationToast(result);
 
       showMutationToast(result);
       // Publish the authoritative level immediately. A stale refetch cannot put the old level
@@ -2974,14 +2740,15 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({
       void utils.item.getPublicUserItems.invalidate({ userId: snapshot.userId });
     } catch (error) {
       // Ordinary tRPC errors are shown globally. Suppressed transient failures get one local,
-      // actionable message and retain this request ID for an idempotent replay.
+      // actionable message. Close and refresh because this endpoint has no replay key.
       if (error instanceof Error && isRetryableTrpcError(error)) {
         showMutationToast({
           success: false,
-          message:
-            "Could not confirm the item adjustment. Check your connection and retry the exact change.",
+          message: "The adjustment outcome is unknown. Refresh before trying again.",
         });
       }
+      setConfirmedItemAdjustment(null);
+      void utils.item.getPublicUserItems.invalidate({ userId: snapshot.userId });
     } finally {
       if (itemAdjustmentRequestRef.current === snapshot) {
         itemAdjustmentRequestRef.current = null;
@@ -3540,20 +3307,12 @@ const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
     try {
       const result = await updateUserIdMutation.mutateAsync({
         userId: request.userId,
-        expectedUsername: request.username,
         newUserId: request.newUserId,
       });
       if (requestRef.current !== request) return;
 
       showMutationToast(result);
-      if (
-        !result.success ||
-        result.oldUserId !== request.userId ||
-        result.newUserId !== request.newUserId ||
-        result.username !== request.username
-      ) {
-        return;
-      }
+      if (!result.success) return;
 
       // The old identity no longer exists. Suppress this stale action and close the confirmation
       // before cache/network work; every later move requires a fresh profile and confirmation.
@@ -4247,31 +4006,12 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
     setAssignmentPending(true);
     try {
       const result = await insertUserBadge.mutateAsync({
-        requestId: target.requestId,
         userId: target.userId,
-        expectedUsername: target.username,
         badgeId: target.badgeId,
-        expectedBadgeName: target.badgeName,
       });
       if (assignmentRef.current !== target) return;
 
-      const responseMatches =
-        result.success &&
-        result.requestId === target.requestId &&
-        result.userId === target.userId &&
-        result.badgeId === target.badgeId;
-      if (!responseMatches) {
-        if (result.success) {
-          showMutationToast({
-            success: false,
-            message:
-              "The server returned an unexpected badge assignment. Refresh and check the profile.",
-          });
-        } else {
-          showMutationToast(result);
-        }
-        return;
-      }
+      if (!result.success) return showMutationToast(result);
 
       showMutationToast(result);
       if (
@@ -4296,16 +4036,14 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
         utils.logs.getContentChanges.invalidate(),
       ]);
     } catch (error) {
-      // Every thrown response keeps the immutable request ID: even an internal error can arrive
-      // after a commit. Retryable failures are suppressed globally, so show their one actionable
-      // message here; non-retryable errors keep the retry control but use the global toast.
+      // The endpoint has no replay key, so block another assignment until the profile is checked.
       if (assignmentRef.current === target) {
         setAssignmentNeedsRetry(true);
         if (error instanceof Error && isRetryableTrpcError(error)) {
           showMutationToast({
             success: false,
             message:
-              "Could not confirm this badge assignment. Check your connection and retry the exact assignment.",
+              "The assignment outcome is unknown. Refresh the profile before trying again.",
           });
         }
       }
@@ -4358,32 +4096,14 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
     setRemovalPending(true);
     try {
       const result = await removeUserBadge.mutateAsync({
-        requestId: target.requestId,
         userId: target.userId,
-        expectedUsername: target.username,
         badgeId: target.badgeId,
-        expectedBadgeName: target.badgeName,
-        expectedAssignmentCreatedAt: target.assignmentCreatedAt,
       });
       if (removalRef.current !== target) return;
 
-      const responseMatches =
-        result.success &&
-        result.requestId === target.requestId &&
-        result.userId === target.userId &&
-        result.badgeId === target.badgeId;
-      if (!responseMatches) {
+      if (!result.success) {
         setRemovalNeedsRetry(true);
-        if (result.success) {
-          showMutationToast({
-            success: false,
-            message:
-              "The server returned an unexpected badge removal. Refresh and check the profile.",
-          });
-        } else {
-          showMutationToast(result);
-        }
-        return;
+        return showMutationToast(result);
       }
 
       showMutationToast(result);
@@ -4411,7 +4131,7 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
           showMutationToast({
             success: false,
             message:
-              "Could not confirm this badge removal. Check your connection and retry the exact removal.",
+              "The removal outcome is unknown. Refresh the profile before trying again.",
           });
         }
       }
@@ -4538,10 +4258,10 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
           if (open) setAssignmentOpen(true);
           else closeBadgeAssignment();
         }}
-        proceed_label={assignmentNeedsRetry ? "Retry exact assignment" : "Add badge"}
+        proceed_label="Add badge"
         proceed_loading_label="Adding"
         isLoading={assignmentPending}
-        proceedDisabled={!assignment}
+        proceedDisabled={!assignment || assignmentNeedsRetry}
         keepOpenOnAccept
         onAccept={() => void confirmBadgeAssignment()}
         onClose={closeBadgeAssignment}
@@ -4571,8 +4291,8 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
             </p>
             {assignmentNeedsRetry && (
               <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                The previous response was not confirmed. Retry keeps the same request ID
-                so a completed assignment cannot be applied or audited twice.
+                The previous response was not confirmed. Close this dialog and refresh
+                the profile before attempting another assignment.
               </p>
             )}
           </div>
@@ -4587,11 +4307,11 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
           if (open) setRemovalOpen(true);
           else closeBadgeRemoval();
         }}
-        proceed_label={removalNeedsRetry ? "Retry exact removal" : "Remove badge"}
+        proceed_label="Remove badge"
         proceed_loading_label="Removing"
         confirmClassName="bg-red-600 text-white hover:bg-red-700"
         isLoading={removalPending}
-        proceedDisabled={!removal}
+        proceedDisabled={!removal || removalNeedsRetry}
         keepOpenOnAccept
         onAccept={() => void confirmBadgeRemoval()}
         onClose={closeBadgeRemoval}
@@ -4625,8 +4345,8 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
             </p>
             {removalNeedsRetry && (
               <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                The previous response was not confirmed. Retry keeps the same request
-                ID, so a completed removal cannot be applied or audited twice.
+                The previous response was not confirmed. Close this dialog and refresh
+                the profile before attempting another removal.
               </p>
             )}
           </div>
@@ -4769,26 +4489,13 @@ const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
     inFlightRef.current = request;
     setIsRemoving(true);
     try {
-      const result = await deleteReferral.mutateAsync(request);
+      const result = await deleteReferral.mutateAsync({ userId: request.userId });
       if (inFlightRef.current !== request) return;
       if (!result.success) {
         showMutationToast(result);
         setRetryRequest(request);
         return;
       }
-      if (
-        result.userId !== request.userId ||
-        result.recruiterId !== request.expectedRecruiterId ||
-        result.requestId !== request.requestId
-      ) {
-        setRetryRequest(request);
-        showMutationToast({
-          success: false,
-          message: "The server confirmed a different referral. Refresh and try again.",
-        });
-        return;
-      }
-
       // The commit is authoritative. Remove only this captured row before cache/network work so
       // a slow or stale refresh cannot expose the destructive action for a second click.
       showMutationToast(result);
@@ -4807,7 +4514,7 @@ const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
         showMutationToast({
           success: false,
           message:
-            "The referral response was not confirmed. Retry to safely check the same removal.",
+            "The referral response was not confirmed. Refresh before trying again.",
         });
       }
     } finally {
@@ -4835,6 +4542,7 @@ const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
       isLoading={isRemoving}
       keepOpenOnAccept
       disabled={isRemoving}
+      confirmDisabled={Boolean(retryRequest)}
       confirmClassName="bg-red-600 text-white hover:bg-red-700"
     >
       <div className="space-y-3" aria-busy={isRemoving}>
@@ -4851,8 +4559,8 @@ const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
         </p>
         {retryRequest && (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-            The previous response was not confirmed. Retry uses the same request ID, so
-            a completed unlink and count change cannot be applied or audited twice.
+            The previous response was not confirmed. Refresh the profile before trying
+            again.
           </p>
         )}
         <span className="sr-only" aria-live="polite">
