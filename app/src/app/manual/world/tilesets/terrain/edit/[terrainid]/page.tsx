@@ -292,7 +292,7 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
         aria-busy={isUpdating}
         loading={isUpdating}
       >
-        {isUpdating ? "Saving map terrain..." : "Save to Database"}
+        {isUpdating ? "Saving" : "Save to Database"}
       </Button>
     </ContentBox>
   );

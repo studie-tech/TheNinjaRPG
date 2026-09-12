@@ -555,7 +555,7 @@ export default function SeasonForm({
                       parentForm={form}
                       buildRewardFormData={buildRewardFormData}
                       disabled={isSubmitting}
-                      pendingText={seasonId ? "Saving season…" : "Creating season…"}
+                      pendingText={seasonId ? "Saving" : "Creating"}
                     />
                   )}
                 </CardContent>
@@ -567,8 +567,8 @@ export default function SeasonForm({
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isSubmitting
               ? seasonId
-                ? "Saving season…"
-                : "Creating season…"
+                ? "Saving"
+                : "Creating"
               : seasonId
                 ? "Update Season"
                 : "Create Season"}
@@ -579,7 +579,7 @@ export default function SeasonForm({
               role="status"
               aria-live="polite"
             >
-              {seasonId ? "Saving season…" : "Creating season…"}
+              {seasonId ? "Saving" : "Creating"}
             </p>
           )}
         </fieldset>

@@ -1133,7 +1133,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                       <Hammer className="mr-1.5 h-3.5 w-3.5" />
                     )}
                     {isSubmittingThisAuction
-                      ? "Submitting bid…"
+                      ? "Submitting"
                       : userBid
                         ? "Raise to"
                         : "Place bid"}
@@ -1265,8 +1265,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                   role="status"
                 >
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Submitting bid of {submittedBidAmount?.toLocaleString()}{" "}
-                  {spendCurrencyUnit}…
+                  Submitting
                 </span>
               ) : null}
             </AlertDialogDescription>
@@ -1286,7 +1285,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
               {isSubmittingThisAuction ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Submitting {submittedBidAmount?.toLocaleString()} {spendCurrencyUnit}…
+                  Submitting
                 </>
               ) : (
                 "Confirm Bid"
@@ -1321,7 +1320,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                 cancelAuction({ auctionId });
               }}
             >
-              {isCancellingAuction ? "Cancelling…" : "Cancel listing"}
+              {isCancellingAuction ? "Cancelling" : "Cancel listing"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1361,8 +1360,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                   role="status"
                 >
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Completing buyout for {submittedBidAmount?.toLocaleString()}{" "}
-                  {spendCurrencyUnit}…
+                  Purchasing
                 </span>
               ) : null}
             </AlertDialogDescription>
@@ -1382,7 +1380,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
               {isSubmittingThisAuction ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Buying for {submittedBidAmount?.toLocaleString()} {spendCurrencyUnit}…
+                  Purchasing
                 </>
               ) : (
                 "Confirm Buyout"

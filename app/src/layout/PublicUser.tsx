@@ -303,7 +303,7 @@ const DebugUserCloneControl: React.FC<{
             if (!isOpen) setConfirmedSource(null);
           }}
           proceed_label="Clone user"
-          proceed_loading_label="Cloning user…"
+          proceed_loading_label="Cloning"
           isLoading={isPending}
           keepOpenOnAccept
           onAccept={(event) => {
@@ -1136,7 +1136,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   isOpen={showEditModal}
                   setIsOpen={setShowEditModal}
                   proceed_label="Done"
-                  proceed_loading_label="Deleting quest…"
+                  proceed_loading_label="Deleting"
                   isLoading={isUserQuestDeletionPending}
                 >
                   {showEditModal && (
@@ -1160,7 +1160,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 id="award-reputation"
                 title="Award Reputation Points"
                 proceed_label={awardNeedsRetry ? "Retry exact award" : "Award points"}
-                proceed_loading_label="Awarding reputation…"
+                proceed_loading_label="Awarding"
                 button={
                   <TooltipProvider delayDuration={50}>
                     <Tooltip>
@@ -1350,7 +1350,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     proceed_label={
                       experienceAwardTarget ? "Retry exact award" : "Award experience"
                     }
-                    proceed_loading_label="Awarding experience…"
+                    proceed_loading_label="Awarding"
                     isLoading={experienceAwardPending}
                     keepOpenOnAccept
                     proceedDisabled={!experienceForm.formState.isValid}
@@ -1713,7 +1713,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           if (!open && !avatarUpdatePending) setAvatarUpdateTarget(null);
         }}
         proceed_label="Replace avatar"
-        proceed_loading_label="Updating avatar…"
+        proceed_loading_label="Updating"
         confirmClassName="bg-red-600 text-white hover:bg-red-700"
         isLoading={avatarUpdatePending}
         keepOpenOnAccept={true}
@@ -1734,7 +1734,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           if (!open && !clearNindoPending) setClearNindoTarget(null);
         }}
         proceed_label="Clear nindo"
-        proceed_loading_label="Clearing nindo…"
+        proceed_loading_label="Clearing"
         confirmClassName="bg-red-600 text-white hover:bg-red-700"
         isLoading={clearNindoPending}
         keepOpenOnAccept={true}
@@ -2023,7 +2023,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             }
           }}
           proceed_label="Force Awake"
-          proceed_loading_label="Forcing user awake…"
+          proceed_loading_label="Waking"
           confirmClassName="bg-orange-600 hover:bg-orange-700"
           onAccept={() => void handleForceAwake()}
           isValid={forceAwakeReason.trim().length >= 10}
@@ -2397,7 +2397,7 @@ const DeleteUserQuestControl: React.FC<{
             if (!open) setConfirmedQuest(null);
           }}
           proceed_label="Delete quest record"
-          proceed_loading_label="Deleting quest…"
+          proceed_loading_label="Deleting"
           confirmClassName="bg-red-600 text-white hover:bg-red-700"
           isLoading={isPending}
           keepOpenOnAccept
@@ -3147,7 +3147,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({
                 }
               }}
               proceed_label="Adjust jutsu"
-              proceed_loading_label="Adjusting jutsu…"
+              proceed_loading_label="Adjusting"
               isLoading={isJutsuAdjustmentPending}
               keepOpenOnAccept
               onAccept={(event) => {
@@ -3311,7 +3311,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({
                 }
               }}
               proceed_label="Adjust item"
-              proceed_loading_label="Adjusting item…"
+              proceed_loading_label="Adjusting"
               isLoading={isItemAdjustmentPending}
               keepOpenOnAccept
               onAccept={(event) => {
@@ -3321,7 +3321,7 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({
             >
               <div className="space-y-3" aria-busy={isItemAdjustmentPending}>
                 <p className="sr-only" aria-live="polite">
-                  {isItemAdjustmentPending ? "Adjusting item…" : ""}
+                  {isItemAdjustmentPending ? "Adjusting" : ""}
                 </p>
                 <div className="rounded-md border border-blue-500/40 bg-blue-500/10 p-3">
                   <p className="font-semibold">
@@ -3591,7 +3591,7 @@ const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
       id="update-user-id"
       title="Update User ID"
       proceed_label="Update user ID"
-      proceed_loading_label="Updating user ID…"
+      proceed_loading_label="Updating"
       button={<IdCard className="h-6 w-6 cursor-pointer hover:text-orange-500" />}
       onAccept={handleUpdateUserId}
       isValid={
@@ -4539,7 +4539,7 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
           else closeBadgeAssignment();
         }}
         proceed_label={assignmentNeedsRetry ? "Retry exact assignment" : "Add badge"}
-        proceed_loading_label="Adding badge…"
+        proceed_loading_label="Adding"
         isLoading={assignmentPending}
         proceedDisabled={!assignment}
         keepOpenOnAccept
@@ -4588,7 +4588,7 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
           else closeBadgeRemoval();
         }}
         proceed_label={removalNeedsRetry ? "Retry exact removal" : "Remove badge"}
-        proceed_loading_label="Removing badge…"
+        proceed_loading_label="Removing"
         confirmClassName="bg-red-600 text-white hover:bg-red-700"
         isLoading={removalPending}
         proceedDisabled={!removal}
@@ -4824,7 +4824,7 @@ const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
       id={`remove-referral-${recruit.userId}`}
       title="Remove referral relationship?"
       proceed_label="Remove referral"
-      proceed_loading_label="Removing referral…"
+      proceed_loading_label="Removing"
       button={
         <Trash2
           aria-label={`Remove ${recruit.username} as a referral`}
@@ -4856,7 +4856,7 @@ const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
           </p>
         )}
         <span className="sr-only" aria-live="polite">
-          {isRemoving ? "Removing referral…" : ""}
+          {isRemoving ? "Removing" : ""}
         </span>
       </div>
     </Confirm>
@@ -5136,7 +5136,7 @@ const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
         title="Adjust Seichi Silver"
         isOpen={isOpen}
         setIsOpen={setIsOpen}
-        proceed_label={isPending ? "Saving..." : "Apply"}
+        proceed_label={isPending ? "Saving" : "Apply"}
         // Modal auto-closes on Apply when isValid is true/undefined. Pass false so a
         // failed mutation (AI rejection / insufficient balance) keeps the form open
         // with the entered amount + reason; we close in onSuccess instead. The accept

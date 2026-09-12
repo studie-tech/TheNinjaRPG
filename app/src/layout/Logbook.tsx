@@ -689,7 +689,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
               setAbandonDialogIdentity(open ? abandonIdentity : null)
             }
             proceed_label="Abandon quest"
-            proceed_loading_label="Abandoning quest…"
+            proceed_loading_label="Abandoning"
             confirmClassName="bg-red-600 text-white hover:bg-red-700"
             isLoading={isAbandoning}
             keepOpenOnAccept

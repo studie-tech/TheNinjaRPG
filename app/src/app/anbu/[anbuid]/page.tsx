@@ -368,9 +368,9 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                   id={`kick-${member.userId}`}
                   hoverText={
                     isKickingMember
-                      ? "Kicking Member"
+                      ? "Kicking"
                       : isPromotingMember
-                        ? "Promotion in progress"
+                        ? "Promoting"
                         : "Kick Member"
                   }
                   disabled={isMemberActionPending}
@@ -384,7 +384,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                 >
                   {!isKickingMember && <DoorOpen className="mr-2 h-5 w-5" />}
                   <span role={isKickingMember ? "status" : undefined}>
-                    {isKickingMember ? "Kicking..." : "Kick"}
+                    {isKickingMember ? "Kicking" : "Kick"}
                   </span>
                 </Button>
               }
@@ -404,9 +404,9 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                   id={`promote-${member.userId}`}
                   hoverText={
                     isPromotingMember
-                      ? "Promoting Member"
+                      ? "Promoting"
                       : isKickingMember
-                        ? "Kick in progress"
+                        ? "Kicking"
                         : "Promote Member"
                   }
                   disabled={isMemberActionPending}
@@ -420,7 +420,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                 >
                   {!isPromotingMember && <ArrowBigUpDash className="mr-2 h-5 w-5" />}
                   <span role={isPromotingMember ? "status" : undefined}>
-                    {isPromotingMember ? "Promoting..." : "Promote"}
+                    {isPromotingMember ? "Promoting" : "Promote"}
                   </span>
                 </Button>
               }
@@ -487,15 +487,15 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
               button={
                 <Button
                   id="rename-anbu-squad"
-                  hoverText={isEditing ? "Renaming Squad" : "Rename Squad"}
+                  hoverText={isEditing ? "Renaming" : "Rename Squad"}
                   disabled={isEditing}
                   loading={isEditing}
                   aria-busy={isEditing}
-                  aria-label={isEditing ? "Renaming squad" : "Rename squad"}
+                  aria-label={isEditing ? "Renaming" : "Rename squad"}
                 >
                   {!isEditing && <FilePenLine className="h-5 w-5" />}
                   <span className="sr-only" aria-live="polite">
-                    {isEditing ? "Renaming squad" : "Rename squad"}
+                    {isEditing ? "Renaming" : "Rename squad"}
                   </span>
                 </Button>
               }
@@ -612,7 +612,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                       }
                       className="w-full"
                     >
-                      {isUpgradingEspionage ? "Upgrading..." : "Upgrade Espionage"}
+                      {isUpgradingEspionage ? "Upgrading" : "Upgrade Espionage"}
                     </Button>
                   </div>
 
@@ -653,7 +653,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                       }
                       className="w-full"
                     >
-                      {isUpgradingStealth ? "Upgrading..." : "Upgrade Stealth"}
+                      {isUpgradingStealth ? "Upgrading" : "Upgrade Stealth"}
                     </Button>
                   </div>
                 </div>
@@ -751,9 +751,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                     }
                     className="w-full"
                   >
-                    {isPerformingEspionage
-                      ? "Performing Espionage..."
-                      : "Conduct Espionage Mission"}
+                    {isPerformingEspionage ? "Performing" : "Conduct Espionage Mission"}
                   </Button>
                 </div>
               </DialogContent>
@@ -770,16 +768,16 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
               button={
                 <Button
                   id="leave-anbu-squad-trigger"
-                  hoverText={isLeaving ? "Leaving Squad" : "Leave Squad"}
+                  hoverText={isLeaving ? "Leaving" : "Leave Squad"}
                   variant="destructive"
                   disabled={isSquadExitPending}
                   loading={isLeaving}
                   aria-busy={isLeaving}
-                  aria-label={isLeaving ? "Leaving squad" : "Leave squad"}
+                  aria-label={isLeaving ? "Leaving" : "Leave squad"}
                 >
                   {!isLeaving && <DoorOpen className="h-5 w-5" />}
                   <span role={isLeaving ? "status" : undefined}>
-                    {isLeaving ? "Leaving..." : "Leave"}
+                    {isLeaving ? "Leaving" : "Leave"}
                   </span>
                 </Button>
               }
@@ -792,23 +790,23 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
             <Confirm
               id="disband-anbu-squad"
               title="Disband Squad"
-              proceed_label={isDisbanding ? "Disbanding..." : "Disband"}
+              proceed_label={isDisbanding ? "Disbanding" : "Disband"}
               confirmClassName="bg-red-600 text-white hover:bg-red-700"
               disabled={isSquadExitPending}
               confirmDisabled={isSquadExitPending}
               button={
                 <Button
                   id="disband-anbu-squad-trigger"
-                  hoverText={isDisbanding ? "Disbanding Squad" : "Disband Squad"}
+                  hoverText={isDisbanding ? "Disbanding" : "Disband Squad"}
                   variant="destructive"
                   disabled={isSquadExitPending}
                   loading={isDisbanding}
                   aria-busy={isDisbanding}
-                  aria-label={isDisbanding ? "Disbanding squad" : "Disband squad"}
+                  aria-label={isDisbanding ? "Disbanding" : "Disband squad"}
                 >
                   {!isDisbanding && <Trash2 className="mr-2 h-5 w-5" />}
                   <span role={isDisbanding ? "status" : undefined}>
-                    {isDisbanding ? "Disbanding..." : "Disband"}
+                    {isDisbanding ? "Disbanding" : "Disband"}
                   </span>
                 </Button>
               }
@@ -902,13 +900,13 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
             <Confirm
               id={`update-${type.toLowerCase()}-orders`}
               title="Update Orders"
-              proceed_label={isUpdatingNotice ? "Updating..." : "Submit"}
+              proceed_label={isUpdatingNotice ? "Updating" : "Submit"}
               disabled={isUpdatingNotice}
               confirmDisabled={isUpdatingNotice}
               button={
                 <Button
                   id={`edit-${type.toLowerCase()}-orders`}
-                  hoverText={isUpdatingNotice ? "Updating Orders" : "Edit Orders"}
+                  hoverText={isUpdatingNotice ? "Updating" : "Edit Orders"}
                   disabled={isUpdatingNotice}
                   loading={isUpdatingNotice}
                   aria-busy={isUpdatingNotice}
@@ -920,7 +918,7 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
                     role={isUpdatingNotice ? "status" : undefined}
                     aria-live="polite"
                   >
-                    {isUpdatingNotice ? "Updating orders..." : `Edit ${title}`}
+                    {isUpdatingNotice ? "Updating" : `Edit ${title}`}
                   </span>
                 </Button>
               }

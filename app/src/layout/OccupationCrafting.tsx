@@ -685,7 +685,7 @@ export default function OccupationCrafting() {
                         <Modal
                           title="Imbue Item"
                           proceed_label="Imbue Item"
-                          proceed_loading_label={`Imbuing ${pendingImbueRequest?.targetName ?? selectedImbuableItem.item?.name ?? "item"}…`}
+                          proceed_loading_label="Imbuing"
                           isOpen={isImbueModalOpen}
                           setIsOpen={setIsImbueModalOpen}
                           isValid={false}
@@ -891,11 +891,7 @@ export default function OccupationCrafting() {
             }
           }}
           proceed_label="Remove"
-          proceed_loading_label={
-            pendingRemoveImbuement
-              ? `Removing ${pendingRemoveImbuement.crystalName}…`
-              : "Removing imbuement…"
-          }
+          proceed_loading_label="Removing"
           confirmClassName="bg-red-600 text-white hover:bg-red-700"
           isLoading={pendingRemoveImbuement !== null}
           keepOpenOnAccept
@@ -920,8 +916,7 @@ export default function OccupationCrafting() {
               )}
               {pendingRemoveImbuement && (
                 <p role="status" aria-live="polite" className="text-sm">
-                  Removing {pendingRemoveImbuement.crystalName} from{" "}
-                  {pendingRemoveImbuement.targetName}…
+                  Removing
                 </p>
               )}
             </div>

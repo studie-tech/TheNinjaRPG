@@ -171,7 +171,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
             allowImageUpload={true}
             onAccept={handleItemSubmit}
             submitLoading={isUpdating}
-            submitLoadingText="Saving item…"
+            submitLoadingText="Saving"
           />
         )}
         {item && <ItemVariantsEditor itemId={item.id} />}
@@ -417,7 +417,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                             disabled={isDeleting}
                             loading={isDeleting}
                           >
-                            {isDeleting ? "Deleting…" : "Delete"}
+                            {isDeleting ? "Deleting" : "Delete"}
                           </Button>
                         }
                         onAccept={() => deleteVariant(v.id)}
@@ -590,7 +590,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                 (editingVariant?.id ? deletingVariantIds.has(editingVariant.id) : false)
               }
             >
-              {upsert.isPending ? "Saving..." : "Save Variant"}
+              {upsert.isPending ? "Saving" : "Save Variant"}
             </Button>
             <Button
               type="button"

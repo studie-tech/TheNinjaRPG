@@ -223,10 +223,10 @@ export default function MissionHall({ userData }: MissionHallProps) {
         </>
       )}
 
-      {isPending && <Loader explanation="Accepting..." />}
+      {isPending && <Loader explanation="Accepting" />}
       {hasUnrefreshedCommittedStart && (
         <div role="status" aria-live="polite">
-          <Loader explanation="Quest started. Updating missions…" />
+          <Loader explanation="Updating" />
         </div>
       )}
       {currentQuest && currentTracker && (

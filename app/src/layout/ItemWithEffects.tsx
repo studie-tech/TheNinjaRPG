@@ -190,7 +190,7 @@ const QuestCloneControl: React.FC<{ source: QuestCloneSource }> = ({ source }) =
             if (!isOpen) setConfirmedSource(null);
           }}
           proceed_label="Clone quest"
-          proceed_loading_label="Cloning quest…"
+          proceed_loading_label="Cloning"
           isLoading={isPending}
           keepOpenOnAccept
           onAccept={(event) => {
@@ -273,7 +273,7 @@ const AiCloneControl: React.FC<{ source: AiCloneSource }> = ({ source }) => {
             if (!isOpen) setConfirmedSource(null);
           }}
           proceed_label="Clone AI"
-          proceed_loading_label="Cloning AI…"
+          proceed_loading_label="Cloning"
           isLoading={isPending}
           keepOpenOnAccept
           onAccept={(event) => {
@@ -358,7 +358,7 @@ const ItemCloneControl: React.FC<{ source: ItemCloneSource }> = ({ source }) => 
             if (!isOpen) setConfirmedSource(null);
           }}
           proceed_label="Clone item"
-          proceed_loading_label="Cloning item…"
+          proceed_loading_label="Cloning"
           isLoading={isPending}
           keepOpenOnAccept
           onAccept={(event) => {

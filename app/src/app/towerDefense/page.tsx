@@ -547,17 +547,15 @@ const TowerDefensePage: React.FC = () => {
                 )}
                 {isReturningToLobby
                   ? isClaimingRewards
-                    ? "Claiming rewards…"
-                    : "Returning…"
+                    ? "Claiming"
+                    : "Returning"
                   : gameState.error && (gameState.finalPointsEarned ?? 0) > 0
                     ? "Try claiming again"
                     : "Return to Lobby"}
               </Button>
               {isReturningToLobby && (
                 <p className="mt-2 text-muted-foreground text-sm" role="status">
-                  {isClaimingRewards
-                    ? "Claiming rewards and saving your result…"
-                    : "Returning to the lobby…"}
+                  {isClaimingRewards ? "Claiming" : "Returning"}
                 </p>
               )}
             </div>

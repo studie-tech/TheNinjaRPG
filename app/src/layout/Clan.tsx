@@ -291,7 +291,7 @@ export const ClanOrders: React.FC<ClanOrdersProps> = (props) => {
                 id="create"
                 disabled={isUpdatingOrders}
                 aria-busy={isUpdatingOrders}
-                aria-label={isUpdatingOrders ? "Updating orders…" : "Update orders"}
+                aria-label={isUpdatingOrders ? "Updating" : "Update orders"}
                 onClick={() => setIsOrderModalOpen(true)}
               >
                 {isUpdatingOrders ? (
@@ -306,7 +306,7 @@ export const ClanOrders: React.FC<ClanOrdersProps> = (props) => {
                 isOpen={isOrderModalOpen}
                 setIsOpen={setIsOrderModalOpen}
                 proceed_label="Submit"
-                proceed_loading_label="Updating orders…"
+                proceed_loading_label="Updating"
                 isLoading={isUpdatingOrders}
                 keepOpenOnAccept
                 onAccept={() => void onUpdateOrder()}
@@ -619,11 +619,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                 >
                   <PopoverTrigger
                     disabled={isKickingTarget}
-                    aria-label={
-                      isKickingTarget
-                        ? `Kicking ${q.user.username}…`
-                        : `View ${q.user.username}`
-                    }
+                    aria-label={isKickingTarget ? "Kicking" : `View ${q.user.username}`}
                   >
                     <AvatarImage
                       className={cn(border, isKickingTarget && "opacity-40")}
@@ -675,9 +671,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                               ) : (
                                 <DoorOpen className="mr-2 h-4 w-4" aria-hidden />
                               )}
-                              {isKickingTarget
-                                ? `Kicking ${q.user.username}…`
-                                : "Proceed"}
+                              {isKickingTarget ? "Kicking" : "Proceed"}
                             </Button>
                             <Button
                               variant="outline"
@@ -689,7 +683,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                           </div>
                           {isKickingTarget && (
                             <span className="sr-only" role="status" aria-live="polite">
-                              Kicking {q.user.username}…
+                              Kicking
                             </span>
                           )}
                         </>
@@ -731,7 +725,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                     aria-live="polite"
                   >
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    <span className="sr-only">Kicking {q.user.username}…</span>
+                    <span className="sr-only">Kicking</span>
                   </span>
                 )}
               </div>
@@ -750,9 +744,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                   disabled={joinDisabled}
                   aria-busy={isJoiningThisSlot}
                   aria-label={
-                    isJoiningThisSlot
-                      ? `Joining ${clan.name} battle…`
-                      : `Join ${clan.name} battle`
+                    isJoiningThisSlot ? "Joining" : `Join ${clan.name} battle`
                   }
                 >
                   {isJoiningThisSlot ? (
@@ -851,7 +843,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
         countdown: (
           <div className="flex flex-col gap-1">
             {isInitiating ? (
-              <Loader explanation="Starting battle" />
+              <Loader explanation="Starting" />
             ) : (
               inBattle &&
               !hasStarted && (
@@ -870,7 +862,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                     className="w-full"
                     disabled={isLeavingBattle}
                     aria-busy={isLeavingBattle}
-                    aria-label={isLeavingBattle ? "Leaving clan battle…" : undefined}
+                    aria-label={isLeavingBattle ? "Leaving" : undefined}
                     onClick={() => void onLeave(battle.id)}
                   >
                     {isLeavingBattle ? (
@@ -878,7 +870,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                     ) : (
                       <DoorOpen className="mr-2 h-6 w-6" aria-hidden />
                     )}
-                    {isLeavingBattle ? "Leaving…" : "Leave"}
+                    {isLeavingBattle ? "Leaving" : "Leave"}
                   </Button>
                 </>
               )
@@ -928,9 +920,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                 id="create"
                 disabled={isChallenging}
                 aria-busy={isChallenging}
-                aria-label={
-                  isChallenging ? "Sending challenge…" : `Challenge ${groupLabel}`
-                }
+                aria-label={isChallenging ? "Sending" : `Challenge ${groupLabel}`}
                 onClick={() => setIsChallengeModalOpen(true)}
               >
                 {isChallenging ? (
@@ -945,7 +935,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                 isOpen={isChallengeModalOpen}
                 setIsOpen={setIsChallengeModalOpen}
                 proceed_label="Proceed"
-                proceed_loading_label="Sending challenge…"
+                proceed_loading_label="Sending"
                 proceedDisabled={!targetClan}
                 isLoading={isChallenging}
                 keepOpenOnAccept
@@ -1553,9 +1543,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 disabled={isEditingColor}
                 aria-busy={isEditingColor}
                 aria-label={
-                  isEditingColor
-                    ? `Updating ${groupLabel.toLowerCase()} color…`
-                    : `Edit ${groupLabel.toLowerCase()} color`
+                  isEditingColor ? "Updating" : `Edit ${groupLabel.toLowerCase()} color`
                 }
                 onClick={() => setIsColorModalOpen(true)}
               >
@@ -1569,7 +1557,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 id="edit-clan-color"
                 title={`Edit ${groupLabel} Color`}
                 proceed_label="Submit"
-                proceed_loading_label={`Updating ${groupLabel.toLowerCase()} color…`}
+                proceed_loading_label="Updating"
                 isOpen={isColorModalOpen}
                 setIsOpen={setIsColorModalOpen}
                 isLoading={isEditingColor}
@@ -1613,9 +1601,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 hoverText={`Edit ${groupLabel}`}
                 disabled={isEditBusy}
                 aria-busy={isEditBusy}
-                aria-label={
-                  isEditingClan ? `Saving ${groupLabel.toLowerCase()}…` : undefined
-                }
+                aria-label={isEditingClan ? "Saving" : undefined}
                 onClick={() => setIsEditModalOpen(true)}
               >
                 {isEditingClan ? (
@@ -1630,11 +1616,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 isOpen={isEditModalOpen}
                 setIsOpen={setIsEditModalOpen}
                 proceed_label="Submit"
-                proceed_loading_label={
-                  isUploadingClanImage
-                    ? "Uploading image…"
-                    : `Saving ${groupLabel.toLowerCase()}…`
-                }
+                proceed_loading_label={isUploadingClanImage ? "Uploading" : "Saving"}
                 isValid={editForm.formState.isValid}
                 isLoading={isEditBusy}
                 keepOpenOnAccept
@@ -1734,9 +1716,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 disabled={isLeavingClan}
                 aria-busy={isLeavingClan}
                 aria-label={
-                  isLeavingClan
-                    ? `Leaving ${groupLabel.toLowerCase()}…`
-                    : `Leave ${groupLabel.toLowerCase()}`
+                  isLeavingClan ? "Leaving" : `Leave ${groupLabel.toLowerCase()}`
                 }
                 onClick={() => setIsLeaveModalOpen(true)}
               >
@@ -1752,7 +1732,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 isOpen={isLeaveModalOpen}
                 setIsOpen={setIsLeaveModalOpen}
                 proceed_label={`Leave ${groupLabel}`}
-                proceed_loading_label={`Leaving ${groupLabel.toLowerCase()}…`}
+                proceed_loading_label="Leaving"
                 confirmClassName="bg-red-600 text-white hover:bg-red-700"
                 isLoading={isLeavingClan}
                 keepOpenOnAccept
@@ -1895,9 +1875,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                         disabled={isDonationBusy || donationCapacity === 0}
                         aria-busy={isDonationBusy}
                         aria-label={
-                          isDonationBusy
-                            ? "Donating reputation points…"
-                            : "Donate reputation points"
+                          isDonationBusy ? "Donating" : "Donate reputation points"
                         }
                         onClick={() => setIsDonateModalOpen(true)}
                       >
@@ -1911,7 +1889,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                         id="donate-reputation"
                         title="Donate reputation points"
                         proceed_label="Donate"
-                        proceed_loading_label="Donating reputation…"
+                        proceed_loading_label="Donating"
                         isOpen={isDonateModalOpen}
                         setIsOpen={setIsDonateModalOpen}
                         isLoading={isDonationBusy}
@@ -2152,9 +2130,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 className="my-2 w-full"
                 disabled={isUpgradingToTown}
                 aria-busy={isUpgradingToTown}
-                aria-label={
-                  isUpgradingToTown ? "Upgrading hideout to town…" : undefined
-                }
+                aria-label={isUpgradingToTown ? "Upgrading" : undefined}
                 onClick={() => setIsTownUpgradeModalOpen(true)}
               >
                 {isUpgradingToTown ? (
@@ -2162,13 +2138,13 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 ) : (
                   <Star className="mr-2 h-6 w-6" aria-hidden />
                 )}
-                {isUpgradingToTown ? "Upgrading hideout to town…" : "Upgrade to Town"}
+                {isUpgradingToTown ? "Upgrading" : "Upgrade to Town"}
               </Button>
               <Modal
                 id="upgrade-hideout-to-town"
                 title="Upgrade Hideout to Town"
                 proceed_label="Upgrade to Town"
-                proceed_loading_label="Upgrading hideout to town…"
+                proceed_loading_label="Upgrading"
                 confirmClassName="bg-amber-600 text-white hover:bg-amber-700"
                 isOpen={isTownUpgradeModalOpen}
                 setIsOpen={setIsTownUpgradeModalOpen}
@@ -2213,7 +2189,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 aria-busy={isResigningLeadership}
                 aria-label={
                   isResigningLeadership
-                    ? `Demoting ${userData.username}…`
+                    ? "Demoting"
                     : `Resign as ${isLeader ? "leader" : "co-leader"}`
                 }
                 onClick={() => setIsResignModalOpen(true)}
@@ -2224,7 +2200,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   <DoorClosed className="mr-2 h-6 w-6" aria-hidden />
                 )}
                 {isResigningLeadership
-                  ? `Demoting ${userData.username}…`
+                  ? "Demoting"
                   : `Resign as ${isLeader ? "Leader" : "Co-Leader"}`}
               </Button>
               <Modal
@@ -2233,7 +2209,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 isOpen={isResignModalOpen}
                 setIsOpen={setIsResignModalOpen}
                 proceed_label="Resign"
-                proceed_loading_label={`Demoting ${userData.username}…`}
+                proceed_loading_label="Demoting"
                 confirmClassName="bg-red-600 text-white hover:bg-red-700"
                 isLoading={isResigningLeadership}
                 keepOpenOnAccept
@@ -2271,7 +2247,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               id="clear-clan-leadership"
               title="Clear Leadership"
               proceed_label="Clear All"
-              proceed_loading_label="Clearing leadership roles…"
+              proceed_loading_label="Clearing"
               confirmClassName="bg-red-600 text-white hover:bg-red-700"
               disabled={isClearingLeadership}
               isLoading={isClearingLeadership}
@@ -2284,7 +2260,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   aria-busy={isClearingLeadership}
                   aria-label={
                     isClearingLeadership
-                      ? "Clearing leadership roles…"
+                      ? "Clearing"
                       : "Clear all delegated leadership roles"
                   }
                 >
@@ -2293,9 +2269,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   ) : (
                     <XCircle className="mr-2 h-5 w-5" aria-hidden />
                   )}
-                  {isClearingLeadership
-                    ? "Clearing leadership roles…"
-                    : "Clear Leadership"}
+                  {isClearingLeadership ? "Clearing" : "Clear Leadership"}
                 </Button>
               }
               onAccept={() => void onClearLeadership()}
@@ -2326,7 +2300,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 aria-busy={isInstantlyJoiningAndLeading}
                 aria-label={
                   isInstantlyJoiningAndLeading
-                    ? `Taking leadership of ${clanData.name}…`
+                    ? "Promoting"
                     : `Take leadership of ${clanData.name}`
                 }
                 onClick={() => setIsInstantJoinModalOpen(true)}
@@ -2336,9 +2310,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 ) : (
                   <Swords className="mr-2 h-5 w-5" aria-hidden />
                 )}
-                {isInstantlyJoiningAndLeading
-                  ? `Taking leadership of ${clanData.name}…`
-                  : "Take Leadership"}
+                {isInstantlyJoiningAndLeading ? "Promoting" : "Take Leadership"}
               </Button>
               <Modal
                 id="instant-join-lead"
@@ -2348,7 +2320,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                     ? "Take Leadership"
                     : "Join & Take Leadership"
                 }
-                proceed_loading_label={`Taking leadership of ${clanData.name}…`}
+                proceed_loading_label="Promoting"
                 confirmClassName="bg-amber-600 text-white hover:bg-amber-700"
                 isOpen={isInstantJoinModalOpen}
                 setIsOpen={setIsInstantJoinModalOpen}
@@ -2780,9 +2752,9 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
                     aria-busy={isThisMemberBeingKicked}
                     aria-label={
                       isThisMemberBeingKicked
-                        ? `Kicking ${member.username}…`
+                        ? "Kicking"
                         : isThisMemberBeingPromoted
-                          ? `Promoting ${member.username}…`
+                          ? "Promoting"
                           : `Kick ${member.username}`
                     }
                     onClick={(event) => {
@@ -2812,7 +2784,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
                       aria-busy={isThisMemberBeingPromoted}
                       aria-label={
                         isThisMemberBeingPromoted
-                          ? `Promoting ${member.username}…`
+                          ? "Promoting"
                           : `Promote ${member.username}`
                       }
                       onClick={(event) => {
@@ -2840,7 +2812,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
                 aria-busy={isThisMemberBeingDemoted}
                 aria-label={
                   isThisMemberBeingDemoted
-                    ? `Demoting ${member.username}…`
+                    ? "Demoting"
                     : member.userId === userId
                       ? `Step down ${member.username}`
                       : `Demote ${member.username}`
@@ -2912,9 +2884,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
               : `Demote ${demoteTarget?.username ?? "member"}?`
         }
         proceed_label="Demote member"
-        proceed_loading_label={
-          demoteTarget ? `Demoting ${demoteTarget.username}…` : "Demoting member…"
-        }
+        proceed_loading_label="Demoting"
         confirmClassName="bg-red-600 text-white hover:bg-red-700"
         isOpen={demoteTarget !== undefined}
         setIsOpen={(nextOpen) => {
@@ -2989,9 +2959,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
         }
         title={promoteTarget ? `Promote ${promoteTarget.username}?` : "Promote member?"}
         proceed_label="Promote member"
-        proceed_loading_label={
-          promoteTarget ? `Promoting ${promoteTarget.username}…` : "Promoting member…"
-        }
+        proceed_loading_label="Promoting"
         isOpen={promoteTarget !== undefined}
         setIsOpen={(nextOpen) => {
           const shouldOpen =
@@ -3084,9 +3052,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
         id={kickTarget ? `kick-${kickTarget.userId}-confirm` : "kick-member-confirm"}
         title={kickTarget ? `Kick ${kickTarget.username}?` : "Kick member?"}
         proceed_label="Kick member"
-        proceed_loading_label={
-          kickTarget ? `Kicking ${kickTarget.username}…` : "Kicking member…"
-        }
+        proceed_loading_label="Kicking"
         confirmClassName="bg-red-600 text-white hover:bg-red-700"
         isOpen={kickTarget !== undefined}
         setIsOpen={(nextOpen) => {

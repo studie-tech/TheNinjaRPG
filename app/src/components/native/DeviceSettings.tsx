@@ -174,7 +174,7 @@ export default function DeviceSettings() {
                         aria-live="polite"
                         className="text-muted-foreground text-xs"
                       >
-                        Saving…
+                        Saving
                       </span>
                     )}
                     <Switch

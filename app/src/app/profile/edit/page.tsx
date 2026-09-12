@@ -723,7 +723,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                       <span role="status" aria-live="polite">
-                        Saving...
+                        Saving
                       </span>
                     </>
                   ) : (
@@ -760,7 +760,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                   className="inline-flex items-center gap-1 text-muted-foreground text-sm"
                 >
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  Saving...
+                  Saving
                 </span>
               )}
             </div>
@@ -925,7 +925,7 @@ const Marriage: React.FC = () => {
                 id={`divorce-${user.userId}`}
                 title={`Divorce ${user.username}?`}
                 proceed_label="Divorce"
-                proceed_loading_label={`Divorcing ${user.username}...`}
+                proceed_loading_label="Divorcing"
                 confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 isLoading={isDivorcing}
                 keepOpenOnAccept
@@ -1031,7 +1031,7 @@ const NewAiAvatar: React.FC = () => {
     enabled: !!userData,
   });
 
-  if (createAvatar.isPending) return <Loader explanation="Processing avatar..." />;
+  if (createAvatar.isPending) return <Loader explanation="Processing" />;
 
   return (
     <div className="flex">
@@ -1156,7 +1156,7 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
   });
 
   const loading = updateAvatar.isPending || deleteAvatar.isPending;
-  if (loading) return <Loader explanation="Processing..." />;
+  if (loading) return <Loader explanation="Processing" />;
 
   return (
     <>
@@ -1291,7 +1291,7 @@ const SwapVillage: React.FC = () => {
         }
       >
         {village && !isSwapping && <ItemWithEffects item={village} key={village.id} />}
-        {isSwapping && village && <Loader explanation={`Purchasing ${village.name}`} />}
+        {isSwapping && village && <Loader explanation="Purchasing" />}
       </Modal>
     </div>
   );
@@ -1448,9 +1448,7 @@ const SwapBloodline: React.FC = () => {
         {bloodline && !isSwapping && (
           <ItemWithEffects item={bloodline} key={bloodline.id} />
         )}
-        {isSwapping && bloodline && (
-          <Loader explanation={`Purchasing ${bloodline.name}`} />
-        )}
+        {isSwapping && bloodline && <Loader explanation="Purchasing" />}
       </Modal>
     </div>
   );
@@ -1535,7 +1533,7 @@ const ResetStats: React.FC = () => {
           isRedistribution={true}
           showWrapper={false}
           isPending={isPending}
-          pendingLabel="Redistributing…"
+          pendingLabel="Redistributing"
         />
       )}
     </div>
@@ -1712,7 +1710,7 @@ const AttributeChange: React.FC = () => {
               {isRemoving ? (
                 <>
                   <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                  <span aria-live="polite">Removing {attribute}…</span>
+                  <span aria-live="polite">Removing</span>
                 </>
               ) : (
                 <>
@@ -1746,7 +1744,7 @@ const AttributeChange: React.FC = () => {
                 {pendingLabel ? (
                   <>
                     <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                    <span aria-live="polite">Adding {pendingLabel}…</span>
+                    <span aria-live="polite">Adding</span>
                   </>
                 ) : (
                   <>
@@ -1792,7 +1790,7 @@ const AttributeChange: React.FC = () => {
             {pendingAttributeAdditions.Eyes ? (
               <>
                 <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                <span aria-live="polite">Adding…</span>
+                <span aria-live="polite">Adding</span>
               </>
             ) : (
               <ChevronsLeft className="h-5 w-5" />
@@ -1834,7 +1832,7 @@ const AttributeChange: React.FC = () => {
             {pendingAttributeAdditions.Skin ? (
               <>
                 <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                <span aria-live="polite">Adding…</span>
+                <span aria-live="polite">Adding</span>
               </>
             ) : (
               <ChevronsLeft className="h-5 w-5" />
@@ -1876,7 +1874,7 @@ const AttributeChange: React.FC = () => {
             {pendingAttributeAdditions.Hair ? (
               <>
                 <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                <span aria-live="polite">Adding…</span>
+                <span aria-live="polite">Adding</span>
               </>
             ) : (
               <ChevronsLeft className="h-5 w-5" />
@@ -1906,7 +1904,7 @@ const OwnNindoChange: React.FC = () => {
     },
   });
 
-  if (isUpdating) return <Loader explanation="Updating nindo..." />;
+  if (isUpdating) return <Loader explanation="Updating" />;
   if (!userData) return <Loader explanation="Loading profile..." />;
 
   return (
@@ -1975,7 +1973,7 @@ const RerollElement: React.FC = () => {
     });
 
   // Loaders
-  if (isRolling) return <Loader explanation="Rerolling elements..." />;
+  if (isRolling) return <Loader explanation="Rerolling" />;
 
   // Guards
   const canAfford = userData && userData.reputationPoints >= COST_REROLL_ELEMENT;
@@ -2128,7 +2126,7 @@ const NameChange: React.FC = () => {
             isOpen={showNameChangeConfirm}
             setIsOpen={setShowNameChangeConfirm}
             proceed_label="Change username"
-            proceed_loading_label="Changing username…"
+            proceed_loading_label="Changing"
             isLoading={isChangingUsername}
             keepOpenOnAccept
             onAccept={(e) => {
@@ -2254,7 +2252,7 @@ const CustomTitle: React.FC = () => {
             isOpen={showCustomTitleConfirm}
             setIsOpen={setShowCustomTitleConfirm}
             proceed_label="Set custom title"
-            proceed_loading_label="Setting custom title…"
+            proceed_loading_label="Setting"
             isLoading={isUpdatingCustomTitle}
             keepOpenOnAccept
             onAccept={(event) => {
@@ -2566,7 +2564,7 @@ const ChangeGender: React.FC = () => {
             isOpen={showGenderConfirmation}
             setIsOpen={setShowGenderConfirmation}
             proceed_label="Set new gender"
-            proceed_loading_label="Changing gender…"
+            proceed_loading_label="Changing"
             isLoading={isChangingGender}
             keepOpenOnAccept
             onAccept={(event) => {

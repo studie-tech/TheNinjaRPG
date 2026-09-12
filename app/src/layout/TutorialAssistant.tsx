@@ -191,8 +191,8 @@ const AssistantDialog: React.FC<{
               }}
               disabled={isBusy}
               className="absolute top-2 right-2 h-6 w-6 p-0 opacity-50 hover:opacity-100"
-              title={isBusy ? "Turning off tutorial" : "Disable tutorial"}
-              aria-label={isBusy ? "Turning off tutorial" : "Disable tutorial"}
+              title={isBusy ? "Disabling" : "Disable tutorial"}
+              aria-label={isBusy ? "Disabling" : "Disable tutorial"}
             >
               {isBusy ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -208,7 +208,7 @@ const AssistantDialog: React.FC<{
               className="mb-3 flex items-center gap-2 font-medium text-muted-foreground text-sm"
             >
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              Turning off tutorial…
+              Disabling
             </div>
           )}
           {errorMessage && !isBusy && (
@@ -307,7 +307,7 @@ const CancelTutorialConfirmDialog: React.FC<{
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                     <span role="status" aria-live="polite">
-                      Turning off tutorial…
+                      Disabling
                     </span>
                   </>
                 ) : (

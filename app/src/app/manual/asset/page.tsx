@@ -72,7 +72,7 @@ export default function ManualAssets() {
               aria-label={isCreating ? "Creating asset" : "Create asset"}
             >
               {!isCreating && <FilePlus className="h-5 w-5" />}
-              {isCreating && <span aria-live="polite">Creating…</span>}
+              {isCreating && <span aria-live="polite">Creating</span>}
             </Button>
           )}
           <GameAssetFiltering state={state} />
@@ -255,7 +255,7 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
                   role="status"
                   aria-live="polite"
                 >
-                  <Loader explanation="Deleting…" noPadding size={24} />
+                  <Loader explanation="Deleting" noPadding size={24} />
                 </div>
               )}
             </div>
@@ -284,7 +284,7 @@ const AssetsContent: React.FC<{ state: ReturnType<typeof useFiltering> }> = (pro
               />
             </div>
           )}
-          {isPending && <Loader explanation={`Processing ${asset.name}`} />}
+          {isPending && <Loader explanation="Processing" />}
         </Modal>
       )}
     </>

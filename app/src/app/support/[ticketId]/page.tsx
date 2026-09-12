@@ -147,7 +147,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
               { ticketId: params.ticketId, status: "IN_PROGRESS" },
               {
                 kind: "comment-status",
-                label: "Updating status after your reply…",
+                label: "Updating",
               },
             );
           });
@@ -265,9 +265,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                       disabled={escalateToGithub.isPending}
                     >
                       <SiGithub className="mr-2 text-black" size={10} />
-                      {escalateToGithub.isPending
-                        ? "Escalating..."
-                        : "Escalate to GitHub"}
+                      {escalateToGithub.isPending ? "Escalating" : "Escalate to GitHub"}
                     </Button>
                   </div>
                 )}
@@ -326,7 +324,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                             { ticketId: params.ticketId, status },
                             {
                               kind: "status",
-                              label: `Updating status to ${status.replace("_", " ")}…`,
+                              label: "Updating",
                             },
                           );
                           if (accepted) setStatusOpen(false);
@@ -380,7 +378,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                         onClick={() => {
                           const accepted = startTicketUpdate(
                             { ticketId: params.ticketId, priority: p },
-                            { kind: "priority", label: `Updating priority to ${p}…` },
+                            { kind: "priority", label: "Updating" },
                           );
                           if (accepted) setPriorityOpen(false);
                         }}
@@ -433,7 +431,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                             { ticketId: params.ticketId, category: c },
                             {
                               kind: "category",
-                              label: `Updating category to ${c.replace("_", " ")}…`,
+                              label: "Updating",
                             },
                           );
                           if (accepted) setCategoryOpen(false);
@@ -488,7 +486,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                             ticketId: params.ticketId,
                             assignedToUserId: undefined,
                           },
-                          { kind: "assignment", label: "Unassigning ticket…" },
+                          { kind: "assignment", label: "Unassigning" },
                         );
                         if (accepted) setAssignOpen(false);
                       }}
@@ -510,7 +508,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                             },
                             {
                               kind: "assignment",
-                              label: `Assigning to ${staff.username}…`,
+                              label: "Assigning",
                             },
                           );
                           if (accepted) setAssignOpen(false);
@@ -611,7 +609,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                                 ticketId: params.ticketId,
                                 tags: [...ticket.tags, tagToAdd],
                               },
-                              { kind: "tag", label: `Adding tag ${tagToAdd}…` },
+                              { kind: "tag", label: "Adding" },
                               () => {
                                 setNewTag("");
                                 setTagOpen(false);
@@ -626,7 +624,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                               className="mr-2 h-4 w-4 animate-spin"
                               aria-hidden
                             />
-                            Adding…
+                            Adding
                           </>
                         ) : (
                           "Add"
@@ -661,7 +659,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
             { ticketId: params.ticketId, status: "IN_PROGRESS" },
             {
               kind: "comment-status",
-              label: "Updating status after your reply…",
+              label: "Updating",
             },
           );
           if (!accepted) queuedCommentStatusRef.current = true;

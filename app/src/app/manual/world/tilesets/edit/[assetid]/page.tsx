@@ -139,7 +139,7 @@ const SingleEditMapAsset: React.FC<SingleEditMapAssetProps> = (props) => {
         showSubmit={true}
         buttonTxt="Save to Database"
         submitLoading={isUpdating}
-        submitLoadingText="Saving map asset..."
+        submitLoadingText="Saving"
         type="mapAsset"
         relationId={asset.id}
         allowImageUpload={true}

@@ -203,7 +203,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
     <div aria-busy={isUpdating}>
       {isUpdating && (
         <span role="status" aria-live="polite" className="sr-only">
-          Saving quest…
+          Saving
         </span>
       )}
       <ContentBox
@@ -286,7 +286,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
             onAccept={handleQuestSubmit}
             submitDisabled={currentValues.consecutiveObjectives && !isFlowValid}
             submitLoading={isUpdating}
-            submitLoadingText="Saving quest…"
+            submitLoadingText="Saving"
           />
         )}
       </ContentBox>

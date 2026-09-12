@@ -167,7 +167,7 @@ export default function Recruit() {
             {isPending ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                <span>Claiming...</span>
+                <span>Claiming</span>
               </>
             ) : (
               <>
@@ -509,7 +509,7 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
         {reviewComplete
           ? "Reviewed"
           : reviewPromotion.isPending
-            ? "Reviewing..."
+            ? "Reviewing"
             : "Review"}
       </Button>
       <Modal
@@ -518,7 +518,7 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
         isOpen={dialogOpen}
         setIsOpen={setDialogOpen}
         proceed_label="Award Points"
-        proceed_loading_label="Awarding points..."
+        proceed_loading_label="Awarding"
         isLoading={reviewPromotion.isPending}
         keepOpenOnAccept
         onAccept={review}
