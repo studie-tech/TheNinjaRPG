@@ -91,6 +91,12 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
             utils.comments.getForumComments.invalidate(),
           ]);
         },
+        onError: (error) => {
+          showMutationToast({
+            success: false,
+            message: error.message || "Could not submit report",
+          });
+        },
         onSettled: () => {
           if (pendingRequestRef.current !== requestId) return;
           pendingRequestRef.current = null;

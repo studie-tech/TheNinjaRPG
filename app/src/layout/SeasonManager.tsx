@@ -233,7 +233,6 @@ export function SeasonManager() {
                     </DialogHeader>
                     <SeasonForm
                       seasonId={selectedSeason.id}
-                      seasonRevision={new Date(selectedSeason.updatedAt)}
                       initialData={{
                         name: selectedSeason.name,
                         description: selectedSeason.description,

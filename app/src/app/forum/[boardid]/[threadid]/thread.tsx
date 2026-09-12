@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
@@ -44,12 +44,16 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
   const [pendingDeletionIds, setPendingDeletionIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const pendingDeletionStartedAtRef = useRef(new Map<string, number>());
   const thread_id = threadId;
   const utils = api.useUtils();
 
   const {
     data: comments,
+    dataUpdatedAt,
+    isPlaceholderData,
     isPending: isPendingComments,
+    isSuccess: isCommentsSuccess,
     refetch,
   } = api.comments.getForumComments.useQuery(
     { thread_id: thread_id, limit: limit, cursor: page },
@@ -79,6 +83,24 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
     allComments?.length === 1 && comments?.nextCursor === null && totalComments > limit;
   const belowForumMinLevel = (userData?.level ?? 0) < FORUM_MIN_LEVEL;
 
+  useEffect(() => {
+    if (!isCommentsSuccess || isPlaceholderData || pendingDeletionIds.size === 0) {
+      return;
+    }
+
+    setPendingDeletionIds((current) => {
+      const next = new Set(current);
+      for (const commentId of current) {
+        const startedAt = pendingDeletionStartedAtRef.current.get(commentId);
+        if (startedAt !== undefined && dataUpdatedAt >= startedAt) {
+          next.delete(commentId);
+          pendingDeletionStartedAtRef.current.delete(commentId);
+        }
+      }
+      return next.size === current.size ? current : next;
+    });
+  }, [dataUpdatedAt, isCommentsSuccess, isPlaceholderData, pendingDeletionIds.size]);
+
   const handleCommentDeleted = useCallback(
     (commentId: string) => {
       const expectedTotal = Math.max(0, totalComments - 1);
@@ -89,6 +111,10 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
       });
       setPendingDeletionIds((current) => {
         if (current.has(commentId)) return current;
+        pendingDeletionStartedAtRef.current.set(
+          commentId,
+          Math.max(Date.now(), dataUpdatedAt + 1),
+        );
         return new Set(current).add(commentId);
       });
       // Decide the destination from the known pre-delete count, rather than a
@@ -112,18 +138,10 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
       // This fetch starts only after the mutation has confirmed this exact id was
       // deleted. Its total therefore incorporates that deletion regardless of
       // unrelated comments being created or removed at the same time.
-      void refetch({ throwOnError: true })
-        .then(() => {
-          setPendingDeletionIds((current) => {
-            if (!current.has(commentId)) return current;
-            const next = new Set(current);
-            next.delete(commentId);
-            return next;
-          });
-        })
-        .catch(() => undefined);
+      void refetch({ throwOnError: true }).catch(() => undefined);
     },
     [
+      dataUpdatedAt,
       isSoleCommentOnLastPage,
       limit,
       page,

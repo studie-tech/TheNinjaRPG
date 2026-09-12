@@ -19,6 +19,7 @@ export const useBadgeEditForm = (badge: Badge, refetch: () => void) => {
     criteriaMode: "all",
     values: badge,
     defaultValues: badge,
+    resetOptions: { keepDirtyValues: true },
     resolver: zodResolver(BadgeValidator),
   });
 
