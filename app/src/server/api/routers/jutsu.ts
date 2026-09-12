@@ -806,7 +806,13 @@ export const jutsuRouter = createTRPCRouter({
       // one commit. Otherwise a later write failure can leave a partial update
       // that the client reasonably believes is safe to retry.
       await ctx.drizzle.transaction(async (tx) => {
-        await tx.update(jutsu).set(input.data).where(eq(jutsu.id, input.id));
+        await tx
+          .update(jutsu)
+          .set({
+            ...input.data,
+            updatedAt: new Date(Math.max(Date.now(), entry.updatedAt.getTime() + 1)),
+          })
+          .where(eq(jutsu.id, input.id));
         await tx.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,

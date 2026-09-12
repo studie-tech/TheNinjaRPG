@@ -564,7 +564,10 @@ export const itemRouter = createTRPCRouter({
       const updateCommitted = await ctx.drizzle.transaction(async (tx) => {
         const updateResult = await tx
           .update(item)
-          .set({ ...input.data, updatedAt: new Date() })
+          .set({
+            ...input.data,
+            updatedAt: new Date(Math.max(Date.now(), entry.updatedAt.getTime() + 1)),
+          })
           .where(and(eq(item.id, input.id), ...evolutionUpdateGuards));
         if (updateResult.rowsAffected === 0) return false;
 

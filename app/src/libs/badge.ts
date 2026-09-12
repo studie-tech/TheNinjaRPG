@@ -45,13 +45,13 @@ export const useBadgeEditForm = (badge: Badge, refetch: () => void) => {
     const incomingIsNewer =
       badge.id !== editorBadge.id ||
       badge.updatedAt.getTime() > editorBadge.updatedAt.getTime();
-    if (!incomingIsNewer || inFlightRef.current) return;
+    if (!incomingIsNewer || isUpdating) return;
 
     const nextBadge = copyBadge(badge);
     retryRef.current = null;
     setEditorBadge(nextBadge);
     form.reset(copyFormData(nextBadge));
-  }, [badge, editorBadge.id, editorBadge.updatedAt, form]);
+  }, [badge, editorBadge.id, editorBadge.updatedAt, form, isUpdating]);
 
   // Mutation for updating badges
   const utils = api.useUtils();

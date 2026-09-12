@@ -253,6 +253,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
     ReadonlySet<string>
   >(() => new Set());
   const variantOperationInFlightRef = React.useRef(false);
+  const [variantOperationPending, setVariantOperationPending] = React.useState(false);
 
   const setVariantDeleting = (variantId: string, deleting: boolean) => {
     const next = new Set(deletingVariantIdsRef.current);
@@ -289,6 +290,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
     },
     onSettled: () => {
       variantOperationInFlightRef.current = false;
+      setVariantOperationPending(false);
     },
   });
 
@@ -302,6 +304,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
     onSettled: (_result, _error, variables) => {
       setVariantDeleting(variables.variantId, false);
       variantOperationInFlightRef.current = false;
+      setVariantOperationPending(false);
     },
   });
 
@@ -315,11 +318,13 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
       return;
     }
     variantOperationInFlightRef.current = true;
+    setVariantOperationPending(true);
     setVariantDeleting(variantId, true);
     try {
       remove.mutate({ variantId });
     } catch (error) {
       variantOperationInFlightRef.current = false;
+      setVariantOperationPending(false);
       setVariantDeleting(variantId, false);
       throw error;
     }
@@ -360,7 +365,14 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
   const onSubmit = form.handleSubmit((data) => {
     if (variantOperationInFlightRef.current) return;
     variantOperationInFlightRef.current = true;
-    upsert.mutate({ itemId, variant: data });
+    setVariantOperationPending(true);
+    try {
+      upsert.mutate({ itemId, variant: data });
+    } catch (error) {
+      variantOperationInFlightRef.current = false;
+      setVariantOperationPending(false);
+      throw error;
+    }
   });
 
   return (
@@ -411,7 +423,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={isDeleting}
+                        disabled={variantOperationPending}
                         onClick={() => {
                           setEditingVariant({
                             ...v,
@@ -425,12 +437,12 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                       </Button>
                       <Confirm
                         title="Delete Variant"
-                        disabled={isDeleting}
+                        disabled={variantOperationPending}
                         button={
                           <Button
                             variant="destructive"
                             size="sm"
-                            disabled={isDeleting}
+                            disabled={variantOperationPending}
                             loading={isDeleting}
                           >
                             {isDeleting ? "Deleting" : "Delete"}
@@ -460,6 +472,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
       {!showForm && (variants?.length ?? 0) < MAX_ITEM_VARIANTS && (
         <Button
           variant="outline"
+          disabled={variantOperationPending}
           onClick={() => {
             setEditingVariant(null);
             setShowForm(true);
@@ -473,10 +486,9 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
         <form
           onSubmit={onSubmit}
           className="mt-2 space-y-3 rounded border p-4"
-          aria-busy={
-            editingVariant?.id ? deletingVariantIds.has(editingVariant.id) : false
-          }
+          aria-busy={variantOperationPending}
         >
+          <fieldset disabled={variantOperationPending} className="space-y-3">
           <h3 className="font-medium">
             {editingVariant ? "Edit Variant" : "New Variant"}
           </h3>
@@ -602,7 +614,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
             <Button
               type="submit"
               disabled={
-                upsert.isPending ||
+                variantOperationPending ||
                 (editingVariant?.id ? deletingVariantIds.has(editingVariant.id) : false)
               }
             >
@@ -612,7 +624,10 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
               type="button"
               variant="outline"
               disabled={
-                editingVariant?.id ? deletingVariantIds.has(editingVariant.id) : false
+                variantOperationPending ||
+                (editingVariant?.id
+                  ? deletingVariantIds.has(editingVariant.id)
+                  : false)
               }
               onClick={() => {
                 setShowForm(false);
@@ -622,6 +637,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
               Cancel
             </Button>
           </div>
+          </fieldset>
         </form>
       )}
     </div>

@@ -250,7 +250,12 @@ const sameWarRowState = (
   current.attackerWarHealthMax === expected.attackerWarHealthMax &&
   current.defenderWarHealthMax === expected.defenderWarHealthMax;
 
-class RollbackWarEndPreparation extends Error {}
+class RollbackWarEndPreparation extends Error {
+  constructor() {
+    super("War end preparation lost its claim");
+    this.name = "RollbackWarEndPreparation";
+  }
+}
 
 const isRollbackWarEndPreparation = (error: unknown): boolean => {
   let current = error;
@@ -798,10 +803,11 @@ export const handleWarEnd = async (
     return { ...activeWar, status, endedAt } as FetchActiveWarsReturnType;
   };
 
+  if (options.transaction) {
+    return await resolveInTransaction(options.transaction);
+  }
+
   try {
-    if (options.transaction) {
-      return await resolveInTransaction(options.transaction);
-    }
     return await retryOnDeadlock(() =>
       client.transaction((rawTx) =>
         resolveInTransaction(rawTx as unknown as DrizzleClient),

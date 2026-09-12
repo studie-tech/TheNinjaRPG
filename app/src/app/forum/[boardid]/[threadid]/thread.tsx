@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
@@ -41,9 +41,9 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
   const [deletedCommentIds, setDeletedCommentIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [pendingDeletionTotals, setPendingDeletionTotals] = useState<
-    Map<string, number>
-  >(() => new Map());
+  const [pendingDeletionIds, setPendingDeletionIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const thread_id = threadId;
   const utils = api.useUtils();
 
@@ -72,13 +72,7 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
   // still reports a total from before that deletion. This is deliberately not
   // tied to whether the current page contains the tombstoned id: deleting the
   // sole post on the final page immediately moves the user to the prior page.
-  const pendingDeletionCount = useMemo(
-    () =>
-      [...pendingDeletionTotals.values()].filter(
-        (observedTotal) => rawTotalComments === observedTotal,
-      ).length,
-    [pendingDeletionTotals, rawTotalComments],
-  );
+  const pendingDeletionCount = pendingDeletionIds.size;
   const totalComments = Math.max(0, rawTotalComments - pendingDeletionCount);
   const totalPages = Math.ceil(totalComments / limit);
   const isSoleCommentOnLastPage =
@@ -93,11 +87,9 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
         if (current.has(commentId)) return current;
         return new Set(current).add(commentId);
       });
-      setPendingDeletionTotals((current) => {
+      setPendingDeletionIds((current) => {
         if (current.has(commentId)) return current;
-        const next = new Map(current);
-        next.set(commentId, rawTotalComments);
-        return next;
+        return new Set(current).add(commentId);
       });
       // Decide the destination from the known pre-delete count, rather than a
       // transient placeholder returned while React Query changes page keys.
@@ -117,35 +109,30 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
           };
         },
       );
+      // This fetch starts only after the mutation has confirmed this exact id was
+      // deleted. Its total therefore incorporates that deletion regardless of
+      // unrelated comments being created or removed at the same time.
+      void refetch({ throwOnError: true })
+        .then(() => {
+          setPendingDeletionIds((current) => {
+            if (!current.has(commentId)) return current;
+            const next = new Set(current);
+            next.delete(commentId);
+            return next;
+          });
+        })
+        .catch(() => undefined);
     },
     [
       isSoleCommentOnLastPage,
       limit,
       page,
-      rawTotalComments,
+      refetch,
       thread_id,
       totalComments,
       utils.comments.getForumComments,
     ],
   );
-
-  // A lower authoritative total proves which local adjustments the server has
-  // incorporated. Retire those adjustments so a later unrelated new post can
-  // increase the count normally; the id tombstones remain as resurrection
-  // guards for any older page payload still in cache.
-  useEffect(() => {
-    setPendingDeletionTotals((current) => {
-      let changed = false;
-      const next = new Map(current);
-      for (const [commentId, observedTotal] of current) {
-        if (rawTotalComments !== observedTotal) {
-          next.delete(commentId);
-          changed = true;
-        }
-      }
-      return changed ? next : current;
-    });
-  }, [rawTotalComments]);
 
   const {
     handleSubmit,
