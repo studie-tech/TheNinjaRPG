@@ -1469,7 +1469,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                   {isMarkingReady ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                      Marking you ready…
+                      Confirming
                     </>
                   ) : hasSettledReady ? (
                     <>
@@ -1488,8 +1488,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                   aria-live="polite"
                 >
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                  Saving {activePendingLoadout.kind} loadout “
-                  {activePendingLoadout.displayName}”…
+                  Saving
                 </p>
               )}
             </div>
@@ -1664,7 +1663,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                       {isStartingArenaBattle && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                       )}
-                      {isStartingArenaBattle ? "Starting next fight…" : "Go Again"}
+                      {isStartingArenaBattle ? "Starting" : "Go Again"}
                     </Button>
 
                     <Button
@@ -1687,9 +1686,9 @@ const Combat: React.FC<CombatProps> = (props) => {
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                       )}
                       {isArenaHealPending
-                        ? "Healing and preparing next fight…"
+                        ? "Healing"
                         : hasSettledArenaHeal && isStartingArenaBattle
-                          ? "Healed — starting next fight…"
+                          ? "Starting"
                           : hasSettledArenaHeal
                             ? "Healed — use Go Again"
                             : !canHealFromCurrentStatus

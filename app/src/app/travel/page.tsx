@@ -775,8 +775,8 @@ export default function Travel() {
   ]);
 
   if (!userData) return <Loader explanation="Loading userdata" />;
-  if (isJoining) return <Loader explanation="Joining village" />;
-  if (isCreatingHideout) return <Loader explanation="Purchasing hideout" />;
+  if (isJoining) return <Loader explanation="Joining" />;
+  if (isCreatingHideout) return <Loader explanation="Purchasing" />;
 
   // Derived
   const loadedVillages = villages && villages.length > 0;
@@ -1185,7 +1185,7 @@ export default function Travel() {
                   )}
                 </div>
               )}
-              {isConsuming && <Loader explanation={`Using ${useritem.item.name}`} />}
+              {isConsuming && <Loader explanation="Using" />}
             </Modal>
           )}
         </div>
@@ -1347,9 +1347,9 @@ const StealthControls: React.FC<{
             aria-disabled={isActivatingStealth || isDeactivatingStealth}
             aria-label={
               isActivatingStealth
-                ? "Activating stealth…"
+                ? "Activating"
                 : isDeactivatingStealth
-                  ? "Deactivating stealth…"
+                  ? "Deactivating"
                   : stealthStatus?.isCurrentlyStealthed
                     ? "Deactivate stealth"
                     : "Activate stealth"
@@ -1388,9 +1388,9 @@ const StealthControls: React.FC<{
           </TooltipTrigger>
           <TooltipContent aria-live="polite">
             {isActivatingStealth
-              ? "Activating stealth…"
+              ? "Activating"
               : isDeactivatingStealth
-                ? "Deactivating stealth…"
+                ? "Deactivating"
                 : stealthStatus?.isCurrentlyStealthed
                   ? `Stealth Active (${Math.ceil(stealthDuration)}s remaining)`
                   : stealthCooldown > 0
@@ -1400,9 +1400,9 @@ const StealthControls: React.FC<{
         </Tooltip>
         <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           {isActivatingStealth
-            ? "Activating stealth…"
+            ? "Activating"
             : isDeactivatingStealth
-              ? "Deactivating stealth…"
+              ? "Deactivating"
               : ""}
         </span>
       </TooltipProvider>
@@ -1424,7 +1424,7 @@ const StealthControls: React.FC<{
                   sensoryCooldown > 0 ||
                   currentSector === undefined
                 }
-                aria-label={isScanningSensory ? "Scanning sector…" : "Scan sector"}
+                aria-label={isScanningSensory ? "Scanning" : "Scan sector"}
                 className={isScanningSensory ? "cursor-wait" : undefined}
                 onClick={() => {
                   const successfulScanCooldown = getRemainingSensoryCooldown(
@@ -1463,14 +1463,14 @@ const StealthControls: React.FC<{
           </TooltipTrigger>
           <TooltipContent aria-live="polite">
             {isScanningSensory
-              ? "Scanning sector…"
+              ? "Scanning"
               : sensoryCooldown > 0
                 ? `Sensory Cooldown (${Math.ceil(sensoryCooldown)}s)`
                 : `Scan for Hidden Enemies (${(stealthStatus?.sensoryDetectChance ?? 5).toFixed(0)}% chance)`}
           </TooltipContent>
         </Tooltip>
         <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {isScanningSensory ? "Scanning sector…" : ""}
+          {isScanningSensory ? "Scanning" : ""}
         </span>
       </TooltipProvider>
     </>

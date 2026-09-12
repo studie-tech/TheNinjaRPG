@@ -104,7 +104,7 @@ export default function Staff() {
               <Confirm
                 title="Apply for Staff"
                 proceed_label="Submit Application"
-                proceed_loading_label="Submitting application…"
+                proceed_loading_label="Submitting"
                 button={
                   <Button disabled={createApp.isPending}>
                     <FileUser className="mr-2 h-5 w-5" />

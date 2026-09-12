@@ -105,7 +105,7 @@ export default function MapTilesets() {
               aria-label={isCreating ? "Creating map asset" : "Create map asset"}
             >
               {!isCreating && <FilePlus className="mr-2 h-5 w-5" />}
-              <span aria-live="polite">{isCreating ? "Creating…" : "New"}</span>
+              <span aria-live="polite">{isCreating ? "Creating" : "New"}</span>
             </Button>
           ) : undefined
         }
@@ -219,7 +219,7 @@ export default function MapTilesets() {
                       }
                       disabled={isDeleting}
                       isLoading={isDeleting}
-                      proceed_loading_label="Deleting…"
+                      proceed_loading_label="Deleting"
                       onAccept={() => handleDelete(asset.id)}
                     >
                       Delete {asset.name} ({asset.key})? Maps referencing this key will
@@ -233,11 +233,7 @@ export default function MapTilesets() {
                     role="status"
                     aria-live="polite"
                   >
-                    <Loader
-                      explanation={`Deleting ${asset.name}…`}
-                      noPadding
-                      size={24}
-                    />
+                    <Loader explanation="Deleting" noPadding size={24} />
                   </div>
                 )}
               </div>
@@ -331,7 +327,7 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             aria-label={isCreating ? "Creating map terrain" : "Create map terrain"}
           >
             {!isCreating && <FilePlus className="mr-2 h-5 w-5" />}
-            <span aria-live="polite">{isCreating ? "Creating…" : "New"}</span>
+            <span aria-live="polite">{isCreating ? "Creating" : "New"}</span>
           </Button>
         ) : undefined
       }
@@ -432,7 +428,7 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                       }
                       disabled={isDeleting}
                       isLoading={isDeleting}
-                      proceed_loading_label="Deleting…"
+                      proceed_loading_label="Deleting"
                       onAccept={() => handleDelete(terrain.id)}
                     >
                       Delete {terrain.name} ({terrain.key})? Map tiles painted with this
@@ -447,11 +443,7 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   role="status"
                   aria-live="polite"
                 >
-                  <Loader
-                    explanation={`Deleting ${terrain.name}…`}
-                    noPadding
-                    size={24}
-                  />
+                  <Loader explanation="Deleting" noPadding size={24} />
                 </div>
               )}
             </div>

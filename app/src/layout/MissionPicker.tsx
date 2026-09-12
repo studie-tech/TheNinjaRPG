@@ -171,7 +171,7 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
                               aria-hidden
                             />
                             <span role="status" aria-live="polite">
-                              Starting quest…
+                              Starting
                             </span>
                           </>
                         ) : (

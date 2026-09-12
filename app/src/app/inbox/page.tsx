@@ -261,11 +261,11 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
             isOpen={isExitConfirmOpen}
             setIsOpen={setIsExitConfirmOpen}
             // Keep Modal from self-closing on accept, so this destructive action
-            // stays visible in its disabled "Exiting..." state until the request
+            // stays visible in its disabled "Exiting" state until the request
             // settles and onSettled closes the dialog.
             isValid={false}
             isLoading={isExitingPending}
-            proceed_loading_label="Exiting..."
+            proceed_loading_label="Exiting"
             proceed_label="Proceed"
             proceedDisabled={!pendingConvoId || isExitingPending}
             onAccept={(e) => {
@@ -482,7 +482,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
           <Modal
             title="Create a new conversation"
             proceed_label="Submit"
-            proceed_loading_label="Creating..."
+            proceed_loading_label="Creating"
             isOpen={isCreateDialogOpen}
             setIsOpen={setCreateDialogOpen}
             isValid={false}
@@ -545,7 +545,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
                   aria-atomic="true"
                   className="mt-3 rounded-md border border-border bg-muted/50 p-2 text-center text-muted-foreground text-sm"
                 >
-                  Creating conversation...
+                  Creating
                 </div>
               )}
             </div>

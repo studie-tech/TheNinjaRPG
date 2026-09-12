@@ -206,7 +206,7 @@ export default function CannedResponsesManagement({
                                       className="mr-2 h-4 w-4 animate-spin"
                                       aria-hidden
                                     />
-                                    Deleting…
+                                    Deleting
                                   </>
                                 ) : (
                                   <Trash2 className="h-4 w-4 text-red-500" />
@@ -214,7 +214,7 @@ export default function CannedResponsesManagement({
                               </Button>
                             }
                             proceed_label="Delete"
-                            proceed_loading_label="Deleting…"
+                            proceed_loading_label="Deleting"
                             confirmClassName="bg-red-600 text-white hover:bg-red-700"
                             isLoading={isDeleting}
                             keepOpenOnAccept

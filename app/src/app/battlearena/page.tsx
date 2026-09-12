@@ -396,7 +396,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
             {isAsleep && (
               <div className="flex flex-col items-center border-t pt-3">
                 {isTogglingSleep ? (
-                  <Loader explanation="Waking up..." />
+                  <Loader explanation="Waking" />
                 ) : (
                   <Button
                     size="xl"
@@ -428,7 +428,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
                   ) : (
                     <Swords className="mr-4 h-10 w-10" />
                   )}
-                  {isAttacking ? "Starting arena battle…" : "Enter arena"}
+                  {isAttacking ? "Starting" : "Enter arena"}
                 </Button>
                 {autoCombat && (
                   <p className="text-center text-muted-foreground text-xs">
@@ -856,7 +856,7 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
             {isAsleep ? (
               <div className="col-span-2 flex flex-row justify-center">
                 {isTogglingSleep ? (
-                  <Loader explanation="Waking up..." />
+                  <Loader explanation="Waking" />
                 ) : (
                   <Button
                     type="button"
@@ -886,7 +886,7 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
                   ) : (
                     <Swords className="mr-4 h-10 w-10" />
                   )}
-                  {isAttacking ? "Starting arena battle…" : "Enter arena"}
+                  {isAttacking ? "Starting" : "Enter arena"}
                 </Button>
               </div>
             )}

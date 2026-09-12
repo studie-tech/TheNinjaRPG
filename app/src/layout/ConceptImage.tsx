@@ -247,7 +247,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
     const statusMessage =
       videoStatus && "message" in videoStatus && typeof videoStatus.message === "string"
         ? videoStatus.message
-        : "Generating video...";
+        : "Generating";
     return (
       <div className="flex aspect-256/345 w-full flex-col items-center justify-center gap-3 rounded-xl bg-gradient-to-br from-purple-900 to-indigo-900 p-4 text-center text-white">
         <Video className="h-12 w-12 animate-pulse text-purple-300" />
@@ -415,7 +415,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
             aria-pressed={!!hasLike}
             aria-label={
               pendingEmotion?.type === "like"
-                ? "Updating reaction…"
+                ? "Updating"
                 : `${hasLike ? "Remove" : "Add"} heart reaction`
             }
             onClick={(e) => {
@@ -437,7 +437,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
             aria-pressed={!!hasLove}
             aria-label={
               pendingEmotion?.type === "love"
-                ? "Updating reaction…"
+                ? "Updating"
                 : `${hasLove ? "Remove" : "Add"} thumbs-up reaction`
             }
             onClick={(e) => {
@@ -459,7 +459,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
             aria-pressed={!!hasLaugh}
             aria-label={
               pendingEmotion?.type === "laugh"
-                ? "Updating reaction…"
+                ? "Updating"
                 : `${hasLaugh ? "Remove" : "Add"} laugh reaction`
             }
             onClick={(e) => {
@@ -475,7 +475,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
           </button>
           {isEmotionPending && (
             <span className="sr-only" role="status" aria-live="polite">
-              Updating reaction…
+              Updating
             </span>
           )}
           <div className="grow"></div>
@@ -647,7 +647,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
         isOpen={showDeleteConfirmation}
         setIsOpen={setShowDeleteConfirmation}
         proceed_label="Delete"
-        proceed_loading_label="Deleting concept art…"
+        proceed_loading_label="Deleting"
         confirmClassName="bg-red-600 text-white hover:bg-red-700"
         isLoading={isDeleting}
         keepOpenOnAccept

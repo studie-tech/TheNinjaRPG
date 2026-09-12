@@ -172,7 +172,7 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
             aria-pressed={!!hasLike}
             aria-label={
               pendingEmotion?.type === "like"
-                ? "Updating reaction…"
+                ? "Updating"
                 : `${hasLike ? "Remove" : "Add"} heart reaction`
             }
             onClick={(e) => {
@@ -194,7 +194,7 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
             aria-pressed={!!hasLove}
             aria-label={
               pendingEmotion?.type === "love"
-                ? "Updating reaction…"
+                ? "Updating"
                 : `${hasLove ? "Remove" : "Add"} thumbs-up reaction`
             }
             onClick={(e) => {
@@ -216,7 +216,7 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
             aria-pressed={!!hasLaugh}
             aria-label={
               pendingEmotion?.type === "laugh"
-                ? "Updating reaction…"
+                ? "Updating"
                 : `${hasLaugh ? "Remove" : "Add"} laugh reaction`
             }
             onClick={(e) => {
@@ -232,7 +232,7 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
           </button>
           {isEmotionPending && (
             <span className="sr-only" role="status" aria-live="polite">
-              Updating reaction…
+              Updating
             </span>
           )}
         </div>

@@ -101,7 +101,7 @@ const SingleEditBadge: React.FC<SingleEditBadgeProps> = (props) => {
           allowImageUpload={true}
           onAccept={handleBadgeSubmit}
           submitLoading={isUpdating}
-          submitLoadingText="Saving badge…"
+          submitLoadingText="Saving"
         />
       )}
     </ContentBox>

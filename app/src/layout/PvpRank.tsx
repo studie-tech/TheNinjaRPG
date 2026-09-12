@@ -202,7 +202,7 @@ export const RankedArenaMain: React.FC = () => {
             onClick={() => enterSeason()}
             disabled={isEntering || !hasEnoughPrestige}
           >
-            {isEntering ? "Entering..." : "Enter Ranked Season"}
+            {isEntering ? "Entering" : "Enter Ranked Season"}
           </Button>
         </div>
       </div>
@@ -271,11 +271,11 @@ export const RankedArenaMain: React.FC = () => {
           }}
           disabled={isQueuing}
         >
-          {isQueuing ? "Queuing..." : "Queue for Ranked PvP"}
+          {isQueuing ? "Queuing" : "Queue for Ranked PvP"}
         </Button>
       ) : (
         <Button className="w-full" onClick={() => leaveQueue()} disabled={isLeaving}>
-          {isLeaving ? "Leaving..." : "Leave Queue"}
+          {isLeaving ? "Leaving" : "Leave Queue"}
         </Button>
       )}
     </div>
@@ -738,7 +738,7 @@ export const RankedLoadoutSelector: React.FC = () => {
             aria-live="polite"
           >
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Saving loadout…
+            Saving
           </div>
         )}
         <div className={isSaving ? "pointer-events-none opacity-60" : undefined}>
@@ -761,9 +761,7 @@ export const RankedLoadoutSelector: React.FC = () => {
                   ) : (
                     <OctagonX className="mr-2 h-6 w-6" />
                   )}
-                  {pendingSave?.kind === "unequip-all"
-                    ? "Saving loadout…"
-                    : "Unequip All"}
+                  {pendingSave?.kind === "unequip-all" ? "Saving" : "Unequip All"}
                 </Button>
               ) : undefined
             }
@@ -865,7 +863,7 @@ export const RankedLoadoutSelector: React.FC = () => {
           isLoading={isSaving}
           keepOpenOnAccept={true}
           proceed_label={equippedItems.includes(selectedItem.id) ? "Unequip" : "Equip"}
-          proceed_loading_label="Saving loadout…"
+          proceed_loading_label="Saving"
           onAccept={() => {
             if (selectedItem.itemType === "WEAPON") {
               handleToggleWeapon(selectedItem);
@@ -894,7 +892,7 @@ export const RankedLoadoutSelector: React.FC = () => {
                   pendingSave.kind === "favorite-consumable") ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving favorite…
+                    Saving
                   </>
                 ) : (
                   <>
@@ -945,7 +943,7 @@ export const RankedLoadoutSelector: React.FC = () => {
           isLoading={isSaving}
           keepOpenOnAccept={true}
           proceed_label={loadoutJutsus.includes(selectedJutsu.id) ? "Unequip" : "Equip"}
-          proceed_loading_label="Saving loadout…"
+          proceed_loading_label="Saving"
           onAccept={() => {
             handleToggleJutsu(selectedJutsu);
           }}
@@ -963,7 +961,7 @@ export const RankedLoadoutSelector: React.FC = () => {
                 pendingSave.targetId === selectedJutsu.id ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving favorite…
+                    Saving
                   </>
                 ) : (
                   <>

@@ -1503,7 +1503,7 @@ export const EditContent = <
         {showSubmit && props.onAccept && (
           <div className="col-span-2 mt-3 items-center">
             <span className="sr-only" role="status" aria-live="polite">
-              {submitLoading ? (submitLoadingText ?? "Saving...") : ""}
+              {submitLoading ? (submitLoadingText ?? "Saving") : ""}
             </span>
             <Button
               id="create"
@@ -1520,7 +1520,7 @@ export const EditContent = <
             >
               {submitLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {submitLoading
-                ? (submitLoadingText ?? "Saving...")
+                ? (submitLoadingText ?? "Saving")
                 : (buttonTxt ?? "Save")}
             </Button>
           </div>
@@ -3340,7 +3340,7 @@ export const MassEffectEditor = <
                           className="mr-2 h-4 w-4 animate-spin"
                           aria-hidden="true"
                         />
-                        Saving item effects…
+                        Saving
                       </>
                     ) : (
                       "Save"
@@ -3363,7 +3363,7 @@ export const MassEffectEditor = <
                             className="mr-2 h-4 w-4 animate-spin"
                             aria-hidden="true"
                           />
-                          Saving jutsu effects…
+                          Saving
                         </>
                       ) : (
                         "Save"
@@ -3385,7 +3385,7 @@ export const MassEffectEditor = <
                             className="mr-2 h-4 w-4 animate-spin"
                             aria-hidden="true"
                           />
-                          Saving bloodline effects…
+                          Saving
                         </>
                       ) : (
                         "Save"
@@ -3406,7 +3406,7 @@ export const MassEffectEditor = <
           role="status"
           aria-live="polite"
         >
-          Saving item effects. Editing is temporarily locked until this item finishes.
+          Saving
         </p>
       )}
       {jutsuEditorPending && (
@@ -3415,7 +3415,7 @@ export const MassEffectEditor = <
           role="status"
           aria-live="polite"
         >
-          Saving jutsu effects. Editing is temporarily locked until this jutsu finishes.
+          Saving
         </p>
       )}
       {bloodlineEditorPending && (
@@ -3424,8 +3424,7 @@ export const MassEffectEditor = <
           role="status"
           aria-live="polite"
         >
-          Saving bloodline effects. Editing is temporarily locked until this bloodline
-          finishes.
+          Saving
         </p>
       )}
     </div>

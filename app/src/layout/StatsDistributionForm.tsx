@@ -68,7 +68,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
     subtitle,
     defaultBackHref,
     isPending = false,
-    pendingLabel = "Assigning…",
+    pendingLabel = "Assigning",
   } = props;
 
   // Tab state - force Advanced mode for redistribution
@@ -183,7 +183,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
     onAccept,
     isRedistribution,
     isPending = false,
-    pendingLabel = "Assigning…",
+    pendingLabel = "Assigning",
   } = props;
   const [pendingSpecialization, setPendingSpecialization] = useState<string | null>(
     null,
@@ -381,7 +381,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
     availableStats,
     onAccept,
     isPending = false,
-    pendingLabel = "Assigning…",
+    pendingLabel = "Assigning",
   } = props;
 
   // State - synchronize with localStorage using useLocalStorage hook

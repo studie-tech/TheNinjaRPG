@@ -143,7 +143,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
             : null
           : null
       }
-      proceed_loading_label="Purchasing..."
+      proceed_loading_label="Purchasing"
       isLoading={isPurchasing}
       onAccept={
         selectedSkill && getSkillStatus(selectedSkill).canPurchase

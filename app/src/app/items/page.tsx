@@ -301,7 +301,7 @@ export default function MyItems() {
                 </DialogHeader>
                 <div className="min-h-8" aria-live="polite" aria-atomic="true">
                   {isBuyingItemSlot ? (
-                    <Loader explanation="Purchasing item slot…" noPadding />
+                    <Loader explanation="Purchasing" noPadding />
                   ) : canAfford ? (
                     <p>Are you sure you want to complete this purchase?</p>
                   ) : (
@@ -323,7 +323,7 @@ export default function MyItems() {
                     }}
                   >
                     {isBuyingItemSlot
-                      ? "Purchasing item slot…"
+                      ? "Purchasing"
                       : canAfford
                         ? `Purchase for ${COST_EXTRA_ITEM_SLOT} reps`
                         : `Need ${COST_EXTRA_ITEM_SLOT - userData.reputationPoints} more reps`}
@@ -382,7 +382,7 @@ export default function MyItems() {
             button={
               <Button disabled={isUnequippingAll} variant="outline" type="button">
                 <Undo2 className="mr-2 h-4 w-4" />
-                {isUnequippingAll ? "Unequipping..." : "Unequip all"}
+                {isUnequippingAll ? "Unequipping" : "Unequip all"}
               </Button>
             }
             onAccept={(e) => {
@@ -408,7 +408,7 @@ export default function MyItems() {
               button={
                 <Button disabled={isRepairAllPending} variant="outline">
                   <Wrench className="mr-2 h-4 w-4" />
-                  {isRepairAllPending ? "Repairing..." : "Repair All"}
+                  {isRepairAllPending ? "Repairing" : "Repair All"}
                 </Button>
               }
               onAccept={(e) => {
@@ -511,7 +511,7 @@ export default function MyItems() {
             button={
               <Button disabled={isAutoEquipping} variant="default">
                 <Zap className="mr-2 h-4 w-4" />
-                {isAutoEquipping ? "Auto Equipping..." : "Auto Equip"}
+                {isAutoEquipping ? "Equipping" : "Auto Equip"}
               </Button>
             }
             onAccept={(e) => {
@@ -613,7 +613,7 @@ function RepairItemSelectionModal({
                     <div className="text-right">
                       {isPending ? (
                         <p className="font-medium text-muted-foreground text-sm">
-                          Repairing...
+                          Repairing
                         </p>
                       ) : (
                         <>
@@ -1239,14 +1239,12 @@ const Backpack: React.FC<BackpackProps> = (props) => {
               </Confirm>
             </div>
           )}
-          {isMerging && <Loader explanation={`Merging ${useritem.item.name} stacks`} />}
-          {isConsuming && <Loader explanation={`Using ${useritem.item.name}`} />}
-          {isSelling && <Loader explanation={`Selling ${useritem.item.name}`} />}
-          {isEquipping && <Loader explanation={`Equipping ${useritem.item.name}`} />}
-          {isEvolving && <Loader explanation={`Evolving ${useritem.item.name}`} />}
-          {isRepairingWithRyo && (
-            <Loader explanation={`Repairing ${useritem.item.name}`} />
-          )}
+          {isMerging && <Loader explanation="Merging" />}
+          {isConsuming && <Loader explanation="Using" />}
+          {isSelling && <Loader explanation="Selling" />}
+          {isEquipping && <Loader explanation="Equipping" />}
+          {isEvolving && <Loader explanation="Evolving" />}
+          {isRepairingWithRyo && <Loader explanation="Repairing" />}
         </Modal>
       )}
       {isSplitDialogOpen && useritem && (
@@ -1302,7 +1300,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                   parseInt(quantityToKeep, 10) >= useritem.quantity
                 }
               >
-                {isSplitting ? "Splitting..." : "Split Stack"}
+                {isSplitting ? "Splitting" : "Split Stack"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1499,7 +1497,7 @@ const Character: React.FC<CharacterProps> = (props) => {
                 }}
               />
             ) : (
-              <Loader explanation={`Swapping ${useritem?.item.name}`} />
+              <Loader explanation="Swapping" />
             )}
           </Modal>
         )}

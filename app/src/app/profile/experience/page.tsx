@@ -64,7 +64,7 @@ export default function AssignExperience() {
       subtitle={`You have ${userData.earnedExperience.toLocaleString()} unused experience points`}
       defaultBackHref="/profile"
       isPending={isPending}
-      pendingLabel="Assigning…"
+      pendingLabel="Assigning"
     />
   );
 }

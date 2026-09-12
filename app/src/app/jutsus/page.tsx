@@ -433,7 +433,7 @@ export default function MyJutsu() {
         bottomRightContent={
           <Button onClick={() => unequipAll()} disabled={isUnequipping}>
             <OctagonX className="mr-2 h-6 w-6" />
-            {isUnequipping ? "Unequipping..." : "Unequip All"}
+            {isUnequipping ? "Unequipping" : "Unequip All"}
           </Button>
         }
         topRightContent={
@@ -953,7 +953,7 @@ export default function MyJutsu() {
                 </div>
               </>
             )}
-            {isPending && <Loader explanation={`Processing ${userjutsu.jutsu.name}`} />}
+            {isPending && <Loader explanation="Processing" />}
           </Modal>
         )}
         {modalType === "reskin" && userjutsu && isReskinOpen && (

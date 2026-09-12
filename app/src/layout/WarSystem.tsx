@@ -900,7 +900,7 @@ export const SectorWar: React.FC<{
           isOpen={showAdminEndDialog}
           setIsOpen={setAdminEndDialogOpen}
           proceed_label="End sector war"
-          proceed_loading_label="Ending sector war…"
+          proceed_loading_label="Ending"
           confirmClassName="bg-amber-600 text-white hover:bg-amber-700"
           isLoading={isEndingWar}
           keepOpenOnAccept={true}
@@ -940,7 +940,7 @@ export const SectorWar: React.FC<{
                 aria-live="polite"
               >
                 <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
-                <span>Ending sector war…</span>
+                <span>Ending</span>
               </div>
             )}
           </div>
@@ -1871,9 +1871,7 @@ export const VillageWar: React.FC<{
             <Button
               variant="destructive"
               size="icon"
-              aria-label={
-                isSurrendering ? "Surrendering war" : `Surrender war ${war.id}`
-              }
+              aria-label={isSurrendering ? "Surrendering" : `Surrender war ${war.id}`}
               disabled={isSurrendering || competingVillageWarMutation}
               onClick={openSurrenderDialog}
             >
@@ -1909,7 +1907,7 @@ export const VillageWar: React.FC<{
         isOpen={showSurrenderDialog}
         setIsOpen={setSurrenderDialogOpen}
         proceed_label="Surrender"
-        proceed_loading_label="Surrendering…"
+        proceed_loading_label="Surrendering"
         confirmClassName="bg-red-700 text-white hover:bg-red-800 focus-visible:ring-red-500"
         isLoading={isSurrendering}
         keepOpenOnAccept={true}
@@ -1970,7 +1968,7 @@ export const VillageWar: React.FC<{
                 className="flex items-center gap-2 rounded-md border border-amber-700/60 bg-amber-950/30 p-3 font-medium text-amber-200"
               >
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Surrendering… Please keep this window open.
+                Surrendering
               </div>
             )}
           </div>
@@ -1992,11 +1990,7 @@ export const VillageWar: React.FC<{
               ? "End war raid"
               : "End village war"
           }
-          proceed_loading_label={
-            adminEndRequest.payload.expectedWar.type === "WAR_RAID"
-              ? "Ending war raid…"
-              : "Ending village war…"
-          }
+          proceed_loading_label="Ending"
           confirmClassName="bg-amber-700 text-white hover:bg-amber-800 focus-visible:ring-amber-500"
           isLoading={isAdminEnding}
           keepOpenOnAccept={true}
@@ -2055,9 +2049,7 @@ export const VillageWar: React.FC<{
                 className="flex items-center gap-2 rounded-md border border-amber-700/60 bg-amber-950/30 p-3 font-medium text-amber-200"
               >
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {adminEndRequest.payload.expectedWar.type === "WAR_RAID"
-                  ? "Ending war raid…"
-                  : "Ending village war…"}
+                Ending
               </div>
             )}
           </div>

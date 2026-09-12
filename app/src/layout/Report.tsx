@@ -123,7 +123,7 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
           isOpen={showModal}
           setIsOpen={setShowModal}
           proceed_label={userData?.isBanned ? "Stop" : "Report User"}
-          proceed_loading_label="Submitting report…"
+          proceed_loading_label="Submitting"
           onAccept={userData?.isBanned ? undefined : onSubmit}
           isValid={isValid}
           isLoading={pendingRequestId !== null}

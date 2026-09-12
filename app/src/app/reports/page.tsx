@@ -200,12 +200,12 @@ export default function Reports() {
                                 aria-busy={isClearing}
                               >
                                 {!isClearing && <Eraser className="mr-2 h-5 w-5" />}
-                                {isClearing ? "Clearing…" : "False Positive from AI"}
+                                {isClearing ? "Clearing" : "False Positive from AI"}
                               </Button>
                             }
                             confirmClassName="bg-green-600 text-white hover:bg-green-700"
                             proceed_label="Clear AI report"
-                            proceed_loading_label="Clearing…"
+                            proceed_loading_label="Clearing"
                             isLoading={isClearing}
                             keepOpenOnAccept
                             disabled={isClearing}

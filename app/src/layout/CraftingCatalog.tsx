@@ -372,7 +372,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
               ? "Start Crafting"
               : "Missing Materials"
         }
-        proceed_loading_label={`Crafting ${pendingCraftName ?? selectedItem?.name ?? "item"}…`}
+        proceed_loading_label="Crafting"
         isLoading={isCraftPending}
         keepOpenOnAccept
         proceedDisabled={!canCraft}

@@ -380,7 +380,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
                   disabled={props.isDeletePending}
                   confirmClassName="bg-red-600 text-white hover:bg-red-700"
                   proceed_label="Delete comment"
-                  proceed_loading_label="Deleting comment…"
+                  proceed_loading_label="Deleting"
                   isLoading={props.isDeletePending}
                   keepOpenOnAccept={true}
                   onAccept={(e) => {
