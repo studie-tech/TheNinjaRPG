@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const BadgeValidator = z.object({
   name: z.string().trim().min(1).max(191),
-  image: z.url(),
+  image: z.url().max(191),
   description: z.string().min(1).max(500),
 });
 

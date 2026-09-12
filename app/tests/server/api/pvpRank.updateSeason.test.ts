@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { actionLog, rankedSeason, userData } from "@/drizzle/schema";
 import { pvpRankRouter } from "@/routers/pvprank";
 import type { DrizzleClient } from "@/server/db";
-import { rewardSchema } from "@/validators/pvpRank";
+import { rewardSchema, updateRankedSeasonSchema } from "@/validators/pvpRank";
 import { insertUsers } from "../../setup/factories";
 import { failStatements } from "../../setup/statements";
 import {
@@ -78,11 +78,9 @@ const updateInput = (
 
 describe("ranked season update validation", () => {
   it("requires a request UUID and original revision", async () => {
-    await expect(
-      pvpRankRouter.createCaller({} as never).updateSeason({
-        ...updateInput("not-a-uuid"),
-      }),
-    ).rejects.toThrow();
+    expect(
+      await updateRankedSeasonSchema.safeParseAsync(updateInput("not-a-uuid")),
+    ).toMatchObject({ success: false });
   });
 });
 
@@ -296,6 +294,7 @@ describeWithDatabase("pvpRank.updateSeason", () => {
 
     const committedRevision = legacyEdit.committedSeason?.updatedAt;
     expect(committedRevision).toBeDefined();
+    if (!committedRevision) throw new Error("Missing committed season revision");
     const invalidDates = await (await callerFor()).updateSeason(
       updateInput("96000000-0000-4000-8000-000000000010", {
         expectedUpdatedAt: committedRevision,

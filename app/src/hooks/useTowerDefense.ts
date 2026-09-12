@@ -1336,13 +1336,21 @@ export const useTowerDefense = (userId?: string) => {
     const session = staticSessionRef.current;
     const isGuest = isGuestRef.current;
     const runId = gameState.runId;
+    const isAuthenticatedCompletedRun =
+      gameState.mode === "game-over" && !isGuest && !!userId;
+
+    if (isAuthenticatedCompletedRun && (!runId || !completedRun || !session)) {
+      setGameState((prev) => ({
+        ...prev,
+        error: "The completed run is still loading. Please try again.",
+      }));
+      returnToLobbyInFlightRef.current = false;
+      setIsReturningToLobby(false);
+      return;
+    }
+
     const shouldClaimRun =
-      gameState.mode === "game-over" &&
-      runId &&
-      completedRun &&
-      session &&
-      !isGuest &&
-      userId;
+      isAuthenticatedCompletedRun && runId && completedRun && session;
 
     setGameState((prev) => ({ ...prev, error: null }));
 

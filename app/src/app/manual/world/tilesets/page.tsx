@@ -44,6 +44,9 @@ export default function MapTilesets() {
         router.push(`/manual/world/tilesets/edit/${data.message}`);
       }
     },
+    onError: (error) => {
+      showMutationToast({ success: false, message: error.message });
+    },
     onSettled: () => {
       createInFlightRef.current = false;
     },
@@ -189,6 +192,10 @@ export default function MapTilesets() {
                       href={`/manual/world/tilesets/edit/${asset.id}`}
                       className={isDeleting ? "pointer-events-none grow" : "grow"}
                       aria-disabled={isDeleting}
+                      tabIndex={isDeleting ? -1 : undefined}
+                      onClick={(event) => {
+                        if (isDeleting) event.preventDefault();
+                      }}
                     >
                       <Button
                         variant="secondary"

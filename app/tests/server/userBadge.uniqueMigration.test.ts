@@ -33,7 +33,7 @@ describeWithDatabase("UserBadge unique assignment migration", () => {
     await resetTables(userBadge);
     await runRawSql(
       "ALTER TABLE `UserBadge` DROP INDEX `UserBadge_userId_badgeId_key`",
-    );
+    ).catch(() => undefined);
     await runRawSql("DROP TABLE IF EXISTS `_UserBadge_duplicates_0046`");
   });
 
@@ -95,5 +95,24 @@ describeWithDatabase("UserBadge unique assignment migration", () => {
     const database = await getTestDatabase();
     const rows = await database.select().from(userBadge);
     expect(rows).toHaveLength(2);
+  });
+
+  it("restores saved memberships when retried after the destructive step", async () => {
+    await runRawSql(
+      "INSERT INTO `UserBadge` (`userId`,`badgeId`,`createdAt`) VALUES " +
+        "('retry-user','retry-badge','2026-09-11 12:00:00.000')," +
+        "('retry-user','retry-badge','2026-09-10 12:00:00.000')",
+    );
+
+    for (const statement of statements.slice(0, 3)) await runRawSql(statement);
+    await applyMigration();
+
+    const database = await getTestDatabase();
+    const rows = await database.select().from(userBadge);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      userId: "retry-user",
+      badgeId: "retry-badge",
+    });
   });
 });

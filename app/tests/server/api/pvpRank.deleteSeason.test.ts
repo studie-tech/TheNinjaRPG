@@ -10,7 +10,7 @@ import {
 } from "@/drizzle/schema";
 import { pvpRankRouter } from "@/routers/pvprank";
 import type { DrizzleClient } from "@/server/db";
-import { rewardSchema } from "@/validators/pvpRank";
+import { deleteRankedSeasonSchema, rewardSchema } from "@/validators/pvpRank";
 import { insertUsers } from "../../setup/factories";
 import { failStatements } from "../../setup/statements";
 import {
@@ -100,17 +100,15 @@ const deleteInputBase = (requestId: string) => {
 
 describe("ranked season deletion validation", () => {
   it("requires a UUID whose target and revision match the immutable snapshot", async () => {
-    await expect(
-      pvpRankRouter.createCaller({} as never).deleteSeason({
-        ...deleteInput("not-a-uuid"),
-      }),
-    ).rejects.toThrow();
-    await expect(
-      pvpRankRouter.createCaller({} as never).deleteSeason({
+    expect(
+      await deleteRankedSeasonSchema.safeParseAsync(deleteInput("not-a-uuid")),
+    ).toMatchObject({ success: false });
+    expect(
+      await deleteRankedSeasonSchema.safeParseAsync({
         ...deleteInput("97000000-0000-4000-8000-000000000001"),
         id: "another-season",
       }),
-    ).rejects.toThrow();
+    ).toMatchObject({ success: false });
   });
 });
 
@@ -337,9 +335,12 @@ describeWithDatabase("pvpRank.deleteSeason", () => {
     const remainingSeason = await database.query.rankedSeason.findFirst({
       where: eq(rankedSeason.id, SEASON_ID),
     });
-    expect(remainingSeason === undefined || remainingSeason.name === updateRequest.name).toBe(
-      true,
-    );
+    if (deleted.success) {
+      expect(remainingSeason).toBeUndefined();
+    } else {
+      expect(updated.success).toBe(true);
+      expect(remainingSeason?.name).toBe(updateRequest.name);
+    }
     expect(await database.query.actionLog.findMany()).toHaveLength(1);
   });
 

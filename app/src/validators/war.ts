@@ -81,7 +81,28 @@ export const adminEndWarInputSchema = z
 
 /** Small deterministic display revision; the full snapshot is still compared for correctness. */
 export const getAdminEndWarRevision = (snapshot: AdminEndWarSnapshot) => {
-  const value = JSON.stringify(snapshot);
+  const value = JSON.stringify([
+    snapshot.id,
+    snapshot.attackerVillageId,
+    snapshot.defenderVillageId,
+    snapshot.startedAt,
+    snapshot.endedAt,
+    snapshot.status,
+    snapshot.type,
+    snapshot.sector,
+    snapshot.attackerShrineHp,
+    snapshot.attackerShrineMaxHp,
+    snapshot.attackerShrineStatus,
+    snapshot.defenderShrineHp,
+    snapshot.defenderShrineMaxHp,
+    snapshot.defenderShrineStatus,
+    snapshot.lastTokenReductionAt,
+    snapshot.targetStructureRoute,
+    snapshot.attackerWarHealth,
+    snapshot.defenderWarHealth,
+    snapshot.attackerWarHealthMax,
+    snapshot.defenderWarHealthMax,
+  ]);
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);

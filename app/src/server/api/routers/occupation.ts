@@ -429,6 +429,12 @@ export const occupationRouter = createTRPCRouter({
       if (crystalUserItem.quantity <= 0) {
         return errorResponse("You don't have this crystal");
       }
+      if (crystalUserItem.isInAuction) {
+        return errorResponse("You cannot use a crystal listed for auction");
+      }
+      if (crystalUserItem.storedAtHome) {
+        return errorResponse("You must carry the crystal before using it");
+      }
       if (
         crystalUserItem.craftingFinishedAt &&
         new Date(crystalUserItem.craftingFinishedAt) > new Date()
@@ -535,6 +541,8 @@ export const occupationRouter = createTRPCRouter({
             eq(userItem.id, crystalUserItem.id),
             eq(userItem.userId, ctx.userId),
             eq(userItem.quantity, crystalUserItem.quantity),
+            eq(userItem.isInAuction, false),
+            eq(userItem.storedAtHome, false),
           );
           const crystalResult =
             crystalUserItem.quantity > 1

@@ -749,7 +749,7 @@ export const RankedLoadoutSelector: React.FC = () => {
             topRightContent={
               activeTab === "jutsu" && !isOpen ? (
                 <div className="flex flex-row items-center gap-2">
-                  <JutsuFiltering state={state} />
+                  <JutsuFiltering state={state} disabled={isSaving} />
                 </div>
               ) : undefined
             }

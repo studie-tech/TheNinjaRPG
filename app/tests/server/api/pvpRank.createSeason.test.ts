@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { actionLog, rankedSeason, userData } from "@/drizzle/schema";
 import { pvpRankRouter } from "@/routers/pvprank";
 import type { DrizzleClient } from "@/server/db";
-import { rewardSchema } from "@/validators/pvpRank";
+import { createRankedSeasonSchema, rewardSchema } from "@/validators/pvpRank";
 import { insertUsers } from "../../setup/factories";
 import { failStatements } from "../../setup/statements";
 import {
@@ -16,6 +16,8 @@ import {
 
 const STAFF = "gap95-staff";
 const OTHER_STAFF = "gap95-other-staff";
+const ACTIVE_SEASON_START = new Date(Date.now() - 24 * 60 * 60 * 1000);
+const ACTIVE_SEASON_END = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
 const seasonInput = (
   requestId: string,
@@ -29,8 +31,8 @@ const seasonInput = (
 ) => ({
   name: "Gap95 Autumn Circuit",
   description: "Gap95 focused ranked season",
-  startDate: new Date("2026-09-10T00:00:00.000Z"),
-  endDate: new Date("2026-09-20T00:00:00.000Z"),
+  startDate: ACTIVE_SEASON_START,
+  endDate: ACTIVE_SEASON_END,
   paused: false,
   rewards: [
     {
@@ -51,20 +53,20 @@ const callerFor = async (userId = STAFF, database?: DrizzleClient) =>
 describe("ranked season validation", () => {
   it("rejects invalid date ranges, duplicate divisions and unsafe rewards", async () => {
     const base = seasonInput("95000000-0000-4000-8000-000000000001");
-    await expect(
-      pvpRankRouter.createCaller({} as never).createSeason({
+    expect(
+      await createRankedSeasonSchema.safeParseAsync({
         ...base,
         endDate: base.startDate,
       }),
-    ).rejects.toThrow();
-    await expect(
-      pvpRankRouter.createCaller({} as never).createSeason({
+    ).toMatchObject({ success: false });
+    expect(
+      await createRankedSeasonSchema.safeParseAsync({
         ...base,
         rewards: [...base.rewards, base.rewards[0]!],
       }),
-    ).rejects.toThrow();
-    await expect(
-      pvpRankRouter.createCaller({} as never).createSeason({
+    ).toMatchObject({ success: false });
+    expect(
+      await createRankedSeasonSchema.safeParseAsync({
         ...base,
         rewards: [
           {
@@ -73,7 +75,7 @@ describe("ranked season validation", () => {
           },
         ],
       }),
-    ).rejects.toThrow();
+    ).toMatchObject({ success: false });
   });
 });
 

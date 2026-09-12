@@ -545,8 +545,16 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
       const result = await updateBattleDescription({
         showBattleDescription: checked,
       });
-      if (!result.success) setBattleDescriptionDraft(previousValue);
-    } catch {
+      if (!result.success) {
+        showMutationToast(result);
+        setBattleDescriptionDraft(previousValue);
+      }
+    } catch (error) {
+      showMutationToast({
+        success: false,
+        message:
+          error instanceof Error ? error.message : "Could not update the preference",
+      });
       setBattleDescriptionDraft(previousValue);
     } finally {
       battleDescriptionRequestRef.current = false;
@@ -1098,6 +1106,8 @@ interface HistoricalAiAvatarProps {
   contentType: ContentType;
   onUpdate?: (url: string) => void;
   size?: IMG_ORIENTATION;
+  disabled?: boolean;
+  operationGeneration?: number;
 }
 
 export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => {
@@ -1105,6 +1115,11 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
   const [lastElement, setLastElement] = useState<HTMLButtonElement | null>(null);
   const { data: userData } = useRequiredUserData();
   const { size = "square" } = props;
+  const disabledRef = useRef(Boolean(props.disabled));
+  const operationGenerationRef = useRef(props.operationGeneration ?? 0);
+  const updateGenerationRef = useRef<number | null>(null);
+  disabledRef.current = Boolean(props.disabled);
+  operationGenerationRef.current = props.operationGeneration ?? 0;
 
   // tRPC utility
   const utils = api.useUtils();
@@ -1136,9 +1151,18 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
   const updateAvatar = api.avatar.updateAvatar.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      if (data.success && data.url) {
+      if (
+        data.success &&
+        data.url &&
+        !disabledRef.current &&
+        updateGenerationRef.current === operationGenerationRef.current
+      ) {
         await utils.profile.getUser.invalidate();
-        if (props.onUpdate) {
+        if (
+          props.onUpdate &&
+          !disabledRef.current &&
+          updateGenerationRef.current === operationGenerationRef.current
+        ) {
           props.onUpdate(data.url);
         }
       }
@@ -1167,9 +1191,12 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
               type="button"
               key={avatar.id}
               className="relative my-2 basis-1/6"
-              onClick={() =>
-                updateAvatar.mutate({ avatar: avatar.id, type: props.contentType })
-              }
+              disabled={props.disabled}
+              onClick={() => {
+                if (disabledRef.current) return;
+                updateGenerationRef.current = operationGenerationRef.current;
+                updateAvatar.mutate({ avatar: avatar.id, type: props.contentType });
+              }}
               ref={i === pageAvatars.length - 1 ? setLastElement : null}
             >
               <AvatarImage

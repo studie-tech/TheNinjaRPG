@@ -58,16 +58,6 @@ import {
   fetchVillages,
 } from "@/routers/village";
 import {
-  type AdminEndWarSnapshot,
-  adminEndWarInputSchema,
-  adminEndWarSnapshotSchema,
-  getAdminEndWarRevision,
-  type SurrenderParticipationRole,
-  surrenderActorSnapshotSchema,
-  surrenderWarAllySnapshotSchema,
-  surrenderWarInputSchema,
-} from "@/validators/war";
-import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
@@ -79,6 +69,28 @@ import { findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
 import { canAdministrateWars, canSeeSecretData } from "@/utils/permissions";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
+import {
+  type AdminEndWarSnapshot,
+  adminEndWarInputSchema,
+  adminEndWarSnapshotSchema,
+  getAdminEndWarRevision,
+  type SurrenderParticipationRole,
+  surrenderActorSnapshotSchema,
+  surrenderWarAllySnapshotSchema,
+  surrenderWarInputSchema,
+} from "@/validators/war";
+
+const writeRowsAffected = (result: unknown): number => {
+  if (Array.isArray(result)) return writeRowsAffected(result[0]);
+  if (!result || typeof result !== "object") return 0;
+  if ("rowsAffected" in result && typeof result.rowsAffected === "number") {
+    return result.rowsAffected;
+  }
+  if ("affectedRows" in result && typeof result.affectedRows === "number") {
+    return result.affectedRows;
+  }
+  return 0;
+};
 
 export const warRouter = createTRPCRouter({
   // Get active wars for a village
@@ -1258,8 +1270,11 @@ export const warRouter = createTRPCRouter({
         fetchRequest(ctx.drizzle, input.offerId, "WAR_ALLY"),
         fetchAlliances(ctx.drizzle),
       ]);
+      if (!request) {
+        return errorResponse("Offer not found");
+      }
       // Derived
-      const warId = request?.relatedId;
+      const warId = request.relatedId;
       const activeWar = activeWars.find(
         (w) =>
           (w.attackerVillage?.kageId === request.senderId ||
@@ -1271,9 +1286,6 @@ export const warRouter = createTRPCRouter({
           ? activeWar?.attackerVillage
           : activeWar?.defenderVillage;
       // Guard
-      if (!request) {
-        return errorResponse("Offer not found");
-      }
       if (!senderVillage) {
         return errorResponse("Sender village not found");
       }
@@ -1318,72 +1330,85 @@ export const warRouter = createTRPCRouter({
       // Claim the still-pending offer only while its War row is locked and active. Admin cleanup
       // uses the same War -> offer/ally lock order, so a late accept cannot recreate child state
       // or transfer tokens after the war was removed.
-      const joined = await ctx.drizzle.transaction(async (tx) => {
-        await tx.execute(
-          sql`SELECT ${war.id} FROM ${war} WHERE ${war.id} = ${activeWar.id} FOR UPDATE`,
-        );
-        const currentWar = await tx.query.war.findFirst({
-          where: and(eq(war.id, activeWar.id), eq(war.status, "ACTIVE")),
-          columns: { id: true, endedAt: true, type: true },
-        });
-        if (
-          !currentWar ||
-          currentWar.endedAt ||
-          !["VILLAGE_WAR", "WAR_RAID"].includes(currentWar.type)
-        ) {
-          return false;
-        }
-        await tx.execute(
-          sql`SELECT ${userRequest.id} FROM ${userRequest} WHERE ${userRequest.id} = ${request.id} FOR UPDATE`,
-        );
-        const freshRequest = await tx.query.userRequest.findFirst({
-          where: and(
-            eq(userRequest.id, request.id),
-            eq(userRequest.type, "WAR_ALLY"),
-            eq(userRequest.status, "PENDING"),
-            eq(userRequest.relatedId, activeWar.id),
-            eq(userRequest.senderId, request.senderId),
-            eq(userRequest.receiverId, ctx.userId),
-          ),
-        });
-        if (!freshRequest) return false;
-        const existingAlly = await tx.query.warAlly.findFirst({
-          where: and(
-            eq(warAlly.warId, activeWar.id),
-            eq(warAlly.villageId, acceptingVillageId),
-          ),
-          columns: { id: true },
-        });
-        if (existingAlly) return false;
-        const claimedOffer = await tx
-          .update(userRequest)
-          .set({ status: "ACCEPTED" })
-          .where(
-            and(
-              eq(userRequest.id, freshRequest.id),
+      const paymentConflict = Symbol("paymentConflict");
+      let joined = false;
+      try {
+        joined = await ctx.drizzle.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT ${war.id} FROM ${war} WHERE ${war.id} = ${activeWar.id} FOR UPDATE`,
+          );
+          const currentWar = await tx.query.war.findFirst({
+            where: and(eq(war.id, activeWar.id), eq(war.status, "ACTIVE")),
+            columns: { id: true, endedAt: true, type: true },
+          });
+          if (
+            !currentWar ||
+            currentWar.endedAt ||
+            !["VILLAGE_WAR", "WAR_RAID"].includes(currentWar.type)
+          ) {
+            return false;
+          }
+          await tx.execute(
+            sql`SELECT ${userRequest.id} FROM ${userRequest} WHERE ${userRequest.id} = ${request.id} FOR UPDATE`,
+          );
+          const freshRequest = await tx.query.userRequest.findFirst({
+            where: and(
+              eq(userRequest.id, request.id),
               eq(userRequest.type, "WAR_ALLY"),
               eq(userRequest.status, "PENDING"),
               eq(userRequest.relatedId, activeWar.id),
+              eq(userRequest.senderId, request.senderId),
+              eq(userRequest.receiverId, ctx.userId),
             ),
-          );
-        if (claimedOffer.rowsAffected !== 1) return false;
-        await tx.insert(warAlly).values({
-          id: nanoid(),
-          warId: activeWar.id,
-          villageId: acceptingVillageId,
-          supportVillageId: senderVillage.id,
-          tokensPaid: freshRequest.value || 0,
+          });
+          if (!freshRequest) return false;
+          const offerValue = freshRequest.value ?? 0;
+          const existingAlly = await tx.query.warAlly.findFirst({
+            where: and(
+              eq(warAlly.warId, activeWar.id),
+              eq(warAlly.villageId, acceptingVillageId),
+            ),
+            columns: { id: true },
+          });
+          if (existingAlly) return false;
+          const claimedOffer = await tx
+            .update(userRequest)
+            .set({ status: "ACCEPTED" })
+            .where(
+              and(
+                eq(userRequest.id, freshRequest.id),
+                eq(userRequest.type, "WAR_ALLY"),
+                eq(userRequest.status, "PENDING"),
+                eq(userRequest.relatedId, activeWar.id),
+              ),
+            );
+          if (writeRowsAffected(claimedOffer) !== 1) return false;
+          const paid = await tx
+            .update(village)
+            .set({ tokens: sql`${village.tokens} - ${offerValue}` })
+            .where(
+              and(
+                eq(village.kageId, freshRequest.senderId),
+                gte(village.tokens, offerValue),
+              ),
+            );
+          if (writeRowsAffected(paid) !== 1) throw paymentConflict;
+          await tx.insert(warAlly).values({
+            id: nanoid(),
+            warId: activeWar.id,
+            villageId: acceptingVillageId,
+            supportVillageId: senderVillage.id,
+            tokensPaid: offerValue,
+          });
+          await tx
+            .update(village)
+            .set({ tokens: sql`tokens + ${offerValue}` })
+            .where(eq(village.id, acceptingVillageId));
+          return true;
         });
-        await tx
-          .update(village)
-          .set({ tokens: sql`tokens + ${freshRequest.value}` })
-          .where(eq(village.id, acceptingVillageId));
-        await tx
-          .update(village)
-          .set({ tokens: sql`tokens - ${freshRequest.value}` })
-          .where(eq(village.kageId, freshRequest.senderId));
-        return true;
-      });
+      } catch (error) {
+        if (error !== paymentConflict) throw error;
+      }
       if (!joined) {
         return errorResponse("War or ally offer changed. Refresh before accepting");
       }
@@ -1705,6 +1730,12 @@ export const warRouter = createTRPCRouter({
             !endedWar ||
             !["ATTACKER_VICTORY", "DEFENDER_VICTORY"].includes(endedWar.status)
           ) {
+            if (endedWar) {
+              throw serverError(
+                "CONFLICT",
+                "War state changed. Refresh before surrendering",
+              );
+            }
             return errorResponse("War state changed. Refresh before surrendering");
           }
           const winnerVillageId =

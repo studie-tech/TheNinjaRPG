@@ -117,6 +117,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
           formData.find((e) => e.id === "description") ? (
             <div className="flex items-center gap-2">
               <ChatInputField
+                disabled={isUpdating}
                 inputProps={{
                   id: "chatInput",
                   placeholder: "Instruct ChatGPT to edit",
@@ -129,6 +130,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
                   `,
                 }}
                 onToolCall={(toolCall) => {
+                  if (isUpdating) return;
                   const data = toolCall.args as ZodItemType;
                   let key: keyof typeof data;
                   for (key in data) {
@@ -250,6 +252,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
   const [deletingVariantIds, setDeletingVariantIds] = React.useState<
     ReadonlySet<string>
   >(() => new Set());
+  const variantOperationInFlightRef = React.useRef(false);
 
   const setVariantDeleting = (variantId: string, deleting: boolean) => {
     const next = new Set(deletingVariantIdsRef.current);
@@ -284,6 +287,9 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
         setEditingVariant(null);
       }
     },
+    onSettled: () => {
+      variantOperationInFlightRef.current = false;
+    },
   });
 
   const remove = api.item.deleteItemVariant.useMutation({
@@ -295,17 +301,25 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
     },
     onSettled: (_result, _error, variables) => {
       setVariantDeleting(variables.variantId, false);
+      variantOperationInFlightRef.current = false;
     },
   });
 
   const deleteVariant = (variantId: string) => {
     // mutate() updates React state asynchronously, so guard duplicate activations with
     // a ref before starting the request. Other variant rows remain independently usable.
-    if (deletingVariantIdsRef.current.has(variantId)) return;
+    if (
+      variantOperationInFlightRef.current ||
+      deletingVariantIdsRef.current.has(variantId)
+    ) {
+      return;
+    }
+    variantOperationInFlightRef.current = true;
     setVariantDeleting(variantId, true);
     try {
       remove.mutate({ variantId });
     } catch (error) {
+      variantOperationInFlightRef.current = false;
       setVariantDeleting(variantId, false);
       throw error;
     }
@@ -344,6 +358,8 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
   const imageValue = useWatch({ control: form.control, name: "image" });
 
   const onSubmit = form.handleSubmit((data) => {
+    if (variantOperationInFlightRef.current) return;
+    variantOperationInFlightRef.current = true;
     upsert.mutate({ itemId, variant: data });
   });
 

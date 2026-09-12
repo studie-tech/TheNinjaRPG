@@ -757,7 +757,7 @@ export const questsRouter = createTRPCRouter({
               isNull(questHistory.endAt),
             ),
           );
-        if (claim.rowsAffected !== 1) return "changed" as const;
+        if (mutationRowsAffected(claim) !== 1) return "changed" as const;
 
         await tx
           .update(userData)

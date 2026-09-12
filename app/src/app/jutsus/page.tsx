@@ -95,7 +95,7 @@ export default function MyJutsu() {
     jutsuId: string;
     moveForward: boolean;
   } | null>(null);
-  const orderRequestInFlightRef = useRef(false);
+  const loadoutRequestInFlightRef = useRef(false);
 
   // Accordion state for jutsu category sections (multiple can be open simultaneously)
   const [openSections, setOpenSections] = useState<Set<string>>(
@@ -211,7 +211,10 @@ export default function MyJutsu() {
         await updateUser({ loadout: { jutsuIds: newLoadout } });
       }
     },
-    onSettled,
+    onSettled: () => {
+      loadoutRequestInFlightRef.current = false;
+      onSettled();
+    },
   });
 
   const { mutate: unequipAll, isPending: isUnequipping } =
@@ -244,15 +247,15 @@ export default function MyJutsu() {
         }
       },
       onSettled: () => {
-        orderRequestInFlightRef.current = false;
+        loadoutRequestInFlightRef.current = false;
         setPendingOrder(null);
       },
     });
 
   const reorderJutsu = (jutsuId: string, moveForward: boolean) => {
-    if (orderRequestInFlightRef.current) return;
+    if (loadoutRequestInFlightRef.current) return;
 
-    orderRequestInFlightRef.current = true;
+    loadoutRequestInFlightRef.current = true;
     setPendingOrder({ jutsuId, moveForward });
     updateOrder({
       jutsuId,
@@ -347,7 +350,8 @@ export default function MyJutsu() {
     isTransferring ||
     isReskinning ||
     isRemovingReskin ||
-    isEvolving;
+    isEvolving ||
+    isReordering;
   const isFetching = l1 || l2;
 
   // Collapse UserItem and Item
@@ -599,6 +603,8 @@ export default function MyJutsu() {
             isValid={false}
             onAccept={() => {
               if (canEquip || userjutsu.equipped) {
+                if (loadoutRequestInFlightRef.current) return;
+                loadoutRequestInFlightRef.current = true;
                 equip({ userJutsuId: userjutsu.id });
               } else {
                 setIsOpen(false);

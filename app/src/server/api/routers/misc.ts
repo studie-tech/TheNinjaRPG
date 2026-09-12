@@ -362,24 +362,9 @@ export const miscRouter = createTRPCRouter({
         }));
 
         if (previousRequest || previousRewards.length > 0) {
-          const previousChanges = previousRequest?.changes as
-            | {
-                userIds?: string[];
-                reputationAmount?: number;
-                moneyAmount?: number;
-                reason?: string;
-              }
-            | undefined;
           const isExactReplay =
             previousRequest?.userId === admin.userId &&
             previousRequest.tableName === "UserRewards" &&
-            previousChanges?.reputationAmount === reputationAmount &&
-            previousChanges.moneyAmount === moneyAmount &&
-            previousChanges.reason === input.reason &&
-            previousChanges.userIds?.length === uniqueUserIds.length &&
-            uniqueUserIds.every((userId) =>
-              previousChanges.userIds?.includes(userId),
-            ) &&
             previousRewards.length === users.length &&
             previousRewards.every(
               (reward) =>
@@ -403,12 +388,10 @@ export const miscRouter = createTRPCRouter({
           id: requestActionId,
           userId: admin.userId,
           tableName: "UserRewards",
-          changes: {
-            userIds: uniqueUserIds,
-            reputationAmount,
-            moneyAmount,
-            reason: input.reason,
-          },
+          changes: awards.map(
+            (award) =>
+              `Awarded ${award.reputationAmount} reputation and ${award.moneyAmount} money to ${award.username} (${award.userId}): ${input.reason}`,
+          ),
           relatedId: uniqueUserIds.length === 1 ? uniqueUserIds[0] : null,
           relatedMsg: `Awarded rewards to ${uniqueUserIds.length} user(s)`,
         });

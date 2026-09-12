@@ -418,6 +418,7 @@ export const profileRouter = createTRPCRouter({
         };
       }
 
+      const expectedTutorialOn = input.expectedTutorialOn;
       const receiptId = `tutorial-preference:${input.requestId}`;
       const expectedChange = `tutorialOn:${input.expectedTutorialOn}->${input.tutorialOn}`;
 
@@ -468,25 +469,28 @@ export const profileRouter = createTRPCRouter({
           };
         }
 
-        if (currentUser.tutorialOn !== input.expectedTutorialOn) {
+        const isIdempotentNoop = currentUser.tutorialOn === input.tutorialOn;
+        if (!isIdempotentNoop && currentUser.tutorialOn !== input.expectedTutorialOn) {
           return errorResponse(
             "Your tutorial preference changed; review it before trying again",
           );
         }
 
-        const result = await tx
-          .update(userData)
-          .set(preferenceUpdate)
-          .where(
-            and(
-              eq(userData.userId, ctx.userId),
-              eq(userData.tutorialOn, input.expectedTutorialOn),
-            ),
-          );
-        if (mutationAffectedRows(result) !== 1) {
-          return errorResponse(
-            "Your tutorial preference changed; review it before trying again",
-          );
+        if (!isIdempotentNoop) {
+          const result = await tx
+            .update(userData)
+            .set(preferenceUpdate)
+            .where(
+              and(
+                eq(userData.userId, ctx.userId),
+                eq(userData.tutorialOn, expectedTutorialOn),
+              ),
+            );
+          if (mutationAffectedRows(result) !== 1) {
+            return errorResponse(
+              "Your tutorial preference changed; review it before trying again",
+            );
+          }
         }
 
         await tx.insert(actionLog).values({
