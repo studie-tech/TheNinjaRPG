@@ -80,14 +80,18 @@ import {
   findSectorSchema,
 } from "@/validators/travel";
 import {
-  type AdminEndWarSnapshot,
   type AllianceOfferSchema,
   type AllianceOfferSchemaInput,
   createAllianceOfferSchema,
-  getAdminEndWarRevision,
-  type SurrenderParticipationRole,
-  type SurrenderWarInput,
 } from "@/validators/war";
+
+type SurrenderParticipationRole =
+  | "MAIN_ATTACKER"
+  | "MAIN_DEFENDER"
+  | "ALLY_ATTACKER"
+  | "ALLY_DEFENDER";
+
+const getAdminEndWarRevision = (snapshot: object) => JSON.stringify(snapshot);
 
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
 
@@ -629,7 +633,7 @@ export const SectorWar: React.FC<{
   // tRPC utility
   const utils = api.useUtils();
 
-  const adminEndSnapshot: AdminEndWarSnapshot = {
+  const adminEndSnapshot = {
     id: war.id,
     attackerVillageId: war.attackerVillageId,
     defenderVillageId: war.defenderVillageId,
@@ -671,7 +675,7 @@ export const SectorWar: React.FC<{
       warId: string;
       requestId: string;
       expectedRevision: string;
-      expectedWar: AdminEndWarSnapshot;
+      expectedWar: typeof adminEndSnapshot;
     };
   };
   const [showAdminEndDialog, setShowAdminEndDialog] = useState(false);
@@ -697,12 +701,11 @@ export const SectorWar: React.FC<{
 
   const { mutate: adminEndWar, isPending: isEndingWar } =
     api.war.adminEndWar.useMutation({
-      onSuccess: async (data, variables) => {
+      onSuccess: async (data) => {
         const request = adminEndRequestRef.current;
         if (
           !sectorWarMountedRef.current ||
           !request ||
-          request.payload.requestId !== variables.requestId ||
           currentAdminEndIdentityRef.current !== request.componentIdentity
         ) {
           return;
@@ -712,23 +715,6 @@ export const SectorWar: React.FC<{
           showMutationToast(data);
           return;
         }
-        const isExactResponse =
-          data.requestId === request.payload.requestId &&
-          data.warId === request.payload.warId &&
-          data.warType === "SECTOR_WAR" &&
-          data.expectedRevision === request.payload.expectedRevision &&
-          data.previousStatus === "ACTIVE" &&
-          data.outcome === "ADMIN_ENDED" &&
-          data.auditLogId === `admin-end-war:${request.payload.requestId}`;
-        if (!isExactResponse) {
-          showMutationToast({
-            success: false,
-            message:
-              "The server response could not be verified. The confirmation remains open so you can safely retry.",
-          });
-          return;
-        }
-
         showMutationToast(data);
         adminEndRequestRef.current = null;
         setAdminEndRequest(null);
@@ -779,7 +765,7 @@ export const SectorWar: React.FC<{
     const request = adminEndRequestRef.current;
     if (!request || isEndingWar || adminEndSubmitGuardRef.current) return;
     adminEndSubmitGuardRef.current = true;
-    adminEndWar(request.payload);
+    adminEndWar({ warId: request.payload.warId });
   };
 
   const setAdminEndDialogOpen: React.Dispatch<React.SetStateAction<boolean>> = (
@@ -1383,7 +1369,7 @@ export const VillageWar: React.FC<{
   // tRPC utility
   const utils = api.useUtils();
 
-  const surrenderWarSnapshot: AdminEndWarSnapshot = {
+  const surrenderWarSnapshot = {
     id: war.id,
     attackerVillageId: war.attackerVillageId,
     defenderVillageId: war.defenderVillageId,
@@ -1433,7 +1419,22 @@ export const VillageWar: React.FC<{
     defenderName: string;
     villageName: string;
     supportedVillageName: string | null;
-    payload: SurrenderWarInput;
+    payload: {
+      warId: string;
+      requestId: string;
+      expectedRevision: string;
+      expectedWar: typeof surrenderWarSnapshot;
+      expectedActor: { userId: string; villageId: string; kageId: string };
+      expectedParticipationRole: SurrenderParticipationRole;
+      expectedWarAlly: {
+        id: string;
+        warId: string;
+        villageId: string;
+        supportVillageId: string;
+        tokensPaid: number;
+        joinedAt: string;
+      } | null;
+    };
   };
   const [surrenderRequest, setSurrenderRequest] = useState<SurrenderRequest | null>(
     null,
@@ -1449,7 +1450,7 @@ export const VillageWar: React.FC<{
       warId: string;
       requestId: string;
       expectedRevision: string;
-      expectedWar: AdminEndWarSnapshot;
+      expectedWar: typeof surrenderWarSnapshot;
     };
   };
   const [showAdminEndDialog, setShowAdminEndDialog] = useState(false);
@@ -1542,12 +1543,11 @@ export const VillageWar: React.FC<{
 
   const { mutate: surrender, isPending: isSurrendering } =
     api.war.surrender.useMutation({
-      onSuccess: async (data, variables) => {
+      onSuccess: async (data) => {
         const request = surrenderRequestRef.current;
         if (
           !villageWarMountedRef.current ||
           !request ||
-          request.payload.requestId !== variables.requestId ||
           request.componentIdentity !== surrenderIdentityRef.current
         ) {
           return;
@@ -1556,44 +1556,6 @@ export const VillageWar: React.FC<{
           showMutationToast(data);
           return;
         }
-        const isMain = request.payload.expectedParticipationRole.startsWith("MAIN_");
-        const expectedStatus =
-          request.payload.expectedParticipationRole === "MAIN_ATTACKER"
-            ? "DEFENDER_VICTORY"
-            : request.payload.expectedParticipationRole === "MAIN_DEFENDER"
-              ? "ATTACKER_VICTORY"
-              : "ACTIVE";
-        const expectedWinner =
-          request.payload.expectedParticipationRole === "MAIN_ATTACKER"
-            ? request.payload.expectedWar.defenderVillageId
-            : request.payload.expectedParticipationRole === "MAIN_DEFENDER"
-              ? request.payload.expectedWar.attackerVillageId
-              : null;
-        const exactResponse =
-          data.requestId === request.payload.requestId &&
-          data.warId === request.payload.warId &&
-          data.warType === request.payload.expectedWar.type &&
-          data.expectedRevision === request.payload.expectedRevision &&
-          data.actorUserId === request.payload.expectedActor.userId &&
-          data.villageId === request.payload.expectedActor.villageId &&
-          data.kageId === request.payload.expectedActor.kageId &&
-          data.participationRole === request.payload.expectedParticipationRole &&
-          data.outcome === (isMain ? "MAIN_WAR_ENDED" : "ALLY_WITHDRAWN") &&
-          data.resultStatus === expectedStatus &&
-          data.loserVillageId === request.payload.expectedActor.villageId &&
-          data.winnerVillageId === expectedWinner &&
-          data.allyId === (request.payload.expectedWarAlly?.id ?? null) &&
-          (isMain ? Boolean(data.endedAt) : data.endedAt === null) &&
-          data.auditLogId === `war-surrender:${request.payload.requestId}`;
-        if (!exactResponse) {
-          showMutationToast({
-            success: false,
-            message:
-              "The surrender response could not be verified. The confirmation remains open so you can safely retry.",
-          });
-          return;
-        }
-
         showMutationToast(data);
         surrenderRequestRef.current = null;
         setSurrenderRequest(null);
@@ -1604,21 +1566,18 @@ export const VillageWar: React.FC<{
           utils.war.getAllyOffers.invalidate(),
         ]);
       },
-      onSettled: (_data, _error, variables) => {
-        if (surrenderRequestRef.current?.payload.requestId === variables.requestId) {
-          surrenderSubmitGuardRef.current = false;
-        }
+      onSettled: () => {
+        surrenderSubmitGuardRef.current = false;
       },
     });
 
   const { mutate: adminEndWar, isPending: isAdminEnding } =
     api.war.adminEndWar.useMutation({
-      onSuccess: async (data, variables) => {
+      onSuccess: async (data) => {
         const request = adminEndRequestRef.current;
         if (
           !villageWarMountedRef.current ||
           !request ||
-          request.payload.requestId !== variables.requestId ||
           request.componentIdentity !== adminEndIdentityRef.current
         ) {
           return;
@@ -1626,30 +1585,6 @@ export const VillageWar: React.FC<{
 
         if (!data.success) {
           showMutationToast(data);
-          return;
-        }
-
-        const countsAreVerified = [
-          data.removedWarKillCount,
-          data.removedWarAllyCount,
-          data.removedAllyOfferCount,
-          data.clearedParticipantCount,
-        ].every((count) => Number.isInteger(count) && (count ?? -1) >= 0);
-        const isExactResponse =
-          data.requestId === request.payload.requestId &&
-          data.warId === request.payload.warId &&
-          data.warType === request.payload.expectedWar.type &&
-          data.expectedRevision === request.payload.expectedRevision &&
-          data.previousStatus === "ACTIVE" &&
-          data.outcome === "ADMIN_ENDED" &&
-          data.auditLogId === `admin-end-war:${request.payload.requestId}` &&
-          countsAreVerified;
-        if (!isExactResponse) {
-          showMutationToast({
-            success: false,
-            message:
-              "The server response could not be verified. The confirmation remains open so you can safely retry.",
-          });
           return;
         }
 
@@ -1663,10 +1598,8 @@ export const VillageWar: React.FC<{
           utils.war.getAllyOffers.invalidate(),
         ]);
       },
-      onSettled: (_data, _error, variables) => {
-        if (adminEndRequestRef.current?.payload.requestId === variables.requestId) {
-          adminEndSubmitGuardRef.current = false;
-        }
+      onSettled: () => {
+        adminEndSubmitGuardRef.current = false;
       },
     });
 
@@ -1701,7 +1634,7 @@ export const VillageWar: React.FC<{
     const request = adminEndRequestRef.current;
     if (!request || isAdminEnding || adminEndSubmitGuardRef.current) return;
     adminEndSubmitGuardRef.current = true;
-    adminEndWar(request.payload);
+    adminEndWar({ warId: request.payload.warId });
   };
 
   const setAdminEndDialogOpen: React.Dispatch<React.SetStateAction<boolean>> = (
@@ -1772,7 +1705,7 @@ export const VillageWar: React.FC<{
     const request = surrenderRequestRef.current;
     if (!request || isSurrendering || surrenderSubmitGuardRef.current) return;
     surrenderSubmitGuardRef.current = true;
-    surrender(request.payload);
+    surrender({ warId: request.payload.warId });
   };
 
   const setSurrenderDialogOpen: React.Dispatch<React.SetStateAction<boolean>> = (

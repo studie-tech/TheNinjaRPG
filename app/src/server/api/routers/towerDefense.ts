@@ -512,16 +512,7 @@ export const towerDefenseRouter = createTRPCRouter({
       });
 
       if (existingRun) {
-        // A previous response may have been lost after the claim committed. Treat
-        // retries as success so the client can safely finish local cleanup without
-        // awarding points a second time.
-        return {
-          success: true,
-          message: "This run was already claimed.",
-          pointsEarned: Math.floor(existingRun.score / input.scoreToPointsRatio),
-          finalScore: existingRun.score,
-          finalWave: existingRun.wave,
-        };
+        return errorResponse("This run has already been claimed.");
       }
 
       // Update database in parallel: create run record and award points

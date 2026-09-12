@@ -148,7 +148,6 @@ import {
 } from "@/libs/combat/util";
 import { fetchDmgConfig } from "@/libs/gamesettings";
 import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
-import { resolveSelectableLoadout } from "@/libs/loadout";
 import {
   calcActiveUserRegen,
   calcCP,
@@ -206,13 +205,11 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { resolveCommittedArenaHeal } from "@/server/utils/battleArenaHeal";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { findRelationship } from "@/utils/alliance";
 import { getRandomElement } from "@/utils/array";
 import { randomInt } from "@/utils/math";
-import { fedItemLoadouts, fedJutsuLoadouts } from "@/utils/paypal";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
 import type { StatSchemaType } from "@/validators/combat";
@@ -872,14 +869,7 @@ export const combatRouter = createTRPCRouter({
     }),
   battleArenaHeal: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Heal in battle arena for ryo" } })
-    .output(
-      baseServerResponse.extend({
-        money: z.number().optional(),
-        curHealth: z.number().optional(),
-        curStamina: z.number().optional(),
-        curChakra: z.number().optional(),
-      }),
-    )
+    .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -887,51 +877,25 @@ export const combatRouter = createTRPCRouter({
       if (user.money < BATTLE_ARENA_HEAL_COST)
         return errorResponse("You don't have enough money");
       if (user.isBanned) return errorResponse("You are banned");
-      if (user.status !== "AWAKE") {
-        return errorResponse("You can only heal after finishing an arena fight");
-      }
-      if (
-        user.curHealth >= user.maxHealth &&
-        user.curStamina >= user.maxStamina &&
-        user.curChakra >= user.maxChakra
-      ) {
-        return errorResponse("You are already fully healed");
-      }
       // Mutate with guard
       const result = await ctx.drizzle
         .update(userData)
         .set({
-          money: sql`${userData.money} - ${BATTLE_ARENA_HEAL_COST}`,
-          curHealth: sql`${userData.maxHealth}`,
-          curStamina: sql`${userData.maxStamina}`,
-          curChakra: sql`${userData.maxChakra}`,
+          money: user.money - BATTLE_ARENA_HEAL_COST,
+          curHealth: user.maxHealth,
+          curStamina: user.maxStamina,
+          curChakra: user.maxChakra,
         })
         .where(
           and(
             eq(userData.userId, ctx.userId),
-            eq(userData.status, "AWAKE"),
             gte(userData.money, BATTLE_ARENA_HEAL_COST),
-            or(
-              lt(userData.curHealth, userData.maxHealth),
-              lt(userData.curStamina, userData.maxStamina),
-              lt(userData.curChakra, userData.maxChakra),
-            ),
           ),
         );
       if (result.rowsAffected === 0) {
         return errorResponse("Error trying to heal and continue. Try again.");
       } else {
-        return resolveCommittedArenaHeal(() =>
-          ctx.drizzle.query.userData.findFirst({
-            where: eq(userData.userId, ctx.userId),
-            columns: {
-              money: true,
-              curHealth: true,
-              curStamina: true,
-              curChakra: true,
-            },
-          }),
-        );
+        return { success: true, message: "You've healed" };
       }
     }),
   startArenaBattle: protectedProcedure
@@ -1084,32 +1048,6 @@ export const combatRouter = createTRPCRouter({
       }
       if (jId === user.jutsuLoadout && iId === user.itemLoadout) {
         return errorResponse("You already have this loadout selected");
-      }
-
-      // Validate every requested ID before either selector performs writes. In
-      // addition to rejecting guessed/expired IDs, doing this up front keeps a
-      // combined item+jutsu request atomic from the caller's perspective: an
-      // invalid second ID can never leave the first selection committed only in
-      // user equipment while the battle snapshot remains unchanged.
-      if (iId) {
-        const selectableItemLoadout = resolveSelectableLoadout(
-          itemLoadouts,
-          iId,
-          fedItemLoadouts(user),
-        );
-        if (!selectableItemLoadout.ok) {
-          return errorResponse(selectableItemLoadout.message);
-        }
-      }
-      if (jId) {
-        const selectableJutsuLoadout = resolveSelectableLoadout(
-          jutsuLoadouts,
-          jId,
-          fedJutsuLoadouts(user),
-        );
-        if (!selectableJutsuLoadout.ok) {
-          return errorResponse(selectableJutsuLoadout.message);
-        }
       }
 
       // Apply the item loadout first, then the jutsu loadout. selectItemLoadout mutates

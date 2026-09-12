@@ -39,7 +39,6 @@ import { showMutationToast } from "@/libs/toast";
 import { canAwardReputation } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import {
-  createRankedSeasonDetailsSchema,
   type RankedSeason,
   type RankedSeasonInput,
   type RankedSeasonReward,
@@ -59,60 +58,21 @@ interface SeasonFormProps {
   onPendingChange?: (pending: boolean) => void;
 }
 
-type CreateSeasonSubmission = {
-  requestId: string;
-  season: FormValues;
-};
-
-type UpdateSeasonSubmission = CreateSeasonSubmission & {
-  seasonId: string;
-  expectedUpdatedAt: Date;
-  identity: string;
-};
-
-const copySeason = (season: FormValues): FormValues =>
-  Object.freeze({
-    ...season,
-    startDate: new Date(season.startDate),
-    endDate: new Date(season.endDate),
-    rewards: structuredClone(season.rewards),
-  });
-
-const seasonsMatch = (left: FormValues, right: FormValues) =>
-  left.name === right.name &&
-  left.description === right.description &&
-  left.startDate.getTime() === right.startDate.getTime() &&
-  left.endDate.getTime() === right.endDate.getTime() &&
-  left.paused === right.paused &&
-  JSON.stringify(left.rewards) === JSON.stringify(right.rewards);
-
 export default function SeasonForm({
   initialData,
   seasonId,
-  seasonRevision,
   onSuccess,
   onPendingChange,
 }: SeasonFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingDivisionIndex, setEditingDivisionIndex] = useState<number | null>(null);
-  // React mutation state is not synchronous. This ref closes the same-tick click/Enter gap,
-  // while retrySubmissionRef keeps an uncertain request key durable after a lost response.
-  const createInFlightRef = useRef<CreateSeasonSubmission | null>(null);
-  const retrySubmissionRef = useRef<CreateSeasonSubmission | null>(null);
-  const updateInFlightRef = useRef<UpdateSeasonSubmission | null>(null);
-  const updateRetrySubmissionRef = useRef<UpdateSeasonSubmission | null>(null);
+  const submitInFlightRef = useRef(false);
   const utils = api.useUtils();
 
   // Get user data for permission checks
-  const { data: userData, userId } = useUserData();
+  const { data: userData } = useUserData();
   const userRole = userData?.role ?? "USER";
   const hasReputationPermission = canAwardReputation(userRole);
-  const updateIdentity = `${userId ?? "unknown"}:${seasonId ?? "create"}:${
-    seasonRevision?.getTime() ?? "unversioned"
-  }`;
-  const updateIdentityRef = useRef(updateIdentity);
-  updateIdentityRef.current = updateIdentity;
-
   // Queries used in reward editor dialogs
   const { data: items } = api.item.getAllNames.useQuery(undefined);
   const { data: jutsus } = api.jutsu.getAllNames.useQuery(undefined);
@@ -120,9 +80,7 @@ export default function SeasonForm({
   const { data: badges } = api.badge.getAll.useQuery(undefined);
 
   const form = useForm<FormValuesInput, unknown, FormValues>({
-    resolver: zodResolver(
-      seasonId ? rankedSeasonSchema : createRankedSeasonDetailsSchema,
-    ),
+    resolver: zodResolver(rankedSeasonSchema),
     defaultValues: initialData || {
       name: "",
       description: "",
@@ -137,157 +95,23 @@ export default function SeasonForm({
   const updateSeason = api.pvpRank.updateSeason.useMutation();
 
   const onSubmit = async (data: FormValues) => {
-    if (!seasonId && createInFlightRef.current) return;
-
-    if (!seasonId) {
-      const season = copySeason(data);
-      const previousRetry = retrySubmissionRef.current;
-      const submission =
-        previousRetry && seasonsMatch(previousRetry.season, season)
-          ? previousRetry
-          : { requestId: crypto.randomUUID(), season };
-
-      createInFlightRef.current = submission;
-      retrySubmissionRef.current = submission;
-      setIsSubmitting(true);
-      onPendingChange?.(true);
-      try {
-        // The creation resolver already produced this shape; parsing again gives the mutation
-        // the creation-only narrowed division type without narrowing legacy update-season data.
-        const validatedSeason = createRankedSeasonDetailsSchema.parse(
-          submission.season,
-        );
-        const result = await createSeason.mutateAsync({
-          ...validatedSeason,
-          requestId: submission.requestId,
-        });
-        if (createInFlightRef.current !== submission) return;
-
-        if (!result.success) {
-          showMutationToast(result);
-          return;
-        }
-
-        const verified =
-          result.requestId === submission.requestId &&
-          result.submittedSeason !== undefined &&
-          result.createdSeason !== undefined &&
-          result.createdSeason.id.length > 0 &&
-          seasonsMatch(result.submittedSeason, submission.season);
-        if (!verified) {
-          showMutationToast({
-            success: false,
-            message:
-              "The server response could not be matched to this season. Your draft is still available; please retry.",
-          });
-          return;
-        }
-
-        retrySubmissionRef.current = null;
-        showMutationToast(result);
-        void utils.pvpRank.getSeasons.invalidate();
-        onSuccess?.();
-      } catch {
-        // The shared tRPC handler owns transport-error reporting. Keep the exact submitted
-        // snapshot and UUID so retry is safe if the first response was lost after commit.
-      } finally {
-        if (createInFlightRef.current === submission) {
-          createInFlightRef.current = null;
-          setIsSubmitting(false);
-          onPendingChange?.(false);
-        }
-      }
-      return;
-    }
-
-    if (updateInFlightRef.current) return;
-    if (!seasonRevision) {
-      showMutationToast({
-        success: false,
-        message: "This season has no revision. Refresh it before saving.",
-      });
-      return;
-    }
-
-    const season = copySeason(data);
-    const previousRetry = updateRetrySubmissionRef.current;
-    const submission =
-      previousRetry &&
-      previousRetry.identity === updateIdentity &&
-      seasonsMatch(previousRetry.season, season)
-        ? previousRetry
-        : {
-            requestId: crypto.randomUUID(),
-            seasonId,
-            expectedUpdatedAt: new Date(seasonRevision),
-            season,
-            identity: updateIdentity,
-          };
-
-    updateInFlightRef.current = submission;
-    updateRetrySubmissionRef.current = submission;
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     setIsSubmitting(true);
     onPendingChange?.(true);
     try {
-      const result = await updateSeason.mutateAsync({
-        id: submission.seasonId,
-        ...submission.season,
-        expectedUpdatedAt: submission.expectedUpdatedAt,
-        requestId: submission.requestId,
-      });
-      if (
-        updateInFlightRef.current !== submission ||
-        updateIdentityRef.current !== submission.identity
-      ) {
-        return;
-      }
-      if (!result.success) {
-        showMutationToast(result);
-        return;
-      }
-
-      const verified =
-        result.requestId === submission.requestId &&
-        result.seasonId === submission.seasonId &&
-        result.expectedUpdatedAt?.getTime() ===
-          submission.expectedUpdatedAt.getTime() &&
-        result.submittedSeason !== undefined &&
-        seasonsMatch(result.submittedSeason, submission.season) &&
-        result.previousSeason?.id === submission.seasonId &&
-        result.previousSeason.updatedAt.getTime() ===
-          submission.expectedUpdatedAt.getTime() &&
-        result.committedSeason?.id === submission.seasonId &&
-        seasonsMatch(result.committedSeason, submission.season) &&
-        result.committedSeason.updatedAt.getTime() >
-          submission.expectedUpdatedAt.getTime();
-      if (!verified || !result.committedSeason) {
-        showMutationToast({
-          success: false,
-          message:
-            "The server response could not be matched to this season. Your draft is still available; please retry.",
-        });
-        return;
-      }
-
-      const committedSeason = result.committedSeason;
-      utils.pvpRank.getSeasons.setData(undefined, (seasons) =>
-        seasons?.map((entry) =>
-          entry.id === submission.seasonId ? { ...entry, ...committedSeason } : entry,
-        ),
-      );
-      updateRetrySubmissionRef.current = null;
+      const result = seasonId
+        ? await updateSeason.mutateAsync({ id: seasonId, ...data })
+        : await createSeason.mutateAsync(data);
       showMutationToast(result);
-      await utils.pvpRank.getSeasons.invalidate();
-      onSuccess?.();
-    } catch {
-      // The shared tRPC handler reports transport failures. Keep the exact immutable snapshot,
-      // original revision, and UUID so a retry can safely recover a lost success response.
-    } finally {
-      if (updateInFlightRef.current === submission) {
-        updateInFlightRef.current = null;
-        setIsSubmitting(false);
-        onPendingChange?.(false);
+      if (result.success) {
+        await utils.pvpRank.getSeasons.invalidate();
+        onSuccess?.();
       }
+    } finally {
+      submitInFlightRef.current = false;
+      setIsSubmitting(false);
+      onPendingChange?.(false);
     }
   };
 

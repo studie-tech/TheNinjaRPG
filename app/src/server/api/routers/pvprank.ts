@@ -6,12 +6,10 @@ import {
   RANKED_ENTRY_COST,
   RANKED_LEGEND_LP_REQUIREMENT,
   RANKED_PVP_STATS,
-  RANKED_RANKS,
   RANKED_REQUIRED_RANK,
   RANKED_SANNIN_TOP_PLAYERS,
 } from "@/drizzle/constants";
 import {
-  actionLog,
   item,
   jutsu,
   logQueueLengths,
@@ -40,350 +38,12 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { secondsPassed } from "@/utils/time";
 import { idSchema } from "@/validators/misc";
-import {
-  createRankedSeasonSchema,
-  deleteRankedSeasonSchema,
-  deleteRankedSeasonSnapshotSchema,
-  endRankedSeasonSchema,
-  rankedLoadoutSchema,
-  rankedSeasonSchema,
-  updateRankedLoadoutSchema,
-  updateRankedSeasonSchema,
-  writableSeasonDivisionRewardSchema,
-} from "@/validators/pvpRank";
-
-const createdSeasonResponseSchema = z.object({
-  id: z.string().min(1),
-  ...rankedSeasonSchema.shape,
-});
-
-const createSeasonResponseSchema = baseServerResponse.extend({
-  requestId: z.string().uuid().optional(),
-  submittedSeason: rankedSeasonSchema.optional(),
-  createdSeason: createdSeasonResponseSchema.optional(),
-});
-
-type SeasonSnapshot = {
-  name: string;
-  description: string;
-  startDate: string;
-  endDate: string;
-  rewards: z.infer<typeof rankedSeasonSchema>["rewards"];
-  paused: boolean;
-};
-
-type CreateSeasonReceipt = {
-  requestId: string;
-  submittedSeason: SeasonSnapshot;
-  createdSeason: SeasonSnapshot & { id: string };
-};
-
-const seasonSnapshotSchema = z.object({
-  name: z.string(),
-  description: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
-  rewards: rankedSeasonSchema.shape.rewards,
-  paused: z.boolean(),
-});
-
-const createSeasonReceiptSchema = z.object({
-  requestId: z.string().uuid(),
-  submittedSeason: seasonSnapshotSchema,
-  createdSeason: seasonSnapshotSchema.extend({ id: z.string().min(1) }),
-});
-
-const seasonSnapshot = (season: {
-  name: string;
-  description: string;
-  startDate: Date;
-  endDate: Date;
-  rewards: z.infer<typeof rankedSeasonSchema>["rewards"];
-  paused: boolean;
-}): SeasonSnapshot => ({
-  name: season.name,
-  description: season.description,
-  startDate: season.startDate.toISOString(),
-  endDate: season.endDate.toISOString(),
-  rewards: season.rewards,
-  paused: season.paused,
-});
-
-const canonicalJson = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(canonicalJson);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, entry]) => [key, canonicalJson(entry)]),
-    );
-  }
-  return value;
-};
-
-const snapshotsMatch = (left: SeasonSnapshot, right: SeasonSnapshot) =>
-  JSON.stringify(canonicalJson(left)) === JSON.stringify(canonicalJson(right));
-
-type VersionedSeasonSnapshot = SeasonSnapshot & {
-  id: string;
-  updatedAt: string;
-};
-
-type UpdateSeasonReceipt = {
-  requestId: string;
-  seasonId: string;
-  expectedUpdatedAt: string;
-  submittedSeason: SeasonSnapshot;
-  previousSeason: VersionedSeasonSnapshot;
-  committedSeason: VersionedSeasonSnapshot;
-};
-
-const versionedSeasonSnapshotSchema = seasonSnapshotSchema.extend({
-  id: z.string().min(1),
-  updatedAt: z.string(),
-});
-
-const updateSeasonReceiptSchema = z.object({
-  requestId: z.string().uuid(),
-  seasonId: z.string().min(1),
-  expectedUpdatedAt: z.string(),
-  submittedSeason: seasonSnapshotSchema,
-  previousSeason: versionedSeasonSnapshotSchema,
-  committedSeason: versionedSeasonSnapshotSchema,
-});
-
-const updateSeasonResponseSchema = baseServerResponse.extend({
-  requestId: z.string().uuid().optional(),
-  seasonId: z.string().min(1).optional(),
-  expectedUpdatedAt: z.date().optional(),
-  submittedSeason: rankedSeasonSchema.optional(),
-  previousSeason: createdSeasonResponseSchema
-    .extend({ updatedAt: z.date() })
-    .optional(),
-  committedSeason: createdSeasonResponseSchema
-    .extend({ updatedAt: z.date() })
-    .optional(),
-});
-
-const deleteSeasonResponseSchema = baseServerResponse.extend({
-  requestId: z.string().uuid().optional(),
-  seasonId: z.string().min(1).optional(),
-  expectedUpdatedAt: z.date().optional(),
-  expectedSeason: deleteRankedSeasonSnapshotSchema.optional(),
-  deletedSeason: deleteRankedSeasonSnapshotSchema.optional(),
-  deletedUnclaimedRewardIds: z.array(z.string()).optional(),
-  deletedUnclaimedRewardCount: z.number().int().nonnegative().optional(),
-  deleted: z.literal(true).optional(),
-});
-
-type DeleteSeasonSnapshot = Omit<
-  z.infer<typeof deleteRankedSeasonSnapshotSchema>,
-  "startDate" | "endDate" | "createdAt" | "updatedAt"
-> & {
-  startDate: string;
-  endDate: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type DeleteSeasonReceipt = {
-  requestId: string;
-  seasonId: string;
-  expectedUpdatedAt: string;
-  expectedSeason: DeleteSeasonSnapshot;
-  deletedSeason: DeleteSeasonSnapshot;
-  deletedUnclaimedRewardIds: string[];
-};
-
-const deleteSeasonSnapshotSchema = seasonSnapshotSchema.extend({
-  id: z.string().min(1),
-  ended: z.boolean(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
-const deleteSeasonReceiptSchema = z.object({
-  requestId: z.string().uuid(),
-  seasonId: z.string().min(1),
-  expectedUpdatedAt: z.string(),
-  expectedSeason: deleteSeasonSnapshotSchema,
-  deletedSeason: deleteSeasonSnapshotSchema,
-  deletedUnclaimedRewardIds: z.array(z.string()),
-});
-
-const deleteSeasonSnapshot = (season: {
-  id: string;
-  name: string;
-  description: string;
-  startDate: Date;
-  endDate: Date;
-  rewards: z.infer<typeof rankedSeasonSchema>["rewards"];
-  ended: boolean;
-  paused: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}): DeleteSeasonSnapshot => ({
-  id: season.id,
-  name: season.name,
-  description: season.description,
-  startDate: season.startDate.toISOString(),
-  endDate: season.endDate.toISOString(),
-  rewards: season.rewards,
-  ended: season.ended,
-  paused: season.paused,
-  createdAt: season.createdAt.toISOString(),
-  updatedAt: season.updatedAt.toISOString(),
-});
-
-const deleteSeasonResponse = (season: DeleteSeasonSnapshot) => ({
-  ...season,
-  startDate: new Date(season.startDate),
-  endDate: new Date(season.endDate),
-  createdAt: new Date(season.createdAt),
-  updatedAt: new Date(season.updatedAt),
-});
-
-type EndSeasonRewardReceipt = {
-  id: string;
-  userId: string;
-  division: (typeof rankedUserRewards.$inferSelect)["division"];
-};
-
-type EndSeasonReceipt = {
-  requestId: string;
-  seasonId: string;
-  expectedUpdatedAt: string;
-  expectedSeason: DeleteSeasonSnapshot;
-  previousSeason: DeleteSeasonSnapshot;
-  committedSeason: DeleteSeasonSnapshot;
-  rewards: EndSeasonRewardReceipt[];
-  insertedRewardIds: string[];
-  resetUserIds: string[];
-  clearedQueueUserIds: string[];
-};
-
-const endSeasonRewardReceiptSchema = z.object({
-  id: z.string().min(1),
-  userId: z.string().min(1),
-  division: z.enum(RANKED_RANKS),
-});
-
-const endSeasonReceiptSchema = z.object({
-  requestId: z.string().uuid(),
-  seasonId: z.string().min(1),
-  expectedUpdatedAt: z.string(),
-  expectedSeason: deleteSeasonSnapshotSchema,
-  previousSeason: deleteSeasonSnapshotSchema,
-  committedSeason: deleteSeasonSnapshotSchema,
-  rewards: z.array(endSeasonRewardReceiptSchema),
-  insertedRewardIds: z.array(z.string()),
-  resetUserIds: z.array(z.string()),
-  clearedQueueUserIds: z.array(z.string()),
-});
-
-const endSeasonResponseSchema = baseServerResponse.extend({
-  requestId: z.string().uuid().optional(),
-  seasonId: z.string().min(1).optional(),
-  expectedUpdatedAt: z.date().optional(),
-  expectedSeason: deleteRankedSeasonSnapshotSchema.optional(),
-  previousSeason: deleteRankedSeasonSnapshotSchema.optional(),
-  committedSeason: deleteRankedSeasonSnapshotSchema.optional(),
-  rewards: z.array(endSeasonRewardReceiptSchema).optional(),
-  rewardCount: z.number().int().nonnegative().optional(),
-  insertedRewardIds: z.array(z.string()).optional(),
-  resetUserIds: z.array(z.string()).optional(),
-  resetUserCount: z.number().int().nonnegative().optional(),
-  clearedQueueUserIds: z.array(z.string()).optional(),
-  clearedQueueCount: z.number().int().nonnegative().optional(),
-  ended: z.literal(true).optional(),
-});
-
-const versionedSeasonSnapshot = (season: {
-  id: string;
-  name: string;
-  description: string;
-  startDate: Date;
-  endDate: Date;
-  rewards: z.infer<typeof rankedSeasonSchema>["rewards"];
-  paused: boolean;
-  updatedAt: Date;
-}): VersionedSeasonSnapshot => ({
-  id: season.id,
-  ...seasonSnapshot(season),
-  updatedAt: season.updatedAt.toISOString(),
-});
-
-const seasonResponse = (season: VersionedSeasonSnapshot) => ({
-  id: season.id,
-  name: season.name,
-  description: season.description,
-  startDate: new Date(season.startDate),
-  endDate: new Date(season.endDate),
-  rewards: season.rewards,
-  paused: season.paused,
-  updatedAt: new Date(season.updatedAt),
-});
-
-const valuesMatch = (left: unknown, right: unknown) =>
-  JSON.stringify(canonicalJson(left)) === JSON.stringify(canonicalJson(right));
-
-const affectedRows = (result: unknown) => {
-  if (result && typeof result === "object" && "rowsAffected" in result) {
-    return Number(result.rowsAffected);
-  }
-  if (result && typeof result === "object" && "affectedRows" in result) {
-    return Number(result.affectedRows);
-  }
-  if (
-    Array.isArray(result) &&
-    result[0] &&
-    typeof result[0] === "object" &&
-    "affectedRows" in result[0]
-  ) {
-    return Number(result[0].affectedRows);
-  }
-  return 0;
-};
-
-/**
- * Existing invalid legacy reward entries may be kept or removed. Any entry that is new or
- * materially changed must meet today's write rules, and edits may not introduce duplicate
- * divisions. This avoids making an unrelated text/date repair impossible on a legacy season.
- */
-const validateSeasonRewardUpdate = (
-  existingRewards: SeasonSnapshot["rewards"],
-  submittedRewards: SeasonSnapshot["rewards"],
-) => {
-  if (valuesMatch(existingRewards, submittedRewards)) return undefined;
-
-  const divisions = submittedRewards.map((entry) =>
-    entry && typeof entry === "object" && "division" in entry
-      ? (entry as { division: unknown }).division
-      : undefined,
-  );
-  if (new Set(divisions).size !== divisions.length) {
-    return "Each ranked division can only have one reward entry";
-  }
-
-  for (const submittedEntry of submittedRewards) {
-    const isUnchangedLegacyEntry = existingRewards.some((existingEntry) =>
-      valuesMatch(existingEntry, submittedEntry),
-    );
-    if (isUnchangedLegacyEntry) continue;
-
-    const parsed = writableSeasonDivisionRewardSchema.safeParse(submittedEntry);
-    if (!parsed.success) {
-      return parsed.error.issues[0]?.message ?? "Invalid ranked season reward";
-    }
-  }
-  return undefined;
-};
+import { rankedLoadoutSchema, rankedSeasonSchema } from "@/validators/pvpRank";
 
 export const pvpRankRouter = createTRPCRouter({
   // Get the user's season rewards
@@ -491,498 +151,145 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Create a new season
   createSeason: protectedProcedure
-    .input(createRankedSeasonSchema)
-    .output(createSeasonResponseSchema)
+    .input(rankedSeasonSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const { requestId, ...submittedSeason } = input;
-      const submittedSnapshot = seasonSnapshot(submittedSeason);
-      const receiptId = `create-ranked-season:${requestId}`;
+      // Query
+      const [user, currentSeason] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchCurrentSeason(ctx.drizzle),
+      ]);
+      // Guard
+      if (!canChangeContent(user.role)) {
+        return errorResponse("You don't have permission to create ranked seasons");
+      }
+      if (currentSeason) {
+        return errorResponse("A season is already active");
+      }
+      // Server-side enforcement: reset reward_reputation to 0 in all division rewards if user lacks permission
+      const seasonData = { ...input };
+      if (!canAwardReputation(user.role)) {
+        seasonData.rewards = seasonData.rewards.map((divisionReward) => ({
+          ...divisionReward,
+          rewards: {
+            ...divisionReward.rewards,
+            reward_reputation: 0,
+          },
+        }));
+      }
+      // insert new season
+      const id = nanoid();
+      await ctx.drizzle.insert(rankedSeason).values({
+        id,
+        ...seasonData,
+      });
 
-      return retryOnDeadlock(() =>
-        ctx.drizzle.transaction(async (tx) => {
-          // Re-read authorization under a lock so a role/ban change cannot race this write.
-          await tx.execute(
-            sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} = ${ctx.userId} FOR UPDATE`,
-          );
-          // This locking read serializes checks against a newly-active season, including the
-          // supremum gap when no season rows exist. Keep every statement on this PlanetScale
-          // transaction connection sequential.
-          await tx.execute(
-            sql`SELECT ${rankedSeason.id} FROM ${rankedSeason} ORDER BY ${rankedSeason.id} FOR UPDATE`,
-          );
-
-          const user = await tx.query.userData.findFirst({
-            where: eq(userData.userId, ctx.userId),
-          });
-          const previousRequest = await tx.query.actionLog.findFirst({
-            where: eq(actionLog.id, receiptId),
-          });
-
-          if (!user) return errorResponse("Creating user not found");
-          if (user.isBanned) {
-            return errorResponse("You are banned and cannot create ranked seasons");
-          }
-          if (!canChangeContent(user.role)) {
-            return errorResponse("You don't have permission to create ranked seasons");
-          }
-
-          if (previousRequest) {
-            const parsedReceipt = createSeasonReceiptSchema.safeParse(
-              previousRequest.changes,
-            );
-            if (!parsedReceipt.success) {
-              return errorResponse("Invalid ranked season creation request ID");
-            }
-            const receipt = parsedReceipt.data;
-            const existingSeason = previousRequest.relatedId
-              ? await tx.query.rankedSeason.findFirst({
-                  where: eq(rankedSeason.id, previousRequest.relatedId),
-                })
-              : undefined;
-            const existingSnapshot = existingSeason
-              ? seasonSnapshot(existingSeason)
-              : undefined;
-            const { id: receiptSeasonId, ...receiptSeasonSnapshot } =
-              receipt.createdSeason;
-            const isExactReplay =
-              previousRequest.userId === user.userId &&
-              previousRequest.tableName === "RankedSeason" &&
-              receipt.requestId === requestId &&
-              snapshotsMatch(receipt.submittedSeason, submittedSnapshot) &&
-              receiptSeasonId === previousRequest.relatedId &&
-              existingSnapshot !== undefined &&
-              snapshotsMatch(receiptSeasonSnapshot, existingSnapshot);
-            if (!isExactReplay || !existingSeason) {
-              return errorResponse("Invalid ranked season creation request ID");
-            }
-
-            return {
-              success: true,
-              message: "Season was already created",
-              requestId,
-              submittedSeason,
-              createdSeason: {
-                id: existingSeason.id,
-                name: existingSeason.name,
-                description: existingSeason.description,
-                startDate: existingSeason.startDate,
-                endDate: existingSeason.endDate,
-                rewards: existingSeason.rewards,
-                paused: existingSeason.paused,
-              },
-            };
-          }
-
-          const currentSeason = await fetchCurrentSeason(tx);
-          if (currentSeason) {
-            return errorResponse("A season is already active");
-          }
-
-          // A caller without reputation permission cannot smuggle reputation through a crafted
-          // client request. The submitted snapshot remains in the receipt for exact replay checks.
-          const seasonData = {
-            ...submittedSeason,
-            rewards: canAwardReputation(user.role)
-              ? submittedSeason.rewards
-              : submittedSeason.rewards.map((divisionReward) => ({
-                  ...divisionReward,
-                  rewards: {
-                    ...divisionReward.rewards,
-                    reward_reputation: 0,
-                  },
-                })),
-          };
-          const id = nanoid();
-          const createdSnapshot = { id, ...seasonSnapshot(seasonData) };
-
-          await tx.insert(rankedSeason).values({ id, ...seasonData });
-          await tx.insert(actionLog).values({
-            id: receiptId,
-            userId: user.userId,
-            tableName: "RankedSeason",
-            changes: {
-              requestId,
-              submittedSeason: submittedSnapshot,
-              createdSeason: createdSnapshot,
-            } satisfies CreateSeasonReceipt,
-            relatedId: id,
-            relatedMsg: "Created ranked season",
-          });
-
-          return {
-            success: true,
-            message: "Season created successfully",
-            requestId,
-            submittedSeason,
-            createdSeason: { id, ...seasonData },
-          };
-        }),
-      );
+      return { success: true, message: "Season created successfully" };
     }),
 
   // Update an existing season
   updateSeason: protectedProcedure
-    .input(updateRankedSeasonSchema)
-    .output(updateSeasonResponseSchema)
+    .input(idSchema.extend(rankedSeasonSchema.shape))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const {
-        id: seasonId,
-        requestId,
-        expectedUpdatedAt,
-        ...rawSubmittedSeason
-      } = input;
-      const submittedSnapshot = seasonSnapshot(rawSubmittedSeason);
-      const receiptId = `update-ranked-season:${requestId}`;
-
-      return retryOnDeadlock(() =>
-        ctx.drizzle.transaction(async (tx) => {
-          // Match createSeason's lock order and keep all statements on this transaction
-          // connection sequential. The full season-range lock serializes active-season checks.
-          await tx.execute(
-            sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} = ${ctx.userId} FOR UPDATE`,
-          );
-          await tx.execute(
-            sql`SELECT ${rankedSeason.id} FROM ${rankedSeason} ORDER BY ${rankedSeason.id} FOR UPDATE`,
-          );
-
-          const user = await tx.query.userData.findFirst({
-            where: eq(userData.userId, ctx.userId),
-          });
-          const existingSeason = await tx.query.rankedSeason.findFirst({
-            where: eq(rankedSeason.id, seasonId),
-          });
-          const previousRequest = await tx.query.actionLog.findFirst({
-            where: eq(actionLog.id, receiptId),
-          });
-
-          if (!user) return errorResponse("Updating user not found");
-          if (user.isBanned) {
-            return errorResponse("You are banned and cannot update ranked seasons");
-          }
-          if (!canChangeContent(user.role)) {
-            return errorResponse("You don't have permission to update ranked seasons");
-          }
-
-          if (previousRequest) {
-            const parsedReceipt = updateSeasonReceiptSchema.safeParse(
-              previousRequest.changes,
-            );
-            if (!parsedReceipt.success) {
-              return errorResponse("Invalid ranked season update request ID");
-            }
-            const receipt = parsedReceipt.data;
-            const currentSnapshot = existingSeason
-              ? versionedSeasonSnapshot(existingSeason)
-              : undefined;
-            const exactReplay =
-              previousRequest.userId === user.userId &&
-              previousRequest.tableName === "RankedSeason" &&
-              previousRequest.relatedId === seasonId &&
-              receipt.requestId === requestId &&
-              receipt.seasonId === seasonId &&
-              receipt.expectedUpdatedAt === expectedUpdatedAt.toISOString() &&
-              snapshotsMatch(receipt.submittedSeason, submittedSnapshot) &&
-              currentSnapshot !== undefined &&
-              valuesMatch(receipt.committedSeason, currentSnapshot);
-            if (!exactReplay) {
-              return errorResponse("Invalid ranked season update request ID");
-            }
-
-            return {
-              success: true,
-              message: "Season update was already saved",
-              requestId,
-              seasonId,
-              expectedUpdatedAt,
-              submittedSeason: rawSubmittedSeason,
-              previousSeason: seasonResponse(receipt.previousSeason),
-              committedSeason: seasonResponse(receipt.committedSeason),
-            };
-          }
-
-          if (!existingSeason) return errorResponse("Season not found");
-          if (existingSeason.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
-            return errorResponse(
-              "This season changed after the editor opened. Refresh it before saving.",
-            );
-          }
-
-          const data = {
-            ...rawSubmittedSeason,
-            rewards: rawSubmittedSeason.rewards,
-          };
-          if (!canAwardReputation(user.role)) {
-            data.rewards = data.rewards.map((divisionReward) => {
-              const existingDivisionReward = existingSeason.rewards.find(
-                (reward) => reward.division === divisionReward.division,
-              );
-              return {
-                ...divisionReward,
-                rewards: {
-                  ...divisionReward.rewards,
-                  reward_reputation:
-                    existingDivisionReward?.rewards.reward_reputation ?? 0,
-                },
-              };
-            });
-          }
-
-          const datesChanged =
-            data.startDate.getTime() !== existingSeason.startDate.getTime() ||
-            data.endDate.getTime() !== existingSeason.endDate.getTime();
-          if (datesChanged && data.endDate <= data.startDate) {
-            return errorResponse("End date must be after the start date");
-          }
-          const rewardError = validateSeasonRewardUpdate(
-            existingSeason.rewards,
-            data.rewards,
-          );
-          if (rewardError) return errorResponse(rewardError);
-
-          const currentSeason = await fetchCurrentSeason(tx);
-          if (
-            currentSeason &&
-            currentSeason.id !== seasonId &&
-            data.endDate >= new Date()
-          ) {
-            return errorResponse("Another season is active, cannot update this season");
-          }
-
-          const previousSnapshot = versionedSeasonSnapshot(existingSeason);
-          const nextUpdatedAt = new Date(
-            Math.max(Date.now(), existingSeason.updatedAt.getTime() + 1),
-          );
-          const updateResult = await tx
-            .update(rankedSeason)
-            .set({ ...data, updatedAt: nextUpdatedAt })
-            .where(
-              and(
-                eq(rankedSeason.id, seasonId),
-                eq(rankedSeason.updatedAt, expectedUpdatedAt),
-              ),
-            );
-          if (affectedRows(updateResult) !== 1) {
-            return errorResponse(
-              "This season changed while it was being saved. Refresh it before retrying.",
-            );
-          }
-
-          const committedSnapshot: VersionedSeasonSnapshot = {
-            id: seasonId,
-            ...seasonSnapshot(data),
-            updatedAt: nextUpdatedAt.toISOString(),
-          };
-          await tx.insert(actionLog).values({
-            id: receiptId,
-            userId: user.userId,
-            tableName: "RankedSeason",
-            changes: {
-              requestId,
-              seasonId,
-              expectedUpdatedAt: expectedUpdatedAt.toISOString(),
-              submittedSeason: submittedSnapshot,
-              previousSeason: previousSnapshot,
-              committedSeason: committedSnapshot,
-            } satisfies UpdateSeasonReceipt,
-            relatedId: seasonId,
-            relatedMsg: "Updated ranked season",
-          });
-
-          return {
-            success: true,
-            message: "Season updated successfully",
-            requestId,
-            seasonId,
-            expectedUpdatedAt,
-            submittedSeason: rawSubmittedSeason,
-            previousSeason: seasonResponse(previousSnapshot),
-            committedSeason: seasonResponse(committedSnapshot),
-          };
+      // Query
+      const [user, currentSeason, existingSeason] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchCurrentSeason(ctx.drizzle),
+        ctx.drizzle.query.rankedSeason.findFirst({
+          where: eq(rankedSeason.id, input.id),
         }),
-      );
+      ]);
+      // Guard
+      if (!canChangeContent(user.role)) {
+        return errorResponse("You don't have permission to update ranked seasons");
+      }
+      if (!existingSeason) {
+        return errorResponse("Season not found");
+      }
+      if (currentSeason && currentSeason.id !== input.id) {
+        const now = new Date();
+        const resultActive = input.endDate >= now;
+        if (resultActive) {
+          return errorResponse("Another season is active, cannot update this season");
+        }
+      }
+      // Server-side enforcement: preserve existing reward_reputation in all division rewards if user lacks permission
+      const { id, ...data } = input;
+      if (!canAwardReputation(user.role)) {
+        data.rewards = data.rewards.map((divisionReward) => {
+          // Find existing division reward by division name to preserve its reputation value
+          const existingDivisionReward = existingSeason.rewards.find(
+            (r) => r.division === divisionReward.division,
+          );
+          const existingReputation =
+            existingDivisionReward?.rewards?.reward_reputation ?? 0;
+          return {
+            ...divisionReward,
+            rewards: {
+              ...divisionReward.rewards,
+              reward_reputation: existingReputation,
+            },
+          };
+        });
+      }
+      // update season
+      await ctx.drizzle
+        .update(rankedSeason)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(rankedSeason.id, id));
+      return { success: true, message: "Season updated successfully" };
     }),
 
   // Delete a season
   deleteSeason: protectedProcedure
-    .input(deleteRankedSeasonSchema)
-    .output(deleteSeasonResponseSchema)
+    .input(idSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const { id: seasonId, requestId, expectedUpdatedAt, expectedSeason } = input;
-      const submittedSnapshot = deleteSeasonSnapshot(expectedSeason);
-      const receiptId = `delete-ranked-season:${requestId}`;
-
-      return retryOnDeadlock(() =>
-        ctx.drizzle.transaction(async (tx) => {
-          // Keep the same lock order as ranked-season create/update. The full season range
-          // serializes delete against those full-document writes, while the reward-range lock
-          // serializes the unclaimed-only cleanup against a reward claim.
-          await tx.execute(
-            sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} = ${ctx.userId} FOR UPDATE`,
-          );
-          await tx.execute(
-            sql`SELECT ${rankedSeason.id} FROM ${rankedSeason} ORDER BY ${rankedSeason.id} FOR UPDATE`,
-          );
-          await tx.execute(
-            sql`SELECT ${rankedUserRewards.id} FROM ${rankedUserRewards} WHERE ${rankedUserRewards.seasonId} = ${seasonId} ORDER BY ${rankedUserRewards.id} FOR UPDATE`,
-          );
-
-          const user = await tx.query.userData.findFirst({
-            where: eq(userData.userId, ctx.userId),
-          });
-          const season = await tx.query.rankedSeason.findFirst({
-            where: eq(rankedSeason.id, seasonId),
-          });
-          const previousRequest = await tx.query.actionLog.findFirst({
-            where: eq(actionLog.id, receiptId),
-          });
-
-          if (!user) return errorResponse("Deleting user not found");
-          if (user.isBanned) {
-            return errorResponse("You are banned and cannot delete ranked seasons");
-          }
-          if (!canChangeContent(user.role)) {
-            return errorResponse("You don't have permission to delete ranked seasons");
-          }
-
-          if (previousRequest) {
-            const parsedReceipt = deleteSeasonReceiptSchema.safeParse(
-              previousRequest.changes,
-            );
-            if (!parsedReceipt.success) {
-              return errorResponse("Invalid ranked season deletion request ID");
-            }
-            const receipt = parsedReceipt.data;
-            const remainingUnclaimedReward = await tx.query.rankedUserRewards.findFirst(
-              {
-                where: and(
-                  eq(rankedUserRewards.seasonId, seasonId),
-                  eq(rankedUserRewards.claimed, false),
-                ),
-              },
-            );
-            const exactReplay =
-              previousRequest.userId === user.userId &&
-              previousRequest.tableName === "RankedSeason" &&
-              previousRequest.relatedId === seasonId &&
-              receipt.requestId === requestId &&
-              receipt.seasonId === seasonId &&
-              receipt.expectedUpdatedAt === expectedUpdatedAt.toISOString() &&
-              valuesMatch(receipt.expectedSeason, submittedSnapshot) &&
-              valuesMatch(receipt.deletedSeason, submittedSnapshot) &&
-              season === undefined &&
-              remainingUnclaimedReward === undefined;
-            if (!exactReplay) {
-              return errorResponse("Invalid ranked season deletion request ID");
-            }
-
-            return {
-              success: true,
-              message: "Season was already deleted",
-              requestId,
-              seasonId,
-              expectedUpdatedAt,
-              expectedSeason,
-              deletedSeason: deleteSeasonResponse(receipt.deletedSeason),
-              deletedUnclaimedRewardIds: receipt.deletedUnclaimedRewardIds,
-              deletedUnclaimedRewardCount: receipt.deletedUnclaimedRewardIds.length,
-              deleted: true as const,
-            };
-          }
-
-          if (!season) return errorResponse("Season not found");
-          const currentSnapshot = deleteSeasonSnapshot(season);
-          if (
-            season.updatedAt.getTime() !== expectedUpdatedAt.getTime() ||
-            !valuesMatch(currentSnapshot, submittedSnapshot)
-          ) {
-            return errorResponse(
-              "This season changed after the confirmation opened. Refresh it before deleting.",
-            );
-          }
-          const unclaimedRewards = await tx.query.rankedUserRewards.findMany({
-            where: and(
-              eq(rankedUserRewards.seasonId, seasonId),
-              eq(rankedUserRewards.claimed, false),
-            ),
-            columns: { id: true },
-          });
-          const deletedUnclaimedRewardIds = unclaimedRewards
-            .map((reward) => reward.id)
-            .sort();
-
-          if (deletedUnclaimedRewardIds.length > 0) {
-            const rewardDelete = await tx
-              .delete(rankedUserRewards)
-              .where(
-                and(
-                  eq(rankedUserRewards.seasonId, seasonId),
-                  eq(rankedUserRewards.claimed, false),
-                ),
-              );
-            if (affectedRows(rewardDelete) !== deletedUnclaimedRewardIds.length) {
-              throw new TRPCError({
-                code: "CONFLICT",
-                message: "Season rewards changed while the season was being deleted",
-              });
-            }
-          }
-
-          const seasonDelete = await tx
-            .delete(rankedSeason)
-            .where(
-              and(
-                eq(rankedSeason.id, seasonId),
-                eq(rankedSeason.updatedAt, expectedUpdatedAt),
-              ),
-            );
-          if (affectedRows(seasonDelete) !== 1) {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "Season changed while it was being deleted",
-            });
-          }
-
-          await tx.insert(actionLog).values({
-            id: receiptId,
-            userId: user.userId,
-            tableName: "RankedSeason",
-            changes: {
-              requestId,
-              seasonId,
-              expectedUpdatedAt: expectedUpdatedAt.toISOString(),
-              expectedSeason: submittedSnapshot,
-              deletedSeason: currentSnapshot,
-              deletedUnclaimedRewardIds,
-            } satisfies DeleteSeasonReceipt,
-            relatedId: seasonId,
-            relatedMsg: "Deleted ranked season",
-          });
-
-          return {
-            success: true,
-            message: "Season deleted successfully",
-            requestId,
-            seasonId,
-            expectedUpdatedAt,
-            expectedSeason,
-            deletedSeason: deleteSeasonResponse(currentSnapshot),
-            deletedUnclaimedRewardIds,
-            deletedUnclaimedRewardCount: deletedUnclaimedRewardIds.length,
-            deleted: true as const,
-          };
-        }),
-      );
+      // Query
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Guard
+      if (!canChangeContent(user.role)) {
+        return errorResponse("You don't have permission to delete ranked seasons");
+      }
+      // delete season
+      await Promise.all([
+        ctx.drizzle.delete(rankedSeason).where(eq(rankedSeason.id, input.id)),
+        ctx.drizzle
+          .delete(rankedUserRewards)
+          .where(eq(rankedUserRewards.seasonId, input.id)),
+      ]);
+      return { success: true, message: "Season deleted successfully" };
     }),
 
   // End a season manually
   endSeason: protectedProcedure
-    .input(endRankedSeasonSchema)
-    .output(endSeasonResponseSchema)
+    .input(idSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      return await endRankedSeason(ctx.drizzle, input.id, {
-        actorUserId: ctx.userId,
-        request: input,
+      // Fetch user & permission guard
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canChangeContent(user.role)) {
+        return errorResponse("You don't have permission to end ranked seasons");
+      }
+      // Verify season exists & not already ended
+      const season = await ctx.drizzle.query.rankedSeason.findFirst({
+        where: eq(rankedSeason.id, input.id),
       });
+      if (!season) {
+        return errorResponse("Season not found");
+      }
+      if (season.ended) {
+        return errorResponse("Season already ended");
+      }
+
+      // Perform season ending logic
+      await endRankedSeason(ctx.drizzle, season.id);
+
+      return { success: true, message: "Season ended successfully" };
     }),
 
   // Get the ranked loadout
@@ -1046,241 +353,49 @@ export const pvpRankRouter = createTRPCRouter({
   // Update the ranked loadout
   updateRankedLoadout: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Update user's ranked PvP loadout" } })
-    .input(updateRankedLoadoutSchema)
-    .output(
-      baseServerResponse.extend({
-        committed: z
-          .object({
-            userId: z.string(),
-            loadoutId: z.string(),
-            previousUpdatedAt: z.date(),
-            updatedAt: z.date(),
-            loadout: rankedLoadoutSchema,
-          })
-          .optional(),
-      }),
-    )
+    .input(rankedLoadoutSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const {
-        expectedLoadoutId,
-        expectedUpdatedAt,
-        jutsuIds,
-        weaponIds,
-        consumableIds,
-        favoriteJutsuIds = [],
-        favoriteWeaponIds = [],
-        favoriteConsumableIds = [],
-      } = input;
-      const nextLoadout = {
-        jutsuIds,
-        weaponIds,
-        consumableIds,
-        favoriteJutsuIds,
-        favoriteWeaponIds,
-        favoriteConsumableIds,
-      };
-      const itemIds = [
-        ...new Set([
-          ...weaponIds,
-          ...consumableIds,
-          ...favoriteWeaponIds,
-          ...favoriteConsumableIds,
-        ]),
-      ];
-      const allJutsuIds = [...new Set([...jutsuIds, ...favoriteJutsuIds])];
-      const allIdLists = [
-        jutsuIds,
-        weaponIds,
-        consumableIds,
-        favoriteJutsuIds,
-        favoriteWeaponIds,
-        favoriteConsumableIds,
-      ];
-      if (allIdLists.some((ids) => new Set(ids).size !== ids.length)) {
-        return errorResponse("A ranked loadout cannot contain duplicate selections");
-      }
-
-      // Ranked loadouts use the public, free catalog rather than owned inventory. Keep the
-      // server's selectable set identical to the editor instead of trusting client-supplied IDs.
-      const [user, items, jutsus, currentLoadout] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      // Query all relevant information
+      const itemIds = [...input.weaponIds, ...input.consumableIds];
+      const [items, jutsus, currentLoadout] = await Promise.all([
         itemIds.length > 0
           ? ctx.drizzle.query.item.findMany({
-              where: inArray(item.id, itemIds),
+              where: and(inArray(item.id, itemIds), eq(item.inShop, true)),
             })
           : [],
-        allJutsuIds.length > 0
+        input.jutsuIds.length > 0
           ? ctx.drizzle.query.jutsu.findMany({
-              where: inArray(jutsu.id, allJutsuIds),
+              where: inArray(jutsu.id, input.jutsuIds),
             })
           : [],
         ctx.drizzle.query.rankedLoadout.findFirst({
-          where: and(
-            eq(rankedLoadout.id, expectedLoadoutId),
-            eq(rankedLoadout.userId, ctx.userId),
-          ),
+          where: eq(rankedLoadout.userId, ctx.userId),
         }),
       ]);
-      if (user.isBanned) {
-        return errorResponse("You are banned and cannot update a ranked loadout");
-      }
+      // Guard & ensure that all the items & jutsus exist and are of correct type
       if (!currentLoadout) {
-        return errorResponse(
-          "This ranked loadout is no longer available; refresh and try again",
-        );
+        return errorResponse("No ranked loadout found");
       }
-      const itemById = new Map(items.map((entry) => [entry.id, entry]));
-      const jutsuById = new Map(jutsus.map((entry) => [entry.id, entry]));
-      const newFavoriteWeaponIds = favoriteWeaponIds.filter(
-        (id) => !(currentLoadout.loadout.favoriteWeaponIds ?? []).includes(id),
-      );
-      const newFavoriteConsumableIds = favoriteConsumableIds.filter(
-        (id) => !(currentLoadout.loadout.favoriteConsumableIds ?? []).includes(id),
-      );
-      const newFavoriteJutsuIds = favoriteJutsuIds.filter(
-        (id) => !(currentLoadout.loadout.favoriteJutsuIds ?? []).includes(id),
-      );
-      const selectableItem = (id: string, expectedType: "WEAPON" | "CONSUMABLE") => {
-        const entry = itemById.get(id);
-        return (
-          entry?.itemType === expectedType &&
-          entry.inShop &&
-          !entry.hidden &&
-          !entry.isEventItem &&
-          entry.repsCost === 0 &&
-          entry.seichiSilverCost === 0
-        );
-      };
-      if (
-        !weaponIds.every((id) => selectableItem(id, "WEAPON")) ||
-        !newFavoriteWeaponIds.every((id) => selectableItem(id, "WEAPON")) ||
-        !consumableIds.every((id) => selectableItem(id, "CONSUMABLE")) ||
-        !newFavoriteConsumableIds.every((id) => selectableItem(id, "CONSUMABLE"))
-      ) {
-        return errorResponse("Some items are not selectable for a ranked loadout");
+      if (items.length !== itemIds.length) {
+        return errorResponse("Some items not found or not available in shop");
       }
-      const selectableJutsu = (id: string) => {
-        const entry = jutsuById.get(id);
-        return (
-          entry?.jutsuType === "NORMAL" &&
-          !entry.hidden &&
-          !entry.effects.some((effect) => effect.type === "summon")
-        );
-      };
-      if (
-        !jutsuIds.every(selectableJutsu) ||
-        !newFavoriteJutsuIds.every(selectableJutsu)
-      ) {
-        return errorResponse("Some jutsus are not selectable for a ranked loadout");
+      if (jutsus.length !== input.jutsuIds.length) {
+        return errorResponse("Some jutsus not found or not available in shop");
       }
-
       // Check loadout
-      const equippedJutsus = jutsuIds.flatMap((id) => {
-        const entry = jutsuById.get(id);
-        return entry ? [entry] : [];
-      });
-      const equippedItems = [...weaponIds, ...consumableIds].flatMap((id) => {
-        const entry = itemById.get(id);
-        return entry ? [entry] : [];
-      });
-      const jutsuCheck = validateJutsuLoadout(equippedJutsus);
-      const itemCheck = validateItemLoadout(equippedItems);
+      const jutsuCheck = validateJutsuLoadout(jutsus);
+      const itemCheck = validateItemLoadout(items);
       if (!jutsuCheck.check || !itemCheck.check) {
         return errorResponse(jutsuCheck.message || itemCheck.message);
       }
-
-      if (currentLoadout.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
-        const currentSnapshot = {
-          jutsuIds: currentLoadout.loadout.jutsuIds,
-          weaponIds: currentLoadout.loadout.weaponIds,
-          consumableIds: currentLoadout.loadout.consumableIds,
-          favoriteJutsuIds: currentLoadout.loadout.favoriteJutsuIds ?? [],
-          favoriteWeaponIds: currentLoadout.loadout.favoriteWeaponIds ?? [],
-          favoriteConsumableIds: currentLoadout.loadout.favoriteConsumableIds ?? [],
-        };
-        // Replaying a full setter after its response was lost is safe and should report the
-        // already-committed value rather than making the user guess whether the save landed.
-        if (JSON.stringify(currentSnapshot) === JSON.stringify(nextLoadout)) {
-          return {
-            success: true,
-            message: "Ranked loadout already saved",
-            committed: {
-              userId: ctx.userId,
-              loadoutId: currentLoadout.id,
-              previousUpdatedAt: expectedUpdatedAt,
-              updatedAt: currentLoadout.updatedAt,
-              loadout: currentSnapshot,
-            },
-          };
-        }
-        return errorResponse(
-          "This ranked loadout changed elsewhere; refresh before saving again",
-        );
-      }
-
-      // Always advance the millisecond revision, even when two saves land within one clock tick.
-      const updatedAt = new Date(
-        Math.max(Date.now(), currentLoadout.updatedAt.getTime() + 1),
-      );
-      const updateResult = await ctx.drizzle
+      // Run mutation
+      await ctx.drizzle
         .update(rankedLoadout)
-        .set({ loadout: nextLoadout, updatedAt })
-        .where(
-          and(
-            eq(rankedLoadout.id, currentLoadout.id),
-            eq(rankedLoadout.userId, ctx.userId),
-            eq(rankedLoadout.updatedAt, expectedUpdatedAt),
-          ),
-        );
-      if (affectedRows(updateResult) !== 1) {
-        const latest = await ctx.drizzle.query.rankedLoadout.findFirst({
-          where: and(
-            eq(rankedLoadout.id, currentLoadout.id),
-            eq(rankedLoadout.userId, ctx.userId),
-          ),
-        });
-        const latestSnapshot = latest
-          ? {
-              jutsuIds: latest.loadout.jutsuIds,
-              weaponIds: latest.loadout.weaponIds,
-              consumableIds: latest.loadout.consumableIds,
-              favoriteJutsuIds: latest.loadout.favoriteJutsuIds ?? [],
-              favoriteWeaponIds: latest.loadout.favoriteWeaponIds ?? [],
-              favoriteConsumableIds: latest.loadout.favoriteConsumableIds ?? [],
-            }
-          : null;
-        if (
-          latest &&
-          latestSnapshot &&
-          JSON.stringify(latestSnapshot) === JSON.stringify(nextLoadout)
-        ) {
-          return {
-            success: true,
-            message: "Ranked loadout already saved",
-            committed: {
-              userId: ctx.userId,
-              loadoutId: latest.id,
-              previousUpdatedAt: expectedUpdatedAt,
-              updatedAt: latest.updatedAt,
-              loadout: latestSnapshot,
-            },
-          };
-        }
-        return errorResponse(
-          "This ranked loadout changed elsewhere; refresh before saving again",
-        );
-      }
-      return {
-        success: true,
-        message: "Ranked loadout updated successfully",
-        committed: {
-          userId: ctx.userId,
-          loadoutId: currentLoadout.id,
-          previousUpdatedAt: expectedUpdatedAt,
-          updatedAt,
-          loadout: nextLoadout,
-        },
-      };
+        .set({ loadout: input, updatedAt: new Date() })
+        .where(eq(rankedLoadout.id, currentLoadout.id));
+      // Return success
+      return { success: true, message: "Ranked loadout updated successfully" };
     }),
 
   // Enter the ranked season
@@ -1684,320 +799,62 @@ export const getUnclaimedUserSeasonRewards = async (
   });
 };
 
-type EndRankedSeasonOptions = {
-  actorUserId?: string;
-  request?: z.infer<typeof endRankedSeasonSchema>;
-  now?: Date;
-};
-
 /**
- * Atomically end a ranked season. The manual route supplies an immutable confirmation
- * snapshot and audit key; the daily job uses the same locking/write path without a staff
- * receipt. User rows are locked before the ranked-season range so create/update/delete/end
- * cannot form a user/season lock-order cycle. Every transaction statement remains sequential.
+ * End a ranked season
+ * @param client - The Drizzle client
+ * @param seasonId - The ID of the season to end
  */
-export const endRankedSeason = async (
-  client: DrizzleClient,
-  seasonId: string,
-  options: EndRankedSeasonOptions = {},
-) => {
-  const request = options.request;
-  const submittedSnapshot = request
-    ? deleteSeasonSnapshot(request.expectedSeason)
-    : undefined;
-  const receiptId = request ? `end-ranked-season:${request.requestId}` : undefined;
-
-  return retryOnDeadlock(() =>
-    client.transaction(async (tx) => {
-      if (options.actorUserId) {
-        await tx.execute(
-          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} = ${options.actorUserId} FOR UPDATE`,
-        );
-      }
-
-      // Ranked LP is a season-wide balance. Lock the bounded participating set before the
-      // season range: reward division calculation and LP reset must observe one exact cohort.
-      await tx.execute(
-        sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.rankedLp} > 0 ORDER BY ${userData.userId} FOR UPDATE`,
-      );
-      await tx.execute(
-        sql`SELECT ${rankedSeason.id} FROM ${rankedSeason} ORDER BY ${rankedSeason.id} FOR UPDATE`,
-      );
-      await tx.execute(
-        sql`SELECT ${rankedUserRewards.id} FROM ${rankedUserRewards} WHERE ${rankedUserRewards.seasonId} = ${seasonId} ORDER BY ${rankedUserRewards.id} FOR UPDATE`,
-      );
-      await tx.execute(
-        sql`SELECT ${rankedPvpQueue.id} FROM ${rankedPvpQueue} ORDER BY ${rankedPvpQueue.id} FOR UPDATE`,
-      );
-
-      const actor = options.actorUserId
-        ? await tx.query.userData.findFirst({
-            where: eq(userData.userId, options.actorUserId),
-          })
-        : undefined;
-      const season = await tx.query.rankedSeason.findFirst({
-        where: eq(rankedSeason.id, seasonId),
-      });
-      const previousRequest = receiptId
-        ? await tx.query.actionLog.findFirst({
-            where: eq(actionLog.id, receiptId),
-          })
-        : undefined;
-
-      if (options.actorUserId) {
-        if (!actor) return errorResponse("Ending user not found");
-        if (actor.isBanned) {
-          return errorResponse("You are banned and cannot end ranked seasons");
-        }
-        if (!canChangeContent(actor.role)) {
-          return errorResponse("You don't have permission to end ranked seasons");
-        }
-      }
-
-      if (request && actor && previousRequest) {
-        const parsedReceipt = endSeasonReceiptSchema.safeParse(previousRequest.changes);
-        if (!parsedReceipt.success || !submittedSnapshot) {
-          return errorResponse("Invalid ranked season ending request ID");
-        }
-        const receipt = parsedReceipt.data;
-        const currentSnapshot = season ? deleteSeasonSnapshot(season) : undefined;
-        const currentRewards = await tx.query.rankedUserRewards.findMany({
-          where: eq(rankedUserRewards.seasonId, seasonId),
-          columns: { id: true, userId: true, division: true },
-        });
-        const rewardById = new Map(currentRewards.map((reward) => [reward.id, reward]));
-        const exactRewardsRemain = receipt.rewards.every((reward) => {
-          const current = rewardById.get(reward.id);
-          return (
-            current?.userId === reward.userId && current.division === reward.division
-          );
-        });
-        const exactReplay =
-          previousRequest.userId === actor.userId &&
-          previousRequest.tableName === "RankedSeason" &&
-          previousRequest.relatedId === seasonId &&
-          receipt.requestId === request.requestId &&
-          receipt.seasonId === seasonId &&
-          receipt.expectedUpdatedAt === request.expectedUpdatedAt.toISOString() &&
-          valuesMatch(receipt.expectedSeason, submittedSnapshot) &&
-          valuesMatch(receipt.previousSeason, submittedSnapshot) &&
-          currentSnapshot !== undefined &&
-          valuesMatch(receipt.committedSeason, currentSnapshot) &&
-          exactRewardsRemain;
-        if (!exactReplay) {
-          return errorResponse("Invalid ranked season ending request ID");
-        }
-
-        return {
-          success: true,
-          message: "Season was already ended",
-          requestId: request.requestId,
-          seasonId,
-          expectedUpdatedAt: request.expectedUpdatedAt,
-          expectedSeason: request.expectedSeason,
-          previousSeason: deleteSeasonResponse(receipt.previousSeason),
-          committedSeason: deleteSeasonResponse(receipt.committedSeason),
-          rewards: receipt.rewards,
-          rewardCount: receipt.rewards.length,
-          insertedRewardIds: receipt.insertedRewardIds,
-          resetUserIds: receipt.resetUserIds,
-          resetUserCount: receipt.resetUserIds.length,
-          clearedQueueUserIds: receipt.clearedQueueUserIds,
-          clearedQueueCount: receipt.clearedQueueUserIds.length,
-          ended: true as const,
-        };
-      }
-
-      if (previousRequest) {
-        return errorResponse("Invalid ranked season ending request ID");
-      }
-      if (!season) {
-        if (request) return errorResponse("Season not found");
-        throw new Error("Season not found");
-      }
-      if (season.ended) {
-        if (request) return errorResponse("Season already ended");
-        return { success: true, message: "Season already ended", ended: true as const };
-      }
-
-      const previousSnapshot = deleteSeasonSnapshot(season);
-      if (
-        request &&
-        (!submittedSnapshot ||
-          season.updatedAt.getTime() !== request.expectedUpdatedAt.getTime() ||
-          !valuesMatch(previousSnapshot, submittedSnapshot))
-      ) {
-        return errorResponse(
-          "This season changed after the confirmation opened. Refresh it before ending.",
-        );
-      }
-
-      const now = options.now ?? new Date();
-      if (request && (season.startDate > now || season.endDate < now)) {
-        return errorResponse("Only the currently active season can be ended manually");
-      }
-
-      const users = await tx.query.userData.findMany({
-        columns: { userId: true, rankedLp: true },
-        where: gt(userData.rankedLp, 0),
-        orderBy: (users, { desc, asc }) => [desc(users.rankedLp), asc(users.userId)],
-      });
-      const existingRewards = await tx.query.rankedUserRewards.findMany({
-        where: eq(rankedUserRewards.seasonId, seasonId),
-        columns: { id: true, userId: true, division: true },
-      });
-      const queueEntries = await tx.query.rankedPvpQueue.findMany({
-        columns: { id: true, userId: true },
-      });
-
-      const existingRewardsByUser = new Map<string, typeof existingRewards>();
-      for (const reward of existingRewards) {
-        const entries = existingRewardsByUser.get(reward.userId) ?? [];
-        entries.push(reward);
-        existingRewardsByUser.set(reward.userId, entries);
-      }
-      if ([...existingRewardsByUser.values()].some((rewards) => rewards.length > 1)) {
-        const message =
-          "Season rewards contain duplicate users; repair them before ending the season";
-        if (request) return errorResponse(message);
-        throw new Error(message);
-      }
-
-      const topPlayersLP = users
-        .filter((user) => user.rankedLp >= RANKED_LEGEND_LP_REQUIREMENT)
-        .slice(0, RANKED_SANNIN_TOP_PLAYERS)
-        .map((user) => user.rankedLp);
-      const rewards: EndSeasonRewardReceipt[] = [];
-      const rewardsToInsert: Array<typeof rankedUserRewards.$inferInsert> = [];
-      for (const user of users) {
-        const existingReward = existingRewardsByUser.get(user.userId)?.[0];
-        if (existingReward) {
-          rewards.push(existingReward);
-          continue;
-        }
-        const reward = {
-          id: nanoid(),
-          userId: user.userId,
-          seasonId,
-          division: getRankedRank(user.rankedLp, topPlayersLP),
-        };
-        rewardsToInsert.push(reward);
-        rewards.push({
-          id: reward.id,
-          userId: reward.userId,
-          division: reward.division,
-        });
-      }
-      rewards.sort((left, right) => left.userId.localeCompare(right.userId));
-      const insertedRewardIds = rewardsToInsert.map((reward) => reward.id).sort();
-      const resetUserIds = users.map((user) => user.userId).sort();
-      const clearedQueueUserIds = [
-        ...new Set(queueEntries.map((entry) => entry.userId)),
-      ].sort();
-
-      if (rewardsToInsert.length > 0) {
-        await tx.insert(rankedUserRewards).values(rewardsToInsert);
-      }
-      if (resetUserIds.length > 0) {
-        const resetResult = await tx
-          .update(userData)
-          .set({ rankedLp: 0, rankedStreak: 0 })
-          .where(inArray(userData.userId, resetUserIds));
-        if (affectedRows(resetResult) !== resetUserIds.length) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "Ranked participants changed while the season was ending",
-          });
-        }
-      }
-      if (clearedQueueUserIds.length > 0) {
-        await tx
-          .update(userData)
-          .set({ status: "AWAKE" })
-          .where(
-            and(
-              inArray(userData.userId, clearedQueueUserIds),
-              eq(userData.status, "QUEUED"),
-            ),
-          );
-      }
-      if (queueEntries.length > 0) {
-        const queueDelete = await tx.delete(rankedPvpQueue);
-        if (affectedRows(queueDelete) !== queueEntries.length) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "Ranked queue changed while the season was ending",
-          });
-        }
-      }
-
-      const nextUpdatedAt = new Date(
-        Math.max(now.getTime(), season.updatedAt.getTime() + 1),
-      );
-      const seasonUpdate = await tx
-        .update(rankedSeason)
-        .set({ ended: true, endDate: now, updatedAt: nextUpdatedAt })
-        .where(
-          and(
-            eq(rankedSeason.id, seasonId),
-            eq(rankedSeason.updatedAt, season.updatedAt),
-            eq(rankedSeason.ended, false),
-          ),
-        );
-      if (affectedRows(seasonUpdate) !== 1) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "Season changed while it was being ended",
-        });
-      }
-
-      const committedSnapshot: DeleteSeasonSnapshot = {
-        ...previousSnapshot,
-        endDate: now.toISOString(),
-        ended: true,
-        updatedAt: nextUpdatedAt.toISOString(),
-      };
-
-      if (request && actor && receiptId && submittedSnapshot) {
-        await tx.insert(actionLog).values({
-          id: receiptId,
-          userId: actor.userId,
-          tableName: "RankedSeason",
-          changes: {
-            requestId: request.requestId,
-            seasonId,
-            expectedUpdatedAt: request.expectedUpdatedAt.toISOString(),
-            expectedSeason: submittedSnapshot,
-            previousSeason: previousSnapshot,
-            committedSeason: committedSnapshot,
-            rewards,
-            insertedRewardIds,
-            resetUserIds,
-            clearedQueueUserIds,
-          } satisfies EndSeasonReceipt,
-          relatedId: seasonId,
-          relatedMsg: "Ended ranked season",
-        });
-      }
-
-      return {
-        success: true,
-        message: "Season ended successfully",
-        requestId: request?.requestId,
-        seasonId,
-        expectedUpdatedAt: request?.expectedUpdatedAt,
-        expectedSeason: request?.expectedSeason,
-        previousSeason: deleteSeasonResponse(previousSnapshot),
-        committedSeason: deleteSeasonResponse(committedSnapshot),
-        rewards,
-        rewardCount: rewards.length,
-        insertedRewardIds,
-        resetUserIds,
-        resetUserCount: resetUserIds.length,
-        clearedQueueUserIds,
-        clearedQueueCount: clearedQueueUserIds.length,
-        ended: true as const,
-      };
+export const endRankedSeason = async (client: DrizzleClient, seasonId: string) => {
+  // Fetch users with LP > 0 and the season to end (validate again in case caller skipped)
+  const [users, season] = await Promise.all([
+    client.query.userData.findMany({
+      columns: {
+        userId: true,
+        rankedLp: true,
+      },
+      orderBy: (userData, { desc }) => [desc(userData.rankedLp)],
+      where: gt(userData.rankedLp, 0),
     }),
-  );
+    client.query.rankedSeason.findFirst({
+      where: eq(rankedSeason.id, seasonId),
+    }),
+  ]);
+
+  if (!season) {
+    throw new Error("Season not found");
+  }
+  if (season.ended) {
+    return;
+  }
+
+  // Determine top players LP for "Sannin" rank calculation
+  // Sannin is only the top 10 players who have reached Legend rank (900+ LP)
+  const legendPlayers = users.filter((u) => u.rankedLp >= RANKED_LEGEND_LP_REQUIREMENT);
+  const topPlayersLP = legendPlayers
+    .slice(0, RANKED_SANNIN_TOP_PLAYERS)
+    .map((u) => u.rankedLp);
+
+  // Prepare reward rows
+  const rewardRows = users.map((user) => ({
+    id: nanoid(),
+    userId: user.userId,
+    seasonId: season.id,
+    division: getRankedRank(user.rankedLp, topPlayersLP),
+  }));
+
+  // Execute database updates in parallel (no explicit transaction)
+  await Promise.all([
+    // Reset LP for everyone
+    client
+      .update(userData)
+      .set({ rankedLp: 0, rankedStreak: 0 })
+      .where(gt(userData.rankedLp, 0)),
+    // Mark season as ended
+    client
+      .update(rankedSeason)
+      .set({ ended: true, endDate: new Date() })
+      .where(eq(rankedSeason.id, season.id)),
+    // Insert rewards rows if any
+    rewardRows.length > 0 ? client.insert(rankedUserRewards).values(rewardRows) : null,
+  ]);
 };

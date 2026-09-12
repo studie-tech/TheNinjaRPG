@@ -13,24 +13,6 @@ export const awardSchema = z
 
 export type AwardSchema = z.infer<typeof awardSchema>;
 
-/**
- * The mutation carries an immutable recipient snapshot and an idempotency key in addition to the
- * editable award fields. Keeping this separate from {@link awardSchema} means the same schema can
- * still drive the form without manufacturing request metadata before the user confirms it.
- */
-export const awardRequestSchema = awardSchema.extend({
-  requestId: z.string().uuid(),
-  expectedUsers: z
-    .array(
-      z.object({
-        userId: z.string().min(1),
-        username: z.string().min(1).max(191),
-      }),
-    )
-    .min(1)
-    .max(10),
-});
-
 // Filtering schema for listing awards
 export const awardsFilteringSchema = z.object({
   rewardType: z.enum(["all", "reputation", "money", "both"]).prefault("all"),

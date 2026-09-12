@@ -53,12 +53,7 @@ export type PrestigeTransferSchema = z.infer<
 
 // Experience award schema (used in PublicUser for staff)
 export const experienceAwardSchema = z.object({
-  amount: z.number().int("Experience must be a whole number").min(1).max(100000),
-  reason: z
-    .string()
-    .trim()
-    .min(3, "Please provide a reason")
-    .max(191, "Reason must be 191 characters or fewer"),
+  amount: z.number().min(1).max(100000),
 });
 export type ExperienceAwardSchema = z.infer<typeof experienceAwardSchema>;
 

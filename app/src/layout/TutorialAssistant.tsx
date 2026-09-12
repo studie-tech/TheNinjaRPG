@@ -412,27 +412,14 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     try {
       const result = await disableTutorial({
         tutorialOn: false,
-        expectedTutorialOn: request.expectedTutorialOn,
-        requestId: request.requestId,
       });
       const identity = tutorialIdentityRef.current;
       const isCurrentTutorial =
         identity.userId === request.userId &&
         identity.tutorialStep === request.tutorialStep;
-      const isVerifiedCommit =
-        result.success &&
-        result.requestId === request.requestId &&
-        result.userId === request.userId &&
-        result.expectedTutorialOn === request.expectedTutorialOn &&
-        result.committedTutorialOn === false;
-
       if (!isCurrentTutorial) return;
-      if (!isVerifiedCommit) {
-        setDisableTutorialError(
-          result.success
-            ? "The server response could not be verified. Please try again."
-            : result.message,
-        );
+      if (!result.success) {
+        setDisableTutorialError(result.message);
         return;
       }
 

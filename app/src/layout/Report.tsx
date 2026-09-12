@@ -74,26 +74,15 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
       // Capture everything the player confirmed, including the target identity and
       // reason draft, before beginning the asynchronous request.
       const requestId = crypto.randomUUID();
-      const request = Object.freeze({ ...data, requestId });
       pendingRequestRef.current = requestId;
       setPendingRequestId(requestId);
 
-      createReport.mutate(request, {
+      createReport.mutate(data, {
         onSuccess: (response) => {
           showMutationToast(response);
-          if (
-            !response.success ||
-            response.requestId !== requestId ||
-            response.system !== request.system ||
-            response.systemId !== request.system_id ||
-            response.reportedUserId !== request.reported_userId ||
-            !response.reportId
-          ) {
-            return;
-          }
+          if (!response.success) return;
 
-          // The response proves this exact request committed. Only now is it safe
-          // to clear the draft and close the report dialog.
+          // Clear the draft only after the server reports success.
           reset();
           setShowModal(false);
           void Promise.allSettled([

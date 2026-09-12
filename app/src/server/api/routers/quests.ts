@@ -23,7 +23,6 @@ import {
   MAX_SKILL_POINTS,
   MEDICAL_MISSIONS_PER_DAY,
   MEDNIN_EXP_CAP,
-  MISSIONS_PER_DAY,
   NPC_ONLY_QUEST_TYPES,
   PVP_MISSIONS_PER_DAY,
   QUESTS_CONCURRENT_LIMIT,
@@ -137,21 +136,6 @@ import { questFilteringSchema } from "@/validators/quest";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import type { QuestCounterFieldName } from "@/validators/user";
 import { getQuestCounterFieldName } from "@/validators/user";
-
-const mutationRowsAffected = (result: unknown) => {
-  if (result && typeof result === "object" && "rowsAffected" in result) {
-    return Number(result.rowsAffected);
-  }
-  if (
-    Array.isArray(result) &&
-    result[0] &&
-    typeof result[0] === "object" &&
-    "affectedRows" in result[0]
-  ) {
-    return Number(result[0].affectedRows);
-  }
-  return 0;
-};
 
 export const questsRouter = createTRPCRouter({
   getAllNames: publicProcedure
@@ -604,112 +588,47 @@ export const questsRouter = createTRPCRouter({
     .input(z.object({ questId: z.string(), userSector: z.number() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Quest and map data are immutable for this request and do not need the user assignment
-      // lock. Fetch them first to keep the transaction's critical section small.
-      const [sectorVillage, questData, initialUser] = await Promise.all([
-        fetchSectorVillage(ctx.drizzle, input.userSector),
-        fetchQuest(ctx.drizzle, input.questId),
+      // Query
+      const [updatedUser, sectorVillage, questData, prevAttempt] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
-          forceRegen: true,
+          forceRegen: true, // Force regeneration to ensure we have latest quest data
         }),
+        fetchSectorVillage(ctx.drizzle, input.userSector),
+        fetchQuest(ctx.drizzle, input.questId),
+        fetchUserQuestByQuestId(ctx.drizzle, ctx.userId, input.questId),
       ]);
+
+      // Cheap pre-fetch guards (UI-only)
+      const { user } = updatedUser;
+      if (!user) return errorResponse("User does not exist");
       if (!questData) return errorResponse("Quest does not exist");
-      if (!initialUser.user) return errorResponse("User does not exist");
+      if (user.sector !== input.userSector) return errorResponse("Sector mismatch");
+      if (user.isBanned) return errorResponse("You are banned");
 
-      return ctx.drizzle.transaction(async (tx) => {
-        // Serialize all explicit starts for this user. Without this lock, two requests can both
-        // validate against the same pre-start snapshot and create mutually-exclusive quests while
-        // incrementing counters twice. The transaction also makes history, tracker, and counter
-        // writes atomic.
-        await tx.execute(
-          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} = ${ctx.userId} FOR UPDATE`,
-        );
-        // PlanetScale transaction connections execute one statement at a time, so refresh only
-        // the mutable assignment snapshot here instead of calling fetchUpdatedUser's parallel
-        // read fan-out inside the transaction.
-        const lockedUser = await tx.query.userData.findFirst({
-          where: eq(userData.userId, ctx.userId),
-          with: {
-            village: {
-              with: {
-                structures: true,
-                relationshipA: true,
-                relationshipB: true,
-                sectors: { columns: { sector: true } },
-              },
-            },
-            userQuests: {
-              where: or(
-                and(isNull(questHistory.endAt), eq(questHistory.completed, 0)),
-                eq(questHistory.questType, "achievement"),
-              ),
-              with: { quest: true },
-              orderBy: sql`FIELD(${questHistory.questType}, 'daily', 'tier') ASC`,
-            },
-            completedQuests: {
-              columns: { id: true, questId: true, completed: true },
-              where: gte(questHistory.completed, 1),
-            },
-          },
-        });
-        if (!lockedUser) return errorResponse("User does not exist");
-        const user = {
-          ...initialUser.user,
-          ...lockedUser,
-          activeWars: lockedUser.villageId
-            ? await fetchActiveWars(tx, lockedUser.villageId)
-            : [],
-        };
-        const prevAttempt = await fetchUserQuestByQuestId(
-          tx,
-          ctx.userId,
-          input.questId,
-        );
-        if (user.sector !== input.userSector) return errorResponse("Sector mismatch");
-        if (user.isBanned) return errorResponse("You are banned");
-
-        return assignQuestToUser({
-          client: tx,
-          user,
-          quest: questData,
-          source: "ui",
-          sectorVillage,
-          prevAttempt,
-        });
+      return assignQuestToUser({
+        client: ctx.drizzle,
+        user,
+        quest: questData,
+        source: "ui",
+        sectorVillage,
+        prevAttempt,
       });
     }),
   abandon: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Abandon an active quest" } })
-    .input(
-      z.object({
-        id: z.string(),
-        userQuestId: z.string(),
-        startedAt: z.date(),
-      }),
-    )
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, storedAttempt] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        ctx.drizzle.query.questHistory.findFirst({
-          where: and(
-            eq(questHistory.id, input.userQuestId),
-            eq(questHistory.questId, input.id),
-            eq(questHistory.userId, ctx.userId),
-          ),
-        }),
-      ]);
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
       if (!user) return errorResponse("User does not exist");
-      if (
-        !storedAttempt ||
-        storedAttempt.startedAt.getTime() !== input.startedAt.getTime()
-      ) {
-        return errorResponse("This quest attempt is no longer active. Please refresh.");
-      }
-      if (storedAttempt.completed !== 0 || storedAttempt.endAt) {
-        return { success: true, message: "Quest already abandoned" };
+      const current = user?.userQuests?.find((q) => q.questId === input.id && !q.endAt);
+      if (!current) {
+        return { success: true, message: `Quest already abandoned` };
       }
       if (
         user.role === "USER" &&
@@ -726,73 +645,38 @@ export const questsRouter = createTRPCRouter({
           "pvp",
           "war",
           "overworld",
-        ].includes(storedAttempt.questType)
+        ].includes(current.questType)
       ) {
-        return errorResponse(`Cannot abandon ${storedAttempt.questType} quest type.`);
+        return errorResponse(`Cannot abandon ${current.questType} quest type.`);
       }
-      const endedAt = new Date();
-      const questId = input.id;
-      // JSON_SEARCH uses LIKE matching, so escape its wildcard characters before resolving the
-      // exact tracker path. JSON_REMOVE then operates on the latest row value inside the same
-      // transaction instead of replacing unrelated quest progress with the earlier user snapshot.
-      const trackerPath = sql`JSON_UNQUOTE(JSON_SEARCH(
-        ${userData.questData},
-        'one',
-        REPLACE(REPLACE(REPLACE(${questId}, '#', '##'), '%', '#%'), '_', '#_'),
-        '#',
-        '$[*].id'
-      ))`;
-
-      const outcome = await ctx.drizzle.transaction(async (tx) => {
-        const claim = await tx
+      // Derived
+      const questData = filterQuestTrackersForDbPersist(
+        user.questData?.filter((q) => q.id !== input.id) ?? [],
+        user,
+      );
+      // Mutate
+      await Promise.all([
+        ctx.drizzle
           .update(questHistory)
-          .set({ completed: 0, endAt: endedAt })
+          .set({ completed: 0, endAt: new Date() })
           .where(
             and(
-              eq(questHistory.id, input.userQuestId),
-              eq(questHistory.questId, questId),
+              eq(questHistory.questId, input.id),
               eq(questHistory.userId, ctx.userId),
-              eq(questHistory.startedAt, input.startedAt),
-              eq(questHistory.completed, 0),
-              isNull(questHistory.endAt),
             ),
-          );
-        if (mutationRowsAffected(claim) !== 1) return "changed" as const;
-
-        await tx
+          ),
+        ctx.drizzle
           .update(userData)
           .set({
-            questFinishAt: endedAt,
-            questData: sql`CASE
-              WHEN ${trackerPath} IS NULL THEN ${userData.questData}
-              ELSE JSON_REMOVE(
-                ${userData.questData},
-                TRIM(TRAILING '.id' FROM ${trackerPath})
-              )
-            END`,
+            questFinishAt: new Date(),
+            questData: questData,
             // If the abandoned quest held the single active-NPC-mission slot, free it in the same
             // write (questId-scoped so a concurrent grant of a different quest is never cleared).
             // Otherwise the slot stays stale and blocks the next overworld NPC interaction.
-            activeNpcQuestId: sql`IF(${userData.activeNpcQuestId} = ${questId}, NULL, ${userData.activeNpcQuestId})`,
+            activeNpcQuestId: sql`IF(${userData.activeNpcQuestId} = ${input.id}, NULL, ${userData.activeNpcQuestId})`,
           })
-          .where(eq(userData.userId, ctx.userId));
-        return "abandoned" as const;
-      });
-
-      if (outcome === "changed") {
-        const latestAttempt = await ctx.drizzle.query.questHistory.findFirst({
-          where: and(
-            eq(questHistory.id, input.userQuestId),
-            eq(questHistory.questId, input.id),
-            eq(questHistory.userId, ctx.userId),
-            eq(questHistory.startedAt, input.startedAt),
-          ),
-        });
-        if (latestAttempt && (latestAttempt.completed !== 0 || latestAttempt.endAt)) {
-          return { success: true, message: "Quest already abandoned" };
-        }
-        return errorResponse("This quest attempt is no longer active. Please refresh.");
-      }
+          .where(eq(userData.userId, ctx.userId)),
+      ]);
       return { success: true, message: `Quest abandoned` };
     }),
   getQuestHistory: protectedProcedure
@@ -1383,208 +1267,56 @@ export const questsRouter = createTRPCRouter({
       return quests.filter((q) => q.quest);
     }),
   deleteUserQuest: protectedProcedure
-    .input(
-      z.object({
-        userId: z.string().min(1),
-        expectedUsername: z.string().min(1).max(191),
-        userQuestId: z.string().min(1),
-        questId: z.string().min(1),
-        expectedQuestName: z.string().min(1).max(191),
-        expectedQuestType: z.enum(QuestTypes),
-        expectedStartedAt: z.date(),
-        expectedEndAt: z.date().nullable(),
-        expectedCompleted: z.number().int().min(0),
-        requestId: z.string().uuid(),
-      }),
-    )
-    .output(
-      baseServerResponse.extend({
-        requestId: z.string().uuid().optional(),
-        deletion: z
-          .object({
-            userId: z.string(),
-            username: z.string(),
-            userQuestId: z.string(),
-            questId: z.string(),
-            questName: z.string(),
-            questType: z.enum(QuestTypes),
-            startedAt: z.date(),
-            endAt: z.date().nullable(),
-            completed: z.number().int(),
-          })
-          .optional(),
-      }),
-    )
+    .input(z.object({ userId: z.string(), questId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const receiptId = `delete-user-quest:${input.requestId}`;
-      const confirmedDeletion = {
-        userId: input.userId,
-        username: input.expectedUsername,
-        userQuestId: input.userQuestId,
-        questId: input.questId,
-        questName: input.expectedQuestName,
-        questType: input.expectedQuestType,
-        startedAt: input.expectedStartedAt,
-        endAt: input.expectedEndAt,
-        completed: input.expectedCompleted,
-      };
-      const expectedReceipt = {
-        userQuestId: input.userQuestId,
-        questId: input.questId,
-        questName: input.expectedQuestName,
-        questType: input.expectedQuestType,
-        startedAt: input.expectedStartedAt.toISOString(),
-        endAt: input.expectedEndAt?.toISOString() ?? null,
-        completed: input.expectedCompleted,
-      };
-
-      return ctx.drizzle.transaction(async (tx) => {
-        // Serialize operations touching this user before checking the request receipt and
-        // history CAS. This prevents two staff actions from both observing an old profile.
-        const lockedUserIds = [...new Set([ctx.userId, input.userId])].sort();
-        await tx.execute(
-          sql`SELECT ${userData.userId} FROM ${userData} WHERE ${userData.userId} IN (${sql.join(
-            lockedUserIds.map((id) => sql`${id}`),
-            sql`, `,
-          )}) ORDER BY ${userData.userId} FOR UPDATE`,
-        );
-
-        // A transaction is one database connection. Keep these reads sequential so the
-        // PlanetScale transport never overlaps statements on the same transaction session.
-        const user = await tx.query.userData.findFirst({
-          where: eq(userData.userId, ctx.userId),
-        });
-        const targetUser = await tx.query.userData.findFirst({
-          where: eq(userData.userId, input.userId),
-        });
-        const previousRequest = await tx.query.actionLog.findFirst({
-          where: eq(actionLog.id, receiptId),
-        });
-
-        if (!user) return errorResponse("User not found");
-        if (user.isBanned) {
-          return errorResponse("You are banned and cannot perform this action");
-        }
-        if (!canEditQuests(user.role)) {
-          return errorResponse("Not authorized to delete user quests");
-        }
-        if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
-          return errorResponse("You can only delete quests from your own profile");
-        }
-
-        if (previousRequest) {
-          const receipt = previousRequest.changes as typeof expectedReceipt;
-          const exactReplay =
-            previousRequest.userId === user.userId &&
-            previousRequest.tableName === "QuestHistory" &&
-            previousRequest.relatedId === input.userId &&
-            receipt.userQuestId === expectedReceipt.userQuestId &&
-            receipt.questId === expectedReceipt.questId &&
-            receipt.questName === expectedReceipt.questName &&
-            receipt.questType === expectedReceipt.questType &&
-            receipt.startedAt === expectedReceipt.startedAt &&
-            receipt.endAt === expectedReceipt.endAt &&
-            receipt.completed === expectedReceipt.completed;
-          if (!exactReplay) return errorResponse("Invalid quest deletion request ID");
-          return {
-            success: true,
-            message: `${input.expectedQuestName} was already deleted`,
-            requestId: input.requestId,
-            deletion: confirmedDeletion,
-          };
-        }
-
-        if (!targetUser) return errorResponse("Target user not found");
-        if (targetUser.username !== input.expectedUsername) {
-          return errorResponse("The selected user changed; review the deletion again");
-        }
-
-        const storedAttempt = await tx.query.questHistory.findFirst({
-          where: and(
-            eq(questHistory.id, input.userQuestId),
-            eq(questHistory.userId, input.userId),
-            eq(questHistory.questId, input.questId),
-          ),
-          with: { quest: true },
-        });
-        if (
-          !storedAttempt?.quest ||
-          storedAttempt.quest.name !== input.expectedQuestName ||
-          storedAttempt.quest.questType !== input.expectedQuestType ||
-          storedAttempt.startedAt.getTime() !== input.expectedStartedAt.getTime() ||
-          (storedAttempt.endAt?.getTime() ?? null) !==
-            (input.expectedEndAt?.getTime() ?? null) ||
-          storedAttempt.completed !== input.expectedCompleted
-        ) {
-          return errorResponse(
-            "This quest record changed; refresh and review it before deleting",
-          );
-        }
-
-        const endAtCondition = input.expectedEndAt
-          ? eq(questHistory.endAt, input.expectedEndAt)
-          : isNull(questHistory.endAt);
-        const deleted = await tx
+      // Query
+      const [user, targetUser] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUpdatedUser({ client: ctx.drizzle, userId: input.userId }),
+      ]);
+      // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
+      if (!user || !canEditQuests(user.role)) {
+        return errorResponse("Not authorized to delete user quests");
+      }
+      if (!targetUser.user) {
+        return errorResponse("Target user not found");
+      }
+      // Roles that can only edit themselves
+      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+        return errorResponse("You can only delete quests from your own profile");
+      }
+      // Derives
+      const questData = filterQuestTrackersForDbPersist(
+        targetUser.user.questData?.filter((q) => q.id !== input.questId) ?? [],
+        targetUser.user,
+      );
+      // Mutate
+      await Promise.all([
+        ctx.drizzle
           .delete(questHistory)
           .where(
             and(
-              eq(questHistory.id, input.userQuestId),
               eq(questHistory.userId, input.userId),
               eq(questHistory.questId, input.questId),
-              eq(questHistory.questType, input.expectedQuestType),
-              eq(questHistory.startedAt, input.expectedStartedAt),
-              endAtCondition,
-              eq(questHistory.completed, input.expectedCompleted),
             ),
-          );
-        if (mutationRowsAffected(deleted) !== 1) {
-          return errorResponse(
-            "This quest record changed; refresh and review it before deleting",
-          );
-        }
-
-        // Remove only this quest's tracker from the latest JSON value. Keep questFinishAt and
-        // aggregate counters untouched: deletion does not reverse rewards or completed work.
-        const trackerPath = sql`JSON_UNQUOTE(JSON_SEARCH(
-          ${userData.questData},
-          'one',
-          REPLACE(REPLACE(REPLACE(${input.questId}, '#', '##'), '%', '#%'), '_', '#_'),
-          '#',
-          '$[*].id'
-        ))`;
-        await tx
+          ),
+        ctx.drizzle
           .update(userData)
-          .set({
-            questData: sql`CASE
-              WHEN ${trackerPath} IS NULL THEN ${userData.questData}
-              ELSE JSON_REMOVE(
-                ${userData.questData},
-                TRIM(TRAILING '.id' FROM ${trackerPath})
-              )
-            END`,
-            activeNpcQuestId: sql`IF(${userData.activeNpcQuestId} = ${input.questId}, NULL, ${userData.activeNpcQuestId})`,
-          })
-          .where(eq(userData.userId, input.userId));
-
-        // The request-keyed action log is both the audit and durable idempotency receipt. It
-        // commits with the delete and cleanup or not at all.
-        await tx.insert(actionLog).values({
-          id: receiptId,
-          userId: user.userId,
-          tableName: "QuestHistory",
-          changes: expectedReceipt,
-          relatedId: targetUser.userId,
-          relatedMsg: "Deleted user quest record",
-          relatedImage: targetUser.avatarLight,
-        });
-
-        return {
-          success: true,
-          message: `${storedAttempt.quest.name} deleted from ${targetUser.username}`,
-          requestId: input.requestId,
-          deletion: confirmedDeletion,
-        };
-      });
+          .set({ questData })
+          .where(eq(userData.userId, input.userId)),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "user",
+          changes: [`Deleted quest ${input.questId}`],
+          relatedId: input.userId,
+          relatedMsg: `Deleted quest ${input.questId}`,
+          relatedImage: user.avatarLight,
+        }),
+      ]);
+      return { success: true, message: "Quest deleted successfully" };
     }),
   retryBattle: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Retry a quest battle after failure" } })
@@ -2626,27 +2358,6 @@ const uiStructureAccessGuard = (
     if (!user.isOutlaw && !canAccessStructure(user, "/missionhall", sectorVillage)) {
       return errorResponse("Must be in your allied village to start quest");
     }
-    if (
-      ["mission", "crime"].includes(quest.questType) &&
-      user.dailyMissions >= MISSIONS_PER_DAY
-    ) {
-      return errorResponse(
-        `You have reached your daily mission limit of ${MISSIONS_PER_DAY}`,
-      );
-    }
-    if (
-      quest.questType === "medical" &&
-      user.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY
-    ) {
-      return errorResponse(
-        `You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY}`,
-      );
-    }
-    if (quest.questType === "pvp" && user.dailyPvpMissions >= PVP_MISSIONS_PER_DAY) {
-      return errorResponse(
-        `You have reached your daily PvP mission limit of ${PVP_MISSIONS_PER_DAY}`,
-      );
-    }
   }
   return null;
 };
@@ -2806,11 +2517,10 @@ export const assignQuestToUser = async (args: {
     }
     await upsertQuestEntry(client, user, questData, source, prevAttempt ?? null);
   } else {
-    // Keep these sequential: startQuest passes a PlanetScale transaction client, whose single
-    // connection cannot execute concurrent statements. The surrounding transaction preserves
-    // atomicity; other callers simply trade one tiny round trip of parallelism for correctness.
-    await upsertQuestEntry(client, user, questData, source, prevAttempt ?? null);
-    await incrementDailyQuestCounter(client, user, questData.questType);
+    await Promise.all([
+      upsertQuestEntry(client, user, questData, source, prevAttempt ?? null),
+      incrementDailyQuestCounter(client, user, questData.questType),
+    ]);
   }
   return { success: true, message: `Quest started: ${questData.name}` };
 };
@@ -2935,8 +2645,8 @@ export const upsertQuestEntry = async (
       })
       .where(eq(userData.userId, user.userId)),
   );
-  // Execute sequentially because this helper may run on a single-connection transaction client.
-  for (const promise of promises) await promise;
+  // Execute promises
+  await Promise.all(promises);
   // Return the newest log entry
   return entry;
 };
@@ -3160,7 +2870,6 @@ export const commitQuestObjectiveRewards = async (info: {
           eq(questHistory.questId, userQuest?.questId ?? ""),
           eq(questHistory.userId, userId),
           eq(questHistory.completed, 0),
-          isNull(questHistory.endAt),
         ),
       );
 
