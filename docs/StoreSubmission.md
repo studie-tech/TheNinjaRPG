@@ -99,9 +99,11 @@ screenshots remain incomplete. No products have been submitted for review.
 
 Apple subscriptions: `tnr_federal_normal`, `tnr_federal_silver`, `tnr_federal_gold` in
 one subscription group. Android: subscription `tnr_federal` with `normal`, `silver`,
-`gold` base plans. Confirm billing periods and prices before activating products.
+`gold` base plans. Match the live game’s Federal prices, as instructed by the owner. Verify exact amounts
+and billing periods against the production PayPal plans before activating products.
 Apple group `Federal Status` (`22379575`) is created with English (US) localization;
-individual subscriptions await confirmed billing periods and prices.
+individual subscriptions await verification of the existing live-game PayPal plan
+amounts and billing periods; the owner has approved matching those prices.
 Map all subscriptions to RevenueCat entitlement `federal`; include supported products
 in the current offering. Webhook: `https://www.theninja-rpg.com/api/webhooks/revenuecat`.
 RevenueCat authorization must match `REVENUECAT_WEBHOOK_SECRET` exactly.
@@ -225,3 +227,7 @@ repeat the affected native checks because both shells load the production origin
 Prepare announcement copy and assets before launch, but do not publish announcements
 or send messages without the owner's authorization. Keep the website usable if a
 native rollout is paused, and record which backend deployment each beta build tested.
+
+Federal pricing verified via production PayPal plans on 2026-09-12: Normal USD 5.00,
+Silver USD 10.00, Gold USD 15.00; all active, recurring every one month, no trial cycle.
+Console updates are in progress; this verification does not itself change store prices.

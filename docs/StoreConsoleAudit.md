@@ -44,7 +44,7 @@ settles every regional licensing requirement.
 | App Privacy | Data-type/purpose/linkage/tracking questionnaire remains incomplete; no privacy declaration published |
 | Content rights | Not completed; confirm rights for all game art, music and user-uploaded content before attesting |
 | Purchases | Five consumable drafts exist; availability, screenshots and review remain incomplete |
-| Subscriptions | Federal Status group exists; Normal/Silver/Gold monthly USD prices still required before product configuration |
+| Subscriptions | Federal Status group exists; Owner instructed matching the live game’s Normal/Silver/Gold prices; verify the production PayPal plan amounts and billing periods before product configuration |
 | Business | DSA verification is In Review; DAC7 Missing Info; bank account holder address/type requested |
 | Business address | Console and website footer show different addresses; owner must establish the current legal address |
 
@@ -129,7 +129,8 @@ physical haptics or production account deletion.
 ## Owner input still needed
 
 1. Reviewer telephone number, including country code.
-2. Monthly USD prices for Normal, Silver and Gold Federal subscriptions.
+2. Federal pricing is decided: match the live game. No further price choice is needed
+   from the owner; read the production PayPal plans to establish exact amounts and periods.
 3. Business verification details requested by Apple and Google, and the current legal
    address. Verification codes or identity documents must be supplied by the owner.
 4. A release date only after candidate testing and review timing are understood.
@@ -140,3 +141,7 @@ physical haptics or production account deletion.
 - Apple screenshot upload guidance: https://developer.apple.com/help/app-store-connect/manage-app-information/upload-app-previews-and-screenshots
 - Google preview assets: https://support.google.com/googleplay/android-developer/answer/9866151
 - Apple review guidelines: https://developer.apple.com/app-store/review/guidelines/
+
+Federal pricing verified via production PayPal plans on 2026-09-12: Normal USD 5.00,
+Silver USD 10.00, Gold USD 15.00; all active, recurring every one month, no trial cycle.
+Console updates are in progress; this verification does not itself change store prices.
