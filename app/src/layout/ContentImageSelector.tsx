@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Edit, Sparkles } from "lucide-react";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { HistoricalAiAvatar } from "@/app/profile/edit/page";
@@ -18,7 +18,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
-import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
 import { showMutationToast } from "@/libs/toast";
@@ -44,6 +43,16 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
   const { label, imageUrl, id, prompt, allowImageUpload, type } = props;
   const { onUploadComplete } = props;
   const { size, maxDim } = props;
+  const disabledRef = useRef(Boolean(props.disabled));
+  const wasDisabledRef = useRef(Boolean(props.disabled));
+  const operationGenerationRef = useRef(0);
+  const imageGenerationRef = useRef<number | null>(null);
+  const uploadGenerationRef = useRef<number | null>(null);
+  disabledRef.current = Boolean(props.disabled);
+  if (props.disabled && !wasDisabledRef.current) {
+    operationGenerationRef.current += 1;
+  }
+  wasDisabledRef.current = Boolean(props.disabled);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,7 +86,10 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
   const { mutate: createImg, isPending: load } = api.generativeAi.createImg.useMutation(
     {
       onSuccess: async (data) => {
-        if (data.success && data.url) {
+        const isCurrentOperation =
+          imageGenerationRef.current === operationGenerationRef.current &&
+          !disabledRef.current;
+        if (data.success && data.url && isCurrentOperation) {
           setLocalImageUrl(data.url);
           onUploadComplete(data.url);
           await utils.avatar.getHistoricalAvatars.invalidate();
@@ -93,6 +105,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
       return;
     } else if (!load) {
       // Send off the request for content image
+      imageGenerationRef.current = operationGenerationRef.current;
       createImg({
         preprompt: data.systemPrompt,
         prompt: data.userPrompt,
@@ -113,6 +126,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
       return;
     } else if (!load) {
       // Use the edit prompt for image modification
+      imageGenerationRef.current = operationGenerationRef.current;
       createImg({
         preprompt: data.systemPrompt,
         prompt: data.editPrompt,
@@ -186,7 +200,16 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                 <div className="mt-4 flex flex-row gap-2">
                   <UploadButton
                     endpoint="imageUploader"
+                    onUploadBegin={() => {
+                      uploadGenerationRef.current = operationGenerationRef.current;
+                    }}
                     onClientUploadComplete={(res) => {
+                      if (
+                        disabledRef.current ||
+                        uploadGenerationRef.current !== operationGenerationRef.current
+                      ) {
+                        return;
+                      }
                       const serverData = res?.[0]?.serverData;
                       if (serverData?.error) {
                         showMutationToast({
@@ -300,7 +323,10 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
             <HistoricalAiAvatar
               relationId={id}
               contentType={type}
+              disabled={props.disabled}
+              operationGeneration={operationGenerationRef.current}
               onUpdate={(url) => {
+                if (disabledRef.current) return;
                 setLocalImageUrl(url);
                 onUploadComplete(url);
               }}

@@ -12,7 +12,7 @@ import {
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { pvpRankRouter } from "@/routers/pvprank";
 import type { DrizzleClient } from "@/server/db";
-import { rewardSchema } from "@/validators/pvpRank";
+import { endRankedSeasonSchema, rewardSchema } from "@/validators/pvpRank";
 import { insertUsers } from "../../setup/factories";
 import { beforeStatements, failStatements } from "../../setup/statements";
 import {
@@ -111,15 +111,15 @@ const transactionalProxy = (
 
 describe("ranked season ending validation", () => {
   it("requires a UUID whose target and revision match the immutable snapshot", async () => {
-    await expect(
-      pvpRankRouter.createCaller({} as never).endSeason(endInput("not-a-uuid")),
-    ).rejects.toThrow();
-    await expect(
-      pvpRankRouter.createCaller({} as never).endSeason({
+    expect(
+      await endRankedSeasonSchema.safeParseAsync(endInput("not-a-uuid")),
+    ).toMatchObject({ success: false });
+    expect(
+      await endRankedSeasonSchema.safeParseAsync({
         ...endInput("98000000-0000-4000-8000-000000000001"),
         id: "another-season",
       }),
-    ).rejects.toThrow();
+    ).toMatchObject({ success: false });
   });
 });
 

@@ -31,6 +31,7 @@ type TableProps<T, K extends keyof T> = {
   linkColumn?: K;
   linkPrefix?: string;
   buttons?: {
+    id?: string | ((row: T) => string);
     label: string | React.ReactNode | ((row: T) => React.ReactNode);
     onClick: (row: T) => void;
     disabled?: (row: T) => boolean;
@@ -148,25 +149,30 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
               ))}
               {props.buttons && (
                 <td className={compact ? "px-2 py-1" : "px-6 py-4"}>
-                  {props.buttons.map((button) => (
-                    <Button
-                      id={`button-${typeof button.label === "string" ? button.label : "action"}`}
-                      key={
-                        typeof button.label === "string" ? button.label : "row-action"
-                      }
-                      disabled={button.disabled?.(row)}
-                      aria-label={button.ariaLabel?.(row)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        button.onClick(row);
-                      }}
-                    >
-                      {typeof button.label === "function"
-                        ? button.label(row)
-                        : button.label}
-                    </Button>
-                  ))}
+                  {props.buttons.map((button, buttonIndex) => {
+                    const rowId = (row as T & { id?: string }).id ?? `row-${i}`;
+                    const actionId =
+                      typeof button.id === "function"
+                        ? button.id(row)
+                        : (button.id ?? String(buttonIndex));
+                    return (
+                      <Button
+                        id={`table-action-${rowId}-${actionId}`}
+                        key={`${rowId}-${actionId}`}
+                        disabled={button.disabled?.(row)}
+                        aria-label={button.ariaLabel?.(row)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          button.onClick(row);
+                        }}
+                      >
+                        {typeof button.label === "function"
+                          ? button.label(row)
+                          : button.label}
+                      </Button>
+                    );
+                  })}
                 </td>
               )}
             </tr>

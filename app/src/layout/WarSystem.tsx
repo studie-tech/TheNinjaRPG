@@ -738,12 +738,24 @@ export const SectorWar: React.FC<{
           utils.war.getEndedWars.invalidate(),
         ]);
       },
-      onSettled: (_data, _error, variables) => {
-        if (adminEndRequestRef.current?.payload.requestId === variables.requestId) {
-          adminEndSubmitGuardRef.current = false;
-        }
+      onSettled: () => {
+        adminEndSubmitGuardRef.current = false;
       },
     });
+
+  useEffect(() => {
+    const request = adminEndRequestRef.current;
+    if (
+      request &&
+      request.componentIdentity !== currentAdminEndIdentity &&
+      !isEndingWar
+    ) {
+      adminEndRequestRef.current = null;
+      setAdminEndRequest(null);
+      setShowAdminEndDialog(false);
+      adminEndSubmitGuardRef.current = false;
+    }
+  }, [currentAdminEndIdentity, isEndingWar]);
 
   const openAdminEndDialog = () => {
     if (isBuilding || isEndingWar || adminEndSubmitGuardRef.current) return;

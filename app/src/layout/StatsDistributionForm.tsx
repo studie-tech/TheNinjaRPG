@@ -50,7 +50,7 @@ interface StatDistributionProps {
   title?: string;
   subtitle?: string;
   defaultBackHref?: string;
-  isPending?: boolean;
+  isPending: boolean;
   pendingLabel?: string;
 }
 
@@ -67,7 +67,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
     title = "Distribute Stats",
     subtitle,
     defaultBackHref,
-    isPending = false,
+    isPending,
     pendingLabel = "Assigning",
   } = props;
 
@@ -172,7 +172,7 @@ interface SimpleDistributionProps {
   availableStats: number;
   onAccept: (data: StatSchemaType) => void;
   isRedistribution?: boolean;
-  isPending?: boolean;
+  isPending: boolean;
   pendingLabel?: string;
 }
 
@@ -182,7 +182,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
     availableStats,
     onAccept,
     isRedistribution,
-    isPending = false,
+    isPending,
     pendingLabel = "Assigning",
   } = props;
   const [pendingSpecialization, setPendingSpecialization] = useState<string | null>(

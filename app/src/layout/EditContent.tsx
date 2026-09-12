@@ -3076,12 +3076,11 @@ export const MassEffectEditor = <
     [props.onPendingChange],
   );
 
-  // A successful jutsu or bloodline save becomes the local source of truth
+  // A successful save becomes the local source of truth
   // immediately. Only release that snapshot once a later list response confirms
   // the same effects; a stale or failed refresh must not make a committed change
   // look retryable.
   useEffect(() => {
-    if (kind !== "jutsu" && kind !== "bloodline") return;
     setCommitted((prev) => {
       let changed = false;
       const next = { ...prev };

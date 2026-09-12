@@ -41,6 +41,18 @@ export const useBadgeEditForm = (badge: Badge, refetch: () => void) => {
     resolver: zodResolver(BadgeValidator),
   });
 
+  useEffect(() => {
+    const incomingIsNewer =
+      badge.id !== editorBadge.id ||
+      badge.updatedAt.getTime() > editorBadge.updatedAt.getTime();
+    if (!incomingIsNewer || inFlightRef.current) return;
+
+    const nextBadge = copyBadge(badge);
+    retryRef.current = null;
+    setEditorBadge(nextBadge);
+    form.reset(copyFormData(nextBadge));
+  }, [badge, editorBadge.id, editorBadge.updatedAt, form]);
+
   // Mutation for updating badges
   const utils = api.useUtils();
   const updateBadge = api.badge.update.useMutation();

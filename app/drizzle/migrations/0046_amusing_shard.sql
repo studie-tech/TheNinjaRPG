@@ -9,9 +9,7 @@ CREATE TABLE IF NOT EXISTS `_UserBadge_duplicates_0046` (
 	PRIMARY KEY (`userId`, `badgeId`)
 );
 --> statement-breakpoint
-DELETE FROM `_UserBadge_duplicates_0046`;
---> statement-breakpoint
-INSERT INTO `_UserBadge_duplicates_0046` (`userId`, `badgeId`, `createdAt`)
+INSERT IGNORE INTO `_UserBadge_duplicates_0046` (`userId`, `badgeId`, `createdAt`)
 SELECT `userId`, `badgeId`, MIN(`createdAt`)
 FROM `UserBadge`
 GROUP BY `userId`, `badgeId`

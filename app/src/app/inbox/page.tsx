@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -61,10 +61,10 @@ export default function Inbox() {
       <NewConversationPrompt
         setSelectedConvo={setSelectedConvo}
         newButton={
-          <Button id="conversation">
+          <span className={buttonVariants()}>
             <SquarePen className="mr-2 h-5 w-5" />
             New
-          </Button>
+          </span>
         }
       />
       <Popover>
@@ -320,7 +320,6 @@ export interface NewConversationPromptProps {
 
 export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (props) => {
   const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
   const maxUsers = 5;
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const createSubmissionRef = useRef(false);
@@ -449,15 +448,14 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
       )}
       {userData && !composeRestriction && (
         <>
-          {/* biome-ignore lint/a11y/useSemanticElements: supports both button and icon trigger content */}
-          <div
-            role="button"
-            tabIndex={createConversation.isPending ? -1 : 0}
+          <button
+            type="button"
+            id={props.preSelectedUser ? undefined : "conversation"}
             aria-haspopup="dialog"
             aria-expanded={isCreateDialogOpen}
-            aria-disabled={createConversation.isPending}
             aria-busy={createConversation.isPending}
-            className={`inline-flex items-center ${
+            disabled={createConversation.isPending}
+            className={`inline-flex items-center border-0 bg-transparent p-0 ${
               createConversation.isPending
                 ? "cursor-not-allowed opacity-50"
                 : "cursor-pointer"
@@ -468,17 +466,9 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
               event.stopPropagation();
               openCreateDialog();
             }}
-            onKeyDown={(event) => {
-              if (createSubmissionRef.current) return;
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                event.stopPropagation();
-                openCreateDialog();
-              }
-            }}
           >
             {props.newButton}
-          </div>
+          </button>
           <Modal
             title="Create a new conversation"
             proceed_label="Submit"

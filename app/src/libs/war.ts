@@ -538,14 +538,16 @@ export const handleWarEnd = async (
           )`,
         ),
       );
-    await tx.insert(notification).values({
-      userId: TERR_BOT_ID,
-      content: notificationContent,
-    });
-    await tx
-      .update(userData)
-      .set({ unreadNotifications: sql`unreadNotifications + 1` })
-      .where(inArray(userData.villageId, [loserVillageId, winnerVillageId]));
+    if (notificationContent) {
+      await tx.insert(notification).values({
+        userId: TERR_BOT_ID,
+        content: notificationContent,
+      });
+      await tx
+        .update(userData)
+        .set({ unreadNotifications: sql`unreadNotifications + 1` })
+        .where(inArray(userData.villageId, [loserVillageId, winnerVillageId]));
+    }
     await tx
       .delete(userRequest)
       .where(
@@ -565,15 +567,28 @@ export const handleWarEnd = async (
       );
 
     if (activeWar.type === "SECTOR_WAR") {
-      await tx
-        .update(sector)
-        .set({ villageId: winnerVillageId, shrineLevel: 1, capturedAt: endedAt })
-        .where(
-          and(
-            eq(sector.sector, activeWar.sector),
-            ne(sector.villageId, winnerVillageId),
-          ),
-        );
+      if (status === "ATTACKER_VICTORY") {
+        await tx
+          .update(sector)
+          .set({ villageId: winnerVillageId, shrineLevel: 1, capturedAt: endedAt })
+          .where(
+            and(
+              eq(sector.sector, activeWar.sector),
+              ne(sector.villageId, winnerVillageId),
+            ),
+          );
+        await tx
+          .update(villageStructure)
+          .set({
+            curSp: sql`GREATEST(curSp - ${WAR_SECTOR_LOSS_TOWNHALL_DAMAGE}, 0)`,
+          })
+          .where(
+            and(
+              eq(villageStructure.villageId, loserVillageId),
+              eq(villageStructure.route, "/townhall"),
+            ),
+          );
+      }
       await tx
         .update(war)
         .set({ status: "DEFENDER_VICTORY", endedAt })
@@ -582,17 +597,6 @@ export const handleWarEnd = async (
             ne(war.id, activeWar.id),
             eq(war.sector, activeWar.sector),
             isNull(war.endedAt),
-          ),
-        );
-      await tx
-        .update(villageStructure)
-        .set({
-          curSp: sql`GREATEST(curSp - ${WAR_SECTOR_LOSS_TOWNHALL_DAMAGE}, 0)`,
-        })
-        .where(
-          and(
-            eq(villageStructure.villageId, loserVillageId),
-            eq(villageStructure.route, "/townhall"),
           ),
         );
     } else if (["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {

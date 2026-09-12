@@ -75,7 +75,7 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
   const pendingDeletionCount = useMemo(
     () =>
       [...pendingDeletionTotals.values()].filter(
-        (expectedTotal) => rawTotalComments > expectedTotal,
+        (observedTotal) => rawTotalComments === observedTotal,
       ).length,
     [pendingDeletionTotals, rawTotalComments],
   );
@@ -96,7 +96,7 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
       setPendingDeletionTotals((current) => {
         if (current.has(commentId)) return current;
         const next = new Map(current);
-        next.set(commentId, expectedTotal);
+        next.set(commentId, rawTotalComments);
         return next;
       });
       // Decide the destination from the known pre-delete count, rather than a
@@ -122,6 +122,7 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
       isSoleCommentOnLastPage,
       limit,
       page,
+      rawTotalComments,
       thread_id,
       totalComments,
       utils.comments.getForumComments,
@@ -136,8 +137,8 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
     setPendingDeletionTotals((current) => {
       let changed = false;
       const next = new Map(current);
-      for (const [commentId, expectedTotal] of current) {
-        if (rawTotalComments <= expectedTotal) {
+      for (const [commentId, observedTotal] of current) {
+        if (rawTotalComments !== observedTotal) {
           next.delete(commentId);
           changed = true;
         }

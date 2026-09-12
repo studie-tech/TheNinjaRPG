@@ -40,7 +40,6 @@ import {
 } from "@/libs/moderator";
 import { getServerPusher } from "@/libs/pusher";
 import { createUserAvatar } from "@/routers/avatar";
-import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -48,6 +47,7 @@ import {
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import {
   canBanUsers,
   canClearReport,
@@ -832,7 +832,7 @@ export const reportsRouter = createTRPCRouter({
                 : eq(userData.avatar, input.expectedAvatar),
             ),
           );
-        if (updateResult.rowsAffected !== 1) return false;
+        if (mutationRowsAffected(updateResult) !== 1) return false;
 
         await tx.insert(reportLog).values({
           id: nanoid(),
@@ -899,7 +899,7 @@ export const reportsRouter = createTRPCRouter({
               sql`BINARY ${userNindo.content} = BINARY ${input.expectedContent}`,
             ),
           );
-        if (deleted.rowsAffected !== 1) return false;
+        if (mutationRowsAffected(deleted) !== 1) return false;
 
         await tx.insert(reportLog).values({
           id: nanoid(),
