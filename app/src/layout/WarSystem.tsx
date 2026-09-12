@@ -702,14 +702,7 @@ export const SectorWar: React.FC<{
   const { mutate: adminEndWar, isPending: isEndingWar } =
     api.war.adminEndWar.useMutation({
       onSuccess: async (data) => {
-        const request = adminEndRequestRef.current;
-        if (
-          !sectorWarMountedRef.current ||
-          !request ||
-          currentAdminEndIdentityRef.current !== request.componentIdentity
-        ) {
-          return;
-        }
+        if (!sectorWarMountedRef.current) return;
 
         if (!data.success) {
           showMutationToast(data);
@@ -1544,14 +1537,7 @@ export const VillageWar: React.FC<{
   const { mutate: surrender, isPending: isSurrendering } =
     api.war.surrender.useMutation({
       onSuccess: async (data) => {
-        const request = surrenderRequestRef.current;
-        if (
-          !villageWarMountedRef.current ||
-          !request ||
-          request.componentIdentity !== surrenderIdentityRef.current
-        ) {
-          return;
-        }
+        if (!villageWarMountedRef.current) return;
         if (!data.success) {
           showMutationToast(data);
           return;
@@ -1574,14 +1560,7 @@ export const VillageWar: React.FC<{
   const { mutate: adminEndWar, isPending: isAdminEnding } =
     api.war.adminEndWar.useMutation({
       onSuccess: async (data) => {
-        const request = adminEndRequestRef.current;
-        if (
-          !villageWarMountedRef.current ||
-          !request ||
-          request.componentIdentity !== adminEndIdentityRef.current
-        ) {
-          return;
-        }
+        if (!villageWarMountedRef.current) return;
 
         if (!data.success) {
           showMutationToast(data);

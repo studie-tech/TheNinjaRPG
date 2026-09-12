@@ -53,7 +53,6 @@ type FormValuesInput = RankedSeasonInput;
 interface SeasonFormProps {
   initialData?: FormValues;
   seasonId?: string;
-  seasonRevision?: Date;
   onSuccess?: () => void;
   onPendingChange?: (pending: boolean) => void;
 }
