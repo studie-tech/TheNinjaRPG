@@ -18,6 +18,7 @@ import {
  */
 export const USER_ID_REFERENCE_COLUMNS = [
   ["GameAsset", "createdByUserId"],
+  ["GuideArticle", "updatedByUserId"],
   ["AiProfile", "userId"],
   ["OverworldAiPlacement", "aiTemplateUserId"],
   ["AnbuSquad", "leaderId"],
