@@ -3,6 +3,7 @@
 import { BellRing, Send } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { NativeAccountDeletionLink } from "@/components/native/NativeAccountDeletionLink";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { PushCategory } from "@/drizzle/constants";
@@ -200,6 +201,9 @@ export default function DeviceSettings() {
             </Button>
           </div>
         )}
+        <div className="mt-6">
+          <NativeAccountDeletionLink />
+        </div>
       </div>
     </>
   );
