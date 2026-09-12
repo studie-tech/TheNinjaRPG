@@ -32,6 +32,25 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 /// Sign in with Apple are all dead. `registerPluginInstance` is the supported route and,
 /// unlike `registerPluginType`, is not skipped while auto-registration is on.
 class MainViewController: CAPBridgeViewController {
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        guard let webView else { return }
+
+        // The live site's positioned headers don't honor the WebView's scroll insets.
+        // Constrain the viewport itself so controls stay clear of the camera and home indicator.
+        let container = UIView()
+        container.backgroundColor = webView.backgroundColor
+        view = container
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(webView)
+        NSLayoutConstraint.activate([
+            webView.topAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: container.safeAreaLayoutGuide.bottomAnchor),
+            webView.leadingAnchor.constraint(equalTo: container.safeAreaLayoutGuide.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: container.safeAreaLayoutGuide.trailingAnchor),
+        ])
+    }
+
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(TNRWidgetSyncPlugin())
         bridge?.registerPluginInstance(TNRAudioSessionPlugin())

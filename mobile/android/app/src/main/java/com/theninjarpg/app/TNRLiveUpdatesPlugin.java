@@ -210,11 +210,20 @@ public class TNRLiveUpdatesPlugin extends Plugin {
      * runtime. A number needs no date library at all, and the web side sends one.
      */
     private Long parseEndsAt(PluginCall call) {
-        Double raw = call.getDouble("endsAtEpochMs");
-        if (raw == null) {
+        return parseEpochMilliseconds(call.getData().opt("endsAtEpochMs"));
+    }
+
+    static Long parseEpochMilliseconds(Object raw) {
+        // JSONObject decodes whole-number JavaScript timestamps as Long, while
+        // Capacitor's getDouble only accepts Double and would report them missing.
+        if (!(raw instanceof Number)) {
             return null;
         }
-        return raw.longValue();
+        double value = ((Number) raw).doubleValue();
+        if (!Double.isFinite(value) || value <= 0 || value >= Long.MAX_VALUE) {
+            return null;
+        }
+        return ((Number) raw).longValue();
     }
 
     private NotificationManager manager() {
