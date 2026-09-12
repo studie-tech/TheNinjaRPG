@@ -5908,3 +5908,24 @@ export const guideArticleRelations = relations(guideArticle, ({ one }) => ({
     references: [jutsu.id],
   }),
 }));
+
+// A durable deletion request survives removal of both the character and Clerk identity.
+// Never store email addresses, verification codes or credentials in this queue.
+export const accountDeletion = mysqlTable(
+  "AccountDeletion",
+  {
+    appleRevokedSubject: varchar("appleRevokedSubject", { length: 191 }),
+    userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+    phase: mysqlEnum("phase", ["QUEUED", "IDENTITY_DELETED", "COMPLETE"])
+      .default("QUEUED").notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+    nextAttemptAt: datetime("nextAttemptAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+    leaseId: varchar("leaseId", { length: 191 }),
+    leaseUntil: datetime("leaseUntil", { mode: "date", fsp: 3 }),
+    attempts: int("attempts").default(0).notNull(),
+    completedAt: datetime("completedAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => ({ pendingIdx: index("AccountDeletion_pending_idx").on(table.phase, table.nextAttemptAt) }),
+);

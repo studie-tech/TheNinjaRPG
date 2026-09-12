@@ -1,10 +1,12 @@
 import Link from "next/link";
 import React from "react";
+import { NativeAccountDeletionLink } from "@/components/native/NativeAccountDeletionLink";
 import { SITE_FOOTER_LINKS } from "@/libs/legalLinks";
 
 const Footer: React.FC = () => {
   return (
     <div className="col-span-6 text-center text-white" data-site-footer>
+      <NativeAccountDeletionLink />
       <p className="text-xs" data-footer-links>
         {SITE_FOOTER_LINKS.map((link, index) => (
           <React.Fragment key={link.href}>
