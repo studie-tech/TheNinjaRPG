@@ -553,7 +553,9 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
       showMutationToast({
         success: false,
         message:
-          error instanceof Error ? error.message : "Could not update the preference",
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not update the preference",
       });
       setBattleDescriptionDraft(previousValue);
     } finally {
@@ -1496,7 +1498,7 @@ const ResetStats: React.FC = () => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await utils.profile.getUser.invalidate().catch(() => undefined);
         }
       },
       onError: (error) => {

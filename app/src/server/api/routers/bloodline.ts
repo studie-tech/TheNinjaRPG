@@ -666,7 +666,13 @@ export const bloodlineRouter = createTRPCRouter({
         // editing sends the complete bloodline, so an audit failure must not leave
         // a partial update that appears safe to retry.
         await ctx.drizzle.transaction(async (tx) => {
-          await tx.update(bloodline).set(newData).where(eq(bloodline.id, input.id));
+          await tx
+            .update(bloodline)
+            .set({
+              ...newData,
+              updatedAt: new Date(Math.max(Date.now(), entry.updatedAt.getTime() + 1)),
+            })
+            .where(eq(bloodline.id, input.id));
           await tx.insert(actionLog).values({
             id: nanoid(),
             userId: ctx.userId,

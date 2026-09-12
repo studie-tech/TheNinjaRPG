@@ -105,14 +105,26 @@ describeWithDatabase("UserBadge unique assignment migration", () => {
     );
 
     for (const statement of statements.slice(0, 3)) await runRawSql(statement);
+    await runRawSql(
+      "INSERT INTO `UserBadge` (`userId`,`badgeId`,`createdAt`) VALUES " +
+        "('retry-user','retry-badge','2026-09-09 12:00:00.000')," +
+        "('retry-user','retry-badge','2026-09-09 06:00:00.000')",
+    );
     await applyMigration();
 
     const database = await getTestDatabase();
-    const rows = await database.select().from(userBadge);
+    const rows = await database
+      .select({
+        userId: userBadge.userId,
+        badgeId: userBadge.badgeId,
+        createdAt: sql<string>`DATE_FORMAT(${userBadge.createdAt}, '%Y-%m-%d %H:%i:%s')`,
+      })
+      .from(userBadge);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       userId: "retry-user",
       badgeId: "retry-badge",
+      createdAt: "2026-09-09 06:00:00",
     });
   });
 });

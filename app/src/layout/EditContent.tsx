@@ -3044,7 +3044,7 @@ const SingleSelectSimple: React.FC<{
  * MassEffectEditor (re-exported) - generic mass editor that reuses EffectFieldInputGeneric
  */
 export const MassEffectEditor = <
-  T extends { id: string; name: string; effects: ZodAllTags[] },
+  T extends { id: string; name: string; effects: ZodAllTags[]; updatedAt: Date },
 >(props: {
   kind: "item" | "jutsu" | "bloodline";
   entries: T[] | undefined;
@@ -3056,7 +3056,9 @@ export const MassEffectEditor = <
   const { kind, entries, selectedFields } = props;
 
   const [modified, setModified] = useState<Record<string, ZodAllTags[]>>({});
-  const [committed, setCommitted] = useState<Record<string, ZodAllTags[]>>({});
+  const [committed, setCommitted] = useState<
+    Record<string, { effects: ZodAllTags[]; baseUpdatedAt: number }>
+  >({});
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
   const [pendingJutsuId, setPendingJutsuId] = useState<string | null>(null);
   const [pendingBloodlineId, setPendingBloodlineId] = useState<string | null>(null);
@@ -3076,19 +3078,20 @@ export const MassEffectEditor = <
     [props.onPendingChange],
   );
 
-  // A successful save becomes the local source of truth
-  // immediately. Only release that snapshot once a later list response confirms
-  // the same effects; a stale or failed refresh must not make a committed change
-  // look retryable.
+  // A successful save becomes the local source of truth immediately. Retain it
+  // only while the list still carries the exact pre-save revision. Once the
+  // server revision advances it is authoritative, including when another editor
+  // has since committed different effects.
   useEffect(() => {
     setCommitted((prev) => {
       let changed = false;
       const next = { ...prev };
       for (const entry of entries ?? []) {
-        const savedEffects = next[entry.id];
+        const snapshot = next[entry.id];
         if (
-          savedEffects &&
-          JSON.stringify(entry.effects) === JSON.stringify(savedEffects)
+          snapshot &&
+          (entry.updatedAt.getTime() > snapshot.baseUpdatedAt ||
+            JSON.stringify(entry.effects) === JSON.stringify(snapshot.effects))
         ) {
           delete next[entry.id];
           changed = true;
@@ -3158,13 +3161,15 @@ export const MassEffectEditor = <
         selectedFields.forEach((f) => {
           row[f] = (
             <EffectFieldInputGeneric
-              effect={modified[entry.id]?.[idx] ?? committed[entry.id]?.[idx] ?? effect}
+              effect={
+                modified[entry.id]?.[idx] ?? committed[entry.id]?.effects[idx] ?? effect
+              }
               field={f}
               onChange={(v) =>
                 setModified((prev) => {
                   const next: Record<string, ZodAllTags[]> = { ...prev };
                   const baseEffs =
-                    next[entry.id] ?? committed[entry.id] ?? entry.effects;
+                    next[entry.id] ?? committed[entry.id]?.effects ?? entry.effects;
                   const effsArray = Array.isArray(baseEffs) ? baseEffs : entry.effects;
                   const updated = [...effsArray];
                   const current = updated[idx] ?? effect;
@@ -3192,7 +3197,8 @@ export const MassEffectEditor = <
   const saveRow = async (row: Row) => {
     const entry = (entries || []).find((e) => e.id === row.entryId);
     if (!entry) return;
-    const effects = modified[row.entryId] ?? committed[row.entryId] ?? entry.effects;
+    const effects =
+      modified[row.entryId] ?? committed[row.entryId]?.effects ?? entry.effects;
     if (kind === "item") {
       if (itemSaveInFlight.current) return;
       itemSaveInFlight.current = true;
@@ -3203,7 +3209,10 @@ export const MassEffectEditor = <
         const res = await itemUpdate.mutateAsync({ id: entry.id, data });
         showMutationToast(res);
         if (!res.success) return;
-        setCommitted((prev) => ({ ...prev, [entry.id]: effects }));
+        setCommitted((prev) => ({
+          ...prev,
+          [entry.id]: { effects, baseUpdatedAt: entry.updatedAt.getTime() },
+        }));
         setModified((prev) => {
           const next = { ...prev };
           delete next[row.entryId];
@@ -3240,7 +3249,10 @@ export const MassEffectEditor = <
         const res = await jutsuUpdate.mutateAsync({ id: entry.id, data });
         showMutationToast(res);
         if (!res.success) return;
-        setCommitted((prev) => ({ ...prev, [entry.id]: effects }));
+        setCommitted((prev) => ({
+          ...prev,
+          [entry.id]: { effects, baseUpdatedAt: entry.updatedAt.getTime() },
+        }));
         setModified((prev) => {
           const next = { ...prev };
           delete next[row.entryId];
@@ -3281,7 +3293,10 @@ export const MassEffectEditor = <
         const res = await bloodlineUpdate.mutateAsync({ id: entry.id, data });
         showMutationToast(res);
         if (!res.success) return;
-        setCommitted((prev) => ({ ...prev, [entry.id]: effects }));
+        setCommitted((prev) => ({
+          ...prev,
+          [entry.id]: { effects, baseUpdatedAt: entry.updatedAt.getTime() },
+        }));
         setModified((prev) => {
           const next = { ...prev };
           delete next[row.entryId];

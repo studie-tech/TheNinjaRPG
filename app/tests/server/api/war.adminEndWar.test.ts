@@ -774,6 +774,62 @@ describeWithDatabase("war.adminEndWar", () => {
     expect(await database.query.notification.findMany()).toEqual([]);
   });
 
+  it("lets the rollback sentinel escape a caller-owned transaction", async () => {
+    const database = await getTestDatabase();
+    const staleWar = await database.query.war.findFirst({
+      where: eq(war.id, WAR_ID),
+      with: {
+        attackerVillage: { with: { structures: true } },
+        defenderVillage: { with: { structures: true } },
+        warAllies: { with: { village: true } },
+      },
+    });
+    expect(staleWar).toBeDefined();
+
+    await expect(
+      database.transaction(async (rawTx) => {
+        const tx = beforeStatements(
+          rawTx as unknown as DrizzleClient,
+          village,
+          [
+            async () => undefined,
+            async () => undefined,
+            async () => {
+              await rawTx.delete(war).where(eq(war.id, WAR_ID));
+            },
+          ],
+        );
+        return await handleWarEnd(staleWar as FetchActiveWarsReturnType, {
+          transaction: tx,
+          preparedState: {
+            attackerTokens: 850,
+            defenderTokens: 0,
+            attackerWarHealth: 800,
+            defenderWarHealth: 0,
+          },
+        });
+      }),
+    ).rejects.toThrow("War end preparation lost its claim");
+
+    expect(
+      await database.query.war.findFirst({ where: eq(war.id, WAR_ID) }),
+    ).toMatchObject({
+      status: "ACTIVE",
+      attackerWarHealth: 820,
+      defenderWarHealth: 760,
+    });
+    expect(
+      await database.query.village.findMany({
+        columns: { id: true, tokens: true },
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        { id: ATTACKER_VILLAGE, tokens: 900 },
+        { id: DEFENDER_VILLAGE, tokens: 700 },
+      ]),
+    );
+  });
+
   it("keeps participation active when a village remains in another active war", async () => {
     const database = await getTestDatabase();
     await database.insert(war).values(

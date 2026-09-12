@@ -141,7 +141,9 @@ export const CommentOnForum: React.FC<ForumCommentProps> = (props) => {
         // resurrect this exact post.
         props.onDeleted?.(variables.id);
         setEditing(false);
-        void utils.comments.getForumComments.invalidate().catch(() => undefined);
+        if (!props.onDeleted) {
+          void utils.comments.getForumComments.invalidate().catch(() => undefined);
+        }
       }
     },
     onError: (error) => {
