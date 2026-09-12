@@ -16,7 +16,7 @@ import {
 const statements = readFileSync(
   join(
     import.meta.dirname,
-    "../../drizzle/migrations/0045_user_badge_unique_assignment.sql",
+    "../../drizzle/migrations/0046_amusing_shard.sql",
   ),
   "utf8",
 )
@@ -34,11 +34,11 @@ describeWithDatabase("UserBadge unique assignment migration", () => {
     await runRawSql(
       "ALTER TABLE `UserBadge` DROP INDEX `UserBadge_userId_badgeId_key`",
     );
-    await runRawSql("DROP TABLE IF EXISTS `_UserBadge_duplicates_0045`");
+    await runRawSql("DROP TABLE IF EXISTS `_UserBadge_duplicates_0046`");
   });
 
   afterEach(async () => {
-    await runRawSql("DROP TABLE IF EXISTS `_UserBadge_duplicates_0045`");
+    await runRawSql("DROP TABLE IF EXISTS `_UserBadge_duplicates_0046`");
     await resetTables(userBadge);
     await runRawSql(
       "ALTER TABLE `UserBadge` DROP INDEX `UserBadge_userId_badgeId_key`",
