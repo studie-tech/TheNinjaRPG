@@ -6,6 +6,7 @@ import {
   MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT,
   MEDNIN_EXP_CAP,
   MEDNIN_EXP_PER_IMPROVEMENT,
+  MEDNIN_HEAL_TO_EXP,
   MEDNIN_MIN_CHAKRA_FACTOR,
   MEDNIN_MIN_RANK,
   MEDNIN_REQUIRED_EXP,
@@ -77,6 +78,30 @@ export const calcHealFinish = (info: {
 
 // Minimal user type for calculating mednin things
 type Healer = Pick<UserData, "medicalExperience" | "rank">;
+
+/**
+ * Calculates medical experience awarded for a hospital heal.
+ *
+ * Self-healing awards half the experience of healing another user. The award is
+ * capped by the healer's remaining medical experience capacity.
+ */
+export const calcHospitalHealExperience = ({
+  healerId,
+  targetId,
+  toHeal,
+  medicalExperience,
+}: {
+  healerId: string;
+  targetId: string;
+  toHeal: number;
+  medicalExperience: number;
+}) => {
+  const experienceMultiplier = healerId === targetId ? 0.5 : 1;
+  const rawExperience = MEDNIN_HEAL_TO_EXP * toHeal * experienceMultiplier;
+  return rawExperience > 0
+    ? Math.min(rawExperience, Math.max(0, MEDNIN_EXP_CAP - medicalExperience))
+    : 0;
+};
 
 /**
  * Calculates the MEDNIN rank based on the healer's medical experience.
