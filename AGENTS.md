@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents (Claude Code, Codex, opencode, C
 
 ## Development Commands
 
-All make commands should be run from the root directory `/`, not from `/app`.
+All make commands should be run from the repository or worktree root (in the primary checkout that is `/`), never from `/app`.
 
 **Primary Development:**
 
