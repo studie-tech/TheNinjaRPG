@@ -20,7 +20,7 @@ public class TNRLiveUpdatesPluginTest {
 
     @Test
     public void rejectsInvalidDeadlines() {
-        for (Object value : new Object[] {null, "1789226133850", 0, -1,
+        for (Object value : new Object[] {null, "1789226133850", 0, 0.5, -1,
                 Double.NaN, Double.POSITIVE_INFINITY, Double.MAX_VALUE}) {
             assertNull(TNRLiveUpdatesPlugin.parseEpochMilliseconds(value));
         }

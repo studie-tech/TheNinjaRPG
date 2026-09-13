@@ -220,7 +220,7 @@ public class TNRLiveUpdatesPlugin extends Plugin {
             return null;
         }
         double value = ((Number) raw).doubleValue();
-        if (!Double.isFinite(value) || value <= 0 || value >= Long.MAX_VALUE) {
+        if (!Double.isFinite(value) || value < 1 || value >= Long.MAX_VALUE) {
             return null;
         }
         return ((Number) raw).longValue();
