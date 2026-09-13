@@ -135,9 +135,9 @@ export const NativeAccountDeletion = () => {
   return (
     <ContentBox
       title="Delete account permanently"
-      subtitle="This affects your account on every device, including the website"
+      subtitle="Applies to the app and website"
     >
-      <div className="space-y-4">
+      <div className="space-y-4 [&_p]:text-pretty">
         <NativeFeatureCard
           title="Before you leave"
           icon={AlertTriangle}
@@ -156,11 +156,9 @@ export const NativeAccountDeletion = () => {
         <NativeFeatureCard
           title="Check your subscriptions"
           icon={CreditCard}
-          description="Deleting your account does not cancel recurring payments or request a refund."
+          description="Account deletion does not cancel billing or request a refund."
         >
-          <p className="text-[14px]">
-            Cancel any active subscriptions with the service where you purchased them.
-          </p>
+          <p className="text-[14px]">Cancel subscriptions where you bought them.</p>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-2">
             <NativeExternalLink href="https://apps.apple.com/account/subscriptions">
               Apple subscriptions
@@ -176,7 +174,7 @@ export const NativeAccountDeletion = () => {
         <NativeFeatureCard
           title="Confirm your account"
           icon={ShieldCheck}
-          description="The next step asks you to acknowledge the consequences and verify your identity if required."
+          description="Review, confirm, then verify your identity if asked."
         >
           <p className="break-words rounded-md bg-primary/5 p-3 text-[14px]">
             <span className="block text-[12px] text-muted-foreground">
@@ -268,9 +266,8 @@ export const NativeAccountDeletion = () => {
             onChange={(event) => setConfirmation(event.target.value)}
           />
           <p className="text-sm">
-            You may be asked to verify your identity again using your account’s email
-            code, password or two-factor method. Cancelling verification keeps your
-            account.
+            If asked, verify by email code, password or two-factor authentication.
+            Cancelling verification keeps your account.
           </p>
           {error && (
             <p role="alert" className="text-destructive">

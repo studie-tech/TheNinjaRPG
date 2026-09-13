@@ -85,9 +85,8 @@ export default function NativeSignIn() {
         </Button>
       ))}
 
-      <p className="mt-1 text-center text-muted-foreground text-xs">
-        Your progress follows your account across devices. Social sign-in opens a secure
-        sign-in screen and returns you to the game.
+      <p className="mt-1 text-pretty text-center text-muted-foreground text-xs">
+        Sign in securely, then return to the game.
       </p>
     </div>
   );

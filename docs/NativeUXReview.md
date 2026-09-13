@@ -37,3 +37,7 @@ The store uses consistent panels, readable catalogue names in recovery/history, 
 Action labels were shortened after reviewing the narrow settings overlay: Delete account, Continue, Delete permanently and Test notification. Permanent-loss explanations remain outside the buttons. Subscription/terms links use available-width grids instead of viewport breakpoints, and the confirmation footer has consistent vertical ordering without inherited horizontal spacing. Store restore/retry padding and purchase-history wrapping were also checked.
 
 A temporary development fixture rendered the actual game button and external-link components at 220, 244, 280 and 320 CSS pixels. Browser geometry checks found no horizontal overflow across 28 controls; all labels stayed on one line at a 44px height. The fixture was removed after review.
+
+## Copy density follow-up
+
+Removed the redundant settings-shortcut description and repeated card introductions. Notification category labels, sign-in guidance and store status messages are shorter. Optional Lock Screen guidance is expandable alongside widget setup instructions. Shared card headings balance line lengths, and descriptions use natural paragraph wrapping to reduce isolated words; no explanation is clipped or forced onto one line. Permanent deletion, billing, retention and verification consequences remain visible. The shared Game Layout control no longer includes the implementation-oriented “chrome” description.

@@ -20,9 +20,9 @@ export const NativeFeatureCard = ({
         <Icon className="size-5" aria-hidden="true" />
       </span>
       <div className="min-w-0">
-        <h3 className="font-semibold text-[16px]">{title}</h3>
+        <h3 className="text-balance font-semibold text-[16px]">{title}</h3>
         {description && (
-          <p className="mt-1 text-[14px] text-muted-foreground leading-relaxed">
+          <p className="mt-1 text-pretty text-[14px] text-muted-foreground leading-relaxed">
             {description}
           </p>
         )}

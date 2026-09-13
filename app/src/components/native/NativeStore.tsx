@@ -834,7 +834,7 @@ export default function NativeStore() {
       <ContentBox title="Store" subtitle="Connection interrupted" alreadyHasH1>
         <NativeFeatureCard
           title="The store could not be loaded"
-          description="Your existing purchases are safe. Reconnect to try again."
+          description="Reconnect to load your purchases."
           icon={ShoppingCart}
         >
           <Button
@@ -852,12 +852,10 @@ export default function NativeStore() {
       <ContentBox title="Store" subtitle="Temporarily unavailable" alreadyHasH1>
         <NativeFeatureCard
           title="Store unavailable"
-          description="Purchases are unavailable right now. You can keep playing and check back later."
+          description="Keep playing and check back later."
           icon={ShoppingCart}
         >
-          <p className="text-[14px] text-muted-foreground">
-            No purchase has been made and nothing has been charged.
-          </p>
+          <p className="text-[14px] text-muted-foreground">Nothing has been charged.</p>
         </NativeFeatureCard>
       </ContentBox>
     );
@@ -872,10 +870,10 @@ export default function NativeStore() {
       {packages === null ? (
         <Loader explanation="Loading store" />
       ) : (
-        <div className="flex flex-col gap-3 [&_button]:min-h-[44px] [&_button]:text-[14px]">
+        <div className="flex flex-col gap-3 [&_button]:min-h-[44px] [&_button]:text-[14px] [&_p]:text-pretty">
           {!hasRecentBaseline && (
             <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 text-[14px]">
-              <p>{recentBaselineError ?? "Verifying your recent purchases..."}</p>
+              <p>{recentBaselineError ?? "Checking purchases…"}</p>
               {recentBaselineError && (
                 <Button
                   className="mt-2"
@@ -1089,22 +1087,21 @@ export default function NativeStore() {
                 );
               })}
               <p className="text-muted-foreground text-xs">
-                Monthly subscriptions renew automatically until cancelled in your store
-                account. Manage or cancel your plan with the store where you subscribed.
+                Renews monthly until cancelled. Manage your plan in your store account.
               </p>
             </>
           )}
 
           {packages.length === 0 && !bindingError && (
             <p className="text-[14px] text-muted-foreground">
-              The store is not responding right now. Please try again shortly.
+              Store unavailable. Please try again shortly.
             </p>
           )}
 
           <NativeFeatureCard
             title="Your store account"
             icon={CreditCard}
-            description="Manage recurring payments or recover purchases made with this store account."
+            description="Manage subscriptions or restore purchases."
           >
             <NativeExternalLink
               href={
@@ -1131,8 +1128,7 @@ export default function NativeStore() {
               {isRestoring ? "Restoring…" : "Restore purchases"}
             </Button>
             <p className="text-muted-foreground text-xs">
-              Restoring checks for eligible previous purchases. It does not create a new
-              charge.
+              Restore eligible purchases without a new charge.
             </p>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-2">
               {LEGAL_LINKS.filter(

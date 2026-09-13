@@ -609,11 +609,6 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
             <LayoutTemplate className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <div>
               <p className={textClass}>Game Layout</p>
-              {isPanel && (
-                <p className="text-muted-foreground text-xs">
-                  Choose the chrome used across landing and in-game screens.
-                </p>
-              )}
             </div>
           </div>
           <RadioGroup

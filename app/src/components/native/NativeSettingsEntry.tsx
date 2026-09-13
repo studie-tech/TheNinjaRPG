@@ -25,9 +25,6 @@ export const NativeSettingsEntry = ({ onNavigate }: { onNavigate?: () => void })
           <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
         </Link>
       </Button>
-      <p className="text-muted-foreground text-sm">
-        Notifications, touch feedback and home screen widgets.
-      </p>
       <NativeAccountDeletionLink onNavigate={onNavigate} />
     </section>
   );

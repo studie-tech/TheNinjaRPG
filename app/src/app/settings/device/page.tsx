@@ -10,10 +10,7 @@ export const metadata = noindexMetadata("App settings");
 export default async function DeviceSettingsPage() {
   if (!isNativeUserAgent((await headers()).get("user-agent"))) notFound();
   return (
-    <ContentBox
-      title="App settings"
-      subtitle="Make the game feel at home on your device"
-    >
+    <ContentBox title="App settings" subtitle="Your app preferences">
       <DeviceSettings />
     </ContentBox>
   );

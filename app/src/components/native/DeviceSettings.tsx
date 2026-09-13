@@ -18,13 +18,13 @@ import { showMutationToast } from "@/libs/toast";
 
 /** Player-facing wording for each push category. */
 const CATEGORY_LABELS: Record<PushCategory, string> = {
-  combat: "Battles and attacks",
-  recovery: "Hospital and regeneration",
+  combat: "Battles & attacks",
+  recovery: "Hospital & recovery",
   training: "Training completed",
-  war: "Village wars and raids",
-  clan: "Clan and ANBU activity",
-  trade: "Auctions and trades",
-  social: "Messages and mentions",
+  war: "Wars & raids",
+  clan: "Clan & ANBU",
+  trade: "Auctions & trades",
+  social: "Messages & mentions",
   system: "Announcements",
 };
 
@@ -149,19 +149,15 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
     );
 
   return (
-    <div className="space-y-4">
-      <NativeFeatureCard
-        title="Touch feedback"
-        description="Feel important moments in your ninja’s journey."
-        icon={Vibrate}
-      >
+    <div className="space-y-4 [&_p]:text-pretty">
+      <NativeFeatureCard title="Touch feedback" icon={Vibrate}>
         <div className="flex min-h-[44px] items-center justify-between gap-3">
           <div>
             <label htmlFor="native-haptics" className="cursor-pointer text-[14px]">
               Vibration feedback
             </label>
             <p className="text-muted-foreground text-xs">
-              Taps on hits, level ups and travel arrivals
+              For battles, levels and travel.
             </p>
           </div>
           <Switch
@@ -178,17 +174,13 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
         </div>
       </NativeFeatureCard>
 
-      <NativeFeatureCard
-        title="Notifications"
-        description="Choose when the game can call you back."
-        icon={BellRing}
-      >
+      <NativeFeatureCard title="Notifications" icon={BellRing}>
         {permission !== "granted" ? (
           <div className="flex flex-col gap-3">
             <p className="text-muted-foreground text-xs">
               {permission === "denied"
-                ? "Notifications are blocked. Turn them back on for TheNinja-RPG in your device settings."
-                : "Get alerted when your ninja is needed, even with the app closed."}
+                ? "Enable TheNinja-RPG notifications in device settings."
+                : "Get alerts while the app is closed."}
             </p>
             {permission !== "denied" && (
               <Button
@@ -205,13 +197,12 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
           <div className="space-y-2">
             {preferencesLoading && (
               <p role="status" className="flex items-center gap-2 text-[14px]">
-                <Loader2 className="size-4 animate-spin" /> Loading notification
-                preferences…
+                <Loader2 className="size-4 animate-spin" /> Loading preferences…
               </p>
             )}
             {preferencesError && (
               <div role="alert" className="space-y-2 text-[14px]">
-                <p>Your preferences could not be loaded.</p>
+                <p>Could not load preferences.</p>
                 <Button
                   variant="outline"
                   className="min-h-[44px]"
@@ -279,14 +270,10 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
           </p>
         )}
       </NativeFeatureCard>
-      <NativeFeatureCard
-        title="At a glance"
-        description="Check on your ninja without opening the game."
-        icon={LayoutGrid}
-      >
+      <NativeFeatureCard title="Widgets" icon={LayoutGrid}>
         <details className="rounded-md border border-primary/20 px-3">
           <summary className="min-h-[44px] cursor-pointer py-3 font-medium text-[14px]">
-            Add a home screen widget
+            Add a widget
           </summary>
           <p className="pb-3 text-[14px] leading-relaxed">
             {platform() === "ios"
@@ -295,25 +282,20 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
           </p>
         </details>
         {platform() === "ios" && (
-          <p className="text-[14px] text-muted-foreground leading-relaxed">
-            Live Activities show supported countdowns on your Lock Screen while you
-            play. Their availability is controlled in iPhone settings.
-          </p>
+          <details className="rounded-md border border-primary/20 px-3">
+            <summary className="min-h-[44px] cursor-pointer py-3 font-medium text-[14px]">
+              Lock Screen timers
+            </summary>
+            <p className="pb-3 text-[14px] leading-relaxed">
+              Supported countdowns appear as Live Activities. Manage them in iPhone
+              settings.
+            </p>
+          </details>
         )}
-        <p className="text-muted-foreground text-xs">
-          Widgets refresh periodically. Open the game for the latest status.
-        </p>
+        <p className="text-muted-foreground text-xs">For live status, open the game.</p>
       </NativeFeatureCard>
-      <NativeFeatureCard
-        title="Account"
-        description="Your account is shared across the app and website."
-        icon={Shield}
-      >
+      <NativeFeatureCard title="Account" icon={Shield}>
         <NativeAccountDeletionLink onNavigate={onNavigate} />
-        <p className="text-muted-foreground text-xs">
-          Review what will be removed before confirming. Opening this page does not
-          delete anything.
-        </p>
       </NativeFeatureCard>
     </div>
   );
