@@ -513,7 +513,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             {imageExtra && <div className="flex flex-row">{imageExtra}</div>}
             <div className="flex items-start justify-between gap-2">
               {!hideTitle ? (
-                <h3 className="min-w-0 flex-1 break-words font-bold text-popover-foreground text-xl tracking-tight">
+                <h3 className="wrap-break-word min-w-0 flex-1 font-bold text-popover-foreground text-xl tracking-tight">
                   {detailHref ? (
                     <Link className="hover:text-orange-500" href={detailHref}>
                       {item.name}
