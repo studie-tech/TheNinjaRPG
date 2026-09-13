@@ -1,3 +1,5 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import alea from "alea";
 import type { Grid } from "honeycomb-grid";
 import { useSetAtom } from "jotai";
@@ -6,7 +8,7 @@ import Link from "next/link";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Clock, Group, OrthographicCamera, Vector2 } from "three";
-import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
+import { api, type RouterInputs, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   HEX_ASPECT_RATIO,
@@ -32,6 +34,7 @@ import Modal from "@/layout/Modal";
 import WebGlError from "@/layout/WebGLError";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
+import { mergeBattleEntries } from "@/libs/combat/log";
 import type {
   BattleState,
   CachedIntersections,
@@ -86,6 +89,7 @@ interface CombatProps {
 const Combat: React.FC<CombatProps> = (props) => {
   // Destructure props
   const { battleState, setBattleState, config } = props;
+  const queryClient = useQueryClient();
   const result = battleState.result;
   const utils = api.useUtils();
 
@@ -456,20 +460,31 @@ const Combat: React.FC<CombatProps> = (props) => {
           });
         }
       }
-      // Update battle history
-      if (battleId && data.logEntries && data.battleUpdate) {
-        const prevData = utils.combat.getBattleEntries.getData({
-          battleId,
-          refreshKey: battleRef.current?.version,
+      // Seed the exact history/timeline keys, including their filters and limits.
+      if (data.logEntries && data.battleUpdate && suid) {
+        const queries = queryClient.getQueryCache().findAll({
+          queryKey: getQueryKey(api.combat.getBattleEntries, undefined, "query"),
         });
-        utils.combat.getBattleEntries.setData(
-          { battleId, refreshKey: data.battleUpdate.version },
-          () => {
-            if (data.logEntries) {
-              return prevData ? [...data.logEntries, ...prevData] : data.logEntries;
-            }
-          },
-        );
+        for (const query of queries) {
+          if (query.state.isInvalidated) continue;
+          const { input } = query.queryKey[1] as {
+            input: RouterInputs["combat"]["getBattleEntries"];
+          };
+          const previous = utils.combat.getBattleEntries.getData(input);
+          const entries = mergeBattleEntries(
+            previous,
+            data.logEntries,
+            input,
+            data.battleUpdate.version,
+            suid,
+          );
+          if (entries) {
+            utils.combat.getBattleEntries.setData(
+              { ...input, refreshKey: data.battleUpdate.version },
+              entries,
+            );
+          }
+        }
       }
       // Check if tutorial should progress
       if (data.result) {
@@ -820,7 +835,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     if (battleId && pusher) {
       const channel = pusher.subscribe(battleId);
       channel.bind("event", (data: { version: number }) => {
-        if (battleRef.current?.version !== data.version && !result) {
+        if (battleRef.current && data.version > battleRef.current.version && !result) {
           void utils.combat.getBattle.invalidate();
         }
       });

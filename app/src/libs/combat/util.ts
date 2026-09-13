@@ -1444,6 +1444,17 @@ export const maskUsersState = (
 export const maskBattle = (battle: Battle, userId: string) => {
   return {
     ...battle,
+    // Reward settlement uses the authoritative server state; the client never reads
+    // these records. Keep the remaining catalogs for actions, summons and rendering.
+    extraState: {
+      ...battle.extraState,
+      userQuests: {},
+      completedQuests: {},
+      questData: {},
+      bounties: {},
+      bountySignups: {},
+      sectorExclusiveRaids: [],
+    },
     usersState: maskUsersState(battle.usersState, userId),
   };
 };
