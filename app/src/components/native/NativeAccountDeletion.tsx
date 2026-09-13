@@ -72,10 +72,10 @@ export const NativeAccountDeletion = () => {
         understandsSubscriptions: subscriptions,
       });
       if (!result) return; // Dismissing Clerk verification never confirms deletion.
-      if (!result.success)
-        throw new Error(
-          result.message ?? "Unable to request deletion. Please try again.",
-        );
+      if (!result.success) {
+        setError(result.message || "Unable to request deletion. Please try again.");
+        return;
+      }
       setAccepted(true);
       setOpen(false);
       // NativeBridge observes sign-out and clears widgets, push binding, purchases and

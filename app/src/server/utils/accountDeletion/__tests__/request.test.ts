@@ -114,8 +114,9 @@ describe("native account deletion authorization", () => {
     expect(mocks.after).not.toHaveBeenCalled();
   });
   it("rejects ordinary web requests", async () => {
-    await expect(request(body, "Mozilla/5.0")).rejects.toMatchObject({
-      code: "FORBIDDEN",
+    expect(await request(body, "Mozilla/5.0")).toEqual({
+      success: false,
+      message: "Use the native app to request account deletion.",
     });
     expect(mocks.insert).not.toHaveBeenCalled();
     expect(mocks.after).not.toHaveBeenCalled();
@@ -141,12 +142,29 @@ describe("native account deletion authorization", () => {
     expect(mocks.insert).not.toHaveBeenCalled();
     expect(mocks.after).not.toHaveBeenCalled();
   });
+  it("returns a recoverable response for switched-account confirmation", async () => {
+    expect(await request({ ...body, expectedUserId: "user_other" })).toEqual({
+      success: false,
+      message: "Your signed-in account changed. Close this dialog and start again.",
+    });
+    expect(mocks.prepare).not.toHaveBeenCalled();
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
+  it("returns a recoverable response when the Clerk session changes", async () => {
+    mocks.auth.mockResolvedValueOnce({ userId: "user_other" });
+    expect(await request()).toMatchObject({
+      success: false,
+      message: "Your session changed. Sign in again to continue.",
+    });
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
   it.each([
-    { ...body, expectedUserId: "user_other" },
     { ...body, confirmation: "delete" },
     { ...body, understandsSubscriptions: false },
     { ...body, understandsPermanentLoss: false },
-  ])("rejects incomplete or switched-account confirmation", async (input) => {
+  ])("rejects malformed confirmation", async (input) => {
     await expect(request(input)).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(mocks.insert).not.toHaveBeenCalled();
     expect(mocks.after).not.toHaveBeenCalled();

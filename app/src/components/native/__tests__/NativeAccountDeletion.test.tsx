@@ -133,17 +133,35 @@ describe("native deletion confirmation", () => {
       confirmation: "DELETE MY ACCOUNT",
     });
   });
-  it("keeps the user signed in and shows failures", async () => {
+  it.each([
+    "Use the native app to request account deletion.",
+    "Your signed-in account changed. Close this dialog and start again.",
+    "Service unavailable",
+  ])("keeps the dialog usable after rejection: %s", async (message) => {
     state.mutate.mockResolvedValue({
       success: false,
-      message: "Service unavailable",
+      message,
     });
     render(<NativeAccountDeletion />);
     confirm();
     fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      "Service unavailable",
-    );
+    expect((await screen.findByRole("alert")).textContent).toContain(message);
     expect(state.signOut).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "Delete permanently" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+    expect(
+      (
+        within(screen.getByRole("dialog")).getByRole("button", {
+          name: "Keep my account",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+    state.mutate.mockResolvedValueOnce({ success: true });
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() => expect(state.signOut).toHaveBeenCalledOnce());
+    expect(state.mutate).toHaveBeenCalledTimes(2);
   });
 });
