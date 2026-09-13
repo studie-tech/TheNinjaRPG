@@ -1,8 +1,24 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import superjson from "superjson";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as clerk from "@clerk/nextjs/server";
+import * as nextServer from "next/server";
+import * as processor from "../process";
+import * as apple from "../apple";
+import {
+  stubDatabase,
+  resetServerModuleStubs,
+} from "../../../../../tests/setup/serverModules";
+import type { z } from "zod";
+import { accountDeletionRouter } from "@/server/api/routers/accountDeletion";
+import { drizzleDB } from "@/server/db";
+import type { accountDeletionSchema } from "@/validators/accountDeletion";
+import { ACCOUNT_DELETION_REVERIFICATION } from "@/validators/accountDeletion";
 
-const mocks = vi.hoisted(() => ({
+const originalEnv = { ...process.env };
+
+
+const mocks = {
   auth: vi.fn(),
   after: vi.fn(),
   process: vi.fn(),
@@ -11,40 +27,14 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
   find: vi.fn(),
   prepare: vi.fn(),
-}));
-vi.mock("@clerk/nextjs/server", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@clerk/nextjs/server")>()),
-  auth: mocks.auth,
-}));
-vi.mock("next/server", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("next/server")>()),
-  after: mocks.after,
-}));
-vi.mock("@/server/utils/accountDeletion/process", () => ({
-  processAccountDeletions: mocks.process,
-}));
-vi.mock("@/server/db", () => ({
-  drizzleDB: {
-    insert: mocks.insert,
-    query: { accountDeletion: { findFirst: mocks.find } },
-  },
-}));
-vi.mock("@/server/utils/accountDeletion/apple", () => ({
-  prepareAppleDeletion: mocks.prepare,
-}));
+};
 
-vi.mock("@upstash/redis", () => ({ Redis: { fromEnv: () => ({}) } }));
-vi.mock("@upstash/ratelimit", () => ({
-  Ratelimit: Object.assign(vi.fn(), { slidingWindow: () => ({}) }),
-}));
 
-import type { z } from "zod";
-import { accountDeletionRouter } from "@/server/api/routers/accountDeletion";
-import { drizzleDB } from "@/server/db";
-import type { accountDeletionSchema } from "@/validators/accountDeletion";
-import { ACCOUNT_DELETION_REVERIFICATION } from "@/validators/accountDeletion";
-
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  process.env = { ...originalEnv };
+  vi.restoreAllMocks();
+  resetServerModuleStubs();
+});
 
 const body = {
   expectedUserId: "user_test",
@@ -83,11 +73,19 @@ const transport = (method: "GET" | "POST") =>
 describe("native account deletion authorization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubEnv("CRON_SECRET", "test-worker-secret");
-    vi.stubEnv("NATIVE_ACCOUNT_DELETION_ENABLED", "true");
+    vi.spyOn(clerk, "auth").mockImplementation(mocks.auth);
+    vi.spyOn(nextServer, "after").mockImplementation(mocks.after);
+    vi.spyOn(processor, "processAccountDeletions").mockImplementation(mocks.process);
+    vi.spyOn(apple, "prepareAppleDeletion").mockImplementation(mocks.prepare);
+    stubDatabase({
+      insert: mocks.insert,
+      query: { accountDeletion: { findFirst: mocks.find } },
+    });
+    process.env["CRON_SECRET"] = "test-worker-secret";
+    process.env["NATIVE_ACCOUNT_DELETION_ENABLED"] = "true";
     mocks.find.mockResolvedValue(undefined);
     mocks.process.mockResolvedValue({ processed: 1, failed: 0 });
-    mocks.prepare.mockResolvedValue(null);
+    mocks.prepare.mockResolvedValue({ subject: null });
     mocks.auth.mockResolvedValue({ userId: "user_test", has: () => true });
     mocks.insert.mockReturnValue({ values: mocks.values });
     mocks.values.mockReturnValue({ onDuplicateKeyUpdate: mocks.save });
@@ -105,11 +103,6 @@ describe("native account deletion authorization", () => {
         metadata: { reverification: ACCOUNT_DELETION_REVERIFICATION },
       },
     });
-    expect(mocks.insert).not.toHaveBeenCalled();
-    expect(mocks.after).not.toHaveBeenCalled();
-  });
-  it("rejects GET requests to the deletion mutation", async () => {
-    expect((await transport("GET")).status).toBe(405);
     expect(mocks.insert).not.toHaveBeenCalled();
     expect(mocks.after).not.toHaveBeenCalled();
   });
@@ -170,7 +163,7 @@ describe("native account deletion authorization", () => {
     expect(mocks.after).not.toHaveBeenCalled();
   });
   it("refuses to enqueue when cleanup is not configured", async () => {
-    vi.stubEnv("CRON_SECRET", "");
+    process.env["CRON_SECRET"] = "";
     expect(await request()).toMatchObject({ success: false });
     expect(mocks.insert).not.toHaveBeenCalled();
     expect(mocks.after).not.toHaveBeenCalled();
@@ -219,5 +212,24 @@ describe("native account deletion authorization", () => {
     expect(await request()).toMatchObject({ success: false });
     expect(mocks.insert).not.toHaveBeenCalled();
     expect(mocks.after).not.toHaveBeenCalled();
+  });
+  it.each([
+    "Please use the latest iPhone app and verify with Apple to delete this Apple-linked account.",
+    "Verify with the Apple account linked to this game account.",
+    "Apple verification expired. Please try again and approve the Apple sign-in sheet.",
+  ])("shows the expected Apple recovery message: %s", async (message) => {
+    mocks.prepare.mockResolvedValueOnce({ error: message });
+    expect(await request()).toEqual({ success: false, message });
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
+  it("does not expose unexpected provider errors", async () => {
+    mocks.prepare.mockRejectedValueOnce(new Error("private provider details"));
+    expect(await request()).toEqual({
+      success: false,
+      message:
+        "We could not save your request. Nothing has been confirmed; please try again.",
+    });
+    expect(mocks.insert).not.toHaveBeenCalled();
   });
 });

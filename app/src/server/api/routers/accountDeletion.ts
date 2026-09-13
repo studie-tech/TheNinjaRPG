@@ -50,14 +50,15 @@ export const accountDeletionRouter = createTRPCRouter({
           after(() => processAccountDeletions(ctx.userId));
           return { success: true, message: "Your deletion request is already saved." };
         }
-        const appleRevokedSubject = await prepareAppleDeletion(
+        const apple = await prepareAppleDeletion(
           ctx.userId,
           input.appleAuthorizationCode,
         );
+        if (apple.error) return errorResponse(apple.error);
         // Duplicate clicks and lost responses cannot reset a partially processed request.
         await ctx.drizzle
           .insert(accountDeletion)
-          .values({ userId: ctx.userId, appleRevokedSubject })
+          .values({ userId: ctx.userId, appleRevokedSubject: apple.subject })
           .onDuplicateKeyUpdate({ set: { userId: ctx.userId } });
         // Next keeps this work alive after the response, even if the app closes.
         // Only this account is eligible; the cleaner recovers interrupted attempts.

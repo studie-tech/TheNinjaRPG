@@ -1,52 +1,23 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { ensureDom } from "../../../../tests/setup-dom.mjs";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const state = vi.hoisted(() => ({
-  native: true,
-  mutate: vi.fn(),
-  signOut: vi.fn(),
-  cancel: false,
-}));
-vi.mock("@clerk/nextjs", () => ({
-  useUser: () => ({
-    isLoaded: true,
-    user: {
-      id: "user_test",
-      primaryEmailAddress: { emailAddress: "test@example.com" },
-      externalAccounts: [],
-    },
-  }),
-  useClerk: () => ({ signOut: state.signOut }),
-  useReverification: (fn: (body: string) => Promise<unknown>) => (body: string) =>
-    state.cancel ? Promise.reject(new Error("Verification cancelled")) : fn(body),
-}));
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
-    accountDeletion: {
-      request: { useMutation: () => ({ mutateAsync: state.mutate }) },
-    },
-  },
-}));
-vi.mock("@/hooks/useNativeShell", () => ({ useNativeShell: () => state.native }));
-vi.mock("@/layout/ContentBox", () => ({
-  default: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("div", null, children),
-}));
-vi.mock("@/libs/native", () => ({ appleAuth: { isSupported: () => false } }));
-
+import * as clerk from "@clerk/nextjs";
+import * as client from "@/app/_trpc/client";
+import * as shell from "@/hooks/useNativeShell";
+import * as dialog from "@/components/ui/dialog";
+import * as input from "@/components/ui/input";
+import * as contentBox from "@/layout/ContentBox";
+import { appleAuth } from "@/libs/native";
 import { NativeAccountDeletion } from "../NativeAccountDeletion";
+
+let screen: ReturnType<typeof within>;
+const state = { native: true, mutate: vi.fn(), signOut: vi.fn(), cancel: false };
+
 
 afterEach(() => {
   cleanup();
-  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 beforeEach(() => {
   vi.clearAllMocks();
@@ -54,7 +25,63 @@ beforeEach(() => {
   state.cancel = false;
   state.signOut.mockResolvedValue(undefined);
   state.mutate.mockResolvedValue({ success: true });
-  vi.stubGlobal("React", React);
+  ensureDom();
+  screen = within(document.body);
+  vi.spyOn(clerk, "useUser").mockReturnValue({
+    isLoaded: true,
+    user: {
+      id: "user_test",
+      primaryEmailAddress: { emailAddress: "test@example.com" },
+      externalAccounts: [],
+    },
+  } as unknown as ReturnType<typeof clerk.useUser>);
+  vi.spyOn(clerk, "useClerk").mockReturnValue({
+    signOut: state.signOut,
+  } as unknown as ReturnType<typeof clerk.useClerk>);
+  vi.spyOn(clerk, "useReverification").mockImplementation(
+    ((fn: (body: unknown) => Promise<unknown>) => (body: unknown) =>
+      state.cancel
+        ? Promise.reject(new Error("Verification cancelled"))
+        : fn(body)) as typeof clerk.useReverification,
+  );
+  Object.assign(vi.spyOn(client, "api" as never), {
+    accountDeletion: {
+      request: { useMutation: () => ({ mutateAsync: state.mutate }) },
+    },
+  });
+  vi.spyOn(shell, "useNativeShell").mockImplementation(() => state.native);
+  vi.spyOn(contentBox, "default").mockImplementation(({ children }) =>
+    React.createElement("div", null, children),
+  );
+  // The server preload initializes React's legacy change-event fallback before DOM.
+  // Keep this suite focused on confirmation/recovery, using a native input event.
+  vi.spyOn(input, "Input").mockImplementation(({ onChange, ...props }) => (
+    <input
+      {...props}
+      onInput={(event) =>
+        onChange?.(event as unknown as React.ChangeEvent<HTMLInputElement>)
+      }
+    />
+  ));
+  vi.spyOn(dialog, "Dialog").mockImplementation(({ open, children }) =>
+    open ? <>{children}</> : null,
+  );
+  vi.spyOn(dialog, "DialogContent").mockImplementation(({ children }) => (
+    <div role="dialog">{children}</div>
+  ));
+  vi.spyOn(dialog, "DialogHeader").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
+  vi.spyOn(dialog, "DialogFooter").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
+  vi.spyOn(dialog, "DialogTitle").mockImplementation(({ children }) => (
+    <h2>{children}</h2>
+  ));
+  vi.spyOn(dialog, "DialogDescription").mockImplementation(({ children }) => (
+    <p>{children}</p>
+  ));
+  vi.spyOn(appleAuth, "isSupported").mockReturnValue(false);
 });
 const confirm = () => {
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -68,7 +95,7 @@ const confirm = () => {
       "I understand that recurring subscriptions must be cancelled separately.",
     ),
   );
-  fireEvent.change(screen.getByRole("textbox"), {
+  fireEvent.input(screen.getByRole("textbox"), {
     target: { value: "DELETE MY ACCOUNT" },
   });
 };

@@ -32,11 +32,16 @@ export const removeAccountProcessorData = async (userId: string) => {
   if (files.some((file) => file === null))
     throw new Error("An owned upload needs manual storage cleanup");
   const storage = new UTApi();
-  for (const file of files) {
-    if (!file) continue;
-    const result = await storage.deleteFiles(file.key, { keyType: file.keyType });
-    if (!result.success) throw new Error("Owned upload deletion failed");
-  }
+  await Promise.all(
+    (["customId", "fileKey"] as const).map(async (keyType) => {
+      const keys = files.flatMap((file) =>
+        file?.keyType === keyType ? [file.key] : [],
+      );
+      if (!keys.length) return;
+      const result = await storage.deleteFiles(keys, { keyType });
+      if (!result.success) throw new Error("Owned upload deletion failed");
+    }),
+  );
 };
 
 export const ownedUploadKey = (

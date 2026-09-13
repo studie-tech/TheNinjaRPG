@@ -53,14 +53,18 @@ export const removeAccountGameData = async (userId: string) => {
     throw new Error("Account deletion awaits auction escrow settlement");
   await retireStoreUserId(drizzleDB, userId);
   await removeAccountProcessorData(userId);
-  const user = await drizzleDB.query.userData.findFirst({
-    where: eq(userData.userId, userId),
+  // Membership is the retry marker: keep departure, leadership transfer and faction
+  // teardown atomic so a failed sibling write cannot make the next attempt skip them.
+  await drizzleDB.transaction(async (tx) => {
+    const user = await tx.query.userData.findFirst({
+      where: eq(userData.userId, userId),
+    });
+    if (user?.clanId) {
+      const membership = await fetchClan(tx, user.clanId);
+      if (membership)
+        await removeFromClan(tx, membership, user, ["Permanent account deletion"]);
+    }
   });
-  if (user?.clanId) {
-    const membership = await fetchClan(drizzleDB, user.clanId);
-    if (membership)
-      await removeFromClan(drizzleDB, membership, user, ["Permanent account deletion"]);
-  }
   // Only clear roles still owned by this identity. Repeated cleanup must never remove
   // a replacement leader or decrement shared counters a second time.
   await Promise.all([

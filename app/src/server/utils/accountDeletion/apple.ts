@@ -43,24 +43,29 @@ export const revokeAppleToken = async (
 export const prepareAppleDeletion = async (
   userId: string,
   code?: string,
-): Promise<string | null> => {
+): Promise<
+  { subject: string | null; error?: never } | { error: string; subject?: never }
+> => {
   const clerk = await clerkClient();
   const user = await clerk.users.getUser(userId);
   const accounts = user.externalAccounts.filter((account) =>
     isAppleProvider(account.provider),
   );
-  if (!accounts.length) return null;
+  if (!accounts.length) return { subject: null };
   const credentials = await appleClientCredentials();
   if (!code) {
     // Android or older shells may have a server-managed OAuth token in Clerk.
     const tokens = await clerk.users.getUserOauthAccessToken(userId, "apple");
     if (!tokens.data.length)
-      throw new Error(
-        "Please use the latest iPhone app and verify with Apple to delete this Apple-linked account.",
-      );
+      return {
+        error:
+          "Please use the latest iPhone app and verify with Apple to delete this Apple-linked account.",
+      };
     for (const token of tokens.data)
       await revokeAppleToken(token.token, "access_token", credentials);
-    return accounts.length === 1 ? (accounts[0]?.providerUserId ?? null) : null;
+    return {
+      subject: accounts.length === 1 ? (accounts[0]?.providerUserId ?? null) : null,
+    };
   }
   const response = await fetch("https://appleid.apple.com/auth/token", {
     method: "POST",
@@ -72,10 +77,15 @@ export const prepareAppleDeletion = async (
     }),
     signal: AbortSignal.timeout(15_000),
   });
-  if (!response.ok)
-    throw new Error(
-      "Apple verification expired. Please try again and approve the Apple sign-in sheet.",
-    );
+  if (!response.ok) {
+    const failure = (await response.json()) as { error?: string };
+    if (failure.error === "invalid_grant")
+      return {
+        error:
+          "Apple verification expired. Please try again and approve the Apple sign-in sheet.",
+      };
+    throw new Error("Apple verification failed");
+  }
   const tokens = (await response.json()) as {
     id_token?: string;
     refresh_token?: string;
@@ -90,7 +100,7 @@ export const prepareAppleDeletion = async (
     !payload.sub ||
     !accounts.some((account) => account.providerUserId === payload.sub)
   )
-    throw new Error("Verify with the Apple account linked to this game account.");
+    return { error: "Verify with the Apple account linked to this game account." };
   await revokeAppleToken(tokens.refresh_token, "refresh_token", credentials);
-  return payload.sub;
+  return { subject: payload.sub };
 };

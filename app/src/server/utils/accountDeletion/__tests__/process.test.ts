@@ -1,29 +1,37 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as identity from "../identity";
+import * as cleanup from "../cleanup";
+import * as sentry from "@sentry/nextjs";
+import {
+  stubDatabase,
+  resetServerModuleStubs,
+} from "../../../../../tests/setup/serverModules";
+import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
 
-const f = vi.hoisted(() => ({
+const f = {
   find: vi.fn(),
   update: vi.fn(),
   set: vi.fn(),
   where: vi.fn(),
   identity: vi.fn(),
   cleanup: vi.fn(),
-}));
-vi.mock("@/server/db", () => ({
-  drizzleDB: { query: { accountDeletion: { findMany: f.find } }, update: f.update },
-}));
-vi.mock("@/server/utils/accountDeletion/identity", () => ({
-  removeAccountIdentity: f.identity,
-}));
-vi.mock("@/server/utils/accountDeletion/cleanup", () => ({
-  removeAccountGameData: f.cleanup,
-}));
-vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
+};
+afterEach(() => {
+  vi.restoreAllMocks();
+  resetServerModuleStubs();
+});
 
-import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
 
 describe("shared deletion processor leases", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    stubDatabase({
+      query: { accountDeletion: { findMany: f.find } },
+      update: f.update,
+    });
+    vi.spyOn(identity, "removeAccountIdentity").mockImplementation(f.identity);
+    vi.spyOn(cleanup, "removeAccountGameData").mockImplementation(f.cleanup);
+    vi.spyOn(sentry, "captureException").mockReturnValue("test");
     f.find.mockResolvedValue([
       { userId: "user_test", phase: "QUEUED", appleRevokedSubject: null },
     ]);
