@@ -9,6 +9,7 @@ import { userData, userReview } from "@/drizzle/schema";
 import { checkGameTimer, updateGameSetting } from "@/libs/gamesettings";
 import { createConvo } from "@/routers/comments";
 import { drizzleDB } from "@/server/db";
+import { authenticateCronRequest } from "@/server/utils/cron";
 import { secondsFromNow } from "@/utils/time";
 
 /**
@@ -17,7 +18,10 @@ import { secondsFromNow } from "@/utils/time";
  * It is a critical function that should be handled with care!!!
  * @returns
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const authError = authenticateCronRequest(request);
+  if (authError) return authError;
+
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
   await cookies();
 

@@ -1,5 +1,7 @@
 // @vitest-environment node
 
+vi.mock("@/server/utils/cron", () => ({ authenticateCronRequest: () => null }));
+
 import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -129,7 +131,7 @@ describe("daily-quest cron", () => {
     // fully-done tracker, which getReward reads as resolved and pays out again.
     seedHappyPath();
 
-    await GET();
+    await GET(new Request("https://example.com/api/daily-quest", { headers: { authorization: "Bearer test-cron" } }));
 
     const closeIndex = mocks.calls.indexOf("update:completed,endAt");
     const assignIndex = mocks.calls.indexOf("upsertQuestEntries");
@@ -141,7 +143,7 @@ describe("daily-quest cron", () => {
   it("assigns one daily per rank/village/level combo and re-enables tier tutorials", async () => {
     seedHappyPath();
 
-    const response = await GET();
+    const response = await GET(new Request("https://example.com/api/daily-quest", { headers: { authorization: "Bearer test-cron" } }));
 
     expect(await response.json()).toBe("OK");
     expect(mocks.upsertQuestEntries).toHaveBeenCalledOnce();
@@ -154,7 +156,7 @@ describe("daily-quest cron", () => {
   it("skips the reset when the daily timer says it is not a new day", async () => {
     mocks.lock.mockResolvedValue({ isNewDay: false, response: new Response("locked") });
 
-    await GET();
+    await GET(new Request("https://example.com/api/daily-quest", { headers: { authorization: "Bearer test-cron" } }));
 
     expect(mocks.findQuests).not.toHaveBeenCalled();
     expect(mocks.upsertQuestEntries).not.toHaveBeenCalled();
@@ -165,7 +167,7 @@ describe("daily-quest cron", () => {
     mocks.upsertQuestEntries.mockRejectedValue(new Error("reset failed"));
     mocks.handleError.mockResolvedValue(new Response("error", { status: 500 }));
 
-    await GET();
+    await GET(new Request("https://example.com/api/daily-quest", { headers: { authorization: "Bearer test-cron" } }));
 
     expect(mocks.rollback).toHaveBeenCalledOnce();
     expect(mocks.rollback.mock.calls[0]?.[3]).toBe(1);

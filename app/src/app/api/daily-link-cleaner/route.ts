@@ -64,11 +64,11 @@ function processContentUrls<T extends { id: string; content: string }>(
 }
 
 export const GET = async (request: Request) => {
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
-
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
+
+  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
+  await cookies();
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);

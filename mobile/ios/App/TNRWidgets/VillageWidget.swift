@@ -6,7 +6,7 @@ struct VillageWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "TNRVillageWidget", provider: SnapshotProvider()) { entry in
             VillageWidgetView(entry: entry)
-                .tnrWidgetBackground(TNRStyle.tile.opacity(0.18))
+                .tnrWidgetBackground(TNRStyle.parchment)
         }
         .configurationDisplayName("Village")
         .description("Your village, rank and unread notifications.")
@@ -25,7 +25,7 @@ struct VillageWidgetView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Image(systemName: "building.columns.fill")
                     .font(.system(size: 18))
-                    .foregroundStyle(TNRStyle.ink.opacity(0.7))
+                    .foregroundStyle(.primary)
                 Text(snapshot.village ?? "No village")
                     .font(.system(size: 15, weight: .bold))
                     .lineLimit(1)

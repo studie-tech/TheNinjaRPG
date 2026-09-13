@@ -8,10 +8,14 @@ import {
 } from "@/libs/gamesettings";
 import { endRankedSeason } from "@/server/api/routers/pvprank";
 import { drizzleDB } from "@/server/db";
+import { authenticateCronRequest } from "@/server/utils/cron";
 
 const ENDPOINT_NAME = "daily-ranked-pvp";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authError = authenticateCronRequest(request);
+  if (authError) return authError;
+
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
   await cookies();
 

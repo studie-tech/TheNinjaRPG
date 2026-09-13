@@ -13,6 +13,14 @@ Repository-wide agent instructions; `CLAUDE.md` imports this file. Paths below a
 - React hooks must run unconditionally, in stable order, before early returns. Use query `enabled` for conditional fetching and react-hook-form `useWatch`, never `watch` (React Compiler). Verify hook ordering after frontend changes.
 - Before filtering a Sentry error, verify meaningful user feedback, resolved loading states and no broken/blank UI. Comment how UX is handled; use domain-validating regexes for URL filters, never substring matching.
 
+## Repository consistency
+
+- Keep code, comments and repository documentation timeless: describe current behavior, contracts and durable technical rationale. Do not commit development-conversation narratives, progress reports, review iterations, temporary QA evidence or release-preparation diaries. Put task-specific history and validation results in the PR description or external task artifacts; update existing documentation only when lasting usage or operational guidance changes.
+- Before implementing, inspect comparable features and reuse their architecture, components, helpers, naming, validation, error handling and tests. Follow established repository patterns across frontend, backend, integrations and tooling; do not introduce a parallel approach merely because it is convenient or familiar.
+- Use the existing tRPC routers and client hooks for application queries and mutations, with the established authentication and response conventions. Reserve standalone HTTP routes for integrations that require them, such as webhooks and scheduled jobs; SDK convenience alone is not a reason to bypass tRPC.
+- Cron endpoints must call `authenticateCronRequest` from `@/server/utils/cron` before timers, database access or other work. Keep their existing timing locks; authentication does not replace scheduling or concurrency guards.
+- If an existing pattern cannot meet a concrete requirement, verify the limitation, choose the smallest compatible extension and document why the exception is needed. When replacing an approach, migrate its callers and remove the obsolete implementation.
+
 ## Commands and environments
 
 | Command | Purpose |
@@ -56,6 +64,7 @@ Combat logic lives in `app/src/libs/combat/`: `actions.ts` (actions), `process.t
 
 ## Database and tRPC
 
+- For expected mutation rejections (unsupported client, changed account, unmet prerequisites), return `errorResponse(message)` and stop before side effects. Follow the existing response contract instead of throwing `serverError` for normal user-facing outcomes. The frontend must display the message near the action, clear pending state and allow recovery without treating failure as success. Keep authentication/authorization middleware and schema validation enforced; unexpected exceptions remain errors.
 - Prefer Drizzle query syntax over raw SQL. Endpoint shape: parallel queries → guards → mutations. Reuse existing endpoints/patterns; mutations typically return `baseServerResponse`. Keep DB convenience helpers at the bottom of their router (e.g. profile's `fetchUser`).
 - Prefer a single guarded update over a transaction. Transactions are supported, but the PlanetScale serverless driver serializes statements through a session token; `Promise.all` does not remove those round-trips. Use a short transaction only when multiple rows must change together and one guarded statement cannot express the invariant.
 - For a race confined to the same account with a reversible, support-removable outcome (e.g. a stray device row), prefer readable check-then-write and comment the race's cost. See `register.ts` / `push.ts`. **Do not add transactions or `FOR UPDATE` for these races**: missing-row locking reads can gap-lock and deadlock. Irreversible or cross-user costs still require atomic guards (see `purchases/grant.ts`).
@@ -71,7 +80,7 @@ Capacitor shells and dependencies live in `mobile/`, with their own `package.jso
 - Fire-and-forget exports (`haptics`, `widgets`, `audioSession`, `liveActivity`) no-op off device; no platform check needed. Result-bearing calls (`appleAuth.authorize`, `oauthBrowser.open`, `purchases.purchase`, `push.register`) reject off device; call only after establishing shell context.
 - Ordinary push must use `sendPushToUsers` from `@/server/utils/push`, never router-to-transport calls. It handles opt-outs, device fan-out and dead-token pruning, and never throws. Live Activities use `pushActivityUpdate` instead (ActivityKit tokens); defer with `after()` as in `hospital.ts` to keep Apple latency off the response.
 - `Notification` is a global announcement feed: `userId` is the author; `unreadNotifications` increments determine recipients. It is separate from per-user push delivery.
-- Store branching is client-side via `useNativeShell()`: `points/page.tsx` renders `NativeStore` instead of PayPal in the shell. Preserve this gate against web checkout. `libs/native/userAgent.ts` has a tested server-side detector, but routers do not currently use it.
+- Store branching is client-side via `useNativeShell()`: `points/page.tsx` renders `NativeStore` instead of PayPal in the shell. Preserve this gate against web checkout. `libs/native/userAgent.ts` has a tested server-side detector, and the account-deletion router uses it to restrict the supported client.
 
 ## Code and UI conventions
 

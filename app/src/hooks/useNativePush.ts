@@ -332,7 +332,21 @@ export const useNativePushPermission = () => {
 
   useEffect(() => {
     if (!isNative()) return;
-    void push.checkPermissions().then(setPermission);
+    let active = true;
+    const refreshPermission = () => {
+      void push.checkPermissions().then((value) => {
+        if (active) setPermission(value);
+      });
+    };
+    refreshPermission();
+    // Reflect changes made in system Settings as soon as the player returns.
+    const unsubscribe = appEvents.onStateChange((isActive) => {
+      if (isActive) refreshPermission();
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   /**

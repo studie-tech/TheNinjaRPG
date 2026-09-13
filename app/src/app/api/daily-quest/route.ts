@@ -10,6 +10,7 @@ import {
 import { availableQuestLetterRanks } from "@/libs/train";
 import { upsertQuestEntries } from "@/routers/quests";
 import { drizzleDB } from "@/server/db";
+import { authenticateCronRequest } from "@/server/utils/cron";
 
 const ENDPOINT_NAME = "daily-quest";
 
@@ -34,7 +35,10 @@ AND u.userId NOT IN (
 ORDER BY u.`rank`, u.`level`;
 */
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authError = authenticateCronRequest(request);
+  if (authError) return authError;
+
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
   await cookies();
 

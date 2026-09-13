@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The launcher tile colour, so the widget reads as part of the same app as the icon
-         sitting next to it. -->
-    <color name="widget_tile">#F0C84C</color>
+    <!-- Parchment panels and warm borders match the in-game interface. -->
+    <color name="widget_tile">#FFF8E7</color>
+    <color name="widget_border">#B38B54</color>
     <color name="widget_ink">#23180A</color>
     <color name="widget_ink_muted">#6B5A33</color>
     <color name="widget_health">#D94040</color>

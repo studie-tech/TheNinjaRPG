@@ -12,14 +12,14 @@ struct TNRLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TNRActivityAttributes.self) { context in
             LockScreenView(context: context)
-                .activityBackgroundTint(TNRStyle.tile.opacity(0.9))
-                .activitySystemActionForegroundColor(TNRStyle.ink)
+                .activityBackgroundTint(TNRStyle.parchment)
+                .activitySystemActionForegroundColor(.primary)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Image(systemName: context.attributes.kind.symbol)
                         .font(.system(size: 20))
-                        .foregroundStyle(TNRStyle.ink)
+                        .foregroundStyle(.primary)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -65,23 +65,23 @@ private struct LockScreenView: View {
         HStack(spacing: 14) {
             Image(systemName: context.attributes.kind.symbol)
                 .font(.system(size: 26))
-                .foregroundStyle(TNRStyle.ink)
+                .foregroundStyle(.primary)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(context.state.title)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(TNRStyle.ink)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 if let subtitle = context.state.subtitle {
                     Text(subtitle)
                         .font(.system(size: 12))
-                        .foregroundStyle(TNRStyle.ink.opacity(0.7))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 if let progress = context.state.progress {
                     ProgressView(value: progress)
-                        .tint(TNRStyle.ink)
+                        .tint(TNRStyle.health)
                         .frame(height: 4)
                         .padding(.top, 2)
                 }
@@ -94,7 +94,7 @@ private struct LockScreenView: View {
             Text(context.state.endsAt, style: .timer)
                 .font(.system(size: 22, weight: .semibold))
                 .monospacedDigit()
-                .foregroundStyle(TNRStyle.ink)
+                .foregroundStyle(.primary)
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 96)
         }

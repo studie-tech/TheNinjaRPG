@@ -62,6 +62,10 @@ public class TNRAppleAuthPlugin: CAPPlugin, CAPBridgedPlugin,
             "identityToken": identityToken,
             "user": credential.user,
         ]
+        if let codeData = credential.authorizationCode,
+           let code = String(data: codeData, encoding: .utf8) {
+            result["authorizationCode"] = code
+        }
         if let email = credential.email {
             result["email"] = email
         }
