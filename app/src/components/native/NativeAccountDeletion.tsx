@@ -232,6 +232,7 @@ export const NativeAccountDeletion = () => {
           </label>
           <Input
             id="delete-confirmation"
+            className="text-[16px]"
             autoComplete="off"
             value={confirmation}
             disabled={pending}
