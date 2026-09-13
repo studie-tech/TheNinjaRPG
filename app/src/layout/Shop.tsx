@@ -26,6 +26,7 @@ import {
 } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -269,6 +270,20 @@ const Shop: React.FC<ShopProps> = (props) => {
 
   const utils = api.useUtils();
 
+  const hasBloodlineRoll = item?.effects.some(
+    (effect) => effect.type === "rollbloodline",
+  );
+  const rollOdds = api.item.getBloodlineRollOdds.useQuery(
+    { id: item?.id ?? "" },
+    { enabled: isOpen && !!hasBloodlineRoll, staleTime: 0 },
+  );
+  const canReviewRollOdds =
+    !hasBloodlineRoll ||
+    (!rollOdds.isFetching &&
+      !rollOdds.isError &&
+      !!rollOdds.data?.length &&
+      rollOdds.data.every((roll) => roll.outcomes.length > 0));
+
   const {
     data: items,
     isFetching,
@@ -430,11 +445,13 @@ const Shop: React.FC<ShopProps> = (props) => {
       isOpen={isOpen}
       setIsOpen={setItemConfirmOpen}
       isValid={false}
+      proceedDisabled={!canReviewRollOdds}
       onClose={() => {
         setItem(undefined);
         setStacksize(1);
       }}
       onAccept={() => {
+        if (!canReviewRollOdds) return;
         if (canAfford) {
           purchase({
             itemId: item.id,
@@ -496,6 +513,70 @@ const Shop: React.FC<ShopProps> = (props) => {
       </div>
       {!isPurchasing && (
         <>
+          {hasBloodlineRoll && (
+            <div
+              className="rounded-lg border bg-background p-3 text-sm"
+              aria-live="polite"
+            >
+              <h4 className="font-semibold">Bloodline odds</h4>
+              {rollOdds.isFetching ? (
+                <Loader explanation="Loading your possible bloodlines" />
+              ) : rollOdds.isError || !rollOdds.data?.length ? (
+                <div className="space-y-2">
+                  <p>Could not load the odds. Please retry before buying.</p>
+                  <Button variant="outline" onClick={() => void rollOdds.refetch()}>
+                    Retry
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-muted-foreground">
+                    Odds per use with your current village and roll history. Each use
+                    rolls again; changing villages or rolling bloodlines can change the
+                    pool. A successful roll replaces your equipped bloodline.
+                  </p>
+                  {rollOdds.data.length > 1 && (
+                    <p>
+                      Rolls run in order; the last successful roll determines your
+                      bloodline.
+                    </p>
+                  )}
+                  {rollOdds.data.map((roll, index) => (
+                    <div key={`${roll.rank}-${index}`}>
+                      <p className="font-medium">
+                        {roll.rank}-rank roll
+                        {roll.outcomes.length > 0 && `: ${roll.successChance}% success`}
+                      </p>
+                      {roll.outcomes.length === 0 ? (
+                        <p role="alert">
+                          No bloodlines are currently available for this roll.
+                        </p>
+                      ) : (
+                        <ul>
+                          {roll.outcomes.map((outcome) => (
+                            <li key={outcome.id} className="flex justify-between gap-3">
+                              <span className="min-w-0 break-words">
+                                {outcome.name}
+                              </span>
+                              <span className="shrink-0 tabular-nums">
+                                {outcome.chance.toLocaleString(undefined, {
+                                  maximumFractionDigits: 4,
+                                })}
+                                %
+                              </span>
+                            </li>
+                          ))}
+                          {roll.successChance < 100 && (
+                            <li>No new bloodline: {100 - roll.successChance}%</li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <ItemWithEffects
             item={item}
             key={item.id}

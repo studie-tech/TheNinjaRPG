@@ -210,6 +210,37 @@ export const itemRouter = createTRPCRouter({
       if (!result) return null;
       return result as Omit<typeof result, "effects"> & { effects: ZodAllTags[] };
     }),
+  getBloodlineRollOdds: protectedProcedure
+    .input(idSchema)
+    .query(async ({ ctx, input }) => {
+      const [selectedItem, user, bloodlines, previousRolls] = await Promise.all([
+        fetchItem(ctx.drizzle, input.id),
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchBloodlines(ctx.drizzle),
+        fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
+      ]);
+      if (!selectedItem) return null;
+      return selectedItem.effects
+        .filter((effect) => effect.type === "rollbloodline")
+        .map((effect) => {
+          // Use the consume handler's pool, including village and least-rolled rules.
+          const pool = filterRollableBloodlines({
+            bloodlines,
+            user,
+            previousRolls,
+            rank: effect.rank,
+          });
+          return {
+            rank: effect.rank,
+            successChance: effect.power,
+            outcomes: pool.map(({ id, name }) => ({
+              id,
+              name,
+              chance: effect.power / pool.length,
+            })),
+          };
+        });
+    }),
   getItemWithCraftingRequirements: publicProcedure
     .meta({
       mcp: { enabled: true, description: "Get item with crafting requirements" },
