@@ -75,9 +75,7 @@ platform :android do
       task: "bundle",
       build_type: "Release",
       properties: {
-        # An AGP-level override applied after configuration, so it supersedes the value in
-        # defaultConfig without build.gradle needing a second knob for it.
-        "android.injected.version.code" => next_version_code,
+        "tnrVersionCode" => next_version_code,
         "android.injected.signing.store.file" => ENV.fetch("ANDROID_KEYSTORE_PATH"),
         "android.injected.signing.store.password" => ENV.fetch("ANDROID_KEYSTORE_PASSWORD"),
         "android.injected.signing.key.alias" => ENV.fetch("ANDROID_KEY_ALIAS"),
