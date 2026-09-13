@@ -54,21 +54,18 @@ const HOURLY_TIMER_NAME = "cleaner-hourly";
 export const maxDuration = 300;
 
 export async function GET(request: Request) {
-  // Keep the existing maintenance entry point, but only the authenticated scheduler
-  // can process permanent account deletions. Run these on every ten-minute tick,
-  // independently of the hourly maintenance gate.
   const secret = process.env.CRON_SECRET;
   const actual = Buffer.from(request.headers.get("authorization") ?? "");
   const expected = Buffer.from(`Bearer ${secret ?? ""}`);
-  const isScheduler =
-    !!secret && actual.length === expected.length && timingSafeEqual(actual, expected);
-  const deletions = isScheduler ? await processAccountDeletions() : { failed: 0 };
-  const deletionFailure =
-    deletions.failed > 0
-      ? Response.json("Account deletion cleanup needs a retry", { status: 503 })
-      : null;
+  if (
+    !secret ||
+    actual.length !== expected.length ||
+    !timingSafeEqual(actual, expected)
+  ) {
+    return Response.json("Unauthorized", { status: 401 });
+  }
   const cleanerTimer = await lockWithHourlyTimer(drizzleDB, HOURLY_TIMER_NAME);
-  if (!cleanerTimer.isNewHour) return deletionFailure ?? cleanerTimer.response;
+  if (!cleanerTimer.isNewHour) return cleanerTimer.response;
 
   try {
     // Range deletes use indexed ordering and a bounded batch so one large
@@ -522,7 +519,16 @@ export async function GET(request: Request) {
     // Handle expired exclusive raids - return sectors to neutral if raid timed out without boss defeat
     await cleanupExpiredExclusiveRaids(drizzleDB);
 
-    return deletionFailure ?? Response.json(`OK`);
+    // Finish due permanent-account deletions alongside the other hourly cleanup.
+    const deletions = await processAccountDeletions();
+    if (deletions.failed > 0) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Account deletion cleanup needs a retry",
+      });
+    }
+
+    return Response.json(`OK`);
   } catch (cause) {
     console.error(cause);
     try {

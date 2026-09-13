@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ process: vi.fn(), lock: vi.fn() }));
-vi.mock("@/server/db", () => ({ drizzleDB: {} }));
+const mocks = vi.hoisted(() => ({ process: vi.fn(), lock: vi.fn(), reset: vi.fn(), execute: vi.fn() }));
+vi.mock("@/server/db", () => ({ drizzleDB: {
+  execute: mocks.execute,
+  delete: () => ({ where: vi.fn().mockResolvedValue(undefined) }),
+  update: () => ({ set: () => ({ where: vi.fn().mockResolvedValue(undefined) }) }),
+} }));
 vi.mock("@/libs/gamesettings", () => ({
-  lockWithHourlyTimer: mocks.lock, lockWithDailyTimer: vi.fn(), updateGameSetting: vi.fn(),
+  lockWithHourlyTimer: mocks.lock, lockWithDailyTimer: vi.fn().mockResolvedValue({ isNewDay: false }), updateGameSetting: mocks.reset,
 }));
 vi.mock("@/routers/raids", () => ({ cleanupExpiredExclusiveRaids: vi.fn() }));
 vi.mock("@/server/utils/purchases/grant", () => ({ reconcileFederalStatuses: vi.fn() }));
@@ -19,27 +23,38 @@ describe("account deletion in the existing cleaner", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("CRON_SECRET", "test-cron");
+    mocks.execute.mockResolvedValue([]);
     mocks.process.mockResolvedValue({ processed: 1, failed: 0 });
     mocks.lock.mockResolvedValue({ isNewHour: false, response: Response.json("hourly work already ran") });
   });
-  it("processes due deletions even when hourly maintenance is skipped", async () => {
+  it("skips deletion cleanup with the rest of hourly maintenance", async () => {
     expect((await GET(request())).status).toBe(200);
-    expect(mocks.process).toHaveBeenCalledOnce();
-    expect(mocks.process.mock.invocationCallOrder[0]).toBeLessThan((mocks.lock.mock.invocationCallOrder[0] ?? 0));
-  });
-  it("does not expose deletion processing to unauthenticated maintenance calls", async () => {
-    expect((await GET(request("wrong"))).status).toBe(200);
     expect(mocks.process).not.toHaveBeenCalled();
-    expect(mocks.lock).toHaveBeenCalledOnce();
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+  it("rejects unauthenticated calls before any maintenance", async () => {
+    expect((await GET(request("wrong"))).status).toBe(401);
+    expect(mocks.process).not.toHaveBeenCalled();
+    expect(mocks.lock).not.toHaveBeenCalled();
   });
   it("does not process deletions when the secret is unconfigured", async () => {
     vi.stubEnv("CRON_SECRET", "");
-    await GET(request(""));
+    expect((await GET(request(""))).status).toBe(401);
+    expect(mocks.lock).not.toHaveBeenCalled();
     expect(mocks.process).not.toHaveBeenCalled();
   });
-  it("reports deletion failures while still running the maintenance gate", async () => {
+  it("processes due deletions as part of the hourly cleanup", async () => {
+    mocks.lock.mockResolvedValueOnce({ isNewHour: true, prevTime: new Date(0) });
+    expect((await GET(request())).status).toBe(200);
+    expect(mocks.execute).toHaveBeenCalled();
+    expect(mocks.process).toHaveBeenCalledOnce();
+    expect(mocks.reset).not.toHaveBeenCalled();
+  });
+  it("uses the standard cleaner failure and timer rollback for deletion failures", async () => {
+    const previous = new Date(0);
+    mocks.lock.mockResolvedValueOnce({ isNewHour: true, prevTime: previous });
     mocks.process.mockResolvedValue({ processed: 0, failed: 1 });
-    expect((await GET(request())).status).toBe(503);
-    expect(mocks.lock).toHaveBeenCalledOnce();
+    expect((await GET(request())).status).toBe(500);
+    expect(mocks.reset).toHaveBeenCalledWith(expect.anything(), "cleaner-hourly", 0, previous);
   });
 });
