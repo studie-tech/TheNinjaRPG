@@ -15,6 +15,7 @@ Repository-wide agent instructions; `CLAUDE.md` imports this file. Paths below a
 
 ## Repository consistency
 
+- Keep code, comments and repository documentation timeless: describe current behavior, contracts and durable technical rationale. Do not commit development-conversation narratives, progress reports, review iterations, temporary QA evidence or release-preparation diaries. Put task-specific history and validation results in the PR description or external task artifacts; update existing documentation only when lasting usage or operational guidance changes.
 - Before implementing, inspect comparable features and reuse their architecture, components, helpers, naming, validation, error handling and tests. Follow established repository patterns across frontend, backend, integrations and tooling; do not introduce a parallel approach merely because it is convenient or familiar.
 - Use the existing tRPC routers and client hooks for application queries and mutations, with the established authentication and response conventions. Reserve standalone HTTP routes for integrations that require them, such as webhooks and scheduled jobs; SDK convenience alone is not a reason to bypass tRPC.
 - Cron endpoints must call `authenticateCronRequest` from `@/server/utils/cron` before timers, database access or other work. Keep their existing timing locks; authentication does not replace scheduling or concurrency guards.
