@@ -7,10 +7,14 @@ import {
   updateGameSetting,
 } from "@/libs/gamesettings";
 import { drizzleDB } from "@/server/db";
+import { authenticateCronRequest } from "@/server/utils/cron";
 
 const ENDPOINT_NAME = "monthly-tower-defense-reset";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authError = authenticateCronRequest(request);
+  if (authError) return authError;
+
   // Disable cache for this server action
   await cookies();
 

@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { and, eq, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
@@ -46,6 +45,7 @@ import {
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { drizzleDB } from "@/server/db";
 import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
+import { authenticateCronRequest } from "@/server/utils/cron";
 import { reconcileFederalStatuses } from "@/server/utils/purchases/grant";
 import { secondsFromNow } from "@/utils/time";
 
@@ -54,16 +54,9 @@ const HOURLY_TIMER_NAME = "cleaner-hourly";
 export const maxDuration = 300;
 
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  const actual = Buffer.from(request.headers.get("authorization") ?? "");
-  const expected = Buffer.from(`Bearer ${secret ?? ""}`);
-  if (
-    !secret ||
-    actual.length !== expected.length ||
-    !timingSafeEqual(actual, expected)
-  ) {
-    return Response.json("Unauthorized", { status: 401 });
-  }
+  const authError = authenticateCronRequest(request);
+  if (authError) return authError;
+
   const cleanerTimer = await lockWithHourlyTimer(drizzleDB, HOURLY_TIMER_NAME);
   if (!cleanerTimer.isNewHour) return cleanerTimer.response;
 

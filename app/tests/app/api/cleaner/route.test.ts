@@ -39,7 +39,7 @@ describe("account deletion in the existing cleaner", () => {
   });
   it("does not process deletions when the secret is unconfigured", async () => {
     vi.stubEnv("CRON_SECRET", "");
-    expect((await GET(request(""))).status).toBe(401);
+    expect((await GET(request(""))).status).toBe(500);
     expect(mocks.lock).not.toHaveBeenCalled();
     expect(mocks.process).not.toHaveBeenCalled();
   });
