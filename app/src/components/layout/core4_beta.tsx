@@ -96,7 +96,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
       <div className="relative top-0 bottom-0 mr-auto ml-auto w-full max-w-[1280px] md:relative">
         <div className="relative top-3 z-2 z-50 flex w-full select-none justify-center">
           {!lightLayout && (
-            <Link href="/">
+            <Link prefetch={false} href="/">
               <Image
                 className="hidden md:block"
                 id="tutorial-logo"
@@ -109,6 +109,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
             </Link>
           )}
           <Link
+            prefetch={false}
             href="/"
             className="absolute top-0 left-1/2 block min-w-0 -translate-x-1/2 md:hidden"
             aria-label="The Ninja RPG home"
@@ -147,6 +148,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
                 const count = link.notificationCount ?? 0;
                 return (
                   <Link
+                    prefetch={false}
                     key={link.name}
                     className="relative z-10 flex flex-row items-center justify-center gap-1 hover:cursor-pointer hover:text-orange-500"
                     href={link.href}
@@ -170,6 +172,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
             <div className="absolute top-6 right-0 grid w-1/2 grid-cols-3 px-24 lg:px-36">
               {navbarMenuItemsRight.map((link) => (
                 <Link
+                  prefetch={false}
                   key={link.name}
                   className="z-10 flex flex-row items-center justify-center gap-1 hover:text-orange-500"
                   href={link.href}

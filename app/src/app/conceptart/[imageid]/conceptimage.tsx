@@ -56,6 +56,7 @@ const ConceptBox_ConceptImage: React.FC<ConceptBox_ConceptImageProps> = (props) 
         image && (
           <div className="w-14">
             <Link
+              prefetch={false}
               href={`/username/${image?.user?.username}`}
               aria-label={image?.user?.username || "unknown user"}
             >

@@ -3104,7 +3104,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
                   )}
                 </div>
                 <div className="absolute top-0 left-0 z-50 max-w-1/3 hover:cursor-pointer hover:opacity-80">
-                  <Link href={`/userid/${user.userId}`}>
+                  <Link prefetch={false} href={`/userid/${user.userId}`}>
                     <Image
                       src={IMG_SECTOR_INFO}
                       width={40}

@@ -46,6 +46,7 @@ export const NotificationList: React.FC<NotificationListProps> = ({
     isInPopover = false,
   ) => (
     <Link
+      prefetch={false}
       key={key}
       href={notification.href}
       id={notification.id}

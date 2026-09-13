@@ -75,6 +75,7 @@ export default function ApplicationDetailPage() {
             <div>
               <div className="font-semibold">
                 <Link
+                  prefetch={false}
                   href={`/username/${app.applicant?.username || "user"}`}
                   className="hover:text-orange-500"
                 >

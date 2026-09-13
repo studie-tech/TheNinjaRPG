@@ -41,6 +41,7 @@ const MenuBoxCombat: React.FC = () => {
           battleUser.username
         ) : (
           <Link
+            prefetch={false}
             href={`/userid/${battleUser.userId}`}
             className="inline-block flex flex-row hover:text-orange-500"
           >
@@ -49,7 +50,7 @@ const MenuBoxCombat: React.FC = () => {
         )}
       </SideBannerTitle>
       <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
-        <Link href="/profile">
+        <Link prefetch={false} href="/profile">
           <AvatarImage
             href={battleUser.avatar}
             userId={battleUser.userId}

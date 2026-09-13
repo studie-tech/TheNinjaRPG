@@ -175,13 +175,21 @@ const MenuBoxProfile: React.FC = () => {
     switch (status) {
       case "BATTLE":
         return (
-          <Link href="/combat" className="flex flex-row hover:text-orange-500">
+          <Link
+            prefetch={false}
+            href="/combat"
+            className="flex flex-row hover:text-orange-500"
+          >
             BATTLE <ShieldCheck className="ml-1 h-6 w-6 hover:text-orange-500" />
           </Link>
         );
       case "ASLEEP":
         return (
-          <Link href="/home" className="flex flex-row hover:text-orange-500">
+          <Link
+            prefetch={false}
+            href="/home"
+            className="flex flex-row hover:text-orange-500"
+          >
             ASLEEP <Moon className="ml-1 h-6 w-6 hover:text-orange-500" />
           </Link>
         );
@@ -194,7 +202,11 @@ const MenuBoxProfile: React.FC = () => {
       case "AWAKE":
         if (location) {
           return (
-            <Link href="/home" className="flex flex-row hover:text-orange-500">
+            <Link
+              prefetch={false}
+              href="/home"
+              className="flex flex-row hover:text-orange-500"
+            >
               AWAKE <Sun className="ml-1 h-6 w-6 hover:text-orange-500" />
             </Link>
           );
@@ -217,7 +229,7 @@ const MenuBoxProfile: React.FC = () => {
     <>
       <div className="flex-col items-center justify-center">
         <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
-          <Link href="/profile">
+          <Link prefetch={false} href="/profile">
             <AvatarImage
               href={userData?.avatar}
               userId={userData?.userId}
@@ -301,7 +313,11 @@ const MenuBoxProfile: React.FC = () => {
           {userData?.village?.name && (
             <p className="flex flex-row">
               <b>Village: </b>{" "}
-              <Link href="/village" className="ml-1 hover:text-orange-500">
+              <Link
+                prefetch={false}
+                href="/village"
+                className="ml-1 hover:text-orange-500"
+              >
                 {userData.village.name}
               </Link>
             </p>
@@ -347,6 +363,7 @@ const MenuBoxProfile: React.FC = () => {
             <Tooltip>
               <TooltipTrigger className="w-full">
                 <Link
+                  prefetch={false}
                   href={location ? "/bank" : "/profile"}
                   className="hover:text-orange-500"
                 >
@@ -421,7 +438,7 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center hover:text-orange-500">
                     <Dumbbell className="mr-2 h-6 w-6" />
-                    <Link href="/traininggrounds">
+                    <Link prefetch={false} href="/traininggrounds">
                       <Countdown
                         targetDate={secondsFromDate(
                           trainingSpeedSeconds(userData?.trainingSpeed),
@@ -442,7 +459,7 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center hover:text-orange-500">
                     <Atom className="mr-2 h-6 w-6" />
-                    <Link href="/traininggrounds">
+                    <Link prefetch={false} href="/traininggrounds">
                       <Countdown
                         targetDate={trainingJutsu.finishTraining}
                         timeDiff={timeDiff}
@@ -472,7 +489,7 @@ const MenuBoxProfile: React.FC = () => {
                     ) : (
                       <ScanSearch className="mr-2 h-6 w-6" />
                     )}
-                    <Link href="/traininggrounds">
+                    <Link prefetch={false} href="/traininggrounds">
                       <Countdown
                         targetDate={covertTrainingFinishAt}
                         timeDiff={timeDiff}
@@ -497,7 +514,7 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center hover:text-orange-500">
                     <Hammer className="mr-2 h-6 w-6" />
-                    <Link href="/occupation">
+                    <Link prefetch={false} href="/occupation">
                       <Countdown
                         targetDate={activeItemCraftingTimer.craftingFinishedAt}
                         timeDiff={timeDiff}
@@ -523,7 +540,7 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center hover:text-orange-500">
                     <Gem className="mr-2 h-6 w-6" />
-                    <Link href="/occupation">
+                    <Link prefetch={false} href="/occupation">
                       <Countdown
                         targetDate={activeImbuementTimer.craftingFinishedAt}
                         timeDiff={timeDiff}
@@ -548,7 +565,11 @@ const MenuBoxProfile: React.FC = () => {
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger className="w-full">
-                  <Link href="/missionhall" className="hover:text-orange-500">
+                  <Link
+                    prefetch={false}
+                    href="/missionhall"
+                    className="hover:text-orange-500"
+                  >
                     <div className="flex flex-row items-center">
                       <LayoutList className="mr-2 h-6 w-6" /> {userData.dailyMissions} /{" "}
                       {MISSIONS_PER_DAY}
@@ -563,7 +584,11 @@ const MenuBoxProfile: React.FC = () => {
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger className="w-full">
-                  <Link href="/missionhall" className="hover:text-orange-500">
+                  <Link
+                    prefetch={false}
+                    href="/missionhall"
+                    className="hover:text-orange-500"
+                  >
                     <div className="flex flex-row items-center">
                       <ClipboardList className="mr-2 h-6 w-6" />{" "}
                       {userData.dailyErrands ?? 0} / {ERRANDS_PER_DAY}
@@ -579,7 +604,11 @@ const MenuBoxProfile: React.FC = () => {
               <TooltipProvider delayDuration={50}>
                 <Tooltip>
                   <TooltipTrigger className="w-full">
-                    <Link href="/missionhall" className="hover:text-orange-500">
+                    <Link
+                      prefetch={false}
+                      href="/missionhall"
+                      className="hover:text-orange-500"
+                    >
                       <div className="flex flex-row items-center">
                         <Stethoscope className="mr-2 h-6 w-6" />{" "}
                         {userData.dailyMedicalMissions ?? 0} /{" "}
@@ -595,7 +624,11 @@ const MenuBoxProfile: React.FC = () => {
             <TooltipProvider delayDuration={50}>
               <Tooltip>
                 <TooltipTrigger className="w-full">
-                  <Link href="/missionhall" className="hover:text-orange-500">
+                  <Link
+                    prefetch={false}
+                    href="/missionhall"
+                    className="hover:text-orange-500"
+                  >
                     <div className="flex flex-row items-center">
                       <Swords className="mr-2 h-6 w-6" />{" "}
                       {userData.dailyPvpMissions ?? 0} / {PVP_MISSIONS_PER_DAY}
@@ -609,7 +642,7 @@ const MenuBoxProfile: React.FC = () => {
           <TooltipProvider delayDuration={50}>
             <Tooltip>
               <TooltipTrigger className="w-full">
-                <Link href="/points" className="hover:text-orange-500">
+                <Link prefetch={false} href="/points" className="hover:text-orange-500">
                   <div className="flex flex-row items-center">
                     <Star className="mr-2 h-6 w-6" />{" "}
                     {userData?.reputationPoints ?? "??"}

@@ -27,6 +27,7 @@ const PixelPublicHeader: React.FC<PixelPublicHeaderProps> = ({
     <header className="fixed inset-x-0 top-0 z-50 border-sky-100/10 border-b bg-slate-950/55 backdrop-blur-md">
       <div className="mx-auto grid min-h-20 w-[min(100%_-_32px,1180px)] grid-cols-[auto_1fr_auto] items-center gap-4">
         <Link
+          prefetch={false}
           href="/"
           aria-label="The Ninja RPG home"
           className={cn(
@@ -56,7 +57,7 @@ const PixelPublicHeader: React.FC<PixelPublicHeaderProps> = ({
           ))}
         </nav>
         <div className="col-start-3 flex items-center justify-self-end gap-3">
-          <Link href="/login">
+          <Link prefetch={false} href="/login">
             <Button
               variant="outline"
               size="sm"
@@ -65,7 +66,7 @@ const PixelPublicHeader: React.FC<PixelPublicHeaderProps> = ({
               Log In
             </Button>
           </Link>
-          <Link href="/signup">
+          <Link prefetch={false} href="/signup">
             <Button
               size="sm"
               className="tnr-ink-btn tnr-ink-btn-primary tnr-ink-register"

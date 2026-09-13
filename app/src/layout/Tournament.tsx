@@ -415,6 +415,7 @@ const UserMatch: React.FC<UserMatchProps> = (props) => {
         </div>
       )}
       <Link
+        prefetch={false}
         href={`/userid/${seed.userId1}`}
         className={`grow text-slate-100 ${seed.userId1 ? "hover:cursor-pointer hover:text-orange-100" : ""}`}
       >

@@ -241,6 +241,7 @@ export default function Profile() {
               {marriages !== undefined && marriages.length > 0
                 ? marriages.map((x, i) => (
                     <Link
+                      prefetch={false}
                       key={x.username}
                       href={`/username/${x.username}`}
                       className="font-bold"

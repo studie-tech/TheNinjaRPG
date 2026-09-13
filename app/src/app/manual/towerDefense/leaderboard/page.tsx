@@ -28,13 +28,17 @@ export default function TowerDefenseLeaderboard() {
     rank: index + 1,
     user: (
       <div className="flex items-center gap-2">
-        <Link href={`/username/${run.user.username}`}>
+        <Link prefetch={false} href={`/username/${run.user.username}`}>
           <div className="w-10">
             <AvatarImage href={run.user.avatar} alt={run.user.username} size={100} />
           </div>
         </Link>
         <div>
-          <Link href={`/username/${run.user.username}`} className="font-bold">
+          <Link
+            prefetch={false}
+            href={`/username/${run.user.username}`}
+            className="font-bold"
+          >
             {run.user.username}
           </Link>
           <p className="text-muted-foreground text-xs">{run.user.rank}</p>

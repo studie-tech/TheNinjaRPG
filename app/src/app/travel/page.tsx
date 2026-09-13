@@ -183,14 +183,16 @@ export default function Travel() {
     },
   );
   // The decoration + terrain libraries change rarely; fetch them once and keep
-  // them for the whole session instead of shipping copies with every window
+  // them across navigation for the whole session, including time away from travel.
   const { data: mapAssets } = api.mapAsset.getAll.useQuery(undefined, {
     enabled: !!userData,
     staleTime: Infinity,
+    gcTime: Infinity,
   });
   const { data: mapTerrains } = api.mapTerrain.getAll.useQuery(undefined, {
     enabled: !!userData,
     staleTime: Infinity,
+    gcTime: Infinity,
   });
 
   // Per-sector store: each sector map (~90KB) is downloaded at most once per

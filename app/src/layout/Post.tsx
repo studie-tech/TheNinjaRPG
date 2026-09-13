@@ -239,7 +239,7 @@ const Post: React.FC<PostProps> = (props) => {
       {props.image}
       {props.user && (
         <div className="... mr-3 basis-2/12 truncate text-center sm:basis-3/12 sm:text-base">
-          <Link href={`/username/${props.user.username}`}>
+          <Link prefetch={false} href={`/username/${props.user.username}`}>
             <AvatarImage
               href={props.user.avatar}
               userId={props.user.userId}
@@ -249,6 +249,7 @@ const Post: React.FC<PostProps> = (props) => {
           </Link>
           {props.user.nRecruited && props.user.nRecruited > 0 ? (
             <Link
+              prefetch={false}
               href={`/username/${props.user.username}`}
               className="font-bold text-xs hover:text-orange-500"
             >

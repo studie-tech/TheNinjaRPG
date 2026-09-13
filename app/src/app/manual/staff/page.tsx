@@ -417,6 +417,7 @@ const UserList: React.FC<UserListProps> = (props) => {
     >
       {users.map((user, i) => (
         <Link
+          prefetch={false}
           className="relative basis-1/2 text-center"
           key={`${user.role}-${i}`}
           href={`/username/${user.username}`}

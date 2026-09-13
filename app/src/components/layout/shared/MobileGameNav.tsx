@@ -30,7 +30,7 @@ const MobileGameNavButton: React.FC<{
     <Link
       href={option.href}
       className="relative -top-2 flex justify-center"
-      prefetch={true}
+      prefetch={false}
     >
       <Icon className={mobileNavbarButtonClassName} />
     </Link>
@@ -60,7 +60,7 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
         <Link
           href="/village"
           className="relative -top-8 flex justify-center"
-          prefetch={true}
+          prefetch={false}
         >
           <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
             <House className={cn(yellowButtonClassName)} />
@@ -70,7 +70,7 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
         <Link
           href="/travel"
           className="relative -top-8 flex justify-center"
-          prefetch={true}
+          prefetch={false}
         >
           <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
             <Compass className={mobileNavbarButtonClassName} />

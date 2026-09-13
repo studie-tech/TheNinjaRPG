@@ -1469,6 +1469,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               Sensei:{" "}
               {profile.rank === "GENIN" && profile.senseiId && profile.sensei ? (
                 <Link
+                  prefetch={false}
                   href={`/username/${profile.sensei.username}`}
                   className="font-bold"
                 >
@@ -3788,6 +3789,7 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ students }) => {
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
           {students.map((user) => (
             <Link
+              prefetch={false}
               href={`/username/${user.username}`}
               className="text-center"
               key={user.userId}
@@ -3837,6 +3839,7 @@ const MarriagesTab: React.FC<MarriagesTabProps> = ({ userId, username, isActive 
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
           {marriages.map((user) => (
             <Link
+              prefetch={false}
               href={`/username/${user.username}`}
               className="text-center"
               key={user.userId}
@@ -4402,7 +4405,11 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
           {visibleRecruits.map((user) => (
             <div key={user.userId} className="relative text-center">
-              <Link href={`/username/${user.username}`} className="block">
+              <Link
+                prefetch={false}
+                href={`/username/${user.username}`}
+                className="block"
+              >
                 <AvatarImage
                   href={user.avatar || ""}
                   alt={user.username}
