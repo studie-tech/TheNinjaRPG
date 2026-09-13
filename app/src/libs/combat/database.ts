@@ -74,6 +74,42 @@ type DataBattleAction = {
   relatedBloodlineId?: string;
 };
 
+/** Drain every write before a transaction can roll back after a batch failure. */
+export const completeBattleWrites = async <T extends readonly unknown[]>(writes: T) => {
+  const results = await Promise.allSettled(writes);
+  return results.map((result) => {
+    if (result.status === "rejected") throw result.reason;
+    return result.value;
+  }) as { -readonly [P in keyof T]: Awaited<T[P]> };
+};
+
+/**
+ * Settlement spans the battle claim and reward tables, so one guarded write cannot
+ * make it atomic. Claim first, then drain the parallel writes before commit/rollback;
+ * no intermediate fetches are added. Ordinary actions bypass the transaction.
+ */
+export const commitBattleChanges = async <T>(
+  client: DrizzleClient,
+  pusher: PusherClient,
+  atomic: boolean,
+  persist: (client: DrizzleClient, pusher: PusherClient) => Promise<T>,
+): Promise<T> => {
+  if (!atomic) return persist(client, pusher);
+  const events: Parameters<PusherClient["trigger"]>[] = [];
+  const deferredPusher = new Proxy(pusher, {
+    get: (target, key) =>
+      key === "trigger"
+        ? async (...args: Parameters<PusherClient["trigger"]>) => {
+            events.push(args);
+          }
+        : Reflect.get(target, key),
+  });
+  const result = await client.transaction((tx) => persist(tx, deferredPusher));
+  // A delivery failure must never retry already committed rewards.
+  await Promise.allSettled(events.map((args) => pusher.trigger(...args)));
+  return result;
+};
+
 /**
  * A raid is "boss defeated" when the boss AI exists in the battle and no
  * remaining boss AI is still in fighting condition. Summons don't count as
@@ -124,16 +160,6 @@ export const updateBattle = async (
   const user = newBattle.usersState.find((u) => u.userId === userId && !u.isSummon);
   const other = newBattle.usersState.find((u) => u.userId !== userId && !u.isSummon);
 
-  // If user won and it's a clan battle, update the clan battle queue
-  if (result?.didWin && newBattle.battleType === "CLAN_BATTLE") {
-    if (user && other) {
-      await client
-        .update(mpvpBattleQueue)
-        .set({ winnerId: result?.didWin ? user.clanId : other.clanId })
-        .where(eq(mpvpBattleQueue.battleId, newBattle.id));
-    }
-  }
-
   // Non-summon humans in this raid battle. Used to purge raid-chat memberships
   // on any raid battle-over (boss kill OR team wipe) and to release/notify
   // teammates when the raid boss is defeated.
@@ -144,8 +170,13 @@ export const updateBattle = async (
 
   // Update the battle, return undefined if the battle was updated by another process
   if (battleOver) {
-    await Promise.all([
-      client.delete(battle).where(eq(battle.id, newBattle.id)),
+    const deleted = await client
+      .delete(battle)
+      .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion)));
+    if (deleted.rowsAffected === 0) {
+      throw new Error(`Failure. Version: ${fetchedVersion}, Battle: ${newBattle.id}`);
+    }
+    await completeBattleWrites([
       ...(user && other
         ? [
             client
@@ -276,6 +307,7 @@ export const updateBattle = async (
         });
     }
   } else {
+    newBattle.version = Math.max(newBattle.version, fetchedVersion + 1);
     const result = await client
       .update(battle)
       .set({
@@ -292,6 +324,16 @@ export const updateBattle = async (
       .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion)));
     if (result.rowsAffected === 0) {
       throw new Error(`Failure. Version: ${fetchedVersion}, Battle: ${newBattle.id}`);
+    }
+  }
+
+  // If user won and it's a clan battle, update the clan battle queue
+  if (result?.didWin && newBattle.battleType === "CLAN_BATTLE") {
+    if (user && other) {
+      await client
+        .update(mpvpBattleQueue)
+        .set({ winnerId: result?.didWin ? user.clanId : other.clanId })
+        .where(eq(mpvpBattleQueue.battleId, newBattle.id));
     }
   }
 
@@ -457,7 +499,7 @@ export const updateKage = async (
     ...challenger.items.filter((ui) => ui.quantity > 0),
   ];
 
-  await Promise.all([
+  await completeBattleWrites([
     // Both PvP clients can finalize the same battle. The unique battleId makes
     // this insert idempotent; the no-op update preserves the first canonical row.
     client
@@ -531,7 +573,7 @@ export const updateClanLeaders = async (
   if (!user.isAggressor) return;
   if (!result.didWin) return;
   // Apply
-  await Promise.all([
+  await completeBattleWrites([
     client
       .update(clan)
       .set({
@@ -798,7 +840,7 @@ export const updateWars = async (
 
             // Process both shrines
             if (shrineChanges) {
-              await Promise.all([
+              await completeBattleWrites([
                 processShrine("attacker", shrineChanges.attacker),
                 processShrine("defender", shrineChanges.defender),
               ]);
@@ -928,7 +970,7 @@ export const updateWars = async (
           };
 
           if (shrineChanges) {
-            await Promise.all([
+            await completeBattleWrites([
               processShrine("attacker", shrineChanges.attacker),
               processShrine("defender", shrineChanges.defender),
             ]);
@@ -964,10 +1006,10 @@ export const updateWars = async (
   }
 
   // Run all promises in parallel - shrine updates are processed independently to avoid race conditions
-  await Promise.all([...otherPromises, ...shrineUpdatePromises]);
+  await completeBattleWrites([...otherPromises, ...shrineUpdatePromises]);
 
   // Broadcast pusher notifications after mutations complete
-  await Promise.all(
+  await completeBattleWrites(
     sectorsToNotify.map((sector) => broadcastRaidAvailability(pusher, sector)),
   );
 };
@@ -1004,7 +1046,7 @@ export const updateVillageAnbuClan = async (
   if (!user || !user.villageId) return;
   if (!result?.didWin) return;
   // Mutate
-  await Promise.all([
+  await completeBattleWrites([
     ...(result.villageTokens > 0
       ? [
           client
@@ -1169,7 +1211,7 @@ export const updateRaidProgress = async (
   // Doing this beside the HP write would announce a kill from a stale HP
   // snapshot, or insert a second inbox row if the claim gate were skipped.
   const raidName = updatedQuest?.name ?? "the raid";
-  await Promise.all([
+  await completeBattleWrites([
     client.insert(notification).values([
       {
         userId,
@@ -1455,7 +1497,7 @@ export const updateUser = async (
     }
 
     // Update user & user items
-    await Promise.all([
+    await completeBattleWrites([
       ...(farmActivityReductionSeconds > 0
         ? [
             reduceActiveFarmPlotTimers(
