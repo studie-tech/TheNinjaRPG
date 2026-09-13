@@ -879,7 +879,7 @@ export default function NativeStore() {
               {recentBaselineError && (
                 <Button
                   className="mt-2"
-                  size="lg"
+                  size="default"
                   variant="outline"
                   disabled={isRecentFetching}
                   onClick={() => void retryRecentBaseline()}
@@ -897,14 +897,14 @@ export default function NativeStore() {
               <p>{bindingError}</p>
               <Button
                 className="mt-2"
-                size="lg"
+                size="default"
                 variant="outline"
                 onClick={() => {
                   setPackageState(null);
                   setBindingRetry((attempt) => attempt + 1);
                 }}
               >
-                Retry store connection
+                Reconnect
               </Button>
             </div>
           )}
@@ -920,7 +920,7 @@ export default function NativeStore() {
               </p>
               <Button
                 className="mt-2"
-                size="lg"
+                size="default"
                 variant="outline"
                 disabled={
                   retryingProduct === attempt.productId ||
@@ -999,7 +999,7 @@ export default function NativeStore() {
                   </p>
                 </div>
                 <Button
-                  size="lg"
+                  size="default"
                   disabled={
                     busyProduct !== null ||
                     isPending ||
@@ -1056,7 +1056,7 @@ export default function NativeStore() {
                       </p>
                     </div>
                     <Button
-                      size="lg"
+                      size="default"
                       variant={isCurrent ? "outline" : "default"}
                       disabled={
                         busyProduct !== null ||
@@ -1118,7 +1118,7 @@ export default function NativeStore() {
             {/* Apple rejects apps selling subscriptions or non-consumables without this. */}
             <Button
               variant="outline"
-              size="lg"
+              size="default"
               className="mt-2"
               disabled={isRestoring || !available?.bound}
               onClick={() => void restore()}
@@ -1128,13 +1128,13 @@ export default function NativeStore() {
               ) : (
                 <RotateCcw className="mr-1 h-4 w-4" />
               )}
-              {isRestoring ? "Restoring purchases…" : "Restore purchases"}
+              {isRestoring ? "Restoring…" : "Restore purchases"}
             </Button>
             <p className="text-muted-foreground text-xs">
               Restoring checks for eligible previous purchases. It does not create a new
               charge.
             </p>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-2">
               {LEGAL_LINKS.filter(
                 (link) =>
                   link.label === "Terms of Service" || link.label === "Privacy Policy",
@@ -1151,8 +1151,13 @@ export default function NativeStore() {
               <p className="mt-2 font-semibold text-base">Recent purchases</p>
               <ul className="text-muted-foreground text-xs">
                 {recent.map((purchase) => (
-                  <li key={purchase.id} className="flex justify-between py-0.5">
-                    <span>{productLabel(purchase.productId)}</span>
+                  <li
+                    key={purchase.id}
+                    className="flex flex-wrap justify-between gap-x-3 gap-y-1 py-1"
+                  >
+                    <span className="min-w-0 break-words">
+                      {productLabel(purchase.productId)}
+                    </span>
                     <span>
                       {purchase.federalStatus ?? `${purchase.reputationPoints} reps`}
                     </span>

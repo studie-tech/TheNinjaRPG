@@ -42,7 +42,7 @@ export const NativeExternalLink = ({
   <Button
     asChild
     variant="outline"
-    className="h-auto min-h-[44px] w-full justify-between gap-3 whitespace-normal text-left text-[14px]"
+    className="h-[44px] min-h-[44px] w-full justify-between gap-3 whitespace-nowrap text-left text-[14px]"
   >
     <a href={href} target="_blank" rel="noreferrer">
       <span>{children}</span>

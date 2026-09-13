@@ -49,7 +49,7 @@ beforeEach(() => {
   vi.stubGlobal("React", React);
 });
 describe("native settings navigation", () => {
-  it.each(["App settings", "Delete account permanently"])(
+  it.each(["App settings", "Delete account"])(
     "dismisses the settings overlay when opening %s",
     async (name) => {
       render(<SettingsOverlay />);

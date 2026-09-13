@@ -161,15 +161,15 @@ export const NativeAccountDeletion = () => {
           <p className="text-[14px]">
             Cancel any active subscriptions with the service where you purchased them.
           </p>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-2">
             <NativeExternalLink href="https://apps.apple.com/account/subscriptions">
-              Manage Apple subscriptions
+              Apple subscriptions
             </NativeExternalLink>
             <NativeExternalLink href="https://play.google.com/store/account/subscriptions">
-              Manage Google Play subscriptions
+              Google Play subscriptions
             </NativeExternalLink>
             <NativeExternalLink href="https://www.paypal.com/myaccount/autopay/">
-              Manage PayPal automatic payments
+              PayPal payments
             </NativeExternalLink>
           </div>
         </NativeFeatureCard>
@@ -196,14 +196,14 @@ export const NativeAccountDeletion = () => {
             </Button>
             <Button
               variant="destructive"
-              className="h-auto min-h-[44px] flex-1 whitespace-normal text-[14px]"
+              className="h-[44px] min-h-[44px] flex-1 whitespace-nowrap text-[14px]"
               onClick={() => {
                 setOpen(true);
                 setConfirmationOwner(user.id);
                 setError("");
               }}
             >
-              Continue to permanent deletion
+              Continue
             </Button>
           </div>
         </NativeFeatureCard>
@@ -259,7 +259,7 @@ export const NativeAccountDeletion = () => {
           </label>
           <Input
             id="delete-confirmation"
-            className="h-[44px] text-[16px]"
+            className="h-[44px] min-h-[44px] text-[16px]"
             autoComplete="off"
             autoCapitalize="characters"
             spellCheck={false}
@@ -277,7 +277,7 @@ export const NativeAccountDeletion = () => {
               {error}
             </p>
           )}
-          <DialogFooter className="gap-3 sm:flex-col">
+          <DialogFooter className="flex-col gap-3 sm:flex-col sm:space-x-0">
             <Button
               variant="outline"
               className="min-h-[44px] w-full text-[14px]"
@@ -293,7 +293,7 @@ export const NativeAccountDeletion = () => {
             </Button>
             <Button
               variant="destructive"
-              className="h-auto min-h-[44px] w-full whitespace-normal text-[14px]"
+              className="h-[44px] min-h-[44px] w-full whitespace-nowrap text-[14px]"
               disabled={
                 pending ||
                 !permanent ||
@@ -303,9 +303,7 @@ export const NativeAccountDeletion = () => {
               }
               onClick={() => void submit()}
             >
-              {pending
-                ? "Verifying and saving…"
-                : "Verify and permanently delete account"}
+              {pending ? "Verifying…" : "Delete permanently"}
             </Button>
           </DialogFooter>
         </DialogContent>

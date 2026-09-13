@@ -8,7 +8,7 @@ Native settings shortcuts explicitly dismiss both settings popover variants befo
 
 Device controls use the game's panel palette and buttons, with larger action targets, labelled notification rows, saving indicators, error recovery and separate widget/account sections. Notification permission is refreshed when returning from system Settings. Widget instructions are specific to iPhone and Android; they do not imply live or immediate widget refreshes.
 
-The deletion page separates consequences, subscription management and account identity. External subscription actions use labelled buttons with an external-window indicator. Confirmation retains both acknowledgements, the exact phrase, identity binding and reverification. The input prevents iPhone automatic zoom; long actions wrap and the dialog can scroll. Ordinary website requests still receive 404. The deletion worker remains disabled by default.
+The deletion page separates consequences, subscription management and account identity. External subscription actions use labelled buttons with an external-window indicator. Confirmation retains both acknowledgements, the exact phrase, identity binding and reverification. The input prevents iPhone automatic zoom; action labels stay on one line and the dialog can scroll. Ordinary website requests still receive 404. The deletion worker remains disabled by default.
 
 ## Authentication and store
 
@@ -31,3 +31,9 @@ The store uses consistent panels, readable catalogue names in recovery/history, 
 - iOS Simulator and Android Debug builds pass. Android uses Android Studio's bundled JDK; the host JDK 26 fails the Android SDK image transform.
 - Actual iPhone screenshots cover App settings, widget setup guidance, the deletion page, native sign-in and the unavailable store state. The signed-in test account was preserved; no deletion or purchase was submitted.
 - The local store is not configured, so populated catalogue/payment-sheet visual QA remains pending on a configured sandbox build. Modified widget/Live Activity binaries compile, but their new system-surface appearance still needs installed-device visual QA. Push delivery and Apple identity revocation still require their separate integration tests.
+
+## Narrow-panel follow-up
+
+Action labels were shortened after reviewing the narrow settings overlay: Delete account, Continue, Delete permanently and Test notification. Permanent-loss explanations remain outside the buttons. Subscription/terms links use available-width grids instead of viewport breakpoints, and the confirmation footer has consistent vertical ordering without inherited horizontal spacing. Store restore/retry padding and purchase-history wrapping were also checked.
+
+A temporary development fixture rendered the actual game button and external-link components at 220, 244, 280 and 320 CSS pixels. Browser geometry checks found no horizontal overflow across 28 controls; all labels stayed on one line at a 44px height. The fixture was removed after review.

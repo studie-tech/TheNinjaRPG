@@ -17,7 +17,7 @@ export const NativeSettingsEntry = ({ onNavigate }: { onNavigate?: () => void })
       <Button
         asChild
         variant="outline"
-        className="h-auto min-h-[44px] w-full justify-start gap-2 whitespace-normal text-[14px]"
+        className="h-[44px] min-h-[44px] w-full justify-start gap-2 whitespace-nowrap text-[14px]"
       >
         <Link href="/settings/device" onClick={onNavigate}>
           <Smartphone className="size-4 shrink-0" aria-hidden="true" />

@@ -144,7 +144,7 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
   if (!isSignedIn)
     return (
       <Button asChild className="min-h-[44px]">
-        <Link href="/login">Sign in to manage app settings</Link>
+        <Link href="/login">Sign in</Link>
       </Button>
     );
 
@@ -269,7 +269,7 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
               onClick={() => sendTest()}
             >
               <Send className="mr-1 h-4 w-4" />
-              {isSendingTest ? "Sending…" : "Send a test notification"}
+              {isSendingTest ? "Sending…" : "Test notification"}
             </Button>
           </div>
         )}

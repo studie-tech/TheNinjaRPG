@@ -51,9 +51,7 @@ beforeEach(() => {
   vi.stubGlobal("React", React);
 });
 const confirm = () => {
-  fireEvent.click(
-    screen.getByRole("button", { name: "Continue to permanent deletion" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   fireEvent.click(
     screen.getByLabelText(
       "I understand that my account and progress cannot be recovered.",
@@ -77,13 +75,11 @@ describe("native deletion confirmation", () => {
   });
   it("requires both acknowledgements and the exact phrase", () => {
     render(<NativeAccountDeletion />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Continue to permanent deletion" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(
       (
         screen.getByRole("button", {
-          name: "Verify and permanently delete account",
+          name: "Delete permanently",
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
@@ -97,14 +93,12 @@ describe("native deletion confirmation", () => {
         name: "Keep my account",
       }),
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Continue to permanent deletion" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("");
     expect(
       (
         screen.getByRole("button", {
-          name: "Verify and permanently delete account",
+          name: "Delete permanently",
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
@@ -113,9 +107,7 @@ describe("native deletion confirmation", () => {
     state.cancel = true;
     render(<NativeAccountDeletion />);
     confirm();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Verify and permanently delete account" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
     await screen.findByRole("alert");
     expect(state.fetch).not.toHaveBeenCalled();
     expect(state.signOut).not.toHaveBeenCalled();
@@ -124,7 +116,7 @@ describe("native deletion confirmation", () => {
     render(<NativeAccountDeletion />);
     confirm();
     const button = screen.getByRole("button", {
-      name: "Verify and permanently delete account",
+      name: "Delete permanently",
     });
     fireEvent.click(button);
     fireEvent.click(button);
@@ -141,9 +133,7 @@ describe("native deletion confirmation", () => {
     });
     render(<NativeAccountDeletion />);
     confirm();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Verify and permanently delete account" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
     expect((await screen.findByRole("alert")).textContent).toContain(
       "Service unavailable",
     );

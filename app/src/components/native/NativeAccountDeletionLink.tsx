@@ -18,11 +18,11 @@ export const NativeAccountDeletionLink = ({
     <Button
       asChild
       variant="outline"
-      className="h-auto min-h-[44px] w-full justify-start gap-2 whitespace-normal border-destructive/30 text-[14px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+      className="h-[44px] min-h-[44px] w-full justify-start gap-2 whitespace-nowrap border-destructive/30 text-[14px] text-destructive hover:bg-destructive/10 hover:text-destructive"
     >
       <Link href="/account/delete" onClick={onNavigate}>
         <Trash2 className="size-4 shrink-0" aria-hidden="true" />
-        <span className="flex-1 text-left">Delete account permanently</span>
+        <span className="flex-1 text-left">Delete account</span>
         <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
       </Link>
     </Button>
