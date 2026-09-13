@@ -108,7 +108,7 @@ export type AndroidSubscriptionChange =
 /**
  * Describe a Play subscription replacement from the catalogue's tier order.
  *
- * Play requires the old product id when changing base plans. Upgrades take effect now
+ * Play requires the old product id when changing subscription tiers. Upgrades take effect now
  * with a prorated charge; downgrades are deferred so already-paid access is not shortened.
  */
 export const androidSubscriptionChange = (

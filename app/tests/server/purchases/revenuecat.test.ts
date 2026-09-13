@@ -51,16 +51,16 @@ describe("store catalogue", () => {
         {
           identifier: "gold-package",
           product: {
-            identifier: "tnr_federal",
-            priceString: "$9.99",
+            identifier: "tnr_federal_gold",
+            priceString: "$15.00",
             title: "Gold",
             description: "Gold tier",
-            defaultOption: { basePlanId: "gold" },
+            defaultOption: { basePlanId: "monthly" },
           },
         },
         "android",
       ),
-    ).toBe("tnr_federal:gold");
+    ).toBe("tnr_federal_gold:monthly");
   });
 
   it("offers tiers in ascending order, so the list reads as a ladder", () => {
@@ -71,27 +71,27 @@ describe("store catalogue", () => {
   it("uses Play's replacement flow for subscription tier changes", () => {
     expect(
       androidSubscriptionChange(
-        ["tnr_federal:normal"],
-        "tnr_federal:gold",
+        ["tnr_federal_normal:monthly"],
+        "tnr_federal_gold:monthly",
         STORE_FEDERAL_PRODUCTS,
       ),
     ).toEqual({
       status: "change",
       storeProductChangeInfo: {
-        oldProductIdentifier: "tnr_federal:normal",
+        oldProductIdentifier: "tnr_federal_normal:monthly",
         replacementMode: "CHARGE_PRORATED_PRICE",
       },
     });
     expect(
       androidSubscriptionChange(
-        ["tnr_federal:gold"],
-        "tnr_federal:silver",
+        ["tnr_federal_gold:monthly"],
+        "tnr_federal_silver:monthly",
         STORE_FEDERAL_PRODUCTS,
       ),
     ).toEqual({
       status: "change",
       storeProductChangeInfo: {
-        oldProductIdentifier: "tnr_federal:gold",
+        oldProductIdentifier: "tnr_federal_gold:monthly",
         replacementMode: "DEFERRED",
       },
     });
@@ -101,14 +101,14 @@ describe("store catalogue", () => {
     expect(
       androidSubscriptionChange(
         [],
-        "tnr_federal:gold",
+        "tnr_federal_gold:monthly",
         STORE_FEDERAL_PRODUCTS,
       ),
     ).toEqual({ status: "new" });
     expect(
       androidSubscriptionChange(
-        ["tnr_federal:gold"],
-        "tnr_federal:gold",
+        ["tnr_federal_gold:monthly"],
+        "tnr_federal_gold:monthly",
         STORE_FEDERAL_PRODUCTS,
       ),
     ).toEqual({ status: "active" });

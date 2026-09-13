@@ -3179,23 +3179,23 @@ export const STORE_REP_PRODUCTS = [
 
 /**
  * Federal status subscriptions. On Apple these belong to one subscription group so
- * upgrades and downgrades are handled by the system; Play models the same thing as base
- * plans on a single subscription.
+ * upgrades and downgrades are handled by the system. Play uses a separate subscription
+ * for each benefit tier, each with a monthly base plan.
  */
 export const STORE_FEDERAL_PRODUCTS = [
   {
     productId: "tnr_federal_normal",
-    androidProductId: "tnr_federal:normal",
+    androidProductId: "tnr_federal_normal:monthly",
     federalStatus: "NORMAL",
   },
   {
     productId: "tnr_federal_silver",
-    androidProductId: "tnr_federal:silver",
+    androidProductId: "tnr_federal_silver:monthly",
     federalStatus: "SILVER",
   },
   {
     productId: "tnr_federal_gold",
-    androidProductId: "tnr_federal:gold",
+    androidProductId: "tnr_federal_gold:monthly",
     federalStatus: "GOLD",
   },
 ] as const;
