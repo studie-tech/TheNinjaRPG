@@ -44,10 +44,6 @@ vi.mock("@/libs/pusher", () => ({
   }),
 }));
 
-vi.mock("@/routers/clan", () => ({
-  fetchClan: vi.fn(),
-}));
-
 vi.mock("@/routers/combat", () => ({
   initiateBattle: vi.fn(),
 }));
