@@ -62,8 +62,18 @@ const settle = async (snapshot: CompleteBattle, userId = "winner", fail = false)
   const result = calcBattleResult(snapshot, userId, []);
   if (!result) return null;
   result.money = userId === "winner" ? 9600 : -9600;
-  await updateBattle(client, result, userId, snapshot, snapshot.version, pusher);
-  await updateUser(client, pusher, snapshot, result, userId);
+  const { finishBattle } = await updateBattle(
+    client,
+    result,
+    userId,
+    snapshot,
+    snapshot.version,
+    pusher,
+  );
+  await Promise.all([
+    finishBattle(),
+    updateUser(client, pusher, snapshot, result, userId),
+  ]);
   if (fail) throw new Error("Later reward failed");
   return result;
 };
@@ -144,6 +154,94 @@ describeWithDatabase("CAS combat settlement", () => {
     await api.getBattle({ battleId: snapshot.id });
     expect(await balance()).toBe(100000 + response.result.money);
   });
+
+  for (const route of ["getBattle", "performAction"] as const) {
+    it(`${route} grants rewards while independent cleanup is still pending`, async () => {
+      const snapshot = scenario(true);
+      const database = await getTestDatabase();
+      await database.insert(battle).values(snapshot);
+      let releaseCleanup!: () => void;
+      const cleanupGate = new Promise<void>((resolve) => {
+        releaseCleanup = resolve;
+      });
+      let rewardWritten!: () => void;
+      const rewardReady = new Promise<void>((resolve) => {
+        rewardWritten = resolve;
+      });
+      const client = new Proxy(database, {
+        get(target, key, receiver) {
+          if (key === "insert")
+            return (table: Parameters<typeof database.insert>[0]) => {
+              if (table !== logBattleLengths) return database.insert(table);
+              return {
+                values: (values: typeof logBattleLengths.$inferInsert) => ({
+                  onDuplicateKeyUpdate: async (
+                    config: Parameters<
+                      ReturnType<
+                        ReturnType<typeof database.insert>["values"]
+                      >["onDuplicateKeyUpdate"]
+                    >[0],
+                  ) => {
+                    await cleanupGate;
+                    return database
+                      .insert(logBattleLengths)
+                      .values(values)
+                      .onDuplicateKeyUpdate(config);
+                  },
+                }),
+              };
+            };
+          if (key === "update")
+            return (table: Parameters<typeof database.update>[0]) => {
+              if (table !== userData) return database.update(table);
+              return {
+                set: (
+                  values: Parameters<ReturnType<typeof database.update>["set"]>[0],
+                ) => ({
+                  where: async (
+                    condition: Parameters<
+                      ReturnType<ReturnType<typeof database.update>["set"]>["where"]
+                    >[0],
+                  ) => {
+                    const result = await database
+                      .update(userData)
+                      .set(values)
+                      .where(condition);
+                    rewardWritten();
+                    return result;
+                  },
+                }),
+              };
+            };
+          return Reflect.get(target, key, receiver);
+        },
+      });
+      const api = callerForDatabase(combatRouter, "winner", client);
+      const request =
+        route === "getBattle"
+          ? api.getBattle({ battleId: snapshot.id })
+          : api.performAction({ battleId: snapshot.id, version: 1 });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          rewardReady,
+          new Promise((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error("Rewards waited for cleanup")),
+              2000,
+            );
+          }),
+        ]);
+        expect(await balance()).toBeGreaterThan(100000);
+        expect(await database.query.logBattleLengths.findMany()).toHaveLength(0);
+      } finally {
+        clearTimeout(timer);
+        releaseCleanup();
+        await request;
+      }
+      expect(await database.query.logBattleLengths.findMany()).toHaveLength(1);
+    });
+  }
 
   for (const route of ["getBattle", "performAction"] as const) {
     it(`${route} retries a deadlocked claim without a transaction`, async () => {

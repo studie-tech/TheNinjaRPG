@@ -290,79 +290,68 @@ export const combatRouter = createTRPCRouter({
           // that clone or it disagrees with what was just persisted.
           let settledBattle = userBattle;
 
-          // Check if the battle is over, or state was updated
           const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
-          if (result || progressRound || changedActor) {
-            if (
-              (battleOver || progressRound || changedActor) &&
-              !hadActivity &&
-              actId &&
-              activeUser
-            ) {
-              const { newBattle, actionEffects } = applyEffects(userBattle, actId);
-              settledBattle = newBattle;
-              // Effects ticking on this poll can end the fight -- a lingering
-              // damage tag finishing the last opponent -- so the result computed
-              // above is stale here, and persisting it would store a decided
-              // battle as an unfinished one nobody can ever act in again.
-              // calcBattleResult only mutates when it returns a result, so
-              // re-running it after a null costs nothing.
-              result =
-                result ??
-                calcBattleResult(newBattle, ctx.userId, newBattle.extraState.settings);
+          // A settlement-only poll must persist leftBattle without ticking effects again.
+          const shouldTickEffects = battleOver || progressRound || changedActor;
+          const history: Parameters<typeof createAction>[2] = [];
+          if (shouldTickEffects && !hadActivity && actId && activeUser) {
+            const { newBattle, actionEffects } = applyEffects(userBattle, actId);
+            settledBattle = newBattle;
+            // Effects ticking on this poll can end the fight -- a lingering
+            // damage tag finishing the last opponent -- so the result computed
+            // above is stale here, and persisting it would store a decided
+            // battle as an unfinished one nobody can ever act in again.
+            // calcBattleResult only mutates when it returns a result, so
+            // re-running it after a null costs nothing.
+            result =
+              result ??
+              calcBattleResult(newBattle, ctx.userId, newBattle.extraState.settings);
 
-              // Remove expired ground effects after applyEffects has processed them
-              // This ensures summon despawning logic runs before effects are removed
-              newBattle.groundEffects = newBattle.groundEffects.filter((e) => {
-                if (e.rounds !== undefined && e.rounds <= 0) {
-                  if (e.type === "visual" && actionRounds.includes(e.createdRound)) {
-                    return true;
-                  } else {
-                    return false; // Remove expired effects
-                  }
+            // Remove expired ground effects after applyEffects has processed them
+            // This ensures summon despawning logic runs before effects are removed
+            newBattle.groundEffects = newBattle.groundEffects.filter((e) => {
+              if (e.rounds !== undefined && e.rounds <= 0) {
+                if (e.type === "visual" && actionRounds.includes(e.createdRound)) {
+                  return true;
+                } else {
+                  return false; // Remove expired effects
                 }
-                return true; // Keep active effects
-              });
+              }
+              return true; // Keep active effects
+            });
 
-              await Promise.all([
-                updateBattle(
-                  ctx.drizzle,
-                  result,
-                  ctx.userId,
-                  newBattle,
-                  fetchedVersion,
-                  pusher,
-                ),
-                createAction(ctx.drizzle, newBattle, [
-                  {
-                    battleRound: actionRound,
-                    appliedEffects: actionEffects,
-                    description: `${activeUser.username} stands and does nothing. `,
-                    battleVersion: fetchedVersion,
-                    actionId: "wait",
-                    userId: activeUser.userId,
-                  },
-                ]),
-              ]);
-            } else {
-              await updateBattle(
-                ctx.drizzle,
-                result,
-                ctx.userId,
-                userBattle,
-                fetchedVersion,
-                pusher,
-              );
-            }
+            history.push({
+              battleRound: actionRound,
+              appliedEffects: actionEffects,
+              description: `${activeUser.username} stands and does nothing. `,
+              battleVersion: fetchedVersion,
+              actionId: "wait",
+              userId: activeUser.userId,
+            });
           }
 
-          // Update user
-          if (result) {
+          if (result || progressRound || changedActor) {
+            const { finishBattle } = await updateBattle(
+              ctx.drizzle,
+              result,
+              ctx.userId,
+              settledBattle,
+              fetchedVersion,
+              pusher,
+            );
             await Promise.all([
-              updateUser(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
-              updateWars(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
-              updateKage(ctx.drizzle, settledBattle, result), // no ctx.userId needed
-              updateRaidProgress(ctx.drizzle, settledBattle, ctx.userId),
+              finishBattle(),
+              ...(history.length
+                ? [createAction(ctx.drizzle, settledBattle, history)]
+                : []),
+              ...(result
+                ? [
+                    updateUser(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+                    updateWars(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+                    updateKage(ctx.drizzle, settledBattle, result),
+                    updateRaidProgress(ctx.drizzle, settledBattle, ctx.userId),
+                  ]
+                : []),
             ]);
           }
 
@@ -815,7 +804,7 @@ export const combatRouter = createTRPCRouter({
             // updateBattle returns the authoritative battleOver — it covers raid
             // boss defeats where surviving teammates exist as friends, which the
             // simple friendsLeft + targetsLeft check would miss.
-            const { battleOver } = await updateBattle(
+            const { battleOver, finishBattle } = await updateBattle(
               db,
               result,
               suid,
@@ -833,6 +822,7 @@ export const combatRouter = createTRPCRouter({
               updateWars(db, pusher, newBattle, result, suid),
               updateTournament(db, newBattle, result, suid),
               result ? updateRaidProgress(db, newBattle, suid) : Promise.resolve(),
+              finishBattle(),
             ]);
             // Return dynamic battle update (excludes extraState for efficiency)
             // Frontend should merge this with existing extraState

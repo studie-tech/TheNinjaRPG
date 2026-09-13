@@ -87,7 +87,7 @@ const isRaidBossDefeated = (battle: CompleteBattle) =>
   );
 
 /**
- * Update the battle state with raw queries for speed
+ * Claim the battle version; return cleanup to run alongside independent reward writes.
  */
 export const updateBattle = async (
   client: DrizzleClient,
@@ -143,136 +143,6 @@ export const updateBattle = async (
     if (deleted.rowsAffected === 0) {
       throw new Error(`Failure. Version: ${fetchedVersion}, Battle: ${newBattle.id}`);
     }
-    await Promise.all([
-      ...(user && other
-        ? [
-            client
-              .insert(logBattleLengths)
-              .values({
-                battleType: newBattle.battleType,
-                winnerLevel: user?.level ?? 0,
-                loserLevel: other?.level ?? 0,
-                rounds: newBattle.round,
-                count: 1,
-              })
-              .onDuplicateKeyUpdate({
-                set: { count: sql`${logBattleLengths.count} + 1` },
-              }),
-          ]
-        : []),
-      // Clean up battle users in parallel - safe since they only read from mpvpBattleQueue
-      ...(["RAID", "SHRINE_WAR"].includes(newBattle.battleType)
-        ? [
-            client
-              .delete(mpvpBattleUser)
-              .where(
-                inArray(
-                  mpvpBattleUser.clanBattleId,
-                  client
-                    .select({ id: mpvpBattleQueue.id })
-                    .from(mpvpBattleQueue)
-                    .where(eq(mpvpBattleQueue.battleId, newBattle.id)),
-                ),
-              ),
-          ]
-        : []),
-      // Purge raid-chat memberships on any raid battle-over (boss kill OR team
-      // wipe). The conversation ID is stable across raid resets, so stale
-      // memberships would let former participants read the next team's private
-      // channel.
-      ...(raidEnded && newBattle.extraState.raidQuestId && humanUserIds.length > 0
-        ? [
-            purgeRaidChatMembership(
-              client,
-              getRaidChatConversationId(newBattle.extraState.raidQuestId),
-              humanUserIds,
-            ),
-          ]
-        : []),
-      // When a raid ends (boss defeated OR team wipe), release all non-acting
-      // teammates from BATTLE status. updateUser only handles the acting player,
-      // so teammates would be stuck pointing at a deleted battle row otherwise —
-      // readyToQueue hard-blocks BATTLE status and would lock them out.
-      // Mirror the pool sync (curHealth/curStamina/curChakra) the acting user gets so
-      // teammates who took damage don't revert to pre-battle pool values on release.
-      // Mirror the HOSPITALIZED handling from updateUser: teammates whose curHealth
-      // dropped to 0 from boss AoE must be sent to the hospital, not released as AWAKE.
-      ...(raidBossDefeated || raidTeamWiped ? humanTeammates : [])
-        .filter((u) => u.userId !== userId)
-        .map((teammate) => {
-          const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
-          return client
-            .update(userData)
-            .set({
-              battleId: null,
-              regenAt: new Date(),
-              curHealth: teammate.curHealth,
-              curStamina: teammate.curStamina,
-              curChakra: teammate.curChakra,
-              stealthActive: false,
-              stealthActivatedAt: null,
-              stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
-              ...(sendToHospital
-                ? {
-                    status: "HOSPITALIZED",
-                    longitude: HOSPITAL_LONG,
-                    latitude: HOSPITAL_LAT,
-                    sector: teammate.allyVillage
-                      ? teammate.sector
-                      : getVillage(newBattle, teammate.villageId)?.sector,
-                  }
-                : { status: "AWAKE" }),
-            })
-            .where(
-              and(
-                eq(userData.userId, teammate.userId),
-                eq(userData.battleId, newBattle.id),
-              ),
-            );
-        }),
-    ]);
-
-    // Delete queue entries AFTER the Promise.all to ensure mpvpBattleUser
-    // subquery has completed (it references mpvpBattleQueue)
-    if (["RAID", "SHRINE_WAR"].includes(newBattle.battleType)) {
-      await client
-        .delete(mpvpBattleQueue)
-        .where(eq(mpvpBattleQueue.battleId, newBattle.id));
-    }
-
-    // Notify the sector that surviving raid teammates are back on the map.
-    // Mirrors the `result.curHealth > 0` gate in updateUser so other clients
-    // see them transition out of BATTLE without waiting for the next poll.
-    // Skip teammates who already fled: their DB UPDATE above no-ops via the
-    // battleId guard, so broadcasting here would overwrite their actual
-    // sector/coords in other clients' map views with stale battle data.
-    if (pusher && raidBossDefeated) {
-      humanTeammates
-        .filter((u) => u.userId !== userId && !u.fledBattle)
-        .forEach((teammate) => {
-          const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
-          if (sendToHospital) return;
-          void updateUserOnMap(pusher, teammate.sector, {
-            ...teammate,
-            longitude: teammate.originalLongitude,
-            latitude: teammate.originalLatitude,
-            status: "AWAKE",
-            battleId: null,
-          });
-        });
-    }
-
-    // Nudge each human teammate's user channel so any open /combat tab
-    // invalidates getBattle/getUser immediately on raid end. Without this the
-    // acting user (and any teammate not the one who pressed an action) keeps
-    // showing the old battle map and `Status: BATTLE` until the next poll.
-    if (pusher && raidEnded) {
-      humanTeammates
-        .filter((u) => !u.fledBattle)
-        .forEach((teammate) => {
-          void pusher.trigger(teammate.userId, "event", { type: "battleEnded" });
-        });
-    }
   } else {
     newBattle.version = Math.max(newBattle.version, fetchedVersion + 1);
     const result = await retryOnDeadlock(() =>
@@ -296,17 +166,150 @@ export const updateBattle = async (
     }
   }
 
-  // If user won and it's a clan battle, update the clan battle queue
-  if (result?.didWin && newBattle.battleType === "CLAN_BATTLE") {
-    if (user && other) {
-      await client
-        .update(mpvpBattleQueue)
-        .set({ winnerId: result?.didWin ? user.clanId : other.clanId })
-        .where(eq(mpvpBattleQueue.battleId, newBattle.id));
-    }
-  }
+  const finishBattle = async () => {
+    if (battleOver) {
+      await Promise.all([
+        ...(user && other
+          ? [
+              client
+                .insert(logBattleLengths)
+                .values({
+                  battleType: newBattle.battleType,
+                  winnerLevel: user?.level ?? 0,
+                  loserLevel: other?.level ?? 0,
+                  rounds: newBattle.round,
+                  count: 1,
+                })
+                .onDuplicateKeyUpdate({
+                  set: { count: sql`${logBattleLengths.count} + 1` },
+                }),
+            ]
+          : []),
+        // Clean up battle users in parallel - safe since they only read from mpvpBattleQueue
+        ...(["RAID", "SHRINE_WAR"].includes(newBattle.battleType)
+          ? [
+              client
+                .delete(mpvpBattleUser)
+                .where(
+                  inArray(
+                    mpvpBattleUser.clanBattleId,
+                    client
+                      .select({ id: mpvpBattleQueue.id })
+                      .from(mpvpBattleQueue)
+                      .where(eq(mpvpBattleQueue.battleId, newBattle.id)),
+                  ),
+                ),
+            ]
+          : []),
+        // Purge raid-chat memberships on any raid battle-over (boss kill OR team
+        // wipe). The conversation ID is stable across raid resets, so stale
+        // memberships would let former participants read the next team's private
+        // channel.
+        ...(raidEnded && newBattle.extraState.raidQuestId && humanUserIds.length > 0
+          ? [
+              purgeRaidChatMembership(
+                client,
+                getRaidChatConversationId(newBattle.extraState.raidQuestId),
+                humanUserIds,
+              ),
+            ]
+          : []),
+        // When a raid ends (boss defeated OR team wipe), release all non-acting
+        // teammates from BATTLE status. updateUser only handles the acting player,
+        // so teammates would be stuck pointing at a deleted battle row otherwise —
+        // readyToQueue hard-blocks BATTLE status and would lock them out.
+        // Mirror the pool sync (curHealth/curStamina/curChakra) the acting user gets so
+        // teammates who took damage don't revert to pre-battle pool values on release.
+        // Mirror the HOSPITALIZED handling from updateUser: teammates whose curHealth
+        // dropped to 0 from boss AoE must be sent to the hospital, not released as AWAKE.
+        ...(raidBossDefeated || raidTeamWiped ? humanTeammates : [])
+          .filter((u) => u.userId !== userId)
+          .map((teammate) => {
+            const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
+            return client
+              .update(userData)
+              .set({
+                battleId: null,
+                regenAt: new Date(),
+                curHealth: teammate.curHealth,
+                curStamina: teammate.curStamina,
+                curChakra: teammate.curChakra,
+                stealthActive: false,
+                stealthActivatedAt: null,
+                stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
+                ...(sendToHospital
+                  ? {
+                      status: "HOSPITALIZED",
+                      longitude: HOSPITAL_LONG,
+                      latitude: HOSPITAL_LAT,
+                      sector: teammate.allyVillage
+                        ? teammate.sector
+                        : getVillage(newBattle, teammate.villageId)?.sector,
+                    }
+                  : { status: "AWAKE" }),
+              })
+              .where(
+                and(
+                  eq(userData.userId, teammate.userId),
+                  eq(userData.battleId, newBattle.id),
+                ),
+              );
+          }),
+      ]);
 
-  return { battleOver };
+      // Delete queue entries AFTER the Promise.all to ensure mpvpBattleUser
+      // subquery has completed (it references mpvpBattleQueue)
+      if (["RAID", "SHRINE_WAR"].includes(newBattle.battleType)) {
+        await client
+          .delete(mpvpBattleQueue)
+          .where(eq(mpvpBattleQueue.battleId, newBattle.id));
+      }
+
+      // Notify the sector that surviving raid teammates are back on the map.
+      // Mirrors the `result.curHealth > 0` gate in updateUser so other clients
+      // see them transition out of BATTLE without waiting for the next poll.
+      // Skip teammates who already fled: their DB UPDATE above no-ops via the
+      // battleId guard, so broadcasting here would overwrite their actual
+      // sector/coords in other clients' map views with stale battle data.
+      if (pusher && raidBossDefeated) {
+        humanTeammates
+          .filter((u) => u.userId !== userId && !u.fledBattle)
+          .forEach((teammate) => {
+            const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
+            if (sendToHospital) return;
+            void updateUserOnMap(pusher, teammate.sector, {
+              ...teammate,
+              longitude: teammate.originalLongitude,
+              latitude: teammate.originalLatitude,
+              status: "AWAKE",
+              battleId: null,
+            });
+          });
+      }
+
+      // Nudge each human teammate's user channel so any open /combat tab
+      // invalidates getBattle/getUser immediately on raid end. Without this the
+      // acting user (and any teammate not the one who pressed an action) keeps
+      // showing the old battle map and `Status: BATTLE` until the next poll.
+      if (pusher && raidEnded) {
+        humanTeammates
+          .filter((u) => !u.fledBattle)
+          .forEach((teammate) => {
+            void pusher.trigger(teammate.userId, "event", { type: "battleEnded" });
+          });
+      }
+    }
+    // If user won and it's a clan battle, update the clan battle queue
+    if (result?.didWin && newBattle.battleType === "CLAN_BATTLE") {
+      if (user && other) {
+        await client
+          .update(mpvpBattleQueue)
+          .set({ winnerId: result?.didWin ? user.clanId : other.clanId })
+          .where(eq(mpvpBattleQueue.battleId, newBattle.id));
+      }
+    }
+  };
+  return { battleOver, finishBattle };
 };
 
 /**
