@@ -52,10 +52,10 @@ export default function NativeSignIn() {
   };
 
   return (
-    <div className="flex w-full flex-col gap-2">
+    <div className="flex w-full flex-col gap-3 rounded-lg border border-primary/25 bg-background p-4 shadow-xs">
       {appleAuth.isSupported() && (
         <Button
-          className="w-full bg-black text-white hover:bg-neutral-800"
+          className="h-auto min-h-[44px] w-full bg-black text-[14px] text-white hover:bg-neutral-800"
           disabled={isPending}
           onClick={() => void handle("apple", signInWithApple)}
         >
@@ -72,7 +72,7 @@ export default function NativeSignIn() {
         <Button
           key={id}
           variant="outline"
-          className="w-full"
+          className="h-auto min-h-[44px] w-full text-[14px]"
           disabled={isPending}
           onClick={() => void handle(id, () => signInWithProvider(id))}
         >
@@ -86,7 +86,8 @@ export default function NativeSignIn() {
       ))}
 
       <p className="mt-1 text-center text-muted-foreground text-xs">
-        Opens your browser to sign in securely, then returns to the app.
+        Your progress follows your account across devices. Social sign-in opens a secure
+        sign-in screen and returns you to the game.
       </p>
     </div>
   );

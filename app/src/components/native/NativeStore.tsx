@@ -1,13 +1,18 @@
 "use client";
 
-import { Loader2, RotateCcw, ShoppingCart } from "lucide-react";
+import { CreditCard, Loader2, RotateCcw, ShoppingCart } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import {
+  NativeExternalLink,
+  NativeFeatureCard,
+} from "@/components/native/NativeFeatureCard";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env/client.mjs";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
+import { LEGAL_LINKS } from "@/libs/legalLinks";
 import { platform, purchases } from "@/libs/native";
 import {
   fetchFreshStoreObservation,
@@ -79,7 +84,12 @@ export default function NativeStore() {
   );
   const [recoveryRetry, setRecoveryRetry] = useState(0);
 
-  const { data: catalogue } = api.purchases.catalogue.useQuery(undefined, {
+  const {
+    data: catalogue,
+    isError: catalogueError,
+    refetch: reloadCatalogue,
+    isFetching: catalogueFetching,
+  } = api.purchases.catalogue.useQuery(undefined, {
     enabled: isNativeShell === true,
   });
   const {
@@ -809,12 +819,46 @@ export default function NativeStore() {
   if (!isNativeShell) return null;
   if (!player) return <Loader explanation="Loading userdata" />;
 
+  const productLabel = (id: string) => {
+    const reputation = catalogue?.reputation.find((item) => item.productId === id);
+    if (reputation) return `${reputation.reputationPoints} reputation points`;
+    const federal = catalogue?.federal.find(
+      (item) => item.productId === id || item.androidProductId === id,
+    );
+    if (federal)
+      return `${federal.federalStatus.charAt(0)}${federal.federalStatus.slice(1).toLowerCase()} Federal`;
+    return "Store purchase";
+  };
+  if (catalogueError)
+    return (
+      <ContentBox title="Store" subtitle="Connection interrupted" alreadyHasH1>
+        <NativeFeatureCard
+          title="The store could not be loaded"
+          description="Your existing purchases are safe. Reconnect to try again."
+          icon={ShoppingCart}
+        >
+          <Button
+            className="min-h-[44px]"
+            disabled={catalogueFetching}
+            onClick={() => void reloadCatalogue()}
+          >
+            Try again
+          </Button>
+        </NativeFeatureCard>
+      </ContentBox>
+    );
   if (catalogue && !catalogue.isConfigured) {
     return (
       <ContentBox title="Store" subtitle="Temporarily unavailable" alreadyHasH1>
-        <p className="text-sm">
-          In-app purchases are not set up on this build yet. Nothing will be charged.
-        </p>
+        <NativeFeatureCard
+          title="Store unavailable"
+          description="Purchases are unavailable right now. You can keep playing and check back later."
+          icon={ShoppingCart}
+        >
+          <p className="text-[14px] text-muted-foreground">
+            No purchase has been made and nothing has been charged.
+          </p>
+        </NativeFeatureCard>
       </ContentBox>
     );
   }
@@ -828,14 +872,14 @@ export default function NativeStore() {
       {packages === null ? (
         <Loader explanation="Loading store" />
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3 [&_button]:min-h-[44px] [&_button]:text-[14px]">
           {!hasRecentBaseline && (
-            <div className="rounded-lg border p-3 text-sm">
+            <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 text-[14px]">
               <p>{recentBaselineError ?? "Verifying your recent purchases..."}</p>
               {recentBaselineError && (
                 <Button
                   className="mt-2"
-                  size="sm"
+                  size="lg"
                   variant="outline"
                   disabled={isRecentFetching}
                   onClick={() => void retryRecentBaseline()}
@@ -849,11 +893,11 @@ export default function NativeStore() {
             </div>
           )}
           {bindingError && (
-            <div className="rounded-lg border p-3 text-sm">
+            <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 text-[14px]">
               <p>{bindingError}</p>
               <Button
                 className="mt-2"
-                size="sm"
+                size="lg"
                 variant="outline"
                 onClick={() => {
                   setPackageState(null);
@@ -867,16 +911,16 @@ export default function NativeStore() {
           {accountUnsettledAttempts.map(({ accountId, attempt }) => (
             <div
               key={attempt.productId}
-              className="rounded-lg border border-amber-500/50 p-3 text-sm"
+              className="rounded-lg border border-amber-500/50 p-3 text-[14px]"
             >
               <p>
                 {attempt.phase === "sheet-open"
-                  ? `${attempt.productId} checkout was interrupted and is being reconciled. Checkout is locked for this item.`
-                  : `${attempt.productId} may have been charged and is still being verified. Checkout is locked for this item.`}
+                  ? `${productLabel(attempt.productId)} checkout was interrupted. We’re checking whether it completed before you can purchase it again.`
+                  : `${productLabel(attempt.productId)} may have been charged. We’re checking the purchase before you can buy it again.`}
               </p>
               <Button
                 className="mt-2"
-                size="sm"
+                size="lg"
                 variant="outline"
                 disabled={
                   retryingProduct === attempt.productId ||
@@ -919,17 +963,17 @@ export default function NativeStore() {
             </div>
           ))}
           {rejectedRecent.length > 0 && (
-            <div className="rounded-lg border border-red-500/50 p-3 text-sm">
+            <div className="rounded-lg border border-red-500/50 p-3 text-[14px]">
               <p className="font-medium">Recent purchase not credited</p>
               {rejectedRecent.map((purchase) => (
                 <p key={purchase.id} className="text-muted-foreground text-xs">
-                  {purchase.productId}: rejected or retired. Contact support if the
-                  store charged you.
+                  {productLabel(purchase.productId)}: could not be credited. Contact
+                  support if the store charged you.
                 </p>
               ))}
             </div>
           )}
-          <p className="mb-1 font-medium text-sm">Reputation</p>
+          <p className="mt-2 font-semibold text-base">Reputation</p>
           {catalogue?.reputation.map((product) => {
             // The store's own localised price, so the player sees their currency.
             const listed = packages.find(
@@ -944,18 +988,18 @@ export default function NativeStore() {
             return (
               <div
                 key={product.productId}
-                className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/25 bg-background p-4 shadow-xs"
               >
                 <div>
-                  <p className="font-semibold text-sm">
+                  <p className="font-semibold text-[14px]">
                     {product.reputationPoints} reputation points
                   </p>
                   <p className="text-muted-foreground text-xs">
-                    {listed?.product.priceString ?? `$${product.usd.toFixed(2)}`}
+                    {listed?.product.priceString ?? "Price unavailable"}
                   </p>
                 </div>
                 <Button
-                  size="sm"
+                  size="lg"
                   disabled={
                     busyProduct !== null ||
                     isPending ||
@@ -981,7 +1025,7 @@ export default function NativeStore() {
 
           {catalogue?.federal && catalogue.federal.length > 0 && (
             <>
-              <p className="mt-4 mb-1 font-medium text-sm">Federal support</p>
+              <p className="mt-4 font-semibold text-base">Federal support</p>
               {catalogue.federal.map((plan) => {
                 const expectedProductId =
                   storePlatform === "android" ? plan.androidProductId : plan.productId;
@@ -998,19 +1042,21 @@ export default function NativeStore() {
                 return (
                   <div
                     key={plan.productId}
-                    className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/25 bg-background p-4 shadow-xs"
                   >
                     <div>
-                      <p className="font-semibold text-sm">
+                      <p className="font-semibold text-[14px]">
                         {plan.federalStatus.charAt(0)}
                         {plan.federalStatus.slice(1).toLowerCase()}
                       </p>
                       <p className="text-muted-foreground text-xs">
-                        {listed?.product.priceString ?? "Monthly"}
+                        {listed
+                          ? `${listed.product.priceString} / month`
+                          : "Price unavailable"}
                       </p>
                     </div>
                     <Button
-                      size="sm"
+                      size="lg"
                       variant={isCurrent ? "outline" : "default"}
                       disabled={
                         busyProduct !== null ||
@@ -1043,41 +1089,70 @@ export default function NativeStore() {
                 );
               })}
               <p className="text-muted-foreground text-xs">
-                Changing or cancelling a subscription is done in your store account,
-                which is where it is billed.
+                Monthly subscriptions renew automatically until cancelled in your store
+                account. Manage or cancel your plan with the store where you subscribed.
               </p>
             </>
           )}
 
           {packages.length === 0 && !bindingError && (
-            <p className="text-muted-foreground text-sm">
+            <p className="text-[14px] text-muted-foreground">
               The store is not responding right now. Please try again shortly.
             </p>
           )}
 
-          {/* Apple rejects apps selling subscriptions or non-consumables without this. */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-2"
-            disabled={isRestoring || !available?.bound}
-            onClick={() => void restore()}
+          <NativeFeatureCard
+            title="Your store account"
+            icon={CreditCard}
+            description="Manage recurring payments or recover purchases made with this store account."
           >
-            {isRestoring ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-            ) : (
-              <RotateCcw className="mr-1 h-4 w-4" />
-            )}
-            Restore purchases
-          </Button>
+            <NativeExternalLink
+              href={
+                storePlatform === "ios"
+                  ? "https://apps.apple.com/account/subscriptions"
+                  : "https://play.google.com/store/account/subscriptions"
+              }
+            >
+              Manage subscriptions
+            </NativeExternalLink>
+            {/* Apple rejects apps selling subscriptions or non-consumables without this. */}
+            <Button
+              variant="outline"
+              size="lg"
+              className="mt-2"
+              disabled={isRestoring || !available?.bound}
+              onClick={() => void restore()}
+            >
+              {isRestoring ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="mr-1 h-4 w-4" />
+              )}
+              {isRestoring ? "Restoring purchases…" : "Restore purchases"}
+            </Button>
+            <p className="text-muted-foreground text-xs">
+              Restoring checks for eligible previous purchases. It does not create a new
+              charge.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {LEGAL_LINKS.filter(
+                (link) =>
+                  link.label === "Terms of Service" || link.label === "Privacy Policy",
+              ).map((link) => (
+                <NativeExternalLink key={link.href} href={link.href}>
+                  {link.label}
+                </NativeExternalLink>
+              ))}
+            </div>
+          </NativeFeatureCard>
 
           {recent && recent.length > 0 && (
             <div className="mt-4">
-              <p className="mb-1 font-medium text-sm">Recent purchases</p>
+              <p className="mt-2 font-semibold text-base">Recent purchases</p>
               <ul className="text-muted-foreground text-xs">
                 {recent.map((purchase) => (
                   <li key={purchase.id} className="flex justify-between py-0.5">
-                    <span>{purchase.productId}</span>
+                    <span>{productLabel(purchase.productId)}</span>
                     <span>
                       {purchase.federalStatus ?? `${purchase.reputationPoints} reps`}
                     </span>

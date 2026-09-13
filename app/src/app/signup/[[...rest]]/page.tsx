@@ -44,7 +44,7 @@ export default function SignupUser() {
   return (
     <ContentBox
       title="Create Account"
-      subtitle="To create please use one of below providers"
+      subtitle="Choose how you want to join the ninja world."
       alreadyHasH1
       defaultBackHref="/"
     >
@@ -61,6 +61,14 @@ export default function SignupUser() {
               // Tailwind utilities and expose duplicate WebView OAuth buttons.
               ...(isNativeShell
                 ? {
+                    header: { display: "none" },
+                    card: {
+                      background: "transparent",
+                      boxShadow: "none",
+                      padding: "16px 0",
+                    },
+                    cardBox: { width: "100%", boxShadow: "none" },
+                    footer: { background: "transparent", backgroundImage: "none" },
                     socialButtons: { display: "none" },
                     dividerRow: { display: "none" },
                   }

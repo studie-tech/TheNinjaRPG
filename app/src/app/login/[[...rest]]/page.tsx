@@ -24,7 +24,7 @@ export default function LoginUser() {
   return (
     <ContentBox
       title="Login"
-      subtitle="To login please use one of below providers"
+      subtitle="Welcome back. Continue your ninja’s journey."
       alreadyHasH1
       defaultBackHref="/"
     >
@@ -43,6 +43,14 @@ export default function LoginUser() {
               // Tailwind utilities and expose duplicate WebView OAuth buttons.
               ...(isNativeShell
                 ? {
+                    header: { display: "none" },
+                    card: {
+                      background: "transparent",
+                      boxShadow: "none",
+                      padding: "16px 0",
+                    },
+                    cardBox: { width: "100%", boxShadow: "none" },
+                    footer: { background: "transparent", backgroundImage: "none" },
                     socialButtons: { display: "none" },
                     dividerRow: { display: "none" },
                   }

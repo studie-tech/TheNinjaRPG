@@ -1,8 +1,13 @@
 "use client";
 
 import { useClerk, useReverification, useUser } from "@clerk/nextjs";
+import { AlertTriangle, CreditCard, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
+import {
+  NativeExternalLink,
+  NativeFeatureCard,
+} from "@/components/native/NativeFeatureCard";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -121,7 +126,10 @@ export const NativeAccountDeletion = () => {
   if (!user)
     return (
       <ContentBox title="Delete account" subtitle="Sign-in required">
-        <Link href="/login">Sign in to verify ownership of your account.</Link>
+        <p className="mb-4">Sign in to verify ownership of your account.</p>
+        <Button asChild className="min-h-[44px]">
+          <Link href="/login">Sign in</Link>
+        </Button>
       </ContentBox>
     );
   return (
@@ -129,61 +137,76 @@ export const NativeAccountDeletion = () => {
       title="Delete account permanently"
       subtitle="This affects your account on every device, including the website"
     >
-      <p>
-        This permanently removes your login account, character, progress, items and
-        personal game content. You cannot undo this or recover the deleted character.
-      </p>
-      <p className="mt-3">
-        Purchase records needed to prevent duplicate rewards and meet legal obligations
-        may be retained. Backups and third-party retention follow our privacy policy.
-      </p>
-      <p className="mt-3">
-        Cancel recurring subscriptions before continuing. Deleting your account does not
-        cancel them or request a refund.
-      </p>
-      <div className="my-4 flex flex-col gap-2 underline">
-        <a
-          href="https://apps.apple.com/account/subscriptions"
-          target="_blank"
-          rel="noreferrer"
+      <div className="space-y-4">
+        <NativeFeatureCard
+          title="Before you leave"
+          icon={AlertTriangle}
+          description="Permanent deletion cannot be undone."
         >
-          Manage Apple subscriptions
-        </a>
-        <a
-          href="https://play.google.com/store/account/subscriptions"
-          target="_blank"
-          rel="noreferrer"
+          <p className="text-[14px] leading-relaxed">
+            This permanently removes your login account, character, progress, items and
+            personal game content. You cannot recover the deleted character.
+          </p>
+          <p className="text-[13px] text-muted-foreground leading-relaxed">
+            Purchase records needed to prevent duplicate rewards and meet legal
+            obligations may be retained. Backups and third-party retention follow our
+            privacy policy.
+          </p>
+        </NativeFeatureCard>
+        <NativeFeatureCard
+          title="Check your subscriptions"
+          icon={CreditCard}
+          description="Deleting your account does not cancel recurring payments or request a refund."
         >
-          Manage Google Play subscriptions
-        </a>
-        <a
-          href="https://www.paypal.com/myaccount/autopay/"
-          target="_blank"
-          rel="noreferrer"
+          <p className="text-[14px]">
+            Cancel any active subscriptions with the service where you purchased them.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <NativeExternalLink href="https://apps.apple.com/account/subscriptions">
+              Manage Apple subscriptions
+            </NativeExternalLink>
+            <NativeExternalLink href="https://play.google.com/store/account/subscriptions">
+              Manage Google Play subscriptions
+            </NativeExternalLink>
+            <NativeExternalLink href="https://www.paypal.com/myaccount/autopay/">
+              Manage PayPal automatic payments
+            </NativeExternalLink>
+          </div>
+        </NativeFeatureCard>
+        <NativeFeatureCard
+          title="Confirm your account"
+          icon={ShieldCheck}
+          description="The next step asks you to acknowledge the consequences and verify your identity if required."
         >
-          Manage PayPal automatic payments
-        </a>
-      </div>
-      <p>
-        Account:{" "}
-        <strong>
-          {user.primaryEmailAddress?.emailAddress ?? user.username ?? user.id}
-        </strong>
-      </p>
-      <div className="mt-4 flex gap-3">
-        <Button variant="outline" asChild>
-          <Link href="/">Keep my account</Link>
-        </Button>
-        <Button
-          variant="destructive"
-          onClick={() => {
-            setOpen(true);
-            setConfirmationOwner(user.id);
-            setError("");
-          }}
-        >
-          Continue to permanent deletion
-        </Button>
+          <p className="break-words rounded-md bg-primary/5 p-3 text-[14px]">
+            <span className="block text-[12px] text-muted-foreground">
+              Account to delete
+            </span>
+            <strong>
+              {user.primaryEmailAddress?.emailAddress ?? user.username ?? user.id}
+            </strong>
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button
+              variant="outline"
+              asChild
+              className="min-h-[44px] flex-1 text-[14px]"
+            >
+              <Link href="/profile">Keep my account</Link>
+            </Button>
+            <Button
+              variant="destructive"
+              className="h-auto min-h-[44px] flex-1 whitespace-normal text-[14px]"
+              onClick={() => {
+                setOpen(true);
+                setConfirmationOwner(user.id);
+                setError("");
+              }}
+            >
+              Continue to permanent deletion
+            </Button>
+          </div>
+        </NativeFeatureCard>
       </div>
       <Dialog
         open={open}
@@ -200,27 +223,31 @@ export const NativeAccountDeletion = () => {
       >
         <DialogContent
           closeDisabled={pending}
-          className="max-h-[90dvh] overflow-y-auto"
+          className="max-h-[85dvh] max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border-primary/30 md:max-w-lg [&>button]:top-1 [&>button]:right-1 [&>button]:flex [&>button]:size-[44px] [&>button]:items-center [&>button]:justify-center"
         >
-          <DialogHeader>
-            <DialogTitle>Final confirmation: delete your entire account?</DialogTitle>
-            <DialogDescription>
+          <DialogHeader className="pr-6 text-left">
+            <DialogTitle className="text-[18px] leading-snug">
+              Final confirmation: delete your entire account?
+            </DialogTitle>
+            <DialogDescription className="text-[14px] leading-relaxed">
               This deletes your account across iPhone, Android and the website. It is
               not a character restart.
             </DialogDescription>
           </DialogHeader>
-          <label className="flex gap-2">
+          <label className="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md border border-primary/20 bg-primary/5 p-3 text-[14px] leading-relaxed">
             <input
               type="checkbox"
+              className="mt-0.5 size-5 shrink-0 accent-primary"
               checked={permanent}
               disabled={pending}
               onChange={(event) => setPermanent(event.target.checked)}
             />
             I understand that my account and progress cannot be recovered.
           </label>
-          <label className="flex gap-2">
+          <label className="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md border border-primary/20 bg-primary/5 p-3 text-[14px] leading-relaxed">
             <input
               type="checkbox"
+              className="mt-0.5 size-5 shrink-0 accent-primary"
               checked={subscriptions}
               disabled={pending}
               onChange={(event) => setSubscriptions(event.target.checked)}
@@ -232,8 +259,10 @@ export const NativeAccountDeletion = () => {
           </label>
           <Input
             id="delete-confirmation"
-            className="text-[16px]"
+            className="h-[44px] text-[16px]"
             autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
             value={confirmation}
             disabled={pending}
             onChange={(event) => setConfirmation(event.target.value)}
@@ -248,9 +277,10 @@ export const NativeAccountDeletion = () => {
               {error}
             </p>
           )}
-          <DialogFooter>
+          <DialogFooter className="gap-3 sm:flex-col">
             <Button
               variant="outline"
+              className="min-h-[44px] w-full text-[14px]"
               disabled={pending}
               onClick={() => {
                 setOpen(false);
@@ -263,6 +293,7 @@ export const NativeAccountDeletion = () => {
             </Button>
             <Button
               variant="destructive"
+              className="h-auto min-h-[44px] w-full whitespace-normal text-[14px]"
               disabled={
                 pending ||
                 !permanent ||

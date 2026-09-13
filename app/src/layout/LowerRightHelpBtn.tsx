@@ -136,7 +136,11 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
           <div>
             <p className="mb-2 font-bold text-lg">Audio Settings</p>
             <div className="max-h-[400px] overflow-y-auto">
-              <GameSettingsPanel userData={userData} updateUser={updateUser} />
+              <GameSettingsPanel
+                userData={userData}
+                updateUser={updateUser}
+                onNavigate={() => setIsOpen(false)}
+              />
             </div>
           </div>
         ) : (
@@ -212,7 +216,11 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
             <TabsContent value="audio_settings" className="w-full">
               <p className="mb-2 font-bold text-lg">Game Settings</p>
               <div className="max-h-[400px] overflow-y-auto">
-                <GameSettingsPanel userData={userData} updateUser={updateUser} />
+                <GameSettingsPanel
+                  userData={userData}
+                  updateUser={updateUser}
+                  onNavigate={() => setIsOpen(false)}
+                />
               </div>
             </TabsContent>
 

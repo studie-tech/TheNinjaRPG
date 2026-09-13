@@ -12,7 +12,7 @@ import {
   useState,
 } from "react";
 import { api } from "@/app/_trpc/client";
-import DeviceSettings from "@/components/native/DeviceSettings";
+import { NativeSettingsEntry } from "@/components/native/NativeSettingsEntry";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -46,6 +46,7 @@ import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
 import { useActiveLayout } from "@/utils/LayoutContext";
 
 interface GameSettingsProps {
+  onNavigate?: () => void;
   userData?: UserWithRelations | null;
   updateUser?: (data: Partial<UserWithRelations>) => Promise<void>;
   trigger?: "audio" | "settings";
@@ -386,6 +387,7 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
   userData,
   updateUser,
   variant = "panel",
+  onNavigate,
 }) => {
   const {
     audioEnabled,
@@ -684,7 +686,7 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
         )}
       </div>
 
-      <DeviceSettings />
+      <NativeSettingsEntry onNavigate={onNavigate} />
 
       {requiresInteraction && audioEnabled && (
         <p
@@ -705,6 +707,7 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
  * Game settings panel component (for use in tabs, settings pages, etc.)
  */
 export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
+  onNavigate,
   userData,
   updateUser,
 }) => {
@@ -714,6 +717,7 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
         userData={userData}
         updateUser={updateUser}
         variant="panel"
+        onNavigate={onNavigate}
       />
     </div>
   );
@@ -730,9 +734,10 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
 }) => {
   const { audioEnabled } = useGameSettings(userData);
   const isSettingsTrigger = trigger === "settings";
+  const [open, setOpen] = useState(false);
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -751,11 +756,15 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-72" sideOffset={8}>
+      <PopoverContent
+        className="max-h-[80dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto"
+        sideOffset={8}
+      >
         <GameSettingsContent
           userData={userData}
           updateUser={updateUser}
           variant="popover"
+          onNavigate={() => setOpen(false)}
         />
       </PopoverContent>
     </Popover>
