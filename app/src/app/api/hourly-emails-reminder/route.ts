@@ -33,6 +33,7 @@ export async function GET(request: Request) {
     const reminders = await drizzleDB.query.emailReminder.findMany({
       where: and(
         eq(emailReminder.validated, true),
+        eq(emailReminder.disabled, false),
         lte(emailReminder.lastActivity, secondsFromNow(-MONTH_S)),
         or(
           lte(emailReminder.latestRejoinRequest, emailReminder.lastActivity),
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
             unsubscribeUrl: `https://www.theninja-rpg.com/emailsettings?email=${reminder.email}&secret=${reminder.secret}`,
           },
         };
-        sgMail
+        await sgMail
           .send(msg)
           .then(async (response: any) => {
             console.log("RESPONSE: ", response);
@@ -77,9 +78,9 @@ export async function GET(request: Request) {
                 : []),
             ]);
           })
-          .catch((error: any) => {
+          .catch(async (error: any) => {
             console.log("ERROR: ", error);
-            drizzleDB
+            await drizzleDB
               .update(emailReminder)
               .set({
                 latestRejoinRequest: new Date(),
