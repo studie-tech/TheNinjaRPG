@@ -1,6 +1,7 @@
 "use client";
 
 import { SignUp } from "@clerk/nextjs";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import NativeSignIn from "@/components/native/NativeSignIn";
 import { useNativeShell } from "@/hooks/useNativeShell";
@@ -11,6 +12,7 @@ export default function SignupUser() {
   const [webglError, setWebglError] = useState<boolean>(false);
   const [isChecking, setIsChecking] = useState<boolean>(true);
   const isNativeShell = useNativeShell();
+  const pathname = usePathname();
 
   useEffect(() => {
     // Detect WebGL2 support on mount
@@ -48,7 +50,7 @@ export default function SignupUser() {
       alreadyHasH1
       defaultBackHref="/"
     >
-      <NativeSignIn />
+      {pathname === "/signup" && <NativeSignIn />}
       <div className="flex flex-row items-center justify-center [color-scheme:light]">
         <SignUp
           path="/signup"
@@ -61,7 +63,8 @@ export default function SignupUser() {
               // Tailwind utilities and expose duplicate WebView OAuth buttons.
               ...(isNativeShell
                 ? {
-                    header: { display: "none" },
+                    // Keep Clerk's instructions on verification and recovery steps.
+                    ...(pathname === "/signup" ? { header: { display: "none" } } : {}),
                     card: {
                       background: "transparent",
                       boxShadow: "none",
