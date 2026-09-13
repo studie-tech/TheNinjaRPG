@@ -4,6 +4,7 @@ import { useClerk, useReverification, useUser } from "@clerk/nextjs";
 import { AlertTriangle, CreditCard, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { api } from "@/app/_trpc/client";
 import {
   NativeExternalLink,
   NativeFeatureCard,
@@ -36,23 +37,18 @@ export const NativeAccountDeletion = () => {
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState("");
   const submitting = useRef(false);
-  const submitVerified = useReverification((body: string) =>
-    fetch("/api/native/account-deletion", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    }).then(
-      (response) =>
-        response.json() as Promise<{
-          success?: boolean;
-          message?: string;
-          clerk_error?: unknown;
-        }>,
-    ),
-  );
+  const requestDeletion = api.accountDeletion.request.useMutation();
+  const submitVerified = useReverification(requestDeletion.mutateAsync);
 
   const submit = async () => {
-    if (!user || submitting.current) return;
+    if (
+      !user ||
+      submitting.current ||
+      confirmation !== ACCOUNT_DELETION_CONFIRMATION ||
+      !permanent ||
+      !subscriptions
+    )
+      return;
     if (user.id !== confirmationOwner) {
       setError("Your signed-in account changed. Close this dialog and start again.");
       return;
@@ -68,15 +64,13 @@ export const NativeAccountDeletion = () => {
         appleAccount && appleAuth.isSupported()
           ? (await appleAuth.authorize()).authorizationCode
           : undefined;
-      const result = await submitVerified(
-        JSON.stringify({
-          expectedUserId: user.id,
-          appleAuthorizationCode,
-          confirmation,
-          understandsPermanentLoss: permanent,
-          understandsSubscriptions: subscriptions,
-        }),
-      );
+      const result = await submitVerified({
+        expectedUserId: user.id,
+        appleAuthorizationCode,
+        confirmation,
+        understandsPermanentLoss: permanent,
+        understandsSubscriptions: subscriptions,
+      });
       if (!result) return; // Dismissing Clerk verification never confirms deletion.
       if (!result.success)
         throw new Error(

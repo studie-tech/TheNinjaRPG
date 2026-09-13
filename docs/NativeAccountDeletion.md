@@ -29,8 +29,10 @@ and a support path before the feature is enabled for all accounts.
 
 ## Execution
 
-`POST /api/native/account-deletion` records an idempotent request against the authenticated
-identity, returning 202 only after saving it. `/api/account-deletions` runs every five
+`accountDeletion.request` is a protected tRPC mutation that records an idempotent request
+against the authenticated identity, returning success only after saving it. Clerk’s
+reverification hint passes through tRPC to `useReverification`, which verifies and retries
+the mutation before any request is queued. `/api/account-deletions` runs every five
 minutes under `CRON_SECRET`, claims a bounded set of jobs with an expiring CAS lease,
 and retries failed work. The phases are:
 

@@ -13,6 +13,12 @@ Repository-wide agent instructions; `CLAUDE.md` imports this file. Paths below a
 - React hooks must run unconditionally, in stable order, before early returns. Use query `enabled` for conditional fetching and react-hook-form `useWatch`, never `watch` (React Compiler). Verify hook ordering after frontend changes.
 - Before filtering a Sentry error, verify meaningful user feedback, resolved loading states and no broken/blank UI. Comment how UX is handled; use domain-validating regexes for URL filters, never substring matching.
 
+## Repository consistency
+
+- Before implementing, inspect comparable features and reuse their architecture, components, helpers, naming, validation, error handling and tests. Follow established repository patterns across frontend, backend, integrations and tooling; do not introduce a parallel approach merely because it is convenient or familiar.
+- Use the existing tRPC routers and client hooks for application queries and mutations, with the established authentication and response conventions. Reserve standalone HTTP routes for integrations that require them, such as webhooks and scheduled jobs; SDK convenience alone is not a reason to bypass tRPC.
+- If an existing pattern cannot meet a concrete requirement, verify the limitation, choose the smallest compatible extension and document why the exception is needed. When replacing an approach, migrate its callers and remove the obsolete implementation.
+
 ## Commands and environments
 
 | Command | Purpose |
@@ -71,7 +77,7 @@ Capacitor shells and dependencies live in `mobile/`, with their own `package.jso
 - Fire-and-forget exports (`haptics`, `widgets`, `audioSession`, `liveActivity`) no-op off device; no platform check needed. Result-bearing calls (`appleAuth.authorize`, `oauthBrowser.open`, `purchases.purchase`, `push.register`) reject off device; call only after establishing shell context.
 - Ordinary push must use `sendPushToUsers` from `@/server/utils/push`, never router-to-transport calls. It handles opt-outs, device fan-out and dead-token pruning, and never throws. Live Activities use `pushActivityUpdate` instead (ActivityKit tokens); defer with `after()` as in `hospital.ts` to keep Apple latency off the response.
 - `Notification` is a global announcement feed: `userId` is the author; `unreadNotifications` increments determine recipients. It is separate from per-user push delivery.
-- Store branching is client-side via `useNativeShell()`: `points/page.tsx` renders `NativeStore` instead of PayPal in the shell. Preserve this gate against web checkout. `libs/native/userAgent.ts` has a tested server-side detector, but routers do not currently use it.
+- Store branching is client-side via `useNativeShell()`: `points/page.tsx` renders `NativeStore` instead of PayPal in the shell. Preserve this gate against web checkout. `libs/native/userAgent.ts` has a tested server-side detector, and the account-deletion router uses it to restrict the supported client.
 
 ## Code and UI conventions
 

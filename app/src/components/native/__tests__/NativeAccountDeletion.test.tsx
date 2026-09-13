@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   native: true,
-  fetch: vi.fn(),
+  mutate: vi.fn(),
   signOut: vi.fn(),
   cancel: false,
 }));
@@ -27,6 +27,13 @@ vi.mock("@clerk/nextjs", () => ({
   useClerk: () => ({ signOut: state.signOut }),
   useReverification: (fn: (body: string) => Promise<unknown>) => (body: string) =>
     state.cancel ? Promise.reject(new Error("Verification cancelled")) : fn(body),
+}));
+vi.mock("@/app/_trpc/client", () => ({
+  api: {
+    accountDeletion: {
+      request: { useMutation: () => ({ mutateAsync: state.mutate }) },
+    },
+  },
 }));
 vi.mock("@/hooks/useNativeShell", () => ({ useNativeShell: () => state.native }));
 vi.mock("@/layout/ContentBox", () => ({
@@ -46,8 +53,7 @@ beforeEach(() => {
   state.native = true;
   state.cancel = false;
   state.signOut.mockResolvedValue(undefined);
-  state.fetch.mockResolvedValue({ json: async () => ({ success: true }) });
-  vi.stubGlobal("fetch", state.fetch);
+  state.mutate.mockResolvedValue({ success: true });
   vi.stubGlobal("React", React);
 });
 const confirm = () => {
@@ -83,7 +89,7 @@ describe("native deletion confirmation", () => {
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
-    expect(state.fetch).not.toHaveBeenCalled();
+    expect(state.mutate).not.toHaveBeenCalled();
   });
   it("clears confirmations after keeping the account", () => {
     render(<NativeAccountDeletion />);
@@ -109,7 +115,7 @@ describe("native deletion confirmation", () => {
     confirm();
     fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
     await screen.findByRole("alert");
-    expect(state.fetch).not.toHaveBeenCalled();
+    expect(state.mutate).not.toHaveBeenCalled();
     expect(state.signOut).not.toHaveBeenCalled();
   });
   it("queues once and signs out only after server acceptance", async () => {
@@ -121,15 +127,16 @@ describe("native deletion confirmation", () => {
     fireEvent.click(button);
     fireEvent.click(button);
     await waitFor(() => expect(state.signOut).toHaveBeenCalledOnce());
-    expect(state.fetch).toHaveBeenCalledOnce();
-    expect(JSON.parse(state.fetch.mock.calls[0]?.[1].body)).toMatchObject({
+    expect(state.mutate).toHaveBeenCalledOnce();
+    expect(state.mutate.mock.calls[0]?.[0]).toMatchObject({
       expectedUserId: "user_test",
       confirmation: "DELETE MY ACCOUNT",
     });
   });
   it("keeps the user signed in and shows failures", async () => {
-    state.fetch.mockResolvedValue({
-      json: async () => ({ message: "Service unavailable" }),
+    state.mutate.mockResolvedValue({
+      success: false,
+      message: "Service unavailable",
     });
     render(<NativeAccountDeletion />);
     confirm();
