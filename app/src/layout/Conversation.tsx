@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Quote } from "@/components/ui/quote";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CONVERSATION_QUIET_MINS } from "@/drizzle/constants";
+import { useNativeShell } from "@/hooks/useNativeShell";
 import { CommentOnConversation } from "@/layout/Comment";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -84,6 +85,7 @@ export const ConversationSkeleton: React.FC<ConversationProps> = (props) => {
 };
 
 const Conversation: React.FC<ConversationProps> = (props) => {
+  const isNativeShell = useNativeShell();
   const onMutateCheck = useGlobalOnMutateProtect();
   const { data: userData, pusher } = useUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
@@ -753,6 +755,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
               <div className="relative">
                 <RichInput
                   id="comment"
+                  autoFocus={isNativeShell === false}
                   refreshKey={editorKey}
                   height="120"
                   disabled={isCommenting}

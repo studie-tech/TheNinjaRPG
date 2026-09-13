@@ -82,7 +82,10 @@ public class TNRAudioService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? ACTION_START : intent.getAction();
         if (ACTION_STOP.equals(action)) {
-            stopSelf();
+            // A stop can arrive while a foreground start is still pending. Fulfil that
+            // contract before stopping, and do not cancel a newer start request.
+            startInForeground();
+            stopSelf(startId);
             return START_NOT_STICKY;
         }
         if (intent != null) {
@@ -225,6 +228,13 @@ public class TNRAudioService extends Service {
     }
 
     static void stop(Context context) {
-        context.stopService(new Intent(context, TNRAudioService.class));
+        try {
+            // Queue behind pending starts: stopService can tear the service down before
+            // it calls startForeground, which Android treats as an application crash.
+            context.startService(new Intent(context, TNRAudioService.class).setAction(ACTION_STOP));
+        } catch (IllegalStateException | SecurityException error) {
+            // A background caller cannot create a service just to stop it.
+            context.stopService(new Intent(context, TNRAudioService.class));
+        }
     }
 }
