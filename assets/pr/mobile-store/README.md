@@ -1,15 +1,16 @@
 # Store marketing assets
 
-Store artwork, screenshots and English listing copy live under `store/`.
+Store artwork and English listing copy live in this directory. Native captures live
+in `assets/screenshots/mobile-store/`, grouped by platform and screen size.
 
 | Asset | Dimensions | Purpose |
 | --- | --- | --- |
-| `store/play-feature-graphic.png` | 1024 × 500 | Google Play promotional artwork |
-| `store/play-icon.png` | 512 × 512 | Google Play icon, derived from the native icon |
-| `store/ios-6.9/` | 1320 × 2868 | iPhone screenshots |
-| `store/ipad-13/` | 2064 × 2752 | iPad screenshots |
-| `store/android-phone/` | 1080 × 2400 | Android phone screenshots |
-| `store/listing.en-US.json` | Text | English Google Play listing copy |
+| `play-feature-graphic.png` | 1024 × 500 | Google Play promotional artwork |
+| `play-icon.png` | 512 × 512 | Google Play icon, derived from the native icon |
+| `assets/screenshots/mobile-store/ios-6.9/` | 1320 × 2868 | iPhone screenshots |
+| `assets/screenshots/mobile-store/ipad-13/` | 2064 × 2752 | iPad screenshots |
+| `assets/screenshots/mobile-store/android-phone/` | 1080 × 2400 | Android phone screenshots |
+| `listing.en-US.json` | Text | English Google Play listing copy |
 
 Apple's app icon comes from the native asset catalog in the uploaded build.
 `feature-graphic-concept.png` is the source concept for the promotional artwork;
