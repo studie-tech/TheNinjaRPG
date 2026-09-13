@@ -9,7 +9,6 @@ const mocks = { user: vi.fn(), tokens: vi.fn(), verify: vi.fn(), fetch: vi.fn() 
 const { privateKey } = await jose.generateKeyPair("ES256");
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.restoreAllMocks();
   process.env = { ...originalEnv };
 });
 

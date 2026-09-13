@@ -103,8 +103,8 @@ const confirm = () => {
 describe("native deletion confirmation", () => {
   it("renders no deletion controls on the web", () => {
     state.native = false;
-    render(<NativeAccountDeletion />);
-    expect(screen.queryByRole("button")).toBeNull();
+    const { container } = render(<NativeAccountDeletion />);
+    expect(container.firstChild).toBeNull();
   });
   it("requires both acknowledgements and the exact phrase", () => {
     render(<NativeAccountDeletion />);
