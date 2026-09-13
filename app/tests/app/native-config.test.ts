@@ -58,9 +58,11 @@ describe("native release configuration", () => {
     );
 
     expect(controller).toContain('from "@/layout/GameSettings"');
-    expect(settings).toContain('import DeviceSettings from "@/components/native/DeviceSettings"');
+    expect(settings).toContain('import { NativeSettingsEntry } from "@/components/native/NativeSettingsEntry"');
     expect(settings).toContain('import { audioSession } from "@/libs/native"');
-    expect(settings).toContain("<DeviceSettings />");
+    expect(settings).toContain("<NativeSettingsEntry");
+    const devicePage = readRepoFile("app/src/app/settings/device/page.tsx");
+    expect(devicePage).toContain("<DeviceSettings />");
     expect(settings).toContain("audioSession.onRemoteCommand");
   });
 

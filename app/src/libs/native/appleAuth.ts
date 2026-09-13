@@ -15,6 +15,8 @@ const PLUGIN = "TNRAppleAuth";
 export interface AppleCredential {
   /** JWT to hand to Clerk. */
   identityToken: string;
+  /** Single-use code for server-side token revocation during account deletion. */
+  authorizationCode?: string;
   /** Stable Apple user identifier. */
   user: string;
   /** Only present on the very first authorisation, and only if the player shared it. */

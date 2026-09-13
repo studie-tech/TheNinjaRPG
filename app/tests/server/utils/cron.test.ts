@@ -26,7 +26,7 @@ describe("authenticateCronRequest", () => {
     });
   });
 
-  it.each([undefined, "cron-secret", "Bearer wrong-secret"])(
+  it.each([undefined, "cron-secret", "Bearer wrong-secret", "Bearer cr0n-secret", "bearer cron-secret", "Bearer cron-secret-extra"])(
     "rejects an invalid authorization header: %s",
     async (authorization) => {
       process.env.CRON_SECRET = "cron-secret";

@@ -1,6 +1,7 @@
 "use client";
 
 import { SignIn } from "@clerk/nextjs";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import NativeSignIn from "@/components/native/NativeSignIn";
 import { useNativeShell } from "@/hooks/useNativeShell";
@@ -12,6 +13,7 @@ export default function LoginUser() {
   const { webglError, isChecking } = useWebGL2Detection();
   const [proceedAnyway, setProceedAnyway] = useState<boolean>(false);
   const isNativeShell = useNativeShell();
+  const pathname = usePathname();
 
   if (isChecking || isNativeShell === undefined) {
     return null;
@@ -24,12 +26,12 @@ export default function LoginUser() {
   return (
     <ContentBox
       title="Login"
-      subtitle="To login please use one of below providers"
+      subtitle="Welcome back. Continue your ninja’s journey."
       alreadyHasH1
       defaultBackHref="/"
     >
       {webglError && <WebGL2WarningBanner />}
-      <NativeSignIn />
+      {pathname === "/login" && <NativeSignIn />}
       <div className="flex flex-row items-center justify-center [color-scheme:light]">
         <SignIn
           path="/login"
@@ -43,6 +45,15 @@ export default function LoginUser() {
               // Tailwind utilities and expose duplicate WebView OAuth buttons.
               ...(isNativeShell
                 ? {
+                    // Keep Clerk's instructions on verification and recovery steps.
+                    ...(pathname === "/login" ? { header: { display: "none" } } : {}),
+                    card: {
+                      background: "transparent",
+                      boxShadow: "none",
+                      padding: "16px 0",
+                    },
+                    cardBox: { width: "100%", boxShadow: "none" },
+                    footer: { background: "transparent", backgroundImage: "none" },
                     socialButtons: { display: "none" },
                     dividerRow: { display: "none" },
                   }

@@ -44,12 +44,19 @@ import {
 } from "@/libs/gamesettings";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { drizzleDB } from "@/server/db";
+import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
+import { authenticateCronRequest } from "@/server/utils/cron";
 import { reconcileFederalStatuses } from "@/server/utils/purchases/grant";
 import { secondsFromNow } from "@/utils/time";
 
 const HOURLY_TIMER_NAME = "cleaner-hourly";
 
-export async function GET() {
+export const maxDuration = 300;
+
+export async function GET(request: Request) {
+  const authError = authenticateCronRequest(request);
+  if (authError) return authError;
+
   const cleanerTimer = await lockWithHourlyTimer(drizzleDB, HOURLY_TIMER_NAME);
   if (!cleanerTimer.isNewHour) return cleanerTimer.response;
 
@@ -504,6 +511,15 @@ export async function GET() {
 
     // Handle expired exclusive raids - return sectors to neutral if raid timed out without boss defeat
     await cleanupExpiredExclusiveRaids(drizzleDB);
+
+    // Finish due permanent-account deletions alongside the other hourly cleanup.
+    const deletions = await processAccountDeletions();
+    if (deletions.failed > 0) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Account deletion cleanup needs a retry",
+      });
+    }
 
     return Response.json(`OK`);
   } catch (cause) {

@@ -22,11 +22,11 @@ const ENDPOINT_NAME = "daily-overworld-ai";
  * validates all destinations before persisting any position updates.
  */
 export const GET = async (request: Request) => {
-  // Touch a dynamic API so Next.js does not statically cache this GET handler
-  await cookies();
-
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
+
+  // Touch a dynamic API so Next.js does not statically cache this GET handler
+  await cookies();
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);

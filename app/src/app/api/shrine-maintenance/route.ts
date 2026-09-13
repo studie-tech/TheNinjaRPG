@@ -21,6 +21,7 @@ import {
 } from "@/libs/gamesettings";
 import { fetchVillages } from "@/server/api/routers/village";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
+import { authenticateCronRequest } from "@/server/utils/cron";
 import {
   boostInactivePredicate,
   mergeActiveBoostsExpression,
@@ -37,7 +38,10 @@ const ENDPOINT_NAME = "shrine-maintenance";
 const ENDPOINT_NAME_DAILY = "shrine-maintenance-daily";
 type ShrineMaintenanceDb = Pick<DrizzleClient, "select" | "update" | "delete">;
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authError = authenticateCronRequest(request);
+  if (authError) return authError;
+
   // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
   await cookies();
 

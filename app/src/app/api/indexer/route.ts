@@ -5,9 +5,13 @@ import { userReport } from "@/drizzle/schema";
 import { checkGameTimer, updateGameSetting } from "@/libs/gamesettings";
 import { generateModerationDecision } from "@/libs/moderator";
 import { drizzleDB } from "@/server/db";
+import { authenticateCronRequest } from "@/server/utils/cron";
 
 // TODO: Update this to perform vector based indexing once the feature is stable in planetscale + MySQL local
-export async function GET() {
+export async function GET(request: Request) {
+  const authError = authenticateCronRequest(request);
+  if (authError) return authError;
+
   // Check timer
   const frequency = 1;
   const response = await checkGameTimer(drizzleDB, frequency, "m", "indexer");

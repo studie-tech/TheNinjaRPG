@@ -6,7 +6,7 @@ struct QuestWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "TNRQuestWidget", provider: SnapshotProvider()) { entry in
             QuestWidgetView(entry: entry)
-                .tnrWidgetBackground(TNRStyle.tile.opacity(0.18))
+                .tnrWidgetBackground(TNRStyle.parchment)
         }
         .configurationDisplayName("Quest")
         .description("Your active mission and its progress.")
@@ -26,7 +26,7 @@ struct QuestWidgetView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Image(systemName: "scroll")
                         .font(.system(size: 18))
-                        .foregroundStyle(TNRStyle.ink.opacity(0.7))
+                        .foregroundStyle(.primary)
                     Text("No active quest")
                         .font(.system(size: 13, weight: .semibold))
                     Text("Pick one up at the mission hall.")

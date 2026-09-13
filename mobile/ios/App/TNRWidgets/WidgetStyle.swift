@@ -1,9 +1,15 @@
 import SwiftUI
+import UIKit
 
 /// Shared look for every widget, so the three read as one family.
 enum TNRStyle {
     /// The launcher tile colour, which is what the icon on the same home screen looks like.
     static let tile = Color(red: 240 / 255, green: 200 / 255, blue: 76 / 255)
+    static let parchment = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.16, green: 0.12, blue: 0.08, alpha: 1)
+            : UIColor(red: 1, green: 0.97, blue: 0.91, alpha: 1)
+    })
     static let ink = Color(red: 35 / 255, green: 24 / 255, blue: 10 / 255)
 
     static let health = Color(red: 0.85, green: 0.25, blue: 0.25)
@@ -68,8 +74,10 @@ struct StatBar: View {
 struct SignedOutView: View {
     var body: some View {
         VStack(spacing: 6) {
-            Text("🥷").font(.system(size: 28))
-            Text("Open TheNinja-RPG to start")
+            Image(systemName: "scroll.fill").font(.system(size: 28)).foregroundStyle(TNRStyle.tile)
+            Text("Your ninja, at a glance")
+                .font(.system(size: 12, weight: .semibold))
+            Text("Open TheNinja-RPG and sign in.")
                 .font(.system(size: 11, weight: .medium))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
