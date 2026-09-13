@@ -461,7 +461,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         }
       }
       // Seed the exact history/timeline keys, including their filters and limits.
-      if (data.logEntries && data.battleUpdate && suid) {
+      if (data.logEntries && data.battleUpdate) {
         const queries = queryClient.getQueryCache().findAll({
           queryKey: getQueryKey(api.combat.getBattleEntries, undefined, "query"),
         });
@@ -476,7 +476,6 @@ const Combat: React.FC<CombatProps> = (props) => {
             data.logEntries,
             input,
             data.battleUpdate.version,
-            suid,
           );
           if (entries) {
             utils.combat.getBattleEntries.setData(

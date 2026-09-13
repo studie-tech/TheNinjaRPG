@@ -5,10 +5,9 @@ import { maskBattle, maskBattleDynamic } from "@/libs/combat/util";
 import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 
 describe("masked battle payload", () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => vi.restoreAllMocks());
   it("omits settlement records without mutating the authoritative battle or changing client actions", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-01-01"));
+    vi.spyOn(Date, "now").mockReturnValue(1767225600000);
     const battle = makeCompleteBattle({
       usersState: [makeBattleUser("me"), makeBattleUser("opponent")],
       extraState: {
