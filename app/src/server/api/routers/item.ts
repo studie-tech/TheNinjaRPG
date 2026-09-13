@@ -1816,6 +1816,21 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("Not consumable");
       }
 
+      // Validate the same snapshot used below before consuming any quantity.
+      const hasUnavailableBloodlineRoll = useritem.item.effects.some(
+        (effect) =>
+          effect.type === "rollbloodline" &&
+          filterRollableBloodlines({
+            bloodlines: allBloodlines,
+            user,
+            previousRolls,
+            rank: effect.rank,
+          }).length === 0,
+      );
+      if (hasUnavailableBloodlineRoll) {
+        return errorResponse("No bloodline is available to roll");
+      }
+
       const hasSageRoll = useritem.item.effects.some((e) => e.type === "rollsagemode");
       if (hasSageRoll && !user.sageModeId) {
         const sageModePool = filterRollableSageModes({
