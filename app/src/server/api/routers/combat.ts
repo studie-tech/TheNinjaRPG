@@ -855,8 +855,8 @@ export const combatRouter = createTRPCRouter({
                 const nUsers = battle.usersState.filter((u) => !u.isAi).length;
                 if (nUsers > 1) {
                   void pusher.trigger(battle.id, "event", {
-                    // Timeout-only updates can change the round without a version bump.
-                    version: newBattle.version + (nActions === 0 ? 1 : 0),
+                    // Every persisted update now advances the version, including timeouts.
+                    version: newBattle.version,
                   });
                 }
               }
