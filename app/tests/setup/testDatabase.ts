@@ -60,10 +60,7 @@ const wrapWriteBuilder = <T extends object>(builder: T): T =>
   new Proxy(builder, {
     get(target, property, receiver) {
       if (property === "then") {
-        return (
-          onFulfilled?: (value: unknown) => unknown,
-          onRejected?: () => unknown,
-        ) =>
+        return (onFulfilled?: (value: unknown) => unknown, onRejected?: () => unknown) =>
           Promise.resolve(target as PromiseLike<unknown>).then(
             (value) => onFulfilled?.(normalize(value)),
             onRejected,
@@ -73,9 +70,7 @@ const wrapWriteBuilder = <T extends object>(builder: T): T =>
       if (typeof value !== "function") return value;
       return (...args: unknown[]) => {
         const next = (value as (...a: unknown[]) => unknown).apply(target, args);
-        return next && typeof next === "object"
-          ? wrapWriteBuilder(next as object)
-          : next;
+        return next && typeof next === "object" ? wrapWriteBuilder(next as object) : next;
       };
     },
   });
@@ -110,9 +105,7 @@ const truncateEveryTable = async () => {
       "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE()",
     );
     if (tables.length === 0) return;
-    const truncations = tables
-      .map((row) => `TRUNCATE TABLE \`${row.name}\`;`)
-      .join(" ");
+    const truncations = tables.map((row) => `TRUNCATE TABLE \`${row.name}\`;`).join(" ");
     await active.query(
       `SET FOREIGN_KEY_CHECKS = 0; ${truncations} SET FOREIGN_KEY_CHECKS = 1;`,
     );
@@ -133,42 +126,29 @@ const truncateEveryTable = async () => {
  */
 export const getTestDatabase = async (): Promise<DrizzleClient> => {
   if (!client) {
-    pool = mysql.createPool({
-      uri: url,
-      multipleStatements: true,
-      connectionLimit: 10,
-    });
+    pool = mysql.createPool({ uri: url, multipleStatements: true, connectionLimit: 10 });
     const database = drizzle(pool, { schema, mode: "default" });
-    client = wrapClient(database);
+    client = new Proxy(database, {
+      get(target, property, receiver) {
+        if (property === "execute") {
+          const method = Reflect.get(target, property, receiver) as (
+            ...args: unknown[]
+          ) => Promise<unknown>;
+          return async (...args: unknown[]) =>
+            normalize(await method.apply(target, args));
+        }
+        if (property === "insert" || property === "update" || property === "delete") {
+          const method = Reflect.get(target, property, receiver) as (
+            ...args: unknown[]
+          ) => object;
+          return (...args: unknown[]) => wrapWriteBuilder(method.apply(target, args));
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    }) as unknown as DrizzleClient;
   }
   return client;
 };
-
-const wrapClient = (database: object): DrizzleClient =>
-  new Proxy(database, {
-    get(target, property, receiver) {
-      if (property === "transaction") {
-        return (callback: (tx: DrizzleClient) => Promise<unknown>) =>
-          Reflect.get(target, property, receiver).call(target, (tx: object) =>
-            callback(wrapClient(tx)),
-          );
-      }
-      if (property === "execute") {
-        const method = Reflect.get(target, property, receiver) as (
-          ...args: unknown[]
-        ) => Promise<unknown>;
-        return async (...args: unknown[]) =>
-          normalize(await method.apply(target, args));
-      }
-      if (property === "insert" || property === "update" || property === "delete") {
-        const method = Reflect.get(target, property, receiver) as (
-          ...args: unknown[]
-        ) => object;
-        return (...args: unknown[]) => wrapWriteBuilder(method.apply(target, args));
-      }
-      return Reflect.get(target, property, receiver);
-    },
-  }) as unknown as DrizzleClient;
 
 export const peekTestDatabase = (): DrizzleClient | null => client ?? null;
 
@@ -209,10 +189,7 @@ export const indexColumns = async (table: string, keyName: string) => {
     "SELECT COLUMN_NAME AS col, NON_UNIQUE AS nonUnique FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX",
     [table, keyName],
   )) as [{ col: string; nonUnique: number }[], unknown];
-  return {
-    columns: rows.map((row) => row.col),
-    unique: rows.every((row) => !row.nonUnique),
-  };
+  return { columns: rows.map((row) => row.col), unique: rows.every((row) => !row.nonUnique) };
 };
 
 /** Release the shared pool. Registered once by the test preload. */

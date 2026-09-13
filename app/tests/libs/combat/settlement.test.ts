@@ -1,14 +1,9 @@
 // @vitest-environment node
 import * as nextServer from "next/server";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { battle, logBattleLengths, userData } from "@/drizzle/schema";
-import {
-  commitBattleChanges,
-  completeBattleWrites,
-  updateBattle,
-  updateUser,
-} from "@/libs/combat/database";
+import { updateBattle, updateUser } from "@/libs/combat/database";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { alignBattle, calcBattleResult } from "@/libs/combat/util";
 import { Pusher, type PusherClient } from "@/libs/pusher";
@@ -67,16 +62,9 @@ const settle = async (snapshot: CompleteBattle, userId = "winner", fail = false)
   const result = calcBattleResult(snapshot, userId, []);
   if (!result) return null;
   result.money = userId === "winner" ? 9600 : -9600;
-  await commitBattleChanges(client, pusher, true, async (tx, deferred) => {
-    await updateBattle(tx, result, userId, snapshot, snapshot.version, deferred);
-    await completeBattleWrites([
-      updateUser(tx, deferred, snapshot, result, userId),
-      (async () => {
-        await deferred.trigger("settlement", "event", {});
-        if (fail) throw new Error("reward failure");
-      })(),
-    ]);
-  });
+  await updateBattle(client, result, userId, snapshot, snapshot.version, pusher);
+  await updateUser(client, pusher, snapshot, result, userId);
+  if (fail) throw new Error("Later reward failed");
   return result;
 };
 
@@ -91,10 +79,13 @@ const persisted = async () =>
     where: eq(battle.id, "settlement"),
   });
 
-describeWithDatabase("atomic combat settlement", () => {
+describeWithDatabase("CAS combat settlement", () => {
   beforeEach(async () => {
     await resetTables(battle, logBattleLengths, userData);
     trigger.mockClear();
+    vi.spyOn(await getTestDatabase(), "transaction").mockImplementation(() => {
+      throw new Error("Combat settlement must not open a transaction");
+    });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     // Rate limiting is external to settlement; SQL tests must not contact Redis.
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
@@ -155,21 +146,19 @@ describeWithDatabase("atomic combat settlement", () => {
   });
 
   for (const route of ["getBattle", "performAction"] as const) {
-    it(`${route} retries a rolled-back deadlock from fresh battle state`, async () => {
+    it(`${route} retries a deadlocked claim without a transaction`, async () => {
       const snapshot = scenario(true);
       await (await getTestDatabase()).insert(battle).values(snapshot);
       let attempts = 0;
       const database = await getTestDatabase();
       const client = new Proxy(database, {
         get(target, key, receiver) {
-          if (key !== "transaction") return Reflect.get(target, key, receiver);
-          return (run: Parameters<typeof database.transaction>[0]) =>
-            database.transaction(async (tx) => {
-              const result = await run(tx);
-              if (++attempts === 1)
-                throw new Error("Deadlock found when trying to get lock");
-              return result;
-            });
+          if (key !== "delete") return Reflect.get(target, key, receiver);
+          return (...args: Parameters<typeof database.delete>) => {
+            if (args[0] === battle && ++attempts === 1)
+              throw new Error("Deadlock found when trying to get lock");
+            return database.delete(...args);
+          };
         },
       });
       const api = callerForDatabase(combatRouter, "winner", client);
@@ -211,37 +200,19 @@ describeWithDatabase("atomic combat settlement", () => {
       }
     });
 
-    it(`rolls back ${final ? "deletion" : "leftBattle"}, rewards and notifications on failure`, async () => {
+    it(`does not replay a ${final ? "final" : "non-final"} claim after a later write fails`, async () => {
       const snapshot = scenario(final);
       await (await getTestDatabase()).insert(battle).values(snapshot);
       await expect(settle(structuredClone(snapshot), "winner", true)).rejects.toThrow(
-        "reward failure",
+        "Later reward failed",
       );
-      expect(await balance()).toBe(100000);
-      expect((await persisted())?.version).toBe(1);
-      expect((await persisted())?.usersState[0]?.leftBattle).toBe(false);
-      expect(trigger).not.toHaveBeenCalled();
-      await settle(structuredClone(snapshot));
       expect(await balance()).toBe(109600);
-      expect(trigger).toHaveBeenCalled();
+      await expect(settle(structuredClone(snapshot))).rejects.toThrow(
+        "Failure. Version:",
+      );
+      expect(await balance()).toBe(109600);
+      if (final) expect(await persisted()).toBeUndefined();
+      else expect((await persisted())?.usersState[0]?.leftBattle).toBe(true);
     });
   }
-});
-
-describe("battle write batches", () => {
-  it("waits for remaining writes before propagating failure", async () => {
-    let finished = false;
-    await expect(
-      completeBattleWrites([
-        Promise.reject(new Error("failure")),
-        new Promise<void>((resolve) =>
-          setTimeout(() => {
-            finished = true;
-            resolve();
-          }, 10),
-        ),
-      ]),
-    ).rejects.toThrow("failure");
-    expect(finished).toBe(true);
-  });
 });

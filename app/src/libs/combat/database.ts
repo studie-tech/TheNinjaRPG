@@ -63,7 +63,7 @@ import { extendWarParticipantSql, findWarsWithUser } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { reduceActiveFarmPlotTimers } from "@/server/utils/farming";
-import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
 
 type DataBattleAction = {
@@ -72,42 +72,6 @@ type DataBattleAction = {
   battleType: (typeof BattleTypes)[number];
   battleWon: number;
   relatedBloodlineId?: string;
-};
-
-/** Drain every write before a transaction can roll back after a batch failure. */
-export const completeBattleWrites = async <T extends readonly unknown[]>(writes: T) => {
-  const results = await Promise.allSettled(writes);
-  return results.map((result) => {
-    if (result.status === "rejected") throw result.reason;
-    return result.value;
-  }) as { -readonly [P in keyof T]: Awaited<T[P]> };
-};
-
-/**
- * Settlement spans the battle claim and reward tables, so one guarded write cannot
- * make it atomic. Claim first, then drain the parallel writes before commit/rollback;
- * no intermediate fetches are added. Ordinary actions bypass the transaction.
- */
-export const commitBattleChanges = async <T>(
-  client: DrizzleClient,
-  pusher: PusherClient,
-  atomic: boolean,
-  persist: (client: DrizzleClient, pusher: PusherClient) => Promise<T>,
-): Promise<T> => {
-  if (!atomic) return persist(client, pusher);
-  const events: Parameters<PusherClient["trigger"]>[] = [];
-  const deferredPusher = new Proxy(pusher, {
-    get: (target, key) =>
-      key === "trigger"
-        ? async (...args: Parameters<PusherClient["trigger"]>) => {
-            events.push(args);
-          }
-        : Reflect.get(target, key),
-  });
-  const result = await client.transaction((tx) => persist(tx, deferredPusher));
-  // A delivery failure must never retry already committed rewards.
-  await Promise.allSettled(events.map((args) => pusher.trigger(...args)));
-  return result;
 };
 
 /**
@@ -168,15 +132,18 @@ export const updateBattle = async (
     : [];
   const humanUserIds = humanTeammates.map((u) => u.userId);
 
-  // Update the battle, return undefined if the battle was updated by another process
+  // Only the successful version claim may proceed to rewards and cleanup.
+  // Subsequent writes are not atomic with this claim; failures can leave partial settlement.
   if (battleOver) {
-    const deleted = await client
-      .delete(battle)
-      .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion)));
+    const deleted = await retryOnDeadlock(() =>
+      client
+        .delete(battle)
+        .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion))),
+    );
     if (deleted.rowsAffected === 0) {
       throw new Error(`Failure. Version: ${fetchedVersion}, Battle: ${newBattle.id}`);
     }
-    await completeBattleWrites([
+    await Promise.all([
       ...(user && other
         ? [
             client
@@ -308,20 +275,22 @@ export const updateBattle = async (
     }
   } else {
     newBattle.version = Math.max(newBattle.version, fetchedVersion + 1);
-    const result = await client
-      .update(battle)
-      .set({
-        version: newBattle.version,
-        createdAt: newBattle.createdAt,
-        updatedAt: newBattle.updatedAt,
-        usersState: newBattle.usersState,
-        usersEffects: newBattle.usersEffects,
-        groundEffects: newBattle.groundEffects,
-        activeUserId: newBattle.activeUserId,
-        roundStartAt: newBattle.roundStartAt,
-        round: newBattle.round,
-      })
-      .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion)));
+    const result = await retryOnDeadlock(() =>
+      client
+        .update(battle)
+        .set({
+          version: newBattle.version,
+          createdAt: newBattle.createdAt,
+          updatedAt: newBattle.updatedAt,
+          usersState: newBattle.usersState,
+          usersEffects: newBattle.usersEffects,
+          groundEffects: newBattle.groundEffects,
+          activeUserId: newBattle.activeUserId,
+          roundStartAt: newBattle.roundStartAt,
+          round: newBattle.round,
+        })
+        .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion))),
+    );
     if (result.rowsAffected === 0) {
       throw new Error(`Failure. Version: ${fetchedVersion}, Battle: ${newBattle.id}`);
     }
@@ -499,7 +468,7 @@ export const updateKage = async (
     ...challenger.items.filter((ui) => ui.quantity > 0),
   ];
 
-  await completeBattleWrites([
+  await Promise.all([
     // Both PvP clients can finalize the same battle. The unique battleId makes
     // this insert idempotent; the no-op update preserves the first canonical row.
     client
@@ -573,7 +542,7 @@ export const updateClanLeaders = async (
   if (!user.isAggressor) return;
   if (!result.didWin) return;
   // Apply
-  await completeBattleWrites([
+  await Promise.all([
     client
       .update(clan)
       .set({
@@ -840,7 +809,7 @@ export const updateWars = async (
 
             // Process both shrines
             if (shrineChanges) {
-              await completeBattleWrites([
+              await Promise.all([
                 processShrine("attacker", shrineChanges.attacker),
                 processShrine("defender", shrineChanges.defender),
               ]);
@@ -970,7 +939,7 @@ export const updateWars = async (
           };
 
           if (shrineChanges) {
-            await completeBattleWrites([
+            await Promise.all([
               processShrine("attacker", shrineChanges.attacker),
               processShrine("defender", shrineChanges.defender),
             ]);
@@ -1006,10 +975,10 @@ export const updateWars = async (
   }
 
   // Run all promises in parallel - shrine updates are processed independently to avoid race conditions
-  await completeBattleWrites([...otherPromises, ...shrineUpdatePromises]);
+  await Promise.all([...otherPromises, ...shrineUpdatePromises]);
 
   // Broadcast pusher notifications after mutations complete
-  await completeBattleWrites(
+  await Promise.all(
     sectorsToNotify.map((sector) => broadcastRaidAvailability(pusher, sector)),
   );
 };
@@ -1046,7 +1015,7 @@ export const updateVillageAnbuClan = async (
   if (!user || !user.villageId) return;
   if (!result?.didWin) return;
   // Mutate
-  await completeBattleWrites([
+  await Promise.all([
     ...(result.villageTokens > 0
       ? [
           client
@@ -1211,7 +1180,7 @@ export const updateRaidProgress = async (
   // Doing this beside the HP write would announce a kill from a stale HP
   // snapshot, or insert a second inbox row if the claim gate were skipped.
   const raidName = updatedQuest?.name ?? "the raid";
-  await completeBattleWrites([
+  await Promise.all([
     client.insert(notification).values([
       {
         userId,
@@ -1497,7 +1466,7 @@ export const updateUser = async (
     }
 
     // Update user & user items
-    await completeBattleWrites([
+    await Promise.all([
       ...(farmActivityReductionSeconds > 0
         ? [
             reduceActiveFarmPlotTimers(

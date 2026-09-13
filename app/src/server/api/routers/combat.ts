@@ -99,8 +99,6 @@ import {
   COMBAT_LOBBY_SECONDS,
 } from "@/libs/combat/constants";
 import {
-  commitBattleChanges,
-  completeBattleWrites,
   createAction,
   saveUsage,
   updateBattle,
@@ -208,7 +206,6 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
-import { isMysqlDeadlockError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { findRelationship } from "@/utils/alliance";
 import { getRandomElement } from "@/utils/array";
@@ -231,71 +228,71 @@ export const combatRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Get current battle state" } })
     .input(z.object({ battleId: z.string().optional().nullable() }))
     .query(async ({ ctx, input }) => {
-      return retryOnDeadlock(async () => {
-        // No battle ID
-        if (!input.battleId) {
-          return { battle: null, result: null };
-        }
+      // No battle ID
+      if (!input.battleId) {
+        return { battle: null, result: null };
+      }
 
-        // Initial battle version
-        const actionRounds: number[] = [];
+      // Initial battle version
+      const actionRounds: number[] = [];
 
-        // OUTER LOOP: Attempt to perform action untill success || error thrown
-        // The primary purpose here is that if the battle version was already updated, we retry the user's action
-        let attempts = 0;
-        while (true) {
-          try {
-            // Increment attempts
-            attempts += 1;
+      // OUTER LOOP: Attempt to perform action untill success || error thrown
+      // The primary purpose here is that if the battle version was already updated, we retry the user's action
+      let attempts = 0;
+      while (true) {
+        try {
+          // Increment attempts
+          attempts += 1;
 
-            // Distinguish between public and non-public user state
-            const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
-            if (!userBattle) {
-              return { battle: null, result: null };
-            }
+          // Distinguish between public and non-public user state
+          const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
+          if (!userBattle) {
+            return { battle: null, result: null };
+          }
 
-            // Current state of battle
-            const actId = userBattle.activeUserId;
-            const activeUser = userBattle.usersState.find((u) => u.userId === actId);
-            const hadActivity = userBattle.updatedAt > userBattle.roundStartAt;
+          // Current state of battle
+          const actId = userBattle.activeUserId;
+          const activeUser = userBattle.usersState.find((u) => u.userId === actId);
+          const hadActivity = userBattle.updatedAt > userBattle.roundStartAt;
 
-            // Update the battle to the correct activeUserId & round. Default to current user
-            const fetchedVersion = userBattle.version;
-            const { progressRound, changedActor, actionRound } = alignBattle(
-              userBattle,
-              actionRounds,
-              ctx.userId,
-            );
-            // A round can advance on this poll path too (idle turn timeout), not only via
-            // performAction. Run the sage exhaustion transition here as well, or it stays
-            // stranded until the next action. In-memory (no DB round-trip) and idempotent
-            // (guarded on sageModeActivated); the persist below carries the change, and the
-            // applyEffects call in the no-activity branch ticks any queued after-effects.
-            if (progressRound) {
-              applySageModeAfterRoundTransition(userBattle);
-            }
-            if (changedActor) userBattle.version = userBattle.version + 1;
+          // Update the battle to the correct activeUserId & round. Default to current user
+          const fetchedVersion = userBattle.version;
+          const { progressRound, changedActor, actionRound } = alignBattle(
+            userBattle,
+            actionRounds,
+            ctx.userId,
+          );
+          // A round can advance on this poll path too (idle turn timeout), not only via
+          // performAction. Run the sage exhaustion transition here as well, or it stays
+          // stranded until the next action. In-memory (no DB round-trip) and idempotent
+          // (guarded on sageModeActivated); the persist below carries the change, and the
+          // applyEffects call in the no-activity branch ticks any queued after-effects.
+          if (progressRound) {
+            applySageModeAfterRoundTransition(userBattle);
+          }
+          if (changedActor) userBattle.version = userBattle.version + 1;
 
-            if (!actionRounds.includes(actionRound)) {
-              actionRounds.push(actionRound);
-            }
+          if (!actionRounds.includes(actionRound)) {
+            actionRounds.push(actionRound);
+          }
 
-            // Calculate if the battle is over for this user, and if so update user DB
-            // Fetch game settings for multipliers
-            let result = calcBattleResult(
-              userBattle,
-              ctx.userId,
-              userBattle.extraState.settings,
-            );
+          // Calculate if the battle is over for this user, and if so update user DB
+          // Fetch game settings for multipliers
+          let result = calcBattleResult(
+            userBattle,
+            ctx.userId,
+            userBattle.extraState.settings,
+          );
 
-            // The state this poll actually settles on. applyEffects hands back a
-            // clone rather than mutating in place, so everything downstream of it
-            // -- the result, the reward writes, the response -- has to read from
-            // that clone or it disagrees with what was just persisted.
-            let settledBattle = userBattle;
+          // The state this poll actually settles on. applyEffects hands back a
+          // clone rather than mutating in place, so everything downstream of it
+          // -- the result, the reward writes, the response -- has to read from
+          // that clone or it disagrees with what was just persisted.
+          let settledBattle = userBattle;
 
-            const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
-            const history: Parameters<typeof createAction>[2] = [];
+          // Check if the battle is over, or state was updated
+          const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
+          if (result || progressRound || changedActor) {
             if (
               (battleOver || progressRound || changedActor) &&
               !hadActivity &&
@@ -327,67 +324,66 @@ export const combatRouter = createTRPCRouter({
                 return true; // Keep active effects
               });
 
-              history.push({
-                battleRound: actionRound,
-                appliedEffects: actionEffects,
-                description: `${activeUser.username} stands and does nothing. `,
-                battleVersion: fetchedVersion,
-                actionId: "wait",
-                userId: activeUser.userId,
-              });
+              await Promise.all([
+                updateBattle(
+                  ctx.drizzle,
+                  result,
+                  ctx.userId,
+                  newBattle,
+                  fetchedVersion,
+                  pusher,
+                ),
+                createAction(ctx.drizzle, newBattle, [
+                  {
+                    battleRound: actionRound,
+                    appliedEffects: actionEffects,
+                    description: `${activeUser.username} stands and does nothing. `,
+                    battleVersion: fetchedVersion,
+                    actionId: "wait",
+                    userId: activeUser.userId,
+                  },
+                ]),
+              ]);
+            } else {
+              await updateBattle(
+                ctx.drizzle,
+                result,
+                ctx.userId,
+                userBattle,
+                fetchedVersion,
+                pusher,
+              );
             }
-
-            await commitBattleChanges(
-              ctx.drizzle,
-              pusher,
-              !!result,
-              async (client, pusher) => {
-                if (result || progressRound || changedActor) {
-                  await completeBattleWrites([
-                    updateBattle(
-                      client,
-                      result,
-                      ctx.userId,
-                      settledBattle,
-                      fetchedVersion,
-                      pusher,
-                    ),
-                    ...(history.length
-                      ? [createAction(client, settledBattle, history)]
-                      : []),
-                  ]);
-                }
-                if (result) {
-                  await completeBattleWrites([
-                    updateUser(client, pusher, settledBattle, result, ctx.userId),
-                    updateWars(client, pusher, settledBattle, result, ctx.userId),
-                    updateKage(client, settledBattle, result),
-                    updateRaidProgress(client, settledBattle, ctx.userId),
-                  ]);
-                }
-              },
-            );
-
-            // Hide private state of non-session user
-            const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
-
-            // Return the new battle + result state if applicable
-            return { battle: newMaskedBattle, result: result };
-          } catch (e) {
-            if (isMysqlDeadlockError(e)) throw e;
-            // If any of the above fails, retry the whole procedure
-            if (e instanceof Error) {
-              try {
-                e.message += ` (Attempt ${attempts})`;
-              } catch (e) {
-                console.error(e);
-              }
-            }
-            console.log("ERROR: ", e);
-            if (attempts > 2) throw e;
           }
+
+          // Update user
+          if (result) {
+            await Promise.all([
+              updateUser(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+              updateWars(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+              updateKage(ctx.drizzle, settledBattle, result), // no ctx.userId needed
+              updateRaidProgress(ctx.drizzle, settledBattle, ctx.userId),
+            ]);
+          }
+
+          // Hide private state of non-session user
+          const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
+
+          // Return the new battle + result state if applicable
+          return { battle: newMaskedBattle, result: result };
+        } catch (e) {
+          // If any of the above fails, retry the whole procedure
+          if (e instanceof Error) {
+            try {
+              e.message += ` (Attempt ${attempts})`;
+            } catch (e) {
+              console.error(e);
+            }
+          }
+          console.log("ERROR: ", e);
+          if (attempts > 2) throw e;
         }
-      });
+      }
     }),
   getBattleEntries: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get battle action log entries" } })
@@ -575,316 +571,307 @@ export const combatRouter = createTRPCRouter({
     .use(ratelimitMiddleware)
     .input(performActionSchema)
     .mutation(async ({ ctx, input }) => {
-      return retryOnDeadlock(async () => {
-        Sentry.profiler.startProfiler();
-        if (debug) console.log("============ Performing action ============");
+      Sentry.profiler.startProfiler();
+      if (debug) console.log("============ Performing action ============");
 
-        // Short-form
-        const suid = ctx.userId;
-        const db = ctx.drizzle;
-        const actionRounds: number[] = [];
+      // Short-form
+      const suid = ctx.userId;
+      const db = ctx.drizzle;
+      const actionRounds: number[] = [];
 
-        // OUTER LOOP: Attempt to perform action untill success || error thrown
-        // The primary purpose here is that if the battle version was already updated, we retry the user's action
+      // OUTER LOOP: Attempt to perform action untill success || error thrown
+      // The primary purpose here is that if the battle version was already updated, we retry the user's action
+      while (true) {
+        // Fetch battle from database
+        const battle = await fetchBattle(db, input.battleId);
+        if (!battle) return { updateClient: true };
+
+        // Create the grid for the battle
+        const grid = getBattleGrid(1, battle);
+
+        // For kage battles, only allow one move per action. Same whenever any
+        // still-fighting human is on auto combat — they are watching, so every
+        // driving client (not just their own) must deliver one animated action
+        // per poll instead of a whole exchange. Dead/fled/left players no
+        // longer watch a live fight, so they stop capping the batch.
+        const anyHumanOnAutoCombat = battle.usersState.some(
+          (u) =>
+            !u.isAi &&
+            !u.isSummon &&
+            u.isAutoCombat &&
+            !u.leftBattle &&
+            stillInBattle(u, battle.usersEffects),
+        );
+        const maxActions =
+          AutoBattleTypes.includes(battle.battleType) || anyHumanOnAutoCombat ? 1 : 5;
+
+        // Instantiate new state variables
+        const history: {
+          battleRound: number;
+          appliedEffects: ActionEffect[];
+          description: string;
+          battleVersion: number;
+          actionId?: string;
+          userId?: string;
+        }[] = [];
+
+        // Remember original values for round & activeUserId
+        const originalRound = battle.round;
+        const originalActiveUserId = battle.activeUserId;
+
+        // Battle state to update during inner loop
+        let newBattle: CompleteBattle = battle;
+        let actionPerformed = false;
+        let nActions = 0;
+
+        // INNER LOOP: Keep updating battle state until all actions have been performed
         while (true) {
-          // Fetch battle from database
-          const battle = await fetchBattle(db, input.battleId);
-          if (!battle) return { updateClient: true };
+          // Update the battle to the correct activeUserId & round. Default to current user
+          const {
+            actor,
+            actionRound,
+            progressRound: progressedRoundBeforeAction,
+          } = alignBattle(newBattle, actionRounds, suid);
+          if (progressedRoundBeforeAction) {
+            applySageModeAfterRoundTransition(newBattle);
+          }
+          if (debug) {
+            console.log(
+              `============ 1. Actor: ${actor.username} - ${actor.userId} ============`,
+            );
+          }
 
-          // Create the grid for the battle
-          const grid = getBattleGrid(1, battle);
+          // Record all rounds for this endpoint call¨
+          if (!actionRounds.includes(actionRound)) {
+            actionRounds.push(actionRound);
+          }
 
-          // For kage battles, only allow one move per action. Same whenever any
-          // still-fighting human is on auto combat — they are watching, so every
-          // driving client (not just their own) must deliver one animated action
-          // per poll instead of a whole exchange. Dead/fled/left players no
-          // longer watch a live fight, so they stop capping the batch.
-          const anyHumanOnAutoCombat = battle.usersState.some(
-            (u) =>
-              !u.isAi &&
-              !u.isSummon &&
-              u.isAutoCombat &&
-              !u.leftBattle &&
-              stillInBattle(u, battle.usersEffects),
-          );
-          const maxActions =
-            AutoBattleTypes.includes(battle.battleType) || anyHumanOnAutoCombat ? 1 : 5;
+          // Only allow action if it is the users turn (a piloted summon is human-driven)
+          const { isUserTurn, isAITurn } = getTurnControl(actor, suid);
+          if (!isUserTurn && !isAITurn) {
+            return { notification: `Not your turn. Wait for ${actor.username}` };
+          }
 
-          // Instantiate new state variables
-          const history: {
-            battleRound: number;
-            appliedEffects: ActionEffect[];
-            description: string;
-            battleVersion: number;
-            actionId?: string;
-            userId?: string;
-          }[] = [];
-
-          // Remember original values for round & activeUserId
-          const originalRound = battle.round;
-          const originalActiveUserId = battle.activeUserId;
-
-          // Battle state to update during inner loop
-          let newBattle: CompleteBattle = battle;
-          let actionPerformed = false;
-          let nActions = 0;
-
-          // INNER LOOP: Keep updating battle state until all actions have been performed
-          while (true) {
-            // Update the battle to the correct activeUserId & round. Default to current user
-            const {
+          // If userId, actionID, and position specified, perform user action
+          const battleDescriptions: string[] = [];
+          const actionEffects: ActionEffect[] = [];
+          let performedActionId: string | undefined;
+          let performedByUserId: string | undefined;
+          if (
+            !isAITurn &&
+            isUserTurn &&
+            input.longitude !== undefined &&
+            input.latitude !== undefined &&
+            input.actionId
+          ) {
+            /* PERFORM USER ACTION */
+            // Build the action list for the acting entity: on a piloted-summon turn
+            // that is the summon's own jutsu set; on the player's own turn actor.userId
+            // equals suid, so behaviour is unchanged.
+            const actions = availableUserActions(newBattle, actor.userId, true, true);
+            const action = actions.find((a) => a.id === input.actionId);
+            if (!action)
+              return { notification: `Action not valid anymore. Try something else` };
+            performedActionId = action.id;
+            performedByUserId = actor.userId;
+            if (AutoBattleTypes.includes(battle.battleType)) {
+              throw serverError("FORBIDDEN", `Cheater`);
+            }
+            // Refuse a capped summon BEFORE performBattleAction, which spends
+            // chakra/stamina/AP inside insertAction, so a blocked cast is free.
+            const summonBlocked = summonActionBlockedReason(
+              action,
               actor,
-              actionRound,
-              progressRound: progressedRoundBeforeAction,
-            } = alignBattle(newBattle, actionRounds, suid);
-            if (progressedRoundBeforeAction) {
-              applySageModeAfterRoundTransition(newBattle);
-            }
-            if (debug) {
-              console.log(
-                `============ 1. Actor: ${actor.username} - ${actor.userId} ============`,
-              );
-            }
-
-            // Record all rounds for this endpoint call¨
-            if (!actionRounds.includes(actionRound)) {
-              actionRounds.push(actionRound);
-            }
-
-            // Only allow action if it is the users turn (a piloted summon is human-driven)
-            const { isUserTurn, isAITurn } = getTurnControl(actor, suid);
-            if (!isUserTurn && !isAITurn) {
-              return { notification: `Not your turn. Wait for ${actor.username}` };
-            }
-
-            // If userId, actionID, and position specified, perform user action
-            const battleDescriptions: string[] = [];
-            const actionEffects: ActionEffect[] = [];
-            let performedActionId: string | undefined;
-            let performedByUserId: string | undefined;
-            if (
-              !isAITurn &&
-              isUserTurn &&
-              input.longitude !== undefined &&
-              input.latitude !== undefined &&
-              input.actionId
-            ) {
-              /* PERFORM USER ACTION */
-              // Build the action list for the acting entity: on a piloted-summon turn
-              // that is the summon's own jutsu set; on the player's own turn actor.userId
-              // equals suid, so behaviour is unchanged.
-              const actions = availableUserActions(newBattle, actor.userId, true, true);
-              const action = actions.find((a) => a.id === input.actionId);
-              if (!action)
-                return { notification: `Action not valid anymore. Try something else` };
-              performedActionId = action.id;
-              performedByUserId = actor.userId;
-              if (AutoBattleTypes.includes(battle.battleType)) {
-                throw serverError("FORBIDDEN", `Cheater`);
-              }
-              // Refuse a capped summon BEFORE performBattleAction, which spends
-              // chakra/stamina/AP inside insertAction, so a blocked cast is free.
-              const summonBlocked = summonActionBlockedReason(
-                action,
-                actor,
-                newBattle.usersState,
-                newBattle.usersEffects,
-              );
-              if (summonBlocked) {
-                return { updateClient: false, notification: summonBlocked };
-              }
-              try {
-                const newState = performBattleAction({
-                  battle: newBattle,
-                  action,
-                  grid,
-                  contextUserId: suid,
-                  actorId: actor.userId,
-                  longitude: input.longitude,
-                  latitude: input.latitude,
-                });
-                newBattle = newState.newBattle;
-                actionPerformed = true;
-                actionEffects.push(...newState.actionEffects);
-                battleDescriptions.push(action.battleDescription);
-              } catch (error) {
-                let notification = "Unknown Error";
-                if (error instanceof Error) notification = error.message;
-                return { updateClient: false, notification };
-              }
-            } else if (isAITurn) {
-              /* PERFORM AI ACTION */
-              try {
-                const aiState = performAIaction(newBattle, grid, actor.userId);
-                newBattle = aiState.nextBattle;
-                actionPerformed = true;
-                actionEffects.push(...aiState.nextActionEffects);
-                battleDescriptions.push(...aiState.aiDescriptions);
-                performedActionId = aiState.nextActionId ?? performedActionId;
-                performedByUserId = actor.userId;
-                // console.log("STATE SPACE: ", aiState.searchSize);
-              } catch (error) {
-                let notification = "Unknown Error";
-                if (error instanceof Error) notification = error.message;
-                return { updateClient: false, notification };
-              }
-            }
-
-            // If no description, means no actions, just return now
-            let description = battleDescriptions.join(". ");
-            if (!description && actionPerformed && history.length === 0) {
-              return { updateClient: false, notification: "No battle description" };
-            }
-
-            // Check if everybody finished their action, and if so, fast-forward the battle
-            // (alignBattle removes masterless summons before it picks the next actor)
-            const {
-              actor: newActor,
-              progressRound,
-              orphanedSummons,
-            } = alignBattle(newBattle, actionRounds, suid);
-            if (progressRound) {
-              applySageModeAfterRoundTransition(newBattle);
-            }
-            // Tell players why a summon left the field, rather than having it
-            // silently disappear once its summoner is dead/fled/gone.
-            orphanedSummons.forEach((username) => {
-              actionEffects.push({
-                txt: `${username} vanishes without its summoner!`,
-                color: "red",
-              });
-            });
-            if (actionPerformed && progressRound) {
-              const dot = description.endsWith(".");
-              description += `${dot ? "" : ". "} It is now ${newActor.username}'s turn.`;
-            }
-
-            // Add history entry for what happened during this round
-            if (description) {
-              history.push({
-                battleRound: actionRound,
-                appliedEffects: actionEffects,
-                description: description,
-                battleVersion: newBattle.version + nActions,
-                actionId: performedActionId ?? "unknown",
-                userId: performedByUserId ?? actor.userId,
-              });
-              nActions += 1;
-            }
-
-            // Calculate if the battle is over for this user, and if so update user DB
-            const result = calcBattleResult(
-              newBattle,
-              suid,
-              newBattle.extraState.settings,
+              newBattle.usersState,
+              newBattle.usersEffects,
             );
-
-            // Check if we should let the inner-loop continue. Reuse getTurnControl
-            // so "who acts autonomously" stays defined in exactly one place -- a
-            // piloted summon is never auto-driven here for the same reason it is
-            // not authorized as an AI turn at the top of the block.
-            const { isAITurn: newIsAITurn } = getTurnControl(newActor, suid);
-            if (
-              newIsAITurn && // Continue new loop if the next actor acts autonomously
-              nActions < maxActions && // and we haven't performed 5 actions yet
-              !result && // and the battle is not over for the user
-              (newActor.userId !== actor.userId || description) // and new actor, or successful attack
-            ) {
-              continue;
+            if (summonBlocked) {
+              return { updateClient: false, notification: summonBlocked };
             }
-
-            // If battle state didn't change, just return without updating battle
-            // version. A battle that is already decided is the exception: it has
-            // to be settled below even when nobody could act, or a player whose
-            // last opponent is already dead keeps polling a fight that can never
-            // end.
-            if (
-              !result &&
-              !actionPerformed &&
-              newBattle.round === originalRound &&
-              newBattle.activeUserId === originalActiveUserId
-            ) {
-              return { notification: `Battle state was not changed` };
-            }
-
-            // Only keep visual tags that are newer than original round
-            newBattle.groundEffects = newBattle.groundEffects.filter(
-              (e) => e.type !== "visual" || e.createdRound >= originalRound,
-            );
-
-            /**
-             * DATABASE UPDATES in parallel transaction
-             */
             try {
-              newBattle.version = newBattle.version + nActions;
-              // updateBattle returns the authoritative battleOver — it covers raid
-              // boss defeats where surviving teammates exist as friends, which the
-              // simple friendsLeft + targetsLeft check would miss.
-              const { battleOver, logEntries, updatedQuestIds } =
-                await commitBattleChanges(db, pusher, !!result, async (db, pusher) => {
-                  const { battleOver } = await updateBattle(
-                    db,
-                    result,
-                    suid,
-                    newBattle,
-                    battle.version,
-                    pusher,
-                  );
-                  const [logEntries, { updatedQuestIds }] = await completeBattleWrites([
-                    createAction(db, newBattle, history),
-                    updateUser(db, pusher, newBattle, result, suid),
-                    saveUsage(db, newBattle, result, suid),
-                    updateKage(db, newBattle, result),
-                    updateClanLeaders(db, newBattle, result, suid),
-                    updateVillageAnbuClan(db, newBattle, result, suid),
-                    updateWars(db, pusher, newBattle, result, suid),
-                    updateTournament(db, newBattle, result, suid),
-                    result
-                      ? updateRaidProgress(db, newBattle, suid)
-                      : Promise.resolve(),
-                  ] as const);
-                  return { battleOver, logEntries, updatedQuestIds };
-                });
-              // Return dynamic battle update (excludes extraState for efficiency)
-              // Frontend should merge this with existing extraState
-              const newMaskedBattle = maskBattleDynamic(newBattle, suid);
-
-              // Ping users on websocket
-              if (!battleOver) {
-                // Only push websocket data if there is more than one non-AI in battle
-                const nUsers = battle.usersState.filter((u) => !u.isAi).length;
-                if (nUsers > 1) {
-                  void pusher.trigger(battle.id, "event", {
-                    // Every persisted update now advances the version, including timeouts.
-                    version: newBattle.version,
-                  });
-                }
-              }
-
-              // Stop profiling. Flush after the response so the client is not
-              // blocked; after() keeps the Vercel lambda alive via waitUntil.
-              Sentry.profiler.stopProfiler();
-              after(() => Sentry.flush(15000));
-
-              // Return the new battle + result state if applicable
-              // Note: battleUpdate excludes extraState - frontend merges with existing
-              return {
-                result: result,
-                updateClient: true,
-                logEntries: logEntries,
-                battleUpdate: newMaskedBattle,
-                updatedQuestIds: updatedQuestIds,
-              };
-            } catch (e) {
-              if (isMysqlDeadlockError(e)) throw e;
-              console.error("Error updating battle state:", e);
-              return {
-                notification: `Seems like the battle was out of sync with server, please try again`,
-              };
+              const newState = performBattleAction({
+                battle: newBattle,
+                action,
+                grid,
+                contextUserId: suid,
+                actorId: actor.userId,
+                longitude: input.longitude,
+                latitude: input.latitude,
+              });
+              newBattle = newState.newBattle;
+              actionPerformed = true;
+              actionEffects.push(...newState.actionEffects);
+              battleDescriptions.push(action.battleDescription);
+            } catch (error) {
+              let notification = "Unknown Error";
+              if (error instanceof Error) notification = error.message;
+              return { updateClient: false, notification };
+            }
+          } else if (isAITurn) {
+            /* PERFORM AI ACTION */
+            try {
+              const aiState = performAIaction(newBattle, grid, actor.userId);
+              newBattle = aiState.nextBattle;
+              actionPerformed = true;
+              actionEffects.push(...aiState.nextActionEffects);
+              battleDescriptions.push(...aiState.aiDescriptions);
+              performedActionId = aiState.nextActionId ?? performedActionId;
+              performedByUserId = actor.userId;
+              // console.log("STATE SPACE: ", aiState.searchSize);
+            } catch (error) {
+              let notification = "Unknown Error";
+              if (error instanceof Error) notification = error.message;
+              return { updateClient: false, notification };
             }
           }
+
+          // If no description, means no actions, just return now
+          let description = battleDescriptions.join(". ");
+          if (!description && actionPerformed && history.length === 0) {
+            return { updateClient: false, notification: "No battle description" };
+          }
+
+          // Check if everybody finished their action, and if so, fast-forward the battle
+          // (alignBattle removes masterless summons before it picks the next actor)
+          const {
+            actor: newActor,
+            progressRound,
+            orphanedSummons,
+          } = alignBattle(newBattle, actionRounds, suid);
+          if (progressRound) {
+            applySageModeAfterRoundTransition(newBattle);
+          }
+          // Tell players why a summon left the field, rather than having it
+          // silently disappear once its summoner is dead/fled/gone.
+          orphanedSummons.forEach((username) => {
+            actionEffects.push({
+              txt: `${username} vanishes without its summoner!`,
+              color: "red",
+            });
+          });
+          if (actionPerformed && progressRound) {
+            const dot = description.endsWith(".");
+            description += `${dot ? "" : ". "} It is now ${newActor.username}'s turn.`;
+          }
+
+          // Add history entry for what happened during this round
+          if (description) {
+            history.push({
+              battleRound: actionRound,
+              appliedEffects: actionEffects,
+              description: description,
+              battleVersion: newBattle.version + nActions,
+              actionId: performedActionId ?? "unknown",
+              userId: performedByUserId ?? actor.userId,
+            });
+            nActions += 1;
+          }
+
+          // Calculate if the battle is over for this user, and if so update user DB
+          const result = calcBattleResult(
+            newBattle,
+            suid,
+            newBattle.extraState.settings,
+          );
+
+          // Check if we should let the inner-loop continue. Reuse getTurnControl
+          // so "who acts autonomously" stays defined in exactly one place -- a
+          // piloted summon is never auto-driven here for the same reason it is
+          // not authorized as an AI turn at the top of the block.
+          const { isAITurn: newIsAITurn } = getTurnControl(newActor, suid);
+          if (
+            newIsAITurn && // Continue new loop if the next actor acts autonomously
+            nActions < maxActions && // and we haven't performed 5 actions yet
+            !result && // and the battle is not over for the user
+            (newActor.userId !== actor.userId || description) // and new actor, or successful attack
+          ) {
+            continue;
+          }
+
+          // If battle state didn't change, just return without updating battle
+          // version. A battle that is already decided is the exception: it has
+          // to be settled below even when nobody could act, or a player whose
+          // last opponent is already dead keeps polling a fight that can never
+          // end.
+          if (
+            !result &&
+            !actionPerformed &&
+            newBattle.round === originalRound &&
+            newBattle.activeUserId === originalActiveUserId
+          ) {
+            return { notification: `Battle state was not changed` };
+          }
+
+          // Only keep visual tags that are newer than original round
+          newBattle.groundEffects = newBattle.groundEffects.filter(
+            (e) => e.type !== "visual" || e.createdRound >= originalRound,
+          );
+
+          /**
+           * Claim the battle version before the parallel mutation phase
+           */
+          try {
+            newBattle.version = newBattle.version + nActions;
+            // updateBattle returns the authoritative battleOver — it covers raid
+            // boss defeats where surviving teammates exist as friends, which the
+            // simple friendsLeft + targetsLeft check would miss.
+            const { battleOver } = await updateBattle(
+              db,
+              result,
+              suid,
+              newBattle,
+              battle.version,
+              pusher,
+            );
+            const [logEntries, { updatedQuestIds }] = await Promise.all([
+              createAction(db, newBattle, history),
+              updateUser(db, pusher, newBattle, result, suid),
+              saveUsage(db, newBattle, result, suid),
+              updateKage(db, newBattle, result),
+              updateClanLeaders(db, newBattle, result, suid),
+              updateVillageAnbuClan(db, newBattle, result, suid),
+              updateWars(db, pusher, newBattle, result, suid),
+              updateTournament(db, newBattle, result, suid),
+              result ? updateRaidProgress(db, newBattle, suid) : Promise.resolve(),
+            ]);
+            // Return dynamic battle update (excludes extraState for efficiency)
+            // Frontend should merge this with existing extraState
+            const newMaskedBattle = maskBattleDynamic(newBattle, suid);
+
+            // Ping users on websocket
+            if (!battleOver) {
+              // Only push websocket data if there is more than one non-AI in battle
+              const nUsers = battle.usersState.filter((u) => !u.isAi).length;
+              if (nUsers > 1) {
+                void pusher.trigger(battle.id, "event", {
+                  // Every persisted update advances the version, including timeouts.
+                  version: newBattle.version,
+                });
+              }
+            }
+
+            // Stop profiling. Flush after the response so the client is not
+            // blocked; after() keeps the Vercel lambda alive via waitUntil.
+            Sentry.profiler.stopProfiler();
+            after(() => Sentry.flush(15000));
+
+            // Return the new battle + result state if applicable
+            // Note: battleUpdate excludes extraState - frontend merges with existing
+            return {
+              result: result,
+              updateClient: true,
+              logEntries: logEntries,
+              battleUpdate: newMaskedBattle,
+              updatedQuestIds: updatedQuestIds,
+            };
+          } catch (e) {
+            console.error("Error updating battle state:", e);
+            return {
+              notification: `Seems like the battle was out of sync with server, please try again`,
+            };
+          }
         }
-      });
+      }
     }),
   battleArenaHeal: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Heal in battle arena for ryo" } })
