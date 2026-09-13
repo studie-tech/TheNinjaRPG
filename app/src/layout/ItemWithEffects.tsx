@@ -509,23 +509,93 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             <div className="relative block md:hidden md:basis-1/3">{image}</div>
           )}
 
-          <div className="relative flex basis-full flex-col pl-5 md:pl-0">
+          <div className="relative flex min-w-0 basis-full flex-col pl-5 md:pl-0">
             {imageExtra && <div className="flex flex-row">{imageExtra}</div>}
-            {!hideTitle ? (
-              <h3 className="font-bold text-popover-foreground text-xl tracking-tight">
-                {detailHref ? (
-                  <Link className="hover:text-orange-500" href={detailHref}>
-                    {item.name}
+            <div className="flex items-start justify-between gap-2">
+              {!hideTitle ? (
+                <h3 className="min-w-0 flex-1 break-words font-bold text-popover-foreground text-xl tracking-tight">
+                  {detailHref ? (
+                    <Link className="hover:text-orange-500" href={detailHref}>
+                      {item.name}
+                    </Link>
+                  ) : (
+                    item.name
+                  )}
+                </h3>
+              ) : (
+                <br />
+              )}
+              <div className="flex max-w-[50%] shrink-0 flex-wrap justify-end">
+                {showStatistic && (
+                  <Link
+                    href={`/manual/${showStatistic}/statistics/${item.id}`}
+                    className="mr-1"
+                  >
+                    <BarChartBig className="h-6 w-6 hover:text-popover-foreground/50" />
                   </Link>
-                ) : (
-                  item.name
                 )}
-              </h3>
-            ) : (
-              <br />
-            )}
+                {showEdit && userData && canChangeContent(userData.role) && (
+                  <>
+                    {showCopy === "quest" && (
+                      <QuestCloneControl
+                        key={item.id}
+                        source={{ id: item.id, name: item.name }}
+                      />
+                    )}
+                    {showCopy === "ai" && (
+                      <AiCloneControl
+                        key={item.id}
+                        source={{ id: item.id, name: item.name }}
+                      />
+                    )}
+                    {showCopy === "item" && (
+                      <ItemCloneControl
+                        key={item.id}
+                        source={{ id: item.id, name: item.name }}
+                      />
+                    )}
+                    {show3d &&
+                    "avatar" in item &&
+                    "avatar3d" in item &&
+                    item.avatar3d ? (
+                      <Confirm
+                        title="3d Model"
+                        button={
+                          <Box className="h-6 w-6 hover:cursor-pointer hover:text-popover-foreground/50" />
+                        }
+                      >
+                        <Model3d
+                          modelUrl={item.avatar3d as string}
+                          imageUrl={item.avatar as string}
+                          alt={item.name}
+                          size={100}
+                        />
+                      </Confirm>
+                    ) : undefined}
+                    <Link href={`/manual/${showEdit}/edit/${item.id}`}>
+                      <SquarePen className="h-6 w-6 hover:text-popover-foreground/50" />
+                    </Link>
+                    {onDelete && canChangeContent(userData.role) && (
+                      <Confirm
+                        title="Confirm Deletion"
+                        button={
+                          <Trash2 className="h-6 w-6 hover:cursor-pointer hover:text-popover-foreground/50" />
+                        }
+                        onAccept={(e) => {
+                          e.preventDefault();
+                          if (onDelete) onDelete(item.id);
+                        }}
+                      >
+                        You are about to delete this. Are you sure? This will affect ALL
+                        USERS WHO HAS THE CONTENT IN QUESTION.
+                      </Confirm>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
             {!hideDetails && !hideDates && (
-              <div className="flex flex-row gap-2">
+              <div className="flex flex-row flex-wrap gap-2">
                 {item.createdAt && (
                   <div>
                     <b>Created: </b>
@@ -556,71 +626,6 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 )}
               </div>
             )}
-            <div className="absolute right-1 flex flex-row">
-              {showStatistic && (
-                <Link
-                  href={`/manual/${showStatistic}/statistics/${item.id}`}
-                  className="mr-1"
-                >
-                  <BarChartBig className="h-6 w-6 hover:text-popover-foreground/50" />
-                </Link>
-              )}
-              {showEdit && userData && canChangeContent(userData.role) && (
-                <>
-                  {showCopy === "quest" && (
-                    <QuestCloneControl
-                      key={item.id}
-                      source={{ id: item.id, name: item.name }}
-                    />
-                  )}
-                  {showCopy === "ai" && (
-                    <AiCloneControl
-                      key={item.id}
-                      source={{ id: item.id, name: item.name }}
-                    />
-                  )}
-                  {showCopy === "item" && (
-                    <ItemCloneControl
-                      key={item.id}
-                      source={{ id: item.id, name: item.name }}
-                    />
-                  )}
-                  {show3d && "avatar" in item && "avatar3d" in item && item.avatar3d ? (
-                    <Confirm
-                      title="3d Model"
-                      button={
-                        <Box className="h-6 w-6 hover:cursor-pointer hover:text-popover-foreground/50" />
-                      }
-                    >
-                      <Model3d
-                        modelUrl={item.avatar3d as string}
-                        imageUrl={item.avatar as string}
-                        alt={item.name}
-                        size={100}
-                      />
-                    </Confirm>
-                  ) : undefined}
-                  <Link href={`/manual/${showEdit}/edit/${item.id}`}>
-                    <SquarePen className="h-6 w-6 hover:text-popover-foreground/50" />
-                  </Link>
-                  {onDelete && canChangeContent(userData.role) && (
-                    <Confirm
-                      title="Confirm Deletion"
-                      button={
-                        <Trash2 className="h-6 w-6 hover:cursor-pointer hover:text-popover-foreground/50" />
-                      }
-                      onAccept={(e) => {
-                        e.preventDefault();
-                        if (onDelete) onDelete(item.id);
-                      }}
-                    >
-                      You are about to delete this. Are you sure? This will affect ALL
-                      USERS WHO HAS THE CONTENT IN QUESTION.
-                    </Confirm>
-                  )}
-                </>
-              )}
-            </div>
 
             <hr className="py-1" />
             {!hideDetails && "description" in item && item.description && (
