@@ -6,7 +6,7 @@ import * as Sentry from "@sentry/nextjs";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { extractRouterConfig } from "uploadthing/server";
 import TrpcClientProvider from "@/app/_trpc/Provider";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
@@ -29,6 +29,7 @@ import {
   LAYOUT_PREFERENCE_COOKIE,
   toFontScale,
 } from "@/libs/layoutPreference";
+import { isNativeUserAgent } from "@/libs/native/userAgent";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/libs/seo";
 import { UserContextProvider } from "@/utils/UserContext";
 
@@ -36,7 +37,8 @@ import "../styles/globals.css";
 import "sonner/dist/styles.css";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const readCookies = await cookies();
+  const [readCookies, requestHeaders] = await Promise.all([cookies(), headers()]);
+  const isNativeShell = isNativeUserAgent(requestHeaders.get("user-agent"));
   // A path the proxy matcher misses reaches here without Clerk context and auth()
   // throws. Fall back to the signed-out shell so ClerkProvider can still hydrate the
   // session on the client instead of the whole render failing - but keep reporting it,
@@ -84,7 +86,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <TrpcClientProvider>
               <UserContextProvider initialIsSignedIn={initialIsSignedIn}>
                 <InstallPromptProvider>
-                  {env.NEXT_PUBLIC_MEASUREMENT_ID &&
+                  {/* The web marketing container includes advertising pixels; never load it in the native shell. */}
+                  {!isNativeShell &&
+                    env.NEXT_PUBLIC_MEASUREMENT_ID &&
                     process.env.NODE_ENV === "production" && (
                       <GoogleTagManager gtmId={env.NEXT_PUBLIC_MEASUREMENT_ID} />
                     )}
