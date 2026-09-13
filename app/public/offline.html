@@ -166,23 +166,22 @@
   <body>
     <div class="container">
       <div class="ninja-logo">🥷</div>
-      <h1>You're Offline</h1>
-      <div class="subtitle">The ninja world awaits your return</div>
+      <h1>No connection</h1>
+      <div class="subtitle">Reconnect to continue playing</div>
 
       <div class="description">
         <p>
-          Your connection to the ninja world has been severed. Check your internet
-          connection and return to continue your journey as a legendary ninja.
+          TheNinja-RPG needs an internet connection. Check your network and try again.
         </p>
       </div>
 
       <button class="retry-btn" onclick="window.location.reload()">
-        🔄 Reconnect to the Ninja World
+        Try again
       </button>
 
       <div class="network-status">
         <span class="status-indicator status-offline"></span>
-        <span id="connection-status">Connection Status: Offline</span>
+        <span id="connection-status" role="status">Offline</span>
       </div>
     </div>
 
@@ -193,7 +192,7 @@
         const indicator = document.querySelector(".status-indicator");
 
         if (navigator.onLine) {
-          statusElement.textContent = "Connection Status: Online - Reconnecting...";
+          statusElement.textContent = "Reconnecting…";
           indicator.className = "status-indicator status-online";
 
           // Auto-reload when back online
@@ -201,7 +200,7 @@
             window.location.reload();
           }, 1000);
         } else {
-          statusElement.textContent = "Connection Status: Offline";
+          statusElement.textContent = "Offline";
           indicator.className = "status-indicator status-offline";
         }
       }
