@@ -104,10 +104,6 @@
     {
       "path": "/api/daily-overworld-ai",
       "schedule": "0/5 0 * * *"
-    },
-    {
-      "path": "/api/account-deletions",
-      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {

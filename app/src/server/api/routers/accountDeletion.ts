@@ -1,9 +1,11 @@
 import { auth, reverificationError } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
+import { after } from "next/server";
 import { accountDeletion } from "@/drizzle/schema";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 import { createTRPCRouter, protectedProcedure, serverError } from "@/server/api/trpc";
 import { prepareAppleDeletion } from "@/server/utils/accountDeletion/apple";
+import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
 import {
   ACCOUNT_DELETION_REVERIFICATION,
   accountDeletionSchema,
@@ -51,6 +53,7 @@ export const accountDeletionRouter = createTRPCRouter({
           where: eq(accountDeletion.userId, ctx.userId),
         });
         if (existing) {
+          after(() => processAccountDeletions(ctx.userId));
           return { success: true, message: "Your deletion request is already saved." };
         }
         const appleRevokedSubject = await prepareAppleDeletion(
@@ -62,6 +65,9 @@ export const accountDeletionRouter = createTRPCRouter({
           .insert(accountDeletion)
           .values({ userId: ctx.userId, appleRevokedSubject })
           .onDuplicateKeyUpdate({ set: { userId: ctx.userId } });
+        // Next keeps this work alive after the response, even if the app closes.
+        // Only this account is eligible; the cleaner recovers interrupted attempts.
+        after(() => processAccountDeletions(ctx.userId));
         return {
           success: true,
           message:

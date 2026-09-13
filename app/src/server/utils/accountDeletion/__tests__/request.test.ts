@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  after: vi.fn(),
+  process: vi.fn(),
   insert: vi.fn(),
   values: vi.fn(),
   save: vi.fn(),
@@ -13,6 +15,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@clerk/nextjs/server", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@clerk/nextjs/server")>()),
   auth: mocks.auth,
+}));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: mocks.after,
+}));
+vi.mock("@/server/utils/accountDeletion/process", () => ({
+  processAccountDeletions: mocks.process,
 }));
 vi.mock("@/server/db", () => ({
   drizzleDB: {
@@ -77,6 +86,7 @@ describe("native account deletion authorization", () => {
     vi.stubEnv("CRON_SECRET", "test-worker-secret");
     vi.stubEnv("NATIVE_ACCOUNT_DELETION_ENABLED", "true");
     mocks.find.mockResolvedValue(undefined);
+    mocks.process.mockResolvedValue({ processed: 1, failed: 0 });
     mocks.prepare.mockResolvedValue(null);
     mocks.auth.mockResolvedValue({ userId: "user_test", has: () => true });
     mocks.insert.mockReturnValue({ values: mocks.values });
@@ -96,16 +106,19 @@ describe("native account deletion authorization", () => {
       },
     });
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
   });
   it("rejects GET requests to the deletion mutation", async () => {
     expect((await transport("GET")).status).toBe(405);
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
   });
   it("rejects ordinary web requests", async () => {
     await expect(request(body, "Mozilla/5.0")).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
   });
   it("does not mistake a forged shell marker for authentication", async () => {
     mocks.auth.mockResolvedValue({ userId: null });
@@ -113,6 +126,7 @@ describe("native account deletion authorization", () => {
       code: "UNAUTHORIZED",
     });
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
   });
   it("requires recent server-verified identity", async () => {
     mocks.auth.mockResolvedValue({ userId: "user_test", has: () => false });
@@ -125,6 +139,7 @@ describe("native account deletion authorization", () => {
     });
     expect(mocks.prepare).not.toHaveBeenCalled();
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
   });
   it.each([
     { ...body, expectedUserId: "user_other" },
@@ -134,18 +149,32 @@ describe("native account deletion authorization", () => {
   ])("rejects incomplete or switched-account confirmation", async (input) => {
     await expect(request(input)).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
   });
   it("refuses to enqueue when cleanup is not configured", async () => {
     vi.stubEnv("CRON_SECRET", "");
     expect(await request()).toMatchObject({ success: false });
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
   });
   it("queues only after reverification succeeds on retry", async () => {
     mocks.auth.mockResolvedValueOnce({ userId: "user_test", has: () => false });
     expect(await request()).toHaveProperty("clerk_error");
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
     expect(await request()).toMatchObject({ success: true });
     expect(mocks.insert).toHaveBeenCalledOnce();
+  });
+  it("starts only the saved account after returning acceptance", async () => {
+    expect(await request()).toMatchObject({ success: true });
+    expect(mocks.save).toHaveBeenCalledOnce();
+    expect(mocks.after).toHaveBeenCalledOnce();
+    expect(mocks.save.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.after.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(mocks.process).not.toHaveBeenCalled();
+    await mocks.after.mock.calls[0]?.[0]();
+    expect(mocks.process).toHaveBeenCalledWith("user_test");
   });
   it("only queues the authenticated identity, idempotently", async () => {
     expect(await request()).toMatchObject({ success: true });
@@ -158,16 +187,19 @@ describe("native account deletion authorization", () => {
   it("does not report success after an enqueue failure", async () => {
     mocks.save.mockRejectedValueOnce(new Error("database unavailable"));
     expect(await request()).toMatchObject({ success: false });
+    expect(mocks.after).not.toHaveBeenCalled();
   });
   it("reuses a saved request without re-consuming an Apple authorization code", async () => {
     mocks.find.mockResolvedValueOnce({ userId: "user_test" });
     expect(await request()).toMatchObject({ success: true });
     expect(mocks.prepare).not.toHaveBeenCalled();
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).toHaveBeenCalledOnce();
   });
   it("does not enqueue when Apple ownership/revocation cannot be verified", async () => {
     mocks.prepare.mockRejectedValueOnce(new Error("Apple unavailable"));
     expect(await request()).toMatchObject({ success: false });
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
   });
 });

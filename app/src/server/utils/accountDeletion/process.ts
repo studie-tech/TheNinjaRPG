@@ -1,8 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { and, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { NextResponse } from "next/server";
 import { accountDeletion } from "@/drizzle/schema";
 import { drizzleDB } from "@/server/db";
 import { removeAccountGameData } from "@/server/utils/accountDeletion/cleanup";
@@ -10,27 +8,29 @@ import { removeAccountIdentity } from "@/server/utils/accountDeletion/identity";
 import { runDeletionStep } from "@/server/utils/accountDeletion/worker";
 import { secondsFromNow } from "@/utils/time";
 
-export const maxDuration = 300;
-
-export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  const actual = Buffer.from(request.headers.get("authorization") ?? "");
-  const expected = Buffer.from(`Bearer ${secret ?? ""}`);
-  if (
-    !secret ||
-    actual.length !== expected.length ||
-    !timingSafeEqual(actual, expected)
-  ) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+/** Shared by the post-response kick-off and the cleaner. Leases arbitrate both callers. */
+export const processAccountDeletions = async (userId?: string) => {
+  try {
+    return await processDueDeletions(userId);
+  } catch (error) {
+    // A database outage must not undo acceptance of an already durable request.
+    // The next cleaner invocation can retry once the database is available.
+    Sentry.captureException(error, { tags: { task: "account-deletion" } });
+    return { processed: 0, failed: 1 };
   }
+};
+
+const processDueDeletions = async (userId?: string) => {
   const now = new Date();
   const jobs = await drizzleDB.query.accountDeletion.findMany({
     where: and(
+      userId ? eq(accountDeletion.userId, userId) : undefined,
       ne(accountDeletion.phase, "COMPLETE"),
       lte(accountDeletion.nextAttemptAt, now),
       or(isNull(accountDeletion.leaseUntil), lte(accountDeletion.leaseUntil, now)),
     ),
-    limit: 3,
+    orderBy: [accountDeletion.nextAttemptAt, accountDeletion.userId],
+    limit: userId ? 1 : 3,
   });
   let processed = 0;
   let failed = 0;
@@ -92,5 +92,5 @@ export async function GET(request: Request) {
         .where(ownedLease);
     }
   }
-  return NextResponse.json({ processed, failed }, { status: failed ? 503 : 200 });
-}
+  return { processed, failed };
+};

@@ -32,15 +32,18 @@ and a support path before the feature is enabled for all accounts.
 `accountDeletion.request` is a protected tRPC mutation that records an idempotent request
 against the authenticated identity, returning success only after saving it. Clerk’s
 reverification hint passes through tRPC to `useReverification`, which verifies and retries
-the mutation before any request is queued. `/api/account-deletions` runs every five
-minutes under `CRON_SECRET`, claims a bounded set of jobs with an expiring CAS lease,
-and retries failed work. The phases are:
+the mutation before any request is queued. After saving, Next.js `after()` immediately
+starts processing that account following the response. Closing the app does not cancel
+this server work. The existing `/api/cleaner` retries due jobs every ten minutes on calls
+authenticated with `CRON_SECRET`, before its hourly maintenance gate. Both paths share
+an expiring CAS lease and due-time checks; they cannot process the same lease together.
+The dedicated deletion API route and schedule are removed. The phases are:
 
 1. QUEUED: revoke any remaining Apple authorization and delete the Clerk identity.
    A Clerk 404 is success on retry. Verified-email reminder records are removed first.
-2. IDENTITY_DELETED: wait five minutes for short-lived tokens/in-flight requests to
-   drain, then clean processor and game data. Active auction escrow must settle through
-   the normal auction worker first; deletion does not bypass balance/receipt guards.
+2. IDENTITY_DELETED: wait at least five minutes for short-lived tokens/in-flight requests
+   to drain, then clean processor and game data on the next cleaner tick. Active auction
+   escrow must settle through the normal auction worker first; deletion does not bypass balance/receipt guards.
 3. COMPLETE: only after cleanup succeeds. Clear the temporary Apple-subject reference;
    retain the minimal queue record and the existing purchase tombstone for idempotency.
 

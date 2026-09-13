@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { and, eq, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
@@ -44,14 +45,30 @@ import {
 } from "@/libs/gamesettings";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { drizzleDB } from "@/server/db";
+import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
 import { reconcileFederalStatuses } from "@/server/utils/purchases/grant";
 import { secondsFromNow } from "@/utils/time";
 
 const HOURLY_TIMER_NAME = "cleaner-hourly";
 
-export async function GET() {
+export const maxDuration = 300;
+
+export async function GET(request: Request) {
+  // Keep the existing maintenance entry point, but only the authenticated scheduler
+  // can process permanent account deletions. Run these on every ten-minute tick,
+  // independently of the hourly maintenance gate.
+  const secret = process.env.CRON_SECRET;
+  const actual = Buffer.from(request.headers.get("authorization") ?? "");
+  const expected = Buffer.from(`Bearer ${secret ?? ""}`);
+  const isScheduler =
+    !!secret && actual.length === expected.length && timingSafeEqual(actual, expected);
+  const deletions = isScheduler ? await processAccountDeletions() : { failed: 0 };
+  const deletionFailure =
+    deletions.failed > 0
+      ? Response.json("Account deletion cleanup needs a retry", { status: 503 })
+      : null;
   const cleanerTimer = await lockWithHourlyTimer(drizzleDB, HOURLY_TIMER_NAME);
-  if (!cleanerTimer.isNewHour) return cleanerTimer.response;
+  if (!cleanerTimer.isNewHour) return deletionFailure ?? cleanerTimer.response;
 
   try {
     // Range deletes use indexed ordering and a bounded batch so one large
@@ -505,7 +522,7 @@ export async function GET() {
     // Handle expired exclusive raids - return sectors to neutral if raid timed out without boss defeat
     await cleanupExpiredExclusiveRaids(drizzleDB);
 
-    return Response.json(`OK`);
+    return deletionFailure ?? Response.json(`OK`);
   } catch (cause) {
     console.error(cause);
     try {
