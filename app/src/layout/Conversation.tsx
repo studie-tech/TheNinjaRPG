@@ -753,19 +753,21 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                   );
                 })}
               <div className="relative">
-                <RichInput
-                  id="comment"
-                  autoFocus={isNativeShell === false}
-                  refreshKey={editorKey}
-                  height="120"
-                  disabled={isCommenting}
-                  placeholder="Write comment..."
-                  control={control}
-                  error={errors.comment?.message}
-                  onSubmit={handleSubmitComment}
-                  enableMentions={true}
-                  allowClipboardPaste={true}
-                />
+                {isNativeShell !== undefined && (
+                  <RichInput
+                    id="comment"
+                    autoFocus={isNativeShell === false}
+                    refreshKey={editorKey}
+                    height="120"
+                    disabled={isCommenting}
+                    placeholder="Write comment..."
+                    control={control}
+                    error={errors.comment?.message}
+                    onSubmit={handleSubmitComment}
+                    enableMentions={true}
+                    allowClipboardPaste={true}
+                  />
+                )}
                 <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 transform flex-row-reverse">
                   {isCommenting && <Loader />}
                 </div>
