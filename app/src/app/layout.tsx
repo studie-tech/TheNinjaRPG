@@ -1,7 +1,6 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { MultisessionAppSupport } from "@clerk/nextjs/internal";
 import { auth } from "@clerk/nextjs/server";
-import { GoogleTagManager } from "@next/third-parties/google";
 import * as Sentry from "@sentry/nextjs";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -21,6 +20,7 @@ import AcceptWarning from "@/layout/AcceptWarning";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
 import LayoutSwitcher from "@/layout/LayoutSwitcher";
 import StructuredData from "@/layout/StructuredData";
+import { WebAnalytics } from "@/layout/WebAnalytics";
 import {
   AB_PIXEL_LAYOUT_COOKIE,
   cookieValueToLayout,
@@ -90,7 +90,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   {!isNativeShell &&
                     env.NEXT_PUBLIC_MEASUREMENT_ID &&
                     process.env.NODE_ENV === "production" && (
-                      <GoogleTagManager gtmId={env.NEXT_PUBLIC_MEASUREMENT_ID} />
+                      <WebAnalytics gtmId={env.NEXT_PUBLIC_MEASUREMENT_ID} />
                     )}
                   <LayoutSwitcher
                     initialIsSignedIn={initialIsSignedIn}
