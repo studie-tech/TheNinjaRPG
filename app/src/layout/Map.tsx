@@ -644,8 +644,18 @@ const GlobalMap: React.FC<MapProps> = (props) => {
                 context.fillStyle = labelText;
                 context.strokeStyle = labelText === "#000000" ? "#F0F0F0" : "#1a1a1a";
                 context.font = `${f}px arial narrow`;
-                context.strokeText(highlight.mapName || highlight.name, w / 2, h / 2);
-                context.fillText(highlight.mapName || highlight.name, w / 2, h / 2);
+                context.strokeText(
+                  highlight.mapName || highlight.name,
+                  w / 2,
+                  h / 2,
+                  w - 3 * r,
+                );
+                context.fillText(
+                  highlight.mapName || highlight.name,
+                  w / 2,
+                  h / 2,
+                  w - 3 * r,
+                );
               }
               const texture = createTexture(canvas);
               texture.generateMipmaps = false;
