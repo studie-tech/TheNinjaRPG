@@ -50,7 +50,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "Your first hour in Seichi",
     excerpt:
       "Create your ninja, finish the academy tutorial, train, buy a starter weapon and take the Genin exam.",
-    seoTitle: "TheNinja-RPG Getting Started",
+    seoTitle: "Getting Started Guide",
     seoDescription:
       "How to play TheNinja-RPG: create a ninja, finish the academy tutorial, train stats, buy gear and rank up to Genin in Seichi.",
     category: "getting-started",
@@ -115,7 +115,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "Rounds, action points and initiative",
     excerpt:
       "Hex-based turn combat: 60-second rounds, action points, initiative and how to fight on the battlefield.",
-    seoTitle: "TheNinja-RPG Combat Guide",
+    seoTitle: "Combat Guide",
     seoDescription:
       "How combat works in TheNinja-RPG: 60-second rounds, action points, initiative, movement and basic attacks on the hex battlefield.",
     category: "combat",
@@ -171,7 +171,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "What jutsu and items actually do",
     excerpt:
       "A player-facing glossary of combat tags: damage, shields, heals, prevents, cleanses and more.",
-    seoTitle: "TheNinja-RPG Game Tags",
+    seoTitle: "Game Tags",
     seoDescription:
       "Every combat tag in TheNinja-RPG explained: damage, pierce, stun, cleanse, shield and the prevent family. Link through to live jutsu data.",
     category: "combat",
@@ -212,7 +212,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     title: "Prevent Tags",
     subtitle: "Stopping buffs, heals, movement and more",
     excerpt: "Prevent tags block a family of combat effects for a number of rounds.",
-    seoTitle: "TheNinja-RPG Prevent Tags",
+    seoTitle: "Prevent Tags",
     seoDescription:
       "Prevent tags in TheNinja-RPG stop buffs, debuffs, heals, movement, seals and summons. Use them to shut down a loadout.",
     category: "combat",
@@ -242,7 +242,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "What cleanse can remove",
     excerpt:
       "Cleanse strips harmful effects. Use it when poisons, stuns and stat drops would lose the round.",
-    seoTitle: "TheNinja-RPG Cleansable Tags",
+    seoTitle: "Cleansable Tags",
     seoDescription:
       "What the cleanse tag removes in TheNinja-RPG combat, and when to press it instead of attacking.",
     category: "combat",
@@ -270,7 +270,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "What clear can remove",
     excerpt:
       "Clear strips helpful effects from an opponent: buffs, shields and regeneration.",
-    seoTitle: "TheNinja-RPG Clearable Tags",
+    seoTitle: "Clearable Tags",
     seoDescription:
       "What the clear tag removes in TheNinja-RPG: enemy buffs, shields and other helpful combat effects.",
     category: "combat",
@@ -298,7 +298,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "Why order of effects matters",
     excerpt:
       "Effects apply in a defined order each round. Priority decides shields, damage ramps and prevents.",
-    seoTitle: "TheNinja-RPG Tag Priority",
+    seoTitle: "Tag Priority",
     seoDescription:
       "How TheNinja-RPG applies combat tags in order: shields, damage modifiers, prevents and residual effects.",
     category: "combat",
@@ -326,7 +326,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "What to equip before you queue",
     excerpt:
       "Build a loadout around one win condition: offence, control or sustain — then fill gaps with items.",
-    seoTitle: "TheNinja-RPG Loadout Guide",
+    seoTitle: "Loadout Guide",
     seoDescription:
       "How to build a TheNinja-RPG combat loadout: pick a win condition, fill jutsu slots, and add items that cover your gaps.",
     category: "combat",
@@ -360,7 +360,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "Let your profile fight for you",
     excerpt:
       "Custom AI rules pick jutsu from conditions such as range, health and combo order.",
-    seoTitle: "TheNinja-RPG AI Rules",
+    seoTitle: "AI Rules",
     seoDescription:
       "How TheNinja-RPG combat AI rules work: distance checks, self-heal conditions, combo order and when to take control.",
     category: "combat",
@@ -387,7 +387,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     title: "Raid Guidelines",
     subtitle: "Multiplayer PvE in Seichi",
     excerpt: "Open and exclusive raids, tailed-beast hunts and how to show up ready.",
-    seoTitle: "TheNinja-RPG Raid Guide",
+    seoTitle: "Raid Guide",
     seoDescription:
       "How raids work in TheNinja-RPG: open versus exclusive raids, preparing a loadout, and fighting tailed beasts with your village.",
     category: "combat",
@@ -415,7 +415,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "XP brackets and PvP protection",
     excerpt:
       "Experience brackets gate PvP matchups. Attacking lifts your immunity for a few minutes.",
-    seoTitle: "TheNinja-RPG Bracket System",
+    seoTitle: "Bracket System",
     seoDescription:
       "How TheNinja-RPG XP brackets work: PvP protection by experience, war flags, and what happens when you initiate an attack.",
     category: "combat",
@@ -441,7 +441,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "Plots, seeds, water and extractors",
     excerpt:
       "Level farming to 100, buy extra plots, water crops and extract seeds from harvests.",
-    seoTitle: "TheNinja-RPG Farming Guide",
+    seoTitle: "Farming Guide",
     seoDescription:
       "How farming works in TheNinja-RPG: plots, watering, seed extractors, crop tiers and the level 100 cap.",
     category: "farming",
@@ -486,7 +486,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "The five core villages and later settlements",
     excerpt:
       "Shirohana, Tsukimori, Hyorin, Akasumi and Akikaze are the core villages. Join one after the Genin exam.",
-    seoTitle: "TheNinja-RPG Villages",
+    seoTitle: "Villages",
     seoDescription:
       "TheNinja-RPG villages in Seichi: Shirohana, Tsukimori, Hyorin, Akasumi, Akikaze and later settlements. How joining a village works.",
     category: "villages",
@@ -518,7 +518,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "Sectors, the globe and Wake Island",
     excerpt:
       "Move hex by hex on a sector, or open the globe to travel between countries and villages.",
-    seoTitle: "TheNinja-RPG Travel Guide",
+    seoTitle: "Travel Guide",
     seoDescription:
       "How travel works in TheNinja-RPG: sector hexes, the global map of Seichi, Wake Island and staying safe in the wild.",
     category: "world",
@@ -544,7 +544,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "Where bloodlines are rolled",
     excerpt:
       "Travel to Wake Island to roll or buy a bloodline at the science building.",
-    seoTitle: "TheNinja-RPG Wake Island",
+    seoTitle: "Wake Island",
     seoDescription:
       "Wake Island in TheNinja-RPG is where you roll or buy a bloodline. Free starter rolls, prices by rank, and how to get there.",
     category: "world",
@@ -570,7 +570,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "D-rank starters to S-rank event lines",
     excerpt:
       "Bloodlines add jutsu, elements and combat tags. Roll them on Wake Island or buy most ranks with reputation.",
-    seoTitle: "TheNinja-RPG Bloodlines",
+    seoTitle: "Bloodlines",
     seoDescription:
       "TheNinja-RPG bloodlines by rank: how to roll on Wake Island, reputation prices, and where to read each line's jutsu.",
     category: "bloodlines",
@@ -607,7 +607,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "Student to Elite Jonin",
     excerpt:
       "Student, Genin, Chunin, Jonin and Elite Jonin gate missions, PvP and village politics.",
-    seoTitle: "TheNinja-RPG Ranks",
+    seoTitle: "Ranks",
     seoDescription:
       "TheNinja-RPG ranks explained: Student, Genin, Chunin, Jonin and Elite Jonin — what each rank unlocks and who can PvP.",
     category: "ranks",
@@ -641,7 +641,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "The two currencies you will actually use",
     excerpt:
       "Earn ryo from missions and combat, bank it for interest, and spend reputation on bloodlines and cosmetics.",
-    seoTitle: "TheNinja-RPG Economy",
+    seoTitle: "Economy",
     seoDescription:
       "How money works in TheNinja-RPG: ryo, the village bank, reputation points and the ryo shop.",
     category: "economy",
@@ -669,7 +669,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "Community price norms",
     excerpt:
       "Suggested material price tiers. These are player norms, not server-enforced numbers.",
-    seoTitle: "TheNinja-RPG Auction House",
+    seoTitle: "Auction House",
     seoDescription:
       "TheNinja-RPG auction house guidelines: community material price tiers, not hard-coded shop prices.",
     category: "economy",
@@ -697,7 +697,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     subtitle: "Cosmetic reskins of existing items",
     excerpt:
       "Variants change how an item looks. Stats stay on the base item in the encyclopedia.",
-    seoTitle: "TheNinja-RPG Item Variants",
+    seoTitle: "Item Variants",
     seoDescription:
       "Item variants in TheNinja-RPG are cosmetic reskins. Stats stay on the base item; unlocks use variant tokens.",
     category: "economy",

@@ -1,8 +1,9 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { GuideCategory } from "@/drizzle/constants";
-import { actionLog, guideArticle, userData } from "@/drizzle/schema";
+import { actionLog, bloodline, guideArticle, item, userData } from "@/drizzle/schema";
+import { isGuideworthyEntityName } from "@/libs/guide/generate";
 import { fetchUser } from "@/routers/profile";
 import {
   baseServerResponse,
@@ -204,4 +205,90 @@ export const fetchNeighborGuides = async (
     next,
     related: siblings.filter((row) => !neighborSlugs.has(row.slug)).slice(0, 4),
   };
+};
+
+/**
+ * Every farmable seed with the herb it grows into, for the farming hub's catalog.
+ *
+ * This is what replaced the per-item guide pages: one table sourced from live item data
+ * ranks for "farming" queries where twenty-eight templated stubs ranked for nothing,
+ * and it cannot go stale the way seeded prose does.
+ */
+export const fetchFarmCatalog = async (client: DrizzleClient) => {
+  const seeds = await client.query.item.findMany({
+    columns: {
+      id: true,
+      name: true,
+      rarity: true,
+      cost: true,
+      farmMinLevel: true,
+      farmGrowTimeSeconds: true,
+      farmPlantExperience: true,
+      farmYieldItemId: true,
+    },
+    where: and(eq(item.isFarmSeed, true), eq(item.hidden, false)),
+    orderBy: [asc(item.farmMinLevel), asc(item.name)],
+  });
+  const yieldIds = seeds.flatMap((row) =>
+    row.farmYieldItemId ? [row.farmYieldItemId] : [],
+  );
+  const yields = yieldIds.length
+    ? await client.query.item.findMany({
+        columns: { id: true, name: true },
+        where: inArray(item.id, yieldIds),
+      })
+    : [];
+  const yieldById = new Map(yields.map((row) => [row.id, row]));
+  // Same name filter the seed applies: QA fixtures and "- copy" duplicates are visible
+  // items, so `hidden` alone does not keep them off a public page.
+  return seeds
+    .filter((row) => isGuideworthyEntityName(row.name))
+    .map((row) => ({
+      ...row,
+      yield: row.farmYieldItemId ? (yieldById.get(row.farmYieldItemId) ?? null) : null,
+    }));
+};
+
+/**
+ * Every visible bloodline with its published guide, when one exists, for the bloodlines
+ * hub. The join is what lets the hub, the encyclopedia and the guide all point at one
+ * another without any of them hard-coding a slug.
+ */
+export const fetchBloodlineCatalog = async (client: DrizzleClient) => {
+  const [rows, guides] = await Promise.all([
+    client.query.bloodline.findMany({
+      columns: { id: true, name: true, rank: true, image: true },
+      where: eq(bloodline.hidden, false),
+      orderBy: [asc(bloodline.rank), asc(bloodline.name)],
+    }),
+    client.query.guideArticle.findMany({
+      columns: { slug: true, relatedBloodlineId: true },
+      where: and(
+        eq(guideArticle.published, true),
+        or(eq(guideArticle.category, "bloodlines"), eq(guideArticle.category, "world")),
+      ),
+    }),
+  ]);
+  const guideByBloodline = new Map(
+    guides.flatMap((g) =>
+      g.relatedBloodlineId ? [[g.relatedBloodlineId, g.slug]] : [],
+    ),
+  );
+  return rows
+    .filter((row) => isGuideworthyEntityName(row.name))
+    .map((row) => ({ ...row, guideSlug: guideByBloodline.get(row.id) ?? null }));
+};
+
+/** The published guide written for one bloodline, if any, for the encyclopedia page. */
+export const fetchGuideForBloodline = async (
+  client: DrizzleClient,
+  bloodlineId: string,
+) => {
+  return await client.query.guideArticle.findFirst({
+    columns: { slug: true, title: true },
+    where: and(
+      eq(guideArticle.published, true),
+      eq(guideArticle.relatedBloodlineId, bloodlineId),
+    ),
+  });
 };

@@ -4,6 +4,7 @@ import { cache } from "react";
 import ContentDetail from "@/layout/ContentDetail";
 import { buildMetadata, metaDescription } from "@/libs/seo";
 import { fetchBloodline } from "@/server/api/routers/bloodline";
+import { fetchGuideForBloodline } from "@/server/api/routers/guide";
 import { drizzleDB } from "@/server/db";
 
 type Props = { params: Promise<{ bloodlineid: string }> };
@@ -37,7 +38,12 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
 export default async function BloodlineDetail(props: Props) {
   const { bloodlineid } = await props.params;
-  const bloodline = await getBloodline(bloodlineid);
+  // The guide lookup keys on the id, not on the bloodline row, so it needs no result
+  // from the first query and the two can share a round-trip.
+  const [bloodline, guide] = await Promise.all([
+    getBloodline(bloodlineid),
+    fetchGuideForBloodline(drizzleDB, bloodlineid),
+  ]);
   if (!bloodline) notFound();
   return (
     <ContentDetail
@@ -46,6 +52,7 @@ export default async function BloodlineDetail(props: Props) {
       subtitle={`${bloodline.rank} rank bloodline`}
       backHref="/manual/bloodline"
       showEdit="bloodline"
+      guide={guide ? { href: `/guide/${guide.slug}`, title: guide.title } : undefined}
     />
   );
 }

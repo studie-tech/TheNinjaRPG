@@ -115,7 +115,6 @@ export default function ManualMain() {
                   alt={page.name}
                   width={125}
                   height={125}
-                  priority={true}
                 />
                 <p>{page.name}</p>
               </Link>

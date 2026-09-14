@@ -27,6 +27,41 @@ export const absoluteUrl = (path: string) => {
 };
 
 /**
+ * Brand tokens a title may already carry, and the connectors that can join them to the
+ * rest of the title. Only the edges are matched, so a title that merely mentions the
+ * game mid-sentence is left alone.
+ */
+const SITE_NAME_TOKENS = "TheNinja-RPG|The Ninja RPG|The Ninja-RPG|TNR";
+const SITE_NAME_JOINERS = "[|:\\-–—]|\\b(?:in|of|for|on|from|to|at|with|about)\\b";
+const SITE_NAME_LEADING = new RegExp(
+  `^(?:${SITE_NAME_TOKENS})\\b\\s*(?:[|:\\-–—]\\s*)?`,
+  "i",
+);
+const SITE_NAME_TRAILING = new RegExp(
+  `\\s*(?:${SITE_NAME_JOINERS})?\\s*\\b(?:${SITE_NAME_TOKENS})$`,
+  "i",
+);
+
+/**
+ * stripSiteName
+ * - Removes the brand from the start or end of a page title so buildMetadata can append
+ *   it exactly once. Guide articles store an seoTitle written as the whole browser-tab
+ *   title ("Aerathiel TheNinja-RPG", "Bloodlines in TheNinja-RPG"), and passing that
+ *   through a template that adds the brand again produced
+ *   "Aerathiel TheNinja-RPG | TheNinja-RPG" on every guide page. A joining preposition
+ *   goes with the brand -- "Bloodlines in TheNinja-RPG" becomes "Bloodlines", which the
+ *   suffix then completes -- because "Bloodlines in | TheNinja-RPG" is worse than either.
+ * @param title - Page title that may or may not already carry the brand
+ */
+export const stripSiteName = (title: string) => {
+  const stripped = title
+    .replace(SITE_NAME_LEADING, "")
+    .replace(SITE_NAME_TRAILING, "")
+    .trim();
+  return stripped.length > 0 ? stripped : title.trim();
+};
+
+/**
  * metaDescription
  * - Turns stored content descriptions, which may contain HTML and long prose, into a
  *   single-line snippet that fits a search result without being truncated by Google.
@@ -78,7 +113,7 @@ export const buildMetadata = ({
   // Built with `absolute` rather than relying on the root title.template: a segment
   // layout that sets a plain string title (e.g. /manual) replaces the template for all
   // of its children, which left nested pages without the brand suffix.
-  const fullTitle = `${title} | ${SITE_NAME}`;
+  const fullTitle = `${stripSiteName(title)} | ${SITE_NAME}`;
   return {
     title: { absolute: fullTitle },
     description,
@@ -114,7 +149,7 @@ export const buildMetadata = ({
  * @param title - Page title
  */
 export const noindexMetadata = (title: string): Metadata => ({
-  title: { absolute: `${title} | ${SITE_NAME}` },
+  title: { absolute: `${stripSiteName(title)} | ${SITE_NAME}` },
   // index only. These screens link onward to manual and profile URLs that the sitemap
   // does advertise, and `follow: false` would tell Google to ignore those links -- a
   // good way to strand the very pages this metadata exists to help get indexed.

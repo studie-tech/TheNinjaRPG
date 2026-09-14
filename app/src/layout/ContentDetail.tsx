@@ -1,5 +1,7 @@
 "use client";
 
+import { BookOpen } from "lucide-react";
+import Link from "next/link";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects, { type ItemWithEffectsProps } from "@/layout/ItemWithEffects";
 
@@ -9,6 +11,8 @@ interface ContentDetailProps {
   subtitle: string;
   backHref: string;
   showEdit?: ItemWithEffectsProps["showEdit"];
+  /** A published player guide for this entry, when one exists. */
+  guide?: { href: string; title: string };
 }
 
 /**
@@ -23,10 +27,22 @@ export const ContentDetail: React.FC<ContentDetailProps> = ({
   subtitle,
   backHref,
   showEdit,
+  guide,
 }) => {
   return (
     <ContentBox title={title} subtitle={subtitle} defaultBackHref={backHref}>
       <ItemWithEffects item={item} showEdit={showEdit} />
+      {guide && (
+        <p className="mt-4">
+          <Link
+            href={guide.href}
+            className="inline-flex items-center gap-1 font-bold text-orange-500 hover:text-orange-700"
+          >
+            <BookOpen className="h-4 w-4" />
+            Read the guide: {guide.title}
+          </Link>
+        </p>
+      )}
     </ContentBox>
   );
 };

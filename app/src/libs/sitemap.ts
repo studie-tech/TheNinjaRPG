@@ -8,6 +8,7 @@ import {
   jutsu,
   userData,
 } from "@/drizzle/schema";
+import { PROFILE_INDEX_MIN_LEVEL, profileIndexCutoff } from "@/libs/profileIndexing";
 import { absoluteUrl } from "@/libs/seo";
 import type { SitemapEntry, SitemapSection } from "@/libs/sitemapXml";
 import { drizzleDB } from "@/server/db";
@@ -21,8 +22,6 @@ import { drizzleDB } from "@/server/db";
 
 /** Caps on the tables that grow without limit, newest entries winning. */
 const MAX_PROFILES = 2000;
-const MIN_PROFILE_LEVEL = 25;
-const PROFILE_ACTIVE_DAYS = 90;
 const MAX_THREADS = 10000;
 
 const STATIC_ROUTES: {
@@ -61,10 +60,6 @@ const STATIC_ROUTES: {
   { path: "/signup", priority: 0.9, changeFrequency: "monthly" },
   { path: "/login", priority: 0.6, changeFrequency: "monthly" },
 ];
-
-/** Oldest `updatedAt` a profile may carry and still be advertised. */
-const profileActivityCutoff = () =>
-  new Date(Date.now() - PROFILE_ACTIVE_DAYS * 24 * 60 * 60 * 1000);
 
 // No lastModified: these routes change when the code does, and the only timestamp
 // available here is the request time, which would claim every page changed on every
@@ -168,7 +163,8 @@ const forumEntries = async (): Promise<SitemapEntry[]> => {
  * characters, banned accounts and accounts pending deletion are never advertised. The
  * level floor and activity window keep abandoned and barely-started accounts out: Search
  * Console showed 5,000 submitted profiles earning roughly half a click each per year
- * while Google declined to index them.
+ * while Google declined to index them. The same rule, as a predicate, decides which
+ * profile routes answer `noindex` -- see @/libs/profileIndexing.
  */
 const profileEntries = async (): Promise<SitemapEntry[]> => {
   const now = new Date();
@@ -177,8 +173,8 @@ const profileEntries = async (): Promise<SitemapEntry[]> => {
     .from(userData)
     .where(
       and(
-        gte(userData.level, MIN_PROFILE_LEVEL),
-        gte(userData.updatedAt, profileActivityCutoff()),
+        gte(userData.level, PROFILE_INDEX_MIN_LEVEL),
+        gte(userData.updatedAt, profileIndexCutoff()),
         eq(userData.isAi, false),
         eq(userData.isBanned, false),
         isNull(userData.deletionAt),

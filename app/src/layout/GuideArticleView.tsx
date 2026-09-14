@@ -23,6 +23,8 @@ interface GuideArticleViewProps {
   previous?: NeighborGuide;
   next?: NeighborGuide;
   related: NeighborGuide[];
+  /** Server-rendered table for a hub page; see GuideCatalog. */
+  catalog?: React.ReactNode;
 }
 
 export const GuideArticleView: React.FC<GuideArticleViewProps> = ({
@@ -30,6 +32,7 @@ export const GuideArticleView: React.FC<GuideArticleViewProps> = ({
   previous,
   next,
   related,
+  catalog,
 }) => {
   const { data: userData } = useUserData();
   const isStaff = Boolean(userData && canChangeContent(userData.role));
@@ -89,6 +92,7 @@ export const GuideArticleView: React.FC<GuideArticleViewProps> = ({
             </nav>
           )}
         </div>
+        {catalog}
         {article.faq && article.faq.length > 0 && (
           <section className="mt-6">
             <h2 className="font-bold text-xl">Frequently asked questions</h2>

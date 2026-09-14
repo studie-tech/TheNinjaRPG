@@ -5,6 +5,7 @@ import { cache } from "react";
 import { userData } from "@/drizzle/schema";
 import PublicUserComponent from "@/layout/PublicUser";
 import { showUserRank } from "@/libs/profile";
+import { isProfileIndexable } from "@/libs/profileIndexing";
 import { absoluteUrl, buildMetadata, noindexMetadata } from "@/libs/seo";
 import { drizzleDB } from "@/server/db";
 
@@ -20,6 +21,10 @@ const fetchProfile = cache(async (username: string) => {
       isOutlaw: true,
       avatar: true,
       customTitle: true,
+      updatedAt: true,
+      isAi: true,
+      isBanned: true,
+      deletionAt: true,
     },
     with: { village: { columns: { name: true } } },
     where: eq(userData.username, decodeURIComponent(username)),
@@ -35,6 +40,11 @@ export async function generateMetadata(props: {
   if (!user) return noindexMetadata("Player Not Found");
   const rank = showUserRank(user);
   const village = user.village?.name;
+  // A profile the sitemap would not advertise should not stay in the index on the
+  // strength of an old crawl either; the page still renders for anyone who visits.
+  if (!isProfileIndexable(user)) {
+    return noindexMetadata(`${user.username} - Level ${user.level} ${rank}`);
+  }
   return buildMetadata({
     title: `${user.username} - Level ${user.level} ${rank}`,
     description: `${user.username} is a level ${user.level} ${rank}${

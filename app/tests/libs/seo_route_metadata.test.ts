@@ -1,7 +1,8 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { SITE_URL, buildMetadata, noindexMetadata } from "@/libs/seo";
+import { isProfileIndexable, profileIndexCutoff } from "@/libs/profileIndexing";
+import { SITE_URL, buildMetadata, noindexMetadata, stripSiteName } from "@/libs/seo";
 
 const APP_DIR = join(import.meta.dirname, "..", "..", "src", "app");
 
@@ -112,5 +113,77 @@ describe("buildMetadata", () => {
         noindex: true,
       }).alternates,
     ).toEqual({ canonical: null });
+  });
+});
+
+describe("stripSiteName", () => {
+  // Guide articles store seoTitle as the whole browser-tab title, brand included, and
+  // buildMetadata appends the brand again. Every guide page read
+  // "Aerathiel TheNinja-RPG | TheNinja-RPG" until the edge was stripped first.
+  it.each([
+    ["Aerathiel TheNinja-RPG", "Aerathiel"],
+    ["TheNinja-RPG Getting Started", "Getting Started"],
+    ["TNR Progression", "Progression"],
+    ["Farming Guide | TheNinja-RPG", "Farming Guide"],
+    ["Bloodlines in TheNinja-RPG", "Bloodlines"],
+    ["Welcome to TheNinja-RPG", "Welcome"],
+  ])("strips the brand from the edge of %j", (input, expected) => {
+    expect(stripSiteName(input)).toBe(expected);
+  });
+
+  it.each([
+    "Combat in TheNinja-RPG: basics",
+    "TNRx Tools",
+    "Villages of Seichi",
+  ])("leaves %j alone", (input) => {
+    expect(stripSiteName(input)).toBe(input);
+  });
+
+  it("falls back to the input when nothing but the brand remains", () => {
+    expect(stripSiteName("TheNinja-RPG")).toBe("TheNinja-RPG");
+  });
+
+  it("is what keeps buildMetadata from double-branding", () => {
+    const meta = buildMetadata({
+      title: "Aerathiel TheNinja-RPG",
+      description: "A bloodline.",
+      path: "/guide/aerathiel",
+    });
+    expect(meta.title).toEqual({ absolute: "Aerathiel | TheNinja-RPG" });
+  });
+});
+
+describe("isProfileIndexable", () => {
+  const now = Date.UTC(2026, 8, 14);
+  const active = {
+    level: 30,
+    updatedAt: new Date(now - 24 * 60 * 60 * 1000),
+    isAi: false,
+    isBanned: false,
+    deletionAt: null,
+  };
+
+  it("accepts an active account above the level floor", () => {
+    expect(isProfileIndexable(active, now)).toBe(true);
+  });
+
+  // The sitemap already declined to advertise these; the routes now answer noindex for
+  // the same set, so one that Google found before the floor existed does not stay
+  // indexed indefinitely on an old crawl.
+  it.each([
+    ["below the level floor", { level: 13 }],
+    ["inactive past the window", { updatedAt: new Date(now - 91 * 24 * 60 * 60 * 1000) }],
+    ["never updated", { updatedAt: null }],
+    ["an AI character", { isAi: true }],
+    ["banned", { isBanned: true }],
+    ["pending deletion", { deletionAt: new Date(now) }],
+  ])("rejects a profile that is %s", (_label, override) => {
+    expect(isProfileIndexable({ ...active, ...override }, now)).toBe(false);
+  });
+
+  it("treats the activity window as inclusive at the boundary", () => {
+    expect(isProfileIndexable({ ...active, updatedAt: profileIndexCutoff(now) }, now)).toBe(
+      true,
+    );
   });
 });

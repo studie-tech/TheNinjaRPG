@@ -5,6 +5,7 @@ import { cache } from "react";
 import { userData } from "@/drizzle/schema";
 import PublicUserComponent from "@/layout/PublicUser";
 import { showUserRank } from "@/libs/profile";
+import { isProfileIndexable } from "@/libs/profileIndexing";
 import { absoluteUrl, buildMetadata, noindexMetadata } from "@/libs/seo";
 import { drizzleDB } from "@/server/db";
 
@@ -19,6 +20,10 @@ const fetchProfile = cache(async (userid: string) => {
       isOutlaw: true,
       avatar: true,
       customTitle: true,
+      updatedAt: true,
+      isAi: true,
+      isBanned: true,
+      deletionAt: true,
     },
     with: { village: { columns: { name: true } } },
     where: eq(userData.userId, userid),
@@ -38,6 +43,12 @@ export async function generateMetadata(props: {
   if (!user) return noindexMetadata("Player Not Found");
   const rank = showUserRank(user);
   const village = user.village?.name;
+  // This route canonicalises to /username/<name>. When that page is noindex, naming it
+  // as the canonical here would be the noindex-plus-canonical pairing Google warns
+  // against, so this route goes noindex with it and names no canonical at all.
+  if (!isProfileIndexable(user)) {
+    return noindexMetadata(`${user.username} - Level ${user.level} ${rank}`);
+  }
   return buildMetadata({
     title: `${user.username} - Level ${user.level} ${rank}`,
     description: `${user.username} is a level ${user.level} ${rank}${
