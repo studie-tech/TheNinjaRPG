@@ -257,6 +257,7 @@ export const combatRouter = createTRPCRouter({
 
           // Update the battle to the correct activeUserId & round. Default to current user
           const fetchedVersion = userBattle.version;
+          const fetchedUpdatedAt = userBattle.updatedAt;
           const { progressRound, changedActor, actionRound } = alignBattle(
             userBattle,
             actionRounds,
@@ -331,6 +332,10 @@ export const combatRouter = createTRPCRouter({
           }
 
           if (result || progressRound || changedActor) {
+            // alignBattle stamps updatedAt on every call. A settlement-only save must
+            // keep the fetched value: the next timeout poll reads updatedAt > roundStartAt
+            // as "the actor already acted" and would skip the idle actor's effects tick.
+            if (!shouldTickEffects) settledBattle.updatedAt = fetchedUpdatedAt;
             const { finishBattle } = await updateBattle(
               ctx.drizzle,
               result,
