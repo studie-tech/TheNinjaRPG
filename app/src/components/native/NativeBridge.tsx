@@ -117,6 +117,13 @@ export default function NativeBridge() {
   useEffect(() => {
     if (!isNative()) return;
     return appEvents.onBackButton((canGoBack) => {
+      // Radix consumes Escape when its topmost layer dismisses or blocks dismissal.
+      // Preserve that behavior before navigating away from an open dialog or popover.
+      const escapeKey = new KeyboardEvent("keydown", {
+        key: "Escape",
+        cancelable: true,
+      });
+      if (!document.dispatchEvent(escapeKey)) return;
       if (canGoBack && pathnameRef.current !== "/") {
         router.back();
       } else {
