@@ -35,5 +35,8 @@
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.0.0",
     "typescript": "^7.0.2"
+  },
+  "patchedDependencies": {
+    "@capacitor/android@8.5.0": "patches/@capacitor%2Fandroid@8.5.0.patch"
   }
 }

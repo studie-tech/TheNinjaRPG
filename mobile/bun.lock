@@ -25,6 +25,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@capacitor/android@8.5.0": "patches/@capacitor%2Fandroid@8.5.0.patch",
+  },
   "packages": {
     "@capacitor/android": ["@capacitor/android@8.5.0", "", { "peerDependencies": { "@capacitor/core": "^8.5.0" } }, "sha512-Rb3prJeQiTp0pQhSSOReJuG9VgibOGMG4ECs+UhMwr6TCCHZ3NCZO811bDA0HxD0xrT/gCrJAsY5yfEATu84JQ=="],
 

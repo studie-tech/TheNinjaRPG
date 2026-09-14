@@ -13,7 +13,10 @@ immediately, checks `/api/healthcheck`, and only then navigates to the productio
 blank screen on a cold launch with no connectivity, and Ionic documents remote-origin
 loading as a development feature that can attract store rejections.
 `server.allowNavigation` keeps the hand-off inside the WebView so the Capacitor bridge
-survives it.
+survives it. Android's Capacitor dependency is patched to inject the bridge at document
+start for the same allowed origins as native messaging. Without this patch, modern
+Android WebViews inject it only into the bundled origin. Keep the navigation allowlist
+restricted to the configured game origin; never add third-party or wildcard hosts.
 
 The origin lives in one place: `TNR_ORIGIN`. `bun run sync` writes it into `www/config.js`
 and `capacitor.config.ts` reads it for the navigation allowlist.

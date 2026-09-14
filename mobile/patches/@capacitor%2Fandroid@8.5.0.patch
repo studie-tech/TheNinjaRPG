@@ -1,0 +1,16 @@
+diff --git a/capacitor/src/main/java/com/getcapacitor/Bridge.java b/capacitor/src/main/java/com/getcapacitor/Bridge.java
+index d4995fbbc9e4d3f0db7ac0330ef78e2f3547b055..8b0fe0ecf508688fe444cbdef9a8d7048a35d23a 100644
+--- a/capacitor/src/main/java/com/getcapacitor/Bridge.java
++++ b/capacitor/src/main/java/com/getcapacitor/Bridge.java
+@@ -264,9 +264,9 @@ public class Bridge {
+         // Start the local web server
+         JSInjector injector = getJSInjector();
+         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+-            String allowedOrigin = Uri.parse(appUrl).buildUpon().path(null).fragment(null).clearQuery().build().toString();
+             try {
+-                WebViewCompat.addDocumentStartJavaScript(webView, injector.getScriptString(), Collections.singleton(allowedOrigin));
++                // Match the message bridge origins so trusted remote navigation retains native plugins.
++                WebViewCompat.addDocumentStartJavaScript(webView, injector.getScriptString(), allowedOriginRules);
+                 injector = null;
+             } catch (IllegalArgumentException ex) {
+                 Logger.warn("Invalid url, using fallback");
