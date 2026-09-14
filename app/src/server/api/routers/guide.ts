@@ -235,12 +235,17 @@ export const fetchFarmCatalog = async (client: DrizzleClient) => {
   const yields = yieldIds.length
     ? await client.query.item.findMany({
         columns: { id: true, name: true },
-        where: inArray(item.id, yieldIds),
+        where: and(inArray(item.id, yieldIds), eq(item.hidden, false)),
       })
     : [];
-  const yieldById = new Map(yields.map((row) => [row.id, row]));
-  // Same name filter the seed applies: QA fixtures and "- copy" duplicates are visible
-  // items, so `hidden` alone does not keep them off a public page.
+  // Same visibility rules as the seeds themselves: a visible seed can still point at a
+  // hidden or QA yield, and this table must not be the place that discloses it. A
+  // filtered yield leaves its row's "grows into" cell blank rather than dropping the seed.
+  const yieldById = new Map(
+    yields
+      .filter((row) => isGuideworthyEntityName(row.name))
+      .map((row) => [row.id, row]),
+  );
   return seeds
     .filter((row) => isGuideworthyEntityName(row.name))
     .map((row) => ({

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound, permanentRedirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { GUIDE_CATEGORY_LABELS } from "@/drizzle/constants";
 import { GuideArticleView } from "@/layout/GuideArticleView";
@@ -19,12 +19,17 @@ type Props = { params: Promise<{ slug: string }> };
 const getGuide = cache(async (slug: string) => await fetchGuideBySlug(drizzleDB, slug));
 
 /**
- * Where a retired generated stub sends its visitors. The per-entity pages were seeded
- * from item and bloodline rows and later unpublished as too thin to index; anyone still
- * holding one of those URLs -- a crawler included -- lands on the hub that replaced it
- * rather than a 404.
+ * Where an unpublished generated stub sends its visitors. The per-entity pages were
+ * seeded from item and bloodline rows and unpublished as too thin to index; anyone still
+ * holding one of those URLs -- a crawler included -- lands on the hub instead of a 404.
+ *
+ * The redirect is temporary (307) on purpose. It lasts exactly as long as the row stays
+ * unpublished: the generator now seeds these as drafts, and a draft that staff later
+ * write and publish must serve at its own slug again. A 308 would be cached by browsers
+ * and read by Google as permanent, and would keep sending that page's visitors to the
+ * hub after it went live.
  */
-const retiredStubTarget = (article: {
+const draftStubTarget = (article: {
   relatedItemId: string | null;
   relatedBloodlineId: string | null;
 }) => {
@@ -81,8 +86,8 @@ export default async function GuideArticlePage(props: Props) {
   const article = await getGuide(slug);
   if (!article) notFound();
   if (!article.published) {
-    const target = retiredStubTarget(article);
-    if (target) permanentRedirect(target);
+    const target = draftStubTarget(article);
+    if (target) redirect(target);
     notFound();
   }
 
