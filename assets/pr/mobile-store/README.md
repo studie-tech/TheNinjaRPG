@@ -10,18 +10,19 @@ in `assets/screenshots/mobile-store/`, grouped by platform and screen size.
 | `assets/screenshots/mobile-store/ios-6.9/` | 1320 × 2868 | iPhone screenshots |
 | `assets/screenshots/mobile-store/ipad-13/` | 2064 × 2752 | iPad portrait screenshots |
 | `assets/screenshots/mobile-store/android-phone/` | 1080 × 2400 | Android phone screenshots |
-| `assets/screenshots/mobile-store/android-tablet/` | 1600 × 2560 | Android tablet portrait screenshots |
+| `assets/screenshots/mobile-store/android-tablet/` | 1600 × 2560 | 10-inch Android tablet portrait screenshots |
+| `assets/screenshots/mobile-store/android-tablet-7-inch/` | 1920 × 1200 | 7-inch Android tablet landscape screenshots |
 | `listing.en-US.json` | Text | English Google Play listing copy |
 
 Apple's app icon comes from the native asset catalog in the uploaded build.
 `feature-graphic-concept.png` is the source concept for the promotional artwork;
 it is not a gameplay screenshot.
 
-Each platform has eight screenshots, ordered for the store gallery: combat, village,
+Each screen-size set has eight screenshots, ordered for the store gallery: combat, village,
 jutsu, world map, sector, profile, private chat and an alternate village. The iPhone
 set features Tsukimori and Hyorin; iPad features Tsukimori, Hyorin and Akasumi;
-Android phone features Akikaze and Horizon; Android tablet features Akasumi and
-Hyorin. Chat uses a private sample conversation between capture accounts.
+Android phone features Akikaze and Horizon; both Android tablet sets feature Akasumi
+and Hyorin. Chat uses a private sample conversation between capture accounts.
 
 Capture screenshots from the native shells using disposable accounts. Keep gameplay
 captures authentic and compare them with the signed release candidate before store
