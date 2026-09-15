@@ -10,7 +10,7 @@ import {
 } from "@/hooks/localstorage";
 import { useLiveActivity } from "@/hooks/useLiveActivity";
 import { useNativePush } from "@/hooks/useNativePush";
-import { hospitalRecoveryAt } from "@/libs/hospital";
+import { calcHealFinish } from "@/libs/hospital";
 import {
   appEvents,
   isNative,
@@ -28,6 +28,7 @@ import {
 } from "@/libs/native/accountCleanup";
 import { NativeWidgetOperations } from "@/libs/native/widgetOperations";
 import { useUserData } from "@/utils/UserContext";
+import { getStrucBoost } from "@/utils/village";
 
 /**
  * Everything the native shell needs wired up once, mounted from the root layout.
@@ -279,16 +280,19 @@ const activeQuest = (
 /**
  * When the player leaves hospital, or undefined if they are not in one.
  *
- * Rounded to the minute: the timestamp is derived from `Date.now()` and would otherwise
- * differ on every regeneration tick, defeating the snapshot deduplication and spending
- * WidgetKit's daily reload budget on writes that change nothing anyone can see.
+ * Rounded to the minute so small clock-synchronization corrections do not spend
+ * WidgetKit's daily reload budget on visually identical snapshots.
  */
 const hospitalFinishesAt = (
   userData: NonNullable<ReturnType<typeof useUserData>["data"]>,
   timeDiff: number,
 ): string | undefined => {
   if (userData.status !== "HOSPITALIZED") return undefined;
-  const finish = hospitalRecoveryAt(userData, timeDiff);
+  const finish = calcHealFinish({
+    user: userData,
+    timeDiff,
+    boost: getStrucBoost("hospitalSpeedupPerLvl", userData.village?.structures),
+  });
   const rounded = Math.round(finish.getTime() / 60_000) * 60_000;
   return new Date(rounded).toISOString();
 };

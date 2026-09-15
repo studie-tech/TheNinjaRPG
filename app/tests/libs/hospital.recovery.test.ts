@@ -1,52 +1,43 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
-import { calcHealFinish, hospitalRecoveryAt } from "@/libs/hospital";
+import { calcHealFinish } from "@/libs/hospital";
 
-/** A stay that began `secondsAgo` seconds ago. */
-const admitted = (secondsAgo: number) => {
-  const regenAt = new Date(Date.now() - secondsAgo * 1000);
-  return { user: { regenAt } as UserData, regenAt };
-};
+const regenAt = new Date("2026-01-01T12:00:00.000Z");
+const user = { regenAt } as UserData;
 
-/** Seconds between the stay starting and the given instant. */
-const offsetFromAdmission = (at: Date, regenAt: Date) =>
-  Math.round((at.getTime() - regenAt.getTime()) / 1000);
+afterEach(() => vi.useRealTimers());
 
-describe("hospitalRecoveryAt", () => {
-  it("depends only on when the stay began, not on when it is asked", () => {
-    // What a Lock Screen countdown needs: one timestamp that stays put. Recomputing it
-    // later in the same stay must land on the same instant, or the countdown finishes
-    // before the player does.
-    for (const elapsed of [0, HOSPITAL_BASE_HEAL_SECONDS / 4, HOSPITAL_BASE_HEAL_SECONDS / 2]) {
-      const { user, regenAt } = admitted(elapsed);
-      expect(offsetFromAdmission(hospitalRecoveryAt(user), regenAt)).toBe(
-        HOSPITAL_BASE_HEAL_SECONDS,
-      );
+describe("calcHealFinish", () => {
+  it.each([
+    [undefined, 1],
+    [-10, 1],
+    [0, 1],
+    [30, 0.7],
+    [50, 0.5],
+    [100, 0],
+    [150, 0],
+  ])("applies boost %s to the entire hospital stay", (boost, factor) => {
+    expect(calcHealFinish({ user, boost }).getTime()).toBe(
+      regenAt.getTime() + HOSPITAL_BASE_HEAL_SECONDS * factor * 1000,
+    );
+  });
+
+  it("keeps the same deadline before, at and after recovery", () => {
+    vi.useFakeTimers();
+    const deadline = regenAt.getTime() + HOSPITAL_BASE_HEAL_SECONDS * 500;
+    for (const now of [regenAt.getTime(), deadline - 1, deadline, deadline + 60_000]) {
+      vi.setSystemTime(now);
+      const finish = calcHealFinish({ user, boost: 50 }).getTime();
+      expect(finish).toBe(deadline);
+      expect(finish <= Date.now()).toBe(now >= deadline);
     }
   });
 
-  it("has nothing left to wait for once the stay is served", () => {
-    const { user } = admitted(HOSPITAL_BASE_HEAL_SECONDS + 60);
-    expect(hospitalRecoveryAt(user).getTime()).toBeLessThanOrEqual(Date.now() + 1000);
-  });
-
-  it("differs from the boosted estimate, which slides later as the stay goes on", () => {
-    // calcHealFinish scales the time *still* remaining, so the instant it names depends on
-    // when it was called. Fine for a screen that re-renders every second, wrong for a
-    // target handed to the OS once.
-    const boost = 50;
-    const early = admitted(0);
-    const late = admitted(HOSPITAL_BASE_HEAL_SECONDS / 2);
-    const earlyTarget = offsetFromAdmission(
-      calcHealFinish({ user: early.user, boost }),
-      early.regenAt,
+  it.each([-120_000, 120_000])("corrects a client clock offset of %s ms", (timeDiff) => {
+    const serverDeadline = calcHealFinish({ user, boost: 30 }).getTime();
+    expect(calcHealFinish({ user, boost: 30, timeDiff }).getTime()).toBe(
+      serverDeadline + timeDiff,
     );
-    const lateTarget = offsetFromAdmission(
-      calcHealFinish({ user: late.user, boost }),
-      late.regenAt,
-    );
-    expect(lateTarget).toBeGreaterThan(earlyTarget);
-    expect(earlyTarget).toBeLessThan(HOSPITAL_BASE_HEAL_SECONDS);
   });
 });

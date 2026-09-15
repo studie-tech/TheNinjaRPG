@@ -12,7 +12,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { hasRequiredRank } from "@/libs/train";
-import { secondsFromNow, secondsPassed } from "@/utils/time";
+import { secondsFromDate } from "@/utils/time";
 
 /**
  * Calculates the cost of healing for a user.
@@ -28,51 +28,19 @@ export const calcHealCost = (user: UserData) => {
   return Math.ceil(cost);
 };
 
-/**
- * Calculates the number of seconds left until the user is fully healed.
- * @param user - The user data.
- * @param timeDiff - Optional. The time difference in milliseconds. Defaults to the current time.
- * @returns The number of seconds left until the user is fully healed.
- */
-const healSecondsLeft = (user: UserData, timeDiff?: number) => {
-  const seconds = secondsPassed(new Date(user.regenAt), timeDiff);
-  const healedIn = Math.max(HOSPITAL_BASE_HEAL_SECONDS - seconds, 0);
-  return healedIn;
-};
-
-/**
- * The fixed moment a hospital stay ends, for countdowns that are set once and left to run.
- *
- * Not `calcHealFinish`: that applies the village speed boost by scaling the time *still*
- * remaining, so the instant it returns depends on when it was called and slides later on
- * every recomputation — it only converges on this one. A screen that recalculates every
- * render is happy with that; a Lock Screen countdown or a home-screen widget is given a
- * single timestamp and would hit zero while the player was still admitted.
- *
- * This is also the moment the server itself stops charging for the heal, since
- * `finishAt <= now` in the heal endpoint can only be true once the unscaled time is up.
- */
-export const hospitalRecoveryAt = (user: UserData, timeDiff?: number) =>
-  secondsFromNow(healSecondsLeft(user, timeDiff));
-
-/**
- * Calculates the timestamp when a user will finish healing.
- * @param info - The healing information.
- * @param info.user - The user data.
- * @param info.timeDiff - The time difference in seconds (optional).
- * @param info.boost - The healing boost percentage (optional).
- * @returns The timestamp when the user will finish healing.
- */
+/** The recovery deadline, shifted to the client's clock when a time difference is supplied. */
 export const calcHealFinish = (info: {
   user: UserData;
   timeDiff?: number;
   boost?: number;
 }) => {
-  const { user, timeDiff, boost } = info;
-  const factor = (100 - Math.min(100, Math.max(0, boost ?? 0))) / 100;
-  const timeLeft = healSecondsLeft(user, timeDiff) * factor;
-  const healedAt = secondsFromNow(timeLeft);
-  return healedAt;
+  const { user, timeDiff = 0, boost = 0 } = info;
+  const factor = (100 - Math.min(100, Math.max(0, boost))) / 100;
+  // Apply the village bonus to the full stay so recomputing cannot move the deadline.
+  return secondsFromDate(
+    HOSPITAL_BASE_HEAL_SECONDS * factor + timeDiff / 1000,
+    new Date(user.regenAt),
+  );
 };
 
 // Minimal user type for calculating mednin things
