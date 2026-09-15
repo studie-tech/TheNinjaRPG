@@ -103,21 +103,26 @@ export const hospitalRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Query for fetching latest user & target
-      const [updatedUser, updatedTarget, relationships] = await Promise.all([
+      const isSelfHeal = input.userId === ctx.userId;
+      // Reuse the regenerated healer snapshot for self-heals so one request cannot race two
+      // passive-regen writes or duplicate the heavier user fetch and quest bootstrap work.
+      const [updatedUser, updatedTargetOrNull, relationships] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
           userIp: ctx.userIp,
           forceRegen: true,
         }),
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: input.userId,
-          forceRegen: true,
-        }),
+        isSelfHeal
+          ? null
+          : fetchUpdatedUser({
+              client: ctx.drizzle,
+              userId: input.userId,
+              forceRegen: true,
+            }),
         fetchAlliances(ctx.drizzle),
       ]);
+      const updatedTarget = updatedTargetOrNull ?? updatedUser;
       // Extract user & target to shorthand variables
       const { user: u } = updatedUser;
       const { user: t } = updatedTarget;
@@ -167,37 +172,63 @@ export const hospitalRouter = createTRPCRouter({
         { task: "medical_experience_gained", increment: expGain },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, u);
-      // Reduce chakra & give med exp
+      // A self-heal must charge chakra and restore pools in the same statement. Otherwise,
+      // the target update would overwrite the chakra deduction from a stale user snapshot.
       const uResult = await ctx.drizzle
         .update(userData)
         .set({
           medicalExperience: sql`${userData.medicalExperience} + ${expGain}`,
-          curChakra: sql`${userData.curChakra} - ${chakraCost}`,
+          curChakra:
+            isSelfHeal && pools.includes("Chakra")
+              ? sql`LEAST(${userData.curChakra} - ${chakraCost} + ${toHeal}, ${t.maxChakra})`
+              : sql`${userData.curChakra} - ${chakraCost}`,
+          ...(isSelfHeal && pools.includes("Health")
+            ? {
+                curHealth: sql`LEAST(${userData.curHealth} + ${toHeal}, ${t.maxHealth})`,
+              }
+            : {}),
+          ...(isSelfHeal && pools.includes("Stamina")
+            ? {
+                curStamina: sql`LEAST(${userData.curStamina} + ${toHeal}, ${t.maxStamina})`,
+              }
+            : {}),
+          ...(isSelfHeal ? { regenAt: new Date() } : {}),
           questData: questDataForDb,
         })
-        .where(and(eq(userData.userId, u.userId), gte(userData.curChakra, chakraCost)));
+        .where(
+          and(
+            eq(userData.userId, u.userId),
+            eq(userData.status, "AWAKE"),
+            gte(userData.curChakra, chakraCost),
+          ),
+        );
       // Potential student exp share
       const shareExp = Math.floor((expGain * SENSEI_GENIN_MED_EXP_SHARE_PERC) / 100);
       // If successful deduction
       if (uResult.rowsAffected === 1) {
+        const targetUpdate = isSelfHeal
+          ? Promise.resolve(uResult)
+          : ctx.drizzle
+              .update(userData)
+              .set({
+                ...(pools.includes("Health")
+                  ? { curHealth: sql`LEAST(${t.curHealth + toHeal}, ${t.maxHealth})` }
+                  : {}),
+                ...(pools.includes("Chakra")
+                  ? { curChakra: sql`LEAST(${t.curChakra + toHeal}, ${t.maxChakra})` }
+                  : {}),
+                ...(pools.includes("Stamina")
+                  ? {
+                      curStamina: sql`LEAST(${t.curStamina + toHeal}, ${t.maxStamina})`,
+                    }
+                  : {}),
+                regenAt: new Date(),
+                // Don't change status - users must check out manually at the hospital
+                // unless they pay to be healed at the hospital while hospitalized
+              })
+              .where(eq(userData.userId, t.userId));
         const [tResult] = await Promise.all([
-          ctx.drizzle
-            .update(userData)
-            .set({
-              ...(pools.includes("Health")
-                ? { curHealth: sql`LEAST(${t.curHealth + toHeal}, ${t.maxHealth})` }
-                : {}),
-              ...(pools.includes("Chakra")
-                ? { curChakra: sql`LEAST(${t.curChakra + toHeal}, ${t.maxChakra})` }
-                : {}),
-              ...(pools.includes("Stamina")
-                ? { curStamina: sql`LEAST(${t.curStamina + toHeal}, ${t.maxStamina})` }
-                : {}),
-              regenAt: new Date(),
-              // Don't change status - users must check out manually at the hospital
-              // unless they pay to be healed at the hospital while hospitalized
-            })
-            .where(eq(userData.userId, t.userId)),
+          targetUpdate,
           shareExp > 0
             ? ctx.drizzle
                 .update(userData)
