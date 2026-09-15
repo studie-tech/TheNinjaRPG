@@ -31,6 +31,7 @@ export const serverSchema = z.object({
   SENDGRID_API_KEY: z.string().optional(),
   CAPTCHA_SALT: z.string().optional(),
   CLERK_SECRET_KEY: z.string().optional(),
+  NATIVE_CLERK_PROXY_ENABLED: z.enum(["true", "false"]).optional(),
   AI_TEST_USER_BROKER_TOKEN: z.string().optional(),
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: z.string().optional(),
@@ -94,6 +95,9 @@ export const serverEnv = {
   SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
   CAPTCHA_SALT: process.env.CAPTCHA_SALT,
   CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
+  NATIVE_CLERK_PROXY_ENABLED: /** @type {"true" | "false" | undefined} */ (
+    process.env.NATIVE_CLERK_PROXY_ENABLED
+  ),
   AI_TEST_USER_BROKER_TOKEN: process.env.AI_TEST_USER_BROKER_TOKEN,
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: process.env.TOWER_DEFENSE_HMAC_SECRET,

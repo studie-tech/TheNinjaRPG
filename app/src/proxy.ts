@@ -1,9 +1,11 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { env } from "@/env/server.mjs";
 import {
   AB_PIXEL_LAYOUT_COOKIE,
   LEGACY_AB_LAYOUT_COOKIE,
 } from "@/libs/layoutPreference";
+import { isNativeUserAgent } from "@/libs/native/userAgent";
 
 const isMcpRoute = (pathname: string) =>
   pathname === "/api/mcp" ||
@@ -118,7 +120,20 @@ export default clerkMiddleware(
       return res;
     }
   },
-  { clockSkewInMs: 1000 * 60 * 30 },
+  (request) => {
+    const useNativeProxy =
+      env.NATIVE_CLERK_PROXY_ENABLED === "true" &&
+      isNativeUserAgent(request.headers.get("user-agent"));
+    return {
+      clockSkewInMs: 1000 * 60 * 30,
+      // Serve the SDK proxy before enabling native traffic, so Clerk can verify it.
+      // Session refresh must stay on the game origin inside the native WebView.
+      frontendApiProxy:
+        useNativeProxy || request.nextUrl.pathname.startsWith("/__clerk/")
+          ? { enabled: true }
+          : undefined,
+    };
+  },
 );
 
 export const config = {

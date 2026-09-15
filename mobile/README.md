@@ -21,6 +21,19 @@ restricted to the configured game origin; never add third-party or wildcard host
 The origin lives in one place: `TNR_ORIGIN`. `bun run sync` writes it into `www/config.js`
 and `capacitor.config.ts` reads it for the navigation allowlist.
 
+## Native session refresh
+
+Clerk session refresh must stay on the game origin; opening its CNAME host in the system
+browser cannot refresh the WebView's cookies. The Next.js Clerk middleware serves the SDK's
+Frontend API proxy at `/__clerk/`. Native clients use it when the server environment variable
+`NATIVE_CLERK_PROXY_ENABLED=true`; ordinary web clients retain their existing configuration.
+
+Deploy the proxy endpoint with the flag unset or false first. Configure and verify
+`https://www.theninja-rpg.com/__clerk` as the production Clerk domain's proxy URL, then enable
+the flag and redeploy. Keep the CNAME records in place. Verify email sign-in, an authenticated
+cold restart and browser OAuth return on both platforms before distributing a build.
+Proxying is supported only for production Clerk instances.
+
 ## Talking to the web app
 
 The web bundle does not depend on `@capacitor/*`. Plugins are installed here, where

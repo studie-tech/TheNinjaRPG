@@ -14,7 +14,7 @@ import InstallPrompt from "@/components/pwa/InstallPrompt";
 import PWAManager from "@/components/pwa/PWAManager";
 import { Toaster } from "@/components/ui/toaster";
 import { IMG_LOGO_FULL } from "@/drizzle/constants";
-import { env } from "@/env/client.mjs";
+import { env } from "@/env/server.mjs";
 import { InstallPromptProvider } from "@/hooks/useInstallPrompt";
 import AcceptWarning from "@/layout/AcceptWarning";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
@@ -74,6 +74,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           routerConfig={extractRouterConfig(ourFileRouter)}
         />
         <ClerkProvider
+          proxyUrl={
+            isNativeShell && env.NATIVE_CLERK_PROXY_ENABLED === "true"
+              ? "/__clerk"
+              : undefined
+          }
           telemetry={false}
           appearance={{
             variables: {
