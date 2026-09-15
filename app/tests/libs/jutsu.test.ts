@@ -24,6 +24,7 @@ import {
 } from "@/libs/jutsu";
 import type { UserWithRelations } from "@/routers/profile";
 import { calcJutsuEquipLimit } from "@/libs/train";
+import { getActivatedSkillIds, meetsRequiredSkill } from "@/libs/skillTree";
 
 const calcJutsuEquipLimitMock = calcJutsuEquipLimit as unknown as {
   mockReturnValue: (value: number) => void;
@@ -40,6 +41,7 @@ const uj = (over: {
   jutsuType?: string;
   effectTypes?: string[];
   residual?: boolean;
+  requiredSkillId?: string | null;
 }): UserJutsuWithRelations =>
   ({
     jutsuId: over.jutsuId,
@@ -48,6 +50,7 @@ const uj = (over: {
       hidden: over.hidden ?? false,
       usable: over.usable ?? true,
       jutsuType: over.jutsuType ?? "NORMAL",
+      requiredSkillId: over.requiredSkillId ?? null,
       effects: [
         ...(over.effectTypes ?? []).map((type) => ({ type })),
         ...(over.residual ? [{ residualModifier: 1 }] : []),
@@ -56,6 +59,19 @@ const uj = (over: {
   }) as unknown as UserJutsuWithRelations;
 
 const USER = { role: "USER" } as unknown as NonNullable<UserWithRelations>;
+
+describe("required skill eligibility", () => {
+  it("uses only activated skills and lets AI bypass the requirement", () => {
+    const active = getActivatedSkillIds([
+      { skillId: "active", activated: true },
+      { skillId: "inactive", activated: false },
+    ]);
+    expect(meetsRequiredSkill(null, active)).toBe(true);
+    expect(meetsRequiredSkill("active", active)).toBe(true);
+    expect(meetsRequiredSkill("inactive", active)).toBe(false);
+    expect(meetsRequiredSkill("inactive", active, true)).toBe(true);
+  });
+});
 
 describe("computeJutsuLoadoutAssignments", () => {
   beforeEach(() => {
@@ -119,6 +135,24 @@ describe("computeJutsuLoadoutAssignments", () => {
     });
     expect(out.equipIds).toEqual([]);
     expect(out.invalidJutsus[0]).toMatch(/requirements/);
+  });
+
+  it("keeps only jutsus whose required skill is active", () => {
+    const userjutsus = [
+      uj({ jutsuId: "active", requiredSkillId: "skill-a" }),
+      uj({ jutsuId: "inactive", requiredSkillId: "skill-b" }),
+      uj({ jutsuId: "open" }),
+    ];
+    const out = computeJutsuLoadoutAssignments({
+      jutsuIds: ["active", "inactive", "open"],
+      userjutsus,
+      user: USER,
+      activatedSkillIds: new Set(["skill-a"]),
+    });
+    expect(out.equipIds).toEqual(["active", "open"]);
+    expect(out.invalidJutsus).toEqual([
+      "inactive: required skill is not active",
+    ]);
   });
 
   it("enforces the total equip limit", () => {

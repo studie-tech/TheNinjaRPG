@@ -575,9 +575,37 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
     },
   });
 
-  // Update highest preferences
+  // Update highest preferences / public profile toggles
   const { mutateAsync: updatePreferences, isPending: isUpdatingPreferences } =
-    api.profile.updatePreferences.useMutation();
+    api.profile.updatePreferences.useMutation({
+      onSuccess: async (result, variables) => {
+        showMutationToast(result);
+        if (!result.success) {
+          await utils.profile.getUser.invalidate();
+          return;
+        }
+
+        const userUpdate: Partial<NonNullable<UserWithRelations>> = {};
+        if (variables.showPvpRecord !== undefined) {
+          userUpdate.showPvpRecord = variables.showPvpRecord;
+        }
+        if (variables.preferredStat !== undefined) {
+          userUpdate.preferredStat = variables.preferredStat;
+        }
+        if (variables.preferredGeneral1 !== undefined) {
+          userUpdate.preferredGeneral1 = variables.preferredGeneral1;
+        }
+        if (variables.preferredGeneral2 !== undefined) {
+          userUpdate.preferredGeneral2 = variables.preferredGeneral2;
+        }
+        if (Object.keys(userUpdate).length > 0) {
+          await updateUser(userUpdate);
+        }
+      },
+      onError: async () => {
+        await utils.profile.getUser.invalidate();
+      },
+    });
 
   // Update form when preferences are loaded
   useEffect(() => {
@@ -590,26 +618,24 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
     }
   }, [userData, form]);
 
-  // Form submission
-  const onSubmit = async (values: z.infer<typeof updateUserPreferencesSchema>) => {
+  const submitPreferences = async (
+    values: z.infer<typeof updateUserPreferencesSchema>,
+  ) => {
     if (preferencesRequestRef.current) return;
 
     preferencesRequestRef.current = true;
     try {
-      const result = await updatePreferences(values);
-      showMutationToast(result);
-      if (result.success) {
-        await updateUser({
-          preferredStat: values.preferredStat,
-          preferredGeneral1: values.preferredGeneral1,
-          preferredGeneral2: values.preferredGeneral2,
-        });
-      }
+      await updatePreferences(values);
     } catch {
       // Mutation errors are surfaced by the shared tRPC error handler. Keep the draft.
     } finally {
       preferencesRequestRef.current = false;
     }
+  };
+
+  // Form submission
+  const onSubmit = async (values: z.infer<typeof updateUserPreferencesSchema>) => {
+    await submitPreferences(values);
   };
 
   // Loaders
@@ -765,6 +791,37 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
               {isUpdatingBattleDescription && (
                 <span
                   id="battle-description-pending"
+                  role="status"
+                  aria-live="polite"
+                  className="inline-flex items-center gap-1 text-muted-foreground text-sm"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Saving
+                </span>
+              )}
+            </div>
+            <br />
+            <div
+              className="flex min-h-8 items-center gap-2"
+              aria-busy={isUpdatingPreferences}
+            >
+              <Switch
+                id="show-pvp-record"
+                checked={userData?.showPvpRecord}
+                disabled={isUpdatingPreferences}
+                aria-describedby={
+                  isUpdatingPreferences ? "show-pvp-record-pending" : undefined
+                }
+                onCheckedChange={(checked) => {
+                  void submitPreferences({ showPvpRecord: checked });
+                }}
+              />
+              <Label htmlFor="show-pvp-record">
+                Show PvP wins, losses, and win rate on public profile
+              </Label>
+              {isUpdatingPreferences && (
+                <span
+                  id="show-pvp-record-pending"
                   role="status"
                   aria-live="polite"
                   className="inline-flex items-center gap-1 text-muted-foreground text-sm"

@@ -44,6 +44,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     api.bloodline.getAllNames.useQuery(undefined);
   const { data: villages, isPending: l2 } = api.village.getAllNames.useQuery(undefined);
   const { data: jutsus, isPending: l4 } = api.jutsu.getAllNames.useQuery(undefined);
+  const { data: skills, isPending: l6 } = api.skillTree.getAllNames.useQuery(undefined);
 
   // Watch bloodlineId to filter bloodline items to only those for the selected bloodline
   const selectedBloodlineId = useWatch({
@@ -97,7 +98,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   };
 
   // Are we loading data
-  const loading = l1 || l2 || l3 || l4 || l5;
+  const loading = l1 || l2 || l3 || l4 || l5 || l6;
 
   // Watch for changes to avatar
   const imageUrl = useWatch({
@@ -125,6 +126,13 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     { id: "requiredLevel", type: "number" },
     { id: "jutsuType", type: "str_array", values: JutsuTypes },
     { id: "bloodlineId", type: "db_values", values: bloodlines, resetButton: true },
+    {
+      id: "requiredSkillId",
+      label: "Required Active Skill",
+      type: "db_values",
+      values: skills,
+      resetButton: true,
+    },
     {
       id: "requiredBloodlineItemId",
       label: "Required Bloodline Item",
