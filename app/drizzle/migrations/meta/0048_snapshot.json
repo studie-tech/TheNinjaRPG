@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "10a255f4-de58-46f7-8a0e-90b82b52c236",
-  "prevId": "564c721e-6432-408f-bcba-179d39f16ac6",
+  "id": "42d63526-070f-4eaf-8680-daef238112f9",
+  "prevId": "9853f6cf-af9b-49e6-afe6-f8ad815a0044",
   "tables": {
     "AbEvent": {
       "name": "AbEvent",
@@ -124,6 +124,99 @@
           "name": "AbEvent_id",
           "columns": [
             "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "AccountDeletion": {
+      "name": "AccountDeletion",
+      "columns": {
+        "appleRevokedSubject": {
+          "name": "appleRevokedSubject",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "phase": {
+          "name": "phase",
+          "type": "enum('QUEUED','IDENTITY_DELETED','COMPLETE')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'QUEUED'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        },
+        "nextAttemptAt": {
+          "name": "nextAttemptAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        },
+        "leaseId": {
+          "name": "leaseId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "leaseUntil": {
+          "name": "leaseUntil",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "AccountDeletion_pending_idx": {
+          "name": "AccountDeletion_pending_idx",
+          "columns": [
+            "phase",
+            "nextAttemptAt"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "AccountDeletion_userId": {
+          "name": "AccountDeletion_userId",
+          "columns": [
+            "userId"
           ]
         }
       },
@@ -4565,6 +4658,197 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
+    "GuideArticle": {
+      "name": "GuideArticle",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "subtitle": {
+          "name": "subtitle",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "excerpt": {
+          "name": "excerpt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "seoTitle": {
+          "name": "seoTitle",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "seoDescription": {
+          "name": "seoDescription",
+          "type": "varchar(180)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "enum('getting-started','combat','world','villages','bloodlines','farming','economy','ranks','reference')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "content": {
+          "name": "content",
+          "type": "mediumtext",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "image": {
+          "name": "image",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "faq": {
+          "name": "faq",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sortOrder": {
+          "name": "sortOrder",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "published": {
+          "name": "published",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "relatedBloodlineId": {
+          "name": "relatedBloodlineId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "relatedItemId": {
+          "name": "relatedItemId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "relatedJutsuId": {
+          "name": "relatedJutsuId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sourceUrl": {
+          "name": "sourceUrl",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reviewNotes": {
+          "name": "reviewNotes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updatedByUserId": {
+          "name": "updatedByUserId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        }
+      },
+      "indexes": {
+        "GuideArticle_slug_key": {
+          "name": "GuideArticle_slug_key",
+          "columns": [
+            "slug"
+          ],
+          "isUnique": true
+        },
+        "GuideArticle_category_published_idx": {
+          "name": "GuideArticle_category_published_idx",
+          "columns": [
+            "category",
+            "published"
+          ],
+          "isUnique": false
+        },
+        "GuideArticle_published_idx": {
+          "name": "GuideArticle_published_idx",
+          "columns": [
+            "published"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "GuideArticle_id": {
+          "name": "GuideArticle_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
     "HistoricalAvatar": {
       "name": "HistoricalAvatar",
       "columns": {
@@ -5455,6 +5739,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "requiredSkillId": {
+          "name": "requiredSkillId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "battleUsageType": {
           "name": "battleUsageType",
           "type": "enum('PVE','PVP','BOTH')",
@@ -5546,6 +5837,13 @@
           "name": "Item_bloodlineId_idx",
           "columns": [
             "bloodlineId"
+          ],
+          "isUnique": false
+        },
+        "Item_requiredSkillId_idx": {
+          "name": "Item_requiredSkillId_idx",
+          "columns": [
+            "requiredSkillId"
           ],
           "isUnique": false
         },
@@ -6088,6 +6386,13 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "requiredSkillId": {
+          "name": "requiredSkillId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -6145,6 +6450,13 @@
           "name": "Jutsu_requiredBloodlineItemId_idx",
           "columns": [
             "requiredBloodlineItemId"
+          ],
+          "isUnique": false
+        },
+        "Jutsu_requiredSkillId_idx": {
+          "name": "Jutsu_requiredSkillId_idx",
+          "columns": [
+            "requiredSkillId"
           ],
           "isUnique": false
         }
@@ -13129,6 +13441,14 @@
           "autoincrement": false,
           "default": true
         },
+        "showPvpRecord": {
+          "name": "showPvpRecord",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "pvpFights": {
           "name": "pvpFights",
           "type": "int",
@@ -13156,6 +13476,22 @@
         "pvpStreak": {
           "name": "pvpStreak",
           "type": "smallint unsigned",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pvpWins": {
+          "name": "pvpWins",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pvpLosses": {
+          "name": "pvpLosses",
+          "type": "int",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
