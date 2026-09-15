@@ -6,7 +6,7 @@ import { calcHealFinish } from "@/libs/hospital";
 const regenAt = new Date("2026-01-01T12:00:00.000Z");
 const user = { regenAt } as UserData;
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => vi.restoreAllMocks());
 
 describe("calcHealFinish", () => {
   it.each([
@@ -24,10 +24,10 @@ describe("calcHealFinish", () => {
   });
 
   it("keeps the same deadline before, at and after recovery", () => {
-    vi.useFakeTimers();
+    const clock = vi.spyOn(Date, "now");
     const deadline = regenAt.getTime() + HOSPITAL_BASE_HEAL_SECONDS * 500;
     for (const now of [regenAt.getTime(), deadline - 1, deadline, deadline + 60_000]) {
-      vi.setSystemTime(now);
+      clock.mockReturnValue(now);
       const finish = calcHealFinish({ user, boost: 50 }).getTime();
       expect(finish).toBe(deadline);
       expect(finish <= Date.now()).toBe(now >= deadline);
