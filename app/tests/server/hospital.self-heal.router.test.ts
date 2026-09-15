@@ -110,6 +110,24 @@ describeWithDatabase("hospital self-healing", () => {
     expect(saved?.medicalExperience).toBe(MEDNIN_REQUIRED_EXP.LEGENDARY + 45);
   });
 
+  it("allows only one of two concurrent self-heals from the same snapshot", async () => {
+    await insertLegendaryHealer();
+    const api = await callerFor(hospitalRouter, USER_ID);
+
+    const results = await Promise.all([
+      api.userHeal({ userId: USER_ID, healPercentage: 100 }),
+      api.userHeal({ userId: USER_ID, healPercentage: 100 }),
+    ]);
+
+    expect(results.filter((result) => result.success)).toHaveLength(1);
+    const database = await getTestDatabase();
+    const saved = await database.query.userData.findFirst({
+      where: eq(userData.userId, USER_ID),
+    });
+    expect(saved?.curChakra).toBe(7865);
+    expect(saved?.medicalExperience).toBe(MEDNIN_REQUIRED_EXP.LEGENDARY + 45);
+  });
+
   it("does not let a hospitalized user self-heal", async () => {
     await insertLegendaryHealer("HOSPITALIZED");
     const api = await callerFor(hospitalRouter, USER_ID);

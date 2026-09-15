@@ -3,6 +3,7 @@ import { and, asc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-or
 import { after } from "next/server";
 import { z } from "zod";
 import {
+  MEDNIN_EXP_CAP,
   MEDNIN_HEALABLE_STATES,
   MEDNIN_MIN_RANK,
   SENSEI_GENIN_MED_EXP_SHARE_PERC,
@@ -28,6 +29,7 @@ import {
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
+import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
 import { findRelationship } from "@/utils/alliance";
 import { secondsFromNow } from "@/utils/time";
@@ -172,12 +174,15 @@ export const hospitalRouter = createTRPCRouter({
         { task: "medical_experience_gained", increment: expGain },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, u);
-      // A self-heal must charge chakra and restore pools in the same statement. Otherwise,
-      // the target update would overwrite the chakra deduction from a stale user snapshot.
-      const uResult = await ctx.drizzle
-        .update(userData)
-        .set({
-          medicalExperience: sql`${userData.medicalExperience} + ${expGain}`,
+      // Claim the fetched user version while charging and awarding experience so concurrent heals
+      // cannot reuse one snapshot. Self-heals also restore pools in this same statement.
+      const healerClaim = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: u.userId,
+        updatedAt: u.updatedAt,
+        where: [eq(userData.status, "AWAKE"), gte(userData.curChakra, chakraCost)],
+        set: {
+          medicalExperience: sql`LEAST(${userData.medicalExperience} + ${expGain}, ${MEDNIN_EXP_CAP})`,
           curChakra:
             isSelfHeal && pools.includes("Chakra")
               ? sql`LEAST(${userData.curChakra} - ${chakraCost} + ${toHeal}, ${t.maxChakra})`
@@ -194,75 +199,66 @@ export const hospitalRouter = createTRPCRouter({
             : {}),
           ...(isSelfHeal ? { regenAt: new Date() } : {}),
           questData: questDataForDb,
-        })
-        .where(
-          and(
-            eq(userData.userId, u.userId),
-            eq(userData.status, "AWAKE"),
-            gte(userData.curChakra, chakraCost),
-          ),
-        );
+        },
+      });
+      if (!healerClaim.success) {
+        return errorResponse("Could not heal — your state changed, please try again");
+      }
       // Potential student exp share
       const shareExp = Math.floor((expGain * SENSEI_GENIN_MED_EXP_SHARE_PERC) / 100);
-      // If successful deduction
-      if (uResult.rowsAffected === 1) {
-        const targetUpdate = isSelfHeal
-          ? Promise.resolve(uResult)
-          : ctx.drizzle
+      const targetUpdate = isSelfHeal
+        ? Promise.resolve({ rowsAffected: 1 })
+        : ctx.drizzle
+            .update(userData)
+            .set({
+              ...(pools.includes("Health")
+                ? { curHealth: sql`LEAST(${t.curHealth + toHeal}, ${t.maxHealth})` }
+                : {}),
+              ...(pools.includes("Chakra")
+                ? { curChakra: sql`LEAST(${t.curChakra + toHeal}, ${t.maxChakra})` }
+                : {}),
+              ...(pools.includes("Stamina")
+                ? {
+                    curStamina: sql`LEAST(${t.curStamina + toHeal}, ${t.maxStamina})`,
+                  }
+                : {}),
+              regenAt: new Date(),
+              // Don't change status - users must check out manually at the hospital
+              // unless they pay to be healed at the hospital while hospitalized
+            })
+            .where(eq(userData.userId, t.userId));
+      const [tResult] = await Promise.all([
+        targetUpdate,
+        shareExp > 0
+          ? ctx.drizzle
               .update(userData)
               .set({
-                ...(pools.includes("Health")
-                  ? { curHealth: sql`LEAST(${t.curHealth + toHeal}, ${t.maxHealth})` }
-                  : {}),
-                ...(pools.includes("Chakra")
-                  ? { curChakra: sql`LEAST(${t.curChakra + toHeal}, ${t.maxChakra})` }
-                  : {}),
-                ...(pools.includes("Stamina")
-                  ? {
-                      curStamina: sql`LEAST(${t.curStamina + toHeal}, ${t.maxStamina})`,
-                    }
-                  : {}),
-                regenAt: new Date(),
-                // Don't change status - users must check out manually at the hospital
-                // unless they pay to be healed at the hospital while hospitalized
+                medicalExperience: sql`LEAST(${userData.medicalExperience} + ${shareExp}, ${MEDNIN_EXP_CAP})`,
               })
-              .where(eq(userData.userId, t.userId));
-        const [tResult] = await Promise.all([
-          targetUpdate,
-          shareExp > 0
-            ? ctx.drizzle
-                .update(userData)
-                .set({
-                  medicalExperience: sql`${userData.medicalExperience} + ${shareExp}`,
-                })
-                .where(
-                  and(
-                    eq(userData.senseiId, u.userId),
-                    lte(userData.level, SENSEI_MAX_STUDENT_LEVEL),
-                  ),
-                )
-            : null,
-        ]);
-        if (tResult.rowsAffected === 1) {
-          void pusher.trigger(t.userId, "event", {
-            type: "userMessage",
-            message: `You've been healed for ${toHeal} ${pools.join(", ")} by ${u.username}`,
-            route: "/profile",
-            routeText: "To profile",
-          });
-          void updateUserOnMap(pusher, t.sector, t);
-          return {
-            success: true,
-            message: `You have healed the target user${expGain > 0 ? ` and gained ${Math.round(expGain)} medical experience` : ""}`,
-            chakraCost,
-            expGain,
-          };
-        } else {
-          return { success: false, message: "Could not heal target" };
-        }
-      } else {
-        return { success: false, message: "Could not heal - failed to update healer" };
+              .where(
+                and(
+                  eq(userData.senseiId, u.userId),
+                  lte(userData.level, SENSEI_MAX_STUDENT_LEVEL),
+                ),
+              )
+          : null,
+      ]);
+      if (tResult.rowsAffected !== 1) {
+        return { success: false, message: "Could not heal target" };
       }
+      void pusher.trigger(t.userId, "event", {
+        type: "userMessage",
+        message: `You've been healed for ${toHeal} ${pools.join(", ")} by ${u.username}`,
+        route: "/profile",
+        routeText: "To profile",
+      });
+      void updateUserOnMap(pusher, t.sector, t);
+      return {
+        success: true,
+        message: `You have healed the target user${expGain > 0 ? ` and gained ${Math.round(expGain)} medical experience` : ""}`,
+        chakraCost,
+        expGain,
+      };
     }),
   // Pay to heal & get out of hospital
   npcHeal: protectedProcedure
