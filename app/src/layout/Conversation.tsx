@@ -615,15 +615,15 @@ const Conversation: React.FC<ConversationProps> = (props) => {
 
   // Reconnecting restores live events but does not replay messages missed offline.
   useEffect(() => {
-    if (!pusher || silence) return;
+    if (!pusher) return;
     const refreshConversation = () => {
-      void refetch();
+      if (new Date() <= quietTime) void refetch();
     };
     pusher.connection.bind("connected", refreshConversation);
     return () => {
       pusher.connection.unbind("connected", refreshConversation);
     };
-  }, [pusher, refetch, silence]);
+  }, [pusher, refetch, quietTime]);
 
   // Cleanup stale typing indicators every second
   useEffect(() => {
