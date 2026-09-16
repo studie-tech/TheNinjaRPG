@@ -7,7 +7,7 @@
  * the iOS requirement that the first play follow a user gesture.
  */
 
-import { addNativeListener, invokeSafe } from "./bridge";
+import { addNativeListener, getPlatform, invokeSafe } from "./bridge";
 
 const PLUGIN = "TNRAudioSession";
 
@@ -29,11 +29,27 @@ export const activate = async (): Promise<void> => {
  */
 export const deactivate = async (): Promise<void> => {
   await invokeSafe(PLUGIN, "deactivate");
+  if (getPlatform() === "ios" && "mediaSession" in navigator) {
+    navigator.mediaSession.metadata = null;
+  }
 };
 
 /** Populate the Lock Screen / Control Center transport. */
 export const setNowPlaying = async (info: NowPlaying): Promise<void> => {
   await invokeSafe(PLUGIN, "setNowPlaying", { ...info });
+  // WKWebView owns the HTML audio session and otherwise replaces the native title
+  // with the document title when the screen locks.
+  if (
+    getPlatform() === "ios" &&
+    "mediaSession" in navigator &&
+    typeof MediaMetadata !== "undefined"
+  ) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: info.title,
+      artist: info.artist,
+      artwork: info.artworkUrl ? [{ src: info.artworkUrl }] : [],
+    });
+  }
 };
 
 export type RemoteCommand = "play" | "pause" | "toggle";
