@@ -1283,8 +1283,13 @@ export const getNewTrackers = (
                     objective.collect_time_minutes
                   ) {
                     if ("timestamp" in status && status.timestamp) {
+                      // Compare unfloored seconds: the client countdown fires onFinish at the
+                      // exact deadline, so flooring here would reject a request that arrives
+                      // within the same second and leave the objective stuck until the next
+                      // tracker evaluation.
                       const minutesPassed =
-                        secondsPassed(new Date(status.timestamp)) / 60;
+                        secondsPassed(new Date(status.timestamp), undefined, false) /
+                        60;
                       if (minutesPassed < objective.collect_time_minutes) {
                         doCollect = false;
                       }

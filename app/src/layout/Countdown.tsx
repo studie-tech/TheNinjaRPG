@@ -32,12 +32,15 @@ const Countdown: React.FC<CountdownProps> = (props) => {
     hasCalledOnFinishRef.current = false;
   }
 
+  // "Done" is decided on the raw millisecond remainder. getDaysHoursMinutesSeconds floors
+  // each part, so summing them reads 0 while up to 999 ms still remain, which made onFinish
+  // fire before the server-side deadline it was waiting for (e.g. quest collect timers).
   const calcCountString = () => {
-    const secondsLeft = targetTime - Date.now();
-    const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(secondsLeft);
-    if (days + hours + minutes + seconds <= 0) {
+    const msLeft = targetTime - Date.now();
+    if (msLeft <= 0) {
       return "Done";
     }
+    const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(msLeft);
     return getTimeLeftStr(days, hours, minutes, seconds);
   };
 
@@ -45,10 +48,9 @@ const Countdown: React.FC<CountdownProps> = (props) => {
 
   useEffect(() => {
     const updateCountdown = () => {
-      const secondsLeft = targetTime - Date.now();
-      const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(secondsLeft);
+      const msLeft = targetTime - Date.now();
 
-      if (days + hours + minutes + seconds <= 0) {
+      if (msLeft <= 0) {
         setCountString("Done");
         // Call onFinish only once per countdown
         if (onFinishRef.current && !hasCalledOnFinishRef.current) {
@@ -57,6 +59,7 @@ const Countdown: React.FC<CountdownProps> = (props) => {
         }
         return true; // Signal countdown is done
       } else {
+        const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(msLeft);
         setCountString(getTimeLeftStr(days, hours, minutes, seconds));
         return false;
       }
