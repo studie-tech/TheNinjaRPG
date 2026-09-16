@@ -381,6 +381,13 @@ export const syncPurchaseIdentitySnapshot = async <T>(
     return await readSnapshot();
   });
 
+/** Refresh management changes without restoring or transferring store purchases. */
+export const refreshCustomerInfo = async (): Promise<CustomerInfo | undefined> =>
+  await syncPurchaseIdentitySnapshot(
+    async () => await invoke(PLUGIN, "invalidateCustomerInfoCache"),
+    getCustomerInfo,
+  );
+
 /** Force RevenueCat to reconcile the device store queue before restart recovery. */
 export const syncCustomerInfo = async (): Promise<CustomerInfo | undefined> =>
   await syncPurchaseIdentitySnapshot(

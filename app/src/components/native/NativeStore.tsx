@@ -13,7 +13,7 @@ import { useNativeShell } from "@/hooks/useNativeShell";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { LEGAL_LINKS } from "@/libs/legalLinks";
-import { platform, purchases } from "@/libs/native";
+import { appEvents, platform, purchases } from "@/libs/native";
 import {
   fetchFreshStoreObservation,
   finalStorePurchaseResult,
@@ -264,6 +264,59 @@ export default function NativeStore() {
     player && packageState?.userId === player.userId ? packageState : null;
   const packages = available?.packages ?? null;
   const activeSubscriptions = available?.activeSubscriptions ?? null;
+
+  const invalidateProfile = utils.profile.getUser.invalidate;
+  useEffect(() => {
+    const accountId = player?.userId;
+    if (!isNativeShell || !accountId || !available?.bound || busyProduct || isRestoring)
+      return;
+    let disposed = false;
+    let refreshing = false;
+    const unsubscribe = appEvents.onStateChange((isActive) => {
+      if (!isActive || refreshing) return;
+      refreshing = true;
+      // Store management runs outside the webview. Do not offer a plan using its
+      // pre-background entitlement snapshot while checking changes on return.
+      setPackageState((current) =>
+        current?.userId === accountId
+          ? { ...current, activeSubscriptions: null }
+          : current,
+      );
+      void purchases
+        .refreshCustomerInfo()
+        .then(async (info) => {
+          if (disposed) return;
+          if (!info) throw new Error("Could not refresh your store subscriptions");
+          setPackageState((current) =>
+            current?.userId === accountId
+              ? { ...current, activeSubscriptions: info.activeSubscriptions }
+              : current,
+          );
+          setBindingError(null);
+          await invalidateProfile();
+        })
+        .catch(() => {
+          if (!disposed)
+            setBindingError(
+              "Could not refresh your subscriptions. Reconnect to try again.",
+            );
+        })
+        .finally(() => {
+          refreshing = false;
+        });
+    });
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, [
+    isNativeShell,
+    available?.bound,
+    player?.userId,
+    busyProduct,
+    isRestoring,
+    invalidateProfile,
+  ]);
 
   // `recent` is the before-checkout watermark used to tell this attempt's receipt from a
   // terminal receipt already in the list. Refetch it for each signed-in account and keep

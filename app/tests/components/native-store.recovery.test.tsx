@@ -260,6 +260,80 @@ afterEach(() => {
 });
 
 describe("NativeStore purchase recovery", () => {
+  it("refreshes expired subscriptions on resume without restoring purchases", async () => {
+    let onState: ((state: { isActive: boolean }) => void) | undefined;
+    const remove = vi.fn().mockResolvedValue(undefined);
+    capacitorWindow.Capacitor!.Plugins.App = {
+      addListener: (_event: string, callback: typeof onState) => {
+        onState = callback;
+        return { remove };
+      },
+    };
+    const invalidate = vi.fn().mockResolvedValue(undefined);
+    capacitorWindow.Capacitor!.Plugins.Purchases!.invalidateCustomerInfoCache = invalidate;
+    const gold = STORE_FEDERAL_PRODUCTS.find((plan) => plan.federalStatus === "GOLD")!;
+    testMocks().getCustomerInfo.mockResolvedValue({
+      activeEntitlements: ["federal"], activeSubscriptions: [gold.productId],
+      originalAppUserId: "player-1", transactions: [],
+    });
+    const view = render(<NativeStore />);
+    await view.findByRole("button", { name: "Active" });
+    testMocks().getCustomerInfo.mockResolvedValue({
+      activeEntitlements: [], activeSubscriptions: [],
+      originalAppUserId: "player-1", transactions: [],
+    });
+    act(() => onState?.({ isActive: false }));
+    expect(invalidate).not.toHaveBeenCalled();
+    act(() => onState?.({ isActive: true }));
+    await waitFor(() => expect(view.queryByRole("button", { name: "Active" })).toBeNull());
+    await waitFor(() => expect(testMocks().invalidateProfile).toHaveBeenCalled());
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(testMocks().restore).not.toHaveBeenCalled();
+    view.unmount();
+    expect(remove).toHaveBeenCalled();
+  });
+
+  it("shows a recoverable error when resume verification fails", async () => {
+    let onState: ((state: { isActive: boolean }) => void) | undefined;
+    capacitorWindow.Capacitor!.Plugins.App = {
+      addListener: (_event: string, callback: typeof onState) => {
+        onState = callback;
+        return { remove: vi.fn().mockResolvedValue(undefined) };
+      },
+    };
+    capacitorWindow.Capacitor!.Plugins.Purchases!.invalidateCustomerInfoCache =
+      vi.fn().mockRejectedValue(new Error("Offline"));
+    const view = render(<NativeStore />);
+    await waitFor(() => expect(onState).toBeDefined());
+    act(() => onState?.({ isActive: true }));
+    await view.findByText("Could not refresh your subscriptions. Reconnect to try again.");
+    fireEvent.click(view.getByRole("button", { name: "Reconnect" }));
+    await waitFor(() => expect(view.queryByText("Could not refresh your subscriptions. Reconnect to try again.")).toBeNull());
+    expect(testMocks().restore).not.toHaveBeenCalled();
+  });
+
+  it("ignores a resume result after the signed-in account changes", async () => {
+    let onState: ((state: { isActive: boolean }) => void) | undefined;
+    capacitorWindow.Capacitor!.Plugins.App = {
+      addListener: (_event: string, callback: typeof onState) => {
+        onState = callback;
+        return { remove: vi.fn().mockResolvedValue(undefined) };
+      },
+    };
+    let finish: (() => void) | undefined;
+    capacitorWindow.Capacitor!.Plugins.Purchases!.invalidateCustomerInfoCache = () =>
+      new Promise<void>((resolve) => { finish = resolve; });
+    const view = render(<NativeStore />);
+    await waitFor(() => expect(onState).toBeDefined());
+    act(() => onState?.({ isActive: true }));
+    await waitFor(() => expect(finish).toBeDefined());
+    testUser().userId = undefined;
+    view.rerender(<NativeStore />);
+    await act(async () => { finish?.(); });
+    expect(testMocks().invalidateProfile).not.toHaveBeenCalled();
+    expect(view.queryByRole("button", { name: "Active" })).toBeNull();
+  });
+
   it("confirms a deferred downgrade without waiting for a new charge or removing current benefits", async () => {
     const silver = STORE_FEDERAL_PRODUCTS.find(
       (plan) => plan.federalStatus === "SILVER",
