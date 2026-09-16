@@ -424,6 +424,10 @@ describe("NativeStore purchase recovery", () => {
       }),
     ]);
 
+    expect(view.queryByText(/checkout was interrupted/)).toBeNull();
+    expect(view.queryByRole("button", { name: "Retry verification" })).toBeNull();
+    expect((view.getByRole("button", { name: "Processing" }) as HTMLButtonElement).disabled).toBe(true);
+
     await act(async () => finishPurchase?.({ status: "cancelled" }));
     await waitFor(() =>
       expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toEqual([]),
