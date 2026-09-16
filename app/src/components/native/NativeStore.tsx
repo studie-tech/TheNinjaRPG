@@ -109,6 +109,9 @@ export default function NativeStore() {
   const accountUnsettledAttempts = unsettledAttempts.filter(
     (entry) => entry.accountId === player?.userId,
   );
+  const recoveryAttempts = accountUnsettledAttempts.filter(
+    ({ attempt }) => attempt.productId !== busyProduct,
+  );
   const accountUnsettledAttemptCount = accountUnsettledAttempts.length;
   const reconciliationLockedProductIds = new Set(
     accountUnsettledAttempts.map((entry) => entry.attempt.productId),
@@ -976,63 +979,60 @@ export default function NativeStore() {
               </Button>
             </div>
           )}
-          {accountUnsettledAttempts.map(
-            ({ accountId, attempt }) =>
-              busyProduct !== attempt.productId && (
-                <div
-                  key={attempt.productId}
-                  className="rounded-lg border border-amber-500/50 p-3 text-[14px]"
-                >
-                  <p>
-                    {attempt.phase === "sheet-open"
-                      ? `${productLabel(attempt.productId)} checkout was interrupted. We’re checking whether it completed before you can purchase it again.`
-                      : `${productLabel(attempt.productId)} may have been charged. We’re checking the purchase before you can buy it again.`}
-                  </p>
-                  <Button
-                    className="mt-2"
-                    size="default"
-                    variant="outline"
-                    disabled={
-                      retryingProduct === attempt.productId ||
-                      recoveringAccountIds.has(accountId)
-                    }
-                    onClick={() => {
-                      setRetryingProduct(attempt.productId);
-                      // If startup's native history sync failed, a manual verification must
-                      // retry that sync too rather than consulting only the server receipt.
-                      setRecoveryRetry((retry) => retry + 1);
-                      void verifyPurchaseAttempt(accountId, attempt)
-                        .then((observation) => {
-                          showMutationToast({
-                            success: observation === "credited",
-                            message:
-                              observation === "credited"
-                                ? "Purchase verification finished."
-                                : observation === "rejected"
-                                  ? "The receipt was rejected and was not credited. Please contact support."
-                                  : "The server is still processing this purchase.",
-                          });
-                        })
-                        .catch((error: unknown) => {
-                          showMutationToast({
-                            success: false,
-                            message:
-                              error instanceof Error
-                                ? error.message
-                                : "Purchase verification failed. Please try again.",
-                          });
-                        })
-                        .finally(() => setRetryingProduct(null));
-                    }}
-                  >
-                    {retryingProduct === attempt.productId && (
-                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                    )}
-                    Retry verification
-                  </Button>
-                </div>
-              ),
-          )}
+          {recoveryAttempts.map(({ accountId, attempt }) => (
+            <div
+              key={attempt.productId}
+              className="rounded-lg border border-amber-500/50 p-3 text-[14px]"
+            >
+              <p>
+                {attempt.phase === "sheet-open"
+                  ? `${productLabel(attempt.productId)} checkout was interrupted. We’re checking whether it completed before you can purchase it again.`
+                  : `${productLabel(attempt.productId)} may have been charged. We’re checking the purchase before you can buy it again.`}
+              </p>
+              <Button
+                className="mt-2"
+                size="default"
+                variant="outline"
+                disabled={
+                  retryingProduct === attempt.productId ||
+                  recoveringAccountIds.has(accountId)
+                }
+                onClick={() => {
+                  setRetryingProduct(attempt.productId);
+                  // If startup's native history sync failed, a manual verification must
+                  // retry that sync too rather than consulting only the server receipt.
+                  setRecoveryRetry((retry) => retry + 1);
+                  void verifyPurchaseAttempt(accountId, attempt)
+                    .then((observation) => {
+                      showMutationToast({
+                        success: observation === "credited",
+                        message:
+                          observation === "credited"
+                            ? "Purchase verification finished."
+                            : observation === "rejected"
+                              ? "The receipt was rejected and was not credited. Please contact support."
+                              : "The server is still processing this purchase.",
+                      });
+                    })
+                    .catch((error: unknown) => {
+                      showMutationToast({
+                        success: false,
+                        message:
+                          error instanceof Error
+                            ? error.message
+                            : "Purchase verification failed. Please try again.",
+                      });
+                    })
+                    .finally(() => setRetryingProduct(null));
+                }}
+              >
+                {retryingProduct === attempt.productId && (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                )}
+                Retry verification
+              </Button>
+            </div>
+          ))}
           {rejectedRecent.length > 0 && (
             <div className="rounded-lg border border-red-500/50 p-3 text-[14px]">
               <p className="font-medium">Recent purchase not credited</p>
