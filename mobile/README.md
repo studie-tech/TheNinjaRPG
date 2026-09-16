@@ -23,16 +23,19 @@ and `capacitor.config.ts` reads it for the navigation allowlist.
 
 ## Native session refresh
 
-Clerk session refresh must stay on the game origin; opening its CNAME host in the system
-browser cannot refresh the WebView's cookies. The Next.js Clerk middleware serves the SDK's
-Frontend API proxy at `/__clerk/`. Native clients use it when the server environment variable
-`NATIVE_CLERK_PROXY_ENABLED=true`; ordinary web clients retain their existing configuration.
+Clerk session refresh must stay inside the WebView so it can update the session cookies.
+Production shells allow exactly `www.theninja-rpg.com` and the verified Clerk Frontend API
+host `clerk.theninja-rpg.com`. This also trusts Clerk-hosted pages with the native bridge;
+other subdomains remain outside the allowlist. Custom `TNR_ORIGIN` builds allow only their
+configured host.
 
-Deploy the proxy endpoint with the flag unset or false first. Configure and verify
-`https://www.theninja-rpg.com/__clerk` as the production Clerk domain's proxy URL, then enable
-the flag and redeploy. Keep the CNAME records in place. Verify email sign-in, an authenticated
-cold restart and browser OAuth return on both platforms before distributing a build.
-Proxying is supported only for production Clerk instances.
+Keep `NATIVE_CLERK_PROXY_ENABLED` unset or false with the existing Clerk domain configuration.
+The registered domain is `theninja-rpg.com`, so Clerk rejects a proxy on `www.theninja-rpg.com`:
+a production proxy must match the exact registered origin. The optional `/__clerk/` transport
+requires a matching, verified Clerk proxy registration before enabling the flag.
+
+After changing the allowlist, sync and rebuild both shells. Verify email sign-in, an
+authenticated cold restart after session expiry, and browser OAuth return on both platforms.
 
 ## Talking to the web app
 

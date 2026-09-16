@@ -31,10 +31,15 @@ const config: CapacitorConfig = {
     // Keeps that navigation inside the WebView — and the Capacitor bridge with it —
     // rather than handing the URL to the system browser.
     //
-    // Keep the native bridge confined to the one origin this binary was built to trust.
-    // Other first-party hosts still open in the system browser: a compromised or
-    // abandoned subdomain must never inherit access to native plugins.
-    allowNavigation: [ORIGIN_HOST],
+    // Production session refresh must visit Clerk inside the same WebView to update
+    // its cookies. Trust only the verified FAPI host, never a subdomain wildcard.
+    // Custom origins do not inherit trust in the production authentication host.
+    allowNavigation: [
+      ORIGIN_HOST,
+      ...(ORIGIN === "https://www.theninja-rpg.com"
+        ? ["clerk.theninja-rpg.com"]
+        : []),
+    ],
   },
 
   ios: {
