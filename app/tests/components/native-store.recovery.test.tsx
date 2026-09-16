@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import NativeStore from "@/components/native/NativeStore";
+import { STORE_FEDERAL_PRODUCTS } from "@/drizzle/constants";
 import { purchases as nativePurchases } from "@/libs/native";
 import type { StorePackage } from "@/libs/native/purchases";
 import { ensureDom } from "../setup-dom.mjs";
@@ -91,7 +92,7 @@ vi.mock("@/app/_trpc/client", () => ({
             reputation: [
               { productId: "tnr_reps_tier1", reputationPoints: 8, usd: 0.99 },
             ],
-            federal: [],
+            federal: STORE_FEDERAL_PRODUCTS,
           },
         }),
       },
@@ -112,8 +113,8 @@ vi.mock("@/utils/UserContext", () => ({
 
 vi.mock("@/env/client.mjs", () => ({
   env: {
-    NEXT_PUBLIC_REVENUECAT_IOS_KEY: "ios-key",
-    NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: "android-key",
+    NEXT_PUBLIC_REVENUECAT_IOS_KEY: "test-key",
+    NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: "test-key",
   },
 }));
 
@@ -259,6 +260,65 @@ afterEach(() => {
 });
 
 describe("NativeStore purchase recovery", () => {
+  it("confirms a deferred downgrade without waiting for a new charge or removing current benefits", async () => {
+    const silver = STORE_FEDERAL_PRODUCTS.find(
+      (plan) => plan.federalStatus === "SILVER",
+    )!;
+    const gold = STORE_FEDERAL_PRODUCTS.find(
+      (plan) => plan.federalStatus === "GOLD",
+    )!;
+    const plugins = capacitorWindow.Capacitor!.Plugins.Purchases!;
+    capacitorWindow.Capacitor!.getPlatform = () => "android";
+    plugins.getOfferings = async () => ({
+      current: {
+        availablePackages: [silver, gold].map((plan) => ({
+          ...storePackage,
+          identifier: plan.androidProductId,
+          product: { ...storePackage.product, identifier: plan.androidProductId },
+        })),
+      },
+    });
+    testMocks().getCustomerInfo.mockResolvedValue({
+      activeEntitlements: ["federal"],
+      activeSubscriptions: [gold.androidProductId],
+      originalAppUserId: "player-1",
+      transactions: [
+        { transactionId: "existing-gold", productId: gold.androidProductId },
+      ],
+    });
+    testMocks().purchase.mockResolvedValue({
+      status: "purchased",
+      transactionId: "existing-gold",
+    });
+    const view = render(<NativeStore />);
+    const subscribe = (await view.findByText("Silver"))
+      .parentElement!.parentElement!.querySelector("button")!;
+    await waitFor(() => expect(subscribe.disabled).toBe(false));
+    fireEvent.click(subscribe);
+    await waitFor(() =>
+      expect(testMocks().toast).toHaveBeenCalledWith({
+        success: true,
+        message:
+          "Plan change scheduled for your next renewal. Your current benefits remain active until then. Manage changes in Google Play.",
+      }),
+    );
+    expect(testMocks().purchase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storeProductChangeInfo: {
+          oldProductIdentifier: gold.androidProductId,
+          replacementMode: "DEFERRED",
+        },
+      }),
+    );
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toEqual([]);
+    expect(view.queryByText("Verifying")).toBeNull();
+    expect(
+      view.getByRole("button", { name: "Active" }).closest("div")!.textContent,
+    ).toContain("Gold");
+    expect(subscribe.disabled).toBe(false);
+    expect(testMocks().invalidateProfile).not.toHaveBeenCalled();
+  });
+
   it("persists the fresh baseline before awaiting the native purchase sheet", async () => {
     let finishPurchase: ((value: { status: "cancelled" }) => void) | undefined;
     testMocks().purchase.mockImplementation(

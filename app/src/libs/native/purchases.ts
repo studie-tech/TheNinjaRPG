@@ -252,6 +252,7 @@ export const productIdForPackage = (
 export type PurchaseOutcome =
   | { status: "purchased"; transactionId?: string }
   | { status: "cancelled" }
+  | { status: "scheduled" }
   | {
       status: "error";
       message: string;
@@ -305,6 +306,10 @@ const purchase = async (
       ...(storeProductChangeInfo ? { storeProductChangeInfo } : {}),
     });
     if (result.userCancelled) return { status: "cancelled" };
+    // Deferred replacements have no new charge or entitlement to reconcile yet.
+    if (storeProductChangeInfo?.replacementMode === "DEFERRED") {
+      return { status: "scheduled" };
+    }
     return {
       status: "purchased",
       transactionId: result.transaction?.transactionIdentifier,

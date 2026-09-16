@@ -634,11 +634,19 @@ export default function NativeStore() {
       });
       // Classify the result for the account which opened the sheet before suppressing stale
       // React work. A requested account switch cannot strand that account's sheet-open lock
-      // after the native queue returns a definite cancellation/pre-charge failure.
-      if (result.status === "cancelled") {
+      // after a definite cancellation, scheduled change or pre-charge failure.
+      if (result.status === "cancelled" || result.status === "scheduled") {
         updateUnsettledAttempts((current) =>
           releaseStorePurchaseLock(current, accountId, productId),
         );
+        if (result.status === "scheduled") {
+          assertCurrentCheckout();
+          showMutationToast({
+            success: true,
+            message:
+              "Plan change scheduled for your next renewal. Your current benefits remain active until then. Manage changes in Google Play.",
+          });
+        }
         return;
       }
       if (result.status === "error") {
