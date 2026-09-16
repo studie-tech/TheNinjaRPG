@@ -64,10 +64,16 @@ describe("native purchase settlement", () => {
     expect(finalStorePurchaseResult("pending")).toBe("timed-out");
     expect(locked).toEqual([{ accountId: "player", attempt: purchaseAttempt }]);
     expect(
-      releaseStorePurchaseLock(locked, "other-player", purchaseAttempt.productId),
+      releaseStorePurchaseLock(locked, "other-player", purchaseAttempt),
     ).toEqual(locked);
     expect(
-      releaseStorePurchaseLock(locked, "player", purchaseAttempt.productId),
+      releaseStorePurchaseLock(locked, "player", {
+        ...purchaseAttempt,
+        startedAt: "2026-08-01T00:00:00.000Z",
+      }),
+    ).toEqual(locked);
+    expect(
+      releaseStorePurchaseLock(locked, "player", purchaseAttempt),
     ).toEqual([]);
   });
 

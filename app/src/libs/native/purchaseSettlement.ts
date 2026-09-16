@@ -58,11 +58,13 @@ export const retainStorePurchaseLock = (
 export const releaseStorePurchaseLock = (
   locks: readonly StorePurchaseLock[],
   accountId: string,
-  productId: string,
+  attempt: StorePurchaseAttempt,
 ): StorePurchaseLock[] =>
   locks.filter(
     (current) =>
-      current.accountId !== accountId || current.attempt.productId !== productId,
+      current.accountId !== accountId ||
+      current.attempt.productId !== attempt.productId ||
+      current.attempt.startedAt !== attempt.startedAt,
   );
 
 export const finalStoreRestoreResult = (

@@ -406,7 +406,7 @@ export default function NativeStore() {
       const observation = storePurchaseReconciliation(matching, attempt);
       if (observation === "pending") return observation;
       updateUnsettledAttempts((current) =>
-        releaseStorePurchaseLock(current, accountId, attempt.productId),
+        releaseStorePurchaseLock(current, accountId, attempt),
       );
       await Promise.all([refetchRecent(), utils.profile.getUser.invalidate()]);
       return observation;
@@ -637,7 +637,7 @@ export default function NativeStore() {
       // after a definite cancellation, scheduled change or pre-charge failure.
       if (result.status === "cancelled" || result.status === "scheduled") {
         updateUnsettledAttempts((current) =>
-          releaseStorePurchaseLock(current, accountId, productId),
+          releaseStorePurchaseLock(current, accountId, attempt),
         );
         if (result.status === "scheduled") {
           assertCurrentCheckout();
@@ -659,7 +659,7 @@ export default function NativeStore() {
           );
         } else {
           updateUnsettledAttempts((current) =>
-            releaseStorePurchaseLock(current, accountId, productId),
+            releaseStorePurchaseLock(current, accountId, attempt),
           );
         }
         assertCurrentCheckout();
@@ -709,7 +709,7 @@ export default function NativeStore() {
       assertCurrentCheckout();
       if (settlement.status !== "timed-out") {
         updateUnsettledAttempts((current) =>
-          releaseStorePurchaseLock(current, accountId, chargedAttempt.productId),
+          releaseStorePurchaseLock(current, accountId, chargedAttempt),
         );
       }
       if (settlement.status === "rejected") {
