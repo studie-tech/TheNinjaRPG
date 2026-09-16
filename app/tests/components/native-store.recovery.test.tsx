@@ -278,6 +278,7 @@ describe("NativeStore purchase recovery", () => {
     });
     const view = render(<NativeStore />);
     await view.findByRole("button", { name: "Active" });
+    await waitFor(() => expect(onState).toBeDefined());
     testMocks().getCustomerInfo.mockResolvedValue({
       activeEntitlements: [], activeSubscriptions: [],
       originalAppUserId: "player-1", transactions: [],
