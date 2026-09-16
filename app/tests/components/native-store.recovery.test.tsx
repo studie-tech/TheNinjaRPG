@@ -327,6 +327,9 @@ describe("NativeStore purchase recovery", () => {
     await waitFor(() => expect(onState).toBeDefined());
     act(() => onState?.({ isActive: true }));
     await waitFor(() => expect(finish).toBeDefined());
+    expect((view.getByRole("button", { name: "Buy" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((view.getByRole("button", { name: "Restore purchases" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(view.getByRole("status").textContent).toBe("Checking subscription changes…");
     testUser().userId = undefined;
     view.rerender(<NativeStore />);
     await act(async () => { finish?.(); });

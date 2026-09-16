@@ -75,6 +75,7 @@ export default function NativeStore() {
   const [attemptsHydrated, setAttemptsHydrated] = useState(false);
   const [retryingProduct, setRetryingProduct] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isRefreshingSubscriptions, setIsRefreshingSubscriptions] = useState(false);
   const [recentBaselineError, setRecentBaselineError] = useState<string | null>(null);
   const recoveredAccounts = useRef(new Set<string>());
   const recoveringAccounts = useRef(new Set<string>());
@@ -275,6 +276,7 @@ export default function NativeStore() {
     const unsubscribe = appEvents.onStateChange((isActive) => {
       if (!isActive || refreshing) return;
       refreshing = true;
+      setIsRefreshingSubscriptions(true);
       // Store management runs outside the webview. Do not offer a plan using its
       // pre-background entitlement snapshot while checking changes on return.
       setPackageState((current) =>
@@ -303,10 +305,12 @@ export default function NativeStore() {
         })
         .finally(() => {
           refreshing = false;
+          if (!disposed) setIsRefreshingSubscriptions(false);
         });
     });
     return () => {
       disposed = true;
+      setIsRefreshingSubscriptions(false);
       unsubscribe();
     };
   }, [
@@ -951,6 +955,11 @@ export default function NativeStore() {
               )}
             </div>
           )}
+          {isRefreshingSubscriptions && (
+            <p role="status" className="text-muted-foreground text-sm">
+              Checking subscription changes…
+            </p>
+          )}
           {bindingError && (
             <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 text-[14px]">
               <p>{bindingError}</p>
@@ -1060,6 +1069,7 @@ export default function NativeStore() {
                 <Button
                   size="default"
                   disabled={
+                    isRefreshingSubscriptions ||
                     busyProduct !== null ||
                     isPending ||
                     isReconciliationLocked ||
@@ -1118,6 +1128,7 @@ export default function NativeStore() {
                       size="default"
                       variant={isCurrent ? "outline" : "default"}
                       disabled={
+                        isRefreshingSubscriptions ||
                         busyProduct !== null ||
                         isPending ||
                         isReconciliationLocked ||
@@ -1178,7 +1189,7 @@ export default function NativeStore() {
               variant="outline"
               size="default"
               className="mt-2"
-              disabled={isRestoring || !available?.bound}
+              disabled={isRefreshingSubscriptions || isRestoring || !available?.bound}
               onClick={() => void restore()}
             >
               {isRestoring ? (
