@@ -59,6 +59,12 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    // Deep links and notification taps navigate without clicking a sidebar item.
+    setLeftSideBarOpen(false);
+    setRightSideBarOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
     if (variant === "pixel") {
       document.documentElement.classList.add("dark");
     } else {
