@@ -85,7 +85,7 @@ const Logbook: React.FC = () => {
  * <LogbookAchievements />
  * ```
  */
-const LogbookAchievements: React.FC = () => {
+export const LogbookAchievements: React.FC = () => {
   const { data: userData, achievementProgress } = useRequiredUserData();
   const [activeElement, setActiveElement] = useState<string>("");
 
@@ -215,7 +215,7 @@ export default Logbook;
  * Renders the active logbook component.
  * @returns The active logbook component.
  */
-const LogbookActive: React.FC = () => {
+export const LogbookActive: React.FC = () => {
   const { data: userData } = useRequiredUserData();
   const [activeElement, setActiveElement] = useState<string>("");
   const quests = userData?.userQuests?.filter(
@@ -265,7 +265,7 @@ const LogbookActive: React.FC = () => {
  * <LogbookBattles />
  * ```
  */
-const LogbookBattles: React.FC = () => {
+export const LogbookBattles: React.FC = () => {
   const { data: history, isPending } = api.combat.getBattleHistory.useQuery({
     secondsBack: 3600 * 3,
   });
@@ -310,7 +310,7 @@ const LogbookBattles: React.FC = () => {
  * <LogbookHistory />
  * ```
  */
-const LogbookHistory: React.FC = () => {
+export const LogbookHistory: React.FC = () => {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Queries

@@ -78,6 +78,7 @@ import {
   poll,
   quest,
   questHistory,
+  raidParticipation,
   recruitmentRewards,
   sageMode,
   staffApplication,
@@ -115,6 +116,10 @@ import {
   capUserStats,
   scaleUserStats,
 } from "@/libs/profile";
+import {
+  isUndiscoveredStory,
+  resolveDashboardAvailability,
+} from "@/libs/profileDashboard";
 import { getServerPusher } from "@/libs/pusher";
 import {
   controlShownQuestLocationInformation,
@@ -128,7 +133,7 @@ import {
 import { getRaidObjectiveData } from "@/libs/raids";
 import { createThumbnail } from "@/libs/replicate";
 import { callDiscordContent } from "@/libs/socials";
-import { getReducedGainsDays } from "@/libs/train";
+import { availableQuestLetterRanks, getReducedGainsDays } from "@/libs/train";
 import { fetchSquad, removeFromSquad } from "@/routers/anbu";
 import { fetchClan, removeFromClan } from "@/routers/clan";
 import { fetchKageReplacement } from "@/routers/kage";
@@ -148,6 +153,7 @@ import { scopedRead } from "@/server/requestScope";
 import { adjustSeichiSilverAtomically } from "@/server/utils/concurrency";
 import { getFarmCollectionCount } from "@/server/utils/farming";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
+import { fetchQuestDiscoverySummaryCandidates } from "@/server/utils/questDiscovery";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -185,6 +191,7 @@ import { getShrineBoost } from "@/utils/village";
 import { createStatSchema } from "@/validators/combat";
 import { mutateContentSchema } from "@/validators/comments";
 import { idSchema } from "@/validators/misc";
+import { profileDashboardSchema } from "@/validators/profileDashboard";
 import { attributes, colors, skin_colors, usernameSchema } from "@/validators/register";
 import {
   isReservedCustomTitle,
@@ -202,6 +209,169 @@ import {
 const pusher = getServerPusher();
 
 export const profileRouter = createTRPCRouter({
+  getDashboard: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Get compact profile dashboard discovery and reward summaries",
+      },
+    })
+    .output(profileDashboardSchema)
+    .query(async ({ ctx }) => {
+      const serverTime = new Date();
+      const [user, completedQuests, candidates, raidParticipations] = await Promise.all(
+        [
+          ctx.drizzle.query.userData.findFirst({
+            where: eq(userData.userId, ctx.userId),
+            with: {
+              village: {
+                columns: { name: true, sector: true },
+              },
+            },
+          }),
+          ctx.drizzle.query.questHistory.findMany({
+            where: and(
+              eq(questHistory.userId, ctx.userId),
+              eq(questHistory.completed, 1),
+            ),
+            columns: { id: true, questId: true, completed: true },
+          }),
+          fetchQuestDiscoverySummaryCandidates(ctx.drizzle, ctx.userId, {
+            questTypes: [
+              "event",
+              "mission",
+              "errand",
+              "crime",
+              "medical",
+              "pvp",
+              "war",
+              "story",
+              "battlepyramid",
+            ],
+          }),
+          ctx.drizzle.query.raidParticipation.findMany({
+            where: eq(raidParticipation.userId, ctx.userId),
+            columns: {
+              damageDealt: true,
+              rewardsClaimed: true,
+            },
+            with: {
+              quest: {
+                columns: { id: true, name: true },
+                with: {
+                  raidDamageThresholds: {
+                    columns: { id: true, damageRequired: true },
+                  },
+                },
+              },
+            },
+          }),
+        ],
+      );
+
+      if (!user) {
+        throw serverError("NOT_FOUND", "User not found. Please complete registration.");
+      }
+
+      const userForAvailability = { ...user, completedQuests };
+      const availableRanks = availableQuestLetterRanks(user.rank);
+      const isAwayFromVillage =
+        !user.isOutlaw &&
+        user.village?.sector !== undefined &&
+        user.sector !== user.village.sector;
+
+      const content = candidates.flatMap((candidate) => {
+        const availability = isAvailableUserQuests(
+          candidate,
+          userForAvailability,
+          true,
+        );
+        if (availability.message.includes("Quest is hidden")) return [];
+
+        const category =
+          candidate.questType === "event"
+            ? ("events" as const)
+            : candidate.questType === "story"
+              ? ("story" as const)
+              : candidate.questType === "battlepyramid"
+                ? ("battlePyramids" as const)
+                : ("missions" as const);
+        const destination =
+          category === "events"
+            ? "/adminbuilding"
+            : category === "story"
+              ? "/globalanbuhq"
+              : category === "battlePyramids"
+                ? "/battlearena"
+                : "/missionhall";
+        const location =
+          category === "events"
+            ? "Administration Building"
+            : category === "story"
+              ? "Global ANBU HQ"
+              : category === "battlePyramids"
+                ? "Battle Arena"
+                : user.isOutlaw
+                  ? "Crimes Board"
+                  : `${user.village?.name ?? "Village"} Mission Hall`;
+        const rankLocked =
+          ["event", "mission", "errand", "crime", "medical", "pvp", "war"].includes(
+            candidate.questType,
+          ) && !availableRanks.includes(candidate.questRank);
+        const requiresVillageTravel =
+          isAwayFromVillage && category !== "battlePyramids";
+
+        const resolvedAvailability = resolveDashboardAvailability({
+          isEligible: availability.check,
+          eligibilityReason: availability.message,
+          isRankEligible: !rankLocked,
+          questRank: candidate.questRank,
+          userStatus: user.status,
+          requiresVillageTravel,
+          location,
+        });
+        const undiscoveredStory = isUndiscoveredStory(category, availability.message);
+
+        return [
+          {
+            id: candidate.id,
+            name: undiscoveredStory ? "Undiscovered story" : candidate.name,
+            description: undiscoveredStory
+              ? "Continue your current story to reveal this chapter."
+              : candidate.description,
+            image: undiscoveredStory ? null : candidate.image,
+            category,
+            questType: candidate.questType,
+            rank: candidate.questRank,
+            location,
+            destination,
+            availability: resolvedAvailability.availability,
+            availabilityReason: resolvedAvailability.reason,
+            startsAt: candidate.startsAt,
+            endsAt: candidate.endsAt,
+          },
+        ];
+      });
+
+      const raidRewards = raidParticipations.flatMap((participation) => {
+        const claimableCount = participation.quest.raidDamageThresholds.filter(
+          (threshold) =>
+            participation.damageDealt >= threshold.damageRequired &&
+            !participation.rewardsClaimed.includes(threshold.id),
+        ).length;
+        if (claimableCount === 0) return [];
+        return [
+          {
+            raidId: participation.quest.id,
+            raidName: participation.quest.name,
+            claimableCount,
+            damageDealt: participation.damageDealt,
+          },
+        ];
+      });
+
+      return { serverTime, content, raidRewards };
+    }),
   getSidebarTimers: protectedProcedure.query(async ({ ctx }) => {
     const now = sql`NOW()`;
     const imbuedItem = alias(item, "imbuedItem");

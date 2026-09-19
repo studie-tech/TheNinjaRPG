@@ -45,7 +45,10 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
         await handleNextStepAsync();
       }
       if (data.success && userData) {
-        await utils.profile.getUser.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.profile.getDashboard.invalidate(),
+        ]);
         sendGTMEvent({
           event: "level_up",
           level: userData.level + 1,
