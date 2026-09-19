@@ -26,10 +26,12 @@ import { calcMedninRank } from "@/libs/hospital";
 import { calcLevelRequirements, showUserRank } from "@/libs/profile";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { getSageMasteryDisplayRank } from "@/libs/sageMode";
+import { isTutorialActive } from "@/libs/tutorial";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 const profileTabs = ["Dashboard", "Character", "Achievements", "History"] as const;
+const tutorialProfileTabs = ["Character", "Achievements", "History"] as const;
 type ProfileTab = (typeof profileTabs)[number];
 
 export default function Profile() {
@@ -37,6 +39,10 @@ export default function Profile() {
   const [tab, setTab] = useState<ProfileTab>("Dashboard");
 
   if (!userData) return <Loader explanation="Loading profile page..." />;
+
+  const tutorialActive = isTutorialActive(userData);
+  const activeTab = tutorialActive && tab === "Dashboard" ? "Character" : tab;
+  const visibleTabs = tutorialActive ? tutorialProfileTabs : profileTabs;
 
   return (
     <ContentBox
@@ -47,22 +53,22 @@ export default function Profile() {
       topRightContent={
         <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <NavTabs
-            current={tab}
-            options={profileTabs}
+            current={activeTab}
+            options={visibleTabs}
             setValue={setTab}
             fontSize="text-xs"
           />
         </div>
       }
     >
-      {tab === "Dashboard" && <ProfileDashboard />}
-      {tab === "Character" && <CharacterProfile />}
-      {tab === "Achievements" && (
+      {activeTab === "Dashboard" && <ProfileDashboard />}
+      {activeTab === "Character" && <CharacterProfile />}
+      {activeTab === "Achievements" && (
         <div className="p-3">
           <LogbookAchievements />
         </div>
       )}
-      {tab === "History" && <ProfileHistory />}
+      {activeTab === "History" && <ProfileHistory />}
     </ContentBox>
   );
 }
