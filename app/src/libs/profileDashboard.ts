@@ -54,6 +54,10 @@ export interface DashboardMissionDailyCounts {
   dailyPvpMissions: number;
 }
 
+/** Keep content the player can start here or after traveling to its location. */
+export const filterAccessibleDashboardContent = (content: DashboardContentSummary[]) =>
+  content.filter((entry) => entry.availability !== "locked");
+
 const availabilityPriority: Record<DashboardAvailability, number> = {
   available: 0,
   travel: 1,
@@ -107,16 +111,9 @@ export const resolveDashboardAvailability = (input: {
   eligibilityReason: string;
   isRankEligible: boolean;
   questRank: string;
-  userStatus: string;
   requiresVillageTravel: boolean;
   location: string;
 }): { availability: DashboardAvailability; reason: string | null } => {
-  if (input.userStatus !== "AWAKE") {
-    return {
-      availability: "locked",
-      reason: `Unavailable while ${input.userStatus.toLowerCase()}`,
-    };
-  }
   if (!input.isRankEligible) {
     return {
       availability: "locked",
@@ -137,6 +134,3 @@ export const resolveDashboardAvailability = (input: {
   }
   return { availability: "available", reason: null };
 };
-
-export const isUndiscoveredStory = (category: string, eligibilityReason: string) =>
-  category === "story" && eligibilityReason.includes("prerequisite quest");

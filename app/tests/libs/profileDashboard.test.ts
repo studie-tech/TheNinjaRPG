@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { condenseDashboardMissionContent } from "@/libs/profileDashboard";
+import {
+  condenseDashboardMissionContent,
+  filterAccessibleDashboardContent,
+} from "@/libs/profileDashboard";
 import type { DashboardContentSummary } from "@/validators/profileDashboard";
 
 const availableDailyCounts = {
@@ -101,5 +104,26 @@ describe("condenseDashboardMissionContent", () => {
     );
 
     expect(result).toEqual([]);
+  });
+});
+
+describe("filterAccessibleDashboardContent", () => {
+  it("keeps available and travel content but removes locked content", () => {
+    const available = createContent("mission", { availability: "available" });
+    const travel = createContent("story", {
+      id: "travel",
+      category: "story",
+      availability: "travel",
+    });
+    const locked = createContent("event", {
+      id: "locked",
+      category: "events",
+      availability: "locked",
+    });
+
+    expect(filterAccessibleDashboardContent([available, travel, locked])).toEqual([
+      available,
+      travel,
+    ]);
   });
 });

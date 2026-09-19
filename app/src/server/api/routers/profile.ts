@@ -118,7 +118,7 @@ import {
 } from "@/libs/profile";
 import {
   condenseDashboardMissionContent,
-  isUndiscoveredStory,
+  filterAccessibleDashboardContent,
   resolveDashboardAvailability,
 } from "@/libs/profileDashboard";
 import { getServerPusher } from "@/libs/pusher";
@@ -327,20 +327,15 @@ export const profileRouter = createTRPCRouter({
           eligibilityReason: availability.message,
           isRankEligible: !rankLocked,
           questRank: candidate.questRank,
-          userStatus: user.status,
           requiresVillageTravel,
           location,
         });
-        const undiscoveredStory = isUndiscoveredStory(category, availability.message);
-
         return [
           {
             id: candidate.id,
-            name: undiscoveredStory ? "Undiscovered story" : candidate.name,
-            description: undiscoveredStory
-              ? "Continue your current story to reveal this chapter."
-              : candidate.description,
-            image: undiscoveredStory ? null : candidate.image,
+            name: candidate.name,
+            description: candidate.description,
+            image: candidate.image,
             category,
             questType: candidate.questType,
             rank: candidate.questRank,
@@ -373,12 +368,15 @@ export const profileRouter = createTRPCRouter({
 
       return {
         serverTime,
-        content: condenseDashboardMissionContent(content, {
-          dailyMissions: user.dailyMissions,
-          dailyErrands: user.dailyErrands,
-          dailyMedicalMissions: user.dailyMedicalMissions,
-          dailyPvpMissions: user.dailyPvpMissions,
-        }),
+        content: condenseDashboardMissionContent(
+          filterAccessibleDashboardContent(content),
+          {
+            dailyMissions: user.dailyMissions,
+            dailyErrands: user.dailyErrands,
+            dailyMedicalMissions: user.dailyMedicalMissions,
+            dailyPvpMissions: user.dailyPvpMissions,
+          },
+        ),
         raidRewards,
       };
     }),
