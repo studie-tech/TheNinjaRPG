@@ -54,6 +54,7 @@ import { cn } from "@/libs/shadui";
 import { getMaxItemShopPurchaseQuantity, isItemAvailableInStore } from "@/libs/shop";
 import { showMutationToast } from "@/libs/toast";
 import { isTutorialItemBuyStep, isTutorialPageMatch } from "@/libs/tutorial";
+import { getVillageLoyaltyBonuses } from "@/libs/villageLoyalty";
 import type { UserWithRelations } from "@/routers/profile";
 import { useAwake } from "@/utils/routing";
 import { getStrucBoost } from "@/utils/village";
@@ -152,13 +153,19 @@ function shopItemDiscountFactor(
   item: Item,
   structureDiscountPerc: number,
   anbuDiscountPerc: number,
+  loyaltyDiscountPerc = 0,
 ) {
   const healDiscount = item.effects.some((e) => e.type === "heal")
     ? MEDNIN_HEAL_ITEM_DISCOUNT_PERC
     : 0;
   return Math.max(
     MIN_ITEM_SHOP_DISCOUNT_FACTOR,
-    (100 - structureDiscountPerc - anbuDiscountPerc - healDiscount) / 100,
+    (100 -
+      structureDiscountPerc -
+      anbuDiscountPerc -
+      healDiscount -
+      loyaltyDiscountPerc) /
+      100,
   );
 }
 
@@ -372,14 +379,18 @@ const Shop: React.FC<ShopProps> = (props) => {
   const hDiscount = item?.effects?.find((e) => e.type === "heal")
     ? MEDNIN_HEAL_ITEM_DISCOUNT_PERC
     : 0;
+  const loyaltyDiscount = getVillageLoyaltyBonuses(userData).shopDiscount;
   const selectedItemFactor = item
-    ? shopItemDiscountFactor(item, sDiscount, aDiscount)
+    ? shopItemDiscountFactor(item, sDiscount, aDiscount, loyaltyDiscount)
     : 1;
 
   const discounts = [
     ...(sDiscount > 0 ? [{ label: "village structures", value: sDiscount }] : []),
     ...(aDiscount > 0 ? [{ label: "ANBU membership", value: aDiscount }] : []),
     ...(hDiscount > 0 ? [{ label: "medic-nin item", value: hDiscount }] : []),
+    ...(loyaltyDiscount > 0
+      ? [{ label: "village loyalty", value: loyaltyDiscount }]
+      : []),
   ];
   const totalDiscount = discounts.reduce((acc, d) => acc + d.value, 0);
 
@@ -765,6 +776,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                           row,
                           sDiscount,
                           aDiscount,
+                          loyaltyDiscount,
                         );
                         const ryoDue =
                           row.cost > 0 ? Math.ceil(row.cost * rowFactor) : 0;

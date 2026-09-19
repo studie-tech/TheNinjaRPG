@@ -11,6 +11,7 @@ import { getGameSettingBoost } from "@/libs/gamesettings";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { energyPerSecond, trainEfficiency, trainingMultiplier } from "@/libs/train";
 import { calcIsInVillage } from "@/libs/travel";
+import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
 import { validateCaptcha } from "@/routers/misc";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
@@ -128,7 +129,11 @@ export const trainRouter = createTRPCRouter({
       const boost = getStrucBoost("trainBoostPerLvl", user.village?.structures) / 100;
       // Only apply clan boost for real clans (not outlaw factions/towns)
       const clanBoost = user?.isOutlaw ? 0 : (user?.clan?.trainingBoost ?? 0) / 100;
-      const factor = gameFactor * (1 + boost + clanBoost + shrineBoost) * warFactor;
+      const loyaltyFactor = percentageMultiplier(
+        getVillageLoyaltyBonuses(user).statGains,
+      );
+      const factor =
+        gameFactor * (1 + boost + clanBoost + shrineBoost) * warFactor * loyaltyFactor;
       const seconds = (Date.now() - user.trainingStartedAt.getTime()) / 1000;
       const minutes = seconds / 60;
       const energySpent = Math.min(

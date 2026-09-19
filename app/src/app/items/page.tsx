@@ -70,6 +70,7 @@ import {
 import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
+import { getVillageLoyaltyShopCost } from "@/libs/villageLoyalty";
 import type { UserWithRelations } from "@/routers/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { displayCostType } from "@/validators/item";
@@ -1669,6 +1670,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   onClose,
 }) => {
   const utils = api.useUtils();
+  const { data: userData } = useRequiredUserData();
   const [isOpen, setIsOpen] = useState(true);
   const variants = userItem.item.variants ?? [];
 
@@ -1767,6 +1769,10 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
           const isUnlocked = unlockedIds.has(v.id);
           const isActive = activeVariantId === v.id;
           const needsToken = v.costType === "VARIANT_TOKEN";
+          const purchaseCost =
+            v.costType === "VILLAGE_PRESTIGE" && userData
+              ? getVillageLoyaltyShopCost(v.cost, userData)
+              : v.cost;
 
           return (
             <div
@@ -1835,7 +1841,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
                   onClick={() => purchase.mutate({ variantId: v.id })}
                   disabled={purchase.isPending}
                 >
-                  {`Buy: ${v.cost.toLocaleString()} ${displayCostType(v.costType)}`}
+                  {`Buy: ${purchaseCost.toLocaleString()} ${displayCostType(v.costType)}`}
                 </Button>
               )}
             </div>
