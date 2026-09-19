@@ -2379,8 +2379,6 @@ export const IMG_LAYOUT_WELCOME_IMG =
   "https://tnr-storage-cdn.b-cdn.net/welcomeimage_compressed.webp";
 export const IMG_PIXEL_HERO_POSTER =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJW2NIKTvszvj71yaSYC0MDOmbko5q9JAGuLHf.jpg";
-export const IMG_PIXEL_HERO_POSTER_OPTIMIZED =
-  `${IMG_PIXEL_HERO_POSTER}?width=1280&height=720`;
 // "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqbkFzRdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn.webp";
 // export const IMG_LOGO_FULL =
 //   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8b0eqBkkp45TvAnoIBa0rtCf1lbyXYjVKQ2q.webp";

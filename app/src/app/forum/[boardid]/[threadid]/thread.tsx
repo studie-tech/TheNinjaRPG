@@ -16,7 +16,7 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Pagination from "@/layout/Pagination";
 import RichInput from "@/layout/RichInput";
-import { forumText } from "@/layout/seoTexts";
+import { forumThreadIntro } from "@/layout/seoTexts";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { useUserData } from "@/utils/UserContext";
@@ -197,12 +197,9 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
 
   return (
     <>
-      {!userData && (
-        <ContentBox
-          title="Public Forum"
-          defaultBackHref={thread ? `/forum/${thread.boardId}` : "/forum"}
-        >
-          {forumText}
+      {!userData && thread && (
+        <ContentBox title="Public Forum" defaultBackHref={`/forum/${thread.boardId}`}>
+          {forumThreadIntro(thread.title)}
         </ContentBox>
       )}
       {!thread && !isPendingComments && <NotFoundPage />}

@@ -1,0 +1,8 @@
+-- The travel guide's production row was overwritten in the editor down to a 55-character
+-- body under a different title, and 0047 unpublished it. Two routes still send visitors
+-- there: /manual/world redirects guests to it, and next.config 308s /manual/travel to it,
+-- so since 0047 both have dead-ended on a 404 that the sitemap also advertised.
+-- Restore the article from libs/guide/articles.ts as of this migration and republish it.
+-- Seeds insert once and never overwrite, so this is the only path that reaches the row.
+-- Travel and the World of Seichi (647 chars of content)
+UPDATE `GuideArticle` SET `title` = 'Travel and the World of Seichi', `subtitle` = 'Sectors, the globe and Wake Island', `excerpt` = 'Move hex by hex on a sector, or open the globe to travel between countries and villages.', `seoTitle` = 'Travel Guide', `seoDescription` = 'How travel works in TheNinja-RPG: sector hexes, the global map of Seichi, Wake Island and staying safe in the wild.', `category` = 'world', `content` = '<p>Seichi is a hex world. Local travel moves you tile by tile inside a sector. Global travel opens the globe so you can tap another sector — including other villages and <a href="/guide/wake-island">Wake Island</a>.</p><h2>Local sector</h2><p>Players, quest markers and patrols share the same sector view. Sleeping or sitting in your <a href="/home">home</a> keeps you off the PvP list. STUDENT and GENIN are already PvP-restricted; higher ranks should scout before training in the open.</p><h2>Global map</h2><p>Open Travel → Global to see countries and village markers. Quest markers on the globe are the same ones the academy tutorial uses.</p>', `faq` = NULL, `sortOrder` = 31, `published` = 1 WHERE `slug` = 'world';

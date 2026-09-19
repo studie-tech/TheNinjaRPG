@@ -4,7 +4,6 @@ import { Music } from "lucide-react";
 import type React from "react";
 import { useEffect } from "react";
 import ReactDOM from "react-dom";
-import { IMG_PIXEL_HERO_POSTER_OPTIMIZED } from "@/drizzle/constants";
 import { GlobalAudioProvider } from "@/layout/GameSettings";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 import { useUserData } from "@/utils/UserContext";
@@ -16,7 +15,6 @@ export interface LayoutProps {
 const LayoutCore4Landing: React.FC<LayoutProps> = ({ children }) => {
   ReactDOM.prefetchDNS("https://o4507797256601600.ingest.de.sentry.io");
   ReactDOM.prefetchDNS("https://consentcdn.cookiebot.com");
-  ReactDOM.preload(IMG_PIXEL_HERO_POSTER_OPTIMIZED, { as: "image" });
 
   const { data: userData } = useUserData();
 

@@ -1,129 +1,67 @@
 import Link from "next/link";
 import { DISCORD_INVITE_URL } from "@/drizzle/constants";
 
-export const forumText = (
-  <>
-    <p>
-      Register an account to also dive into the world of <strong>The Ninja RPG</strong>{" "}
-      on our forum. This is the place to connect with fellow players, share your
-      strategies, ask questions, and explore the rich lore of the ninja world. Whether
-      you&apos;re here to discuss game mechanics, brainstorm new tactics, or simply
-      enjoy the camaraderie of our passionate community, this thread is your gateway to
-      valuable insights and collaboration.
-    </p>
-    <p className="pt-2">
-      Have questions about missions, combat strategies, or character builds? Share them
-      here and get advice from experienced players. Looking to understand the
-      intricacies of ninja ranks, clan dynamics, or crafting systems? The threads found
-      on the forum is a treasure trove of tips and tricks that will help you level up
-      your gameplay and enhance your ninja journey.
-    </p>
-    <p className="pt-2">
-      Don&apos;t forget to check out the{" "}
-      <Link className="font-bold" href="/manual">
-        game manual
-      </Link>{" "}
-      for detailed guides and instructions on mastering every aspect of{" "}
-      <strong>The Ninja RPG</strong>. Stay connected with our vibrant{" "}
-      <Link className="font-bold" href={DISCORD_INVITE_URL}>
-        Discord community
-      </Link>{" "}
-      for real-time discussions, announcements, and exclusive events. For the latest
-      updates and contributions, visit our{" "}
-      <Link
-        className="font-bold"
-        href="https://github.com/studie-tech/TheNinjaRPG/issues"
-      >
-        GitHub repository
-      </Link>
-      , where you can explore the game&apos;s development and even participate in
-      shaping its future. And, of course, make sure to explore other threads in the{" "}
-      <Link className="font-bold" href="/forum">
-        forums
-      </Link>{" "}
-      to uncover even more tips, debates, and strategies.
-    </p>
-    <p className="pt-2">
-      This forum thread is part of the thriving community that makes{" "}
-      <strong>The Ninja RPG</strong> special. Whether you&apos;re a seasoned ninja or
-      just starting your journey, you&apos;ll find this thread to be a welcoming and
-      resourceful space. Share your ideas, learn from others, and contribute to the
-      growing knowledge base of our ninja world.
-    </p>
-    <p className="pt-2">
-      Ready to jump into the discussion? Join the conversation below and let&apos;s keep
-      building the ninja legacy together. Haven&apos;t started your adventure yet?{" "}
-      <Link className="font-bold" href="/login">
-        sign up today
-      </Link>{" "}
-      at <strong>theninja-rpg.com</strong> and become part of the most immersive ninja
-      RPG experience online!
-    </p>
-  </>
+/**
+ * Short, entity-specific intros for the pages a signed-out visitor lands on from search.
+ *
+ * These replaced two four-paragraph pitches that were rendered verbatim on every forum
+ * thread and every player profile. Identical copy was the majority of each page's body,
+ * and Search Console filed the lot as duplicates of one another -- Google's near-duplicate
+ * detection is weighted by the body, and a 1,900-character block repeated across 900
+ * threads outweighed the posts beneath it. Each intro below names the thing the page is
+ * about, says what a visitor can do here, and stops.
+ */
+
+export const forumThreadIntro = (title: string) => (
+  <p>
+    You are reading <strong>{title}</strong>, a discussion on the{" "}
+    <Link className="font-bold" href="/forum">
+      TheNinja-RPG community forums
+    </Link>
+    . Players use these boards to share builds, ask questions and follow announcements.{" "}
+    <Link className="font-bold" href="/signup">
+      Create a free account
+    </Link>{" "}
+    to reply, or start with the{" "}
+    <Link className="font-bold" href="/guide/getting-started">
+      getting-started guide
+    </Link>
+    .
+  </p>
 );
 
-export const publicUserText = (username: string) => {
-  return (
-    <>
-      Welcome to <b>{username}</b>&apos;s profile on The Ninja RPG, the ultimate
-      destination for immersive ninja role-playing experiences. This profile is your
-      window into {username}&apos;s in-game journey, showcasing their ninja stats, rank,
-      achievements, mission history, affiliations, etc. Whether you&apos;re a seasoned
-      player or a newcomer to the ninja world, this profile offers a unique look at how{" "}
-      {username} has built their ninja legacy within our dynamic RPG community. <br />
-      <br />
-      In the ever-evolving ninja universe of The Ninja RPG, every profile tells a story.
-      Explore {username}&apos;s combat skills, elemental affinities, strategic
-      decisions, and progress through various ninja ranks. See how they&apos;ve tackled
-      challenging missions, contributed to their clan&apos;s strength, and navigated the
-      intricate politics of the ninja world. Profiles like this highlight the
-      creativity, strategy, and dedication that define our players&apos; adventures.{" "}
-      <br />
-      <br />
-      Are you ready to start or improve your own ninja journey? Equip yourself with the
-      tools you need! Dive into the comprehensive{" "}
-      <Link className="font-bold" href="/manual">
-        game manual
-      </Link>
-      , your guide to mastering everything from battle mechanics and skill trees to
-      mission strategies and crafting. Join the vibrant{" "}
-      <Link className="font-bold" href={DISCORD_INVITE_URL}>
-        Discord community
-      </Link>
-      , where ninjas from across the globe come together to discuss game updates, share
-      strategies, and make lifelong connections. Engage directly with developers and
-      fellow enthusiasts through our{" "}
-      <Link
-        className="font-bold"
-        href="https://github.com/studie-tech/TheNinjaRPG/issues"
-      >
-        GitHub repository
-      </Link>
-      , where you can view the latest updates, report issues, and even contribute to the
-      game&apos;s codebase. For detailed discussions, game tips, and debates about ninja
-      lore, visit the bustling{" "}
-      <Link className="font-bold" href="/forum">
-        forums
-      </Link>
-      , the heart of our online ninja community.
-      <br />
-      <br /> User profiles on The Ninja RPG are more than just stats; they&apos;re a
-      reflection of each player&apos;s unique path and impact on the game&apos;s rich,
-      immersive world. By exploring profiles like {username}&apos;s, you can learn about
-      different playstyles, gain inspiration for your own ninja character, and
-      strategize for your next adventure. Whether you&apos;re here to compete,
-      collaborate, or simply learn, every page offers a wealth of insights.
-      <br />
-      <br />
-      Don&apos;t forget that The Ninja RPG is always growing. New missions, challenges,
-      and features are constantly being added to enhance your gameplay experience. Make
-      sure to stay connected through our Discord server and forums to be the first to
-      hear about updates and special events. Ready to take your ninja skills to the next
-      level? Sign up today at theninja-rpg.com, start building your ninja legacy, and
-      become a legend in the ninja world.
-    </>
-  );
-};
+export const forumBoardIntro = (boardName: string) => (
+  <p>
+    The <strong>{boardName}</strong> board on the{" "}
+    <Link className="font-bold" href="/forum">
+      TheNinja-RPG community forums
+    </Link>
+    . Browse the threads below, or{" "}
+    <Link className="font-bold" href="/signup">
+      create a free account
+    </Link>{" "}
+    to post. Strategy questions are usually answered fastest on our{" "}
+    <Link className="font-bold" href={DISCORD_INVITE_URL}>
+      Discord
+    </Link>
+    .
+  </p>
+);
+
+export const publicUserIntro = (username: string) => (
+  <p>
+    <strong>{username}</strong>&apos;s public profile in TheNinja-RPG: rank, village,
+    bloodline, badges and battle record. Want a ninja of your own?{" "}
+    <Link className="font-bold" href="/signup">
+      Create a free account
+    </Link>{" "}
+    and read the{" "}
+    <Link className="font-bold" href="/guide/getting-started">
+      getting-started guide
+    </Link>
+    .
+  </p>
+);
 
 export const bloodlineText = (name: string) => {
   return (

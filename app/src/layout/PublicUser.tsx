@@ -103,7 +103,7 @@ import Post from "@/layout/Post";
 import ReportUser from "@/layout/Report";
 import RichInput from "@/layout/RichInput";
 import StatusBar from "@/layout/StatusBar";
-import { publicUserText } from "@/layout/seoTexts";
+import { publicUserIntro } from "@/layout/seoTexts";
 import Table from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { canAttackBracket, getExpBracket, showUserRank } from "@/libs/profile";
@@ -981,7 +981,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           defaultBackHref={defaultBackHref}
           initialBreak={initialBreak}
         >
-          {publicUserText(profile.username)}
+          {publicUserIntro(profile.username)}
         </ContentBox>
       )}
       {/* USER STATISTICS */}
@@ -2009,20 +2009,15 @@ const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
           initialBreak={initialBreak}
         >
           {/* With a seed this is the same copy the loaded render shows, so the panel needs
-            no placeholder at all and never resizes. Without one, publicUserText is four
-            fixed paragraphs whose rendered height is deterministic -- only the username
-            varies -- so it is reserved to measured size rather than approximated: at 24
-            rows the panel matches the loaded one to within a few pixels at desktop
-            width. */}
+            no placeholder at all and never resizes. Without one, the intro is a single
+            short paragraph whose height only varies with the username, so three rows
+            reserve it to within a line at desktop width. */}
           {seed ? (
-            publicUserText(seed.username)
+            publicUserIntro(seed.username)
           ) : (
             <div className="flex flex-col gap-2">
-              {Array.from({ length: 24 }, (_, i) => (
-                <Skeleton
-                  key={i}
-                  className={i % 7 === 6 ? "h-4 w-2/3" : "h-4 w-full"}
-                />
+              {Array.from({ length: 3 }, (_, i) => (
+                <Skeleton key={i} className={i === 2 ? "h-4 w-2/3" : "h-4 w-full"} />
               ))}
             </div>
           )}

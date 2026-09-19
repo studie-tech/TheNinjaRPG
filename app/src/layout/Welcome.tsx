@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type React from "react";
 import { Suspense, useEffect, useRef, useState } from "react";
+import ReactDOM from "react-dom";
 import { api } from "@/app/_trpc/client";
 import PixelPublicHeader from "@/components/layout/PixelPublicHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -18,7 +19,7 @@ import {
   IMG_FRONTPAGE_SCREENSHOT_VILLAGE,
   IMG_LAYOUT_WELCOME_IMG,
   IMG_LOGO_FULL,
-  IMG_PIXEL_HERO_POSTER_OPTIMIZED,
+  IMG_PIXEL_HERO_POSTER,
   TOTAL_PLAYERS_MILESTONE,
 } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
@@ -27,6 +28,7 @@ import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import { LEGAL_LINKS } from "@/libs/legalLinks";
 import { cn } from "@/libs/shadui";
+import { bunnyImageUrl } from "@/utils/image";
 import { useActiveLayout, useIsPixelLanding } from "@/utils/LayoutContext";
 import { getFirstOfNextMonth } from "@/utils/time";
 
@@ -533,6 +535,7 @@ const PixelWelcome: React.FC = () => {
         className="relative grid min-h-[100svh] place-items-center overflow-hidden px-4 pt-28 pb-20"
         data-pixel-snap="hero"
       >
+        <HeroPoster />
         <video
           ref={heroVideoRef}
           className="absolute inset-0 h-full w-full object-cover"
@@ -541,7 +544,6 @@ const PixelWelcome: React.FC = () => {
           autoPlay
           loop
           preload="metadata"
-          poster={IMG_PIXEL_HERO_POSTER_OPTIMIZED}
           src="/layouts/pixel/tnr-hero.mp4"
         />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,14,.68),rgba(8,13,22,.35)_35%,rgba(7,10,18,.9)),radial-gradient(ellipse_at_center,transparent_0_35%,rgba(4,7,13,.72)_85%)]" />
@@ -1119,3 +1121,57 @@ const textSEO = (
     </div>
   </div>
 );
+
+/**
+ * Renditions of the hero still, keyed by the viewport range that should receive each.
+ *
+ * The still used to be the <video>'s poster attribute, which is a single URL: every
+ * phone downloaded the 1280px JPEG (117 KB) for a 390px-wide slot, and nothing could
+ * preload it because the browser only learns of a poster when it reaches the <video>.
+ * Speed Insights put this element at a 4.15s LCP on mobile. As a <picture> the browser
+ * picks a rendition sized for the screen (the 480px one is 27 KB), and the preload hint
+ * lets it start before the parser reaches the body. The media queries are mutually
+ * exclusive and gapless for the same reasons the wallpaper preloads are.
+ */
+const HERO_POSTER_RENDITIONS = [
+  { media: "(max-width: 480px)", width: 480 },
+  { media: "(min-width: 480.02px) and (max-width: 768px)", width: 828 },
+  { media: "(min-width: 768.02px)", width: 1280 },
+] as const;
+
+/**
+ * The hero still, sitting behind the <video>. Without a poster attribute the video paints
+ * nothing until its first frame decodes, so the image shows through until then and the
+ * playing video covers it. Decorative: the heading beside it carries the meaning.
+ */
+const HeroPoster: React.FC = () => {
+  for (const { media, width } of HERO_POSTER_RENDITIONS) {
+    ReactDOM.preload(bunnyImageUrl(IMG_PIXEL_HERO_POSTER, width), {
+      as: "image",
+      media,
+      fetchPriority: "high",
+    });
+  }
+  return (
+    <picture>
+      {HERO_POSTER_RENDITIONS.slice(0, -1).map(({ media, width }) => (
+        <source
+          key={width}
+          media={media}
+          srcSet={bunnyImageUrl(IMG_PIXEL_HERO_POSTER, width)}
+        />
+      ))}
+      <img
+        className="absolute inset-0 h-full w-full object-cover"
+        src={bunnyImageUrl(IMG_PIXEL_HERO_POSTER, 1280)}
+        width={1280}
+        height={720}
+        alt=""
+        loading="eager"
+        fetchPriority="high"
+        decoding="async"
+        aria-hidden
+      />
+    </picture>
+  );
+};

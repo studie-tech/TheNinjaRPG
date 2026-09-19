@@ -33,7 +33,7 @@ import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import Post from "@/layout/Post";
 import RichInput from "@/layout/RichInput";
-import { forumText } from "@/layout/seoTexts";
+import { forumBoardIntro } from "@/layout/seoTexts";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
@@ -166,7 +166,7 @@ function Board({ boardId, initialThreads }: BoardProps) {
     <>
       {!userData && (
         <ContentBox title="Public Forum" defaultBackHref={"/forum/"}>
-          {forumText}
+          {forumBoardIntro(board.name)}
         </ContentBox>
       )}
       <ContentBox
