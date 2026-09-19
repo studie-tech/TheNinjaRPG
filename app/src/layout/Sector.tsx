@@ -2785,7 +2785,6 @@ const Sector: React.FC<SectorProps> = (props) => {
           users={sorrounding}
           userData={userData}
           timeDiff={timeDiff}
-          updateUser={updateUser}
           hex={originRef.current}
           allyAttack={allyAttack}
           setAllyAttack={setAllyAttack}
@@ -2855,7 +2854,6 @@ const Sector: React.FC<SectorProps> = (props) => {
             targetUser={healTargetUser}
             userData={userData}
             timeDiff={timeDiff}
-            updateUser={updateUser}
             side="top"
             open={!!healTargetUser}
             onOpenChange={(open) => {
@@ -2997,7 +2995,6 @@ interface SorroundingUsersProps {
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   userData: NonNullable<UserWithRelations>;
   timeDiff: number;
-  updateUser: (data: Partial<NonNullable<UserWithRelations>>) => Promise<void>;
   hex: TerrainHex;
   users: SectorUser[];
   allyAttack: boolean;
@@ -3011,7 +3008,7 @@ interface SorroundingUsersProps {
 
 const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
   // Destructure props
-  const { userData, timeDiff, updateUser, storedBracket, setStoredBracket } = props;
+  const { userData, timeDiff, storedBracket, setStoredBracket } = props;
 
   // Query
   const { data } = api.village.getAll.useQuery(undefined);
@@ -3120,7 +3117,6 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
                         targetUser={user}
                         userData={userData}
                         timeDiff={timeDiff}
-                        updateUser={updateUser}
                         side="top"
                       />
                     )}
