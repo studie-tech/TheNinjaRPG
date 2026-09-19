@@ -26,6 +26,7 @@ import {
   PVP_KILL_TOKEN_REWARD,
   PVP_KILL_TOKEN_REWARD_ANBU,
   PVP_KILL_TOKEN_REWARD_ASSASSIN,
+  PvpBattleTypes,
   SHARED_COOLDOWN_TAGS,
   STREAK_LEVEL_DIFF,
   WAR_HEALTH_ANBU_RECOVER,
@@ -59,6 +60,7 @@ import { spliceOrphanedSummons } from "@/libs/combat/summon";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
 import type { ObjectiveTrackerTaskInput as ObjectiveTrackerTask } from "@/libs/quest";
 import { calculateLpEloChange } from "@/libs/ranked_pvp";
+import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
 import { findWarsWithUser } from "@/libs/war";
 import { randomInt } from "@/utils/math";
 import { secondsPassed } from "@/utils/time";
@@ -1489,6 +1491,8 @@ export const calcBattleResult = (
   const users = battle.usersState;
   const user = users.find((u) => u.userId === userId);
   if (user && !user.leftBattle) {
+    const loyalty = getVillageLoyaltyBonuses(user);
+    const pvpRewardBoost = PvpBattleTypes.includes(battleType) ? loyalty.pvpRewards : 0;
     // If single village, then friends/targets are the opposing team. If MPvP, separate by village
     const villageIds = [
       ...new Set(users.filter((u) => !u.isSummon).map((u) => u.villageId)),
@@ -1587,6 +1591,7 @@ export const calcBattleResult = (
           }
         }
       }
+      experience *= percentageMultiplier(pvpRewardBoost);
 
       // Find users who did not leave battle yet
       const friendsUsers = friends.filter((u) => !u.isAi);
@@ -2226,6 +2231,22 @@ export const calcBattleResult = (
             });
           });
       }
+
+      const boostPositiveReward = (value: number, percent: number) =>
+        value > 0 ? value * percentageMultiplier(percent) : value;
+      moneyDelta = boostPositiveReward(moneyDelta, pvpRewardBoost);
+      deltaEarnedExperience = boostPositiveReward(
+        deltaEarnedExperience,
+        pvpRewardBoost,
+      );
+      deltaTokens = boostPositiveReward(
+        deltaTokens,
+        loyalty.villageRewards + pvpRewardBoost,
+      );
+      deltaPrestige = boostPositiveReward(
+        deltaPrestige,
+        loyalty.villageRewards + pvpRewardBoost,
+      );
 
       // Result object
       const result: CombatResult = {

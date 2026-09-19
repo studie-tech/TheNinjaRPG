@@ -23,6 +23,7 @@ import type {
 } from "@/drizzle/schema";
 import { getGameSettingBoost } from "@/libs/gamesettings";
 import { getReducedGainsDays } from "@/libs/train";
+import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { getStrucBoost } from "@/utils/village";
 import type { StatSchemaType } from "@/validators/combat";
@@ -333,6 +334,8 @@ export const calcActiveUserRegen = (
   if (reducedDays > 0) {
     regeneration *= 0.5;
   }
+
+  regeneration *= percentageMultiplier(getVillageLoyaltyBonuses(user).regen);
 
   // Increase by event
   const setting = getGameSettingBoost("regenGainMultiplier", settings);

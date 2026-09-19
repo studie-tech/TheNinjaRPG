@@ -1040,7 +1040,8 @@ export default function Travel() {
               >
                 Do you confirm that you wish to join {sectorVillage.name}? Please be
                 aware that if you join this village your training benefits & regen will
-                be reduced for {VILLAGE_REDUCED_GAINS_DAYS} days.
+                be reduced for {VILLAGE_REDUCED_GAINS_DAYS} days, and village loyalty
+                bonuses will begin from day 0.
               </Confirm>
             )}
             {canCreateHideout && (

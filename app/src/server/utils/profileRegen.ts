@@ -34,7 +34,7 @@ export const buildDerivedUserRegenUpdate = (props: {
   includeVillageState?: boolean;
 }) => {
   const { user, userIp, includeVillageState = false } = props;
-  // When true, villagePrestige / villageId / isOutlaw are written (see fetchUpdatedUser negative-prestige kick is separate).
+  // When true, villagePrestige / villageId / isOutlaw are written.
   const derivedUserUpdate: Record<string, unknown> = {
     curHealth: user.curHealth,
     curStamina: user.curStamina,
@@ -57,3 +57,15 @@ export const buildDerivedUserRegenUpdate = (props: {
 
   return derivedUserUpdate;
 };
+
+/** Complete village-state transition applied when negative prestige turns a user outlaw. */
+export const buildNegativePrestigeVillageUpdate = (
+  user: Pick<UserData, "villagePrestige">,
+  syndicateId: string,
+  joinedVillageAt: Date = new Date(),
+) => ({
+  villagePrestige: Math.abs(user.villagePrestige),
+  villageId: syndicateId,
+  isOutlaw: true,
+  joinedVillageAt,
+});
