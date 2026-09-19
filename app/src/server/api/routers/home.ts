@@ -288,9 +288,6 @@ export const homeRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       if (!userItemResult) return errorResponse("Item not found or is equipped");
       if (!userItemResult.item) return errorResponse("Item data not found");
-      if (user.homeType === "NONE") {
-        return errorResponse("You need a home to store items");
-      }
       if (userItemResult.equipped !== "NONE") {
         return errorResponse("You can't store/retrieve already equipped items");
       }
