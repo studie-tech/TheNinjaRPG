@@ -30,9 +30,10 @@ describe("landingCacheUrl", () => {
     ).toBe("?landing=default");
   });
 
-  it("drops referral and campaign parameters from the cache key", () => {
-    // They are read on the client from the browser URL, which a rewrite leaves alone;
-    // keeping them here would give every shared link its own cold cache entry.
+  it("leaves referral and campaign parameters out of the rewrite", () => {
+    // They are read on the client from the browser URL, which a rewrite leaves alone, so
+    // the rendered page has no use for them. Vercel merges the original query back into
+    // the destination on its own, so this decides what the function sees, not the key.
     const url = landingCacheUrl(
       request("https://www.theninja-rpg.com/?ref=xywerty&utm_source=reddit"),
       "default",

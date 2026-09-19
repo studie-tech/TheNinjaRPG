@@ -53,11 +53,12 @@ const PINNED_CRAWLER_VARIANT = "control";
  * Insights put its TTFB at 1.2-1.6s (3s+ far from the function's region) because every
  * visit ran the full render on a function, most of them cold.
  *
- * Rewriting those visits to /?landing=<variant> gives them a URL of their own. A
- * next.config header rule matched on this parameter marks that URL cacheable, and Vercel
- * keys its edge cache on the rewritten URL, so the first anonymous visitor in a variant
- * warms it for everyone after. Plain "/" keeps its private, no-store response, and only
- * signed-in visitors reach it, so a cached shell can never be served to a session.
+ * Rewriting those visits to /?landing=<variant> gives them a URL of their own. The
+ * rewrite response marks it cacheable, and Vercel keys its edge cache on the rewritten
+ * URL, so the first anonymous visitor in a variant warms it for everyone after. A value
+ * arriving in the request itself is overridden by the one set here, so nobody can pick
+ * the key a render is stored under. Plain "/" keeps its private, no-store response, and
+ * only signed-in visitors reach it, so a cached shell can never be served to a session.
  */
 const LANDING_CACHE_PARAM = "landing";
 
@@ -100,8 +101,10 @@ export const landingCacheUrl = (request: NextRequest, layout: EffectiveLayout) =
   const fontScale = toFontScale(request.cookies.get(FONT_SCALE_COOKIE)?.value);
   if (fontScale !== undefined && fontScale !== DEFAULT_FONT_SCALE) return null;
   // Referral and campaign parameters are read on the client from the browser URL, which
-  // a rewrite leaves untouched, so they are dropped here rather than fragmenting the
-  // cache into one entry per link.
+  // a rewrite leaves untouched, so nothing server-side needs them. Vercel merges the
+  // original query back into the rewrite destination regardless, so a referral link
+  // still gets a cache entry of its own; the plain URL, which is most visits and every
+  // crawl, shares one per variant.
   const url = request.nextUrl.clone();
   url.search = "";
   url.searchParams.set(LANDING_CACHE_PARAM, layout);
@@ -130,18 +133,20 @@ export default clerkMiddleware(
     // Crawlers are never signed in, so pin them to the control layout before the auth()
     // round-trip. No Set-Cookie is issued, which also keeps the response CDN-cacheable.
     if (isSearchCrawler(request.headers.get("user-agent"))) {
+      const cacheUrl = landingCacheUrl(request, "default");
       const requestHeaders = new Headers(request.headers);
       // Only the layout cookies are overridden. The user-agent match is broad enough to
       // catch a signed-in visitor whose browser string contains "bot", and replacing the
       // whole header would drop their Clerk session before auth runs.
-      // The preference and font-scale cookies go too: the root layout reads the
-      // preference ahead of the experiment cookie, so leaving it in place would render
-      // one layout and store it under the other's cache key.
+      // When the render will be cached, the preference and font-scale cookies go too:
+      // the root layout reads the preference ahead of the experiment cookie, so leaving
+      // it in place would render one layout and store it under the other's cache key.
+      // A render that stays private keeps them, so that signed-in visitor still gets
+      // the layout and font they chose.
       const pinned = new Set([
         LEGACY_AB_LAYOUT_COOKIE,
         AB_PIXEL_LAYOUT_COOKIE,
-        LAYOUT_PREFERENCE_COOKIE,
-        FONT_SCALE_COOKIE,
+        ...(cacheUrl ? [LAYOUT_PREFERENCE_COOKIE, FONT_SCALE_COOKIE] : []),
       ]);
       const preserved = request.cookies
         .getAll()
@@ -155,7 +160,6 @@ export default clerkMiddleware(
           `${AB_PIXEL_LAYOUT_COOKIE}=${PINNED_CRAWLER_VARIANT}`,
         ].join("; "),
       );
-      const cacheUrl = landingCacheUrl(request, "default");
       const res = NextResponse.rewrite(cacheUrl ?? request.nextUrl.clone(), {
         request: { headers: requestHeaders },
       });
