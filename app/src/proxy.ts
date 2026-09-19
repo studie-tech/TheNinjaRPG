@@ -1,9 +1,15 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { env } from "@/env/server.mjs";
 import {
   AB_PIXEL_LAYOUT_COOKIE,
+  cookieValueToLayout,
+  DEFAULT_FONT_SCALE,
+  type EffectiveLayout,
+  FONT_SCALE_COOKIE,
+  LAYOUT_PREFERENCE_COOKIE,
   LEGACY_AB_LAYOUT_COOKIE,
+  toFontScale,
 } from "@/libs/layoutPreference";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 
@@ -36,6 +42,50 @@ const appendCookieHeader = (
  * on a near-empty landing page and this choice should be revisited.
  */
 const PINNED_CRAWLER_VARIANT = "control";
+
+/**
+ * Query parameter that keys the signed-out homepage in the CDN cache.
+ *
+ * The root layout reads the session and the layout cookies on every request, so every
+ * response is dynamic and, as far as Next is concerned, private. For the signed-out
+ * homepage that is wasted work: the page is a client-hydrated marketing shell whose
+ * server render depends on nothing but which layout variant the visitor is in. Speed
+ * Insights put its TTFB at 1.2-1.6s (3s+ far from the function's region) because every
+ * visit ran the full render on a function, most of them cold.
+ *
+ * Rewriting those visits to /?landing=<variant> gives them a URL of their own. A
+ * next.config header rule matched on this parameter marks that URL cacheable, and Vercel
+ * keys its edge cache on the rewritten URL, so the first anonymous visitor in a variant
+ * warms it for everyone after. Plain "/" keeps its private, no-store response, and only
+ * signed-in visitors reach it, so a cached shell can never be served to a session.
+ */
+const LANDING_CACHE_PARAM = "landing";
+
+/**
+ * Ten minutes at the edge, then a day of serving stale while a fresh copy renders in the
+ * background. Set on the rewrite response rather than in next.config, whose header rules
+ * match the URL as it arrived and never see the rewritten query. Deploys reset the cache.
+ */
+const LANDING_CACHE_CONTROL = "public, s-maxage=600, stale-while-revalidate=86400";
+
+/**
+ * The URL to rewrite a signed-out homepage visit to, or null when the visit must not
+ * share a cached response. Native shells need a per-request Clerk proxy setting from the
+ * root layout, and a non-default font scale is inlined into the document root, so neither
+ * can be served a copy rendered for someone else.
+ */
+export const landingCacheUrl = (request: NextRequest, layout: EffectiveLayout) => {
+  if (isNativeUserAgent(request.headers.get("user-agent"))) return null;
+  const fontScale = toFontScale(request.cookies.get(FONT_SCALE_COOKIE)?.value);
+  if (fontScale !== undefined && fontScale !== DEFAULT_FONT_SCALE) return null;
+  // Referral and campaign parameters are read on the client from the browser URL, which
+  // a rewrite leaves untouched, so they are dropped here rather than fragmenting the
+  // cache into one entry per link.
+  const url = request.nextUrl.clone();
+  url.search = "";
+  url.searchParams.set(LANDING_CACHE_PARAM, layout);
+  return url;
+};
 
 const CRAWLER_USER_AGENT =
   /bot|crawler|spider|crawling|slurp|mediapartners|facebookexternalhit|bingpreview|whatsapp|telegram|embedly|quora link preview|pinterest|vkshare|w3c_validator|lighthouse|chrome-lighthouse/i;
@@ -78,9 +128,12 @@ export default clerkMiddleware(
           `${AB_PIXEL_LAYOUT_COOKIE}=${PINNED_CRAWLER_VARIANT}`,
         ].join("; "),
       );
-      return NextResponse.rewrite(request.nextUrl.clone(), {
+      const cacheUrl = landingCacheUrl(request, "default");
+      const res = NextResponse.rewrite(cacheUrl ?? request.nextUrl.clone(), {
         request: { headers: requestHeaders },
       });
+      if (cacheUrl) res.headers.set("Cache-Control", LANDING_CACHE_CONTROL);
+      return res;
     }
 
     const { userId } = await auth();
@@ -90,7 +143,14 @@ export default clerkMiddleware(
       const pixelCookie = request.cookies.get(AB_PIXEL_LAYOUT_COOKIE);
       const pixelVariant =
         pixelCookie?.value ?? (Math.random() < 0.5 ? "treatment" : "control");
-      const url = request.nextUrl.clone();
+      // Same precedence the root layout applies: an explicit preference beats the
+      // experiment assignment, and a fresh assignment is the one just drawn above.
+      const layout =
+        cookieValueToLayout(request.cookies.get(LAYOUT_PREFERENCE_COOKIE)?.value) ??
+        cookieValueToLayout(pixelVariant) ??
+        "default";
+      const cacheUrl = landingCacheUrl(request, layout);
+      const url = cacheUrl ?? request.nextUrl.clone();
       const requestHeaders = new Headers(request.headers);
       let cookieHeader = requestHeaders.get("cookie");
       if (!cookie) {
@@ -117,6 +177,7 @@ export default clerkMiddleware(
       if (!pixelCookie) {
         res.cookies.set(AB_PIXEL_LAYOUT_COOKIE, pixelVariant, { path: "/" });
       }
+      if (cacheUrl) res.headers.set("Cache-Control", LANDING_CACHE_CONTROL);
       return res;
     }
   },

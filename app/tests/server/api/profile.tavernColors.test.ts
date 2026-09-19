@@ -5,8 +5,10 @@ import { beforeEach, expect, it } from "vitest";
 import { actionLog, userData } from "@/drizzle/schema";
 import { profileRouter } from "@/routers/profile";
 import { insertUsers } from "../../setup/factories";
+import type { DrizzleClient } from "@/server/db";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -24,6 +26,92 @@ const createUser = async (patch: Record<string, unknown> = {}) => {
     } as never,
   ]);
 };
+
+/**
+ * Runs `race` while a locking read holds the user's row, releasing it only once every
+ * caller has issued its UPDATE. Each caller issues that UPDATE after its own read, so by
+ * the time all of them have, every read is complete and none of the writes has landed:
+ * the writes then apply one after another, and every one after the first sees a row that
+ * no longer matches what it read. That is the exact ordering a compare-and-swap exists to
+ * survive, and the one Promise.all alone does not guarantee -- on CI the first mutation
+ * regularly finished before the second had read, which made the second a legitimate
+ * follow-on purchase rather than a stale one.
+ *
+ * The moment of issue is observed on the client handed to `race`, by wrapping the
+ * builder `update()` returns so its `then` -- drizzle sends the statement when the
+ * builder is awaited -- counts down before delegating. That is a signal from inside the
+ * process, so it needs no polling and no information_schema privilege, and a slow
+ * database only changes how long the test takes. fetchUser is a plain SELECT, a
+ * consistent read under REPEATABLE READ, so the lock never blocks it.
+ *
+ * This is test scaffolding around a row that exists. It is not a pattern for production
+ * code, where a locking read is how this codebase has deadlocked before.
+ */
+const withRowHeld = async <T>(
+  userId: string,
+  writers: number,
+  race: (database: DrizzleClient) => Promise<T>,
+): Promise<T> => {
+  const database = await getTestDatabase();
+  let remaining = writers;
+  let allIssued!: () => void;
+  const issued = new Promise<void>((resolve) => {
+    allIssued = resolve;
+  });
+  const observing = new Proxy(database, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (property !== "update" || typeof value !== "function") return value;
+      return (...args: unknown[]) =>
+        countingBuilder(value.apply(target, args) as object, () => {
+          if (--remaining === 0) allIssued();
+        });
+    },
+  }) as DrizzleClient;
+
+  let lockAcquired!: () => void;
+  const locked = new Promise<void>((resolve) => {
+    lockAcquired = resolve;
+  });
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const holder = database.transaction(async (tx) => {
+    await tx
+      .select({ userId: userData.userId })
+      .from(userData)
+      .where(eq(userData.userId, userId))
+      .for("update");
+    lockAcquired();
+    await released;
+  });
+  await locked;
+  const pending = race(observing);
+  await issued;
+  release();
+  await holder;
+  return await pending;
+};
+
+/** Mirrors the chaining wrapper in setup/testDatabase, adding a hook on `then`. */
+const countingBuilder = <T extends object>(builder: T, onIssue: () => void): T =>
+  new Proxy(builder, {
+    get(target, property, receiver) {
+      if (property === "then") {
+        return (onFulfilled?: (value: unknown) => unknown, onRejected?: () => unknown) => {
+          onIssue();
+          return Promise.resolve(target as PromiseLike<unknown>).then(onFulfilled, onRejected);
+        };
+      }
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => {
+        const next = (value as (...a: unknown[]) => unknown).apply(target, args);
+        return next && typeof next === "object" ? countingBuilder(next as object, onIssue) : next;
+      };
+    },
+  });
 
 const readUser = async () => {
   const database = await getTestDatabase();
@@ -140,11 +228,16 @@ describeWithDatabase("profile tavern color purchases", () => {
 
   it("rejects a stale username color change after a concurrent update", async () => {
     await createUser({ reputationPoints: 20 });
-    const api = await caller("color-user");
-    const results = await Promise.all([
-      api.updateTavernColor({ target: "username", color: "NAVY" }),
-      api.updateTavernColor({ target: "username", color: "COBALT" }),
-    ]);
+    // The budget covers both purchases on purpose: the guard under test is the colour
+    // predicate in the update's WHERE, not the reputation one, and it only fires when the
+    // second write follows a read that the first write has since invalidated.
+    const results = await withRowHeld("color-user", 2, (database) => {
+      const api = callerForDatabase(profileRouter, "color-user", database);
+      return Promise.all([
+        api.updateTavernColor({ target: "username", color: "NAVY" }),
+        api.updateTavernColor({ target: "username", color: "COBALT" }),
+      ]);
+    });
     expect(results.filter((result) => result.success)).toHaveLength(1);
     expect(results.filter((result) => !result.success)).toHaveLength(1);
     expect(
