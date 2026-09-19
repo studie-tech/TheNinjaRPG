@@ -60,30 +60,23 @@ const daily = {
   content: { objectives: [], reward: {} },
 };
 
-/** One D-rank GENIN in one village, plus one player holding an open tier quest. */
+/** One D-rank GENIN in one village. */
 const seedHappyPath = () => {
   mocks.findQuests.mockResolvedValue([daily]);
   mocks.findVillages.mockResolvedValue([
     { id: "village-1", type: "VILLAGE", sector: 1, structures: [] },
   ]);
-  // 1st select: rank/village/level aggregate. 2nd: users holding an open tier quest.
-  mocks.select
-    .mockReturnValueOnce({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          groupBy: vi
-            .fn()
-            .mockResolvedValue([
-              { rank: "GENIN", villageId: "village-1", level: 10, count: 1 },
-            ]),
-        })),
+  mocks.select.mockReturnValueOnce({
+    from: vi.fn(() => ({
+      where: vi.fn(() => ({
+        groupBy: vi
+          .fn()
+          .mockResolvedValue([
+            { rank: "GENIN", villageId: "village-1", level: 10, count: 1 },
+          ]),
       })),
-    })
-    .mockReturnValueOnce({
-      from: vi.fn(() => ({
-        where: vi.fn().mockResolvedValue([{ userId: "user-1" }]),
-      })),
-    });
+    })),
+  });
   mocks.update.mockImplementation(() => ({
     set: (value: Record<string, unknown>) => {
       mocks.updateSets.push(value);
@@ -140,7 +133,7 @@ describe("daily-quest cron", () => {
     expect(mocks.updateSets[0]).toMatchObject({ completed: 0 });
   });
 
-  it("assigns one daily per rank/village/level combo and re-enables tier tutorials", async () => {
+  it("assigns one daily per rank/village/level combo without changing tutorial preferences", async () => {
     seedHappyPath();
 
     const response = await GET(new Request("https://example.com/api/daily-quest", { headers: { authorization: "Bearer test-cron" } }));
@@ -148,8 +141,7 @@ describe("daily-quest cron", () => {
     expect(await response.json()).toBe("OK");
     expect(mocks.upsertQuestEntries).toHaveBeenCalledOnce();
     expect(mocks.upsertQuestEntries.mock.calls[0]?.[1]).toMatchObject({ id: daily.id });
-    // The tier lookup moved into the opening Promise.all; its result must still drive this write.
-    expect(mocks.updateSets.some((set) => set.tutorialOn === true)).toBe(true);
+    expect(mocks.updateSets.some((set) => "tutorialOn" in set)).toBe(false);
     expect(mocks.rollback).not.toHaveBeenCalled();
   });
 

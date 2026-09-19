@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, lte, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { type UserRank, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { quest, questHistory, userData } from "@/drizzle/schema";
@@ -47,48 +47,33 @@ export async function GET(request: Request) {
   if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
   try {
-    // Reset all current dailies. The tier-quest lookup for the tutorial re-enable below rides
-    // along here: the daily reset only writes daily rows, so its result is the same either way
-    // and this saves a round-trip.
-    const [dailies, villages, userRankPerVillageLevel, , usersWithActiveTierQuests] =
-      await Promise.all([
-        drizzleDB.query.quest.findMany({
-          where: and(
-            eq(quest.questType, "daily"),
-            isNotNull(quest.content),
-            eq(quest.hidden, false),
-          ),
-        }),
-        drizzleDB.query.village.findMany({
-          with: { structures: true },
-        }),
-        drizzleDB
-          .select({
-            rank: userData.rank,
-            villageId: userData.villageId,
-            level: userData.level,
-            count: sql`count(${userData.userId})`.mapWith(Number),
-          })
-          .from(userData)
-          .where(eq(userData.isAi, false))
-          .groupBy(userData.rank, userData.villageId, userData.level),
-        drizzleDB
-          .update(questHistory)
-          .set({ completed: 0, endAt: new Date() })
-          .where(
-            and(eq(questHistory.questType, "daily"), eq(questHistory.completed, 0)),
-          ),
-        drizzleDB
-          .select({ userId: questHistory.userId })
-          .from(questHistory)
-          .where(
-            and(
-              eq(questHistory.questType, "tier"),
-              eq(questHistory.completed, 0),
-              isNull(questHistory.endAt),
-            ),
-          ),
-      ]);
+    // Reset all current dailies and load the independent assignment inputs together.
+    const [dailies, villages, userRankPerVillageLevel] = await Promise.all([
+      drizzleDB.query.quest.findMany({
+        where: and(
+          eq(quest.questType, "daily"),
+          isNotNull(quest.content),
+          eq(quest.hidden, false),
+        ),
+      }),
+      drizzleDB.query.village.findMany({
+        with: { structures: true },
+      }),
+      drizzleDB
+        .select({
+          rank: userData.rank,
+          villageId: userData.villageId,
+          level: userData.level,
+          count: sql`count(${userData.userId})`.mapWith(Number),
+        })
+        .from(userData)
+        .where(eq(userData.isAi, false))
+        .groupBy(userData.rank, userData.villageId, userData.level),
+      drizzleDB
+        .update(questHistory)
+        .set({ completed: 0, endAt: new Date() })
+        .where(and(eq(questHistory.questType, "daily"), eq(questHistory.completed, 0))),
+    ]);
 
     // Book-keeping to do upsert afterwards more efficiently
     const memory: {
@@ -155,23 +140,6 @@ export async function GET(request: Request) {
           ),
         );
       }
-    }
-
-    // Re-enable tutorials for users with active tier quests who have completed all tutorial steps
-    // This helps users who previously disabled tutorials get guidance on tier quests
-    if (usersWithActiveTierQuests.length > 0) {
-      const userIdsWithTierQuests = usersWithActiveTierQuests.map(
-        (u: (typeof usersWithActiveTierQuests)[number]) => u.userId,
-      );
-      await drizzleDB
-        .update(userData)
-        .set({ tutorialOn: true })
-        .where(
-          and(
-            inArray(userData.userId, userIdsWithTierQuests),
-            eq(userData.tutorialOn, false),
-          ),
-        );
     }
 
     return Response.json(`OK`);

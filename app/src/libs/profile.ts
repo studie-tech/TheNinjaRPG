@@ -43,6 +43,27 @@ export function calcLevelRequirements(level: number): number {
   return cost + prevCost;
 }
 
+/** Convert stored training stat keys into player-facing labels. */
+export const formatTrainingStatName = (stat: string) => {
+  const words = stat
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .toLowerCase();
+  const compact = words.replaceAll(" ", "");
+  const combatStat = compact.match(
+    /^(ninjutsu|taijutsu|genjutsu|bukijutsu)(offen[cs]e|defen[cs]e)$/,
+  );
+  if (combatStat) {
+    const discipline = capitalizeFirstLetter(combatStat[1] ?? "");
+    const direction = (combatStat[2] ?? "")
+      .replace("offence", "offense")
+      .replace("defence", "defense");
+    return `${discipline} ${direction}`;
+  }
+  return capitalizeFirstLetter(words);
+};
+
 /**
  * Calculate the level for a given experience
  * @param experience - the experience to calculate the level for

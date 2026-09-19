@@ -209,6 +209,7 @@ export type GenderChangeSchema = z.infer<typeof genderChangeSchema>;
 export const tavernColorChangeSchema = z.object({
   target: z.enum(["username", "title"]),
   color: z.enum(TavernColorPresets),
+  currentColor: z.enum(TavernColorPresets),
 });
 export type TavernColorChangeSchema = z.infer<typeof tavernColorChangeSchema>;
 

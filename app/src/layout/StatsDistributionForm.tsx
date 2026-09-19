@@ -226,14 +226,19 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
       name: "Genjutsu",
       image: IMG_TRAIN_GEN_OFF,
       description: "Master of illusions",
-      stats: ["willpower", "speed", "genjutsuOffence", "genjutsuDefence"] as const,
+      stats: [
+        "willpower",
+        "intelligence",
+        "genjutsuOffence",
+        "genjutsuDefence",
+      ] as const,
     },
     {
       id: "bukijutsu",
       name: "Bukijutsu",
       image: IMG_TRAIN_BUKI_OFF,
       description: "Weapons mastery",
-      stats: ["intelligence", "speed", "bukijutsuOffence", "bukijutsuDefence"] as const,
+      stats: ["strength", "speed", "bukijutsuOffence", "bukijutsuDefence"] as const,
     },
   ];
 

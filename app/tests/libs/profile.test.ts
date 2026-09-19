@@ -1,5 +1,19 @@
 import { expect, test } from "vitest";
-import { calcLevelRequirements, calcLevel, getExpBracket, canAttackBracket, passesBracketFilter } from "@/libs/profile";
+import {
+  calcLevelRequirements,
+  calcLevel,
+  getExpBracket,
+  canAttackBracket,
+  passesBracketFilter,
+  formatTrainingStatName,
+} from "@/libs/profile";
+
+test("formatTrainingStatName humanizes stored stat keys", () => {
+  expect(formatTrainingStatName("taijutsuDefence")).toBe("Taijutsu defense");
+  expect(formatTrainingStatName("taijutsudefense")).toBe("Taijutsu defense");
+  expect(formatTrainingStatName("ninjutsuOffence")).toBe("Ninjutsu offense");
+  expect(formatTrainingStatName("willpower")).toBe("Willpower");
+});
 
 test("Confirm that level<->experience calculations are consistent", () => {
   for (const level of [

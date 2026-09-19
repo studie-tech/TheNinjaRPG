@@ -23,10 +23,15 @@ import {
 } from "@/libs/activityStreak";
 import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
+import { usePublicPathname } from "@/utils/routing";
 import { getDateKey } from "@/utils/time";
 import { blockingPopupOpenAtom, useUserData } from "@/utils/UserContext";
 
 const ActivityStreakPopup: React.FC = () => {
+  const pathname = usePublicPathname();
+  // The profile dashboard owns this claim surface. Suppressing the global dialog on the root
+  // profile route prevents the same immediately-actionable reward appearing twice.
+  const dashboardOwnsStreak = pathname === "/profile";
   const currentDateKey = getDateKey(new Date());
   // Preserve the pre-overworld behavior: once opened, the popup stays mounted through reward
   // refetches so the user can see the claimed state until they explicitly close it.
@@ -60,7 +65,7 @@ const ActivityStreakPopup: React.FC = () => {
   // for a popup that cannot appear. Re-enables when those latches clear (tutorial
   // finished, date rollover) so an unclaimed reward is not dropped.
   const shouldFetchStreaks = shouldFetchActivityStreaksForPopup({
-    hasUser: !!userData,
+    hasUser: !!userData && !dashboardOwnsStreak,
     tutorialActive,
     dismissedToday,
     userClosed,
@@ -78,7 +83,9 @@ const ActivityStreakPopup: React.FC = () => {
     userStreaks?.streaks.some((s) => s.canClaimToday) ?? false;
   const needsCatchUp = userStreaks?.streaks.some((s) => s.needsCatchUp) ?? false;
   const hasRecurringToEnroll = !!userStreaks?.activeRecurringConfig;
-  const shouldShowPopup = hasUnclaimedRewards || needsCatchUp || hasRecurringToEnroll;
+  const shouldShowPopup =
+    !dashboardOwnsStreak &&
+    (hasUnclaimedRewards || needsCatchUp || hasRecurringToEnroll);
 
   useEffect(() => {
     setIsModalOpen((isOpen) =>
