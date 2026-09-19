@@ -115,6 +115,7 @@ import {
   getFarmCollectionCount,
   reduceActiveFarmPlotTimers,
 } from "@/server/utils/farming";
+import { fetchQuestDiscoveryCandidates } from "@/server/utils/questDiscovery";
 import { chunkArray, getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -262,37 +263,12 @@ export const questsRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        ctx.drizzle
-          .select({ ...getTableColumns(questHistory), ...getTableColumns(quest) })
-          .from(quest)
-          .leftJoin(
-            questHistory,
-            and(
-              eq(quest.id, questHistory.questId),
-              eq(questHistory.userId, ctx.userId),
-            ),
-          )
-          .where(
-            and(
-              inArray(quest.questType, ["event"]),
-              ...(input.villageId
-                ? [
-                    or(
-                      isNull(quest.requiredVillage),
-                      eq(
-                        quest.requiredVillage,
-                        input.villageId ?? VILLAGE_SYNDICATE_ID,
-                      ),
-                    ),
-                  ]
-                : []),
-              ...(input.rank ? [inArray(quest.questRank, input.rank)] : []),
-              // Always check level requirements for events
-              lte(quest.requiredLevel, input.level ?? 0),
-              gte(quest.maxLevel, input.level ?? 0),
-            ),
-          )
-          .orderBy(asc(quest.name)),
+        fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
+          questTypes: ["event"],
+          villageId: input.villageId ?? undefined,
+          level: input.level ?? 0,
+          ranks: input.rank,
+        }),
       ]);
       if (!user) return [];
       events.forEach((r) => {
@@ -312,43 +288,11 @@ export const questsRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        ctx.drizzle
-          .select({ ...getTableColumns(questHistory), ...getTableColumns(quest) })
-          .from(quest)
-          .leftJoin(
-            questHistory,
-            and(
-              eq(quest.id, questHistory.questId),
-              eq(questHistory.userId, ctx.userId),
-            ),
-          )
-          .where(
-            and(
-              inArray(quest.questType, [
-                "mission",
-                "errand",
-                "crime",
-                "medical",
-                "pvp",
-                "war",
-              ]),
-              ...(input.villageId
-                ? [
-                    or(
-                      isNull(quest.requiredVillage),
-                      eq(
-                        quest.requiredVillage,
-                        input.villageId ?? VILLAGE_SYNDICATE_ID,
-                      ),
-                    ),
-                  ]
-                : []),
-              // Always check level requirements for events
-              lte(quest.requiredLevel, input.level ?? 0),
-              gte(quest.maxLevel, input.level ?? 0),
-            ),
-          )
-          .orderBy(asc(quest.name)),
+        fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
+          questTypes: ["mission", "errand", "crime", "medical", "pvp", "war"],
+          villageId: input.villageId,
+          level: input.level,
+        }),
         fetchActiveWars(ctx.drizzle, input.villageId),
       ]);
       if (!user) return [];
@@ -377,24 +321,10 @@ export const questsRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        ctx.drizzle
-          .select({ ...getTableColumns(questHistory), ...getTableColumns(quest) })
-          .from(quest)
-          .leftJoin(
-            questHistory,
-            and(
-              eq(quest.id, questHistory.questId),
-              eq(questHistory.userId, ctx.userId),
-            ),
-          )
-          .where(
-            and(
-              eq(quest.questType, input.questType),
-              lte(quest.requiredLevel, input.level ?? 0),
-              gte(quest.maxLevel, input.level ?? 0),
-            ),
-          )
-          .orderBy(asc(quest.name)),
+        fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
+          questTypes: [input.questType],
+          level: input.level,
+        }),
       ]);
       if (!user) return [];
       quests.forEach((r) => {
