@@ -2625,7 +2625,7 @@ export const HomeTypes = [
 export type HomeType = (typeof HomeTypes)[number];
 
 export const HomeTypeDetails = {
-  NONE: { regen: 0, storage: 0, cost: 0, name: "No Home" },
+  NONE: { regen: 0, storage: 15, cost: 0, name: "Tent" },
   STUDIO_APARTMENT: { regen: 20, storage: 25, cost: 3000000, name: "Studio Apartment" },
   ONE_BED_APARTMENT: {
     regen: 50,

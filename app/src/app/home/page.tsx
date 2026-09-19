@@ -106,7 +106,7 @@ export default function HomePage() {
 
   const boost = 1 + getStrucBoost("sleepRegenPerLvl", sectorVillage?.structures);
 
-  const homeName = homeData ? HomeTypeDetails[homeData.homeType].name : "No Home";
+  const homeName = homeData ? HomeTypeDetails[homeData.homeType].name : "Tent";
   const homeRegen = homeData ? homeData.regen : 0;
   const homeStorage = homeData ? homeData.storage : 0;
   const filteredItems = userItems?.filter(
@@ -428,7 +428,7 @@ export default function HomePage() {
             subtitle={`Items in home (${totalStoredItems}/${homeStorage} slots used) | Materials in home (${storedMaterials.length}/${maxHouseMaterials} slots used) | Cooking in home (${storedCooking.length}/${maxHouseCooking} slots used)`}
             initialBreak={true}
             topRightContent={
-              homeData && homeData.homeType !== "NONE" ? (
+              homeData ? (
                 <MergeAllStacksButton
                   storedAtHome={true}
                   onMerged={() => {
@@ -441,10 +441,6 @@ export default function HomePage() {
           >
             {isHomeLoading || isItemsLoading ? (
               <Loader explanation="Loading item storage data" />
-            ) : homeData?.homeType === "NONE" ? (
-              <div className="p-4 text-center">
-                You need to upgrade your home to store items.
-              </div>
             ) : (
               <Tabs defaultValue="stored" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
