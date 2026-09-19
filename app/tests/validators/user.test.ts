@@ -68,28 +68,52 @@ describe("getSearchValidator", () => {
 
 describe("tavernColorChangeSchema", () => {
   it.each(TavernColorPresets)("accepts the %s preset for both targets", (color) => {
-    expect(tavernColorChangeSchema.parse({ target: "username", color })).toEqual({
-      target: "username",
-      color,
-    });
-    expect(tavernColorChangeSchema.parse({ target: "title", color })).toEqual({
-      target: "title",
-      color,
-    });
+    expect(
+      tavernColorChangeSchema.parse({
+        target: "username",
+        color,
+        currentColor: "DEFAULT",
+      }),
+    ).toEqual({ target: "username", color, currentColor: "DEFAULT" });
+    expect(
+      tavernColorChangeSchema.parse({
+        target: "title",
+        color,
+        currentColor: "DEFAULT",
+      }),
+    ).toEqual({ target: "title", color, currentColor: "DEFAULT" });
   });
 
   it.each(["#1e3a8a", "RED", "GREEN", "EMERALD", "PINK", "ORANGE", "SKY", "PURPLE", "ROSE"])(
     "rejects arbitrary or staff-associated value %s",
     (color) => {
       expect(
-        tavernColorChangeSchema.safeParse({ target: "username", color }).success,
+        tavernColorChangeSchema.safeParse({
+          target: "username",
+          color,
+          currentColor: "DEFAULT",
+        }).success,
       ).toBe(false);
     },
   );
 
   it("rejects unsupported targets", () => {
     expect(
-      tavernColorChangeSchema.safeParse({ target: "post", color: "NAVY" }).success,
+      tavernColorChangeSchema.safeParse({
+        target: "post",
+        color: "NAVY",
+        currentColor: "DEFAULT",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects unsupported current colors", () => {
+    expect(
+      tavernColorChangeSchema.safeParse({
+        target: "username",
+        color: "NAVY",
+        currentColor: "RED",
+      }).success,
     ).toBe(false);
   });
 });

@@ -364,7 +364,11 @@ export default function ProfileDashboard() {
                 onFinish={() => void sidebarTimers.refetch()}
               />
             )}
-            <Button asChild variant="outline" className="mt-auto w-full">
+            <Button
+              asChild
+              variant="outline"
+              className="mt-auto w-full hover:text-black"
+            >
               <Link href="/traininggrounds">
                 {training ? "View training" : "Start training"}
               </Link>
@@ -398,7 +402,11 @@ export default function ProfileDashboard() {
                 onFinish={() => void sidebarTimers.refetch()}
               />
             ))}
-            <Button asChild variant="outline" className="mt-auto w-full">
+            <Button
+              asChild
+              variant="outline"
+              className="mt-auto w-full hover:text-black"
+            >
               <Link href="/occupation">
                 {userData.occupation ? "Continue work" : "Start a job"}
               </Link>
@@ -430,13 +438,19 @@ export default function ProfileDashboard() {
           id="catalogue-heading"
           action={
             catalogue.length > previewContent.length ? (
-              <Button variant="ghost" size="sm" onClick={() => setShowAllContent(true)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hover:text-foreground"
+                onClick={() => setShowAllContent(true)}
+              >
                 View all content <ArrowRight className="ml-1 h-4 w-4" />
               </Button>
             ) : showAllContent && catalogue.length > 0 ? (
               <Button
                 variant="ghost"
                 size="sm"
+                className="hover:text-foreground"
                 onClick={() => setShowAllContent(false)}
               >
                 Show highlights
@@ -521,7 +535,12 @@ export default function ProfileDashboard() {
                       ? `Ends ${raid.raidEndsAt.toLocaleString()}`
                       : "No published deadline"}
                   </p>
-                  <Button asChild size="sm" variant="outline">
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="hover:text-black"
+                  >
                     <Link
                       href={
                         raid.raidSector === userData.sector
@@ -558,7 +577,7 @@ function SectionHeader({
   return (
     <div className="mb-3 flex items-end justify-between gap-3">
       <div>
-        <p className="font-mono text-primary text-xs uppercase tracking-[0.18em]">
+        <p className="font-mono text-primary text-xs uppercase tracking-[0.18em] dark:text-muted-foreground">
           {eyebrow}
         </p>
         <h2 id={id} className="font-bold text-2xl">
@@ -677,7 +696,12 @@ function RetryPanel({ message, onRetry }: { message: string; onRetry?: () => voi
     <div className="flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
       <span>{message}</span>
       {onRetry && (
-        <Button size="sm" variant="outline" onClick={onRetry}>
+        <Button
+          size="sm"
+          variant="outline"
+          className="hover:text-black"
+          onClick={onRetry}
+        >
           <RotateCcw className="mr-1 h-4 w-4" /> Retry
         </Button>
       )}
@@ -688,11 +712,12 @@ function RetryPanel({ message, onRetry }: { message: string; onRetry?: () => voi
 function ContentCard({ entry }: { entry: CatalogueEntry }) {
   const routesThroughWakeIsland =
     entry.category === "events" || entry.category === "story";
-  const destination = routesThroughWakeIsland
-    ? "/travel"
-    : entry.availability === "travel"
-      ? "/travel"
-      : entry.destination;
+  const destination =
+    entry.category === "battlePyramids"
+      ? "/battlearena#Battle%20Pyramid"
+      : routesThroughWakeIsland || entry.availability === "travel"
+        ? "/travel"
+        : entry.destination;
   const actionLabel = routesThroughWakeIsland
     ? "Go to Wake Island"
     : entry.availability === "travel"
@@ -752,7 +777,12 @@ function ContentCard({ entry }: { entry: CatalogueEntry }) {
         {entry.availabilityReason && (
           <p className="text-muted-foreground text-xs">{entry.availabilityReason}</p>
         )}
-        <Button asChild size="sm" variant="outline" className="mt-1 w-full">
+        <Button
+          asChild
+          size="sm"
+          variant="outline"
+          className="mt-1 w-full hover:text-black"
+        >
           <Link href={destination}>
             {actionLabel}
             <ArrowRight className="ml-1 h-4 w-4" />

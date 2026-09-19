@@ -29,13 +29,7 @@ import { getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-const profileTabs = [
-  "Dashboard",
-  "Character",
-  "Notifications",
-  "Achievements",
-  "History",
-] as const;
+const profileTabs = ["Dashboard", "Character", "Achievements", "History"] as const;
 type ProfileTab = (typeof profileTabs)[number];
 
 export default function Profile() {
@@ -63,7 +57,6 @@ export default function Profile() {
     >
       {tab === "Dashboard" && <ProfileDashboard />}
       {tab === "Character" && <CharacterProfile />}
-      {tab === "Notifications" && <ProfileNotifications />}
       {tab === "Achievements" && (
         <div className="p-3">
           <LogbookAchievements />
@@ -369,33 +362,6 @@ function CharacterProfile() {
 
       <StrengthWeaknesses />
     </>
-  );
-}
-
-function ProfileNotifications() {
-  const { notifications } = useRequiredUserData();
-
-  return (
-    <div className="space-y-2 p-3">
-      {notifications && notifications.length > 0 ? (
-        notifications.map((notification, index) => (
-          <Link
-            key={`${notification.href}-${notification.name}-${index}`}
-            href={notification.href}
-            className="flex items-center justify-between rounded-md border bg-card p-3 transition-colors hover:bg-muted/50"
-          >
-            <span>{notification.name}</span>
-            {notification.notificationCount ? (
-              <span className="rounded-full bg-primary px-2 py-0.5 font-semibold text-primary-foreground text-xs">
-                {notification.notificationCount}
-              </span>
-            ) : null}
-          </Link>
-        ))
-      ) : (
-        <p className="p-3 text-muted-foreground">You have no current notifications.</p>
-      )}
-    </div>
   );
 }
 
