@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  RANKED_BLOODLINE_EFFECT_MULT,
   RANKED_LOADOUT_MAX_CONSUMABLES,
   RANKED_LOADOUT_MAX_HEAL_JUTSUS,
   RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
@@ -87,7 +88,10 @@ export default function RankedManualPage() {
                     <li>Level 100 with maximum experience</li>
                     <li>Equalized health, chakra, and stamina pools</li>
                     <li>Balanced combat stats for all players</li>
-                    <li>No bloodlines</li>
+                    <li>
+                      Bloodline holders get a simulated {RANKED_BLOODLINE_EFFECT_MULT}x
+                      damage boost (no unique bloodline effects; still sealable)
+                    </li>
                   </ul>
                 </div>
 

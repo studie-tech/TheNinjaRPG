@@ -337,6 +337,13 @@
       "when": 1789368528373,
       "tag": "0047_guide_stubs_unpublished",
       "breakpoints": false
+    },
+    {
+      "idx": 48,
+      "version": "5",
+      "when": 1789516272980,
+      "tag": "0048_ordinary_red_shift",
+      "breakpoints": false
     }
   ]
 }
