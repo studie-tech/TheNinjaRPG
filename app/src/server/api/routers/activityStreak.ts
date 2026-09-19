@@ -9,6 +9,7 @@ import {
   userData,
   userStreakProgress,
 } from "@/drizzle/schema";
+import { isEventPassCompletion } from "@/libs/activityStreak";
 import { getRewardPreview } from "@/libs/objectives";
 import { postProcessRewards } from "@/libs/quest";
 import { fetchUser } from "@/routers/profile";
@@ -44,7 +45,7 @@ const getDefaultRewards = (): ObjectiveRewardType => {
 export const activityStreakRouter = createTRPCRouter({
   // ===== Player Endpoints =====
 
-  // Get all user's active streaks (RECURRING + owned EVENT_PASSes)
+  // Get all user's active streaks (RECURRING + in-progress EVENT_PASSes)
   getUserStreaks: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get user's active activity streaks" } })
     .query(async ({ ctx }) => {
@@ -84,6 +85,15 @@ export const activityStreakRouter = createTRPCRouter({
 
           // Skip deactivated configs - users cannot claim these
           if (!config.isActive) return null;
+
+          // Completed event passes remain as permanent purchase records, but they
+          // are no longer active streaks that the player can claim.
+          if (
+            config.streakType === "EVENT_PASS" &&
+            progress.currentDay >= config.totalDays
+          ) {
+            return null;
+          }
 
           const alreadyClaimedToday = isToday(progress.lastClaimDate);
           const withinThreshold = isStreakContinuous(progress.lastClaimDate);
@@ -162,14 +172,15 @@ export const activityStreakRouter = createTRPCRouter({
       };
     }),
 
-  // Get purchasable EVENT_PASSes (active, within date range, not owned)
+  // Get purchasable EVENT_PASSes (active, within date range, never purchased)
   getAvailablePasses: protectedProcedure
     .meta({
       mcp: { enabled: true, description: "Get available event passes for purchase" },
     })
     .query(async ({ ctx }) => {
-      // Get all active EVENT_PASS configs and user's progress in parallel
-      const [eventPasses, userProgress] = await Promise.all([
+      // Historical completion logs cover passes completed before progress rows
+      // became permanent purchase records.
+      const [eventPasses, userProgress, completionLogs] = await Promise.all([
         ctx.drizzle.query.activityStreakConfig.findMany({
           where: and(
             eq(activityStreakConfig.streakType, "EVENT_PASS"),
@@ -183,15 +194,27 @@ export const activityStreakRouter = createTRPCRouter({
           where: eq(userStreakProgress.userId, ctx.userId),
           columns: { configId: true },
         }),
+        ctx.drizzle.query.actionLog.findMany({
+          where: and(
+            eq(actionLog.userId, ctx.userId),
+            eq(actionLog.tableName, "activityStreak"),
+          ),
+          columns: { relatedId: true, changes: true },
+        }),
       ]);
 
-      const ownedConfigIds = new Set(userProgress.map((p) => p.configId));
+      const purchasedConfigIds = new Set(userProgress.map((p) => p.configId));
+      for (const log of completionLogs) {
+        if (log.relatedId && isEventPassCompletion(log.changes)) {
+          purchasedConfigIds.add(log.relatedId);
+        }
+      }
 
       // Filter to only available passes
       const availablePasses = eventPasses
         .filter((config) => {
-          // Not already owned
-          if (ownedConfigIds.has(config.id)) return false;
+          // Event passes can only ever be purchased once.
+          if (purchasedConfigIds.has(config.id)) return false;
 
           // Within date range
           if (!isWithinDateRange(config.startDate, config.endDate)) return false;
@@ -221,8 +244,8 @@ export const activityStreakRouter = createTRPCRouter({
     .input(purchaseEventPassSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch user, config, and existing progress in parallel
-      const [user, config, existingProgress] = await Promise.all([
+      // Fetch purchase requirements and both current and historical ownership in parallel.
+      const [user, config, existingProgress, completionLogs] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.activityStreakConfig.findFirst({
           where: eq(activityStreakConfig.id, input.configId),
@@ -232,6 +255,14 @@ export const activityStreakRouter = createTRPCRouter({
             eq(userStreakProgress.userId, ctx.userId),
             eq(userStreakProgress.configId, input.configId),
           ),
+        }),
+        ctx.drizzle.query.actionLog.findMany({
+          where: and(
+            eq(actionLog.userId, ctx.userId),
+            eq(actionLog.relatedId, input.configId),
+            eq(actionLog.tableName, "activityStreak"),
+          ),
+          columns: { changes: true },
         }),
       ]);
 
@@ -255,9 +286,13 @@ export const activityStreakRouter = createTRPCRouter({
         return errorResponse("This event pass is not available at this time");
       }
 
-      // Guard: user doesn't already own it
-      if (existingProgress) {
-        return errorResponse("You already own this event pass");
+      // Guard: current progress and historical completions both prove the pass
+      // was already purchased. Completion must never make it purchasable again.
+      if (
+        existingProgress ||
+        completionLogs.some((log) => isEventPassCompletion(log.changes))
+      ) {
+        return errorResponse("You have already purchased this event pass");
       }
 
       // Guard: user has sufficient currency
@@ -322,7 +357,7 @@ export const activityStreakRouter = createTRPCRouter({
             seichiSilver: sql`${userData.seichiSilver} + ${config.seichiSilverCost}`,
           })
           .where(eq(userData.userId, ctx.userId));
-        return errorResponse("You already own this event pass");
+        return errorResponse("You have already purchased this event pass");
       }
 
       // Build cost message
@@ -408,6 +443,15 @@ export const activityStreakRouter = createTRPCRouter({
       // Guard: must have progress (for EVENT_PASS, means must be purchased)
       if (!progress) {
         return errorResponse("You need to purchase this event pass first");
+      }
+
+      // Completed event-pass progress is retained as the permanent purchase
+      // record and cannot be claimed or restarted.
+      if (
+        config.streakType === "EVENT_PASS" &&
+        progress.currentDay >= config.totalDays
+      ) {
+        return errorResponse("This event pass has already been completed");
       }
 
       // Calculate theoretical max day to prevent buying ahead
@@ -579,14 +623,8 @@ export const activityStreakRouter = createTRPCRouter({
           }),
         );
 
-        if (config.streakType === "EVENT_PASS") {
-          // EVENT_PASS: delete progress when complete
-          updatePromises.push(
-            ctx.drizzle
-              .delete(userStreakProgress)
-              .where(eq(userStreakProgress.id, progress.id)),
-          );
-        } else {
+        // EVENT_PASS progress stays on its final day as the permanent purchase record.
+        if (config.streakType === "RECURRING") {
           // RECURRING: reset progress but preserve lastClaimDate to prevent same-day re-claim
           updatePromises.push(
             ctx.drizzle
