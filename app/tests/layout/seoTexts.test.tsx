@@ -1,14 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { forumBoardIntro, forumThreadIntro, publicUserIntro } from "@/layout/seoTexts";
+import { htmlToPlainText } from "@/utils/sanitize";
 
-const text = (node: React.ReactNode) =>
-  renderToStaticMarkup(<>{node}</>)
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&#x27;/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
+// The same strip-and-decode the site uses for meta descriptions, so an entity in a
+// board name ("Questions & Answers") reads back as the character it stands for.
+const text = (node: React.ReactNode) => htmlToPlainText(renderToStaticMarkup(<>{node}</>));
 
 describe("entity-page intros", () => {
   // Search Console filed 395 forum threads and several profiles as duplicates of one
