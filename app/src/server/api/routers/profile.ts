@@ -117,6 +117,7 @@ import {
   scaleUserStats,
 } from "@/libs/profile";
 import {
+  condenseDashboardMissionContent,
   isUndiscoveredStory,
   resolveDashboardAvailability,
 } from "@/libs/profileDashboard";
@@ -370,7 +371,16 @@ export const profileRouter = createTRPCRouter({
         ];
       });
 
-      return { serverTime, content, raidRewards };
+      return {
+        serverTime,
+        content: condenseDashboardMissionContent(content, {
+          dailyMissions: user.dailyMissions,
+          dailyErrands: user.dailyErrands,
+          dailyMedicalMissions: user.dailyMedicalMissions,
+          dailyPvpMissions: user.dailyPvpMissions,
+        }),
+        raidRewards,
+      };
     }),
   getSidebarTimers: protectedProcedure.query(async ({ ctx }) => {
     const now = sql`NOW()`;

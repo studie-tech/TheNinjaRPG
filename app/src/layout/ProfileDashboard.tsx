@@ -193,10 +193,19 @@ export default function ProfileDashboard() {
       };
     });
     const categoryOrder = ["events", "missions", "story", "battlePyramids", "raids"];
+    const missionOrder: Record<string, number> = {
+      mission: 0,
+      errand: 1,
+      medical: 2,
+      pvp: 3,
+    };
     const availabilityOrder = { available: 0, travel: 1, locked: 2 };
     return [...quests, ...raidEntries].sort(
       (left, right) =>
         categoryOrder.indexOf(left.category) - categoryOrder.indexOf(right.category) ||
+        (left.category === "missions" && right.category === "missions"
+          ? (missionOrder[left.questType] ?? 99) - (missionOrder[right.questType] ?? 99)
+          : 0) ||
         availabilityOrder[left.availability] - availabilityOrder[right.availability] ||
         left.name.localeCompare(right.name),
     );
