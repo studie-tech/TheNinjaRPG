@@ -2443,6 +2443,7 @@ const TavernColors: React.FC = () => {
                 updateColor.mutate({
                   target: control.target,
                   color: control.value,
+                  currentColor: control.current,
                 });
               }}
             >

@@ -51,7 +51,7 @@ export default function Profile() {
       subtitle="Rewards, current activities, and opportunities"
       padding={false}
       topRightContent={
-        <div className="max-w-full overflow-x-auto">
+        <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <NavTabs
             current={tab}
             options={profileTabs}

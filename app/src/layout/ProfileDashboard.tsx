@@ -14,17 +14,19 @@ import {
   Trophy,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Loader from "@/layout/Loader";
 import { LogbookActive } from "@/layout/Logbook";
 import { getRewardPreview } from "@/libs/objectives";
-import { calcLevelRequirements } from "@/libs/profile";
+import { calcLevelRequirements, formatTrainingStatName } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { trainingSpeedSeconds } from "@/libs/train";
@@ -134,15 +136,37 @@ export default function ProfileDashboard() {
       : null;
   const training = userData?.currentlyTraining
     ? {
-        title: `${capitalizeFirstLetter(userData.currentlyTraining)} training`,
+        title: `${formatTrainingStatName(userData.currentlyTraining)} training`,
+        startedAt: userData.trainingStartedAt,
         endsAt: statTrainingEndsAt,
       }
     : sidebarTimers.data?.jutsuTraining
       ? {
           title: `${sidebarTimers.data.jutsuTraining.name} to level ${sidebarTimers.data.jutsuTraining.level}`,
+          startedAt: sidebarTimers.data.jutsuTraining.trainingStartedAt,
           endsAt: sidebarTimers.data.jutsuTraining.finishTraining,
         }
       : null;
+  const craftingTimers = [
+    ...(sidebarTimers.data?.crafting
+      ? [
+          {
+            label: `Crafting ${sidebarTimers.data.crafting.itemName}`,
+            startedAt: sidebarTimers.data.crafting.craftingStartedAt,
+            endsAt: sidebarTimers.data.crafting.craftingFinishedAt,
+          },
+        ]
+      : []),
+    ...(sidebarTimers.data?.imbuement
+      ? [
+          {
+            label: `Imbuing ${sidebarTimers.data.imbuement.targetName}`,
+            startedAt: sidebarTimers.data.imbuement.craftingStartedAt,
+            endsAt: sidebarTimers.data.imbuement.craftingFinishedAt,
+          },
+        ]
+      : []),
+  ];
 
   const catalogue = useMemo<CatalogueEntry[]>(() => {
     const quests = dashboard.data?.content ?? [];
@@ -331,6 +355,15 @@ export default function ProfileDashboard() {
                 ? `Current session ends ${training.endsAt.toLocaleString()}.`
                 : "No stat or jutsu training is active."}
             </p>
+            {training?.startedAt && training.endsAt && (
+              <TimerProgress
+                label="Training progress"
+                startedAt={training.startedAt}
+                endsAt={training.endsAt}
+                timeDiff={timeDiff}
+                onFinish={() => void sidebarTimers.refetch()}
+              />
+            )}
             <Button asChild variant="outline" className="mt-auto w-full">
               <Link href="/traininggrounds">
                 {training ? "View training" : "Start training"}
@@ -355,6 +388,16 @@ export default function ProfileDashboard() {
                   ? "Continue your work and check collection readiness."
                   : "Select a profession to unlock steady work and rewards."}
             </p>
+            {craftingTimers.map((timer) => (
+              <TimerProgress
+                key={`${timer.label}-${timer.endsAt.toISOString()}`}
+                label={timer.label}
+                startedAt={timer.startedAt}
+                endsAt={timer.endsAt}
+                timeDiff={timeDiff}
+                onFinish={() => void sidebarTimers.refetch()}
+              />
+            ))}
             <Button asChild variant="outline" className="mt-auto w-full">
               <Link href="/occupation">
                 {userData.occupation ? "Continue work" : "Start a job"}
@@ -378,6 +421,55 @@ export default function ProfileDashboard() {
             </div>
           </PriorityCard>
         </div>
+      </section>
+
+      <section aria-labelledby="catalogue-heading">
+        <SectionHeader
+          eyebrow="Opportunities"
+          title="Available content"
+          id="catalogue-heading"
+          action={
+            catalogue.length > previewContent.length ? (
+              <Button variant="ghost" size="sm" onClick={() => setShowAllContent(true)}>
+                View all content <ArrowRight className="ml-1 h-4 w-4" />
+              </Button>
+            ) : showAllContent && catalogue.length > 0 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAllContent(false)}
+              >
+                Show highlights
+              </Button>
+            ) : null
+          }
+        />
+        {(dashboard.isLoading || raids.isLoading) && catalogue.length === 0 ? (
+          <Loader explanation="Loading available content..." />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {previewContent.map((entry) => (
+              <ContentCard key={`${entry.category}-${entry.id}`} entry={entry} />
+            ))}
+            {previewContent.length === 0 && (
+              <div className="col-span-full rounded-md border border-dashed p-5 text-muted-foreground text-sm">
+                No discoverable content is published for your character right now.
+              </div>
+            )}
+          </div>
+        )}
+        {dashboard.isError && (
+          <RetryPanel
+            message="Quest discovery could not be loaded. This is not the same as having no available content."
+            onRetry={() => void dashboard.refetch()}
+          />
+        )}
+        {raids.isError && (
+          <RetryPanel
+            message="Raid availability could not be loaded; other categories are still shown."
+            onRetry={() => void raids.refetch()}
+          />
+        )}
       </section>
 
       <section aria-labelledby="progress-heading">
@@ -444,55 +536,6 @@ export default function ProfileDashboard() {
               </Card>
             ))}
           </div>
-        )}
-      </section>
-
-      <section aria-labelledby="catalogue-heading">
-        <SectionHeader
-          eyebrow="Opportunities"
-          title="Available content"
-          id="catalogue-heading"
-          action={
-            catalogue.length > previewContent.length ? (
-              <Button variant="ghost" size="sm" onClick={() => setShowAllContent(true)}>
-                View all content <ArrowRight className="ml-1 h-4 w-4" />
-              </Button>
-            ) : showAllContent && catalogue.length > 0 ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowAllContent(false)}
-              >
-                Show highlights
-              </Button>
-            ) : null
-          }
-        />
-        {(dashboard.isLoading || raids.isLoading) && catalogue.length === 0 ? (
-          <Loader explanation="Loading available content..." />
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {previewContent.map((entry) => (
-              <ContentCard key={`${entry.category}-${entry.id}`} entry={entry} />
-            ))}
-            {previewContent.length === 0 && (
-              <div className="col-span-full rounded-md border border-dashed p-5 text-muted-foreground text-sm">
-                No discoverable content is published for your character right now.
-              </div>
-            )}
-          </div>
-        )}
-        {dashboard.isError && (
-          <RetryPanel
-            message="Quest discovery could not be loaded. This is not the same as having no available content."
-            onRetry={() => void dashboard.refetch()}
-          />
-        )}
-        {raids.isError && (
-          <RetryPanel
-            message="Raid availability could not be loaded; other categories are still shown."
-            onRetry={() => void raids.refetch()}
-          />
         )}
       </section>
     </div>
@@ -579,6 +622,56 @@ function EmptyPriority({ text }: { text: string }) {
   return <p className="text-muted-foreground text-sm">{text}</p>;
 }
 
+function TimerProgress({
+  label,
+  startedAt,
+  endsAt,
+  timeDiff,
+  onFinish,
+}: {
+  label: string;
+  startedAt: Date;
+  endsAt: Date;
+  timeDiff: number;
+  onFinish?: () => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const hasFinishedRef = useRef(false);
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
+
+  const adjustedStart = startedAt.getTime() + timeDiff;
+  const adjustedEnd = endsAt.getTime() + timeDiff;
+  const duration = Math.max(adjustedEnd - adjustedStart, 1);
+  const progress = Math.min(100, Math.max(0, ((now - adjustedStart) / duration) * 100));
+
+  useEffect(() => {
+    hasFinishedRef.current = false;
+    setNow(Date.now());
+    const interval = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(interval);
+  }, [adjustedStart, adjustedEnd]);
+
+  useEffect(() => {
+    if (progress < 100 || hasFinishedRef.current) return;
+    hasFinishedRef.current = true;
+    onFinishRef.current?.();
+  }, [progress]);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span>{label}</span>
+        <span className="font-mono text-muted-foreground">
+          {Math.round(progress)}% ·{" "}
+          <Countdown targetDate={endsAt} timeDiff={timeDiff} onEndShow="Ready" />
+        </span>
+      </div>
+      <Progress value={progress} className="h-2" />
+    </div>
+  );
+}
+
 function RetryPanel({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
@@ -593,7 +686,20 @@ function RetryPanel({ message, onRetry }: { message: string; onRetry?: () => voi
 }
 
 function ContentCard({ entry }: { entry: CatalogueEntry }) {
-  const destination = entry.availability === "travel" ? "/travel" : entry.destination;
+  const routesThroughWakeIsland =
+    entry.category === "events" || entry.category === "story";
+  const destination = routesThroughWakeIsland
+    ? "/travel"
+    : entry.availability === "travel"
+      ? "/travel"
+      : entry.destination;
+  const actionLabel = routesThroughWakeIsland
+    ? "Go to Wake Island"
+    : entry.availability === "travel"
+      ? "Open travel"
+      : entry.availability === "locked"
+        ? "View requirements"
+        : "Open content";
   return (
     <Card className="group overflow-hidden">
       <div className="relative aspect-[16/7] overflow-hidden bg-muted">
@@ -648,11 +754,7 @@ function ContentCard({ entry }: { entry: CatalogueEntry }) {
         )}
         <Button asChild size="sm" variant="outline" className="mt-1 w-full">
           <Link href={destination}>
-            {entry.availability === "travel"
-              ? "Open travel"
-              : entry.availability === "locked"
-                ? "View requirements"
-                : "Open content"}
+            {actionLabel}
             <ArrowRight className="ml-1 h-4 w-4" />
           </Link>
         </Button>

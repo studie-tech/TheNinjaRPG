@@ -381,6 +381,7 @@ export const profileRouter = createTRPCRouter({
         .select({
           name: sql<string>`COALESCE(${jutsuReskin.name}, ${jutsu.name})`,
           level: userJutsu.level,
+          trainingStartedAt: userJutsu.updatedAt,
           finishTraining: userJutsu.finishTraining,
         })
         .from(userJutsu)
@@ -392,6 +393,7 @@ export const profileRouter = createTRPCRouter({
       ctx.drizzle
         .select({
           itemName: item.name,
+          craftingStartedAt: userItem.createdAt,
           craftingFinishedAt: userItem.craftingFinishedAt,
         })
         .from(userItem)
@@ -405,6 +407,7 @@ export const profileRouter = createTRPCRouter({
         .select({
           imbuedName: imbuedItem.name,
           targetName: item.name,
+          craftingStartedAt: userItemImbuement.createdAt,
           craftingFinishedAt: userItemImbuement.craftingFinishedAt,
         })
         .from(userItemImbuement)
@@ -1838,12 +1841,17 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const currentColor =
+      const storedColor =
         input.target === "username" ? user.tavernUsernameColor : user.tavernTitleColor;
       const cost = getTavernColorChangeCost(input.color);
 
       if (user.isBanned) return errorResponse("You are banned");
-      if (currentColor === input.color) {
+      if (storedColor !== input.currentColor) {
+        return errorResponse(
+          "Could not update tavern color; your selection or reputation changed",
+        );
+      }
+      if (input.currentColor === input.color) {
         return errorResponse(`Tavern ${input.target} color is unchanged`);
       }
       if (cost > user.reputationPoints) {
@@ -1868,7 +1876,7 @@ export const profileRouter = createTRPCRouter({
               input.target === "username"
                 ? userData.tavernUsernameColor
                 : userData.tavernTitleColor,
-              currentColor ?? "DEFAULT",
+              input.currentColor,
             ),
             gte(userData.reputationPoints, cost),
           ),
@@ -1885,7 +1893,7 @@ export const profileRouter = createTRPCRouter({
         userId: ctx.userId,
         tableName: "user",
         changes: [
-          `Tavern ${input.target} color changed from ${currentColor} to ${input.color} (-${cost} reputation)`,
+          `Tavern ${input.target} color changed from ${input.currentColor} to ${input.color} (-${cost} reputation)`,
         ],
         relatedId: ctx.userId,
         relatedMsg: `${user.username} changed their tavern ${input.target} color`,
