@@ -1,11 +1,28 @@
 import { describe, expect, it } from "vitest";
 import {
   isActivityStreakPopupBlocking,
+  isEventPassCompletion,
   resolveActivityStreakDateLatches,
   resolveActivityStreakPopupOpen,
   shouldFetchActivityStreaksForPopup,
   type ActivityStreakPopupState,
 } from "@/libs/activityStreak";
+
+describe("event pass completion history", () => {
+  it("recognizes event-pass completion audit entries", () => {
+    expect(isEventPassCompletion(["Completed Summer Pass (EVENT_PASS)"])).toBe(
+      true,
+    );
+  });
+
+  it("does not treat recurring or malformed audit data as an event-pass completion", () => {
+    expect(isEventPassCompletion(["Completed Daily Streak (RECURRING)"])).toBe(
+      false,
+    );
+    expect(isEventPassCompletion(null)).toBe(false);
+    expect(isEventPassCompletion({ changes: ["(EVENT_PASS)"] })).toBe(false);
+  });
+});
 
 /** Builds popup state with the legacy closed, loaded, and eligible defaults. */
 const state = (
