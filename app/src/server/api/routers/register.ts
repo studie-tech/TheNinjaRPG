@@ -218,6 +218,7 @@ export const registerRouter = createTRPCRouter({
           gender: input.gender,
           avatar: IMG_DEFAULT_PROFILE_PICTURE,
           villageId: villageData.id,
+          joinedVillageAt: new Date(),
           bloodlineId: selectedBloodline.id,
           approvedTos: true,
           sector: villageData.sector,

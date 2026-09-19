@@ -1455,7 +1455,9 @@ export const profileRouter = createTRPCRouter({
             ...(usernameChanged ? { username: input.data.username } : {}),
             ...(customTitleChanged ? { customTitle: input.data.customTitle } : {}),
             ...(bloodlineChanged ? { bloodlineId: input.data.bloodlineId } : {}),
-            ...(villageChanged ? { villageId: input.data.villageId } : {}),
+            ...(villageChanged
+              ? { villageId: input.data.villageId, joinedVillageAt: new Date() }
+              : {}),
             ...(rankChanged ? { rank: input.data.rank } : {}),
             ...(bloodlineReskinChanged
               ? { bloodlineReskinId: input.data.bloodlineReskinId ?? null }
