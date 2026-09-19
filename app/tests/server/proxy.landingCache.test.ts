@@ -58,3 +58,25 @@ describe("landingCacheUrl", () => {
     expect(landingCacheUrl(standard, "pixel")?.search).toBe("?landing=pixel");
   });
 });
+
+describe("landingCacheUrl and sessions", () => {
+  it("refuses a request carrying a Clerk session cookie", () => {
+    // The crawler branch runs before auth() and its user-agent match catches signed-in
+    // people with "bot" in their browser string. Their render is signed in; caching it
+    // under the shared key would hand it to Googlebot and every anonymous visitor after.
+    const signedIn = request("https://www.theninja-rpg.com/", {
+      ua: "Mozilla/5.0 (compatible; SomeBot/1.0)",
+      cookies: { __session: "eyJ.signed.jwt", ab_pixel_layout_1: "control" },
+    });
+    expect(landingCacheUrl(signedIn, "default")).toBeNull();
+  });
+
+  it("accepts a client that is known to Clerk but signed out", () => {
+    // __client_uat=0 is what Clerk leaves behind after sign-out; only the session cookie
+    // itself means a session.
+    const signedOut = request("https://www.theninja-rpg.com/", {
+      cookies: { __client_uat: "0", ab_pixel_layout_1: "control" },
+    });
+    expect(landingCacheUrl(signedOut, "default")?.search).toBe("?landing=default");
+  });
+});

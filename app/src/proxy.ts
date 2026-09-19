@@ -63,8 +63,16 @@ const LANDING_CACHE_PARAM = "landing";
 
 /**
  * Ten minutes at the edge, then a day of serving stale while a fresh copy renders in the
- * background. Set on the rewrite response rather than in next.config, whose header rules
- * match the URL as it arrived and never see the rewritten query. Deploys reset the cache.
+ * background. Deploys reset the cache on their own.
+ *
+ * Sent as Vercel-CDN-Cache-Control, and from here rather than anywhere else, because on
+ * Vercel nothing else reaches the cache. A plain Cache-Control on this response is
+ * overridden by the private, no-store one the function emits for a dynamic route; a
+ * next.config header rule never matches, since those rules see the URL and headers as
+ * they arrived, not as the rewrite left them. The CDN-specific header is read by the
+ * edge alone and never forwarded, so the browser keeps the function's private, no-store
+ * -- which is right: the client hydrates the real session state, and only the edge
+ * should ever serve one visitor's render to another.
  */
 const LANDING_CACHE_CONTROL = "public, s-maxage=600, stale-while-revalidate=86400";
 
@@ -75,6 +83,16 @@ const LANDING_CACHE_CONTROL = "public, s-maxage=600, stale-while-revalidate=8640
  * can be served a copy rendered for someone else.
  */
 export const landingCacheUrl = (request: NextRequest, layout: EffectiveLayout) => {
+  // Belt and braces on top of the auth() check in the signed-out branch, and the only
+  // guard in the crawler branch, which runs before auth() on purpose. That branch's
+  // user-agent match is broad enough to catch a signed-in person whose browser string
+  // contains "bot", and their Clerk cookies are preserved so they keep their session --
+  // which means the shell would render signed in, and a cached copy of it would go to
+  // Googlebot and every anonymous visitor after. A session cookie disqualifies the
+  // response from the shared cache outright.
+  if (request.cookies.getAll().some(({ name }) => name.startsWith("__session"))) {
+    return null;
+  }
   if (isNativeUserAgent(request.headers.get("user-agent"))) return null;
   const fontScale = toFontScale(request.cookies.get(FONT_SCALE_COOKIE)?.value);
   if (fontScale !== undefined && fontScale !== DEFAULT_FONT_SCALE) return null;
@@ -110,16 +128,21 @@ export default clerkMiddleware(
     // round-trip. No Set-Cookie is issued, which also keeps the response CDN-cacheable.
     if (isSearchCrawler(request.headers.get("user-agent"))) {
       const requestHeaders = new Headers(request.headers);
-      requestHeaders.set("x-tnr-landing", "default");
-      // Only the two layout cookies are overridden. The user-agent match is broad
-      // enough to catch a signed-in visitor whose browser string contains "bot", and
-      // replacing the whole header would drop their Clerk session before auth runs.
+      // Only the layout cookies are overridden. The user-agent match is broad enough to
+      // catch a signed-in visitor whose browser string contains "bot", and replacing the
+      // whole header would drop their Clerk session before auth runs.
+      // The preference and font-scale cookies go too: the root layout reads the
+      // preference ahead of the experiment cookie, so leaving it in place would render
+      // one layout and store it under the other's cache key.
+      const pinned = new Set([
+        LEGACY_AB_LAYOUT_COOKIE,
+        AB_PIXEL_LAYOUT_COOKIE,
+        LAYOUT_PREFERENCE_COOKIE,
+        FONT_SCALE_COOKIE,
+      ]);
       const preserved = request.cookies
         .getAll()
-        .filter(
-          ({ name }) =>
-            name !== LEGACY_AB_LAYOUT_COOKIE && name !== AB_PIXEL_LAYOUT_COOKIE,
-        )
+        .filter(({ name }) => !pinned.has(name))
         .map(({ name, value }) => `${name}=${value}`);
       requestHeaders.set(
         "cookie",
@@ -133,7 +156,7 @@ export default clerkMiddleware(
       const res = NextResponse.rewrite(cacheUrl ?? request.nextUrl.clone(), {
         request: { headers: requestHeaders },
       });
-      if (cacheUrl) res.headers.set("Cache-Control", LANDING_CACHE_CONTROL);
+      if (cacheUrl) res.headers.set("Vercel-CDN-Cache-Control", LANDING_CACHE_CONTROL);
       return res;
     }
 
@@ -153,7 +176,6 @@ export default clerkMiddleware(
       const cacheUrl = landingCacheUrl(request, layout);
       const url = cacheUrl ?? request.nextUrl.clone();
       const requestHeaders = new Headers(request.headers);
-      if (cacheUrl) requestHeaders.set("x-tnr-landing", layout);
       let cookieHeader = requestHeaders.get("cookie");
       if (!cookie) {
         cookieHeader = appendCookieHeader(
@@ -179,12 +201,7 @@ export default clerkMiddleware(
       if (!pixelCookie) {
         res.cookies.set(AB_PIXEL_LAYOUT_COOKIE, pixelVariant, { path: "/" });
       }
-      if (cacheUrl) {
-        res.headers.set("Cache-Control", LANDING_CACHE_CONTROL);
-        res.headers.set("CDN-Cache-Control", LANDING_CACHE_CONTROL);
-        res.headers.set("Vercel-CDN-Cache-Control", LANDING_CACHE_CONTROL);
-        res.headers.set("x-tnr-landing-mw", layout);
-      }
+      if (cacheUrl) res.headers.set("Vercel-CDN-Cache-Control", LANDING_CACHE_CONTROL);
       return res;
     }
   },

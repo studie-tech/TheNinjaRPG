@@ -107,15 +107,6 @@ const config = {
         headers: securityHeaders,
       },
       {
-        source: "/",
-        has: [{ type: "header", key: "x-tnr-landing" }],
-        headers: [
-          { key: "Cache-Control", value: "public, s-maxage=600, stale-while-revalidate=86400" },
-          { key: "Vercel-CDN-Cache-Control", value: "public, s-maxage=600, stale-while-revalidate=86400" },
-          { key: "x-tnr-landing-cfg", value: "matched" },
-        ],
-      },
-      {
         source: "/:path*",
         headers: securityHeaders,
       },
