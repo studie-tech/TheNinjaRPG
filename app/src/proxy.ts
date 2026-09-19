@@ -65,14 +65,17 @@ const LANDING_CACHE_PARAM = "landing";
  * Ten minutes at the edge, then a day of serving stale while a fresh copy renders in the
  * background. Deploys reset the cache on their own.
  *
- * Sent as Vercel-CDN-Cache-Control, and from here rather than anywhere else, because on
- * Vercel nothing else reaches the cache. A plain Cache-Control on this response is
- * overridden by the private, no-store one the function emits for a dynamic route; a
- * next.config header rule never matches, since those rules see the URL and headers as
- * they arrived, not as the rewrite left them. The CDN-specific header is read by the
- * edge alone and never forwarded, so the browser keeps the function's private, no-store
- * -- which is right: the client hydrates the real session state, and only the edge
- * should ever serve one visitor's render to another.
+ * Sent as CDN-Cache-Control, and from here rather than anywhere else, because on Vercel
+ * nothing else reaches the cache from a middleware rewrite. A plain Cache-Control on this
+ * response loses to the private, no-store one the function emits for a dynamic route;
+ * Vercel-CDN-Cache-Control set here is dropped somewhere between the middleware and the
+ * cache, though it works from a function; a next.config header rule never matches,
+ * since those rules see the URL and headers as they arrived, not as the rewrite left
+ * them. Each was tried alone on a preview and only this one produced a HIT. The browser
+ * still receives the function's private, no-store as its Cache-Control -- which is
+ * right: the client hydrates the real session state, and only the edge should ever
+ * serve one visitor's render to another. Browsers ignore CDN-Cache-Control, and nothing
+ * sits between them and Vercel that would read it.
  */
 const LANDING_CACHE_CONTROL = "public, s-maxage=600, stale-while-revalidate=86400";
 
@@ -156,7 +159,7 @@ export default clerkMiddleware(
       const res = NextResponse.rewrite(cacheUrl ?? request.nextUrl.clone(), {
         request: { headers: requestHeaders },
       });
-      if (cacheUrl) res.headers.set("Vercel-CDN-Cache-Control", LANDING_CACHE_CONTROL);
+      if (cacheUrl) res.headers.set("CDN-Cache-Control", LANDING_CACHE_CONTROL);
       return res;
     }
 
@@ -201,7 +204,7 @@ export default clerkMiddleware(
       if (!pixelCookie) {
         res.cookies.set(AB_PIXEL_LAYOUT_COOKIE, pixelVariant, { path: "/" });
       }
-      if (cacheUrl) res.headers.set("Vercel-CDN-Cache-Control", LANDING_CACHE_CONTROL);
+      if (cacheUrl) res.headers.set("CDN-Cache-Control", LANDING_CACHE_CONTROL);
       return res;
     }
   },
