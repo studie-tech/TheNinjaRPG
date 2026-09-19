@@ -22,6 +22,7 @@ import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
+import { getPotencyDescription, POTENCY_TAG_LABELS } from "@/libs/combat/potency";
 import { getPreventTypeName } from "@/libs/combat/util";
 import { getFarmPlantExperience } from "@/libs/farming";
 import { getRewardArray } from "@/libs/objectives";
@@ -1193,8 +1194,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               const result = schema.safeParse(effect);
               const parsedEffect = result.success ? result.data : undefined;
 
-              // Get custom description for immunity effects
+              // Include the configured target of selective effects in descriptions.
               const getEffectDescription = () => {
+                if (
+                  parsedEffect?.type === "increasepotency" ||
+                  parsedEffect?.type === "decreasepotency"
+                ) {
+                  return getPotencyDescription(parsedEffect);
+                }
                 if (
                   parsedEffect?.type === "immunity" &&
                   "blocks" in parsedEffect &&
@@ -1253,6 +1260,20 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                           <span>
                             <b>Blocks: </b>
                             {`${getPreventTypeName(parsedEffect.blocks as string)} prevention`}
+                          </span>
+                        )}
+                        {"affectedTag" in parsedEffect && (
+                          <span>
+                            <b>Affected Tag: </b>
+                            {POTENCY_TAG_LABELS[parsedEffect.affectedTag]}
+                          </span>
+                        )}
+                        {"affectedElements" in parsedEffect && (
+                          <span>
+                            <b>Affected Elements: </b>
+                            {parsedEffect.affectedElements.length > 0
+                              ? parsedEffect.affectedElements.join(", ")
+                              : "All (including non-elemental)"}
                           </span>
                         )}
                         {"power" in parsedEffect && (
