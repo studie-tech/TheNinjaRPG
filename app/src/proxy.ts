@@ -110,6 +110,7 @@ export default clerkMiddleware(
     // round-trip. No Set-Cookie is issued, which also keeps the response CDN-cacheable.
     if (isSearchCrawler(request.headers.get("user-agent"))) {
       const requestHeaders = new Headers(request.headers);
+      requestHeaders.set("x-tnr-landing", "default");
       // Only the two layout cookies are overridden. The user-agent match is broad
       // enough to catch a signed-in visitor whose browser string contains "bot", and
       // replacing the whole header would drop their Clerk session before auth runs.
@@ -152,6 +153,7 @@ export default clerkMiddleware(
       const cacheUrl = landingCacheUrl(request, layout);
       const url = cacheUrl ?? request.nextUrl.clone();
       const requestHeaders = new Headers(request.headers);
+      if (cacheUrl) requestHeaders.set("x-tnr-landing", layout);
       let cookieHeader = requestHeaders.get("cookie");
       if (!cookie) {
         cookieHeader = appendCookieHeader(
@@ -177,7 +179,12 @@ export default clerkMiddleware(
       if (!pixelCookie) {
         res.cookies.set(AB_PIXEL_LAYOUT_COOKIE, pixelVariant, { path: "/" });
       }
-      if (cacheUrl) res.headers.set("Cache-Control", LANDING_CACHE_CONTROL);
+      if (cacheUrl) {
+        res.headers.set("Cache-Control", LANDING_CACHE_CONTROL);
+        res.headers.set("CDN-Cache-Control", LANDING_CACHE_CONTROL);
+        res.headers.set("Vercel-CDN-Cache-Control", LANDING_CACHE_CONTROL);
+        res.headers.set("x-tnr-landing-mw", layout);
+      }
       return res;
     }
   },
