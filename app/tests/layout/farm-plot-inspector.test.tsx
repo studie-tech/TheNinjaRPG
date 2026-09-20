@@ -7,9 +7,6 @@ import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 vi.mock("@/utils/UserContext", () => ({
   useRequiredUserData: () => ({ timeDiff: 0 }),
 }));
-vi.mock("@/layout/Countdown", () => ({
-  default: () => <span>10 minutes</span>,
-}));
 vi.mock("@/layout/Image", () => ({
   default: (props: { src: string; alt: string }) => (
     // biome-ignore lint/performance/noImgElement: isolated component test stub

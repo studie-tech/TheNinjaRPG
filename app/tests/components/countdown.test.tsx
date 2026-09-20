@@ -1,59 +1,75 @@
-import { ensureDom } from "../setup-dom.mjs";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Countdown from "@/layout/Countdown";
+import { ensureDom } from "../setup-dom.mjs";
 
 ensureDom();
 
-const BASE = new Date("2026-09-16T12:00:00.000Z").getTime();
+const BASE = Date.UTC(2026, 8, 16, 12, 0, 0);
+let nowMs = BASE;
+
+// Countdown reads Date.now() directly, so the clock is a spy advanced in step with the
+// fake timers (same approach as tests/layout/action-timer.test.tsx).
+const advanceTimers = (ms: number) => {
+  nowMs += ms;
+  vi.advanceTimersByTime(ms);
+};
+
+beforeEach(() => {
+  nowMs = BASE;
+  vi.useFakeTimers();
+  vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe("Countdown", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(BASE);
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.useRealTimers();
-  });
-
   it("does not report done or call onFinish while a sub-second remainder is left", () => {
     const onFinish = vi.fn();
-    render(<Countdown targetDate={new Date(BASE + 1_500)} onFinish={onFinish} />);
+    const view = render(
+      <Countdown targetDate={new Date(BASE + 1_500)} onFinish={onFinish} />,
+    );
 
     // 1000 ms in: 500 ms remain. Every floored part reads 0, but the timer is not over.
     act(() => {
-      vi.advanceTimersByTime(1_000);
+      advanceTimers(1_000);
     });
 
     expect(onFinish).not.toHaveBeenCalled();
-    expect(screen.queryByText("Done")).toBeNull();
-    expect(screen.getByText("0 seconds")).toBeTruthy();
+    expect(view.queryByText("Done")).toBeNull();
+    expect(view.getByText("0 seconds")).toBeTruthy();
   });
 
   it("reports done and calls onFinish exactly once when the target time is reached", () => {
     const onFinish = vi.fn();
-    render(<Countdown targetDate={new Date(BASE + 1_500)} onFinish={onFinish} />);
+    const view = render(
+      <Countdown targetDate={new Date(BASE + 1_500)} onFinish={onFinish} />,
+    );
 
     act(() => {
-      vi.advanceTimersByTime(1_500);
+      advanceTimers(1_500);
     });
 
     expect(onFinish).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Done")).toBeTruthy();
+    expect(view.getByText("Done")).toBeTruthy();
 
     act(() => {
-      vi.advanceTimersByTime(5_000);
+      advanceTimers(5_000);
     });
     expect(onFinish).toHaveBeenCalledTimes(1);
   });
 
   it("treats a target already in the past as done on mount", () => {
     const onFinish = vi.fn();
-    render(<Countdown targetDate={new Date(BASE - 1)} onFinish={onFinish} />);
+    const view = render(
+      <Countdown targetDate={new Date(BASE - 1)} onFinish={onFinish} />,
+    );
 
-    expect(screen.getByText("Done")).toBeTruthy();
+    expect(view.getByText("Done")).toBeTruthy();
     expect(onFinish).toHaveBeenCalledTimes(1);
   });
 
@@ -66,12 +82,12 @@ describe("Countdown", () => {
     );
 
     act(() => {
-      vi.advanceTimersByTime(2_000);
+      advanceTimers(2_000);
     });
     expect(onFinish).not.toHaveBeenCalled();
 
     act(() => {
-      vi.advanceTimersByTime(500);
+      advanceTimers(500);
     });
     expect(onFinish).toHaveBeenCalledTimes(1);
   });
