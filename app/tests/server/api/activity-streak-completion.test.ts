@@ -95,13 +95,13 @@ describeWithDatabase("completed event pass configuration changes", () => {
     expect(after?.reputationPoints).toBe(before?.reputationPoints);
   });
 
-  it("grants day one after conversion to recurring without permitting a same-day double claim", async () => {
+  it.each([2, 3])("starts recurring day one after conversion to %i days and then advances", async (totalDays) => {
     const db = await getTestDatabase();
     const caller = await callerFor(activityStreakRouter, "pass-user");
     expect((await caller.claimStreakDay({ configId: "pass" })).success).toBe(true);
     await db
       .update(activityStreakConfig)
-      .set({ streakType: "RECURRING" })
+      .set({ streakType: "RECURRING", totalDays })
       .where(eq(activityStreakConfig.id, "pass"));
     expect((await caller.claimStreakDay({ configId: "pass" })).success).toBe(false);
     await db
@@ -126,6 +126,14 @@ describeWithDatabase("completed event pass configuration changes", () => {
     });
     expect(progress?.currentDay).toBe(1);
     expect(progress?.startedAt.getTime()).toBeGreaterThan(Date.now() - 60_000);
+    // Advance the new cycle one day while keeping the event completion in its past.
+    await db.update(actionLog).set({ createdAt: hoursAgo(48) }).where(eq(actionLog.relatedId, "pass"));
+    await db.update(userStreakProgress).set({ startedAt: hoursAgo(24), lastClaimDate: hoursAgo(24) }).where(eq(userStreakProgress.id, "progress"));
+    expect((await caller.getUserStreaks()).streaks[0]?.nextDayNumber).toBe(2);
+    expect((await caller.claimStreakDay({ configId: "pass" })).success).toBe(true);
+    const nextDay = await db.query.userData.findFirst({ where: eq(userData.userId, "pass-user") });
+    expect(nextDay?.money).toBe((after?.money ?? 0) + 200);
+
   });
 
   it("continues an unfinished extended pass", async () => {

@@ -10,6 +10,7 @@ import {
   userStreakProgress,
 } from "@/drizzle/schema";
 import {
+  getEventPassCompletionDate,
   isEventPassCompletion,
   normalizeRecurringStreakProgress,
 } from "@/libs/activityStreak";
@@ -78,15 +79,10 @@ export const activityStreakRouter = createTRPCRouter({
             eq(actionLog.userId, ctx.userId),
             eq(actionLog.tableName, "activityStreak"),
           ),
-          columns: { relatedId: true, changes: true },
+          columns: { relatedId: true, changes: true, createdAt: true },
         }),
       ]);
 
-      const completedConfigIds = new Set(
-        completionLogs
-          .filter((log) => isEventPassCompletion(log.changes))
-          .map((log) => log.relatedId),
-      );
       const now = new Date();
 
       // Check if user has progress for the active recurring config
@@ -99,7 +95,15 @@ export const activityStreakRouter = createTRPCRouter({
         .map((entry) => {
           const config = entry.config;
           if (!config) return null;
-          const progress = normalizeRecurringStreakProgress(entry, config, now);
+          const eventPassCompletedAt = getEventPassCompletionDate(
+            completionLogs.filter((log) => log.relatedId === config.id),
+          );
+          const progress = normalizeRecurringStreakProgress(
+            entry,
+            config,
+            now,
+            eventPassCompletedAt,
+          );
 
           // Skip deactivated configs - users cannot claim these
           if (!config.isActive) return null;
@@ -109,7 +113,7 @@ export const activityStreakRouter = createTRPCRouter({
           if (
             config.streakType === "EVENT_PASS" &&
             (progress.currentDay >= config.totalDays ||
-              completedConfigIds.has(config.id))
+              eventPassCompletedAt !== undefined)
           ) {
             return null;
           }
@@ -418,7 +422,7 @@ export const activityStreakRouter = createTRPCRouter({
             eq(actionLog.relatedId, input.configId),
             eq(actionLog.tableName, "activityStreak"),
           ),
-          columns: { changes: true },
+          columns: { changes: true, createdAt: true },
         }),
       ]);
 
@@ -442,8 +446,14 @@ export const activityStreakRouter = createTRPCRouter({
 
       // Get or create progress entry
       const now = new Date();
+      const eventPassCompletedAt = getEventPassCompletionDate(completionLogs);
       let progress = existingProgress
-        ? normalizeRecurringStreakProgress(existingProgress, config, now)
+        ? normalizeRecurringStreakProgress(
+            existingProgress,
+            config,
+            now,
+            eventPassCompletedAt,
+          )
         : undefined;
       const normalizedCompletion = !!existingProgress && progress !== existingProgress;
 
@@ -480,8 +490,7 @@ export const activityStreakRouter = createTRPCRouter({
       // record and cannot be claimed or restarted.
       if (
         config.streakType === "EVENT_PASS" &&
-        (progress.currentDay >= config.totalDays ||
-          completionLogs.some((log) => isEventPassCompletion(log.changes)))
+        (progress.currentDay >= config.totalDays || eventPassCompletedAt !== undefined)
       ) {
         return errorResponse("This event pass has already been completed");
       }

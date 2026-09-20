@@ -91,6 +91,17 @@ export const isEventPassCompletion = (changes: unknown): boolean =>
     (change) => typeof change === "string" && change.endsWith("(EVENT_PASS)"),
   );
 
+/** Latest event completion anchors ownership even if the configuration changes. */
+export const getEventPassCompletionDate = (
+  logs: { changes: unknown; createdAt: Date }[],
+): Date | undefined =>
+  logs
+    .filter((log) => isEventPassCompletion(log.changes))
+    .reduce<Date | undefined>(
+      (latest, log) => (!latest || log.createdAt > latest ? log.createdAt : latest),
+      undefined,
+    );
+
 /** Terminal progress can survive conversion from an event pass to a recurring streak. */
 export const normalizeRecurringStreakProgress = <
   T extends { currentDay: number; startedAt: Date },
@@ -98,7 +109,12 @@ export const normalizeRecurringStreakProgress = <
   progress: T,
   config: { streakType: string; totalDays: number },
   now: Date,
+  eventPassCompletedAt?: Date,
 ): T =>
-  config.streakType === "RECURRING" && progress.currentDay >= config.totalDays
+  config.streakType === "RECURRING" &&
+  (progress.currentDay >= config.totalDays ||
+    // A successful restart advances startedAt beyond the event completion, so
+    // the permanent ownership record cannot reset subsequent recurring claims.
+    (eventPassCompletedAt !== undefined && eventPassCompletedAt >= progress.startedAt))
     ? { ...progress, currentDay: 0, startedAt: now }
     : progress;

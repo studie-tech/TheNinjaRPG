@@ -258,3 +258,15 @@ describe("recurring progress after configuration changes", () => {
     ).toBe(progress);
   });
 });
+
+
+it("resets an expanded converted pass only until its new recurring cycle starts", () => {
+  const completedAt = new Date("2026-09-19T12:00:00Z");
+  const now = new Date("2026-09-20T12:00:00Z");
+  const progress = { currentDay: 2, startedAt: new Date("2026-09-01") };
+  const config = { streakType: "RECURRING", totalDays: 3 };
+  const normalized = normalizeRecurringStreakProgress(progress, config, now, completedAt);
+  expect(normalized.currentDay).toBe(0);
+  const nextDay = { ...normalized, currentDay: 1 };
+  expect(normalizeRecurringStreakProgress(nextDay, config, new Date("2026-09-21"), completedAt)).toBe(nextDay);
+});
