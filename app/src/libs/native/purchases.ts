@@ -253,6 +253,7 @@ export type PurchaseOutcome =
   | { status: "purchased"; transactionId?: string }
   | { status: "cancelled" }
   | { status: "scheduled" }
+  | { status: "pending" }
   | {
       status: "error";
       message: string;
@@ -281,6 +282,7 @@ export const purchaseErrorOutcome = (error: unknown): PurchaseOutcome => {
   if (code === "1" || candidate?.userCancelled === true) {
     return { status: "cancelled" };
   }
+  if (code === "20") return { status: "pending" };
   return {
     status: "error",
     message,

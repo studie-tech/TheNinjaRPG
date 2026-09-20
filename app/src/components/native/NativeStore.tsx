@@ -114,7 +114,9 @@ export default function NativeStore() {
   );
   const accountUnsettledAttemptCount = accountUnsettledAttempts.length;
   const reconciliationLockedProductIds = new Set(
-    accountUnsettledAttempts.map((entry) => entry.attempt.productId),
+    accountUnsettledAttempts
+      .filter(({ attempt }) => attempt.phase !== "payment-pending")
+      .map((entry) => entry.attempt.productId),
   );
 
   const storePlatform = platform();
@@ -189,6 +191,7 @@ export default function NativeStore() {
                   : [],
                 phase:
                   value.attempt.phase === "sheet-open" ||
+                  value.attempt.phase === "payment-pending" ||
                   value.attempt.phase === "charged-or-pending"
                     ? value.attempt.phase
                     : "charged-or-pending",
@@ -709,6 +712,17 @@ export default function NativeStore() {
         }
         return;
       }
+      if (result.status === "pending") {
+        // The store owns deferred payment and prevents duplicate pending purchases.
+        // Cancellation may produce no RevenueCat receipt, so it must not lock checkout.
+        updateUnsettledAttempts((current) =>
+          retainStorePurchaseLock(current, {
+            accountId,
+            attempt: { ...attempt, phase: "payment-pending" },
+          }),
+        );
+        return;
+      }
       if (result.status === "error") {
         if (result.mayHaveCharged) {
           updateUnsettledAttempts((current) =>
@@ -985,9 +999,11 @@ export default function NativeStore() {
               className="rounded-lg border border-amber-500/50 p-3 text-[14px]"
             >
               <p>
-                {attempt.phase === "sheet-open"
-                  ? `${productLabel(attempt.productId)} checkout was interrupted. We’re checking whether it completed before you can purchase it again.`
-                  : `${productLabel(attempt.productId)} may have been charged. We’re checking the purchase before you can buy it again.`}
+                {attempt.phase === "payment-pending"
+                  ? `${productLabel(attempt.productId)} payment is pending. Follow the store’s instructions to complete it. Benefits arrive only after payment approval. If it was canceled, you can buy again.`
+                  : attempt.phase === "sheet-open"
+                    ? `${productLabel(attempt.productId)} checkout was interrupted. We’re checking whether it completed before you can purchase it again.`
+                    : `${productLabel(attempt.productId)} may have been charged. We’re checking the purchase before you can buy it again.`}
               </p>
               <Button
                 className="mt-2"
@@ -998,6 +1014,12 @@ export default function NativeStore() {
                   recoveringAccountIds.has(accountId)
                 }
                 onClick={() => {
+                  if (attempt.phase === "payment-pending") {
+                    updateUnsettledAttempts((current) =>
+                      releaseStorePurchaseLock(current, accountId, attempt),
+                    );
+                    return;
+                  }
                   setRetryingProduct(attempt.productId);
                   // If startup's native history sync failed, a manual verification must
                   // retry that sync too rather than consulting only the server receipt.
@@ -1029,7 +1051,7 @@ export default function NativeStore() {
                 {retryingProduct === attempt.productId && (
                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                 )}
-                Retry verification
+                {attempt.phase === "payment-pending" ? "Dismiss" : "Retry verification"}
               </Button>
             </div>
           ))}

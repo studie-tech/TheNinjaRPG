@@ -19,7 +19,7 @@ export interface StorePurchaseAttempt {
   /** Native transaction ids observed before the sheet opened. */
   baselineNativeTransactionIds: readonly string[];
   /** Distinguishes an interrupted sheet from a callback which may have charged. */
-  phase: "sheet-open" | "charged-or-pending";
+  phase: "sheet-open" | "payment-pending" | "charged-or-pending";
   /** Device time is only used to explain/recover local state, never to order receipts. */
   startedAt: string;
 }
