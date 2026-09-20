@@ -5,8 +5,13 @@ const appleKeys = createRemoteJWKSet(new URL("https://appleid.apple.com/auth/key
 export const isAppleProvider = (provider: string) =>
   provider === "apple" || provider === "oauth_apple";
 
-export const appleClientCredentials = async () => {
-  const clientId = process.env.APPLE_SIGN_IN_CLIENT_ID;
+export const appleClientCredentials = async (source: "native" | "web") => {
+  // Apple tokens are bound to the client that issued them: the native App ID or
+  // Clerk's web Services ID, even when both belong to the same Apple app group.
+  const clientId =
+    source === "native"
+      ? process.env.APPLE_SIGN_IN_CLIENT_ID
+      : process.env.APPLE_SIGN_IN_SERVICES_ID;
   const teamId = process.env.APPLE_SIGN_IN_TEAM_ID;
   const keyId = process.env.APPLE_SIGN_IN_KEY_ID;
   const privateKey = process.env.APPLE_SIGN_IN_PRIVATE_KEY;
@@ -52,7 +57,7 @@ export const prepareAppleDeletion = async (
     isAppleProvider(account.provider),
   );
   if (!accounts.length) return { subject: null };
-  const credentials = await appleClientCredentials();
+  const credentials = await appleClientCredentials(code ? "native" : "web");
   if (!code) {
     // Android or older shells may have a server-managed OAuth token in Clerk.
     const tokens = await clerk.users.getUserOauthAccessToken(userId, "apple");

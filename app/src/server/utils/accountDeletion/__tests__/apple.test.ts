@@ -1,7 +1,9 @@
 import * as clerk from "@clerk/nextjs/server";
 import * as jose from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { prepareAppleDeletion } from "../apple";
+import { appleClientCredentials, prepareAppleDeletion } from "../apple";
+
+vi.mock("jose", { spy: true });
 
 const originalEnv = { ...process.env };
 
@@ -28,6 +30,8 @@ describe("Apple deletion authorization", () => {
       "APPLE_SIGN_IN_PRIVATE_KEY",
     ])
       process.env[name] = "test";
+    process.env.APPLE_SIGN_IN_CLIENT_ID = "native-client";
+    process.env.APPLE_SIGN_IN_SERVICES_ID = "web-client";
     mocks.user.mockResolvedValue({
       externalAccounts: [{ provider: "apple", providerUserId: "apple_owner" }],
     });
@@ -63,8 +67,31 @@ describe("Apple deletion authorization", () => {
     expect(mocks.fetch).toHaveBeenCalledTimes(2);
     const [url, options] = mocks.fetch.mock.calls[1] ?? [];
     expect(url).toBe("https://appleid.apple.com/auth/revoke");
+    expect(options.body.get("client_id")).toBe("native-client");
+    expect(jose.decodeJwt(options.body.get("client_secret")).sub).toBe("native-client");
+    expect(mocks.fetch.mock.calls[0]?.[1].body.get("client_id")).toBe("native-client");
+    expect(mocks.verify).toHaveBeenCalledWith("id-token", expect.anything(), {
+      issuer: "https://appleid.apple.com",
+      audience: "native-client",
+    });
     expect(options.body.get("token")).toBe("refresh-token");
     expect(options.body.get("token_type_hint")).toBe("refresh_token");
+  });
+  it("uses Clerk's Services ID for stored browser OAuth tokens", async () => {
+    mocks.tokens.mockResolvedValue({ data: [{ token: "web-access-token" }] });
+    expect(await prepareAppleDeletion("user_test")).toEqual({ subject: "apple_owner" });
+    const [url, options] = mocks.fetch.mock.calls[0] ?? [];
+    expect(url).toBe("https://appleid.apple.com/auth/revoke");
+    expect(options.body.get("client_id")).toBe("web-client");
+    expect(jose.decodeJwt(options.body.get("client_secret")).sub).toBe("web-client");
+    expect(options.body.get("token")).toBe("web-access-token");
+  });
+  it("does not fall back to native credentials when web configuration is missing", async () => {
+    delete process.env.APPLE_SIGN_IN_SERVICES_ID;
+    await expect(appleClientCredentials("web")).rejects.toThrow(
+      "temporarily unavailable",
+    );
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
   it("does not skip revocation when a stored token is unavailable", async () => {
     mocks.tokens.mockResolvedValue({ data: [] });

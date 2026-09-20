@@ -24,7 +24,7 @@ export const removeAccountIdentity = async (
         account.providerUserId !== appleRevokedSubject,
     )
   ) {
-    const credentials = await appleClientCredentials();
+    const credentials = await appleClientCredentials("web");
     const tokens = await clerk.users.getUserOauthAccessToken(userId, "apple");
     if (!tokens.data.length)
       throw new Error(
